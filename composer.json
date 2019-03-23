@@ -1,6 +1,7 @@
 {
     "name": "andrevanzuydam/tina4php",
     "version": "0.0.1",
+    "license": "MIT",
     "require": {
         "twig/twig": "^2.7",
         "phpfastcache/phpfastcache": "^7.0",
