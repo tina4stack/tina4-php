@@ -109,10 +109,10 @@ class Routing
                 header( "Content-Type: application/json" );
                 $content = json_encode($content);
             }
-                else
-            if (!empty($content)) {
-                header("Content-Type: {$contentType}");
-            }
+            else
+                if (!empty($content)) {
+                    header("Content-Type: {$contentType}");
+                }
 
             return $content;
         };
@@ -141,7 +141,14 @@ class Routing
 
         // if requested file is'nt a php file
         if (file_exists($root.$urlToParse) && $urlToParse !== "/") {
-            header('Content-Type: '.mime_content_type($root.$urlToParse));
+            $ext = pathinfo($urlToParse, PATHINFO_EXTENSION);
+            $mimeType = mime_content_type($root.$urlToParse);
+
+            if ($ext === "css") {
+                $mimeType = "text/css";
+            }
+            header('Content-Type: '.$mimeType);
+
             $fh = fopen($root.$urlToParse, 'r');
             fpassthru($fh);
             fclose($fh);
@@ -195,7 +202,7 @@ class Routing
                 $reflection = new ReflectionFunction($route["function"]);
                 $doc = $reflection->getDocComment();
                 preg_match_all('#@(.*?)\n#s', $doc, $annotations);
-                
+
                 if (in_array("secure", $annotations[1])) {
                     $headers = getallheaders();
                     if (isset($headers["Authorization"]) && Auth::validToken($headers["Authorization"]) ) {
@@ -297,12 +304,12 @@ class Routing
                         if ($matches[1] === "@description") {
                             $description = $matches[2];
                         } else
-                    if ($matches[1] === "@tags") {
-                        $tags = explode(",", $matches[2]);
-                    }  else
-                    if ($matches[1] === "@example") {
-                        eval(' if (class_exists("'.trim(str_replace("\n", "", $matches[2])).'")) { $example = (object)(new '.trim(str_replace("\n", "", $matches[2])).'())->getTableData();} else {$example = (object)[];} ');
-                    }
+                            if ($matches[1] === "@tags") {
+                                $tags = explode(",", $matches[2]);
+                            }  else
+                                if ($matches[1] === "@example") {
+                                    eval(' if (class_exists("'.trim(str_replace("\n", "", $matches[2])).'")) { $example = (object)(new '.trim(str_replace("\n", "", $matches[2])).'())->getTableData();} else {$example = (object)[];} ');
+                                }
 
                 }
             }

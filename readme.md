@@ -61,7 +61,7 @@ Once you have mastered these basics you should be able to create an simple stati
     </body>
     </html>
     ```
-- Hit up localhost:8080 and you should see the hello world message
+- Hit up http://localhost:8080 and you should see the hello world message
 
 #### Step 2 - Include a Snippet ####
 - Create a snippets folder under the existing templates folder
@@ -88,7 +88,7 @@ Once you have mastered these basics you should be able to create an simple stati
     </body>
     </html>
     ```
-- Hit up localhost:8080 and you should see the footer included at the bottom of the file   
+- Hit up http://localhost:8080 and you should see the footer included at the bottom of the file   
 
 #### Advanced ####
 
@@ -133,6 +133,7 @@ Make use of PHP inside the HTML with the following **{{call:[method],[param1,par
     ```html
     {{Example:renderSomething?"Nice"}}
     ```
+- Hit up http://localhost:8080, you should see the result from the renderSomething method.
 
 ### index.twig ###
 
@@ -191,9 +192,101 @@ Once you have mastered these basics you should be able to create an simple stati
     </body>
     </html>
     ```
-- Hit up localhost:8080 and you should see the footer included at the bottom of the file   
-
-#### Advanced ####
+- Hit up http://localhost:8080 and you should see the footer included at the bottom of the file   
 
 
 ### Hello World - API ###
+
+There are a number of steps to making good API end points and the following steps will take you through the ways of getting this right.
+
+#### Hello World ####
+
+- Create an api folder to store your end point code
+- Define the folder for Tina4 to use as an include path in your index.php
+    ```php
+    define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]);
+    ```
+
+- Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want, the idea is to group your API end points logically.
+- Add the following code to helloWorld.php
+    ```php
+    //Use Get::add, Post:add, Patch::add, Put::add, Delete:add
+    Get::add("/hello-world",
+      function ($response) {
+          //response takes 3 params (text, http_code, content-type)
+          return $response ("Hello World", 200);
+      }
+    );
+    ```
+- Hit up http://localhost:8080/hello-world
+
+#### Hello World with inline params ####
+
+- Add the following code to helloWorld.php
+    ```php
+    //Use Get::add, Post:add, Patch::add, Put::add, Delete:add
+    Get::add("/hello-world/{testingString}",
+        function ($testingString, $response) { //notice how the response variable moves to the end
+            //response takes 3 params (text, http_code, content-type)
+            return $response ("Hello World {$testingString}", 200);
+        }
+    );
+    ```
+- Hit up http://localhost:8080/hello-world/itworks
+
+- Add the following code to helloWorld.php
+    ```php
+    //Use Get::add, Post:add, Patch::add, Put::add, Delete:add
+    Get::add("/hello-world/{testingString}/{someMore}",
+        function ($testingString, $someMore, $response) { //notice how the response variable moves to the end
+            //response takes 3 params (text, http_code, content-type)
+            return $response ("Hello World {$testingString} {$someMore}", 200);
+        }
+    );
+    ```
+- Hit up http://localhost:8080/hello-world/itworks/somemore
+
+#### Hello World with annotations ####
+
+End points can be annotated for documentation purposes, if you have worked with swagger you will probably find this process much simpler to use.
+
+**Annotation Documentation reference**
+```
+ /**
+ * Description of what the end point does for code purposes
+ * @description Swagger description
+ * @tags Header tag for grouping in Swagger
+ * @summary Summary of what to expect
+ * @example PHP Object - add this object to any of your TINA4_INCLUDE_LOCATIONS folders
+ */
+ ```
+ 
+The following steps will establish the automated Swagger annotation
+
+- Add the following code to one of your route files, modify the getSwagger method as required
+    ```php
+    //A swagger endpoint for annotating your API end points
+    Get::add('/swagger/json.json', function($response) {
+        return $response ( (new Routing())->getSwagger("Some Name for the Swagger","Some other description","1.0.0"));
+    });
+
+    ```
+- Hit up http://localhost:8080/swagger/index, your should see a blank Swagger interface
+- Annotate one of the previous examples or a new end point you have created
+    ```php
+    /**
+     * Hello world get end point
+     * @description Runs a Hello world test
+     * @tags Hello World
+     * @summary Get a hello world test
+     */
+    Get::add("/hello-world/{testingString}/{someMore}",
+        function ($testingString, $someMore, $response) { //notice how the response variable moves to the end
+            //response takes 3 params (text, http_code, content-type)
+            return $response ("Hello World {$testingString} {$someMore}", 200, "html/text");
+        }
+    );
+
+    ```
+    **Notice the deliberate passback of the content-type for Swagger to work properly**
+- Hit up http://localhost:8080/swagger/index and open up the newly annotated end point, you should be able to click try me and test the end point.
