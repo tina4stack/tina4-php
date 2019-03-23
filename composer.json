@@ -1,6 +1,6 @@
 {
     "name": "andrevanzuydam/tina4php",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "license": "MIT",
     "require": {
         "twig/twig": "^2.7",
