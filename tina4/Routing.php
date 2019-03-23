@@ -27,6 +27,22 @@ class Routing
         }
     }
 
+    static function recurseCopy($src,$dst) {
+        $dir = opendir($src);
+        @mkdir($dst);
+        while(false !== ( $file = readdir($dir)) ) {
+            if (( $file != '.' ) && ( $file != '..' )) {
+                if ( is_dir($src . '/' . $file) ) {
+                    self::recurseCopy($src . '/' . $file,$dst . '/' . $file);
+                }
+                else {
+                    copy($src . '/' . $file,$dst . '/' . $file);
+                }
+            }
+        }
+        closedir($dir);
+    }
+
     function matchPath($path, $routePath)
     {
         $this->debug("Matching {$path} with {$routePath}");
@@ -82,6 +98,7 @@ class Routing
 
     function __construct($root = "", $urlToParse = "", $method = "")
     {
+        error_log("TINA4: URL to parse ".$urlToParse);
         global $arrRoutes;
 
         //Gives back things in an orderly fashion for API responses
@@ -107,7 +124,7 @@ class Routing
 
         //Generate a filename just in case the routing doesn't find anything
         if ($urlToParse === "/") {
-            $fileName = "index.html";
+            $fileName = "index";
         } else {
             $ext = pathinfo($urlToParse, PATHINFO_EXTENSION);
             if (empty($ext)) {
@@ -119,6 +136,18 @@ class Routing
         }
 
         $urlToParse = $this->cleanURL($urlToParse);
+
+
+
+        // if requested file is'nt a php file
+        if (file_exists($root.$urlToParse) && $urlToParse !== "/") {
+            header('Content-Type: '.mime_content_type($root.$urlToParse));
+            $fh = fopen($root.$urlToParse, 'r');
+            fpassthru($fh);
+            fclose($fh);
+            exit; //we are done here, file will be delivered
+        }
+
 
         if ($urlToParse !== "/") {
             $urlToParse .= "/";
@@ -133,15 +162,21 @@ class Routing
 
         //include routes in routes folder
         foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
-            $d = dir(getcwd() . "/" . $route);
+            if (file_exists(getcwd() . "/" . $route)) {
 
-            while (($file = $d->read()) !== false) {
-                if ($file != "." && $file != "..") {
-                    $fileNameRoute = realpath(getcwd() . "/" . $route) . "/" . $file;
-                    require_once $fileNameRoute;
+                $d = dir(getcwd() . "/" . $route);
+
+
+                while (($file = $d->read()) !== false) {
+                    if ($file != "." && $file != "..") {
+                        $fileNameRoute = realpath(getcwd() . "/" . $route) . "/" . $file;
+                        require_once $fileNameRoute;
+                    }
                 }
+                $d->close();
+            } else {
+                error_log("TINA4: ". getcwd() . "/" . $route. " not found!");
             }
-            $d->close();
         }
 
         //determine what should be outputted and if the route is found
@@ -191,7 +226,7 @@ class Routing
         if (!$matched) {
             //if there is no file passed, go for the default or make one up
             if (empty($fileName)) {
-                $fileName = "index.html";
+                $fileName = "index";
             }
 
             $this->content .= new ParseTemplate($root, $fileName);

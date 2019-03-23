@@ -10,8 +10,14 @@
  * andrevanzuydam@gmail.com
  */
 
-//root of the system
-$root = dirname(__FILE__);
+
+
+//root of the website
+$documentRoot = realpath(dirname(__FILE__)."/../../../");
+error_log ("TINA4: document root ".$documentRoot);
+
+//root of tina4
+$root = realpath(dirname(__FILE__));
 
 //We use code when we debug, if we turn this off a phar file will be build from the code library, which is great for deployments
 define("USE_CODE", true);
@@ -21,12 +27,16 @@ if (file_exists($root."/vendor/autoload.php")) {
     require_once $root."/vendor/autoload.php";
 }
 
+if (file_exists($documentRoot."/vendor/autoload.php")) {
+    require_once $documentRoot."/vendor/autoload.php";
+}
+
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
 //system defines, perhaps can be defined or overridden by a config.php file.
-if (file_exists("{$root}/config.php")) {
-    require_once ($root."/config.php");
+if (file_exists("{$documentRoot}/config.php")) {
+    require_once ($documentRoot."/config.php");
 }
 
 
@@ -35,7 +45,7 @@ if(!defined("TINA4_TEMPLATE_LOCATIONS")) {
 }
 
 if(!defined("TINA4_ROUTE_LOCATIONS")) {
-    define("TINA4_ROUTE_LOCATIONS"  , ["api"]);
+    define("TINA4_ROUTE_LOCATIONS"  , ["api","routes"]);
 }
 
 if(!defined("TINA4_INCLUDE_LOCATIONS")) {
@@ -45,7 +55,7 @@ if(!defined("TINA4_INCLUDE_LOCATIONS")) {
 //Setup caching options
 $TINA4_CACHE_CONFIG =
         new ConfigurationOption([
-            "path"      =>  $root."/cache"
+            "path"      =>  $documentRoot."/cache"
         ]);
 
 //include build
@@ -72,10 +82,16 @@ if (!USE_CODE && file_exists($root."/tina4core/tina4stackv2.phar")) {
     }
 }
 
-//See if cache directory exists
-if (!file_exists($root."/cache")) {
-    mkdir($root."/cache");
+//Check if assets folder is there
+if (!file_exists($documentRoot."/assets")) {
+    Routing::recurseCopy($root."/assets", $documentRoot."/assets");
 }
+//Add the .htaccess file for redirecting things
+if (!file_exists($documentRoot."/.htaccess")) {
+    copy($root."/.htaccess", $documentRoot."/.htaccess");
+}
+
+
 
 global $cache;
 
@@ -86,7 +102,7 @@ $cache = CacheManager::getInstance("files");
 
 if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
 //do the routing and come up with a result, this should be the last line of code regardless
-    echo new Routing($root, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
+    echo new Routing($documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
 } else {
-    echo new Routing($root, "/", "GET");
+    echo new Routing($documentRoot, "/", "GET");
 }

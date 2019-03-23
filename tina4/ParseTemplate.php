@@ -13,6 +13,7 @@ class ParseTemplate {
     private $varRegEx = "";
     private $locations = ["assets", "objects"];
     private $responseCode = 200;
+    private $twig;
 
     function __construct($root, $fileName) {
         if (defined("TINA4_TEMPLATE_LOCATIONS")) {
@@ -96,26 +97,44 @@ class ParseTemplate {
     function parseFile ($fileName) {
         //find a file in the assets folder which matches the route given
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+
+
+
         if (empty($ext)) {
-             $fileName = $fileName . ".html";
+            $possibleFiles =  [ $fileName . ".html", $fileName.".twig" ];
+        } else {
+            $possibleFiles = [$fileName];
+
         }
 
         $realFileName = $fileName;
-
         foreach ($this->locations as $lid => $location) {
-            $testFile = $this->root."/".$location.$fileName;
-            if (file_exists($testFile)) {
-                $realFileName = $testFile;
-                break;
+            foreach ($possibleFiles as $id => $fileName) {
+                $testFile = $this->root . "/" . $location ."/". $fileName;
+                if (file_exists($testFile)) {
+                    $realFileName = $testFile;
+                    break;
+                }
             }
         }
 
-        if (file_exists($realFileName)) {
 
-            $content = file_get_contents($realFileName);
-            $content = $this->parseSnippets($content);
-            $content = $this->parseCalls($content);
-            $content = $this->parseVariables($content);
+        $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
+
+        if (file_exists($realFileName)) {
+            //Render a twig file if the extension is twig
+            if ($ext === "twig") {
+                if (!isset($_SESSION["renderData"])) {
+                    $_SESSION["renderData"] = [];
+                }
+                $templateName = basename($realFileName);
+                $content = renderTemplate($templateName, $_SESSION["renderData"]);
+            } else {
+                $content = file_get_contents($realFileName);
+                $content = $this->parseSnippets($content);
+                $content = $this->parseCalls($content);
+                $content = $this->parseVariables($content);
+            }
         }   else {
             $this->responseCode = 404;
             $content = "<img src=\"/assets/images/404.jpg\">";

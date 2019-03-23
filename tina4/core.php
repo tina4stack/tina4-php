@@ -15,11 +15,13 @@ define("TINA4_DELETE"  , "DELETE");
 
 //Twig template engine
 global $twigLoader;
-$webRoot =  str_replace ("phar://", "", dirname(__DIR__));
+$webRoot =  str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
 
 $twigPaths = TINA4_TEMPLATE_LOCATIONS;
+
+error_log("TINA4: Twig Paths".print_r ($twigPaths, 1));
 foreach ($twigPaths as $tid => $twigPath) {
-    if (!file_exists($webRoot.$twigPath)) {
+    if (!file_exists($webRoot."/".$twigPath)) {
         unset($twigPaths[$tid]);
     }
 }
