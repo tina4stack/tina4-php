@@ -19,8 +19,11 @@ class Tina4Object
     {
         if ($request) {
             foreach ($request as $key => $value) {
-                if (isset($this->$key)) {
+                $key = $this->getObjectName($key);
+                if (property_exists($this, $key )) {
                     $this->{$key} = $value;
+                } else {
+                    throw new Exception("{$key} does not exist for ".get_class($this));
                 }
             }
         }

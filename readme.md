@@ -290,3 +290,58 @@ The following steps will establish the automated Swagger annotation
     ```
     **Notice the deliberate passback of the content-type for Swagger to work properly**
 - Hit up http://localhost:8080/swagger/index and open up the newly annotated end point, you should be able to click try me and test the end point.
+
+#### Hello World - A JSON result ####
+
+Any object pass back on the response is immediatelly assumed to be a JSON response. Try the following example.
+
+```php
+Get::add("/some-json",
+    function ($response) {
+        $object = (object)["firstName" => "Hello", "lastName" => "World", "email" => "helloworld@test.com"];
+
+        return $response ($object);
+    }
+);
+```
+
+Hit up http://localhost:8080/some-json to test the end point
+
+**Annotated results**
+
+- Create an object folder and add a Person.php file with the following code
+```php
+class Person extends Tina4Object //must extend a Tina4Object to work with Swagger
+{
+    public $firstName;
+    public $lastName;
+    public $email;
+}
+```
+-Annotate the some-json end point and change it to a POST for the example
+```php
+/**
+ * Example of returning a JSON result based on what was submitted
+ * @description Example of returning a JSON result
+ * @tags Some JSON
+ * @summary Returns a person
+ * @example Person
+ */
+Post::add("/some-json",
+        function ($response, $request) {
+
+
+            try {
+                $object = new Person($request);
+                $result = $object->getTableData();
+                $errorCode = 200;
+            } catch (Exception $exception) {
+                $result = (object)["error" => $exception->getMessage()];
+                $errorCode = 400;
+            }
+
+            return $response ($result, $errorCode);
+        }
+    );
+```
+- Hit up http://localhost:8080/swagger/index to test the end point, try adding variables into the object that don't exist
