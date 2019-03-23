@@ -14,7 +14,7 @@ Tina4 is a light weight routing and templating system which allows you to write 
 - Install composer
 - In your project folder terminal / console
     ```bash
-    composer require andrevanzuydam/tina4php:dev-master
+    composer require andrevanzuydam/tina4php
     ```
 - Create an index.php file in your folder and add this code
     ```bash
