@@ -1,6 +1,5 @@
 {
     "name": "andrevanzuydam/tina4php",
-    "version": "1.0.0",
     "license": "MIT",
     "minimum-stability": "stable",
     "require": {
