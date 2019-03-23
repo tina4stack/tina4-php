@@ -1,7 +1,7 @@
 {
     "name": "andrevanzuydam/tina4php",
+    "description": "Tina4 PHP",
     "license": "MIT",
-    "version" : "0.0.1",
     "minimum-stability": "stable",
     "require": {
         "twig/twig": "^2.7",
