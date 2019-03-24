@@ -212,6 +212,8 @@ There are a number of steps to making good API end points and the following step
 - Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want, the idea is to group your API end points logically.
 - Add the following code to helloWorld.php
     ```php
+    <?php
+    use Tina4\Get;
     //Use Get::add, Post:add, Patch::add, Put::add, Delete:add
     Get::add("/hello-world",
       function ($response) {
@@ -226,6 +228,8 @@ There are a number of steps to making good API end points and the following step
 
 - Add the following code to helloWorld.php
     ```php
+    <?php
+    use Tina4\Get;
     //Use Get::add, Post:add, Patch::add, Put::add, Delete:add
     Get::add("/hello-world/{testingString}",
         function ($testingString, $response) { //notice how the response variable moves to the end
@@ -238,6 +242,8 @@ There are a number of steps to making good API end points and the following step
 
 - Add the following code to helloWorld.php
     ```php
+     <?php
+    use Tina4\Get;
     //Use Get::add, Post:add, Patch::add, Put::add, Delete:add
     Get::add("/hello-world/{testingString}/{someMore}",
         function ($testingString, $someMore, $response) { //notice how the response variable moves to the end
@@ -253,7 +259,8 @@ There are a number of steps to making good API end points and the following step
 End points can be annotated for documentation purposes, if you have worked with swagger you will probably find this process much simpler to use.
 
 **Annotation Documentation reference**
-```
+```php
+ <?php
  /**
  * Description of what the end point does for code purposes
  * @description Swagger description
@@ -267,6 +274,8 @@ The following steps will establish the automated Swagger annotation
 
 - Add the following code to one of your route files, modify the getSwagger method as required
     ```php
+    <?php
+    use Tina4\Get;
     //A swagger endpoint for annotating your API end points
     Get::add('/swagger/json.json', function($response) {
         return $response ( (new Routing())->getSwagger("Some Name for the Swagger","Some other description","1.0.0"));
@@ -276,6 +285,8 @@ The following steps will establish the automated Swagger annotation
 - Hit up http://localhost:8080/swagger/index, your should see a blank Swagger interface
 - Annotate one of the previous examples or a new end point you have created
     ```php
+    <?php
+    use Tina4\Get;
     /**
      * Hello world get end point
      * @description Runs a Hello world test
@@ -298,6 +309,8 @@ The following steps will establish the automated Swagger annotation
 Any object pass back on the response is immediatelly assumed to be a JSON response. Try the following example.
 
 ```php
+<?php
+use Tina4\Get;
 Get::add("/some-json",
     function ($response) {
         $object = (object)["firstName" => "Hello", "lastName" => "World", "email" => "helloworld@test.com"];
@@ -313,6 +326,8 @@ Hit up http://localhost:8080/some-json to test the end point
 
 - Create an object folder and add a Person.php file with the following code
 ```php
+<?php
+use Tina4\Tina4Object;
 class Person extends Tina4Object //must extend a Tina4Object to work with Swagger
 {
     public $firstName;
@@ -322,6 +337,8 @@ class Person extends Tina4Object //must extend a Tina4Object to work with Swagge
 ```
 -Annotate the some-json end point and change it to a POST for the example
 ```php
+<?php
+use Tina4\Post;
 /**
  * Example of returning a JSON result based on what was submitted
  * @description Example of returning a JSON result
