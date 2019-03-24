@@ -1,13 +1,13 @@
 <?php
 /**
-* Created by PhpStorm.
-* User: Andre van Zuydam
-* Date: 2016/02/09
-* Time: 02:02 PM
-* Purpose: Determine routing responses and data outputs based on the URL sent from the system
-* You are welcome to read and modify this code but it should not be broken, if you find something to improve it, send me an email with the patch
-* andrevanzuydam@gmail.com
-*/
+ * Created by PhpStorm.
+ * User: Andre van Zuydam
+ * Date: 2016/02/09
+ * Time: 02:02 PM
+ * Purpose: Determine routing responses and data outputs based on the URL sent from the system
+ * You are welcome to read and modify this code but it should not be broken, if you find something to improve it, send me an email with the patch
+ * andrevanzuydam@gmail.com
+ */
 namespace Tina4;
 
 class Routing
@@ -273,7 +273,7 @@ class Routing
             $method = strtolower($route["method"]);
             //echo $method;
 
-            $reflection = new ReflectionFunction($route["function"]);
+            $reflection = new \ReflectionFunction($route["function"]);
             $doc = $reflection->getDocComment();
             preg_match_all('#@(.*?)\n#s', $doc, $annotations);
 
