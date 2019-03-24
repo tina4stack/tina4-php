@@ -12,9 +12,6 @@ namespace Tina4;
 
 class Routing
 {
-    private $session;
-    private $request;
-    private $parser;
     private $params;
     private $content;
     private $debug = false;
@@ -187,7 +184,9 @@ class Routing
     function matchPath($path, $routePath)
     {
         $this->debug("Matching {$path} with {$routePath}");
-        if ($routePath !== "/") $routePath .= "/";
+        if ($routePath !== "/") {
+            $routePath .= "/";
+        }
         preg_match_all($this->pathMatchExpression, $path, $matchesPath);
         preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
 
