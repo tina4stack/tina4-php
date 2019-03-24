@@ -10,7 +10,7 @@ Tina4 is a light weight routing and templating system which allows you to write 
 
 ### Installing ###
 
-- Install PHP7.1 >
+- Install PHP7.1 > make sure the php_fileinfo extension and mbstring extension are enabled.
 - Install composer
 - In your project folder terminal / console
     ```bash
