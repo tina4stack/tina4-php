@@ -1,12 +1,13 @@
 <?php
-
 /**
  * Created by PhpStorm.
- * User: S946115
+ * User: Andre van Zuydam
  * Date: 2016/03/01
  * Time: 04:35 PM
  * Notes: A record is a single part of the result set
  */
+namespace Tina4;
+
 class DataRecord
 {
     private $original;

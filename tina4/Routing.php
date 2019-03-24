@@ -8,6 +8,7 @@
  * You are welcome to read and modify this code but it should not be broken, if you find something to improve it, send me an email with the patch
  * andrevanzuydam@gmail.com
  */
+namespace Tina4;
 
 class Routing
 {

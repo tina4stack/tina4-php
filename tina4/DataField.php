@@ -1,12 +1,13 @@
 <?php
-
 /**
  * Created by PhpStorm.
- * User: S946115
+ * User: Andre van Zuydam
  * Date: 2016/03/27
  * Time: 11:29 PM
  * Notes: Make an array of these for a result set from a data query
  */
+namespace Tina4;
+
 class DataField {
     public $index=0;
     public $fieldName;

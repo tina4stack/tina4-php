@@ -1,8 +1,7 @@
 <?php
-
 /**
  * Created by PhpStorm.
- * User: s946115
+ * User: Andre van Zuydam
  * Date: 2016/02/15
  * Time: 03:23 PM
  */
@@ -10,6 +9,8 @@
  * Class Route
  * The main router class which handles the routes that are registered with it
  */
+namespace Tina4;
+
 class Route {
     public static $method;
 

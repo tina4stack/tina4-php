@@ -1,12 +1,13 @@
 <?php
-
 /**
  * Created by PhpStorm.
- * User: S946115
+ * User: Andre van Zuydam
  * Date: 2016/03/01
  * Time: 04:30 PM
  * Note: A result from the data is a collection of records which can be in an OBJECT form or Key Value form
  */
+namespace Tina4;
+
 class DataResult
 {
     private $records;

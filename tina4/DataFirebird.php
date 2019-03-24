@@ -1,11 +1,12 @@
 <?php
-
 /**
  * Created by PhpStorm.
  * User: Andre van Zuydam
  * Date: 5/19/2016
  * Time: 11:19 AM
  */
+namespace Tina4;
+
 class DataFirebird extends DataBase
 {
     public function native_open() {

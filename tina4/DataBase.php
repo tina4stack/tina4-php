@@ -1,11 +1,12 @@
 <?php
-
 /**
  * Created by PhpStorm.
- * User: S946115
+ * User: Andre van Zuydam
  * Date: 2016/02/29
  * Time: 07:50 PM
  */
+namespace Tina4;
+
 class DataBase
 {
     public $dbh;           //database handle

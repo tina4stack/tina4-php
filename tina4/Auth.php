@@ -1,10 +1,12 @@
 <?php
 /**
  * Created by PhpStorm.
- * User: andrevanzuydam
+ * User: Andre van Zuydam
  * Date: 2018/05/30
  * Time: 22:24
  */
+namespace Tina4;
+
 class Auth
 {
     /**

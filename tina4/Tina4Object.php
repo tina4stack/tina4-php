@@ -1,10 +1,11 @@
 <?php
 /**
  * Created by PhpStorm.
- * User: andre
+ * User: Andre van Zuydam
  * Date: 2018/03/19
  * Time: 13:40
  */
+namespace Tina4;
 
 class Tina4Object
 {

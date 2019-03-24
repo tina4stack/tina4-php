@@ -5,6 +5,8 @@
  * Date: 2016/02/09
  * Time: 03:04 PM
  */
+namespace Tina4;
+
 class ParseTemplate {
     private $root;
     private $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";

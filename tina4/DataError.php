@@ -1,11 +1,12 @@
 <?php
-
 /**
  * Created by PhpStorm.
- * User: S946115
+ * User: Andre van Zuydam
  * Date: 2016/03/27
  * Time: 10:36 PM
  */
+namespace Tina4;
+
 class DataError
 {
   private $errorCode;

@@ -1,11 +1,12 @@
 <?php
-
 /**
  * Created by PhpStorm.
  * User: Andre van Zuydam
  * Date: 5/19/2016
  * Time: 12:09 PM
  */
+namespace Tina4;
+
 class Emailer
 {
     private $bulkSMSUsername="";
