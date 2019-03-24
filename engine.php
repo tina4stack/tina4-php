@@ -12,6 +12,9 @@
 
 //root of the website
 $documentRoot = realpath(dirname(__FILE__)."/../../../");
+if (file_exists("engine.php")) {
+    $documentRoot = realpath(dirname(__FILE__));
+}
 error_log ("TINA4: document root ".$documentRoot);
 
 //root of tina4
@@ -31,6 +34,7 @@ if (file_exists($documentRoot."/vendor/autoload.php")) {
 
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
+use Tina4\Routing;
 
 //system defines, perhaps can be defined or overridden by a config.php file.
 if (file_exists("{$documentRoot}/config.php")) {
@@ -80,15 +84,16 @@ if (!USE_CODE && file_exists($root."/tina4core/tina4stackv2.phar")) {
     }
 }
 
+error_log("TINA4: Document root ".$documentRoot);
+
 //Check if assets folder is there
-if (!file_exists($documentRoot."/assets")) {
-    Routing::recurseCopy($root."/assets", $documentRoot."/assets");
+if (!file_exists($documentRoot."/assets") && !file_exists("engine.php")) {
+    Tina4\Routing::recurseCopy($root."/assets", $documentRoot."/assets");
 }
 //Add the .htaccess file for redirecting things
-if (!file_exists($documentRoot."/.htaccess")) {
+if (!file_exists($documentRoot."/.htaccess") && !file_exists("engine.php")) {
     copy($root."/.htaccess", $documentRoot."/.htaccess");
 }
-
 
 
 global $cache;
