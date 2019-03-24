@@ -78,7 +78,7 @@ if (!USE_CODE && file_exists($root."/tina4core/tina4stackv2.phar")) {
 } else {
     if (USE_CODE) {
         set_include_path('.' . PATH_SEPARATOR . "{$root}/../code");
-        require_once "tina4/core.php";
+        require_once "Tina4/core.php";
     } else {
         die("tina4stack needs to be built for the system to run correctly.");
     }

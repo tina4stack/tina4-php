@@ -206,7 +206,9 @@ There are a number of steps to making good API end points and the following step
 - Create an api folder to store your end point code in your project folder.
 - Define the folder for Tina4 to use as an include path in your index.php, we've added some more folders for future use.
     ```php
-    define("TINA4_INCLUDE_LOCATIONS"  , ["api","app","objects"]);
+    <?php
+    define("TINA4_ROUTE_LOCATIONS"  , ["api","routes"]); //For routing and API
+    define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]); //For business logic and ORM objects
     ```
 
 - Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want, the idea is to group your API end points logically.
@@ -324,7 +326,7 @@ Hit up http://localhost:8080/some-json to test the end point
 
 **Annotated results**
 
-- Create an object folder and add a Person.php file with the following code
+- Create an objects folder and add a Person.php file with the following code
 ```php
 <?php
 use Tina4\Tina4Object;
@@ -348,8 +350,6 @@ use Tina4\Post;
  */
 Post::add("/some-json",
         function ($response, $request) {
-
-
             try {
                 $object = new Person($request);
                 $result = $object->getTableData();

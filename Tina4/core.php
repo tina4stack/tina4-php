@@ -51,13 +51,15 @@ function tina4_autoloader($class) {
     $class = explode("\\", $class);
     $class = $class[count($class)-1];
 
-    if (file_exists("{$root}/".str_replace("_","/",$class). ".php")) {
-        include "{$root}/" . str_replace("_", "/", $class) . ".php";
+    $fileName = "{$root}/".str_replace("_","/",$class). ".php";
+
+    if (file_exists($fileName)) {
+        include_once $fileName;
     }  else {
         if (defined("TINA4_INCLUDE_LOCATIONS") && is_array(TINA4_INCLUDE_LOCATIONS)) {
             foreach (TINA4_INCLUDE_LOCATIONS as $lid => $location) {
                 if (file_exists($_SERVER["DOCUMENT_ROOT"]."/{$location}/{$class}.php")) {
-                    include $_SERVER["DOCUMENT_ROOT"] . "/{$location}/{$class}.php";
+                    require_once $_SERVER["DOCUMENT_ROOT"] . "/{$location}/{$class}.php";
                     break;
                 }
             }

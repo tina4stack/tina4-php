@@ -119,7 +119,7 @@ class Routing
             $result = "";
             if ($this->matchPath($urlToParse, $route["routePath"]) && ($route["method"] === $this->method || $route["method"] == TINA4_ANY)) {
                 //Look to see if we are a secure route
-                $reflection = new ReflectionFunction($route["function"]);
+                $reflection = new \ReflectionFunction($route["function"]);
                 $doc = $reflection->getDocComment();
                 preg_match_all('#@(.*?)\n#s', $doc, $annotations);
 
