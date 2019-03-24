@@ -38,7 +38,7 @@ Once you have mastered these basics you should be able to create an simple stati
 
 #### Step 1 - Hello World ####
 - Create a templates folder
-- Define where your templates will exist, you will need to create the folders under your project folder.
+- Define where your templates will exist in the index.php file, you will need to create the folders under your project folder.
   ```php
   <?php
   //Define some folders where we want templates
@@ -111,9 +111,11 @@ Make use of PHP inside the HTML with the following **{{call:[method],[param1,par
 ##### Calling methods on a PHP Class #####
 
 - Create a folder called app in your project folder
-- Tell Tina4 about it by defining it
+- Define the app folder for Tina4 by updating the index.php file with the following code.
  ```php
   <?php
+  //Define where the template locations are
+  define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
   //Define some folders where we want to have tina4 include automatically
   define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]);
   require "vendor/andrevanzuydam/tina4php/engine.php";
@@ -141,8 +143,8 @@ Follow these steps to creating a hello world index.twig, this is the default fil
 Once you have mastered these basics you should be able to create an simple static site using the twig templating engine.
 
 #### Step 1 - Hello World ####
-- Create a templates folder
-- Define where your templates will exist, you will need to create the folders under your project folder.
+- Create a templates folder in your project folder
+- Define where your templates will exist for Tina4.
   ```php
   <?php
   //Define some folders where we want templates
@@ -201,10 +203,10 @@ There are a number of steps to making good API end points and the following step
 
 #### Hello World ####
 
-- Create an api folder to store your end point code
-- Define the folder for Tina4 to use as an include path in your index.php
+- Create an api folder to store your end point code in your project folder.
+- Define the folder for Tina4 to use as an include path in your index.php, we've added some more folders for future use.
     ```php
-    define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]);
+    define("TINA4_INCLUDE_LOCATIONS"  , ["api","app","objects"]);
     ```
 
 - Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want, the idea is to group your API end points logically.
