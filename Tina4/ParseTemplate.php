@@ -18,6 +18,7 @@ class ParseTemplate {
     private $twig;
 
     function __construct($root, $fileName) {
+        error_log("TINA4 Filename: ".$fileName);
         if (defined("TINA4_TEMPLATE_LOCATIONS")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS;
         }
@@ -97,6 +98,10 @@ class ParseTemplate {
 
     //parse files
     function parseFile ($fileName) {
+        //Trim off the first char if /
+        if ($fileName[0] === "/") {
+            $fileName = substr($fileName,1);
+        }
         //find a file in the assets folder which matches the route given
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
 
@@ -130,6 +135,7 @@ class ParseTemplate {
                     $_SESSION["renderData"] = [];
                 }
                 $templateName = basename($realFileName);
+
                 $content = renderTemplate($templateName, $_SESSION["renderData"]);
             } else {
                 $content = file_get_contents($realFileName);

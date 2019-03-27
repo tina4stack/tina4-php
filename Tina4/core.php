@@ -5,6 +5,7 @@
  * Date: 2018/04/12
  * Time: 11:24
  */
+
 //defines
 define("TINA4_POST" , "POST");
 define("TINA4_GET"  , "GET");
@@ -13,31 +14,40 @@ define("TINA4_PUT"  , "PUT");
 define("TINA4_PATCH"  , "PATCH");
 define("TINA4_DELETE"  , "DELETE");
 
+global $twig;
 //Twig template engine
-global $twigLoader;
-$webRoot =  str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
+$webRoot = explode ( "/", realpath( __DIR__));// str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
+array_pop($webRoot);
+$webRoot = join("/", $webRoot);
 
 $twigPaths = TINA4_TEMPLATE_LOCATIONS;
 
-error_log("TINA4: Twig Paths".print_r ($twigPaths, 1));
+error_log("TINA4: Twig Paths\n".print_r ($twigPaths, 1));
 foreach ($twigPaths as $tid => $twigPath) {
+
     if (!file_exists($webRoot."/".$twigPath)) {
         unset($twigPaths[$tid]);
     }
 }
 
-$twigLoader = new Twig_Loader_Filesystem($twigPaths);
+$twigLoader = new \Twig\Loader\FilesystemLoader();
+foreach ($twigPaths as $twigPath) {
+    $twigLoader->addPath($twigPath, '__main__');
+}
 
-
-global $twig;
-$twig = new Twig_Environment($twigLoader, ["debug" => true]);
-$twig->addExtension(new Twig_Extension_Debug());
+$twig = new \Twig\Environment($twigLoader, ["debug" => true]);
+$twig->addExtension(new Twig\Extension\DebugExtension());
 
 function renderTemplate ($fileName, $data=[]) {
-    global $twig;
+    try {
+        global $twig;
 
-    return $twig->render($fileName, $data);
+        return $twig->render($fileName, $data);
+    } catch (Exception $exception) {
+        return $exception->getMessage();
+    }
 }
+
 
 function redirect($url, $statusCode = 303)
 {

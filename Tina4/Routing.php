@@ -43,18 +43,19 @@ class Routing
             echo "<PRE>";
         }
 
+
+
         //Generate a filename just in case the routing doesn't find anything
         if ($urlToParse === "/") {
             $fileName = "index";
         } else {
-            $ext = pathinfo($urlToParse, PATHINFO_EXTENSION);
-            if (empty($ext)) {
-                $fileName = $urlToParse . ".html";
-                $fileName = str_replace("/.html", "/index.html", $fileName);
-            } else {
-                $fileName = $urlToParse;
-            }
+            $fileName = $urlToParse;
         }
+
+        //Clean up twig extensions
+        $fileName = str_replace (".twig", "", $fileName);
+
+
 
         $urlToParse = $this->cleanURL($urlToParse);
 
