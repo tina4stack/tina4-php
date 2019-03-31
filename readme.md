@@ -12,16 +12,17 @@ Tina4 is a light weight routing and templating system which allows you to write 
 
 - Install PHP7.1 > make sure the php_fileinfo extension and mbstring extension are enabled.
 - Install composer
+- Create a project folder where you want to work
 - In your project folder terminal / console
     ```bash
     composer require andrevanzuydam/tina4php
     ```
-- Create an index.php file in your folder and add this code
+- Create an index.php file in your project folder and add this code
     ```bash
     <?php
     require "vendor/andrevanzuydam/tina4php/engine.php";
     ``` 
-- Spin up a web server with PHP
+- Spin up a web server with PHP in your terminal in the project folder
     ```bash
     php -S localhost:8080 index.php
     ```
