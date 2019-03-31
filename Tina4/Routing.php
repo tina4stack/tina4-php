@@ -43,7 +43,7 @@ class Routing
             echo "<PRE>";
         }
 
-
+        $urlToParse = $this->cleanURL($urlToParse);
 
         //Generate a filename just in case the routing doesn't find anything
         if ($urlToParse === "/") {
@@ -55,9 +55,6 @@ class Routing
         //Clean up twig extensions
         $fileName = str_replace (".twig", "", $fileName);
 
-
-
-        $urlToParse = $this->cleanURL($urlToParse);
 
 
         // if requested file is'nt a php file
@@ -157,7 +154,8 @@ class Routing
                 $fileName = "index";
             }
 
-            $this->content .= new ParseTemplate($root, $fileName);
+            error_log("TINA4: Variables\n".print_r (get_defined_vars(), 1));
+            $this->content .= new ParseTemplate($root, $fileName, get_defined_vars());
         } else {
             $this->content = $result;
         }

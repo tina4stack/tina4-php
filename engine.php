@@ -56,9 +56,9 @@ if(!defined("TINA4_INCLUDE_LOCATIONS")) {
 
 //Setup caching options
 $TINA4_CACHE_CONFIG =
-        new ConfigurationOption([
-            "path"      =>  $documentRoot."/cache"
-        ]);
+    new ConfigurationOption([
+        "path"      =>  $documentRoot."/cache"
+    ]);
 
 //include build
 if (!USE_CODE && !file_exists($root."/tina4core/tina4stackv2.phar")) {

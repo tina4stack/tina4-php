@@ -7,6 +7,8 @@
  */
 namespace Tina4;
 
+use mysql_xdevapi\Exception;
+
 class ParseTemplate {
     private $root;
     private $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";
@@ -16,8 +18,10 @@ class ParseTemplate {
     private $locations = ["assets", "objects"];
     private $responseCode = 200;
     private $twig;
+    private $definedVariables;
+    private $evals = [];
 
-    function __construct($root, $fileName) {
+    function __construct($root, $fileName, $definedVariables="") {
         error_log("TINA4 Filename: ".$fileName);
         if (defined("TINA4_TEMPLATE_LOCATIONS")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS;
@@ -26,6 +30,8 @@ class ParseTemplate {
         $this->root = $root;
         //parse the file for objects and tags
         $this->content = $this->parseFile($fileName);
+
+        $this->definedVariables = $definedVariables;
     }
 
     //we want to parse all includes that may exist
@@ -41,6 +47,37 @@ class ParseTemplate {
 
     //we want to parse all variables that might exist
     function parseVariables($content) {
+        foreach ($this->evals as $id => $eval) {
+            try {
+                eval($eval);
+            } catch (\ParseError $error) {
+                error_log("TINA4: Parse Error for ".$eval);
+            }
+        }
+
+        if (is_array($this->definedVariables)) {
+            $this->definedVariables = array_merge($this->definedVariables, get_defined_vars());
+        } else {
+            $this->definedVariables = get_defined_vars();
+        }
+
+        if (!empty($this->definedVariables)) {
+            foreach ($this->definedVariables as $varName => $value) {
+                $content = str_replace('{{'.$varName.'}}', $value, $content);
+            }
+        }
+
+        if (isset($_SESSION)) {
+            foreach ($_SESSION as $varName => $value) {
+                $content = str_replace('{{'.$varName.'}}', $value, $content);
+            }
+        }
+
+        if (isset($_REQUEST)) {
+            foreach ($_REQUEST as $varName => $value) {
+                $content = str_replace('{{' . $varName . '}}', $value, $content);
+            }
+        }
 
         return $content;
     }
@@ -68,21 +105,37 @@ class ParseTemplate {
         $parts = $this->parseParams($method);
 
         if ($object === "call") {
-            return call_user_func_array( $parts["method"], $parts["params"]);
-        }
-          else
-        if (!empty($parts["method"])) {
-            eval('$object = (new ' . $object . '());');
-            if (method_exists($object, $parts["method"] )) {
-               return call_user_func_array(array($object, $parts["method"]), $parts["params"]);
+            error_reporting(E_ALL & ~ E_WARNING);
+            try {
+                $response = call_user_func_array($parts["method"], $parts["params"]);
+                if ($response === false || empty($response)) {
+
+                    throw new \Exception ("Failed to call method ");
+                } else {
+                    return $response;
+                }
+            } catch (\Exception $error) {
+                $this->evals[] = $parts["method"];
             }
-              else {
-                  return "[Method {$parts["method"]} not found on ".get_class($object)."]";
-              }
-        } else {
-            $objectReflection = new ReflectionClass($object);
-            return $objectReflection->newInstanceArgs($parts["params"]);
         }
+        else
+            if (!empty($parts["method"])) {
+                eval('$object = (new ' . $object . '());');
+                if (method_exists($object, $parts["method"] )) {
+                    $response = call_user_func_array(array($object, $parts["method"]), $parts["params"]);
+                    if ($response === false) {
+                        throw new \Exception ("Failed to call method ");
+                    } else {
+                        return $response;
+                    }
+                }
+                else {
+                    return "[Method {$parts["method"]} not found on ".get_class($object)."]";
+                }
+            } else {
+                $objectReflection = new ReflectionClass($object);
+                return $objectReflection->newInstanceArgs($parts["params"]);
+            }
 
     }
 

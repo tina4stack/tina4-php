@@ -16,7 +16,8 @@ define("TINA4_DELETE"  , "DELETE");
 
 global $twig;
 //Twig template engine
-$webRoot = explode ( "/", realpath( __DIR__));// str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
+
+$webRoot = explode ( "/", realpath(dirname(__FILE__)."/../../../"));// str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
 array_pop($webRoot);
 $webRoot = join("/", $webRoot);
 
