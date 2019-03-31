@@ -96,6 +96,7 @@ class ParseTemplate {
         foreach ($paramArray as $pid => $param) {
             if (is_string($param) && $param[0] == "\"" && $param[strlen($param)-1] == "\"") {
                 $paramArray[$pid] = substr($param, 1, strlen($param)-2);
+                $paramArray[$pid] = $this->parseVariables($paramArray[$pid]);
             }
         }
         return ["method" => $method, "params" => $paramArray];
