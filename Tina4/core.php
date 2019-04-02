@@ -14,12 +14,23 @@ define("TINA4_PUT"  , "PUT");
 define("TINA4_PATCH"  , "PATCH");
 define("TINA4_DELETE"  , "DELETE");
 
+
+
 global $twig;
 //Twig template engine
 
 $webRoot = explode ( "/", realpath(dirname(__FILE__)."/../../../"));// str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
 array_pop($webRoot);
 $webRoot = join("/", $webRoot);
+
+//Silly work around when in package folder and need to test
+if ($webRoot === "/Users") {
+    $webRoot = explode ( "/", realpath(dirname(__FILE__)));
+    array_pop($webRoot);
+    $webRoot = join("/", $webRoot);
+}
+
+error_log("TINA4: Webroot ". $webRoot);
 
 $twigPaths = TINA4_TEMPLATE_LOCATIONS;
 
@@ -35,6 +46,7 @@ $twigLoader = new \Twig\Loader\FilesystemLoader();
 foreach ($twigPaths as $twigPath) {
     $twigLoader->addPath($twigPath, '__main__');
 }
+
 
 $twig = new \Twig\Environment($twigLoader, ["debug" => true]);
 $twig->addExtension(new Twig\Extension\DebugExtension());

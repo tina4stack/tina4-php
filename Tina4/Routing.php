@@ -154,7 +154,7 @@ class Routing
                 $fileName = "index";
             }
 
-            error_log("TINA4: Variables\n".print_r (get_defined_vars(), 1));
+            //error_log("TINA4: Variables\n".print_r (get_defined_vars(), 1));
             $this->content .= new ParseTemplate($root, $fileName, get_defined_vars());
         } else {
             $this->content = $result;
