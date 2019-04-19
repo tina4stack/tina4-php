@@ -62,6 +62,8 @@ class Tina4Object
      * @return string
      */
     function getObjectName($name, $fieldMapping=[]) {
+        if (!isset($this->{$name})) return $name;
+
         $name = strtolower($name);
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
             $fieldName = $fieldMapping[$name];
@@ -94,8 +96,19 @@ class Tina4Object
 
         foreach ($tableData as $fieldName => $fieldValue) {
             $insertColumns[] = $fieldName;
-            if ($fieldName === "id") {
-                $returningStatement = " returning (id)";
+            if ($fieldName === "id" ) {
+                if (empty($DBA)) {
+                    global $DBA; // see for a global DBA
+                }
+
+                if (!empty($DBA)) {
+                    if (get_class($DBA) === "Tina4\DataFirebird") {
+                        $returningStatement = " returning (id)";
+                    } else if (get_class($DBA) === "Tina4\DataSQLite3")    {
+                        $returningStatement = "";
+                    }
+                }
+
             }
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue) && $fieldValue[0] !== "0" ) {
@@ -200,7 +213,10 @@ class Tina4Object
      * @return object
      * @throws Exception
      */
-    function save($DBA, $tableName="", $fieldMapping=[]) {
+    function save($DBA=null, $tableName="", $fieldMapping=[]) {
+        if (empty($DBA)) {
+            global $DBA; // see for a global DBA
+        }
         $tableName = $this->getTableName ($tableName);
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
@@ -208,7 +224,9 @@ class Tina4Object
         //See if the record exists already using the primary key
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
+        error_log("TINA4: check ".$sqlCheck);
         $exists = json_decode($DBA->fetch($sqlCheck, 1)."");
+
 
         if (empty($exists->data)) { //insert
             $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
@@ -243,6 +261,8 @@ class Tina4Object
         }
     }
 
+
+
     /**
      * Loads the record from the database into the object
      * @param $DBA
@@ -251,7 +271,10 @@ class Tina4Object
      * @param string $filter
      * @return bool
      */
-    function load($DBA, $tableName= "", $fieldMapping=[], $filter="") {
+    function load($DBA=null, $tableName= "", $fieldMapping=[], $filter="") {
+        if (empty($DBA)) {
+            global $DBA; // see for a global DBA
+        }
         $tableName = $this->getTableName ($tableName);
 
         if (!empty($filter)) {
@@ -286,7 +309,10 @@ class Tina4Object
      * @param string $fieldMapping
      * @return object
      */
-    function delete($DBA, $tableName="", $fieldMapping="") {
+    function delete($DBA=null, $tableName="", $fieldMapping="") {
+        if (empty($DBA)) {
+            global $DBA; // see for a global DBA
+        }
         $tableName = $this->getTableName ($tableName);
 
         $tableData = $this->getTableData($fieldMapping);
@@ -324,6 +350,13 @@ class Tina4Object
         }
 
         return $this->load($DBA, $tableName, $fieldMapping, $filter);
+    }
+
+
+    function __toString()
+    {
+        // TODO: Implement __toString() method.
+        return json_encode($this->getTableData());
     }
 
 
