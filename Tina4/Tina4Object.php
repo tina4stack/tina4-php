@@ -18,13 +18,15 @@ class Tina4Object
      */
     function __construct($request=null)
     {
+        if (!empty($request) && !is_object($request) && !is_array($request)) {
+            throw new \Exception("Input is not an array or object");
+        }
         if ($request) {
             foreach ($request as $key => $value) {
-                $key = $this->getObjectName($key);
                 if (property_exists($this, $key )) {
                     $this->{$key} = $value;
                 } else {
-                    throw new Exception("{$key} does not exist for ".get_class($this));
+                    throw new \Exception("{$key} does not exist for ".get_class($this));
                 }
             }
         }
@@ -62,7 +64,7 @@ class Tina4Object
      * @return string
      */
     function getObjectName($name, $fieldMapping=[]) {
-        if (!isset($this->{$name})) return $name;
+        if (property_exists($this, $name)) return $name;
 
         $name = strtolower($name);
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
@@ -78,6 +80,7 @@ class Tina4Object
                     $fieldName .= $name{$i};
                 }
             }
+
             return $fieldName;
         }
     }
@@ -291,7 +294,8 @@ class Tina4Object
         if (!empty($fetchData->data)) {
             $fetchData = $fetchData->data[0];
             foreach ($fetchData as $fieldName => $fieldValue) {
-                if (property_exists($this, self::getObjectName($fieldName, $fieldMapping))) {
+                $propertyName = self::getObjectName($fieldName, $fieldMapping);
+                if (property_exists($this, $propertyName ) && empty($this->{$propertyName})) {
                     $this->{self::getObjectName($fieldName, $fieldMapping)} = $fieldValue;
                 }
             }
