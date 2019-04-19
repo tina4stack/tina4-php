@@ -5,7 +5,7 @@
  * Date: 2016/02/29
  * Time: 07:50 PM
  */
-namespace Tina4\PHP;
+namespace Tina4;
 
 class DataBase
 {

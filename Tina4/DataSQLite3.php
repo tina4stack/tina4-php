@@ -11,7 +11,7 @@ class DataSQLite3 extends DataBase
 {
     public function native_open() {
         inherited:
-        $this->dbh = (new SQLite3($this->databaseName)); //create the new database or open existing one
+        $this->dbh = (new \SQLite3($this->databaseName)); //create the new database or open existing one
         $this->dbh->busyTimeout(5000); //prevent database locks
         $this->dbh->exec('PRAGMA journal_mode = wal;'); //help with concurrency
     }
