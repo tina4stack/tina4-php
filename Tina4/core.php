@@ -19,15 +19,15 @@ define("TINA4_DELETE"  , "DELETE");
 global $twig;
 //Twig template engine
 
-$webRoot = explode ( "/", realpath(dirname(__FILE__)."/../../../"));// str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
+$webRoot = explode ( DIRECTORY_SEPARATOR, realpath(dirname(__FILE__). "/../../../"));// str_replace ("phar://", "", realpath(dirname(__FILE__)."/../../../../"));
 array_pop($webRoot);
-$webRoot = join("/", $webRoot);
+$webRoot = join(DIRECTORY_SEPARATOR, $webRoot);
 
 //Silly work around when in package folder and need to test
 if ($webRoot === "/Users") {
-    $webRoot = explode ( "/", realpath(dirname(__FILE__)));
+    $webRoot = explode ( DIRECTORY_SEPARATOR, realpath(dirname(__FILE__)));
     array_pop($webRoot);
-    $webRoot = join("/", $webRoot);
+    $webRoot = join(DIRECTORY_SEPARATOR, $webRoot);
 }
 
 error_log("TINA4: Webroot ". $webRoot);

@@ -66,7 +66,6 @@ class Tina4Object
      */
     function getObjectName($name, $fieldMapping=[]) {
         if (property_exists($this, $name)) return $name;
-
         $name = strtolower($name);
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
             $fieldName = $fieldMapping[$name];
