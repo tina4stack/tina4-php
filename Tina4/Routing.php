@@ -62,9 +62,13 @@ class Routing
             $ext = pathinfo($urlToParse, PATHINFO_EXTENSION);
             $mimeType = mime_content_type($root . $urlToParse);
 
-            if ($ext === "css") {
-                $mimeType = "text/css";
+            if ($ext === "svg") {
+                $mimeType = "image/svg+xml";
             }
+            else
+                if ($ext === "css") {
+                    $mimeType = "text/css";
+                }
             header('Content-Type: ' . $mimeType);
 
             $fh = fopen($root . $urlToParse, 'r');
