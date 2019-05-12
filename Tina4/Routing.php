@@ -124,10 +124,11 @@ class Routing
                 //Look to see if we are a secure route
                 $reflection = new \ReflectionFunction($route["function"]);
                 $doc = $reflection->getDocComment();
-                preg_match_all('#@(.*?)\n#s', $doc, $annotations);
+                preg_match_all('#@(.*?)\r\n#s', $doc, $annotations);
 
                 if (in_array("secure", $annotations[1])) {
                     $headers = getallheaders();
+
                     if (isset($headers["Authorization"]) && Auth::validToken($headers["Authorization"])) {
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $this->getParams($response));
@@ -257,6 +258,27 @@ class Routing
         return $this->content;
     }
 
+    /**
+     * Convert a multi-dimensional array into a single-dimensional array.
+     * @author Sean Cannon, LitmusBox.com | seanc@litmusbox.com
+     * @param  array $array The multi-dimensional array.
+     * @return array
+     */
+    function array_flatten($array) {
+        if (!is_array($array)) {
+            return false;
+        }
+        $result = array();
+        foreach ($array as $key => $value) {
+            if (is_array($value)) {
+                $result = array_merge($result, array_flatten($value));
+            } else {
+                $result[$key] = $value;
+            }
+        }
+        return $result;
+    }
+
 
     function getClassAnnotations($class)
     {
@@ -278,18 +300,21 @@ class Routing
             //echo $method;
 
             $reflection = new \ReflectionFunction($route["function"]);
-            $doc = $reflection->getDocComment();
+            $doc = str_replace("\r", "", $reflection->getDocComment());
             preg_match_all('#@(.*?)\n#s', $doc, $annotations);
 
-            //print_r ($annotations);
+
 
             $summary = "None";
             $description = "None";
             $tags = [];
+            $queryParams = [];
+
+
+
             foreach ($annotations[0] as $aid => $annotation) {
 
-                preg_match_all('/^(@[a-z]*) ([\w\s]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
-
+                preg_match_all('/^(@[a-zA-Z]*) ([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
 
                 if (count($matches) > 0) {
                     $matches = $matches[0];
@@ -304,24 +329,32 @@ class Routing
                         $summary = $matches[2];
                     } else
                         if ($matches[1] === "@description") {
-                            $description = $matches[2];
+                            $description = str_replace("\n", "", $matches[2]);
                         } else
                             if ($matches[1] === "@tags") {
                                 $tags = explode(",", $matches[2]);
-                            } else
-                                if ($matches[1] === "@example") {
-                                    eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (object)(new ' . trim(str_replace("\n", "", $matches[2])) . '())->getTableData();} else {$example = (object)[];} ');
+                                foreach ($tags as $tid => $tag) {
+                                    $tags[$tid] = str_replace("\n", "", $tag);
                                 }
+                            } else
+                                if ($matches[1] === "@queryParams") {
+                                    $queryParams = explode(",", $matches[2]);
+                                } else
+                                    if ($matches[1] === "@example") {
+                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (object)(new ' . trim(str_replace("\n", "", $matches[2])) . '())->getTableData();} else {$example = (object)[];} ');
+                                    }
 
                 }
             }
 
-
             $arguments = $reflection->getParameters();
 
             $params = json_decode(json_encode($arguments));
+
             $propertyIn = "in";
             $propertyType = "type";
+            $propertyName = "name";
+
             foreach ($params as $pid => $param) {
                 $params[$pid]->{$propertyIn} = "path";
                 $params[$pid]->{$propertyType} = "string";
@@ -330,6 +363,13 @@ class Routing
                     unset($params[$pid]);
                 }
             }
+
+            foreach ($queryParams as $pid => $param) {
+                $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string" ];
+                array_push($params, $newParam);
+            }
+
+            $params = json_decode(json_encode(array_values($params)));
 
             if ($description !== "None") {
                 if ($method === "any") {
