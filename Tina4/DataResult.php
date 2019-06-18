@@ -23,12 +23,13 @@ class DataResult
      * @param $noOfRecords
      * @param int $offSet
      */
-    function __construct($records, $fields, $noOfRecords, $offSet=0)
+    function __construct($records, $fields, $noOfRecords, $offSet=0,$error=null)
     {
         $this->records = $records;
         $this->fields = $fields;
         $this->noOfRecords = $noOfRecords;
         $this->offSet = $offSet;
+        $this->error = $error;
     }
 
     /**
