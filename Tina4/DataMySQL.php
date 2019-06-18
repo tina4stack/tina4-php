@@ -37,9 +37,10 @@ class DataMYSQL extends DataBase
     }
 
     public function native_error() {
-        $error = mysqli_error($this->dbh);
+        $errorNo = mysqli_errno($this->dbh);
+        $errorMessage = mysqli_error($this->dbh);
 
-        return (new DataError( $errorCode="1000", $error));
+        return (new DataError( $errorNo, $errorMessage));
     }
 
     public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
