@@ -47,7 +47,7 @@ class DataMYSQL extends DataBase
         $initialSQL = $sql;
 
         if (strpos($sql, "limit") === false) {
-            $sql .= " limit {$noOfRecords},{$offSet}";
+            $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
         $recordCursor = @mysqli_query($this->dbh, $sql );
@@ -60,7 +60,7 @@ class DataMYSQL extends DataBase
         }
 
 
-        if (count($records) > 1) {
+        if (count($records) > 0) {
             if (stripos($sql, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 

@@ -25,16 +25,16 @@ class DataRecord
     }
 
     function asObject () {
-        return json_decode(json_encode($this->original));
+        return $this->original;
     }
 
     function asJSON () {
-        return json_encode($this->original);
+        return json_encode($this->original,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
     }
 
     function __toString()
     {
-        return json_encode($this->original);
+        return json_encode($this->original, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
     }
 
     function byName ($name) {
