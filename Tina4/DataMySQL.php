@@ -52,25 +52,32 @@ class DataMYSQL extends DataBase
 
         $recordCursor = @mysqli_query($this->dbh, $sql );
 
+
         $records = null;
         $record = null;
 
-        while($record = @mysqli_fetch_assoc($recordCursor)) {
-            $records[] = (new DataRecord( $record ));
-        }
+        if ($recordCursor->num_rows > 0) {
+            while ($record = @mysqli_fetch_assoc($recordCursor)) {
+                if (is_array($record)) {
+                    $records[] = (new DataRecord($record));
+                }
+            }
 
 
-        if (count($records) > 0) {
-            if (stripos($sql, "returning") === false) {
-                $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
+            if (is_array($records) && count($records) > 1) {
+                if (stripos($sql, "returning") === false) {
+                    $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
-                $recordCount = @mysqli_query($this->dbh, $sqlCount);
+                    $recordCount = @mysqli_query($this->dbh, $sqlCount);
 
-                $resultCount = @mysqli_fetch_assoc($recordCount);
+                    $resultCount = @mysqli_fetch_assoc($recordCount);
 
 
+                } else {
+                    $resultCount = null;
+                }
             } else {
-                $resultCount = null;
+                $resultCount["COUNT_RECORDS"] = 1;
             }
         } else {
             $resultCount["COUNT_RECORDS"] = 1;
@@ -81,9 +88,10 @@ class DataMYSQL extends DataBase
         $fields = [];
         if (!empty($records)) {
             //$record = $records[0];
-            $fields = mysqli_fetch_fields($recordCursor);
-            foreach ($fields as $field => $fieldInfo) {
-                $fieldInfo = (array) $fieldInfo;
+            $fields = @mysqli_fetch_fields($recordCursor);
+
+            foreach ($fields as $fieldId => $fieldInfo) {
+                $fieldInfo = (array)json_decode(json_encode($fieldInfo));
 
                 $fields[] = (new DataField($fid, $fieldInfo["name"], $fieldInfo["orgname"], $fieldInfo["type"], $fieldInfo["length"]));
                 $fid++;
@@ -91,6 +99,7 @@ class DataMYSQL extends DataBase
         }
 
         $error = $this->error();
+
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
 
