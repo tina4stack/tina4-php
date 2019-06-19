@@ -7,11 +7,11 @@
  */
 namespace Tina4;
 
-class DataMYSQL extends DataBase
+class DataMySQL extends DataBase
 {
     public function native_open() {
         inherited:
-        $this->dbh = mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName);
+        $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName);
 
     }
 
@@ -26,10 +26,10 @@ class DataMYSQL extends DataBase
             $fetchData = $this->fetch($params[0]);
             return $fetchData;
         } else {
-            $preparedQuery = @mysqli_prepare($params[0]);
+            $preparedQuery = @\mysqli_prepare($params[0]);
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-                @call_user_func_array("mysqli_execute", $params);
+                @call_user_func_array("\mysqli_execute", $params);
             }
 
             return $this->error();
@@ -37,8 +37,8 @@ class DataMYSQL extends DataBase
     }
 
     public function native_error() {
-        $errorNo = mysqli_errno($this->dbh);
-        $errorMessage = mysqli_error($this->dbh);
+        $errorNo = \mysqli_errno($this->dbh);
+        $errorMessage = \mysqli_error($this->dbh);
 
         return (new DataError( $errorNo, $errorMessage));
     }
@@ -50,14 +50,14 @@ class DataMYSQL extends DataBase
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
-        $recordCursor = @mysqli_query($this->dbh, $sql );
+        $recordCursor = @\mysqli_query($this->dbh, $sql );
 
 
         $records = null;
         $record = null;
 
         if ($recordCursor->num_rows > 0) {
-            while ($record = @mysqli_fetch_assoc($recordCursor)) {
+            while ($record = @\mysqli_fetch_assoc($recordCursor)) {
                 if (is_array($record)) {
                     $records[] = (new DataRecord($record));
                 }
@@ -68,9 +68,9 @@ class DataMYSQL extends DataBase
                 if (stripos($sql, "returning") === false) {
                     $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
-                    $recordCount = @mysqli_query($this->dbh, $sqlCount);
+                    $recordCount = @\mysqli_query($this->dbh, $sqlCount);
 
-                    $resultCount = @mysqli_fetch_assoc($recordCount);
+                    $resultCount = @\mysqli_fetch_assoc($recordCount);
 
 
                 } else {
@@ -105,7 +105,7 @@ class DataMYSQL extends DataBase
 
     public function native_commit() {
         //No commit for sqlite
-        mysqli_commit($this->dbh);
+        \mysqli_commit($this->dbh);
     }
 }
 
