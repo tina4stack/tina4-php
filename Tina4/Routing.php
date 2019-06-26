@@ -70,6 +70,7 @@ class Routing
                     $mimeType = "text/css";
                 }
             header('Content-Type: ' . $mimeType);
+            header('Cache-Control: max-age='.(60 * 60).', public');
             header('Expires: '.gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
             $fh = fopen($root . $urlToParse, 'r');
