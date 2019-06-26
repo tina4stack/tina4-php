@@ -23,6 +23,18 @@ class Routing
         error_log("TINA4: URL to parse " . $urlToParse);
         global $arrRoutes;
 
+        if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS) ) {
+            header('Access-Control-Allow-Origin: '.$_SERVER["HTTP_ORIGIN"]);
+            header('Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+        }
+
+        if ($method === "OPTIONS") {
+            http_response_code(200);
+            $this->content = "";
+            return true;
+        }
+
         //Gives back things in an orderly fashion for API responses
         $response = function ($content, $code = 200, $contentType = null) {
             http_response_code($code);

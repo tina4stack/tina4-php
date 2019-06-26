@@ -41,7 +41,6 @@ if (file_exists("{$documentRoot}/config.php")) {
     require_once ($documentRoot."/config.php");
 }
 
-
 if(!defined("TINA4_TEMPLATE_LOCATIONS")) {
     define("TINA4_TEMPLATE_LOCATIONS" , ["templates", "assets", "templates/snippets"]);
 }
@@ -52,6 +51,10 @@ if(!defined("TINA4_ROUTE_LOCATIONS")) {
 
 if(!defined("TINA4_INCLUDE_LOCATIONS")) {
     define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]);
+}
+
+if (!defined( "TINA4_ALLOW_ORIGINS")) {
+    define("TINA4_ALLOW_ORIGINS", ["*"]);
 }
 
 //Setup caching options
