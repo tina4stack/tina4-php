@@ -26,10 +26,12 @@ class DataMySQL extends DataBase
             $fetchData = $this->fetch($params[0]);
             return $fetchData;
         } else {
-            $preparedQuery = @\mysqli_prepare($params[0]);
+
+
+            $preparedQuery = @\mysqli_prepare($this->dbh, $params[0]);
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-                @call_user_func_array("\mysqli_execute", $params);
+                $result = @call_user_func_array("\mysqli_execute", $params);
             }
 
             return $this->error();
@@ -37,8 +39,8 @@ class DataMySQL extends DataBase
     }
 
     public function native_error() {
-        $errorNo = \mysqli_errno($this->dbh);
-        $errorMessage = \mysqli_error($this->dbh);
+        $errorNo = @\mysqli_errno($this->dbh);
+        $errorMessage = @\mysqli_error($this->dbh);
 
         return (new DataError( $errorNo, $errorMessage));
     }
@@ -108,4 +110,3 @@ class DataMySQL extends DataBase
         \mysqli_commit($this->dbh);
     }
 }
-
