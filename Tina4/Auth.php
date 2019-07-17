@@ -34,7 +34,7 @@ class Auth
         if (isset($_SESSION["tina4:authToken"]) && $_SESSION["tina4:authToken"] === $token) {
             return true;
         } else {
-            error_log("Validating {$_SESSION["tina4:authToken"]} {$token} failed!");
+            error_log("Validating {$token} failed!");
             return false;
         }
 

@@ -145,7 +145,7 @@ class Routing
                 //Look to see if we are a secure route
                 $reflection = new \ReflectionFunction($route["function"]);
                 $doc = $reflection->getDocComment();
-                preg_match_all('#@(.*?)\r\n#s', $doc, $annotations);
+                preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
                 if (in_array("secure", $annotations[1])) {
                     $headers = getallheaders();
@@ -323,8 +323,9 @@ class Routing
             //echo $method;
 
             $reflection = new \ReflectionFunction($route["function"]);
-            $doc = str_replace("\r", "", $reflection->getDocComment());
-            preg_match_all('#@(.*?)\n#s', $doc, $annotations);
+
+            $doc = $reflection->getDocComment();
+            preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
 
 
