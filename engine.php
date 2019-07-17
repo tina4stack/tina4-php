@@ -15,7 +15,6 @@ $documentRoot = realpath(dirname(__FILE__)."/../../../");
 if (file_exists("engine.php")) {
     $documentRoot = realpath(dirname(__FILE__));
 }
-error_log ("TINA4: document root ".$documentRoot);
 
 //root of tina4
 $root = realpath(dirname(__FILE__));
@@ -94,8 +93,6 @@ if (!USE_CODE && file_exists($root."/tina4core/tina4stackv2.phar")) {
         die("tina4stack needs to be built for the system to run correctly.");
     }
 }
-
-error_log("TINA4: Document root ".$documentRoot);
 
 //Check if assets folder is there
 if (!file_exists($documentRoot."/assets") && !file_exists("engine.php")) {
