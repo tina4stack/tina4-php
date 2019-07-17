@@ -21,6 +21,7 @@ class Auth
             $token = md5(date("Y-m-d h:i:s"));
         }
         $_SESSION["tina4:authToken"] = $token;
+        session_write_close();
         return $token;
     }
 
