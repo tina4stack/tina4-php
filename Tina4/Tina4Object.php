@@ -227,7 +227,9 @@ class Tina4Object
         //See if the record exists already using the primary key
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
-        error_log("TINA4: check ".$sqlCheck);
+        if (TINA4_DEBUG) {
+            error_log("TINA4: check " . $sqlCheck);
+        }
         $exists = json_decode($DBA->fetch($sqlCheck, 1)."");
 
 

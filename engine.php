@@ -41,6 +41,14 @@ if (file_exists("{$documentRoot}/config.php")) {
     require_once ($documentRoot."/config.php");
 }
 
+if (!defined("TINA4_DEBUG")) {
+    define ("TINA4_DEBUG", false);
+} else {
+    if (TINA4_DEBUG) {
+        error_log("TINA4 DEBUG: ON");
+    }
+}
+
 if(!defined("TINA4_TEMPLATE_LOCATIONS")) {
     define("TINA4_TEMPLATE_LOCATIONS" , ["templates", "assets", "templates/snippets"]);
 }

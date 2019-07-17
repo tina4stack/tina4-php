@@ -22,7 +22,9 @@ class ParseTemplate {
     private $evals = [];
 
     function __construct($root, $fileName, $definedVariables="") {
-        error_log("TINA4 Filename: ".$fileName);
+        if (TINA4_DEBUG) {
+            error_log("TINA4 Filename: " . $fileName);
+        }
         if (defined("TINA4_TEMPLATE_LOCATIONS")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS;
         }
@@ -51,7 +53,9 @@ class ParseTemplate {
             try {
                 eval($eval);
             } catch (\ParseError $error) {
-                error_log("TINA4: Parse Error for ".$eval);
+                if (TINA4_DEBUG) {
+                    error_log("TINA4: Parse Error for " . $eval);
+                }
             }
         }
 

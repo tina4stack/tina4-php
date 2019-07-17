@@ -20,7 +20,11 @@ class Routing
 
     function __construct($root = "", $urlToParse = "", $method = "")
     {
-        error_log("TINA4: URL to parse " . $urlToParse);
+        $this->debug = TINA4_DEBUG;
+
+        if ($this->debug) {
+            error_log("TINA4: URL to parse " . $urlToParse);
+        }
         global $arrRoutes;
 
         if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS) ) {
@@ -118,7 +122,9 @@ class Routing
                 }
                 $d->close();
             } else {
-                error_log("TINA4: " . getcwd() . "/" . $route . " not found!");
+                if ($this->debug) {
+                    error_log("TINA4: " . getcwd() . "/" . $route . " not found!");
+                }
             }
         }
 
@@ -173,7 +179,9 @@ class Routing
                 $fileName = "index";
             }
 
-            //error_log("TINA4: Variables\n".print_r (get_defined_vars(), 1));
+            if ($this->debug) {
+                error_log("TINA4: Variables\n" . print_r(get_defined_vars(), 1));
+            }
             $this->content .= new ParseTemplate($root, $fileName, get_defined_vars());
         } else {
             $this->content = $result;

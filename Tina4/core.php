@@ -14,8 +14,6 @@ define("TINA4_PUT"  , "PUT");
 define("TINA4_PATCH"  , "PATCH");
 define("TINA4_DELETE"  , "DELETE");
 
-
-
 global $twig;
 //Twig template engine
 
@@ -30,11 +28,16 @@ if ($webRoot === "/Users") {
     $webRoot = join(DIRECTORY_SEPARATOR, $webRoot);
 }
 
-error_log("TINA4: Webroot ". $webRoot);
+if (TINA4_DEBUG) {
+    error_log("TINA4: Webroot " . $webRoot);
+}
 
 $twigPaths = TINA4_TEMPLATE_LOCATIONS;
 
-error_log("TINA4: Twig Paths\n".print_r ($twigPaths, 1));
+if (TINA4_DEBUG) {
+    error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+}
+
 foreach ($twigPaths as $tid => $twigPath) {
 
     if (!file_exists($webRoot."/".$twigPath)) {
