@@ -337,9 +337,9 @@ class Routing
 
 
 
+            $addParams = [];
             foreach ($annotations[0] as $aid => $annotation) {
-
-                preg_match_all('/^(@[a-zA-Z]*) ([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
+                preg_match_all('/^(@[a-zA-Z]*)([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
 
                 if (count($matches) > 0) {
                     $matches = $matches[0];
@@ -348,6 +348,10 @@ class Routing
                 }
 
                 $example = (object)[];
+
+                if (!empty($matches[2])) {
+                    $matches[2] = trim ($matches[2]);
+                }
 
                 if (!empty($matches)) {
                     if ($matches[1] === "@summary") {
@@ -366,8 +370,12 @@ class Routing
                                     $queryParams = explode(",", $matches[2]);
                                 } else
                                     if ($matches[1] === "@example") {
-                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (object)(new ' . trim(str_replace("\n", "", $matches[2])) . '())->getTableData();} else {$example = (object)[];} ');
+                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else { $example = json_decode (json_encode($example)); }  } else {$example = (object)[];} ');
                                     }
+                                    else
+                                        if ($matches[1] === "@secure") {
+                                            $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
+                                        }
 
                 }
             }
@@ -375,14 +383,21 @@ class Routing
             $arguments = $reflection->getParameters();
 
             $params = json_decode(json_encode($arguments));
+            $params = array_merge($params, $addParams);
 
             $propertyIn = "in";
             $propertyType = "type";
             $propertyName = "name";
 
             foreach ($params as $pid => $param) {
-                $params[$pid]->{$propertyIn} = "path";
-                $params[$pid]->{$propertyType} = "string";
+
+                if (!isset($params[$pid]->{$propertyIn})) {
+                    $params[$pid]->{$propertyIn} = "path";
+                }
+
+                if (!isset($params[$pid]->{$propertyType})) {
+                    $params[$pid]->{$propertyType} = "string";
+                }
 
                 if ($params[$pid]->name === "response" || $params[$pid]->name === "request") {
                     unset($params[$pid]);
