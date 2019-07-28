@@ -119,7 +119,10 @@ Make use of PHP inside the HTML with the following **{{call:[method],[param1,par
   define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
   //Define some folders where we want to have tina4 include automatically
   define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]);
-  require "vendor/andrevanzuydam/tina4php/engine.php";
+  
+  require "vendor/autoload.php";
+  
+  echo new Tina4/Tina4PHP();
   ```
 - Make an Example.php file in the app folder with the following code
     ```php
@@ -150,7 +153,9 @@ Once you have mastered these basics you should be able to create an simple stati
   <?php
   //Define some folders where we want templates
   define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
-  require "vendor/andrevanzuydam/tina4php/engine.php";
+  require "vendor/autoload.php";
+
+  echo new Tina4/Tina4PHP();  
   ```
 - In your templates folder create a file index.twig and insert the following code
     ```html
@@ -210,6 +215,10 @@ There are a number of steps to making good API end points and the following step
     <?php
     define("TINA4_ROUTE_LOCATIONS"  , ["api","routes"]); //For routing and API
     define("TINA4_INCLUDE_LOCATIONS"  , ["app","objects"]); //For business logic and ORM objects
+    
+    require "vendor/autoload.php";
+    
+    echo new Tina4/Tina4PHP();
     ```
 
 - Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want, the idea is to group your API end points logically.
