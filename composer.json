@@ -8,5 +8,14 @@
         "phpfastcache/phpfastcache": "^7.0",
         "coyl/git": "^0.1.7",
         "codeception/codeception": "^2.5"
+    },
+    "autoload": {
+        "classmap": [
+            "Tina4Php.php",
+            "Tina4"
+        ],
+        "psr-4": {
+            "Tina4\\":"Tina4/"
+        }
     }
 }
