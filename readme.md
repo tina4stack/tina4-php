@@ -45,7 +45,8 @@ Once you have mastered these basics you should be able to create an simple stati
   <?php
   //Define some folders where we want templates
   define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
-  require "vendor/andrevanzuydam/tina4php/engine.php";
+  require "vendor/autoload.php";
+  echo new Tina4/Tina4PHP();
   ```
 - In your templates folder create a file index.html and insert the following code
     ```html
