@@ -20,7 +20,8 @@ Tina4 is a light weight routing and templating system which allows you to write 
 - Create an index.php file in your project folder and add this code
     ```bash
     <?php
-    require "vendor/andrevanzuydam/tina4php/engine.php";
+     require "vendor/autoload.php"; 
+     echo new Tina4/Tina4PHP();
     ``` 
 - Spin up a web server with PHP in your terminal in the project folder
     ```bash
