@@ -9,7 +9,6 @@ namespace Tina4;
 
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
-use Tina4\Routing;
 
 class Tina4Php
 {
@@ -20,8 +19,18 @@ class Tina4Php
 
     function __construct($config=null)
     {
+        //define constants
+
+        if (!defined("TINA4_POST")) define("TINA4_POST" , "POST");
+        if (!defined("TINA4_GET")) define("TINA4_GET"  , "GET");
+        if (!defined("TINA4_ANY")) define("TINA4_ANY"  , "ANY");
+        if (!defined("TINA4_PUT")) define("TINA4_PUT"  , "PUT");
+        if (!defined("TINA4_PATCH")) define("TINA4_PATCH"  , "PATCH");
+        if (!defined("TINA4_DELETE")) define("TINA4_DELETE"  , "DELETE");
+
         //root of the website
-        $this->documentRoot = realpath(dirname(__FILE__)."/../../../");
+        $this->documentRoot = realpath(dirname(__FILE__).DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR);
+
         if (file_exists("Tina4.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
         }
@@ -101,12 +110,102 @@ class Tina4Php
 
         $cache = CacheManager::getInstance("files");
 
+        global $twig;
 
-        if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
-            return new Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
-        } else {
-            return new Routing($this->documentRoot, "/", "GET");
+        $twigPaths = TINA4_TEMPLATE_LOCATIONS;
+
+        if (TINA4_DEBUG) {
+            error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
         }
 
+        foreach ($twigPaths as $tid => $twigPath) {
+            if (!file_exists($this->documentRoot."/".$twigPath)) {
+                unset($twigPaths[$tid]);
+            }
+        }
+
+        $twigLoader = new \Twig\Loader\FilesystemLoader();
+        foreach ($twigPaths as $twigPath) {
+            $twigLoader->addPath($twigPath, '__main__');
+        }
+
+        $twig = new \Twig\Environment($twigLoader, ["debug" => true]);
+        $twig->addExtension(new \Twig\Extension\DebugExtension());
+
+    }
+
+    function __toString()
+    {
+        $string = "";
+        if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
+            $string .= new Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
+
+        } else {
+            $string .= new Routing($this->documentRoot, "/", "GET");
+        }
+        return $string;
     }
 }
+
+/**
+ * Helper functions below used by the whole system
+ */
+
+/**
+ * Render twig template
+ * @param $fileName
+ * @param array $data
+ * @return string
+ * @throws \Twig\Error\LoaderError
+ * @throws \Twig\Error\RuntimeError
+ * @throws \Twig\Error\SyntaxError
+ */
+function renderTemplate ($fileName, $data=[]) {
+    try {
+        global $twig;
+
+        return $twig->render($fileName, $data);
+    } catch (Exception $exception) {
+        return $exception->getMessage();
+    }
+}
+
+/**
+ * Redirect
+ * @param $url
+ * @param int $statusCode
+ */
+function redirect($url, $statusCode = 303)
+{
+    header('Location: ' . $url, true, $statusCode);
+    die();
+}
+
+/**
+ * Autoloader
+ * @param $class
+ */
+function tina4_autoloader($class) {
+    $root = dirname(__FILE__);
+
+    $class = explode("\\", $class);
+    $class = $class[count($class)-1];
+
+    $fileName = "{$root}/".str_replace("_","/",$class). ".php";
+
+    if (file_exists($fileName)) {
+        include_once $fileName;
+    }  else {
+        if (defined("TINA4_INCLUDE_LOCATIONS") && is_array(TINA4_INCLUDE_LOCATIONS)) {
+            foreach (TINA4_INCLUDE_LOCATIONS as $lid => $location) {
+                if (file_exists($_SERVER["DOCUMENT_ROOT"]."/{$location}/{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"] . "/{$location}/{$class}.php";
+                    break;
+                }
+            }
+        }
+    }
+
+}
+
+spl_autoload_register('Tina4\tina4_autoloader');
