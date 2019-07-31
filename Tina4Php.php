@@ -95,7 +95,7 @@ class Tina4Php
 
         //Check if assets folder is there
         if (!file_exists($this->documentRoot."/assets") && !file_exists("Tina4.php")) {
-            Tina4\Routing::recurseCopy($this->webRoot."/assets", $this->documentRoot."/assets");
+            \Tina4\Routing::recurseCopy($this->webRoot."/assets", $this->documentRoot."/assets");
         }
 
         //Add the .htaccess file for redirecting things
@@ -138,10 +138,10 @@ class Tina4Php
     {
         $string = "";
         if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
-            $string .= new Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
+            $string .= new \Tina4\Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
 
         } else {
-            $string .= new Routing($this->documentRoot, "/", "GET");
+            $string .= new \Tina4\Routing($this->documentRoot, "/", "GET");
         }
         return $string;
     }
