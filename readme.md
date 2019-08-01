@@ -21,7 +21,7 @@ Tina4 is a light weight routing and templating system which allows you to write 
     ```bash
     <?php
      require "vendor/autoload.php"; 
-     echo new Tina4/Tina4PHP();
+     echo new \Tina4\Tina4Php();
     ``` 
 - Spin up a web server with PHP in your terminal in the project folder
     ```bash
@@ -46,7 +46,7 @@ Once you have mastered these basics you should be able to create an simple stati
   //Define some folders where we want templates
   define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
   require "vendor/autoload.php";
-  echo new Tina4/Tina4PHP();
+  echo new \Tina4\Tina4Php();
   ```
 - In your templates folder create a file index.html and insert the following code
     ```html
@@ -124,7 +124,7 @@ Make use of PHP inside the HTML with the following **{{call:[method],[param1,par
   
   require "vendor/autoload.php";
   
-  echo new Tina4/Tina4PHP();
+  echo new \Tina4\Tina4Php();
   ```
 - Make an Example.php file in the app folder with the following code
     ```php
@@ -157,7 +157,7 @@ Once you have mastered these basics you should be able to create an simple stati
   define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
   require "vendor/autoload.php";
 
-  echo new Tina4/Tina4PHP();  
+  echo new \Tina4\Tina4Php();
   ```
 - In your templates folder create a file index.twig and insert the following code
     ```html
@@ -220,7 +220,7 @@ There are a number of steps to making good API end points and the following step
     
     require "vendor/autoload.php";
     
-    echo new Tina4/Tina4PHP();
+    echo new \Tina4\Tina4Php();
     ```
 
 - Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want, the idea is to group your API end points logically.
