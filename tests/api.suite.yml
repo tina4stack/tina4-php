@@ -1,0 +1,8 @@
+actor: ApiTester
+modules:
+    enabled:
+        - \Tina4\Helper\Api
+        - REST:
+            url: http://localhost:11444
+            depends: PhpBrowser
+            part: Json

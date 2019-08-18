@@ -10,7 +10,7 @@
         "jms/serializer": "1.7.*"
     },
     "autoload": {
-        "clas smap": [
+        "classmap": [
             "Tina4Php.php",
             "Tina4"
         ],

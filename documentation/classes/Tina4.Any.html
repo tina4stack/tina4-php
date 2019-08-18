@@ -114,7 +114,7 @@
                         <ul class="dropdown-menu">
                             <li>
                                 <a href="../reports/errors.html">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">193</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">191</span>
                                 </a>
                             </li>
                             <li>
@@ -144,19 +144,19 @@
                                 <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-2064956544"></a>
+                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-1230648530"></a>
                                 <a href="../namespaces/default.html" style="margin-left: 30px; padding-left: 0">\</a>
             </div>
-            <div id="namespace-2064956544" class="accordion-body collapse in">
+            <div id="namespace-1230648530" class="accordion-body collapse in">
                 <div class="accordion-inner">
 
                                                     <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-991553880"></a>
+                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-1644917182"></a>
                                 <a href="../namespaces/Tina4.html" style="margin-left: 30px; padding-left: 0">Tina4</a>
             </div>
-            <div id="namespace-991553880" class="accordion-body collapse ">
+            <div id="namespace-1644917182" class="accordion-body collapse ">
                 <div class="accordion-inner">
 
                     
@@ -207,7 +207,7 @@
                     <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal"><i class="icon-code"></i></a>
 
                     <h1><small>\Tina4</small>Any</h1>
-                    <p><em></em></p>
+                    <p><em>The Any route intercepts any type of call that can be made to the web server</em></p>
                     
                     
                                         
@@ -266,7 +266,7 @@
                         <dt>File</dt>
                             <dd><a href="../files/Any.html"><div class="path-wrapper">Any.php</div></a></dd>
                                                 <dt>Package</dt>
-                            <dd><div class="namespace-wrapper">Default</div></dd>
+                            <dd><div class="namespace-wrapper">Tina4</div></dd>
                                                 <dt>Class hierarchy</dt>
                             <dd class="hierarchy">
                                                                                                                                                                                                                                                                                                 
@@ -333,26 +333,61 @@
                 <h3 class="public ">add()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
                 <pre class="signature" style="margin-right: 54px;">add(  <span class="argument">$routePath</span>,   <span class="argument">$function</span>) </pre>
-                <p><em></em></p>
-                
+                <p><em>Add a route to be called on the web server</em></p>
+                <p>The routePath can contain variables or in-line parameters encapsulated with {} e.g. &quot;/test/{number}&quot;</p>
 
                                     <h4>Parameters</h4>
                     <table class="table table-condensed table-hover">
                                                     <tr>
                                 <td></td>
                                 <td>$routePath </td>
-                                <td></td>
+                                <td><p>A valid html route</p></td>
                             </tr>
                                                     <tr>
                                 <td></td>
                                 <td>$function </td>
-                                <td></td>
+                                <td><p>An anonymous function to handle the route called, has params based on inline params and $response, $request params by default</p></td>
                             </tr>
                                             </table>
                 
                 
                 				
-                            </article>
+                                                            <h4>Examples</h4>
+                                                                <h5></h5>
+                        <pre class="pre-scrollable">&lt;?php
+/**
+ * Created by PhpStorm.
+ * User: andrevanzuydam
+ * Date: 2019-08-18
+ * Time: 10:55
+ */
+use Tina4\Get;
+use Tina4\Routing;
+//A swagger endpoint for annotating your API end points
+Get::add(&#039;/swagger/json.json&#039;, function($response) {
+    return $response ( (new Routing())-&gt;getSwagger(&quot;Tina4&quot;,&quot;Use the entries below to test the frame work&quot;,&quot;1.0.0&quot;));
+});
+
+
+/**
+ * Hello world get end point
+ * @description Runs a Hello world test
+ * @tags Hello World
+ * @summary Get a hello world test
+ */
+Get::add(&quot;/tests/routing&quot;, function($response){
+
+    ob_start();
+    passthru(&quot;./codecept run unit&quot;);
+    $variable = ob_get_contents();
+    ob_get_clean();
+
+
+    return $response ($variable, 200, &quot;text/html&quot;);
+
+});
+</pre>
+                                                </article>
         </div>
         <aside class="span4 detailsbar">
             <h1><i class="icon-arrow-down"></i></h1>
@@ -418,7 +453,7 @@
                 <section class="span10 offset1">
                     <hr />
                     Documentation is powered by <a href="http://www.phpdoc.org/">phpDocumentor </a> and authored
-                    on August 18th, 2019 at 10:13.
+                    on August 18th, 2019 at 10:30.
                 </section>
             </section>
         </section>

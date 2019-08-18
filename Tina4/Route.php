@@ -15,8 +15,14 @@ class Route {
     public static $method;
 
     /**
-     * @param $routePath
-     * @param $function
+     * Add a route to be called on the web server
+     *
+     * The routePath can contain variables or in-line parameters encapsulated with {} e.g. "/test/{number}"
+     *
+     * @example "api/tests.php"
+     *
+     * @param $routePath A valid html route
+     * @param $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      */
     public static function add ($routePath, $function) {
         global $arrRoutes;

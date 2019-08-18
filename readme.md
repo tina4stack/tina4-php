@@ -29,6 +29,8 @@ Tina4 is a light weight routing and templating system which allows you to write 
     ```
 - Hit up http://localhost:8080 in your browser, you should see the 404 error
 
+
+
 ### Hello World - Web page ###
 
 Tina4 has twig built in and it's own basic templating engine. 
@@ -377,3 +379,15 @@ Post::add("/some-json",
     );
 ```
 - Hit up http://localhost:8080/swagger/index to test the end point, try adding variables into the object that don't exist
+
+
+### Developers ###
+
+#### Unit Tests ####
+
+```bash
+   
+   ./codecept generate:cest route 
+
+```
+
