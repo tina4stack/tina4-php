@@ -1,8 +1,7 @@
 namespace: Tina4
 suites:
     unit:
-        path: .
-
+        path: unit
 settings:
     shuffle: true
     lint: true

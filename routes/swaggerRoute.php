@@ -6,6 +6,7 @@
  * Time: 23:36
  */
 use Tina4\Get;
+use Tina4\Routing;
 
 //A swagger endpoint for annotating your API end points
 Get::add('/swagger/json.json', function($response) {

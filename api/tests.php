@@ -12,12 +12,6 @@ use Tina4\Patch;
 
 use Tina4\Routing;
 
-//A swagger endpoint for annotating your API end points
-Get::add('/swagger/json.json', function($response) {
-    return $response ( (new Routing())->getSwagger("Tina4","Use the entries below to test the frame work","1.0.0"));
-});
-
-
 /**
  * Get a result of the tests
  * @description Runs a Hello world test
@@ -27,7 +21,7 @@ Get::add('/swagger/json.json', function($response) {
 Get::add("/tests/routing", function($response){
 
     ob_start();
-    passthru("./codecept run unit");
+    passthru("./codecept run");
     $variable = ob_get_contents();
     ob_get_clean();
 

@@ -7,7 +7,7 @@
  */
 namespace Tina4;
 
-class Tina4Object
+class ORM
 {
     public $primaryKey = ""; //Comma separated fields used for primary key
     public $tableFilter = ""; //May be used to filter table records for quicker updating
@@ -367,3 +367,5 @@ class Tina4Object
 
 
 }
+
+

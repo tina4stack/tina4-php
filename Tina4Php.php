@@ -50,8 +50,6 @@ class Tina4Php
             require_once $this->documentRoot."/vendor/autoload.php";
         }
 
-
-
         //system defines, perhaps can be defined or overridden by a config.php file.
         if (file_exists("{$this->documentRoot}/config.php")) {
             require_once ($this->documentRoot."/config.php");

@@ -5,11 +5,12 @@
  * Date: 2019-03-24
  * Time: 23:54
  */
-use Tina4\Tina4Object;
+use Tina4\ORM;
 
-class Person extends Tina4Object //must extend a Tina4Object to work with Swagger
+
+class Person extends \Tina4Object
 {
-    public $firstName;
+    public $firstName;s
     public $lastName;
     public $email;
 }
