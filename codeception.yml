@@ -1,0 +1,14 @@
+namespace: Tina4
+suites:
+    unit:
+        path: .
+
+settings:
+    shuffle: true
+    lint: true
+    report: true
+paths:
+    tests: tests
+    output: tests/_output
+    support: tests/_support
+    data: tests

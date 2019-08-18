@@ -31,7 +31,7 @@ class Tina4Php
         //root of the website
         $this->documentRoot = realpath(dirname(__FILE__).DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR);
 
-        if (file_exists("Tina4.php")) {
+        if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
         }
         error_log ("TINA4: document root ".$this->documentRoot);

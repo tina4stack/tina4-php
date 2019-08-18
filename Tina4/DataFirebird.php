@@ -9,6 +9,8 @@ namespace Tina4;
 
 class DataFirebird extends DataBase
 {
+    public $port = 3050;
+
     public function native_open() {
         inherited:
 
@@ -62,12 +64,12 @@ class DataFirebird extends DataBase
             foreach ($record as $key => $value) {
                 if (substr($value, 0,2) === "0x") {
                     //Get the blob information
-                    $blob_data = ibase_blob_info($this->dbh, $value);
+                    $blobData = ibase_blob_info($this->dbh, $value);
                     //Get a handle to the blob
-                    $blob_hndl = ibase_blob_open($this->dbh, $value);
+                    $blobHandle = ibase_blob_open($this->dbh, $value);
                     //Get the blob contents
-                    $content = ibase_blob_get($blob_hndl, $blob_data[0]);
-                    ibase_blob_close($blob_hndl);
+                    $content = ibase_blob_get($blobHandle, $blobData[0]);
+                    ibase_blob_close($blobHandle);
                     $record[$key] = $content;
                 }
             }

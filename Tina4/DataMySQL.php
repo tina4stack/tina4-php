@@ -9,9 +9,11 @@ namespace Tina4;
 
 class DataMySQL extends DataBase
 {
+    public $port = 3306;
+
     public function native_open() {
         inherited:
-        $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName);
+        $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
 
     }
 
@@ -73,7 +75,6 @@ class DataMySQL extends DataBase
                     $recordCount = @\mysqli_query($this->dbh, $sqlCount);
 
                     $resultCount = @\mysqli_fetch_assoc($recordCount);
-
 
                 } else {
                     $resultCount = null;

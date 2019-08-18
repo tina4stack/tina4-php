@@ -43,6 +43,13 @@ class Routing
         }
 
         //Gives back things in an orderly fashion for API responses
+        /**
+         * Response method
+         * @param $content
+         * @param int $code
+         * @param null $contentType
+         * @return false|string
+         */
         $response = function ($content, $code = 200, $contentType = null) {
             http_response_code($code);
 

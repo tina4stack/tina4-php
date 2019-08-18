@@ -9,6 +9,7 @@ namespace Tina4;
 
 class DataSQLite3 extends DataBase
 {
+    public $port = "";
     public function native_open() {
         inherited:
         $this->dbh = (new \SQLite3($this->databaseName)); //create the new database or open existing one

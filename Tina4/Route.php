@@ -14,6 +14,10 @@ namespace Tina4;
 class Route {
     public static $method;
 
+    /**
+     * @param $routePath
+     * @param $function
+     */
     public static function add ($routePath, $function) {
         global $arrRoutes;
         $originalRoute = $routePath;
