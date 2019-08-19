@@ -21,7 +21,6 @@ class Route {
      *
      * @example "api/tests.php"
      *
-     *
      * @param $routePath A valid html route
      * @param $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      */

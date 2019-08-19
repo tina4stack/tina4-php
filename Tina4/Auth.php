@@ -7,6 +7,10 @@
  */
 namespace Tina4;
 
+/**
+ * Class Auth for creating and validating secure tokens for use with the API layers
+ * @package Tina4
+ */
 class Auth
 {
     /**
