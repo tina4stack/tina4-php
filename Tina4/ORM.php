@@ -12,15 +12,28 @@ class ORM
     public $primaryKey = ""; //Comma separated fields used for primary key
     public $tableFilter = ""; //May be used to filter table records for quicker updating
     public $tableName = ""; //Used to set the table name for an object that doesn't look like the table in question
+
     /**
-     * Tina4Object constructor.
+     * ORM constructor.
      * @param null $request
+     * @param string $tableName
+     * @param string $tableFilter
+     * @throws \Exception
      */
-    function __construct($request=null)
+    function __construct($request=null, $tableName="", $tableFilter="")
     {
         if (!empty($request) && !is_object($request) && !is_array($request)) {
             throw new \Exception("Input is not an array or object");
         }
+
+        if (!empty($tableName)) {
+            $this->tableName = $tableName;
+        }
+
+        if (!empty($tableFilter)) {
+            $this->tableFilter = $tableFilter;
+        }
+
         if ($request) {
             foreach ($request as $key => $value) {
                 if (property_exists($this, $key )) {
@@ -91,12 +104,11 @@ class ORM
      * @param $tableName
      * @return string
      */
-    function generateInsertSQL($tableData, $tableName) {
+    function generateInsertSQL($tableData, $tableName="") {
+        $tableName = $this->getTableName ($tableName);
         $insertColumns = [];
         $insertValues = [];
-
         $returningStatement = "";
-
         foreach ($tableData as $fieldName => $fieldValue) {
             $insertColumns[] = $fieldName;
             if ($fieldName === "id" ) {
@@ -129,11 +141,13 @@ class ORM
     /**
      * Generates an update statement
      * @param $tableData
+     * @param $filter
      * @param $tableName
-     * @param $primaryCheck
      * @return string
      */
-    function generateUpdateSQL ($tableData, $tableName, $primaryCheck) {
+    function generateUpdateSQL ($tableData, $filter, $tableName="") {
+        $tableName = $this->getTableName ($tableName);
+        $updateValues = [];
         foreach ($tableData as $fieldName => $fieldValue) {
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0") ) {
@@ -142,19 +156,20 @@ class ORM
                 $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }
-        $sqlUpdate = "update {$tableName} set ".join(",", $updateValues)." where {$primaryCheck}";
+        $sqlUpdate = "update {$tableName} set ".join(",", $updateValues)." where {$filter}";
 
         return $sqlUpdate;
     }
 
     /**
      * Generates a delete statement
+     * @param $filter
      * @param $tableName
-     * @param $primaryCheck
      * @return string
      */
-    function generateDeleteSQL ($tableName, $primaryCheck) {
-        $sqlDelete = "delete from {$tableName} where {$primaryCheck}";
+    function generateDeleteSQL ($filter, $tableName="") {
+        $tableName = $this->getTableName ($tableName);
+        $sqlDelete = "delete from {$tableName} where {$filter}";
         return $sqlDelete;
     }
 
