@@ -251,7 +251,7 @@ class ORM
         if (empty($exists->data)) { //insert
             $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
         } else {  //update
-            $sqlStatement = $this->generateUpdateSQL($tableData, $tableName, $primaryCheck);
+            $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
         }
 
         $error = $DBA->exec ($sqlStatement);
@@ -339,7 +339,7 @@ class ORM
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
-        $sqlStatement = $this->generateDeleteSQL($tableName, $primaryCheck);
+        $sqlStatement = $this->generateDeleteSQL($primaryCheck, $tableName);
 
         $error = $DBA->exec ($sqlStatement);
 
@@ -382,5 +382,3 @@ class ORM
 
 
 }
-
-
