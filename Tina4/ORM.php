@@ -78,9 +78,9 @@ class ORM
 
     /**
      * Gets the field mapping in the database
-     * @param $name
-     * @param $fieldMapping
-     * @return string
+     * @param string $name Name of field required
+     * @param array $fieldMapping Array of field mapping
+     * @return string Required field name from database
      */
     function getFieldName($name, $fieldMapping=[]) {
         if (property_exists($this, $name)) return $name;
@@ -104,9 +104,9 @@ class ORM
 
     /**
      * Gets a proper object name for returning back data
-     * @param $name
-     * @param $fieldMapping
-     * @return string
+     * @param string $name Improper object name
+     * @param array $fieldMapping Array of field mapping
+     * @return string Proper object name
      */
     function getObjectName($name, $fieldMapping=[]) {
         if (property_exists($this, $name)) return $name;
@@ -131,9 +131,10 @@ class ORM
 
     /**
      * Generates an insert statement
-     * @param $tableData
-     * @param $tableName
-     * @return string
+     * @param array $tableData Array of table data
+     * @param string $tableName Name of the table
+     * @return string Generated insert query
+     * @throws \Exception
      */
     function generateInsertSQL($tableData, $tableName="") {
         $this->checkDBConnection();
@@ -170,10 +171,10 @@ class ORM
 
     /**
      * Generates an update statement
-     * @param $tableData
-     * @param $filter
-     * @param $tableName
-     * @return string
+     * @param array $tableData Array of table data
+     * @param string $filter The criteria of what you are searching for to update e.g. "id = 2"
+     * @param string $tableName Name of the table
+     * @return string Generated update query
      */
     function generateUpdateSQL ($tableData, $filter, $tableName="") {
         $tableName = $this->getTableName ($tableName);
@@ -193,9 +194,9 @@ class ORM
 
     /**
      * Generates a delete statement
-     * @param $filter
-     * @param $tableName
-     * @return string
+     * @param string $filter The criteria of what you are searching for to delete e.g. "id = 2"
+     * @param string $tableName The name of the table
+     * @return string Containing deletion query
      */
     function generateDeleteSQL ($filter, $tableName="") {
         $tableName = $this->getTableName ($tableName);
@@ -206,8 +207,8 @@ class ORM
     /**
      * Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
      * e.g. ["companyId" => "company_id", "storeId" => ]
-     * @param array $fieldMapping
-     * @return array
+     * @param array $fieldMapping Array of field mapping
+     * @return array Contains all table data
      */
     function getTableData($fieldMapping=[]) {
         $data = json_decode(json_encode ($this));
@@ -225,11 +226,22 @@ class ORM
         return $tableData;
     }
 
+    /**
+     * @todo Implement getRecords() method
+     * @param int $limit Number of rows contained in result set
+     * @param int $offset The row number of where to start receiving data
+     * @throws \Exception
+     */
     function getRecords ($limit=10, $offset=0) {
         $this->checkDBConnection();
 
     }
 
+    /**
+     * Checks if there is a database connection assigned to the object
+     * If the object is not empty $DBA is instantiated
+     * @throws \Exception If no database connection is assigned to the object an exception is thrown
+     */
     function checkDBConnection() {
         if (empty($this->DBA)) {
             global $DBA;
@@ -243,8 +255,8 @@ class ORM
 
     /**
      * Helper function to get the filter for the primary key
-     * @param $tableData
-     * @return string
+     * @param array $tableData Array of table data
+     * @return string e.g. "id = ''"
      */
     function getPrimaryCheck($tableData) {
         $primaryFields = explode (",", $this->primaryKey);
@@ -259,8 +271,8 @@ class ORM
 
     /**
      * Works out the table name from the class name
-     * @param $tableName
-     * @return string|null
+     * @param string $tableName The class name
+     * @return string|null Returns the name of the table or null if it does not fit the if statements criteria
      */
     function getTableName($tableName) {
         if (empty($tableName) && empty($this->tableName)) {
@@ -277,11 +289,11 @@ class ORM
 
     /**
      * Save the data populated into the object to the provided data connection
-     * @param $DBA
-     * @param string $tableName
-     * @param array $fieldMapping
-     * @return object
-     * @throws Exception
+     * @param $DBA Database connection object
+     * @param string $tableName Name of the table
+     * @param array $fieldMapping Array of field mapping
+     * @return object Result set
+     * @throws \Exception Error on failure
      */
     function save($DBA=null, $tableName="", $fieldMapping=[]) {
         $this->checkDBConnection();
@@ -336,11 +348,11 @@ class ORM
 
     /**
      * Loads the record from the database into the object
-     * @param $DBA
-     * @param string $tableName
-     * @param array $fieldMapping
-     * @param string $filter
-     * @return bool
+     * @param string $tableName Name of the table
+     * @param array $fieldMapping Array of field mapping for the table
+     * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
+     * @return bool True on success, false on failure to load
+     * @throws \Exception
      */
     function load($tableName= "", $fieldMapping=[], $filter="") {
         $this->checkDBConnection();
@@ -374,10 +386,10 @@ class ORM
 
     /**
      * Deletes the record from the database
-     * @param $DBA
-     * @param string $tableName
-     * @param string $fieldMapping
+     * @param string $tableName Name of the table
+     * @param string $fieldMapping Array of field mapping
      * @return object
+     * @throws \Exception
      */
     function delete($tableName="", $fieldMapping="") {
         $this->checkDBConnection();
@@ -401,11 +413,11 @@ class ORM
 
     /**
      * Alias of load just with different parameter order for neatness
-     * @param $DBA
      * @param string $filter
-     * @param string $tableName
-     * @param array $fieldMapping
+     * @param string $tableName Name of the table
+     * @param array $fieldMapping Array of field mapping
      * @return bool
+     * @throws \Exception
      */
     function find($filter="", $tableName= "", $fieldMapping=[]) {
         //Translate filter
