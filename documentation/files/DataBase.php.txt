@@ -86,12 +86,12 @@ class DataBase
         }
 
         $order = "";
-        if (count($ordering) > 0) {
+        if (is_array($ordering) && count($ordering) > 0) {
             $order = "order by " . join(",", $ordering);
         }
 
         $where = "";
-        if (count($filter) > 0) {
+        if ( is_array($filter) && count($filter) > 0) {
             $where = "(". join (" or ", $filter).")";
         }
 
@@ -162,6 +162,10 @@ class DataBase
 
     public function close() {
         $this->native_close();
+    }
+
+    public function getDataTablesFilter() {
+        return $this->native_dataTablesFilter();
     }
 
     public function exec() {

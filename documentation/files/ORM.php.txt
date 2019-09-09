@@ -7,20 +7,48 @@
  */
 namespace Tina4;
 
+/**
+ * Class ORM
+ * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
+ * @package Tina4
+ */
 class ORM
 {
-    public $primaryKey = ""; //Comma separated fields used for primary key
-    public $tableFilter = ""; //May be used to filter table records for quicker updating
-    public $tableName = ""; //Used to set the table name for an object that doesn't look like the table in question
     /**
-     * Tina4Object constructor.
-     * @param null $request
+     * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
      */
-    function __construct($request=null)
+    public $primaryKey = ""; //Comma separated fields used for primary key
+    /**
+     * @var string  A filter for the table being referenced e.g. company_id = 10
+     */
+    public $tableFilter = ""; //May be used to filter table records for quicker updating
+    /**
+     * @var string A specific table to reference if the class name is not the name of the table
+     */
+    public $tableName = ""; //Used to set the table name for an object that doesn't look like the table in question
+
+    /**
+     * ORM constructor.
+     * @param null $request A JSON input to populate the object
+     * @param string $tableName The name of the table that this object maps in the database
+     * @param string $tableFilter A filter to limit the records when the data is fetched into the class
+     * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
+     * @throws \Exception
+     */
+    function __construct($request=null, $tableName="", $tableFilter="", $fieldMapping="")
     {
         if (!empty($request) && !is_object($request) && !is_array($request)) {
             throw new \Exception("Input is not an array or object");
         }
+
+        if (!empty($tableName)) {
+            $this->tableName = $tableName;
+        }
+
+        if (!empty($tableFilter)) {
+            $this->tableFilter = $tableFilter;
+        }
+
         if ($request) {
             foreach ($request as $key => $value) {
                 if (property_exists($this, $key )) {
@@ -91,12 +119,11 @@ class ORM
      * @param $tableName
      * @return string
      */
-    function generateInsertSQL($tableData, $tableName) {
+    function generateInsertSQL($tableData, $tableName="") {
+        $tableName = $this->getTableName ($tableName);
         $insertColumns = [];
         $insertValues = [];
-
         $returningStatement = "";
-
         foreach ($tableData as $fieldName => $fieldValue) {
             $insertColumns[] = $fieldName;
             if ($fieldName === "id" ) {
@@ -129,11 +156,13 @@ class ORM
     /**
      * Generates an update statement
      * @param $tableData
+     * @param $filter
      * @param $tableName
-     * @param $primaryCheck
      * @return string
      */
-    function generateUpdateSQL ($tableData, $tableName, $primaryCheck) {
+    function generateUpdateSQL ($tableData, $filter, $tableName="") {
+        $tableName = $this->getTableName ($tableName);
+        $updateValues = [];
         foreach ($tableData as $fieldName => $fieldValue) {
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0") ) {
@@ -142,24 +171,26 @@ class ORM
                 $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }
-        $sqlUpdate = "update {$tableName} set ".join(",", $updateValues)." where {$primaryCheck}";
+        $sqlUpdate = "update {$tableName} set ".join(",", $updateValues)." where {$filter}";
 
         return $sqlUpdate;
     }
 
     /**
      * Generates a delete statement
+     * @param $filter
      * @param $tableName
-     * @param $primaryCheck
      * @return string
      */
-    function generateDeleteSQL ($tableName, $primaryCheck) {
-        $sqlDelete = "delete from {$tableName} where {$primaryCheck}";
+    function generateDeleteSQL ($filter, $tableName="") {
+        $tableName = $this->getTableName ($tableName);
+        $sqlDelete = "delete from {$tableName} where {$filter}";
         return $sqlDelete;
     }
 
     /**
-     * Helper function to get the Table data
+     * Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
+     * e.g. ["companyId" => "company_id", "storeId" => ]
      * @param array $fieldMapping
      * @return array
      */
@@ -195,6 +226,11 @@ class ORM
         return $primaryCheck;
     }
 
+    /**
+     * Works out the table name from the class name
+     * @param $tableName
+     * @return string|null
+     */
     function getTableName($tableName) {
         if (empty($tableName) && empty($this->tableName)) {
             return strtolower(get_class($this));
@@ -236,7 +272,7 @@ class ORM
         if (empty($exists->data)) { //insert
             $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
         } else {  //update
-            $sqlStatement = $this->generateUpdateSQL($tableData, $tableName, $primaryCheck);
+            $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
         }
 
         $error = $DBA->exec ($sqlStatement);
@@ -324,7 +360,7 @@ class ORM
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
-        $sqlStatement = $this->generateDeleteSQL($tableName, $primaryCheck);
+        $sqlStatement = $this->generateDeleteSQL($primaryCheck, $tableName);
 
         $error = $DBA->exec ($sqlStatement);
 
@@ -358,7 +394,10 @@ class ORM
         return $this->load($DBA, $tableName, $fieldMapping, $filter);
     }
 
-
+    /**
+     * Returns back a JSON string of the table structure
+     * @return false|string
+     */
     function __toString()
     {
         // TODO: Implement __toString() method.
@@ -367,6 +406,4 @@ class ORM
 
 
 }
-
-
 

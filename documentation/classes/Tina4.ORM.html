@@ -114,7 +114,7 @@
                         <ul class="dropdown-menu">
                             <li>
                                 <a href="../reports/errors.html">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">190</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">184</span>
                                 </a>
                             </li>
                             <li>
@@ -144,19 +144,19 @@
                                 <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-149516590"></a>
+                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-231997401"></a>
                                 <a href="../namespaces/default.html" style="margin-left: 30px; padding-left: 0">\</a>
             </div>
-            <div id="namespace-149516590" class="accordion-body collapse in">
+            <div id="namespace-231997401" class="accordion-body collapse in">
                 <div class="accordion-inner">
 
                                                     <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-721572149"></a>
+                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-520643481"></a>
                                 <a href="../namespaces/Tina4.html" style="margin-left: 30px; padding-left: 0">Tina4</a>
             </div>
-            <div id="namespace-721572149" class="accordion-body collapse ">
+            <div id="namespace-520643481" class="accordion-body collapse ">
                 <div class="accordion-inner">
 
                     
@@ -207,7 +207,8 @@
                     <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal"><i class="icon-code"></i></a>
 
                     <h1><small>\Tina4</small>ORM</h1>
-                    <p><em></em></p>
+                    <p><em>Class ORM
+A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution</em></p>
                     
                     
                                         
@@ -281,7 +282,7 @@
                         <dt>File</dt>
                             <dd><a href="../files/ORM.html"><div class="path-wrapper">ORM.php</div></a></dd>
                                                 <dt>Package</dt>
-                            <dd><div class="namespace-wrapper">Default</div></dd>
+                            <dd><div class="namespace-wrapper">Tina4</div></dd>
                                                 <dt>Class hierarchy</dt>
                             <dd class="hierarchy">
                                                                                                                                                                     <div class="namespace-wrapper">\Tina4\ORM</div>
@@ -313,13 +314,13 @@
             <a id="property_primaryKey" name="property_primaryKey" class="anchor"></a>
             <article class="property">
                 <h3 class="public ">$primaryKey</h3>
-                <pre class="signature">$primaryKey : </pre>
+                <pre class="signature">$primaryKey : string</pre>
                 <p><em></em></p>
                 
 
                                 <h4>Type</h4>
-                
-                                            </article>
+                string
+                &mdash; The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id                            </article>
         </div>
         <aside class="span4 detailsbar">
             <h1><i class="icon-arrow-down"></i></h1>
@@ -337,13 +338,13 @@
             <a id="property_tableFilter" name="property_tableFilter" class="anchor"></a>
             <article class="property">
                 <h3 class="public ">$tableFilter</h3>
-                <pre class="signature">$tableFilter : </pre>
+                <pre class="signature">$tableFilter : string</pre>
                 <p><em></em></p>
                 
 
                                 <h4>Type</h4>
-                
-                                            </article>
+                string
+                &mdash; A filter for the table being referenced e.g. company_id = 10                            </article>
         </div>
         <aside class="span4 detailsbar">
             <h1><i class="icon-arrow-down"></i></h1>
@@ -361,13 +362,13 @@
             <a id="property_tableName" name="property_tableName" class="anchor"></a>
             <article class="property">
                 <h3 class="public ">$tableName</h3>
-                <pre class="signature">$tableName : </pre>
+                <pre class="signature">$tableName : string</pre>
                 <p><em></em></p>
                 
 
                                 <h4>Type</h4>
-                
-                                            </article>
+                string
+                &mdash; A specific table to reference if the class name is not the name of the table                            </article>
         </div>
         <aside class="span4 detailsbar">
             <h1><i class="icon-arrow-down"></i></h1>
@@ -393,8 +394,8 @@
             <article class="method">
                 <h3 class="public ">__construct()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">__construct(null  <span class="argument">$request = null</span>) </pre>
-                <p><em>Tina4Object constructor.</em></p>
+                <pre class="signature" style="margin-right: 54px;">__construct(null  <span class="argument">$request = null</span>, string  <span class="argument">$tableName = &quot;&quot;</span>, string  <span class="argument">$tableFilter = &quot;&quot;</span>, string  <span class="argument">$fieldMapping = &quot;&quot;</span>) </pre>
+                <p><em>ORM constructor.</em></p>
                 
 
                                     <h4>Parameters</h4>
@@ -402,10 +403,30 @@
                                                     <tr>
                                 <td>null</td>
                                 <td>$request </td>
-                                <td></td>
+                                <td><p>A JSON input to populate the object</p></td>
+                            </tr>
+                                                    <tr>
+                                <td>string</td>
+                                <td>$tableName </td>
+                                <td><p>The name of the table that this object maps in the database</p></td>
+                            </tr>
+                                                    <tr>
+                                <td>string</td>
+                                <td>$tableFilter </td>
+                                <td><p>A filter to limit the records when the data is fetched into the class</p></td>
+                            </tr>
+                                                    <tr>
+                                <td>string</td>
+                                <td>$fieldMapping </td>
+                                <td><p>Mapping for fields in the array form [&quot;field&quot; =&gt; &quot;table_field&quot;]</p></td>
                             </tr>
                                             </table>
                 
+                                    <h4>Throws</h4>
+                    <dl>
+                                                    <dt>\Exception</dt>
+                            <dd></dd>
+                                                                    </dl>
                 
                 				
                             </article>
@@ -509,7 +530,7 @@
             <article class="method">
                 <h3 class="public ">generateInsertSQL()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">generateInsertSQL(  <span class="argument">$tableData</span>,   <span class="argument">$tableName</span>) : string</pre>
+                <pre class="signature" style="margin-right: 54px;">generateInsertSQL(  <span class="argument">$tableData</span>,   <span class="argument">$tableName = &quot;&quot;</span>) : string</pre>
                 <p><em>Generates an insert statement</em></p>
                 
 
@@ -550,7 +571,7 @@
             <article class="method">
                 <h3 class="public ">generateUpdateSQL()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">generateUpdateSQL(  <span class="argument">$tableData</span>,   <span class="argument">$tableName</span>,   <span class="argument">$primaryCheck</span>) : string</pre>
+                <pre class="signature" style="margin-right: 54px;">generateUpdateSQL(  <span class="argument">$tableData</span>,   <span class="argument">$filter</span>,   <span class="argument">$tableName = &quot;&quot;</span>) : string</pre>
                 <p><em>Generates an update statement</em></p>
                 
 
@@ -563,12 +584,12 @@
                             </tr>
                                                     <tr>
                                 <td></td>
-                                <td>$tableName </td>
+                                <td>$filter </td>
                                 <td></td>
                             </tr>
                                                     <tr>
                                 <td></td>
-                                <td>$primaryCheck </td>
+                                <td>$tableName </td>
                                 <td></td>
                             </tr>
                                             </table>
@@ -596,7 +617,7 @@
             <article class="method">
                 <h3 class="public ">generateDeleteSQL()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">generateDeleteSQL(  <span class="argument">$tableName</span>,   <span class="argument">$primaryCheck</span>) : string</pre>
+                <pre class="signature" style="margin-right: 54px;">generateDeleteSQL(  <span class="argument">$filter</span>,   <span class="argument">$tableName = &quot;&quot;</span>) : string</pre>
                 <p><em>Generates a delete statement</em></p>
                 
 
@@ -604,12 +625,12 @@
                     <table class="table table-condensed table-hover">
                                                     <tr>
                                 <td></td>
-                                <td>$tableName </td>
+                                <td>$filter </td>
                                 <td></td>
                             </tr>
                                                     <tr>
                                 <td></td>
-                                <td>$primaryCheck </td>
+                                <td>$tableName </td>
                                 <td></td>
                             </tr>
                                             </table>
@@ -638,7 +659,8 @@
                 <h3 class="public ">getTableData()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
                 <pre class="signature" style="margin-right: 54px;">getTableData(array  <span class="argument">$fieldMapping = array()</span>) : array</pre>
-                <p><em>Helper function to get the Table data</em></p>
+                <p><em>Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
+e.g. [&quot;companyId&quot; =&gt; &quot;company_id&quot;, &quot;storeId&quot; =&gt; ]</em></p>
                 
 
                                     <h4>Parameters</h4>
@@ -709,8 +731,8 @@
             <article class="method">
                 <h3 class="public ">getTableName()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">getTableName(  <span class="argument">$tableName</span>) </pre>
-                <p><em></em></p>
+                <pre class="signature" style="margin-right: 54px;">getTableName(  <span class="argument">$tableName</span>) : string|null</pre>
+                <p><em>Works out the table name from the class name</em></p>
                 
 
                                     <h4>Parameters</h4>
@@ -723,7 +745,9 @@
                                             </table>
                 
                 
-                				
+                                    <h4>Returns</h4>
+                    string|null
+                                    				
                             </article>
         </div>
         <aside class="span4 detailsbar">
@@ -942,13 +966,15 @@
             <article class="method">
                 <h3 class="public ">__toString()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">__toString() </pre>
-                <p><em></em></p>
+                <pre class="signature" style="margin-right: 54px;">__toString() : false|string</pre>
+                <p><em>Returns back a JSON string of the table structure</em></p>
                 
 
                 
                 
-                				
+                                    <h4>Returns</h4>
+                    false|string
+                                    				
                             </article>
         </div>
         <aside class="span4 detailsbar">
@@ -1012,7 +1038,7 @@
                 <section class="span10 offset1">
                     <hr />
                     Documentation is powered by <a href="http://www.phpdoc.org/">phpDocumentor </a> and authored
-                    on August 19th, 2019 at 13:42.
+                    on August 31st, 2019 at 17:04.
                 </section>
             </section>
         </section>

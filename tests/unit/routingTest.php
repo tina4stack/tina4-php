@@ -1,4 +1,6 @@
-<?php namespace Tina4;
+<?php
+
+namespace Tina4;
 
 class routingTest extends \Codeception\Test\Unit
 {

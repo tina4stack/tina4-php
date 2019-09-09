@@ -83,9 +83,7 @@ class DataResult
         }
 
         if (!empty($results)) {
-            $json = json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results]);
-
-            return $json;
+            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results]);
         } else {
             return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => "No records"]);
         }

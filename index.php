@@ -8,5 +8,6 @@
 require "vendor/autoload.php";
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");
+//define ("TINA4_DEBUG", true);
 
 echo new \Tina4\Tina4Php();

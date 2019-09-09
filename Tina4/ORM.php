@@ -7,20 +7,47 @@
  */
 namespace Tina4;
 
+
+/**
+ * Class ORM
+ * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
+ * @package Tina4
+ */
 class ORM
 {
+    /**
+     * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
+     */
     public $primaryKey = ""; //Comma separated fields used for primary key
+    /**
+     * @var string  A filter for the table being referenced e.g. company_id = 10
+     */
     public $tableFilter = ""; //May be used to filter table records for quicker updating
+    /**
+     * @var string A specific table to reference if the class name is not the name of the table
+     */
     public $tableName = ""; //Used to set the table name for an object that doesn't look like the table in question
 
     /**
+     * @var null The database connection, if it is null it will look for global $DBA variable
+     */
+    public $DBA = null; //Specify a database connection
+
+    /**
+     * @var array A map of fields from the table to the object
+     */
+    public $fieldMapping = null;
+
+    /**
      * ORM constructor.
-     * @param null $request
-     * @param string $tableName
-     * @param string $tableFilter
+     * @param null $request A JSON input to populate the object
+     * @param string $tableName The name of the table that this object maps in the database
+     * @param string $tableFilter A filter to limit the records when the data is fetched into the class
+     * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
+     * @param DataBase A relevant database connection to fetch information from
      * @throws \Exception
      */
-    function __construct($request=null, $tableName="", $tableFilter="")
+    function __construct($request=null, $tableName="", $tableFilter="", $fieldMapping="", $DBA=null)
     {
         if (!empty($request) && !is_object($request) && !is_array($request)) {
             throw new \Exception("Input is not an array or object");
@@ -32,6 +59,10 @@ class ORM
 
         if (!empty($tableFilter)) {
             $this->tableFilter = $tableFilter;
+        }
+
+        if (!empty($DBA)) {
+            $this->DBA = $DBA;
         }
 
         if ($request) {
@@ -105,6 +136,7 @@ class ORM
      * @return string
      */
     function generateInsertSQL($tableData, $tableName="") {
+        $this->checkDBConnection();
         $tableName = $this->getTableName ($tableName);
         $insertColumns = [];
         $insertValues = [];
@@ -112,14 +144,12 @@ class ORM
         foreach ($tableData as $fieldName => $fieldValue) {
             $insertColumns[] = $fieldName;
             if ($fieldName === "id" ) {
-                if (empty($DBA)) {
-                    global $DBA; // see for a global DBA
-                }
 
-                if (!empty($DBA)) {
-                    if (get_class($DBA) === "Tina4\DataFirebird") {
+
+                if (!empty($this->DBA)) {
+                    if (get_class($this->DBA) === "Tina4\DataFirebird") {
                         $returningStatement = " returning (id)";
-                    } else if (get_class($DBA) === "Tina4\DataSQLite3")    {
+                    } else if (get_class($this->DBA) === "Tina4\DataSQLite3")    {
                         $returningStatement = "";
                     }
                 }
@@ -174,7 +204,8 @@ class ORM
     }
 
     /**
-     * Helper function to get the Table data
+     * Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
+     * e.g. ["companyId" => "company_id", "storeId" => ]
      * @param array $fieldMapping
      * @return array
      */
@@ -194,6 +225,22 @@ class ORM
         return $tableData;
     }
 
+    function getRecords ($limit=10, $offset=0) {
+        $this->checkDBConnection();
+
+    }
+
+    function checkDBConnection() {
+        if (empty($this->DBA)) {
+            global $DBA;
+            $this->DBA = $DBA;
+        }
+
+        if (empty($this->DBA)) {
+            throw new Exception("No database connection assigned to the object");
+        }
+    }
+
     /**
      * Helper function to get the filter for the primary key
      * @param $tableData
@@ -210,6 +257,11 @@ class ORM
         return $primaryCheck;
     }
 
+    /**
+     * Works out the table name from the class name
+     * @param $tableName
+     * @return string|null
+     */
     function getTableName($tableName) {
         if (empty($tableName) && empty($this->tableName)) {
             return strtolower(get_class($this));
@@ -232,9 +284,8 @@ class ORM
      * @throws Exception
      */
     function save($DBA=null, $tableName="", $fieldMapping=[]) {
-        if (empty($DBA)) {
-            global $DBA; // see for a global DBA
-        }
+        $this->checkDBConnection();
+
         $tableName = $this->getTableName ($tableName);
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
@@ -291,10 +342,9 @@ class ORM
      * @param string $filter
      * @return bool
      */
-    function load($DBA=null, $tableName= "", $fieldMapping=[], $filter="") {
-        if (empty($DBA)) {
-            global $DBA; // see for a global DBA
-        }
+    function load($tableName= "", $fieldMapping=[], $filter="") {
+        $this->checkDBConnection();
+
         $tableName = $this->getTableName ($tableName);
 
         if (!empty($filter)) {
@@ -305,8 +355,7 @@ class ORM
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
 
-
-        $fetchData = json_decode($DBA->fetch($sqlStatement, 1) . "");
+        $fetchData = json_decode($this->DBA->fetch($sqlStatement, 1) . "");
 
         if (!empty($fetchData->data)) {
             $fetchData = $fetchData->data[0];
@@ -330,10 +379,9 @@ class ORM
      * @param string $fieldMapping
      * @return object
      */
-    function delete($DBA=null, $tableName="", $fieldMapping="") {
-        if (empty($DBA)) {
-            global $DBA; // see for a global DBA
-        }
+    function delete($tableName="", $fieldMapping="") {
+        $this->checkDBConnection();
+
         $tableName = $this->getTableName ($tableName);
 
         $tableData = $this->getTableData($fieldMapping);
@@ -341,7 +389,7 @@ class ORM
 
         $sqlStatement = $this->generateDeleteSQL($primaryCheck, $tableName);
 
-        $error = $DBA->exec ($sqlStatement);
+        $error = $this->DBA->exec ($sqlStatement);
 
         if (empty($error->getError()["errorCode"])) {
             return (object) ["success" => true];
@@ -359,7 +407,7 @@ class ORM
      * @param array $fieldMapping
      * @return bool
      */
-    function find($DBA, $filter="", $tableName= "", $fieldMapping=[]) {
+    function find($filter="", $tableName= "", $fieldMapping=[]) {
         //Translate filter
         $data = $this->getTableData($fieldMapping);
 
@@ -370,10 +418,13 @@ class ORM
             $filter = str_replace($objectName, $fieldName, $filter);
         }
 
-        return $this->load($DBA, $tableName, $fieldMapping, $filter);
+        return $this->load($tableName, $fieldMapping, $filter);
     }
 
-
+    /**
+     * Returns back a JSON string of the table structure
+     * @return false|string
+     */
     function __toString()
     {
         // TODO: Implement __toString() method.

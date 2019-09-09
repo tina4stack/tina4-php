@@ -8,9 +8,9 @@
 use Tina4\ORM;
 
 
-class Person extends \Tina4Object
+class Person extends \Tina4\ORM
 {
-    public $firstName;s
+    public $firstName;
     public $lastName;
     public $email;
 }

@@ -18,7 +18,7 @@ use Tina4\Routing;
  * @tags Hello World
  * @summary Get a hello world test
  */
-Get::add("/tests/routing", function($response){
+Get::add("/cest/routing", function($response){
 
     ob_start();
     passthru("./codecept run");
@@ -27,11 +27,10 @@ Get::add("/tests/routing", function($response){
 
 
     return $response ($variable, 200, "text/html");
-
 });
 
-Any::add("/tests/routing/any", function ($response){
+Any::add("/cest/routing/any", function ($response, $request){
 
-    return $response ("OK", 200);
+    return $response ("OK". $request, 200);
 });
 

@@ -7,16 +7,28 @@
  */
 use Tina4\Get;
 use Tina4\Post;
+use Tina4\Any;
+use Tina4\Response;
+use Tina4\Request;
 
-Get::add("/test",
-    function ($response, $request)
+Any::add("/test",
+    function (Response $response, Request $request)
     {
-        return $response ("Testing", 200);
+        ob_start();
+        phpinfo();
+
+        $phpInfo = ob_get_contents();
+        ob_get_clean();
+
+        $phpInfo = "";
+        $phpInfo .= $request;
+
+        return $response ($phpInfo, 200);
     }
 );
 
 Get::add( "/test/object",
-    function ($response, $request)
+    function (Response $response, Request $request)
     {
         $person = new Person();
         $person->firstName = "Test";

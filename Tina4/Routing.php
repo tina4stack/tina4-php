@@ -10,11 +10,13 @@
  */
 namespace Tina4;
 
+use http\Env\Request;
+
 class Routing
 {
     private $params;
     private $content;
-    private $debug = false;
+    private $debug;
     private $method;
     private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
 
@@ -50,19 +52,8 @@ class Routing
          * @param null $contentType
          * @return false|string
          */
-        $response = function ($content, $code = 200, $contentType = null) {
-            http_response_code($code);
+        $response = new Response ();
 
-            if (!empty($content) && (is_array($content) || is_object($content))) {
-                header("Content-Type: application/json");
-                $content = json_encode($content);
-            } else
-                if (!empty($content)) {
-                    header("Content-Type: {$contentType}");
-                }
-
-            return $content;
-        };
 
         //Initialize debugging
         if ($this->debug) {
@@ -261,8 +252,10 @@ class Routing
 
     function getParams($response)
     {
+        $request = new \Tina4\Request(file_get_contents("php://input"));
+
         $this->params[] = $response;
-        $this->params[] = json_decode(file_get_contents("php://input")); //TODO: check if header is JSON
+        $this->params[] = $request; //TODO: check if header is JSON
         return $this->params;
     }
 
