@@ -380,7 +380,63 @@ Post::add("/some-json",
 ```
 - Hit up http://localhost:8080/swagger/index to test the end point, try adding variables into the object that don't exist
 
+#### Hello World - A parsed array to index.twig ####
+- Create a templates folder and an api folder to store your end point code in your project folder
+- Define the folders for Tina4 to use as an include path in your index.php
+```php
+  <?php
+  //Define some folders where we want templates
+  define ("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
+  define("TINA4_ROUTE_LOCATIONS"  , ["api","routes"]); //For routing and API
+  
+  require "vendor/autoload.php";
+  echo new \Tina4\Tina4Php();
+```
+  
+  - In your templates folder create a file index.twig and insert the following code
+      ```html
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="utf-8">
+          <meta name="viewport"
+                content="width=device-width, initial-scale=1, user-scalable=yes">
+      
+          <title>Hello World!</title>
+      </head>
+      <body>
+    {% for helloWorldData in data %}
+      <h1> {{ helloWorldData.message }} </h1>
+      <h2> {{ helloWorldData.number }}</h2>
+    {% endfor %}
+      </body>
+      </html>
+      ```
+  
+- Create a helloWorld.php file in the api folder, you can call the file any name and you can add as many files here as you want
 
+     ```php
+    <?php    
+    
+    use Tina4\Get;    
+
+    Get::add("/hello-world", function ($response, $request) {
+    
+  $data = array(
+    "message" => "Hello world",
+    "number" => "1"
+    );
+  
+    $data[] = array(
+      "message" => "Hello world number 2",
+      "number" => "2"
+      );
+
+    return $response (\Tina4\renderTemplate("route/to/folder/index.twig", ["data" => $data]));
+  });
+     ```
+ - Hit up http://localhost:8080/hello-world and you should see the hello world messages
+  
 ### Developers ###
 
 #### Unit Tests ####

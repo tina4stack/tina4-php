@@ -7,6 +7,11 @@
  */
 namespace Tina4;
 
+/**
+ * Class Get Sets the $method variable in Class Route to GET using the definition in Class Tina4Php
+ * Get route intercepts get calls made to the web server e.g. Get::add()
+ * @package Tina4
+ */
 class Get extends Route {
     public static $method = TINA4_GET;
 
