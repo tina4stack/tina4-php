@@ -11,6 +11,8 @@
  */
 namespace Tina4;
 
+use http\Params;
+
 class Route {
     public static $method;
 
@@ -21,7 +23,7 @@ class Route {
      *
      * @example "api/tests.php"
      *
-     * @param $routePath A valid html route
+     * @param string $routePath A valid html route
      * @param $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      */
     public static function add ($routePath, $function) {
