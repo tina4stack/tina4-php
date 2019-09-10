@@ -288,7 +288,7 @@ class ORM
         $primaryFieldFilter = [];
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
-                if (key_exists($tableData, $primaryField)) {
+                if (key_exists($primaryField, $tableData)) {
                     $primaryFieldFilter[] = "{$primaryField} = '" . $tableData[$primaryField] . "'";
                 } else {
                     $primaryFieldFilter[] = "{$primaryField} is null";
