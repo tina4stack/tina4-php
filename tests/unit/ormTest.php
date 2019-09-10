@@ -18,7 +18,7 @@ class ormTest extends \Codeception\Test\Unit
     {
        $testTable = new Tina4\ORM('{"name": "Andre", "email": "test@test.com"}', "user_table", ["name" => "user_name", "email" => "email_address"]);
 
-       debugger_print($testTable->getTableData());
+        codeception_debug($testTable->getTableData());
 
 
 

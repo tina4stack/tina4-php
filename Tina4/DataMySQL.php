@@ -7,12 +7,16 @@
  */
 namespace Tina4;
 
+
 class DataMySQL extends DataBase
 {
     public $port = 3306;
 
     public function native_open() {
         inherited:
+        if (!function_exists("mysqli_connect")) {
+            throw new \Exception("Mysql extension for PHP needs to be installed");
+        }
         $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
 
     }
@@ -33,7 +37,7 @@ class DataMySQL extends DataBase
             $preparedQuery = @\mysqli_prepare($this->dbh, $params[0]);
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-                $result = @call_user_func_array("\mysqli_execute", $params);
+                @call_user_func_array("\mysqli_execute", $params);
             }
 
             return $this->error();
@@ -57,51 +61,57 @@ class DataMySQL extends DataBase
         $recordCursor = @\mysqli_query($this->dbh, $sql );
 
 
+        $error = $this->error()->getError();
+
+
+
         $records = null;
         $record = null;
+        $fields = null;
+        $resultCount = null;
 
-        if ($recordCursor->num_rows > 0) {
-            while ($record = @\mysqli_fetch_assoc($recordCursor)) {
-                if (is_array($record)) {
-                    $records[] = (new DataRecord($record));
+        if ($error["errorCode"] == 0) {
+            if ($recordCursor->num_rows > 0) {
+                while ($record = @\mysqli_fetch_assoc($recordCursor)) {
+                    if (is_array($record)) {
+                        $records[] = (new DataRecord($record));
+                    }
                 }
-            }
 
 
-            if (is_array($records) && count($records) > 1) {
-                if (stripos($sql, "returning") === false) {
-                    $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
+                if (is_array($records) && count($records) > 1) {
+                    if (stripos($sql, "returning") === false) {
+                        $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
-                    $recordCount = @\mysqli_query($this->dbh, $sqlCount);
+                        $recordCount = @\mysqli_query($this->dbh, $sqlCount);
 
-                    $resultCount = @\mysqli_fetch_assoc($recordCount);
+                        $resultCount = @\mysqli_fetch_assoc($recordCount);
 
+                    } else {
+                        $resultCount = null;
+                    }
                 } else {
-                    $resultCount = null;
+                    $resultCount["COUNT_RECORDS"] = 1;
                 }
             } else {
                 $resultCount["COUNT_RECORDS"] = 1;
             }
-        } else {
-            $resultCount["COUNT_RECORDS"] = 1;
-        }
 
-        //populate the fields
-        $fid = 0;
-        $fields = [];
-        if (!empty($records)) {
-            //$record = $records[0];
-            $fields = @mysqli_fetch_fields($recordCursor);
+            //populate the fields
+            $fid = 0;
+            $fields = [];
+            if (!empty($records)) {
+                //$record = $records[0];
+                $fields = @mysqli_fetch_fields($recordCursor);
 
-            foreach ($fields as $fieldId => $fieldInfo) {
-                $fieldInfo = (array)json_decode(json_encode($fieldInfo));
+                foreach ($fields as $fieldId => $fieldInfo) {
+                    $fieldInfo = (array)json_decode(json_encode($fieldInfo));
 
-                $fields[] = (new DataField($fid, $fieldInfo["name"], $fieldInfo["orgname"], $fieldInfo["type"], $fieldInfo["length"]));
-                $fid++;
+                    $fields[] = (new DataField($fid, $fieldInfo["name"], $fieldInfo["orgname"], $fieldInfo["type"], $fieldInfo["length"]));
+                    $fid++;
+                }
             }
         }
-
-        $error = $this->error();
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
