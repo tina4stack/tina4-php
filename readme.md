@@ -435,7 +435,7 @@ Post::add("/some-json",
     return $response (\Tina4\renderTemplate("route/to/folder/index.twig", ["data" => $data]));
   });
      ```
-  - Hit up http://localhost:8080/hello-world and you should see the hello world messages
+ - Hit up http://localhost:8080/hello-world and you should see the hello world messages
   
 ### Developers ###
 
