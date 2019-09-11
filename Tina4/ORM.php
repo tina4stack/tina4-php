@@ -47,14 +47,22 @@ class ORM
      * @param DataBase A relevant database connection to fetch information from
      * @throws \Exception
      */
-    function __construct($request=null, $tableName="", $tableFilter="", $fieldMapping="", $DBA=null)
+    function __construct($request=null, $tableName="", $fieldMapping="", $primaryKey="", $tableFilter="", $DBA=null)
     {
-        if (!empty($request) && !is_object($request) && !is_array($request)) {
+        if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
             throw new \Exception("Input is not an array or object");
         }
 
         if (!empty($tableName)) {
             $this->tableName = $tableName;
+        }
+
+        if (!empty($primaryKey)) {
+            $this->primaryKey = $primaryKey;
+        }
+
+        if (!empty($fieldMapping)) {
+            $this->fieldMapping = $fieldMapping;
         }
 
         if (!empty($tableFilter)) {
@@ -66,11 +74,18 @@ class ORM
         }
 
         if ($request) {
-            foreach ($request as $key => $value) {
-                if (property_exists($this, $key )) {
-                    $this->{$key} = $value;
-                } else {
-                    throw new \Exception("{$key} does not exist for ".get_class($this));
+            if (json_decode($request)) {
+                $request = json_decode($request);
+                foreach ($request as $key => $value) {
+                        $this->{$key} = $value;
+                }
+            } else {
+                foreach ($request as $key => $value) {
+                    if (property_exists($this, $key)) {
+                        $this->{$key} = $value;
+                    } else {
+                        throw new \Exception("{$key} does not exist for " . get_class($this));
+                    }
                 }
             }
         }
@@ -83,12 +98,11 @@ class ORM
      * @return string Required field name from database
      */
     function getFieldName($name, $fieldMapping=[]) {
-        if (property_exists($this, $name)) return $name;
-
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
             $fieldName = $fieldMapping[$name];
             return $fieldName;
         } else {
+            if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
                 if (ctype_upper($name{$i})) {
@@ -213,9 +227,13 @@ class ORM
     function getTableData($fieldMapping=[]) {
         $data = json_decode(json_encode ($this));
         $tableData = [];
+        if (!empty($this->fieldMapping) && empty($fieldMapping)) {
+            $fieldMapping = $this->fieldMapping;
+        }
 
+        $protectedFields = ["primaryKey", "tableFilter", "DBA", "tableName", "fieldMapping"];
         foreach ($data as $fieldName => $value) {
-            if ($fieldName !== "primaryKey" && $fieldName != "tableFilter" && $fieldName != "tableName") {
+            if (!in_array( $fieldName, $protectedFields )) {
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
                 }
@@ -227,14 +245,21 @@ class ORM
     }
 
     /**
-     * @todo Implement getRecords() method
+     * Gets records from a table using the default $DBA
      * @param int $limit Number of rows contained in result set
      * @param int $offset The row number of where to start receiving data
+     * @return DataRecord
      * @throws \Exception
      */
     function getRecords ($limit=10, $offset=0) {
         $this->checkDBConnection();
+        $tableName = $this->getTableName();
 
+        $sql = "select * from {$tableName}";
+        if($this->tableFilter) {
+            $sql .= "where {$this->tableFilter}";
+        }
+        return $this->DBA->fetch ($sql, $limit, $offset);
     }
 
     /**
@@ -261,8 +286,14 @@ class ORM
     function getPrimaryCheck($tableData) {
         $primaryFields = explode (",", $this->primaryKey);
         $primaryFieldFilter = [];
-        foreach ($primaryFields as $id => $primaryField) {
-            $primaryFieldFilter[] = "{$primaryField} = '".$tableData[$primaryField]."'";
+        if (is_array($primaryFields)) {
+            foreach ($primaryFields as $id => $primaryField) {
+                if (key_exists($primaryField, $tableData)) {
+                    $primaryFieldFilter[] = "{$primaryField} = '" . $tableData[$primaryField] . "'";
+                } else {
+                    $primaryFieldFilter[] = "{$primaryField} is null";
+                }
+            }
         }
 
         $primaryCheck = join (" and ", $primaryFieldFilter);
@@ -295,7 +326,7 @@ class ORM
      * @return object Result set
      * @throws \Exception Error on failure
      */
-    function save($DBA=null, $tableName="", $fieldMapping=[]) {
+    function save($tableName="", $fieldMapping=[]) {
         $this->checkDBConnection();
 
         $tableName = $this->getTableName ($tableName);
@@ -308,39 +339,43 @@ class ORM
         if (TINA4_DEBUG) {
             error_log("TINA4: check " . $sqlCheck);
         }
-        $exists = json_decode($DBA->fetch($sqlCheck, 1)."");
+        $exists = json_decode($this->DBA->fetch($sqlCheck, 1)."");
+
+        if ($exists->error->errorCode == 0) {
+            if (empty($exists->data)) { //insert
+                $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
+            } else {  //update
+                $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
+            }
+
+            $error = $this->DBA->exec($sqlStatement);
 
 
-        if (empty($exists->data)) { //insert
-            $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
-        } else {  //update
-            $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
-        }
+            if (empty($error->getError()["errorCode"])) {
+                $this->DBA->commit();
 
-        $error = $DBA->exec ($sqlStatement);
-
-        if (empty($error->getError()["errorCode"])) {
-            $DBA->commit();
-
-            if (method_exists($error, "records") && !empty($error->records())) {
-                $record = $error->record(0);
-                if ($record->ID !== "") {
-                    $this->id = $record->ID; //@todo test on other database engines
-                    $tableData = $this->getTableData($fieldMapping);
-                    $primaryCheck = $this->getPrimaryCheck($tableData);
+                if (method_exists($error, "records") && !empty($error->records())) {
+                    $record = $error->record(0);
+                    if ($record->ID !== "") {
+                        $this->id = $record->ID; //@todo test on other database engines
+                        $tableData = $this->getTableData($fieldMapping);
+                        $primaryCheck = $this->getPrimaryCheck($tableData);
+                    }
                 }
-            }
 
-            $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
-            $fetchData = json_decode($DBA->fetch($sqlFetch, 1) . "")->data[0];
+                $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
+                $fetchData = json_decode($this->DBA->fetch($sqlFetch, 1) . "")->data[0];
 
-            $tableResult = [];
-            foreach ($fetchData as $fieldName => $fieldValue) {
-                $tableResult[self::getObjectName($fieldName, $fieldMapping)] = $fieldValue;
+                $tableResult = [];
+                foreach ($fetchData as $fieldName => $fieldValue) {
+                    $tableResult[self::getObjectName($fieldName, $fieldMapping)] = $fieldValue;
+                }
+                return (object)$tableResult;
+            } else {
+                throw new \Exception(print_r($error->getError(), 1));
             }
-            return (object) $tableResult;
         } else {
-            throw new Exception(print_r ($error->getError(), 1));
+            throw new \Exception(print_r($exists->error, 1));
         }
     }
 

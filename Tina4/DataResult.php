@@ -22,6 +22,7 @@ class DataResult
      * @param $fields
      * @param $noOfRecords
      * @param int $offSet
+     * @param string $error
      */
     function __construct($records, $fields, $noOfRecords, $offSet=0, $error=null)
     {
@@ -83,9 +84,9 @@ class DataResult
         }
 
         if (!empty($results)) {
-            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results]);
+            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => ["errorCode" => 0]]);
         } else {
-            return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => "No records"]);
+            return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => $this->error]);
         }
 
     }
