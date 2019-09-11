@@ -9,6 +9,10 @@ namespace Tina4;
 
 use mysql_xdevapi\Exception;
 
+/**
+ * Class ParseTemplate
+ * @package Tina4
+ */
 class ParseTemplate {
     private $root;
     private $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";
@@ -21,6 +25,13 @@ class ParseTemplate {
     private $definedVariables;
     private $evals = [];
 
+    /**
+     * ParseTemplate constructor.
+     * @param $root
+     * @param string $fileName Name of the file
+     * @param string $definedVariables
+     * @throws \Exception Error on failure
+     */
     function __construct($root, $fileName, $definedVariables="") {
         if (TINA4_DEBUG) {
             error_log("TINA4 Filename: " . $fileName);
@@ -36,7 +47,12 @@ class ParseTemplate {
         $this->definedVariables = $definedVariables;
     }
 
-    //we want to parse all includes that may exist
+    /**
+     * Parse all includes that may exist
+     * @param $content
+     * @return mixed
+     * @throws \Exception Error on failure
+     */
     function parseSnippets($content) {
         preg_match_all($this->includeRegEx, $content, $matchIncludes);
 
@@ -47,7 +63,11 @@ class ParseTemplate {
         return $content;
     }
 
-    //we want to parse all variables that might exist
+    /**
+     * Parse all variables that might exist
+     * @param $content
+     * @return mixed
+     */
     function parseVariables($content) {
         foreach ($this->evals as $id => $eval) {
             try {
@@ -86,6 +106,10 @@ class ParseTemplate {
         return $content;
     }
 
+    /**
+     * @param string $params Parameters to be parsed
+     * @return array Multidimensional array containing methods and their respective array of parameters
+     */
     function parseParams ($params) {
         $paramArray = [];
         $method = explode("?", $params, 2);
@@ -106,6 +130,12 @@ class ParseTemplate {
         return ["method" => $method, "params" => $paramArray];
     }
 
+    /**
+     * @param object $object
+     * @param $method
+     * @return mixed|string
+     * @throws \Exception Error on failure
+     */
     function callMethod ($object, $method) {
         $parts = $this->parseParams($method);
 
@@ -144,7 +174,12 @@ class ParseTemplate {
 
     }
 
-    //we want to parse all variables that might exist
+    /**
+     * Parse all variables that might exist
+     * @param $content
+     * @return mixed
+     * @throws \Exception Error on failure
+     */
     function parseCalls($content) {
         preg_match_all($this->objectRegEx, $content, $matchIncludes);
         foreach ($matchIncludes[0] as $mid => $matchInclude) {
@@ -155,6 +190,12 @@ class ParseTemplate {
 
 
     //parse files
+
+    /**
+     * @param string $fileName Name of the file
+     * @return false|mixed|string
+     * @throws \Exception Error on failure
+     */
     function parseFile ($fileName) {
         //Trim off the first char if /
         if ($fileName[0] === "/") {
@@ -209,6 +250,9 @@ class ParseTemplate {
         return $content;
     }
 
+    /**
+     * @return string
+     */
     function __toString()
     {
         http_response_code($this->responseCode);

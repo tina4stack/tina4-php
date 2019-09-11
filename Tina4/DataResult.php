@@ -19,9 +19,9 @@ class DataResult
     /**
      * DataResult constructor.
      * @param $records
-     * @param $fields
-     * @param $noOfRecords
-     * @param int $offSet
+     * @param $fields Fields in the table
+     * @param integer $noOfRecords Number of records
+     * @param integer $offSet Which row to start recording
      * @param string $error
      */
     function __construct($records, $fields, $noOfRecords, $offSet=0, $error=null)
@@ -55,9 +55,7 @@ class DataResult
         return $this->fields;
     }
 
-
     /**
-     *
      * @return array|null
      */
     function records() {
@@ -72,7 +70,9 @@ class DataResult
     }
 
 
-
+    /**
+     * @return false|string
+     */
     function __toString()
     {
         $results = null;
@@ -91,6 +91,9 @@ class DataResult
 
     }
 
+    /**
+     * @return mixed
+     */
     function getError() {
         return $this->error->getError();
     }

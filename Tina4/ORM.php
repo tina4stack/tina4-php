@@ -45,7 +45,7 @@ class ORM
      * @param string $tableFilter A filter to limit the records when the data is fetched into the class
      * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
      * @param DataBase A relevant database connection to fetch information from
-     * @throws \Exception
+     * @throws \Exception Error on failure
      */
     function __construct($request=null, $tableName="", $fieldMapping="", $primaryKey="", $tableFilter="", $DBA=null)
     {
@@ -148,7 +148,7 @@ class ORM
      * @param array $tableData Array of table data
      * @param string $tableName Name of the table
      * @return string Generated insert query
-     * @throws \Exception
+     * @throws \Exception Error on failure
      */
     function generateInsertSQL($tableData, $tableName="") {
         $this->checkDBConnection();
@@ -246,10 +246,10 @@ class ORM
 
     /**
      * Gets records from a table using the default $DBA
-     * @param int $limit Number of rows contained in result set
-     * @param int $offset The row number of where to start receiving data
+     * @param integer $limit Number of rows contained in result set
+     * @param integer $offset The row number of where to start receiving data
      * @return DataRecord
-     * @throws \Exception
+     * @throws \Exception Error on failure
      */
     function getRecords ($limit=10, $offset=0) {
         $this->checkDBConnection();
@@ -320,7 +320,6 @@ class ORM
 
     /**
      * Save the data populated into the object to the provided data connection
-     * @param $DBA Database connection object
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping
      * @return object Result set
@@ -387,7 +386,7 @@ class ORM
      * @param array $fieldMapping Array of field mapping for the table
      * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
      * @return bool True on success, false on failure to load
-     * @throws \Exception
+     * @throws \Exception Error on failure
      */
     function load($tableName= "", $fieldMapping=[], $filter="") {
         $this->checkDBConnection();
@@ -424,7 +423,7 @@ class ORM
      * @param string $tableName Name of the table
      * @param string $fieldMapping Array of field mapping
      * @return object
-     * @throws \Exception
+     * @throws \Exception Error on failure
      */
     function delete($tableName="", $fieldMapping="") {
         $this->checkDBConnection();
@@ -452,7 +451,7 @@ class ORM
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping
      * @return bool
-     * @throws \Exception
+     * @throws \Exception Error on failure
      */
     function find($filter="", $tableName= "", $fieldMapping=[]) {
         //Translate filter
