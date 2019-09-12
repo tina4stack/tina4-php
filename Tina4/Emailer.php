@@ -60,6 +60,13 @@ class Emailer
         return $mail_sent ? "OK" : "Failed";
     }
 
+    /**
+     * @param $html
+     * @param $eol
+     * @param $boundary_rel
+     * @param $boundary_alt
+     * @return string
+     */
     function prepareHtmlMail($html, $eol, $boundary_rel, $boundary_alt) {
         preg_match_all('~<img.*?src=.([\/.a-z0-9:;,+=_-]+).*?>~si',$html,$matches);
 
@@ -129,9 +136,9 @@ class Emailer
 
     /**
      * Alias of send SMS
-     * @param $mobileno
-     * @param string $message
-     * @param string $countryPrefix
+     * @param string $mobileno Mobile contact number
+     * @param string $message Message to be sent
+     * @param string $countryPrefix Prefix to determine country of origin
      */
     function sendText ($mobileno, $message="", $countryPrefix="01") {
         $this->sendSMS($mobileno, $message, $countryPrefix);
@@ -139,9 +146,9 @@ class Emailer
 
     /**
      * Send SMS
-     * @param String $mobileno
-     * @param String $message
-     * @param String $countryPrefix
+     * @param String $mobileno Mobile contact number
+     * @param String $message Message to be sent
+     * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
      * @return String Result of SMS send
      */
     function sendSMS ($mobileno, $message="", $countryPrefix="27") {
@@ -159,7 +166,7 @@ class Emailer
     /**
      * Format the Mobile Number
      * @param String $celno Mobile number to send with
-     * @param String $countryPrefix 1 - america, 27 - south africa
+     * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
      * @return string
      */
     function formatMobile($celno, $countryPrefix="27")
