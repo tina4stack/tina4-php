@@ -61,7 +61,7 @@ class DataMySQL extends DataBase
         $recordCursor = @\mysqli_query($this->dbh, $sql );
 
 
-        $error = $this->error()->getError();
+        $error = $this->error();
 
 
 
@@ -70,7 +70,7 @@ class DataMySQL extends DataBase
         $fields = null;
         $resultCount = null;
 
-        if ($error["errorCode"] == 0) {
+        if ($error->getError()["errorCode"] == 0) {
             if ($recordCursor->num_rows > 0) {
                 while ($record = @\mysqli_fetch_assoc($recordCursor)) {
                     if (is_array($record)) {
