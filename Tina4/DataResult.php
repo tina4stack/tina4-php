@@ -22,9 +22,9 @@ class DataResult
      * @param $fields Fields in the table
      * @param integer $noOfRecords Number of records
      * @param integer $offSet Which row to start recording
-     * @param string $error
+     * @param DataError $error
      */
-    function __construct($records, $fields, $noOfRecords, $offSet=0, $error=null)
+    function __construct($records, $fields, $noOfRecords, $offSet=0, DataError $error=null)
     {
         $this->records = $records;
         $this->fields = $fields;
@@ -84,9 +84,9 @@ class DataResult
         }
 
         if (!empty($results)) {
-            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => ["errorCode" => 0]]);
+            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => null]);
         } else {
-            return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => $this->error]);
+            return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => $this->error->getErrorText()]);
         }
 
     }
