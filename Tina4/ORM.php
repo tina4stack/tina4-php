@@ -73,11 +73,18 @@ class ORM
             $this->DBA = $DBA;
         }
 
+        if (empty($this->DBA)) {
+            global $DBA;
+            if (!empty($DBA)) {
+                $this->DBA = $DBA;
+            }
+        }
+
         if ($request) {
             if (json_decode($request)) {
                 $request = json_decode($request);
                 foreach ($request as $key => $value) {
-                        $this->{$key} = $value;
+                    $this->{$key} = $value;
                 }
             } else {
                 foreach ($request as $key => $value) {

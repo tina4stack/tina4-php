@@ -23,7 +23,15 @@ Any::add("/test",
         $phpInfo = "";
         $phpInfo .= $request;
 
-        return $response ($phpInfo, 200);
+        $testTable = new Tina4\ORM('{"name": "Andre", "email": "test@test.com"}', "user_table", ["name" => "user_name", "email" => "email_address"]);
+
+        print_r($testTable->getTableData());
+
+        $testTable = new Tina4\ORM('{"name": "Andre", "email": "test@test.com"}', "user_table");
+
+        print_r($testTable->getTableData());
+
+        return $response ($phpInfo, HTTP_OK, TEXT_HTML);
     }
 );
 
