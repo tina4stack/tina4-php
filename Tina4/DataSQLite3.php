@@ -28,7 +28,9 @@ class DataSQLite3 extends DataBase
 
         @$preparedQuery = $this->dbh->prepare($sql);
 
-        if (!empty($preparedQuery)) {
+        $error = $this->error();
+
+        if ($error->getError()["errorCode"] == 0 && !empty($preparedQuery)) {
             unset($params[0]);
 
             foreach ($params as $pid => $param) {
