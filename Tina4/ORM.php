@@ -129,20 +129,32 @@ class ORM
      * @param array $fieldMapping Array of field mapping
      * @return string Proper object name
      */
-    function getObjectName($name, $fieldMapping=[]) {
-        if (property_exists($this, $name)) return $name;
-        $name = strtolower($name);
-        if (!empty($fieldMapping) && $fieldMapping[$name]) {
-            $fieldName = $fieldMapping[$name];
+    function getObjectName($name) {
+        //if (property_exists($this, $name) && empty($this->fieldMapping)) return $name;
+        //print_r ($this->fieldMapping);
+
+        if (!empty($this->fieldMapping) && $this->fieldMapping[$name]) {
+            $fieldName = $this->fieldMapping[$name];
             return $fieldName;
         } else {
             $fieldName = "";
-            for ($i = 0; $i < strlen($name); $i++) {
-                if ($name{$i} === "_") {
-                    $i++;
-                    $fieldName .= strtoupper($name{$i});
-                } else {
-                    $fieldName .= $name{$i};
+            if (strpos($name, "_") !== false) {
+                $name = strtolower($name);
+                for ($i = 0; $i < strlen($name); $i++) {
+                    if ($name{$i} === "_") {
+                        $i++;
+                        $fieldName .= strtoupper($name{$i});
+                    } else {
+                        $fieldName .= $name{$i};
+                    }
+                }
+            } else {
+                for ($i = 0; $i < strlen($name); $i++) {
+                    if ($name{$i} !== strtolower($name{$i})) {
+                        $fieldName .= "_".strtolower($name{$i});
+                    } else {
+                        $fieldName .= $name{$i};
+                    }
                 }
             }
 
@@ -164,10 +176,9 @@ class ORM
         $insertValues = [];
         $returningStatement = "";
         foreach ($tableData as $fieldName => $fieldValue) {
-            $insertColumns[] = $fieldName;
+            if (empty($fieldValue)) continue;
+            $insertColumns[] = $this->getObjectName($fieldName);
             if ($fieldName === "id" ) {
-
-
                 if (!empty($this->DBA)) {
                     if (get_class($this->DBA) === "Tina4\DataFirebird") {
                         $returningStatement = " returning (id)";
@@ -201,6 +212,9 @@ class ORM
         $tableName = $this->getTableName ($tableName);
         $updateValues = [];
         foreach ($tableData as $fieldName => $fieldValue) {
+
+            $fieldName = $this->getObjectName($fieldName);
+
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0") ) {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
@@ -345,9 +359,10 @@ class ORM
         if (TINA4_DEBUG) {
             error_log("TINA4: check " . $sqlCheck);
         }
+
         $exists = json_decode($this->DBA->fetch($sqlCheck, 1)."");
 
-        if ($exists->error->errorCode == 0) {
+        if ($exists->recordsTotal == 0 || $exists->error == "") {
             if (empty($exists->data)) { //insert
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
@@ -374,7 +389,7 @@ class ORM
 
                 $tableResult = [];
                 foreach ($fetchData as $fieldName => $fieldValue) {
-                    $tableResult[self::getObjectName($fieldName, $fieldMapping)] = $fieldValue;
+                    $tableResult[self::getObjectName($fieldName)] = $fieldValue;
                 }
                 return (object)$tableResult;
             } else {
