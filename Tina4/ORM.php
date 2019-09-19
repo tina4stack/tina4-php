@@ -375,14 +375,22 @@ class ORM
             if (empty($error->getError()["errorCode"])) {
                 $this->DBA->commit();
 
-                if (method_exists($error, "records") && !empty($error->records())) {
-                    $record = $error->record(0);
-                    if ($record->ID !== "") {
-                        $this->id = $record->ID; //@todo test on other database engines
-                        $tableData = $this->getTableData($fieldMapping);
-                        $primaryCheck = $this->getPrimaryCheck($tableData);
-                    }
+                //get last id
+                $lastId = $this->DBA->getLastId();
+
+                if (!empty($lastId)) {
+                    $this->id = $lastId;
                 }
+                else
+                    if (method_exists($error, "records") && !empty($error->records())) {
+                        $record = $error->record(0);
+                        if ($record->ID !== "") {
+                            $this->id = $record->ID; //@todo test on other database engines
+                        }
+                    }
+
+                $tableData = $this->getTableData();
+                $primaryCheck = $this->getPrimaryCheck($tableData);
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
                 $fetchData = json_decode($this->DBA->fetch($sqlFetch, 1) . "")->data[0];
