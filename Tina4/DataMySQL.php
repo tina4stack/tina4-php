@@ -17,6 +17,8 @@ class DataMySQL extends DataBase
         if (!function_exists("mysqli_connect")) {
             throw new \Exception("Mysql extension for PHP needs to be installed");
         }
+
+
         $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
 
     }
@@ -114,6 +116,13 @@ class DataMySQL extends DataBase
         }
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
+    }
+
+    public function native_getLastId()
+    {
+        $lastId = $this->fetch("SELECT LAST_INSERT_ID() as last_id");
+
+        return $lastId->record(0)->LAST_ID;
     }
 
     public function native_commit() {

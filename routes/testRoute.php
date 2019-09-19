@@ -40,6 +40,7 @@ Get::add( "/test/object",
     {
         $person = new Person();
         $person->firstName = "Test";
+        $person->save();
 
         return $response ($person->getTableData(), 200);
     }

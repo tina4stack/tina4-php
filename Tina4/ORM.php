@@ -309,10 +309,11 @@ class ORM
         $primaryFieldFilter = [];
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
+                $primaryTableField = $this->getObjectName($primaryField);
                 if (key_exists($primaryField, $tableData)) {
-                    $primaryFieldFilter[] = "{$primaryField} = '" . $tableData[$primaryField] . "'";
+                    $primaryFieldFilter[] = "{$primaryTableField} = '" . $tableData[$primaryField] . "'";
                 } else {
-                    $primaryFieldFilter[] = "{$primaryField} is null";
+                    $primaryFieldFilter[] = "{$primaryTableField} is null";
                 }
             }
         }
@@ -389,10 +390,16 @@ class ORM
                         }
                     }
 
+
                 $tableData = $this->getTableData();
                 $primaryCheck = $this->getPrimaryCheck($tableData);
 
+
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
+
+                //print_r ($this->DBA->fetch($sqlFetch, 1));
+
+
                 $fetchData = json_decode($this->DBA->fetch($sqlFetch, 1) . "")->data[0];
 
                 $tableResult = [];
