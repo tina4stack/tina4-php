@@ -47,7 +47,7 @@ Get::add( "/test/object",
 );
 
 Post::add("/test/object",
-    function ($response, $request) {
+    function (Response $response, Request $request) {
         try {
             $object = new Person($request);
             $result = $object->getTableData();

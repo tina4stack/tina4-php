@@ -7,8 +7,9 @@
  */
 use Tina4\Get;
 use Tina4\Routing;
+use Tina4\Response;
 
 //A swagger endpoint for annotating your API end points
-Get::add('/swagger/json.json', function($response) {
+Get::add('/swagger/json.json', function(Response $response) {
     return $response ( (new Routing())->getSwagger("Some Name for the Swagger","Some other description for swagger","1.0.0"));
 });
