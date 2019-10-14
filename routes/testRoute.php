@@ -40,13 +40,14 @@ Get::add( "/test/object",
     {
         $person = new Person();
         $person->firstName = "Test";
+        $person->save();
 
         return $response ($person->getTableData(), 200);
     }
 );
 
 Post::add("/test/object",
-    function ($response, $request) {
+    function (Response $response, Request $request) {
         try {
             $object = new Person($request);
             $result = $object->getTableData();
