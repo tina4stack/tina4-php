@@ -24,6 +24,8 @@ class Routing
     {
         $this->debug = TINA4_DEBUG;
 
+        $_SERVER["DOCUMENT_ROOT"] = $root;
+
         if ($this->debug) {
             error_log("TINA4: URL to parse " . $urlToParse);
         }
