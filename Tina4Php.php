@@ -5,6 +5,7 @@
  * Date: 2019-07-28
  * Time: 10:34
  */
+
 namespace Tina4;
 
 use Phpfastcache\CacheManager;
@@ -140,9 +141,10 @@ class Tina4Php
 
         if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
 
-            //Check if the server is using an alias to access files
+            //Check if the REQUEST_URI contains an alias
             if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "") {
 
+                //Delete the first instance of the alias in the REQUEST_URI
                 $newRequestURI = stringReplaceFirst($_SERVER["CONTEXT_PREFIX"], "", $_SERVER["REQUEST_URI"]);
 
                 $string .= new \Tina4\Routing($this->documentRoot, $newRequestURI, $_SERVER["REQUEST_METHOD"]);
@@ -197,13 +199,33 @@ function renderTemplate($fileName, $data = [])
 
 /**
  * Redirect
- * @param $url
- * @param int $statusCode
+ * @param string $url The URL to be redirected to
+ * @param integer $statusCode
  */
 function redirect($url, $statusCode = 303)
 {
-    header('Location: ' . $url, true, $statusCode);
-    die();
+    //Define URL to test from parsed string
+    $testURL = parse_url($url);
+
+    //Check if test URL contains a scheme (http or https) or if it contains a host name
+    if ((!isset($testURL["scheme"]) || $testURL["scheme"] == "") && (!isset($testURL["host"]) || $testURL["host"] == "")) {
+
+        //Check if the current page uses an alias and if the parsed URL string is an absolute URL
+        if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "" && substr($url, 0, 1) === '/') {
+
+            //Append the prefix to the absolute path
+            header('Location: ' . $_SERVER["CONTEXT_PREFIX"] . $url, true, $statusCode);
+            die();
+        } else {
+            header('Location: ' . $url, true, $statusCode);
+            die();
+        }
+
+    } else {
+        header('Location: ' . $url, true, $statusCode);
+        die();
+    }
+
 }
 
 /**
