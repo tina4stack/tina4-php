@@ -143,7 +143,7 @@ class Tina4Php
             //Check if the server is using an alias to access files
             if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "") {
 
-                $newRequestURI = str_replace_first($_SERVER["CONTEXT_PREFIX"], "", $_SERVER["REQUEST_URI"]);
+                $newRequestURI = stringReplaceFirst($_SERVER["CONTEXT_PREFIX"], "", $_SERVER["REQUEST_URI"]);
 
                 $string .= new \Tina4\Routing($this->documentRoot, $newRequestURI, $_SERVER["REQUEST_METHOD"]);
             } else {
@@ -164,7 +164,7 @@ class Tina4Php
  * @param string $content What you are searching in
  * @return string|string[]|null
  */
-function str_replace_first($search, $replace, $content)
+function stringReplaceFirst($search, $replace, $content)
 {
     $search = '/' . preg_quote($search, '/') . '/';
 
