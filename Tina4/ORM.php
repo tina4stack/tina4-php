@@ -192,6 +192,7 @@ class ORM
             if ($fieldValue === "null" || is_numeric($fieldValue) && $fieldValue[0] !== "0" ) {
                 $insertValues[] = $fieldValue;
             } else {
+                $fieldValue = str_replace ("'", "''", $fieldValue);
                 $insertValues[] = "'{$fieldValue}'";
             }
         }
@@ -219,6 +220,7 @@ class ORM
             if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0") ) {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
             } else {
+                $fieldValue = str_replace ("'", "''", $fieldValue);
                 $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }
