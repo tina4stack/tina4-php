@@ -192,7 +192,8 @@ class ORM
             if ($fieldValue === "null" || is_numeric($fieldValue) && $fieldValue[0] !== "0" ) {
                 $insertValues[] = $fieldValue;
             } else {
-                $insertValues[] = "\"{$fieldValue}\"";
+                $fieldValue = str_replace ("'", "''", $fieldValue);
+                $insertValues[] = "'{$fieldValue}'";
             }
         }
 
@@ -219,7 +220,8 @@ class ORM
             if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0") ) {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
             } else {
-                $updateValues[] = "{$fieldName} = \"{$fieldValue}\"";
+                $fieldValue = str_replace ("'", "''", $fieldValue);
+                $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }
         $sqlUpdate = "update {$tableName} set ".join(",", $updateValues)." where {$filter}";
