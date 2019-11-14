@@ -57,6 +57,7 @@ class DataResult
 
     /**
      * @return array|null
+     * @example examples\exampleDataResultRecords.php
      */
     function records() {
         $results = null;

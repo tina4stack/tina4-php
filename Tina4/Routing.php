@@ -8,10 +8,15 @@
  * You are welcome to read and modify this code but it should not be broken, if you find something to improve it, send me an email with the patch
  * andrevanzuydam@gmail.com
  */
+
 namespace Tina4;
 
 use http\Env\Request;
 
+/**
+ * Class Routing
+ * @package Tina4
+ */
 class Routing
 {
     private $params;
@@ -20,6 +25,13 @@ class Routing
     private $method;
     private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
 
+    /**
+     * Routing constructor.
+     * @param string $root Where the document root is located
+     * @param string $urlToParse URL being parsed
+     * @param string $method
+     * @throws \ReflectionException
+     */
     function __construct($root = "", $urlToParse = "", $method = "")
     {
         $this->debug = TINA4_DEBUG;
@@ -31,8 +43,8 @@ class Routing
         }
         global $arrRoutes;
 
-        if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS) ) {
-            if (key_exists("HTTP_ORIGIN", $_SERVER) ) {
+        if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS)) {
+            if (key_exists("HTTP_ORIGIN", $_SERVER)) {
                 header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
             }
             header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
@@ -72,8 +84,7 @@ class Routing
         }
 
         //Clean up twig extensions
-        $fileName = str_replace (".twig", "", $fileName);
-
+        $fileName = str_replace(".twig", "", $fileName);
 
 
         // if requested file is'nt a php file
@@ -83,14 +94,13 @@ class Routing
 
             if ($ext === "svg") {
                 $mimeType = "image/svg+xml";
-            }
-            else
+            } else
                 if ($ext === "css") {
                     $mimeType = "text/css";
                 }
             header('Content-Type: ' . $mimeType);
-            header('Cache-Control: max-age='.(60 * 60).', public');
-            header('Expires: '.gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+            header('Cache-Control: max-age=' . (60 * 60) . ', public');
+            header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
             $fh = fopen($root . $urlToParse, 'r');
             fpassthru($fh);
@@ -197,6 +207,11 @@ class Routing
         }
     }
 
+    /**
+     * Clean URL by splitting string at "?" to get actual URL
+     * @param string $url URL to be cleaned that may contain "?"
+     * @return mixed Part of the URL before the "?" if it existed
+     */
     function cleanURL($url)
     {
         $url = explode("?", $url, 2);
@@ -210,6 +225,12 @@ class Routing
         }
     }
 
+    /**
+     * Check if path matches route path
+     * @param string $path URL to parse
+     * @param string $routePath Route path
+     * @return bool Whether or not they match
+     */
     function matchPath($path, $routePath)
     {
         $this->debug("Matching {$path} with {$routePath}");
@@ -277,8 +298,11 @@ class Routing
         closedir($dir);
     }
 
-    //convert the output to a string value
 
+    /**
+     * Convert the output to a string value
+     * @return false|mixed|string|null
+     */
     function __toString()
     {
         return $this->content;
@@ -286,11 +310,12 @@ class Routing
 
     /**
      * Convert a multi-dimensional array into a single-dimensional array.
+     * @param array $array The multi-dimensional array.
+     * @return array|bool
      * @author Sean Cannon, LitmusBox.com | seanc@litmusbox.com
-     * @param  array $array The multi-dimensional array.
-     * @return array
      */
-    function array_flatten($array) {
+    function array_flatten($array)
+    {
         if (!is_array($array)) {
             return false;
         }
@@ -314,7 +339,14 @@ class Routing
         return $annotations[1];
     }
 
-    //swagger
+    /**
+     * Swagger
+     * @param string $title
+     * @param string $description
+     * @param string $version
+     * @return false|string
+     * @throws \ReflectionException
+     */
     function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
         global $arrRoutes;
@@ -331,12 +363,10 @@ class Routing
             preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
 
-
             $summary = "None";
             $description = "None";
             $tags = [];
             $queryParams = [];
-
 
 
             $addParams = [];
@@ -351,7 +381,7 @@ class Routing
                 }
 
                 if (!empty($matches[2])) {
-                    $matches[2] = trim ($matches[2]);
+                    $matches[2] = trim($matches[2]);
                 }
 
                 if (!empty($matches)) {
@@ -372,8 +402,7 @@ class Routing
                                 } else
                                     if ($matches[1] === "@example") {
                                         eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else {  $example = json_decode (json_encode($example)); }  } else {$example = (object)[];} ');
-                                    }
-                                    else
+                                    } else
                                         if ($matches[1] === "@secure") {
                                             $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
                                         }
@@ -406,7 +435,7 @@ class Routing
             }
 
             foreach ($queryParams as $pid => $param) {
-                $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string" ];
+                $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string"];
                 array_push($params, $newParam);
             }
 

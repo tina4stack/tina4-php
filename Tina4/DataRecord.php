@@ -8,10 +8,18 @@
  */
 namespace Tina4;
 
+/**
+ * Class DataRecord
+ * @package Tina4
+ */
 class DataRecord
 {
     private $original;
 
+    /**
+     * DataRecord constructor Converts array to object
+     * @param array $record Array of records
+     */
     function __construct($record)
     {
         if (!empty($record)) {
@@ -24,6 +32,10 @@ class DataRecord
         }
     }
 
+    /**
+     * Converts array to object
+     * @return object
+     */
     function asObject () {
         return $this->original;
     }

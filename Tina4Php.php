@@ -14,10 +14,27 @@ use Phpfastcache\Config\ConfigurationOption;
 class Tina4Php
 {
     private $DBA;
-    private $documentRoot; //The place where Tina4 exists
-    private $webRoot; //The place where the website exists
+    /**
+     * @var false|string The place where Tina4 exists
+     */
+    private $documentRoot;
 
+    /**
+     * @var false|string The place where the website exists
+     */
+    private $webRoot;
 
+    /**
+     * Tina4Php constructor.
+     * @param null $config
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverNotFoundException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException
+     * @throws \ReflectionException
+     * @throws \Twig\Error\LoaderError
+     */
     function __construct($config = null)
     {
         //define constants
@@ -179,12 +196,13 @@ function stringReplaceFirst($search, $replace, $content)
 
 /**
  * Render twig template
- * @param $fileName
- * @param array $data
+ * @param string $fileName File name or path of twig template
+ * @param array $data Array for data to be passed into twig template
  * @return string
  * @throws \Twig\Error\LoaderError
  * @throws \Twig\Error\RuntimeError
  * @throws \Twig\Error\SyntaxError
+ * @example examples\exampleTina4PHPRenderTemplateInAPI.php
  */
 function renderTemplate($fileName, $data = [])
 {
