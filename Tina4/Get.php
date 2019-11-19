@@ -16,6 +16,9 @@ namespace Tina4;
  */
 class Get extends Route
 {
+    /**
+     * @var string Sets $method to GET
+     */
     public static $method = TINA4_GET;
 
 }

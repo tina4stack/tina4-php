@@ -15,8 +15,15 @@ namespace Tina4;
 
 use http\Params;
 
+/**
+ * Class Route Determines what occurs when a route is called
+ * @package Tina4
+ */
 class Route
 {
+    /**
+     * @var string Type of method e.g. ANY, POST, DELETE, etc
+     */
     public static $method;
 
     /**
@@ -25,7 +32,7 @@ class Route
      * The routePath can contain variables or in-line parameters encapsulated with {} e.g. "/test/{number}"
      *
      * @param string $routePath A valid html route
-     * @param $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
+     * @param resource $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      * @example "api/tests.php"
      *
      */

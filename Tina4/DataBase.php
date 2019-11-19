@@ -8,6 +8,10 @@
 
 namespace Tina4;
 
+/**
+ * Class DataBase Instantiates all common database procedures
+ * @package Tina4
+ */
 class DataBase
 {
     /**
@@ -39,42 +43,75 @@ class DataBase
      * @var string $password Password of user for database
      */
     public $password;
+
+    /**
+     * @var string $dateFormat Format of dates
+     */
     public $dateFormat;
-    public $fetchLimit = 100; //limit an sql result set
+
+    /**
+     * @var integer $fetchLimit Limit an sql result set
+     */
+    public $fetchLimit = 100;
+
     public $cache;
     public $transaction;
 
 
+    /**
+     * Abstract database open connection
+     * @return bool
+     */
     public function native_open()
     {
         error_log("Implement the public method native_open for your database engine");
         return false;
     }
 
+    /**
+     * Abstract database close connection
+     * @return bool
+     */
     public function native_close()
     {
         error_log("Implement the public method native_close for your database engine");
         return false;
     }
 
+    /**
+     * Abstract database execute
+     * @return bool
+     */
     public function native_exec()
     {
         error_log("Implement the public method native_exec for your database engine");
         return false;
     }
 
+    /**
+     * Abstract database error return
+     * @return bool
+     */
     public function native_error()
     {
         error_log("Implement the public method native_error for your database engine");
         return false;
     }
 
+    /**
+     * Abstract get last inserted row's id from database
+     * @return bool
+     */
     public function native_getLastId()
     {
         error_log("Implement the public method native_getLastId for your database engine");
         return false;
     }
 
+    /**
+     * Abstract database fetch query
+     * @return bool
+     */
     public function native_fetch()
     {
         error_log("Implement the public method native_fetch for your database engine");
@@ -144,9 +181,9 @@ class DataBase
     /**
      * DataBase constructor.
      * @param $database - In the form [host/port:database]
-     * @param string $username
-     * @param string $password
-     * @param string $dateFormat
+     * @param string $username Database user username
+     * @param string $password Database user password
+     * @param string $dateFormat Format of date
      */
     public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd")
     {
@@ -192,16 +229,27 @@ class DataBase
     }
 
 
+    /**
+     * Sets database close connection from currently used database
+     */
     public function close()
     {
         $this->native_close();
     }
 
+    /**
+     * Gets data tables filter
+     * @return array
+     */
     public function getDataTablesFilter()
     {
         return $this->native_dataTablesFilter();
     }
 
+    /**
+     * Sets database execute from currently used database
+     * @return array|mixed
+     */
     public function exec()
     {
         $params = func_get_args();
@@ -213,6 +261,10 @@ class DataBase
 
     }
 
+    /**
+     * Sets database get last inserted row's id from currently used database
+     * @return bool
+     */
     public function getLastId()
     {
         return $this->native_getLastId();
@@ -232,12 +284,20 @@ class DataBase
         return call_user_func_array(array($this, "native_fetch"), $params);
     }
 
+    /**
+     * Sets database commit from currently used database
+     * @return mixed
+     */
     public function commit()
     {
         return $this->native_commit();
     }
 
 
+    /**
+     * Sets database errors from currently used database
+     * @return bool
+     */
     public function error()
     {
         return $this->native_error();

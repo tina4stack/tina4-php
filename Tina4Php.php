@@ -11,9 +11,17 @@ namespace Tina4;
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
+/**
+ * Class Tina4Php Main class used to set constants
+ * @package Tina4
+ */
 class Tina4Php
 {
+    /**
+     * @var resource Database connection
+     */
     private $DBA;
+
     /**
      * @var false|string The place where Tina4 exists
      */
@@ -151,7 +159,11 @@ class Tina4Php
 
     }
 
-
+    /**
+     * Converts URL requests to string and determines whether or not it contains an alias
+     * @return string Route URL
+     * @throws \ReflectionException
+     */
     function __toString()
     {
         $string = "";
@@ -218,7 +230,8 @@ function renderTemplate($fileName, $data = [])
 /**
  * Redirect
  * @param string $url The URL to be redirected to
- * @param integer $statusCode
+ * @param integer $statusCode Code of status
+ * @example examples\exampleTina4PHPRedirect.php
  */
 function redirect($url, $statusCode = 303)
 {

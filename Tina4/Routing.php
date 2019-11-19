@@ -22,14 +22,22 @@ class Routing
     private $params;
     private $content;
     private $debug;
+
+    /**
+     * @var string Type of method
+     */
     private $method;
+
+    /**
+     * @var string Used to check if path matches route path in matchPath()
+     */
     private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
 
     /**
      * Routing constructor.
      * @param string $root Where the document root is located
      * @param string $urlToParse URL being parsed
-     * @param string $method
+     * @param string $method Type of method e.g. ANY, POST, DELETE, etc
      * @throws \ReflectionException
      */
     function __construct($root = "", $urlToParse = "", $method = "")
@@ -218,6 +226,10 @@ class Routing
         return $url[0];
     }
 
+    /**
+     * Add date to bug message
+     * @param string $msg Message to be debugged
+     */
     function debug($msg)
     {
         if ($this->debug) {

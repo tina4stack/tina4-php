@@ -16,5 +16,8 @@ namespace Tina4;
  */
 class Post extends Route
 {
+    /**
+     * @var string Sets $method to POST
+     */
     public static $method = TINA4_POST;
 }
