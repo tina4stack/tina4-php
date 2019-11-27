@@ -13,5 +13,8 @@ namespace Tina4;
  * @package Tina4
  */
 class Patch extends Route {
+    /**
+     * @var string Sets $method to PATCH
+     */
     public static $method = TINA4_PATCH;
 }

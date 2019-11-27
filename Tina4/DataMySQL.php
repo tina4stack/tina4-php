@@ -5,14 +5,27 @@
  * Date: 2019-06-18
  * Time: 22:10
  */
+
 namespace Tina4;
 
-
+/**
+ * Class DataMySQL Instantiates database functions
+ * @package Tina4
+ */
 class DataMySQL extends DataBase
 {
+    /**
+     * @var integer Port number used by MySQL
+     */
     public $port = 3306;
 
-    public function native_open() {
+    /**
+     * Opens database connection
+     * @return bool|void
+     * @throws \Exception
+     */
+    public function native_open()
+    {
         inherited:
         if (!function_exists("mysqli_connect")) {
             throw new \Exception("Mysql extension for PHP needs to be installed");
@@ -23,11 +36,21 @@ class DataMySQL extends DataBase
 
     }
 
-    public function native_close() {
+    /**
+     * Closes database connection
+     * @return bool|void
+     */
+    public function native_close()
+    {
         mysqli_close($this->dbh);
     }
 
-    public function native_exec() {
+    /**
+     * Executes
+     * @return array|bool
+     */
+    public function native_exec()
+    {
         $params = func_get_args();
 
         if (stripos($params[0], "returning") !== false) {
@@ -46,25 +69,37 @@ class DataMySQL extends DataBase
         }
     }
 
-    public function native_error() {
+    /**
+     * Gets MySQL errors
+     * @return bool|DataError
+     */
+    public function native_error()
+    {
         $errorNo = @\mysqli_errno($this->dbh);
         $errorMessage = @\mysqli_error($this->dbh);
 
-        return (new DataError( $errorNo, $errorMessage));
+        return (new DataError($errorNo, $errorMessage));
     }
 
-    public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+    /**
+     * Fetches records from database
+     * @param string $sql SQL Query
+     * @param integer $noOfRecords Number of records requested
+     * @param integer $offSet Record offset
+     * @return bool|DataResult
+     */
+    public function native_fetch($sql = "", $noOfRecords = 10, $offSet = 0)
+    {
         $initialSQL = $sql;
 
         if (strpos($sql, "limit") === false) {
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
-        $recordCursor = @\mysqli_query($this->dbh, $sql );
+        $recordCursor = @\mysqli_query($this->dbh, $sql);
 
 
         $error = $this->error();
-
 
 
         $records = null;
@@ -118,6 +153,10 @@ class DataMySQL extends DataBase
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
 
+    /**
+     * Gets the last inserted row's ID from database
+     * @return bool
+     */
     public function native_getLastId()
     {
         $lastId = $this->fetch("SELECT LAST_INSERT_ID() as last_id");
@@ -125,7 +164,11 @@ class DataMySQL extends DataBase
         return $lastId->record(0)->LAST_ID;
     }
 
-    public function native_commit() {
+    /**
+     * Commits
+     */
+    public function native_commit()
+    {
         //No commit for sqlite
         \mysqli_commit($this->dbh);
     }

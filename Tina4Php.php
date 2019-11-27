@@ -11,13 +11,38 @@ namespace Tina4;
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
+/**
+ * Class Tina4Php Main class used to set constants
+ * @package Tina4
+ */
 class Tina4Php
 {
+    /**
+     * @var resource Database connection
+     */
     private $DBA;
-    private $documentRoot; //The place where Tina4 exists
-    private $webRoot; //The place where the website exists
 
+    /**
+     * @var false|string The place where Tina4 exists
+     */
+    private $documentRoot;
 
+    /**
+     * @var false|string The place where the website exists
+     */
+    private $webRoot;
+
+    /**
+     * Tina4Php constructor.
+     * @param null $config
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverNotFoundException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException
+     * @throws \ReflectionException
+     * @throws \Twig\Error\LoaderError
+     */
     function __construct($config = null)
     {
         //define constants
@@ -134,7 +159,11 @@ class Tina4Php
 
     }
 
-
+    /**
+     * Converts URL requests to string and determines whether or not it contains an alias
+     * @return string Route URL
+     * @throws \ReflectionException
+     */
     function __toString()
     {
         $string = "";
@@ -179,12 +208,13 @@ function stringReplaceFirst($search, $replace, $content)
 
 /**
  * Render twig template
- * @param $fileName
- * @param array $data
+ * @param string $fileName File name or path of twig template
+ * @param array $data Array for data to be passed into twig template
  * @return string
  * @throws \Twig\Error\LoaderError
  * @throws \Twig\Error\RuntimeError
  * @throws \Twig\Error\SyntaxError
+ * @example examples\exampleTina4PHPRenderTemplateInAPI.php
  */
 function renderTemplate($fileName, $data = [])
 {
@@ -200,7 +230,8 @@ function renderTemplate($fileName, $data = [])
 /**
  * Redirect
  * @param string $url The URL to be redirected to
- * @param integer $statusCode
+ * @param integer $statusCode Code of status
+ * @example examples\exampleTina4PHPRedirect.php
  */
 function redirect($url, $statusCode = 303)
 {
