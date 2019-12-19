@@ -114,12 +114,12 @@
                         <ul class="dropdown-menu">
                             <li>
                                 <a href="../reports/errors.html">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">184</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">77</span>
                                 </a>
                             </li>
                             <li>
                                 <a href="../reports/markers.html">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Markers <span class="label label-info pull-right">2</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <i class="icon-list-alt"></i>&#160;Markers <span class="label label-info pull-right">2</span>
                                 </a>
                             </li>
                             <li>
@@ -144,19 +144,19 @@
                                 <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-1307211490"></a>
+                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-163714427"></a>
                                 <a href="../namespaces/default.html" style="margin-left: 30px; padding-left: 0">\</a>
             </div>
-            <div id="namespace-1307211490" class="accordion-body collapse in">
+            <div id="namespace-163714427" class="accordion-body collapse in">
                 <div class="accordion-inner">
 
                                                     <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-1737229180"></a>
+                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-473425781"></a>
                                 <a href="../namespaces/Tina4.html" style="margin-left: 30px; padding-left: 0">Tina4</a>
             </div>
-            <div id="namespace-1737229180" class="accordion-body collapse ">
+            <div id="namespace-473425781" class="accordion-body collapse ">
                 <div class="accordion-inner">
 
                     
@@ -179,6 +179,8 @@
                                                     <li class="class"><a href="../classes/Tina4.Patch.html">Patch</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Post.html">Post</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Put.html">Put</a></li>
+                                                    <li class="class"><a href="../classes/Tina4.Request.html">Request</a></li>
+                                                    <li class="class"><a href="../classes/Tina4.Response.html">Response</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Route.html">Route</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Routing.html">Routing</a></li>
                                             </ul>
@@ -207,10 +209,22 @@
                     <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal"><i class="icon-code"></i></a>
 
                     <h1><small>\Tina4</small>Post</h1>
-                    <p><em></em></p>
+                    <p><em>Class Post Sets the $method variable in Class Route to POST using the definition in Class Tina4Php
+Post route intercepts post calls made to the web server e.g. Post::add()</em></p>
                     
                     
-                                        
+                                                                        <h3>Examples</h3>
+                                                                            <h4></h4>
+                            <pre class="pre-scrollable">&lt;?php
+
+use Tina4\Post;
+
+Post::add(&quot;/example-url-to-calculate-parsed-variables&quot;, function ($response, $request) {
+
+    $total = $_REQUEST[&quot;parsedVariable1&quot;] * $_REQUEST[&quot;parsedVariable2&quot;];
+
+});</pre>
+                                                                
                     <section id="summary">
                         <h2>Summary</h2>
                         <section class="row-fluid heading">
@@ -266,7 +280,7 @@
                         <dt>File</dt>
                             <dd><a href="../files/Post.html"><div class="path-wrapper">Post.php</div></a></dd>
                                                 <dt>Package</dt>
-                            <dd><div class="namespace-wrapper">Default</div></dd>
+                            <dd><div class="namespace-wrapper">Tina4</div></dd>
                                                 <dt>Class hierarchy</dt>
                             <dd class="hierarchy">
                                                                                                                                                                                                                                                                                                 
@@ -300,13 +314,13 @@
             <a id="property_method" name="property_method" class="anchor"></a>
             <article class="property">
                 <h3 class="public ">$method</h3>
-                <pre class="signature">$method : </pre>
+                <pre class="signature">$method : string</pre>
                 <p><em></em></p>
                 
 
                                 <h4>Type</h4>
-                
-                                            </article>
+                string
+                &mdash; Sets $method to POST                            </article>
         </div>
         <aside class="span4 detailsbar">
             <h1><i class="icon-arrow-down"></i></h1>
@@ -332,19 +346,19 @@
             <article class="method">
                 <h3 class="public ">add()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">add(  <span class="argument">$routePath</span>,   <span class="argument">$function</span>) </pre>
+                <pre class="signature" style="margin-right: 54px;">add(string  <span class="argument">$routePath</span>, resource  <span class="argument">$function</span>) </pre>
                 <p><em>Add a route to be called on the web server</em></p>
                 <p>The routePath can contain variables or in-line parameters encapsulated with {} e.g. &quot;/test/{number}&quot;</p>
 
                                     <h4>Parameters</h4>
                     <table class="table table-condensed table-hover">
                                                     <tr>
-                                <td></td>
+                                <td>string</td>
                                 <td>$routePath </td>
                                 <td><p>A valid html route</p></td>
                             </tr>
                                                     <tr>
-                                <td></td>
+                                <td>resource</td>
                                 <td>$function </td>
                                 <td><p>An anonymous function to handle the route called, has params based on inline params and $response, $request params by default</p></td>
                             </tr>
@@ -374,7 +388,7 @@ use Tina4\Routing;
  * @tags Hello World
  * @summary Get a hello world test
  */
-Get::add(&quot;/tests/routing&quot;, function($response){
+Get::add(&quot;/cest/routing&quot;, function($response){
 
     ob_start();
     passthru(&quot;./codecept run&quot;);
@@ -383,12 +397,11 @@ Get::add(&quot;/tests/routing&quot;, function($response){
 
 
     return $response ($variable, 200, &quot;text/html&quot;);
-
 });
 
-Any::add(&quot;/tests/routing/any&quot;, function ($response){
+Any::add(&quot;/cest/routing/any&quot;, function ($response, $request){
 
-    return $response (&quot;OK&quot;, 200);
+    return $response (&quot;OK&quot;. $request, 200);
 });
 
 </pre>
@@ -458,7 +471,7 @@ Any::add(&quot;/tests/routing/any&quot;, function ($response){
                 <section class="span10 offset1">
                     <hr />
                     Documentation is powered by <a href="http://www.phpdoc.org/">phpDocumentor </a> and authored
-                    on August 31st, 2019 at 17:04.
+                    on December 2nd, 2019 at 16:51.
                 </section>
             </section>
         </section>

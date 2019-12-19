@@ -114,12 +114,12 @@
                         <ul class="dropdown-menu">
                             <li>
                                 <a href="../reports/errors.html">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">184</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <i class="icon-list-alt"></i>&#160;Errors <span class="label label-info pull-right">77</span>
                                 </a>
                             </li>
                             <li>
                                 <a href="../reports/markers.html">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <i class="icon-list-alt"></i>&#160;Markers <span class="label label-info pull-right">2</span>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <i class="icon-list-alt"></i>&#160;Markers <span class="label label-info pull-right">2</span>
                                 </a>
                             </li>
                             <li>
@@ -144,19 +144,19 @@
                                 <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-2027077914"></a>
+                                    <a class="accordion-toggle " data-toggle="collapse" data-target="#namespace-32859407"></a>
                                 <a href="../namespaces/default.html" style="margin-left: 30px; padding-left: 0">\</a>
             </div>
-            <div id="namespace-2027077914" class="accordion-body collapse in">
+            <div id="namespace-32859407" class="accordion-body collapse in">
                 <div class="accordion-inner">
 
                                                     <div class="accordion" style="margin-bottom: 0">
         <div class="accordion-group">
             <div class="accordion-heading">
-                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-1127831239"></a>
+                                    <a class="accordion-toggle collapsed" data-toggle="collapse" data-target="#namespace-1126607704"></a>
                                 <a href="../namespaces/Tina4.html" style="margin-left: 30px; padding-left: 0">Tina4</a>
             </div>
-            <div id="namespace-1127831239" class="accordion-body collapse ">
+            <div id="namespace-1126607704" class="accordion-body collapse ">
                 <div class="accordion-inner">
 
                     
@@ -179,6 +179,8 @@
                                                     <li class="class"><a href="../classes/Tina4.Patch.html">Patch</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Post.html">Post</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Put.html">Put</a></li>
+                                                    <li class="class"><a href="../classes/Tina4.Request.html">Request</a></li>
+                                                    <li class="class"><a href="../classes/Tina4.Response.html">Response</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Route.html">Route</a></li>
                                                     <li class="class"><a href="../classes/Tina4.Routing.html">Routing</a></li>
                                             </ul>
@@ -461,7 +463,7 @@
             <article class="method">
                 <h3 class="public ">prepareHtmlMail()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">prepareHtmlMail(  <span class="argument">$html</span>,   <span class="argument">$eol</span>,   <span class="argument">$boundary_rel</span>,   <span class="argument">$boundary_alt</span>) </pre>
+                <pre class="signature" style="margin-right: 54px;">prepareHtmlMail(  <span class="argument">$html</span>,   <span class="argument">$eol</span>,   <span class="argument">$boundary_rel</span>,   <span class="argument">$boundary_alt</span>) : string</pre>
                 <p><em></em></p>
                 
 
@@ -490,7 +492,9 @@
                                             </table>
                 
                 
-                				
+                                    <h4>Returns</h4>
+                    string
+                                    				
                             </article>
         </div>
         <aside class="span4 detailsbar">
@@ -510,26 +514,26 @@
             <article class="method">
                 <h3 class="public ">sendText()</h3>
                 <a href="#source-view" role="button" class="pull-right btn" data-toggle="modal" style="font-size: 1.1em; padding: 9px 14px"><i class="icon-code"></i></a>
-                <pre class="signature" style="margin-right: 54px;">sendText(  <span class="argument">$mobileno</span>, string  <span class="argument">$message = &quot;&quot;</span>, string  <span class="argument">$countryPrefix = &quot;01&quot;</span>) </pre>
+                <pre class="signature" style="margin-right: 54px;">sendText(string  <span class="argument">$mobileno</span>, string  <span class="argument">$message = &quot;&quot;</span>, string  <span class="argument">$countryPrefix = &quot;01&quot;</span>) </pre>
                 <p><em>Alias of send SMS</em></p>
                 
 
                                     <h4>Parameters</h4>
                     <table class="table table-condensed table-hover">
                                                     <tr>
-                                <td></td>
+                                <td>string</td>
                                 <td>$mobileno </td>
-                                <td></td>
+                                <td><p>Mobile contact number</p></td>
                             </tr>
                                                     <tr>
                                 <td>string</td>
                                 <td>$message </td>
-                                <td></td>
+                                <td><p>Message to be sent</p></td>
                             </tr>
                                                     <tr>
                                 <td>string</td>
                                 <td>$countryPrefix </td>
-                                <td></td>
+                                <td><p>Prefix to determine country of origin</p></td>
                             </tr>
                                             </table>
                 
@@ -563,17 +567,17 @@
                                                     <tr>
                                 <td>String</td>
                                 <td>$mobileno </td>
-                                <td></td>
+                                <td><p>Mobile contact number</p></td>
                             </tr>
                                                     <tr>
                                 <td>String</td>
                                 <td>$message </td>
-                                <td></td>
+                                <td><p>Message to be sent</p></td>
                             </tr>
                                                     <tr>
                                 <td>String</td>
                                 <td>$countryPrefix </td>
-                                <td></td>
+                                <td><p>Prefix to determine country of origin e.g. 1 - america, 27 - south africa</p></td>
                             </tr>
                                             </table>
                 
@@ -615,7 +619,7 @@
                                                     <tr>
                                 <td>String</td>
                                 <td>$countryPrefix </td>
-                                <td><p>1 - america, 27 - south africa</p></td>
+                                <td><p>Prefix to determine country of origin e.g. 1 - america, 27 - south africa</p></td>
                             </tr>
                                             </table>
                 
@@ -686,7 +690,7 @@
                 <section class="span10 offset1">
                     <hr />
                     Documentation is powered by <a href="http://www.phpdoc.org/">phpDocumentor </a> and authored
-                    on August 31st, 2019 at 17:04.
+                    on December 2nd, 2019 at 16:51.
                 </section>
             </section>
         </section>

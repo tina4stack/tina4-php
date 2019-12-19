@@ -28,7 +28,9 @@ class DataSQLite3 extends DataBase
 
         @$preparedQuery = $this->dbh->prepare($sql);
 
-        if (!empty($preparedQuery)) {
+        $error = $this->error();
+
+        if ($error->getError()["errorCode"] == 0 && !empty($preparedQuery)) {
             unset($params[0]);
 
             foreach ($params as $pid => $param) {
@@ -89,7 +91,15 @@ class DataSQLite3 extends DataBase
             $noOfRecords = 0;
         }
 
-        return (new DataResult($records, $fields, $noOfRecords, $offSet));
+        $error = $this->error();
+        return (new DataResult($records, $fields, $noOfRecords, $offSet, $error));
+    }
+
+    public function native_getLastId()
+    {
+        $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
+
+        return $lastId->record(0)->LAST_ID;
     }
 
     public function native_commit() {

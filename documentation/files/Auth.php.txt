@@ -45,6 +45,9 @@ class Auth
 
     }
 
+    /**
+     * Starts a php session
+     */
     public static function initSession()
     {
         //make sure the session is started

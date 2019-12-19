@@ -53,9 +53,21 @@ class Tina4Php
         if (!defined("TINA4_PUT")) define("TINA4_PUT", "PUT");
         if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
         if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
+        if (!defined("TINA4_DOCUMENT_ROOT")) define ("TINA4_DOCUMENT_ROOT", null);
+
+        $debugBackTrace = debug_backtrace();
+        $callerFile = $debugBackTrace[0]["file"]; //calling file /.../.../index.php
+        $callerDir = str_replace("index.php", "", $callerFile);
+
+
 
         //root of the website
-        $this->documentRoot = realpath(dirname(__FILE__) . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR);
+        if (defined ("TINA4_DOCUMENT_ROOT") && empty(TINA4_DOCUMENT_ROOT)) {
+            $this->documentRoot = $callerDir;
+            //$this->documentRoot = realpath(dirname(__FILE__) . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR);
+        } else {
+            $this->documentRoot = TINA4_DOCUMENT_ROOT;
+        }
 
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
@@ -65,7 +77,7 @@ class Tina4Php
         //root of tina4
         $this->webRoot = realpath(dirname(__FILE__));
 
-        error_log("TINA4: web root " . $this->webRoot);
+        error_log("TINA4: web path " . $this->webRoot);
 
         //check for composer defines
         if (file_exists($this->webRoot . "/vendor/autoload.php")) {

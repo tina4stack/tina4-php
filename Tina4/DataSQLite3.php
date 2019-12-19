@@ -70,8 +70,7 @@ class DataSQLite3 extends DataBase
 
         $recordCursor = $this->dbh->query($sql);
         $records = [];
-        for ($i = 0; $i < $noOfRecords; $i++ ) {
-            $recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC);
+        while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
             if (!empty($recordArray)) {
                 $records[] = (new DataRecord($recordArray));
             }

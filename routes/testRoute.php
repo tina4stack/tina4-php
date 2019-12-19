@@ -35,12 +35,15 @@ Any::add("/test",
     }
 );
 
+
 Get::add( "/test/object",
     function (Response $response, Request $request)
     {
         $person = new Person();
         $person->firstName = "Test";
         $person->save();
+
+        //$willem = new Person('{"firstName": "Willem"}')
 
         return $response ($person->getTableData(), 200);
     }

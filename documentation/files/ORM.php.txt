@@ -5,7 +5,9 @@
  * Date: 2018/03/19
  * Time: 13:40
  */
+
 namespace Tina4;
+
 
 /**
  * Class ORM
@@ -28,16 +30,29 @@ class ORM
     public $tableName = ""; //Used to set the table name for an object that doesn't look like the table in question
 
     /**
+     * @var null The database connection, if it is null it will look for global $DBA variable
+     * @example examples\exampleORMDBAConnection.php
+     */
+    public $DBA = null; //Specify a database connection
+
+    /**
+     * @var array A map of fields from the table to the object
+     */
+    public $fieldMapping = null;
+
+    /**
      * ORM constructor.
      * @param null $request A JSON input to populate the object
      * @param string $tableName The name of the table that this object maps in the database
      * @param string $tableFilter A filter to limit the records when the data is fetched into the class
      * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
-     * @throws \Exception
+     * @param DataBase A relevant database connection to fetch information from
+     * @throws \Exception Error on failure
+     * @example examples/exampleORMObject.php Create class object extending ORM
      */
-    function __construct($request=null, $tableName="", $tableFilter="", $fieldMapping="")
+    function __construct($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
-        if (!empty($request) && !is_object($request) && !is_array($request)) {
+        if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
             throw new \Exception("Input is not an array or object");
         }
 
@@ -45,16 +60,42 @@ class ORM
             $this->tableName = $tableName;
         }
 
+        if (!empty($primaryKey)) {
+            $this->primaryKey = $primaryKey;
+        }
+
+        if (!empty($fieldMapping)) {
+            $this->fieldMapping = $fieldMapping;
+        }
+
         if (!empty($tableFilter)) {
             $this->tableFilter = $tableFilter;
         }
 
+        if (!empty($DBA)) {
+            $this->DBA = $DBA;
+        }
+
+        if (empty($this->DBA)) {
+            global $DBA;
+            if (!empty($DBA)) {
+                $this->DBA = $DBA;
+            }
+        }
+
         if ($request) {
-            foreach ($request as $key => $value) {
-                if (property_exists($this, $key )) {
+            if (json_decode($request)) {
+                $request = json_decode($request);
+                foreach ($request as $key => $value) {
                     $this->{$key} = $value;
-                } else {
-                    throw new \Exception("{$key} does not exist for ".get_class($this));
+                }
+            } else {
+                foreach ($request as $key => $value) {
+                    if (property_exists($this, $key)) {
+                        $this->{$key} = $value;
+                    } else {
+                        throw new \Exception("{$key} does not exist for " . get_class($this));
+                    }
                 }
             }
         }
@@ -62,21 +103,21 @@ class ORM
 
     /**
      * Gets the field mapping in the database
-     * @param $name
-     * @param $fieldMapping
-     * @return string
+     * @param string $name Name of field required
+     * @param array $fieldMapping Array of field mapping
+     * @return string Required field name from database
      */
-    function getFieldName($name, $fieldMapping=[]) {
-        if (property_exists($this, $name)) return $name;
-
+    function getFieldName($name, $fieldMapping = [])
+    {
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
             $fieldName = $fieldMapping[$name];
             return $fieldName;
         } else {
+            if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
                 if (ctype_upper($name{$i})) {
-                    $fieldName .= "_".$name{$i};
+                    $fieldName .= "_" . $name{$i};
                 } else {
                     $fieldName .= $name{$i};
                 }
@@ -88,24 +129,36 @@ class ORM
 
     /**
      * Gets a proper object name for returning back data
-     * @param $name
-     * @param $fieldMapping
-     * @return string
+     * @param string $name Improper object name
+     * @return string Proper object name
      */
-    function getObjectName($name, $fieldMapping=[]) {
-        if (property_exists($this, $name)) return $name;
-        $name = strtolower($name);
-        if (!empty($fieldMapping) && $fieldMapping[$name]) {
-            $fieldName = $fieldMapping[$name];
+    function getObjectName($name)
+    {
+        //if (property_exists($this, $name) && empty($this->fieldMapping)) return $name;
+        //print_r ($this->fieldMapping);
+
+        if (!empty($this->fieldMapping) && $this->fieldMapping[$name]) {
+            $fieldName = $this->fieldMapping[$name];
             return $fieldName;
         } else {
             $fieldName = "";
-            for ($i = 0; $i < strlen($name); $i++) {
-                if ($name{$i} === "_") {
-                    $i++;
-                    $fieldName .= strtoupper($name{$i});
-                } else {
-                    $fieldName .= $name{$i};
+            if (strpos($name, "_") !== false) {
+                $name = strtolower($name);
+                for ($i = 0; $i < strlen($name); $i++) {
+                    if ($name{$i} === "_") {
+                        $i++;
+                        $fieldName .= strtoupper($name{$i});
+                    } else {
+                        $fieldName .= $name{$i};
+                    }
+                }
+            } else {
+                for ($i = 0; $i < strlen($name); $i++) {
+                    if ($name{$i} !== strtolower($name{$i})) {
+                        $fieldName .= "_" . strtolower($name{$i});
+                    } else {
+                        $fieldName .= $name{$i};
+                    }
                 }
             }
 
@@ -115,75 +168,82 @@ class ORM
 
     /**
      * Generates an insert statement
-     * @param $tableData
-     * @param $tableName
-     * @return string
+     * @param array $tableData Array of table data
+     * @param string $tableName Name of the table
+     * @return string Generated insert query
+     * @throws \Exception Error on failure
      */
-    function generateInsertSQL($tableData, $tableName="") {
-        $tableName = $this->getTableName ($tableName);
+    function generateInsertSQL($tableData, $tableName = "")
+    {
+        $this->checkDBConnection();
+        $tableName = $this->getTableName($tableName);
         $insertColumns = [];
         $insertValues = [];
         $returningStatement = "";
         foreach ($tableData as $fieldName => $fieldValue) {
-            $insertColumns[] = $fieldName;
-            if ($fieldName === "id" ) {
-                if (empty($DBA)) {
-                    global $DBA; // see for a global DBA
-                }
-
-                if (!empty($DBA)) {
-                    if (get_class($DBA) === "Tina4\DataFirebird") {
+            if (empty($fieldValue)) continue;
+            $insertColumns[] = $this->getObjectName($fieldName);
+            if ($fieldName === "id") {
+                if (!empty($this->DBA)) {
+                    if (get_class($this->DBA) === "Tina4\DataFirebird") {
                         $returningStatement = " returning (id)";
-                    } else if (get_class($DBA) === "Tina4\DataSQLite3")    {
+                    } else if (get_class($this->DBA) === "Tina4\DataSQLite3") {
                         $returningStatement = "";
                     }
                 }
 
             }
             if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue) && $fieldValue[0] !== "0" ) {
+            if ($fieldValue === "null" || is_numeric($fieldValue) && $fieldValue[0] !== "0") {
                 $insertValues[] = $fieldValue;
             } else {
+                $fieldValue = str_replace("'", "''", $fieldValue);
                 $insertValues[] = "'{$fieldValue}'";
             }
         }
 
-        $sqlInsert = "insert into {$tableName} (".join(",", $insertColumns).")\nvalues (".join(",", $insertValues)."){$returningStatement}";
+        $sqlInsert = "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
 
         return $sqlInsert;
     }
 
     /**
      * Generates an update statement
-     * @param $tableData
-     * @param $filter
-     * @param $tableName
-     * @return string
+     * @param array $tableData Array of table data
+     * @param string $filter The criteria of what you are searching for to update e.g. "id = 2"
+     * @param string $tableName Name of the table
+     * @return string Generated update query
      */
-    function generateUpdateSQL ($tableData, $filter, $tableName="") {
-        $tableName = $this->getTableName ($tableName);
+    function generateUpdateSQL($tableData, $filter, $tableName = "")
+    {
+        $tableName = $this->getTableName($tableName);
         $updateValues = [];
         foreach ($tableData as $fieldName => $fieldValue) {
+
+            $fieldName = $this->getObjectName($fieldName);
+
             if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0") ) {
+            if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0")) {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
             } else {
+                $fieldValue = str_replace("'", "''", $fieldValue);
                 $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }
-        $sqlUpdate = "update {$tableName} set ".join(",", $updateValues)." where {$filter}";
+        $sqlUpdate = "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
 
         return $sqlUpdate;
     }
 
     /**
      * Generates a delete statement
-     * @param $filter
-     * @param $tableName
-     * @return string
+     * @param string $filter The criteria of what you are searching for to delete e.g. "id = 2"
+     * @param string $tableName The name of the table
+     * @return string Containing deletion query
      */
-    function generateDeleteSQL ($filter, $tableName="") {
-        $tableName = $this->getTableName ($tableName);
+    function generateDeleteSQL($filter, $tableName = "")
+    {
+        $tableName = $this->getTableName($tableName);
         $sqlDelete = "delete from {$tableName} where {$filter}";
         return $sqlDelete;
     }
@@ -191,15 +251,20 @@ class ORM
     /**
      * Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
      * e.g. ["companyId" => "company_id", "storeId" => ]
-     * @param array $fieldMapping
-     * @return array
+     * @param array $fieldMapping Array of field mapping
+     * @return array Contains all table data
      */
-    function getTableData($fieldMapping=[]) {
-        $data = json_decode(json_encode ($this));
+    function getTableData($fieldMapping = [])
+    {
+        $data = json_decode(json_encode($this));
         $tableData = [];
+        if (!empty($this->fieldMapping) && empty($fieldMapping)) {
+            $fieldMapping = $this->fieldMapping;
+        }
 
+        $protectedFields = ["primaryKey", "tableFilter", "DBA", "tableName", "fieldMapping"];
         foreach ($data as $fieldName => $value) {
-            if ($fieldName !== "primaryKey" && $fieldName != "tableFilter" && $fieldName != "tableName") {
+            if (!in_array($fieldName, $protectedFields)) {
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
                 }
@@ -211,27 +276,72 @@ class ORM
     }
 
     /**
-     * Helper function to get the filter for the primary key
-     * @param $tableData
-     * @return string
+     * Gets records from a table using the default $DBA
+     * @param integer $limit Number of rows contained in result set
+     * @param integer $offset The row number of where to start receiving data
+     * @return DataRecord
+     * @throws \Exception Error on failure
      */
-    function getPrimaryCheck($tableData) {
-        $primaryFields = explode (",", $this->primaryKey);
-        $primaryFieldFilter = [];
-        foreach ($primaryFields as $id => $primaryField) {
-            $primaryFieldFilter[] = "{$primaryField} = '".$tableData[$primaryField]."'";
+    function getRecords($limit = 10, $offset = 0)
+    {
+        $this->checkDBConnection();
+        $tableName = $this->getTableName();
+
+        $sql = "select * from {$tableName}";
+        if ($this->tableFilter) {
+            $sql .= "where {$this->tableFilter}";
+        }
+        return $this->DBA->fetch($sql, $limit, $offset);
+    }
+
+    /**
+     * Checks if there is a database connection assigned to the object
+     * If the object is not empty $DBA is instantiated
+     * @throws \Exception If no database connection is assigned to the object an exception is thrown
+     */
+    function checkDBConnection()
+    {
+        if (empty($this->DBA)) {
+            global $DBA;
+            $this->DBA = $DBA;
         }
 
-        $primaryCheck = join (" and ", $primaryFieldFilter);
+        if (empty($this->DBA)) {
+            throw new Exception("No database connection assigned to the object");
+        }
+    }
+
+    /**
+     * Helper function to get the filter for the primary key
+     * @param array $tableData Array of table data
+     * @return string e.g. "id = ''"
+     */
+    function getPrimaryCheck($tableData)
+    {
+        $primaryFields = explode(",", $this->primaryKey);
+        $primaryFieldFilter = [];
+        if (is_array($primaryFields)) {
+            foreach ($primaryFields as $id => $primaryField) {
+                $primaryTableField = $this->getObjectName($primaryField);
+                if (key_exists($primaryField, $tableData)) {
+                    $primaryFieldFilter[] = "{$primaryTableField} = '" . $tableData[$primaryField] . "'";
+                } else {
+                    $primaryFieldFilter[] = "{$primaryTableField} is null";
+                }
+            }
+        }
+
+        $primaryCheck = join(" and ", $primaryFieldFilter);
         return $primaryCheck;
     }
 
     /**
      * Works out the table name from the class name
-     * @param $tableName
-     * @return string|null
+     * @param string $tableName The class name
+     * @return string|null Returns the name of the table or null if it does not fit the if statements criteria
      */
-    function getTableName($tableName) {
+    function getTableName($tableName)
+    {
         if (empty($tableName) && empty($this->tableName)) {
             return strtolower(get_class($this));
         } else {
@@ -246,17 +356,19 @@ class ORM
 
     /**
      * Save the data populated into the object to the provided data connection
-     * @param $DBA
-     * @param string $tableName
-     * @param array $fieldMapping
-     * @return object
-     * @throws Exception
+     * @param string $tableName Name of the table
+     * @param array $fieldMapping Array of field mapping
+     * @return object Result set
+     * @throws \Exception Error on failure
+     * @example examples\exampleORMGenerateInsertSQL.php For insert of database row
+     * @example examples\exampleORMGenerateUpdateSQL.php For update of database row
+     * @example examples\exampleORMCreateTriggerUsingGenerateUpdateSQL.php For creating an external database trigger
      */
-    function save($DBA=null, $tableName="", $fieldMapping=[]) {
-        if (empty($DBA)) {
-            global $DBA; // see for a global DBA
-        }
-        $tableName = $this->getTableName ($tableName);
+    function save($tableName = "", $fieldMapping = [])
+    {
+        $this->checkDBConnection();
+
+        $tableName = $this->getTableName($tableName);
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
@@ -266,57 +378,75 @@ class ORM
         if (TINA4_DEBUG) {
             error_log("TINA4: check " . $sqlCheck);
         }
-        $exists = json_decode($DBA->fetch($sqlCheck, 1)."");
+
+        $exists = json_decode($this->DBA->fetch($sqlCheck, 1) . "");
+
+        if ($exists->recordsTotal == 0 || $exists->error == "") {
+            if (empty($exists->data)) { //insert
+                $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
+            } else {  //update
+                $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
+            }
+
+            $error = $this->DBA->exec($sqlStatement);
 
 
-        if (empty($exists->data)) { //insert
-            $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
-        } else {  //update
-            $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
-        }
+            if (empty($error->getError()["errorCode"])) {
+                $this->DBA->commit();
 
-        $error = $DBA->exec ($sqlStatement);
+                //get last id
+                $lastId = $this->DBA->getLastId();
 
-        if (empty($error->getError()["errorCode"])) {
-            $DBA->commit();
+                if (!empty($lastId)) {
+                    $this->id = $lastId;
+                } else
+                    if (method_exists($error, "records") && !empty($error->records())) {
+                        $record = $error->record(0);
+                        if ($record->ID !== "") {
+                            $this->id = $record->ID; //@todo test on other database engines
+                        }
+                    }
 
-            if (method_exists($error, "records") && !empty($error->records())) {
-                $record = $error->record(0);
-                if ($record->ID !== "") {
-                    $this->id = $record->ID; //@todo test on other database engines
-                    $tableData = $this->getTableData($fieldMapping);
-                    $primaryCheck = $this->getPrimaryCheck($tableData);
+
+                $tableData = $this->getTableData();
+                $primaryCheck = $this->getPrimaryCheck($tableData);
+
+
+                $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
+
+                //print_r ($this->DBA->fetch($sqlFetch, 1));
+
+
+                $fetchData = json_decode($this->DBA->fetch($sqlFetch, 1) . "")->data[0];
+
+                $tableResult = [];
+                foreach ($fetchData as $fieldName => $fieldValue) {
+                    $tableResult[self::getObjectName($fieldName)] = $fieldValue;
                 }
+                return (object)$tableResult;
+            } else {
+                throw new \Exception(print_r($error->getError(), 1));
             }
-
-            $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
-            $fetchData = json_decode($DBA->fetch($sqlFetch, 1) . "")->data[0];
-
-            $tableResult = [];
-            foreach ($fetchData as $fieldName => $fieldValue) {
-                $tableResult[self::getObjectName($fieldName, $fieldMapping)] = $fieldValue;
-            }
-            return (object) $tableResult;
         } else {
-            throw new Exception(print_r ($error->getError(), 1));
+            throw new \Exception(print_r($exists->error, 1));
         }
     }
 
 
-
     /**
      * Loads the record from the database into the object
-     * @param $DBA
-     * @param string $tableName
-     * @param array $fieldMapping
-     * @param string $filter
-     * @return bool
+     * @param string $tableName Name of the table
+     * @param array $fieldMapping Array of field mapping for the table
+     * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
+     * @return bool True on success, false on failure to load
+     * @throws \Exception Error on failure
+     * @example examples\exampleORMLoadData.php for loading table row data
      */
-    function load($DBA=null, $tableName= "", $fieldMapping=[], $filter="") {
-        if (empty($DBA)) {
-            global $DBA; // see for a global DBA
-        }
-        $tableName = $this->getTableName ($tableName);
+    function load($tableName = "", $fieldMapping = [], $filter = "")
+    {
+        $this->checkDBConnection();
+
+        $tableName = $this->getTableName($tableName);
 
         if (!empty($filter)) {
             $sqlStatement = "select * from {$tableName} where {$filter}";
@@ -326,14 +456,13 @@ class ORM
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
 
-
-        $fetchData = json_decode($DBA->fetch($sqlStatement, 1) . "");
+        $fetchData = json_decode($this->DBA->fetch($sqlStatement, 1) . "");
 
         if (!empty($fetchData->data)) {
             $fetchData = $fetchData->data[0];
             foreach ($fetchData as $fieldName => $fieldValue) {
                 $propertyName = self::getObjectName($fieldName, $fieldMapping);
-                if (property_exists($this, $propertyName ) && empty($this->{$propertyName})) {
+                if (property_exists($this, $propertyName) && empty($this->{$propertyName})) {
                     $this->{self::getObjectName($fieldName, $fieldMapping)} = $fieldValue;
                 }
             }
@@ -346,41 +475,42 @@ class ORM
 
     /**
      * Deletes the record from the database
-     * @param $DBA
-     * @param string $tableName
-     * @param string $fieldMapping
+     * @param string $tableName Name of the table
+     * @param string $fieldMapping Array of field mapping
      * @return object
+     * @throws \Exception Error on failure
      */
-    function delete($DBA=null, $tableName="", $fieldMapping="") {
-        if (empty($DBA)) {
-            global $DBA; // see for a global DBA
-        }
-        $tableName = $this->getTableName ($tableName);
+    function delete($tableName = "", $fieldMapping = "")
+    {
+        $this->checkDBConnection();
+
+        $tableName = $this->getTableName($tableName);
 
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
         $sqlStatement = $this->generateDeleteSQL($primaryCheck, $tableName);
 
-        $error = $DBA->exec ($sqlStatement);
+        $error = $this->DBA->exec($sqlStatement);
 
         if (empty($error->getError()["errorCode"])) {
-            return (object) ["success" => true];
+            return (object)["success" => true];
         } else {
-            return (object) $error->getError();
+            return (object)$error->getError();
         }
 
     }
 
     /**
      * Alias of load just with different parameter order for neatness
-     * @param $DBA
      * @param string $filter
-     * @param string $tableName
-     * @param array $fieldMapping
+     * @param string $tableName Name of the table
+     * @param array $fieldMapping Array of field mapping
      * @return bool
+     * @throws \Exception Error on failure
      */
-    function find($DBA, $filter="", $tableName= "", $fieldMapping=[]) {
+    function find($filter = "", $tableName = "", $fieldMapping = [])
+    {
         //Translate filter
         $data = $this->getTableData($fieldMapping);
 
@@ -391,7 +521,7 @@ class ORM
             $filter = str_replace($objectName, $fieldName, $filter);
         }
 
-        return $this->load($DBA, $tableName, $fieldMapping, $filter);
+        return $this->load($tableName, $fieldMapping, $filter);
     }
 
     /**

@@ -10,8 +10,8 @@ use Tina4\ORM;
 
 class Person extends \Tina4\ORM
 {
-    public $id;
-    public $firstName;
-    public $lastName;
-    public $email;
+    public $id; //id
+    public $firstName; //first_name
+    public $lastName; //last_name
+    public $email; //email
 }
