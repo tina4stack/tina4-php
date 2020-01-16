@@ -137,11 +137,13 @@ class SQL implements \JsonSerializable
             $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit)->records();
             $records = [];
             //transform the records into an array of the ORM
-            foreach ($result as $id => $data) {
-                $record = clone $this->ORM;
-                $record->create($data);
-                $record->id = $id;
-                $records[] = $record;
+            if (!empty($result)) {
+                foreach ($result as $id => $data) {
+                    $record = clone $this->ORM;
+                    $record->create($data);
+                    $record->id = $id;
+                    $records[] = $record;
+                }
             }
         } else {
             $records = ["error" => "No database connection or ORM specified"];
