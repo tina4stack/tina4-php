@@ -8,13 +8,12 @@
 
 namespace Tina4;
 
-
 /**
  * Class ORM
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
  * @package Tina4
  */
-class ORM
+class ORM implements \JsonSerializable
 {
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
@@ -52,6 +51,20 @@ class ORM
      */
     function __construct($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
+        $this->create ($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null);
+    }
+
+    /**
+     * Allows ORM's to be created
+     * @param null $request
+     * @param string $tableName
+     * @param string $fieldMapping
+     * @param string $primaryKey
+     * @param string $tableFilter
+     * @param null $DBA
+     * @throws \Exception
+     */
+    function create($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null) {
         if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
             throw new \Exception("Input is not an array or object");
         }
@@ -84,7 +97,7 @@ class ORM
         }
 
         if ($request) {
-            if (json_decode($request)) {
+            if (!is_array($request) && !is_object($request) && json_decode($request)) {
                 $request = json_decode($request);
                 foreach ($request as $key => $value) {
                     $this->{$key} = $value;
@@ -116,10 +129,10 @@ class ORM
             if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
-                if (ctype_upper($name{$i})) {
-                    $fieldName .= "_" . $name{$i};
+                if (ctype_upper($name[$i])) {
+                    $fieldName .= "_" . $name[$i];
                 } else {
-                    $fieldName .= $name{$i};
+                    $fieldName .= $name[$i];
                 }
             }
             return strtolower($fieldName);
@@ -145,19 +158,19 @@ class ORM
             if (strpos($name, "_") !== false) {
                 $name = strtolower($name);
                 for ($i = 0; $i < strlen($name); $i++) {
-                    if ($name{$i} === "_") {
+                    if ($name[$i] === "_") {
                         $i++;
-                        $fieldName .= strtoupper($name{$i});
+                        $fieldName .= strtoupper($name[$i]);
                     } else {
-                        $fieldName .= $name{$i};
+                        $fieldName .= $name[$i];
                     }
                 }
             } else {
                 for ($i = 0; $i < strlen($name); $i++) {
-                    if ($name{$i} !== strtolower($name{$i})) {
-                        $fieldName .= "_" . strtolower($name{$i});
+                    if ($name[$i] !== strtolower($name[$i])) {
+                        $fieldName .= "_" . strtolower($name[$i]);
                     } else {
-                        $fieldName .= $name{$i};
+                        $fieldName .= $name[$i];
                     }
                 }
             }
@@ -256,14 +269,13 @@ class ORM
      */
     function getTableData($fieldMapping = [])
     {
-        $data = json_decode(json_encode($this));
         $tableData = [];
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
         }
 
         $protectedFields = ["primaryKey", "tableFilter", "DBA", "tableName", "fieldMapping"];
-        foreach ($data as $fieldName => $value) {
+        foreach ($this as $fieldName => $value) {
             if (!in_array($fieldName, $protectedFields)) {
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
@@ -532,6 +544,29 @@ class ORM
     {
         // TODO: Implement __toString() method.
         return json_encode($this->getTableData());
+    }
+
+    /**
+     * Makes a neat JSON response
+     */
+    public function jsonSerialize() {
+        return $this->getTableData();
+    }
+
+    /**
+     * Selects a data set of records
+     * @param string $fields
+     * @param int $limit
+     * @return SQL
+     */
+    public function select($fields="*", $limit=10) {
+        return (new \Tina4\SQL($this))->select($fields, $limit)->from($this->tableName);
+    }
+
+    public function generateForm($columns=1, $ignoreFields=null, $namePrefix="", $groupClass="form-group", $inputClass="form-control") {
+        $html = "coming";
+
+        return $html;
     }
 
 

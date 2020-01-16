@@ -413,7 +413,8 @@ class Routing
                                     $queryParams = explode(",", $matches[2]);
                                 } else
                                     if ($matches[1] === "@example") {
-                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else {  $example = json_decode (json_encode($example)); }  } else {$example = (object)[];} ');
+                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
+
                                     } else
                                         if ($matches[1] === "@secure") {
                                             $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
