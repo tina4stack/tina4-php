@@ -51,7 +51,7 @@ class ORM implements \JsonSerializable
      */
     function __construct($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
-        $this->create ($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null);
+        $this->create ($request, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA);
     }
 
     /**
@@ -96,7 +96,10 @@ class ORM implements \JsonSerializable
             }
         }
 
+
+
         if ($request) {
+
             if (!is_array($request) && !is_object($request) && json_decode($request)) {
                 $request = json_decode($request);
                 foreach ($request as $key => $value) {
@@ -104,6 +107,7 @@ class ORM implements \JsonSerializable
                 }
             } else {
                 foreach ($request as $key => $value) {
+
                     if (property_exists($this, $key)) {
                         $this->{$key} = $value;
                     } else {
@@ -145,11 +149,8 @@ class ORM implements \JsonSerializable
      * @param string $name Improper object name
      * @return string Proper object name
      */
-    function getObjectName($name)
+    function getObjectName($name, $dbResult=false)
     {
-        //if (property_exists($this, $name) && empty($this->fieldMapping)) return $name;
-        //print_r ($this->fieldMapping);
-
         if (!empty($this->fieldMapping) && $this->fieldMapping[$name]) {
             $fieldName = $this->fieldMapping[$name];
             return $fieldName;
@@ -166,11 +167,15 @@ class ORM implements \JsonSerializable
                     }
                 }
             } else {
-                for ($i = 0; $i < strlen($name); $i++) {
-                    if ($name[$i] !== strtolower($name[$i])) {
-                        $fieldName .= "_" . strtolower($name[$i]);
-                    } else {
-                        $fieldName .= $name[$i];
+                if ($dbResult) {
+                    $fieldName = strtolower($name);
+                } else {
+                    for ($i = 0; $i < strlen($name); $i++) {
+                        if ($name[$i] !== strtolower($name[$i])) {
+                            $fieldName .= "_" . strtolower($name[$i]);
+                        } else {
+                            $fieldName .= $name[$i];
+                        }
                     }
                 }
             }
@@ -207,7 +212,7 @@ class ORM implements \JsonSerializable
 
             }
             if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue) && $fieldValue[0] !== "0") {
+            if ($fieldValue === "null" || is_numeric($fieldValue)) {
                 $insertValues[] = $fieldValue;
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
@@ -235,8 +240,9 @@ class ORM implements \JsonSerializable
 
             $fieldName = $this->getObjectName($fieldName);
 
+
             if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue && $fieldValue[0] !== "0")) {
+            if ($fieldValue === "null" || is_numeric($fieldValue)) {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
@@ -426,14 +432,11 @@ class ORM implements \JsonSerializable
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
-                //print_r ($this->DBA->fetch($sqlFetch, 1));
-
-
-                $fetchData = json_decode($this->DBA->fetch($sqlFetch, 1) . "")->data[0];
+                $fetchData = $this->DBA->fetch($sqlFetch, 1)->record(0);
 
                 $tableResult = [];
                 foreach ($fetchData as $fieldName => $fieldValue) {
-                    $tableResult[self::getObjectName($fieldName)] = $fieldValue;
+                    $tableResult[self::getObjectName($fieldName,true)] = $fieldValue;
                 }
                 return (object)$tableResult;
             } else {
