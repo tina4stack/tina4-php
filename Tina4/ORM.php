@@ -457,7 +457,7 @@ class ORM implements \JsonSerializable
      * @throws \Exception Error on failure
      * @example examples\exampleORMLoadData.php for loading table row data
      */
-    function load($tableName = "", $fieldMapping = [], $filter = "")
+    function load($filter = "", $tableName = "", $fieldMapping = [])
     {
         $this->checkDBConnection();
 
