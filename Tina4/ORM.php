@@ -536,7 +536,7 @@ class ORM implements \JsonSerializable
             $filter = str_replace($objectName, $fieldName, $filter);
         }
 
-        return $this->load($tableName, $fieldMapping, $filter);
+        return $this->load($filter, $tableName, $fieldMapping);
     }
 
     /**

@@ -14,6 +14,6 @@ class Caller {
         $object = [$class, $method];
         $result = call_user_func_array($object, $params);
 
-        return $result."";
+        return $result;
     }
 }
