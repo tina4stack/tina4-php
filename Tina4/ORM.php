@@ -481,7 +481,7 @@ class ORM implements \JsonSerializable
                     $this->{self::getObjectName($fieldName, $fieldMapping)} = $fieldValue;
                 }
             }
-            return true;
+            return $this;
         } else {
             return false;
         }
