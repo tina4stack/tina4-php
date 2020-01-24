@@ -7,8 +7,6 @@
  */
 namespace Tina4;
 
-use mysql_xdevapi\Exception;
-
 /**
  * Class ParseTemplate
  * @package Tina4
@@ -33,6 +31,7 @@ class ParseTemplate {
      * @throws \Exception Error on failure
      */
     function __construct($root, $fileName, $definedVariables="") {
+
         if (TINA4_DEBUG) {
             error_log("TINA4 Filename: " . $fileName);
         }
@@ -42,6 +41,7 @@ class ParseTemplate {
         //set the working folder for the site
         $this->root = $root;
         //parse the file for objects and tags
+
         $this->content = $this->parseFile($fileName);
 
         $this->definedVariables = $definedVariables;
@@ -213,10 +213,12 @@ class ParseTemplate {
 
         }
 
+
         $realFileName = $fileName;
         foreach ($this->locations as $lid => $location) {
             foreach ($possibleFiles as $id => $fileName) {
                 $testFile = $this->root . "/" . $location ."/". $fileName;
+                $testFile = str_replace("//", "/", $testFile);
                 if (file_exists($testFile)) {
                     $realFileName = $testFile;
                     break;
@@ -233,9 +235,8 @@ class ParseTemplate {
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
-                $templateName = basename($realFileName);
 
-                $content = renderTemplate($templateName, $_SESSION["renderData"]);
+                $content = renderTemplate($realFileName, $_SESSION["renderData"]);
             } else {
                 $content = file_get_contents($realFileName);
                 $content = $this->parseSnippets($content);

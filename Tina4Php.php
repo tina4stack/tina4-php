@@ -234,7 +234,18 @@ function renderTemplate($fileName, $data = [])
     try {
         global $twig;
 
-        return $twig->render($fileName, $data);
+        $fileName = basename($fileName);
+        if ($twig->getLoader()->exists($fileName)) {
+            return $twig->render($fileName, $data);
+        } else {
+            $twigLoader = new \Twig\Loader\FilesystemLoader();
+            $newPath = str_replace($_SERVER["DOCUMENT_ROOT"], "", dirname($fileName)."/");
+            $twigLoader->addPath( $newPath );
+            $twig->setLoader($twigLoader);
+            $fileName = basename($fileName);
+            return $twig->render($fileName, $data);
+
+        }
     } catch (Exception $exception) {
         return $exception->getMessage();
     }
