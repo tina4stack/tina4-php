@@ -32,7 +32,7 @@ class Route
      * The routePath can contain variables or in-line parameters encapsulated with {} e.g. "/test/{number}"
      *
      * @param string $routePath A valid html route
-     * @param resource $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
+     * @param \Closure $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      * @example "api/tests.php"
      *
      */

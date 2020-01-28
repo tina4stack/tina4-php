@@ -141,7 +141,6 @@ class SQL implements \JsonSerializable
                 foreach ($result as $id => $data) {
                     $record = clone $this->ORM;
                     $record->create($data);
-                    $record->id = $id;
                     $records[] = $record;
                 }
             }
@@ -151,6 +150,19 @@ class SQL implements \JsonSerializable
 
 
         return $records;
+    }
+
+    /**
+     * Gets the result as a generic array without the extra object information
+     * @return array
+     */
+    public function asArray() {
+        $records = $this->jsonSerialize();
+        $result = [];
+        foreach ($records as $id => $record) {
+            $result[] = $record->getTableData();
+        }
+        return $result;
     }
 
 
