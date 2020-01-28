@@ -151,15 +151,20 @@ class Tina4Php
 
         $twigPaths = TINA4_TEMPLATE_LOCATIONS;
 
+        //error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+
         if (TINA4_DEBUG) {
             error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
         }
 
         foreach ($twigPaths as $tid => $twigPath) {
-            if (!file_exists($this->documentRoot . "/" . $twigPath)) {
+            if (!file_exists(str_replace("//", "/", $this->documentRoot . "/" . $twigPath))) {
                 unset($twigPaths[$tid]);
             }
         }
+
+        //error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+
 
         $twigLoader = new \Twig\Loader\FilesystemLoader();
         foreach ($twigPaths as $twigPath) {
@@ -233,19 +238,22 @@ function renderTemplate($fileName, $data = [])
 {
     try {
         global $twig;
-
-        $fileName = basename($fileName);
         if ($twig->getLoader()->exists($fileName)) {
             return $twig->render($fileName, $data);
-        } else {
-            $twigLoader = new \Twig\Loader\FilesystemLoader();
-            $newPath = str_replace($_SERVER["DOCUMENT_ROOT"], "", dirname($fileName)."/");
-            $twigLoader->addPath( $newPath );
-            $twig->setLoader($twigLoader);
-            $fileName = basename($fileName);
-            return $twig->render($fileName, $data);
-
         }
+        else
+            if ($twig->getLoader()->exists(basename($fileName))) {
+                return $twig->render(basename($fileName), $data);
+            }
+            else {
+                $fileName = basename($fileName);
+                $twigLoader = new \Twig\Loader\FilesystemLoader();
+                $newPath = str_replace($_SERVER["DOCUMENT_ROOT"], "", dirname($fileName)."/");
+                $twigLoader->addPath( $newPath );
+                $twig->setLoader($twigLoader);
+                $fileName = basename($fileName);
+                return $twig->render($fileName, $data);
+            }
     } catch (Exception $exception) {
         return $exception->getMessage();
     }
