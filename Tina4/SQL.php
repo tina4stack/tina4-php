@@ -148,8 +148,15 @@ class SQL implements \JsonSerializable
             $records = ["error" => "No database connection or ORM specified"];
         }
 
-
         return $records;
+    }
+
+    /**
+     * Gets an array of objects
+     * @return array|mixed
+     */
+    public function asObject() {
+        return $this->jsonSerialize();
     }
 
     /**

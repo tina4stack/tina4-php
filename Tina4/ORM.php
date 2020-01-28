@@ -455,9 +455,9 @@ class ORM implements \JsonSerializable
 
     /**
      * Loads the record from the database into the object
+     * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping for the table
-     * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
      * @return bool True on success, false on failure to load
      * @throws \Exception Error on failure
      * @example examples\exampleORMLoadData.php for loading table row data
@@ -495,21 +495,24 @@ class ORM implements \JsonSerializable
 
     /**
      * Deletes the record from the database
+     * @param string $filter The criteria of what you are searching for to delete e.g. "id = 2"
      * @param string $tableName Name of the table
      * @param string $fieldMapping Array of field mapping
      * @return object
      * @throws \Exception Error on failure
      */
-    function delete($tableName = "", $fieldMapping = "")
+    function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
         $this->checkDBConnection();
 
         $tableName = $this->getTableName($tableName);
 
         $tableData = $this->getTableData($fieldMapping);
-        $primaryCheck = $this->getPrimaryCheck($tableData);
+        if (empty($filter)) {
+            $filter = $this->getPrimaryCheck($tableData);
+        }
 
-        $sqlStatement = $this->generateDeleteSQL($primaryCheck, $tableName);
+        $sqlStatement = $this->generateDeleteSQL($filter, $tableName);
 
         $error = $this->DBA->exec($sqlStatement);
 
