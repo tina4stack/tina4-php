@@ -140,7 +140,7 @@ class SQL implements \JsonSerializable
             if (!empty($result)) {
                 foreach ($result as $id => $data) {
                     $record = clone $this->ORM;
-                    $record->create($data);
+                    $record->create($data, true);
                     $records[] = $record;
                 }
             }

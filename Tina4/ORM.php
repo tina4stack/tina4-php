@@ -41,7 +41,8 @@ class ORM implements \JsonSerializable
 
     /**
      * ORM constructor.
-     * @param null $request A JSON input to populate the object
+     * @param null $request A JSON input to populate the object\
+     * @param boolean $fromDB True or false - is data from the database
      * @param string $tableName The name of the table that this object maps in the database
      * @param string $tableFilter A filter to limit the records when the data is fetched into the class
      * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
@@ -49,14 +50,15 @@ class ORM implements \JsonSerializable
      * @throws \Exception Error on failure
      * @example examples/exampleORMObject.php Create class object extending ORM
      */
-    function __construct($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
+    function __construct($request = null, $fromDB=false, $tableName = "",  $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
-        $this->create ($request, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA);
+        $this->create ($request, $fromDB, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA);
     }
 
     /**
      * Allows ORM's to be created
      * @param null $request
+     * @param boolean $fromDB True or false - is data from the database
      * @param string $tableName
      * @param string $fieldMapping
      * @param string $primaryKey
@@ -64,7 +66,7 @@ class ORM implements \JsonSerializable
      * @param null $DBA
      * @throws \Exception
      */
-    function create($request = null, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null) {
+    function create($request = null, $fromDB=false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null) {
         if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
             throw new \Exception("Input is not an array or object");
         }
@@ -99,7 +101,6 @@ class ORM implements \JsonSerializable
 
 
         if ($request) {
-
             if (!is_array($request) && !is_object($request) && json_decode($request)) {
                 $request = json_decode($request);
                 foreach ($request as $key => $value) {
@@ -107,6 +108,9 @@ class ORM implements \JsonSerializable
                 }
             } else {
                 foreach ($request as $key => $value) {
+                    if ($fromDB) { //map fields like first_name to firstName
+                        $key = $this->getObjectName($key, $fromDB);
+                    }
 
                     if (property_exists($this, $key)) {
                         $this->{$key} = $value;
@@ -438,6 +442,7 @@ class ORM implements \JsonSerializable
                 foreach ($fetchData as $fieldName => $fieldValue) {
                     $tableResult[self::getObjectName($fieldName,true)] = $fieldValue;
                 }
+
                 return (object)$tableResult;
             } else {
                 throw new \Exception(print_r($error->getError(), 1));
