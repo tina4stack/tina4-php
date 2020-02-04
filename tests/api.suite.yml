@@ -1,7 +1,0 @@
-actor: ApiTester
-modules:
-    enabled:
-        - REST:
-            url: http://localhost:11445
-            depends: PhpBrowser
-            part: Json
