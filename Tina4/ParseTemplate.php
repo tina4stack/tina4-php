@@ -245,7 +245,7 @@ class ParseTemplate {
             }
         }   else {
             $this->responseCode = 404;
-            $content = "<img src=\"/assets/images/404.jpg\">";
+            $content = "<img src=\"assets/images/404.jpg\">";
         }
 
         return $content;

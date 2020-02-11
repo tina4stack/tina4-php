@@ -22,6 +22,7 @@ class Routing
     private $params;
     private $content;
     private $debug;
+    private $subFolder; //Sub folder when stack runs under a directory
 
     /**
      * @var string Type of method
@@ -44,6 +45,9 @@ class Routing
     function __construct($root = "", $urlToParse = "", $method = "")
     {
         $this->debug = TINA4_DEBUG;
+
+
+        $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
 
         $_SERVER["DOCUMENT_ROOT"] = $root;
 
@@ -84,6 +88,10 @@ class Routing
         }
 
         $urlToParse = $this->cleanURL($urlToParse);
+
+        if (!empty($this->subFolder)) {
+            $urlToParse = str_replace($this->subFolder, "/", $urlToParse);
+        }
 
         //Generate a filename just in case the routing doesn't find anything
         if ($urlToParse === "/") {
@@ -157,6 +165,7 @@ class Routing
             print_r($arrRoutes);
         }
 
+
         $result = null;
         //iterate through the routes
         foreach ($arrRoutes as $rid => $route) {
@@ -174,7 +183,7 @@ class Routing
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $this->getParams($response));
                     } else {
-                        $result = $response("Not authorized", 401);
+                        $result = $response("Not authorized", HTTP_UNAUTHORIZED);
                     }
 
                     $matched = true;
