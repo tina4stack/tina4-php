@@ -165,7 +165,6 @@ class Routing
             print_r($arrRoutes);
         }
 
-
         $result = null;
         //iterate through the routes
         foreach ($arrRoutes as $rid => $route) {
