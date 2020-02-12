@@ -17,6 +17,5 @@
         }
     },
     "require-dev": {
-        "phpdocumentor/phpdocumentor": "^2.0.5"
     }
 }

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sketchy/bootstrap.min.css" rel="stylesheet" integrity="sha384-2kOE+STGAkgemIkUbGtoZ8dJLqfvJ/xzRnimSkQN7viOfwRvWseF7lqcuNXmjwrL" crossorigin="anonymous">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.1/styles/atom-one-dark.min.css">
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.1/highlight.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Tina4 - This Is Not Another 4ramework</h1>
+        <div class="card">
+            <div class="card-header">Getting Started</div>
+            <div class="card-body">
+                <h4>Installation</h4>
+                <p>Install composer and run the following command from your project folder</p>
+                <pre><code class="bash">
+composer require andrevanzuydam\tina4php
+                </code></pre>
+                    <h4>index.php</h4><p>Create an index.php file in your project folder after composer has installed the library, add the following code</p>
+                <pre><code class="php">&lt;?php
+require "vendor/autoload.php";
+echo new \Tina4\Tina4Php();</code></pre>
+
+                <h4>Run your application</h4>
+                <pre><code class="bash">
+php -S localhost:7124 index.php
+                </code></pre>
+            </div>
+        </div>
+
+    </div>
+
+    <script>hljs.initHighlightingOnLoad();</script>
+</body>
+
+
+
+
+
+</html>

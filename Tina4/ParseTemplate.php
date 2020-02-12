@@ -22,6 +22,7 @@ class ParseTemplate {
     private $twig;
     private $definedVariables;
     private $evals = [];
+    private $content;
 
     /**
      * ParseTemplate constructor.
@@ -204,10 +205,8 @@ class ParseTemplate {
         //find a file in the assets folder which matches the route given
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
 
-
-
         if (empty($ext)) {
-            $possibleFiles =  [ $fileName . ".html", $fileName.".twig" ];
+            $possibleFiles =  [ $fileName . ".html", $fileName.".twig", str_replace("/index", "", $fileName).".twig", str_replace("/index", "", $fileName).".html" ];
         } else {
             $possibleFiles = [$fileName];
 

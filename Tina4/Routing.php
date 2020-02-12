@@ -206,15 +206,12 @@ class Routing
         //result was empty we can parse for templates
         if (!$matched) {
             //if there is no file passed, go for the default or make one up
-
             if (empty($fileName)) {
                 $fileName = "index";
             }
             else if (strpos($fileName, "index") === false){
                 $fileName .= "/index";
             }
-
-
 
             if ($this->debug) {
                 error_log("TINA4: Variables\n" . print_r(get_defined_vars(), 1));

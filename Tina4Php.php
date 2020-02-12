@@ -59,8 +59,6 @@ class Tina4Php
         $callerFile = $debugBackTrace[0]["file"]; //calling file /.../.../index.php
         $callerDir = str_replace("index.php", "", $callerFile);
 
-
-
         //root of the website
         if (defined ("TINA4_DOCUMENT_ROOT") && empty(TINA4_DOCUMENT_ROOT)) {
             $this->documentRoot = $callerDir;
@@ -86,11 +84,6 @@ class Tina4Php
 
         if (file_exists($this->documentRoot . "/vendor/autoload.php")) {
             require_once $this->documentRoot . "/vendor/autoload.php";
-        }
-
-        //system defines, perhaps can be defined or overridden by a config.php file.
-        if (file_exists("{$this->documentRoot}/config.php")) {
-            require_once($this->documentRoot . "/config.php");
         }
 
         if (!defined("TINA4_DEBUG")) {
@@ -131,9 +124,13 @@ class Tina4Php
         $arrRoutes = [];
 
 
-        //Check if assets folder is there
-        if (!file_exists($this->documentRoot . "/assets") && !file_exists("Tina4.php")) {
-            \Tina4\Routing::recurseCopy($this->webRoot . "/assets", $this->documentRoot . "/assets");
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects"];
+
+        foreach ($foldersToCopy as $id => $folder) {
+            //Check if folder is there
+            if (!file_exists($this->documentRoot . "/{$folder}") && !file_exists("Tina4Php.php")) {
+                \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/{$folder}");
+            }
         }
 
         //Add the .htaccess file for redirecting things
@@ -162,9 +159,6 @@ class Tina4Php
                 unset($twigPaths[$tid]);
             }
         }
-
-        //error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
-
 
         $twigLoader = new \Twig\Loader\FilesystemLoader();
         foreach ($twigPaths as $twigPath) {

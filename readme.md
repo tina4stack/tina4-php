@@ -326,7 +326,7 @@ Get::add("/hello-world/{testingString}/{someMore}",
 
 #### Hello World - A JSON result ####
 
-Any object pass back on the response is immediatelly assumed to be a JSON response. Try the following example.
+Any object pass back on the response is immediately assumed to be a JSON response. Try the following example.
 
 ```php
 <?php
