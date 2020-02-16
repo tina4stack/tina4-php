@@ -66,6 +66,9 @@ class DataSQLite3 extends DataBase
     }
 
     public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+        $countRecords = 0;
+        $countRecords = $this->dbh->querySingle("select count(*) as count from (".$sql.")");
+        
         $sql = $sql." limit {$offSet},{$noOfRecords}";
 
         $recordCursor = $this->dbh->query($sql);
@@ -91,7 +94,8 @@ class DataSQLite3 extends DataBase
         }
 
         $error = $this->error();
-        return (new DataResult($records, $fields, $noOfRecords, $offSet, $error));
+        
+        return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }
 
     public function native_getLastId()

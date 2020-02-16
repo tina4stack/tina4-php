@@ -8,17 +8,20 @@
 
 namespace Tina4;
 
+use Exception;
+use JsonSerializable;
+
 /**
  * Class ORM
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
  * @package Tina4
  */
-class ORM implements \JsonSerializable
+class ORM implements JsonSerializable
 {
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
      */
-    public $primaryKey = ""; //Comma separated fields used for primary key
+    public $primaryKey = "id"; //Comma separated fields used for primary key
     /**
      * @var string  A filter for the table being referenced e.g. company_id = 10
      */
@@ -44,10 +47,11 @@ class ORM implements \JsonSerializable
      * @param null $request A JSON input to populate the object\
      * @param boolean $fromDB True or false - is data from the database
      * @param string $tableName The name of the table that this object maps in the database
-     * @param string $tableFilter A filter to limit the records when the data is fetched into the class
      * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
-     * @param DataBase A relevant database connection to fetch information from
-     * @throws \Exception Error on failure
+     * @param string $primaryKey The primary key of the table
+     * @param string $tableFilter A filter to limit the records when the data is fetched into the class
+     * @param DataBase $DBA A relevant database connection to fetch information from
+     * @throws Exception Error on failure
      * @example examples/exampleORMObject.php Create class object extending ORM
      */
     function __construct($request = null, $fromDB=false, $tableName = "",  $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
@@ -56,7 +60,7 @@ class ORM implements \JsonSerializable
     }
 
     /**
-     * Allows ORM's to be created
+     * Allows ORM to be created
      * @param null $request
      * @param boolean $fromDB True or false - is data from the database
      * @param string $tableName
@@ -64,11 +68,11 @@ class ORM implements \JsonSerializable
      * @param string $primaryKey
      * @param string $tableFilter
      * @param null $DBA
-     * @throws \Exception
+     * @throws Exception
      */
     function create($request = null, $fromDB=false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null) {
         if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
-            throw new \Exception("Input is not an array or object");
+            throw new Exception("Input is not an array or object");
         }
 
         if (!empty($tableName)) {
@@ -101,8 +105,8 @@ class ORM implements \JsonSerializable
 
 
         if ($request) {
-            if (!is_array($request) && !is_object($request) && json_decode($request)) {
-                $request = json_decode($request);
+            if (!is_array($request) && !is_object($request) && json_decode((string)$request)) {
+                $request = json_decode((string)$request);
                 foreach ($request as $key => $value) {
                     $this->{$key} = $value;
                 }
@@ -115,7 +119,9 @@ class ORM implements \JsonSerializable
                     if (property_exists($this, $key)) {
                         $this->{$key} = $value;
                     } else {
-                        throw new \Exception("{$key} does not exist for " . get_class($this));
+                        if (empty($this->hasOne())) {
+                            throw new Exception("{$key} does not exist for " . get_class($this));
+                        }
                     }
                 }
             }
@@ -131,8 +137,7 @@ class ORM implements \JsonSerializable
     function getFieldName($name, $fieldMapping = [])
     {
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
-            $fieldName = $fieldMapping[$name];
-            return $fieldName;
+            return $fieldMapping[$name];
         } else {
             if (property_exists($this, $name)) return $name;
             $fieldName = "";
@@ -151,13 +156,13 @@ class ORM implements \JsonSerializable
     /**
      * Gets a proper object name for returning back data
      * @param string $name Improper object name
+     * @param boolean $dbResult Is this a result set from the database?
      * @return string Proper object name
      */
     function getObjectName($name, $dbResult=false)
     {
         if (!empty($this->fieldMapping) && $this->fieldMapping[$name]) {
-            $fieldName = $this->fieldMapping[$name];
-            return $fieldName;
+            return $this->fieldMapping[$name];
         } else {
             $fieldName = "";
             if (strpos($name, "_") !== false) {
@@ -193,7 +198,7 @@ class ORM implements \JsonSerializable
      * @param array $tableData Array of table data
      * @param string $tableName Name of the table
      * @return string Generated insert query
-     * @throws \Exception Error on failure
+     * @throws Exception Error on failure
      */
     function generateInsertSQL($tableData, $tableName = "")
     {
@@ -224,9 +229,7 @@ class ORM implements \JsonSerializable
             }
         }
 
-        $sqlInsert = "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
-
-        return $sqlInsert;
+        return "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
     }
 
     /**
@@ -253,9 +256,8 @@ class ORM implements \JsonSerializable
                 $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }
-        $sqlUpdate = "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
 
-        return $sqlUpdate;
+        return "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
     }
 
     /**
@@ -267,8 +269,8 @@ class ORM implements \JsonSerializable
     function generateDeleteSQL($filter, $tableName = "")
     {
         $tableName = $this->getTableName($tableName);
-        $sqlDelete = "delete from {$tableName} where {$filter}";
-        return $sqlDelete;
+
+        return "delete from {$tableName} where {$filter}";
     }
 
     /**
@@ -294,6 +296,8 @@ class ORM implements \JsonSerializable
             }
         }
 
+        //Now we need to add the foreign keys hasMany & hasOne
+
         return $tableData;
     }
 
@@ -302,7 +306,7 @@ class ORM implements \JsonSerializable
      * @param integer $limit Number of rows contained in result set
      * @param integer $offset The row number of where to start receiving data
      * @return DataRecord
-     * @throws \Exception Error on failure
+     * @throws Exception Error on failure
      */
     function getRecords($limit = 10, $offset = 0)
     {
@@ -319,7 +323,7 @@ class ORM implements \JsonSerializable
     /**
      * Checks if there is a database connection assigned to the object
      * If the object is not empty $DBA is instantiated
-     * @throws \Exception If no database connection is assigned to the object an exception is thrown
+     * @throws Exception If no database connection is assigned to the object an exception is thrown
      */
     function checkDBConnection()
     {
@@ -353,8 +357,7 @@ class ORM implements \JsonSerializable
             }
         }
 
-        $primaryCheck = join(" and ", $primaryFieldFilter);
-        return $primaryCheck;
+        return join(" and ", $primaryFieldFilter);
     }
 
     /**
@@ -381,7 +384,7 @@ class ORM implements \JsonSerializable
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping
      * @return object Result set
-     * @throws \Exception Error on failure
+     * @throws Exception Error on failure
      * @example examples\exampleORMGenerateInsertSQL.php For insert of database row
      * @example examples\exampleORMGenerateUpdateSQL.php For update of database row
      * @example examples\exampleORMCreateTriggerUsingGenerateUpdateSQL.php For creating an external database trigger
@@ -405,7 +408,7 @@ class ORM implements \JsonSerializable
 
         if ($exists->recordsTotal == 0 || $exists->error == "") {
             if (empty($exists->data)) { //insert
-                $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
+               $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
             }
@@ -420,15 +423,15 @@ class ORM implements \JsonSerializable
                 $lastId = $this->DBA->getLastId();
 
                 if (!empty($lastId)) {
-                    $this->id = $lastId;
+                    $this->{$this->primaryKey} = $lastId;
                 } else
                     if (method_exists($error, "records") && !empty($error->records())) {
                         $record = $error->record(0);
-                        if ($record->ID !== "") {
-                            $this->id = $record->ID; //@todo test on other database engines
+                        $primaryFieldName = strtoupper($this->getObjectName($this->primaryKey));
+                        if ($record->{$primaryFieldName} !== "") {
+                            $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
                         }
                     }
-
 
                 $tableData = $this->getTableData();
                 $primaryCheck = $this->getPrimaryCheck($tableData);
@@ -445,10 +448,10 @@ class ORM implements \JsonSerializable
 
                 return (object)$tableResult;
             } else {
-                throw new \Exception(print_r($error->getError(), 1));
+                throw new Exception(print_r($error->getError(), 1));
             }
         } else {
-            throw new \Exception(print_r($exists->error, 1));
+            throw new Exception(print_r($exists->error, 1));
         }
     }
 
@@ -458,8 +461,8 @@ class ORM implements \JsonSerializable
      * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping for the table
-     * @return bool True on success, false on failure to load
-     * @throws \Exception Error on failure
+     * @return ORM|bool True on success, false on failure to load
+     * @throws Exception Error on failure
      * @example examples\exampleORMLoadData.php for loading table row data
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
@@ -482,7 +485,7 @@ class ORM implements \JsonSerializable
             $fetchData = $fetchData->data[0];
             foreach ($fetchData as $fieldName => $fieldValue) {
                 $propertyName = self::getObjectName($fieldName, $fieldMapping);
-                if (property_exists($this, $propertyName) && empty($this->{$propertyName})) {
+                if (property_exists($this, $propertyName) && empty($this->{$propertyName}) && $this->{$propertyName} !== "0") {
                     $this->{self::getObjectName($fieldName, $fieldMapping)} = $fieldValue;
                 }
             }
@@ -499,7 +502,7 @@ class ORM implements \JsonSerializable
      * @param string $tableName Name of the table
      * @param string $fieldMapping Array of field mapping
      * @return object
-     * @throws \Exception Error on failure
+     * @throws Exception Error on failure
      */
     function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
@@ -530,7 +533,7 @@ class ORM implements \JsonSerializable
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping
      * @return bool
-     * @throws \Exception Error on failure
+     * @throws Exception Error on failure
      */
     function find($filter = "", $tableName = "", $fieldMapping = [])
     {
@@ -539,8 +542,6 @@ class ORM implements \JsonSerializable
 
         foreach ($data as $fieldName => $value) {
             $objectName = $this->getObjectName($fieldName);
-
-
             $filter = str_replace($objectName, $fieldName, $filter);
         }
 
@@ -553,7 +554,6 @@ class ORM implements \JsonSerializable
      */
     function __toString()
     {
-        // TODO: Implement __toString() method.
         return json_encode($this->getTableData());
     }
 
@@ -568,16 +568,38 @@ class ORM implements \JsonSerializable
      * Selects a data set of records
      * @param string $fields
      * @param int $limit
+     * @param int $offset
      * @return SQL
      */
-    public function select($fields="*", $limit=10) {
-        return (new \Tina4\SQL($this))->select($fields, $limit)->from($this->tableName);
+    public function select($fields="*", $limit=10, $offset=0) {
+        return (new \Tina4\SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($this->tableName);
     }
 
-    public function generateForm($columns=1, $ignoreFields=null, $namePrefix="", $groupClass="form-group", $inputClass="form-control") {
-        $html = "coming";
+    /**
+     * Implements a relationship in the following form:
+     * ["TableName" => ["foreignKey" => "primaryKey"], "TableName" => ["foreignKey" => "primaryKey"], ...]
+     * @return array
+     */
+    public function hasMany() {
+        return [];
+    }
 
-        return $html;
+    /**
+     * Implements a relationship in the following form:
+     * ["TableName" => ["foreignKey" => "primaryKey"], "TableName" => ["foreignKey" => "primaryKey"], ...]
+     * @return array
+     */
+    public function hasOne() {
+        return [];
+    }
+
+    /**
+     * Implements a relationship in the following form:
+     * ["TableName" => ["foreignKey" => "primaryKey"], "TableName" => ["foreignKey" => "primaryKey"], ...]
+     * @return array
+     */
+    public function belongsTo () {
+        return [];
     }
 
 

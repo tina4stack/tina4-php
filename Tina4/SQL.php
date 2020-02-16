@@ -14,20 +14,24 @@ class SQL implements \JsonSerializable
     public $orderBy;
     public $nextAnd="join";
     public $limit;
+    public $offset;
+    public $hasOne;
 
     public function __construct($ORM)
     {
         $this->ORM = clone $ORM;
     }
 
-    public function select($fields="*", $limit=10)
+    public function select($fields="*", $limit=10, $offset=0, $hasOne=[])
     {
         if (is_array($fields)) {
-            $this->fields = $fields;
+            $this->fields[] = $fields;
         } else {
             $this->fields = explode(",", $fields);
         }
         $this->limit = $limit;
+        $this->offset = $offset;
+        $this->hasOne = $hasOne;
         return $this;
     }
 
@@ -101,7 +105,14 @@ class SQL implements \JsonSerializable
     }
 
     function generateSQLStatement() {
-        $sql = "select\t".join(",\n\t", $this->fields)."\nfrom\t{$this->tableName}\n";
+        //see if we have some foreign key references
+        if (!empty($this->hasOne)) {
+            foreach ($this->hasOne as $foreignKey) {
+                    $this->fields[] = $foreignKey->getDisplayFieldQuery();
+            }
+        }
+
+        $sql = "select\t".join(",\n\t", $this->fields)."\nfrom\t{$this->tableName} t\n";
         if (!empty($this->join) && is_array($this->join)) {
             foreach ($this->join as $join) {
                 $sql .= $join[0]. " ".$join[1];
@@ -124,6 +135,10 @@ class SQL implements \JsonSerializable
             }
         }
 
+        if (!empty($this->orderBy) && is_array($this->orderBy)) {
+            $sql .= "order by ".join (",", $this->orderBy)."\n";
+        }
+
         return $sql;
     }
 
@@ -134,7 +149,7 @@ class SQL implements \JsonSerializable
         //run the query
         $sqlStatement = $this->generateSQLStatement();
         if (!empty($this->ORM) && !empty($this->ORM->DBA)) {
-            $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit)->records();
+            $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset)->records();
             $records = [];
             //transform the records into an array of the ORM
             if (!empty($result)) {
@@ -170,6 +185,15 @@ class SQL implements \JsonSerializable
             $result[] = $record->getTableData();
         }
         return $result;
+    }
+
+    /**
+     * Gets the records as a result
+     * @return mixed
+     */
+    public function asResult() {
+        $sqlStatement = $this->generateSQLStatement();
+        return $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
     }
 
 

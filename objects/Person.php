@@ -5,8 +5,6 @@
  * Date: 2019-03-24
  * Time: 23:54
  */
-use Tina4\ORM;
-
 
 class Person extends \Tina4\ORM
 {
@@ -14,4 +12,9 @@ class Person extends \Tina4\ORM
     public $firstName; //first_name
     public $lastName; //last_name
     public $email; //email
+
+    function hasMany () {
+        //[ "table" => ["foreignKey" => "primaryKey"] ]
+        return ["ContactInfo" => ["personId" => "id"]]; //select * from contactInfo where personId = {$this->id}
+    }
 }

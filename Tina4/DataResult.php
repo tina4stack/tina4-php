@@ -9,11 +9,13 @@
 
 namespace Tina4;
 
+use JsonSerializable;
+
 /**
  * Class DataResult Result of query
  * @package Tina4
  */
-class DataResult
+class DataResult implements JsonSerializable
 {
     /**
      * @var resource Records returned from query
@@ -104,7 +106,7 @@ class DataResult
      */
     function __toString()
     {
-        $results = null;
+        $results = [];
 
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
@@ -118,6 +120,21 @@ class DataResult
             return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => $this->error->getErrorText()]);
         }
 
+    }
+
+    /**
+     * Makes a neat JSON response
+     */
+    public function jsonSerialize() {
+        $results = [];
+
+        if (!empty($this->records)) {
+            foreach ($this->records as $rid => $record) {
+                $results[] = $record->asObject();
+            }
+        }
+
+        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => null];
     }
 
     /**
