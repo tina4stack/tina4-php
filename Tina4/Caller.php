@@ -11,9 +11,10 @@ class Caller {
      */
     function call ($class, $method="", $params=[]) {
         eval ('$class = new '.$class.'();');
+        if (!is_array($params)) {
+            $params[] = $params;
+        }
         $object = [$class, $method];
-        $result = call_user_func_array($object, $params);
-
-        return $result;
+        return call_user_func_array($object, $params);
     }
 }

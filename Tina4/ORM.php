@@ -142,7 +142,7 @@ class ORM implements JsonSerializable
             if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
-                if (ctype_upper($name[$i])) {
+                if (ctype_upper($name[$i]) && $i != 0) {
                     $fieldName .= "_" . $name[$i];
                 } else {
                     $fieldName .= $name[$i];
@@ -221,7 +221,8 @@ class ORM implements JsonSerializable
 
             }
             if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue)) {
+
+            if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
                 $insertValues[] = $fieldValue;
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
@@ -249,7 +250,7 @@ class ORM implements JsonSerializable
 
 
             if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue)) {
+            if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
@@ -368,7 +369,9 @@ class ORM implements JsonSerializable
     function getTableName($tableName)
     {
         if (empty($tableName) && empty($this->tableName)) {
-            return strtolower(get_class($this));
+
+
+            return strtolower($this->getFieldName(get_class($this)));
         } else {
             if (!empty($tableName)) {
                 return $tableName;

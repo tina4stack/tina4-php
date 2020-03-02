@@ -26,6 +26,8 @@ class DataRecord
             $this->original = (object)$record;
 
             foreach ($record as $column => $value) {
+                $columnName = $column;
+                $this->$columnName = $value;
                 $columnName = strtoupper($column);
                 $this->$columnName = $value;
             }
