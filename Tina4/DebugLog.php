@@ -18,7 +18,13 @@ class DebugLog
         $debugTrace = debug_backtrace();
         foreach($debugTrace as $id => $value) {
             if ($id !== 0) {
-                $message .= "\n\e[1;31;10m" . $value["file"] . "\e[0m \e[1;33;10m(" . $value["line"] . ")\e[0m";
+                if (isset($value["file"])) {
+                    $message .= "\n\e[1;31;10m" . $value["file"] . "\e[0m \e[1;33;10m(" . $value["line"] . ")\e[0m";
+                } else {
+                    if (isset($value["class"])) {
+                        $message .= "\n\e[1;30;10mClass: ".$value["class"]."\e[0m";
+                    }
+                }
             }
         }
 
