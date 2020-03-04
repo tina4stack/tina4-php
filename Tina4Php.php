@@ -46,8 +46,11 @@ class Tina4Php
      */
     function __construct($config = null)
     {
+
+
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
+            if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
             define ("TINA4_DEBUG_LEVEL", DEBUG_NONE);
         }
 
