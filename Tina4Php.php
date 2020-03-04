@@ -11,6 +11,7 @@ namespace Tina4;
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
+
 /**
  * Class Tina4Php Main class used to set constants
  * @package Tina4
@@ -46,6 +47,24 @@ class Tina4Php
     function __construct($config = null)
     {
         //define constants
+        if (!defined("TINA4_DEBUG_LEVEL")) {
+            define ("TINA4_DEBUG_LEVEL", DEBUG_NONE);
+        }
+
+        if (!defined("TINA4_DEBUG")) {
+            define("TINA4_DEBUG", false);
+        } else {
+            if (TINA4_DEBUG) {
+                \Tina4\DebugLog::message("
+  ___________   _____   __ __     ____  __________  __  ________
+ /_  __/  _/ | / /   | / // /    / __ \/ ____/ __ )/ / / / ____/
+  / /  / //  |/ / /| |/ // /_   / / / / __/ / __  / / / / / __  
+ / / _/ // /|  / ___ /__  __/  / /_/ / /___/ /_/ / /_/ / /_/ /  
+/_/ /___/_/ |_/_/  |_| /_/    /_____/_____/_____/\____/\____/   
+============================================================                                                                
+", TINA4_DEBUG_LEVEL);
+            }
+        }
 
         if (!defined("TINA4_POST")) define("TINA4_POST", "POST");
         if (!defined("TINA4_GET")) define("TINA4_GET", "GET");
@@ -70,12 +89,13 @@ class Tina4Php
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
         }
-        error_log("TINA4: document root " . $this->documentRoot);
+
+        \Tina4\DebugLog::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
 
         //root of tina4
         $this->webRoot = realpath(dirname(__FILE__));
 
-        error_log("TINA4: web path " . $this->webRoot);
+        \Tina4\DebugLog::message("TINA4: web path " . $this->webRoot);
 
         //check for composer defines
         if (file_exists($this->webRoot . "/vendor/autoload.php")) {
@@ -84,14 +104,6 @@ class Tina4Php
 
         if (file_exists($this->documentRoot . "/vendor/autoload.php")) {
             require_once $this->documentRoot . "/vendor/autoload.php";
-        }
-
-        if (!defined("TINA4_DEBUG")) {
-            define("TINA4_DEBUG", false);
-        } else {
-            if (TINA4_DEBUG) {
-                error_log("TINA4 DEBUG: ON");
-            }
         }
 
         if (!defined("TINA4_TEMPLATE_LOCATIONS")) {
@@ -148,10 +160,10 @@ class Tina4Php
 
         $twigPaths = TINA4_TEMPLATE_LOCATIONS;
 
-        //error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+        \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
 
         if (TINA4_DEBUG) {
-            error_log("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+            \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1), TINA4_DEBUG_LEVEL);
         }
 
         foreach ($twigPaths as $tid => $twigPath) {

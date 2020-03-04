@@ -8,9 +8,18 @@
 use Tina4\ORM;
 
 require "vendor/autoload.php";
+
+//temporary for running under non composer
+define("DEBUG_CONSOLE", 9001);
+define("DEBUG_SCREEN", 9002);
+define("DEBUG_ALL", 9003);
+define("DEBUG_NONE", 9004);
+
+
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");
-//define ("TINA4_DEBUG", true);
+define ("TINA4_DEBUG", true);
+define ("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
 
 global $DBA;
 

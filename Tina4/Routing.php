@@ -21,7 +21,6 @@ class Routing
 {
     private $params;
     private $content;
-    private $debug;
     private $subFolder; //Sub folder when stack runs under a directory
 
     /**
@@ -44,16 +43,14 @@ class Routing
      */
     function __construct($root = "", $urlToParse = "", $method = "")
     {
-        $this->debug = TINA4_DEBUG;
-
-
         $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
 
         $_SERVER["DOCUMENT_ROOT"] = $root;
 
-        if ($this->debug) {
-            error_log("TINA4: URL to parse " . $urlToParse);
+        if (TINA4_DEBUG) {
+            \Tina4\DebugLog::message("TINA4: URL to parse " . $urlToParse, TINA4_DEBUG_LEVEL);
         }
+
         global $arrRoutes;
 
         if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS)) {
@@ -80,12 +77,6 @@ class Routing
          * @return false|string
          */
         $response = new Response ();
-
-
-        //Initialize debugging
-        if ($this->debug) {
-            echo "<PRE>";
-        }
 
         $urlToParse = $this->cleanURL($urlToParse);
 
@@ -133,9 +124,9 @@ class Routing
 
         $this->content = "";
         $this->method = $method;
-        $this->debug("Root: {$root}");
-        $this->debug("URL: {$urlToParse}");
-        $this->debug("Method: {$method}");
+        \Tina4\DebugLog::message("Root: {$root}", TINA4_DEBUG_LEVEL);
+        \Tina4\DebugLog::message("URL: {$urlToParse}", TINA4_DEBUG_LEVEL);
+        \Tina4\DebugLog::message("Method: {$method}", TINA4_DEBUG_LEVEL);
 
         //include routes in routes folder
         foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
@@ -152,8 +143,8 @@ class Routing
                 }
                 $d->close();
             } else {
-                if ($this->debug) {
-                    error_log("TINA4: " . getcwd() . "/" . $route . " not found!");
+                if (TINA4_DEBUG) {
+                    \Tina4\DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!",TINA4_DEBUG_LEVEL);
                 }
             }
         }
@@ -161,8 +152,8 @@ class Routing
         //determine what should be outputted and if the route is found
         $matched = false;
 
-        if ($this->debug) {
-            print_r($arrRoutes);
+        if (TINA4_DEBUG) {
+            \Tina4\DebugLog::message($arrRoutes, TINA4_DEBUG_LEVEL);
         }
 
         $result = null;
@@ -212,19 +203,22 @@ class Routing
                 $fileName .= "/index";
             }
 
-            if ($this->debug) {
-                error_log("TINA4: Variables\n" . print_r(get_defined_vars(), 1));
+            if (TINA4_DEBUG) {
+                $variables = [];
+                foreach (get_defined_vars() as $varName => $variable) {
+                    if (!is_array($variable) && !is_object($variable)) {
+                        $variables[] = $varName . " => " . $variable;
+                    }
+                }
+
+                \Tina4\DebugLog::message("TINA4: Variables\n" . join("\n", $variables), TINA4_DEBUG_LEVEL);
             }
-            $this->content .= new ParseTemplate($root, $fileName, get_defined_vars());
+
+            $this->content .= new ParseTemplate($root, $fileName, get_defined_vars(), $this->subFolder);
         } else {
             $this->content = $result;
         }
 
-
-        //end debugging
-        if ($this->debug) {
-            echo "</PRE>";
-        }
     }
 
     /**
@@ -239,17 +233,6 @@ class Routing
     }
 
     /**
-     * Add date to bug message
-     * @param string $msg Message to be debugged
-     */
-    function debug($msg)
-    {
-        if ($this->debug) {
-            echo date("\nY-m-d h:i:s - ") . $msg . "\n";
-        }
-    }
-
-    /**
      * Check if path matches route path
      * @param string $path URL to parse
      * @param string $routePath Route path
@@ -257,7 +240,7 @@ class Routing
      */
     function matchPath($path, $routePath)
     {
-        $this->debug("Matching {$path} with {$routePath}");
+        \Tina4\DebugLog::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         if ($routePath !== "/") {
             $routePath .= "/";
         }
@@ -290,9 +273,9 @@ class Routing
 
         if ($matching) {
             $this->params = $variables;
-            $this->debug("Found match {$path} with {$routePath}");
+            \Tina4\DebugLog::message("Found match {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         } else {
-            $this->debug("No match for {$path} with {$routePath}");
+            \Tina4\DebugLog::message("No match for {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         }
         return $matching;
     }

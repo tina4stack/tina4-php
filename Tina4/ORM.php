@@ -404,7 +404,7 @@ class ORM implements JsonSerializable
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
         if (TINA4_DEBUG) {
-            error_log("TINA4: check " . $sqlCheck);
+            \Tina4\DebugLog::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
         }
 
         $exists = json_decode($this->DBA->fetch($sqlCheck, 1) . "");

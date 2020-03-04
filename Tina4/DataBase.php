@@ -64,7 +64,7 @@ class DataBase
      */
     public function native_open()
     {
-        error_log("Implement the public method native_open for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_open for your database engine");
         return false;
     }
 
@@ -74,7 +74,7 @@ class DataBase
      */
     public function native_close()
     {
-        error_log("Implement the public method native_close for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_close for your database engine");
         return false;
     }
 
@@ -84,7 +84,7 @@ class DataBase
      */
     public function native_exec()
     {
-        error_log("Implement the public method native_exec for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_exec for your database engine");
         return false;
     }
 
@@ -94,7 +94,7 @@ class DataBase
      */
     public function native_error()
     {
-        error_log("Implement the public method native_error for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_error for your database engine");
         return false;
     }
 
@@ -104,7 +104,7 @@ class DataBase
      */
     public function native_getLastId()
     {
-        error_log("Implement the public method native_getLastId for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_getLastId for your database engine");
         return false;
     }
 
@@ -114,7 +114,7 @@ class DataBase
      */
     public function native_fetch()
     {
-        error_log("Implement the public method native_fetch for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_fetch for your database engine");
         return false;
     }
 
