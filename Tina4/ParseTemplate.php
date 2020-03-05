@@ -33,7 +33,9 @@ class ParseTemplate {
      * @param string $subFolder
      * @throws \Exception Error on failure
      */
-    function __construct($root, $fileName, $definedVariables="", $subFolder="") {
+    function    __construct($root, $fileName, $definedVariables="", $subFolder="") {
+
+        $fileName = preg_replace('#/+#','/',$fileName);
 
         if (TINA4_DEBUG) {
             \Tina4\DebugLog::message("TINA4 Filename: " . $fileName, TINA4_DEBUG_LEVEL);
@@ -231,6 +233,7 @@ class ParseTemplate {
 
         $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
 
+        \Tina4\DebugLog::message("Looking for file ".$realFileName, TINA4_DEBUG_LEVEL);
         if (file_exists($realFileName)) {
             //Render a twig file if the extension is twig
             if ($ext === "twig") {

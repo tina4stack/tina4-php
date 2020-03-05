@@ -93,6 +93,8 @@ class Tina4Php
             $this->documentRoot = realpath(dirname(__FILE__));
         }
 
+
+
         \Tina4\DebugLog::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
 
         //root of tina4
@@ -146,6 +148,10 @@ class Tina4Php
             if (!file_exists($this->documentRoot . "/{$folder}") && !file_exists("Tina4Php.php")) {
                 \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/{$folder}");
             }
+        }
+
+        if (!file_exists("assets/index.twig")) {
+            file_put_contents("assets/index.twig", file_get_contents("assets/documentation.twig"));
         }
 
         //Add the .htaccess file for redirecting things

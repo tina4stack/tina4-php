@@ -34,6 +34,27 @@ class Routing
      */
     private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
 
+    function returnStatic($fileName) {
+        $fileName = preg_replace('#/+#','/',$fileName);
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        $mimeType = mime_content_type($fileName);
+
+        if ($ext === "svg") {
+            $mimeType = "image/svg+xml";
+        } else
+            if ($ext === "css") {
+                $mimeType = "text/css";
+            }
+        header('Content-Type: ' . $mimeType);
+        header('Cache-Control: max-age=' . (60 * 60) . ', public');
+        header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
+        $fh = fopen($fileName, 'r');
+        fpassthru($fh);
+        fclose($fh);
+        exit; //we are done here, file will be delivered
+    }
+
     /**
      * Routing constructor.
      * @param string $root Where the document root is located
@@ -93,27 +114,17 @@ class Routing
 
         //Clean up twig extensions
         $fileName = str_replace(".twig", "", $fileName);
-
-
-        // if requested file is'nt a php file
-        if (file_exists($root . $urlToParse) && $urlToParse !== "/") {
-            $ext = pathinfo($urlToParse, PATHINFO_EXTENSION);
-            $mimeType = mime_content_type($root . $urlToParse);
-
-            if ($ext === "svg") {
-                $mimeType = "image/svg+xml";
-            } else
-                if ($ext === "css") {
-                    $mimeType = "text/css";
+        // if requested file isn't a php file
+        if (file_exists($root . $urlToParse) && $urlToParse !== "/" && !is_dir($root . $urlToParse)) {
+            $this->returnStatic ($root. $urlToParse);
+        } else {
+            //Check the template locations
+            foreach (TINA4_TEMPLATE_LOCATIONS as $tid => $templateLocation) {
+                \Tina4\DebugLog::message($root."/".$templateLocation.$urlToParse, TINA4_DEBUG_LEVEL);
+                if (file_exists($root."/".$templateLocation.$urlToParse) && !is_dir($root."/".$templateLocation.$urlToParse)) {
+                    $this->returnStatic($root."/".$templateLocation."/".$urlToParse);
                 }
-            header('Content-Type: ' . $mimeType);
-            header('Cache-Control: max-age=' . (60 * 60) . ', public');
-            header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
-
-            $fh = fopen($root . $urlToParse, 'r');
-            fpassthru($fh);
-            fclose($fh);
-            exit; //we are done here, file will be delivered
+            }
         }
 
 
