@@ -15,6 +15,7 @@ define("DEBUG_SCREEN", 9002);
 define("DEBUG_ALL", 9003);
 define("DEBUG_NONE", 9004);
 
+//if (file_exists("assets/index.twig")) unlink("assets/index.twig");
 
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");

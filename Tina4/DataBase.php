@@ -187,20 +187,20 @@ class DataBase
      */
     public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd")
     {
-        define("DATA_ARRAY", 0);
-        define("DATA_OBJECT", 1);
-        define("DATA_NUMERIC", 2);
+        if (!defined("DATA_ARRAY")) define("DATA_ARRAY", 0);
+        if (!defined("DATA_OBJECT")) define("DATA_OBJECT", 1);
+        if (!defined("DATA_NUMERIC")) define("DATA_NUMERIC", 2);
 
-        define("DATA_TYPE_TEXT", 0);
-        define("DATA_TYPE_NUMERIC", 1);
-        define("DATA_TYPE_BINARY", 2);
+        if (!defined("DATA_TYPE_TEXT")) define("DATA_TYPE_TEXT", 0);
+        if (!defined("DATA_TYPE_NUMERIC")) define("DATA_TYPE_NUMERIC", 1);
+        if (!defined("DATA_TYPE_BINARY")) define("DATA_TYPE_BINARY", 2);
 
-        define("DATA_ALIGN_LEFT", 0);
-        define("DATA_ALIGN_RIGHT", 1);
+        if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
+        if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
 
-        define("DATA_CASE_UPPER", 1);
+        if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", 1);
 
-        define("DATA_NO_SQL", "ERR001");
+        if (!defined("DATA_NO_SQL"))  define("DATA_NO_SQL", "ERR001");
 
         global $cache;
         if (!empty($cache)) {
