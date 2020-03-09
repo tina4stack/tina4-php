@@ -369,8 +369,6 @@ class ORM implements JsonSerializable
     function getTableName($tableName)
     {
         if (empty($tableName) && empty($this->tableName)) {
-
-
             return strtolower($this->getFieldName(get_class($this)));
         } else {
             if (!empty($tableName)) {
@@ -411,7 +409,7 @@ class ORM implements JsonSerializable
 
         if ($exists->recordsTotal == 0 || $exists->error == "") {
             if (empty($exists->data)) { //insert
-               $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
+                $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
             }
@@ -575,7 +573,8 @@ class ORM implements JsonSerializable
      * @return SQL
      */
     public function select($fields="*", $limit=10, $offset=0) {
-        return (new \Tina4\SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($this->tableName);
+        $tableName = $this->getTableName($this->tableName);
+        return (new \Tina4\SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName);
     }
 
     /**
