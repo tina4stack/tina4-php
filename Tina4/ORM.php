@@ -345,13 +345,15 @@ class ORM implements JsonSerializable
      */
     function getPrimaryCheck($tableData)
     {
+        //print_r ($tableData);
         $primaryFields = explode(",", $this->primaryKey);
         $primaryFieldFilter = [];
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
                 $primaryTableField = $this->getObjectName($primaryField);
                 if (key_exists($primaryField, $tableData)) {
-                    $primaryFieldFilter[] = "{$primaryTableField} = '" . $tableData[$primaryField] . "'";
+                    $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryField] . "'");
+
                 } else {
                     $primaryFieldFilter[] = "{$primaryTableField} is null";
                 }
