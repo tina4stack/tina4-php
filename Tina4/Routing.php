@@ -19,6 +19,7 @@ use http\Env\Request;
  */
 class Routing
 {
+    private $auth;
     private $params;
     private $content;
     private $subFolder; //Sub folder when stack runs under a directory
@@ -64,8 +65,8 @@ class Routing
      */
     function __construct($root = "", $urlToParse = "", $method = "")
     {
+        $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
         $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
-
         $_SERVER["DOCUMENT_ROOT"] = $root;
 
         if (TINA4_DEBUG) {
@@ -147,7 +148,9 @@ class Routing
 
 
                 while (($file = $d->read()) !== false) {
-                    if ($file != "." && $file != "..") {
+                    $pathInfo = pathinfo($file);
+
+                    if ($file != "." && $file != ".." && strtolower($pathInfo["extension"]) === ".php") {
                         $fileNameRoute = realpath(getcwd() . "/" . $route) . "/" . $file;
                         require_once $fileNameRoute;
                     }
@@ -180,8 +183,12 @@ class Routing
                 if (in_array("secure", $annotations[1])) {
                     $headers = getallheaders();
 
-                    if (isset($headers["Authorization"]) && Auth::validToken($headers["Authorization"])) {
+                    if (isset($headers["Authorization"]) && $this->auth->validToken($headers["Authorization"])) {
                         //call closure with & without params
+                        $result = call_user_func_array($route["function"], $this->getParams($response));
+                    }
+                      else
+                    if ($this->auth->tokenExists()) { //Tries to get a token from the session
                         $result = call_user_func_array($route["function"], $this->getParams($response));
                     } else {
                         $result = $response("Not authorized", HTTP_UNAUTHORIZED);

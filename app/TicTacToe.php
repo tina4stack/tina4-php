@@ -1,6 +1,4 @@
 <?php
-
-
 class TicTacToe
 {
     private const board = ["-", "-", "-","-", "-", "-","-", "-", "-"];
@@ -202,9 +200,5 @@ class TicTacToe
         $html .= "</pre>";
         return $html;
     }
-
-
-
-
 
 }

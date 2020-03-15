@@ -67,15 +67,17 @@ class DataSQLite3 extends DataBase
 
     public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
         $countRecords = 0;
-        $countRecords = $this->dbh->querySingle("select count(*) as count from (".$sql.")");
+        $countRecords = @$this->dbh->querySingle("select count(*) as count from (".$sql.")");
         
         $sql = $sql." limit {$offSet},{$noOfRecords}";
 
-        $recordCursor = $this->dbh->query($sql);
+        $recordCursor = @$this->dbh->query($sql);
         $records = [];
-        while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
-            if (!empty($recordArray)) {
-                $records[] = (new DataRecord($recordArray));
+        if (!empty($recordCursor)) {
+            while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
+                if (!empty($recordArray)) {
+                    $records[] = (new DataRecord($recordArray));
+                }
             }
         }
 

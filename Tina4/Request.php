@@ -48,4 +48,9 @@ class Request
         return json_encode($this->data);
     }
 
+    function asArray() {
+
+        return (array)json_decode(json_encode($this->data));
+    }
+
 }

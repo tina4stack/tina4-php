@@ -371,7 +371,9 @@ class ORM implements JsonSerializable
     function getTableName($tableName)
     {
         if (empty($tableName) && empty($this->tableName)) {
-            return strtolower($this->getFieldName(get_class($this)));
+            $className = explode("\\", get_class($this));
+            $className = $className[count($className)-1];
+            return strtolower($this->getFieldName($className));
         } else {
             if (!empty($tableName)) {
                 return $tableName;
@@ -494,7 +496,7 @@ class ORM implements JsonSerializable
             }
             return $this;
         } else {
-            return false;
+            return $this;
         }
     }
 

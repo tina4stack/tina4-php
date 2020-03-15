@@ -50,4 +50,38 @@ class Route
             }
         }
     }
+
+    public static function get ($routePath, $function) {
+        self::$method = TINA4_GET;
+        self::add($routePath, $function);
+    }
+
+    public static function put ($routePath, $function) {
+        self::$method = TINA4_PUT;
+        self::add($routePath, $function);
+    }
+
+    public static function post ($routePath, $function) {
+        self::$method = TINA4_POST;
+        self::add($routePath, $function);
+    }
+
+    public static function patch ($routePath, $function) {
+        self::$method = TINA4_PATCH;
+        self::add($routePath, $function);
+    }
+
+    public static function delete ($routePath, $function) {
+        self::$method = TINA4_DELETE;
+        self::add($routePath, $function);
+    }
+
+    public static function any ($routePath, $function) {
+        self::$method = TINA4_ANY;
+        self::add($routePath, $function);
+    }
+
+
+
+
 }

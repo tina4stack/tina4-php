@@ -3,3 +3,4 @@
 /vendor/
 /cache/
 /assets/index.twig
+/auth.db

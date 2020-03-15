@@ -8,7 +8,11 @@ class Data
     function __construct()
     {
         global $DBA;
-        $this->DBA = $DBA;
+        if ($DBA) {
+            $this->DBA = $DBA;
+        } else {
+            $this->DBA = null;
+        }
     }
 
 }
