@@ -25,7 +25,9 @@ class Auth extends \Tina4\Data
     {
         parent::__construct();
         self::initSession();
-        $_SESSION["tina4:lastPath"] = $lastPath;
+        if ($lastPath !== "/auth/login" && $lastPath !== "/auth/validate") {
+            $_SESSION["tina4:lastPath"] = $lastPath;
+        }
         $this->documentRoot = $documentRoot;
         //send to the wizard if config settings don't exist
         $tina4Auth = (new Tina4Auth())->load ('id = 1');

@@ -219,8 +219,9 @@ class Tina4Php
             return $response (\Tina4\renderTemplate("code.twig", $request->asArray()), HTTP_OK, TEXT_HTML);
         });
 
-
-
+        /**
+         * @secure
+         */
         \Tina4\Route::post("/code/files/tree", function(\Tina4\Response $response, \Tina4\Request $request) {
             //Read dir
             $html = $this->iterateDirectory($_SERVER["DOCUMENT_ROOT"]);
@@ -228,7 +229,9 @@ class Tina4Php
             return $response ($html, HTTP_OK, TEXT_HTML);
         });
 
-
+        /**
+         * @secure
+         */
         \Tina4\Route::post("/code/files/{action}", function($action, \Tina4\Response $response, \Tina4\Request $request) {
             if ($action == "load") {
                 return $response (file_get_contents($_SERVER["DOCUMENT_ROOT"]."/".$request->params["fileName"]), HTTP_OK, TEXT_HTML);
