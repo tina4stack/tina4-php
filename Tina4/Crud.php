@@ -24,6 +24,7 @@ class Crud
      * @return array
      */
     public static function getDataTablesFilter() {
+        $ORM = new \Tina4\ORM();
         $request = $_REQUEST;
 
         if (!empty($request["columns"])) {
@@ -39,8 +40,10 @@ class Crud
             $search = $request["search"];
 
             foreach ($columns as $id => $column) {
+                $columnName = $ORM->getFieldName($column["data"]);
+
                 if (($column["searchable"] == "true") && !empty($search["value"])) {
-                    $filter[] = "upper(" . $column["data"] . ") like '%" . strtoupper($search["value"]) . "%'";
+                    $filter[] = "upper(" . $columnName . ") like '%" . strtoupper($search["value"]) . "%'";
                 }
             }
         }
@@ -48,7 +51,8 @@ class Crud
         $ordering = null;
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
-                $ordering[] = $columns[$orderEntry["column"]]["data"] . " " . $orderEntry["dir"];
+                $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"]);
+                $ordering[] = $columnName. " " . $orderEntry["dir"];
             }
         }
 
