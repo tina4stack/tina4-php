@@ -56,6 +56,23 @@ class Routing
         exit; //we are done here, file will be delivered
     }
 
+    function includeDirectory($dirName) {
+        $d = dir($dirName);
+        while (($file = $d->read()) !== false) {
+            $pathInfo = pathinfo($file);
+            if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
+                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+                include_once $fileNameRoute;
+            } else {
+                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+                if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
+                    $this->includeDirectory($fileNameRoute);
+                }
+            }
+        }
+        $d->close();
+    }
+
     /**
      * Routing constructor.
      * @param string $root Where the document root is located
@@ -143,19 +160,7 @@ class Routing
         //include routes in routes folder
         foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
             if (file_exists(getcwd() . "/" . $route)) {
-
-                $d = dir(getcwd() . "/" . $route);
-
-
-                while (($file = $d->read()) !== false) {
-                    $pathInfo = pathinfo($file);
-
-                    if ($file != "." && $file != ".." && strtolower($pathInfo["extension"]) === ".php") {
-                        $fileNameRoute = realpath(getcwd() . "/" . $route) . "/" . $file;
-                        require_once $fileNameRoute;
-                    }
-                }
-                $d->close();
+                $this->includeDirectory( getcwd(). "/". $route );
             } else {
                 if (TINA4_DEBUG) {
                     \Tina4\DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!",TINA4_DEBUG_LEVEL);

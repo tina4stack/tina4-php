@@ -105,7 +105,8 @@ class DataMySQL extends DataBase
         $records = null;
         $record = null;
         $fields = null;
-        $resultCount = null;
+        $resultCount = [];
+        $resultCount["COUNT_RECORDS"] = 1;
 
         if ($error->getError()["errorCode"] == 0) {
             if ($recordCursor->num_rows > 0) {

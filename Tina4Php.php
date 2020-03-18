@@ -139,7 +139,6 @@ class Tina4Php
         global $arrRoutes;
         $arrRoutes = [];
 
-
         $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects"];
 
         foreach ($foldersToCopy as $id => $folder) {
