@@ -96,10 +96,13 @@ class SQL implements \JsonSerializable
     }
 
     function orderBy ($fields) {
-        if (is_array($fields)) {
-            $this->orderBy = $fields;
-        } else {
-            $this->orderBy = explode(",", $fields);
+        if (!empty($fields)) {
+            if (is_array($fields)) {
+                $this->orderBy = $fields;
+            } else {
+
+                $this->orderBy = explode(",", $fields);
+            }
         }
         return $this;
     }
@@ -192,8 +195,8 @@ class SQL implements \JsonSerializable
      * @return mixed
      */
     public function asResult() {
-        $sqlStatement = $this->generateSQLStatement();
-        return $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
+        $records = $this->jsonSerialize();
+        return (new DataResult($records, null, count($records), $this->offset));
     }
 
 

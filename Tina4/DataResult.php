@@ -110,7 +110,11 @@ class DataResult implements JsonSerializable
 
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
-                $results[] = $record->asObject();
+                if (get_class($record) == "Tina4\DataRecord") {
+                    $results[] = $record->asObject();
+                } else {
+                    $results [] = (object) $record;
+                }
             }
         }
 
@@ -130,7 +134,11 @@ class DataResult implements JsonSerializable
 
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
-                $results[] = $record->asObject();
+                if (get_class($record) == "Tina4\DataRecord") {
+                    $results[] = $record->asObject();
+                } else {
+                    $results [] = (object) $record;
+                }
             }
         }
 
