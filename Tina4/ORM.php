@@ -103,7 +103,6 @@ class ORM implements JsonSerializable
         }
 
 
-
         if ($request) {
             if (!is_array($request) && !is_object($request) && json_decode((string)$request)) {
                 $request = json_decode((string)$request);
@@ -125,6 +124,10 @@ class ORM implements JsonSerializable
                     }
                 }
             }
+
+
+
+
         }
     }
 
@@ -207,6 +210,12 @@ class ORM implements JsonSerializable
         $insertColumns = [];
         $insertValues = [];
         $returningStatement = "";
+
+        foreach ($this->hasOne() as $id => $hasOne) {
+            $foreignField = $this->getObjectName($hasOne->getFieldName());
+            unset($tableData[$foreignField]);
+        }
+
         foreach ($tableData as $fieldName => $fieldValue) {
             if (empty($fieldValue)) continue;
             $insertColumns[] = $this->getObjectName($fieldName);
@@ -218,7 +227,6 @@ class ORM implements JsonSerializable
                         $returningStatement = "";
                     }
                 }
-
             }
             if (is_null($fieldValue)) $fieldValue = "null";
 
@@ -244,10 +252,15 @@ class ORM implements JsonSerializable
     {
         $tableName = $this->getTableName($tableName);
         $updateValues = [];
+
+        foreach ($this->hasOne() as $id => $hasOne) {
+            $foreignField = $this->getObjectName($hasOne->getFieldName());
+            unset($tableData[$foreignField]);
+        }
+
         foreach ($tableData as $fieldName => $fieldValue) {
 
             $fieldName = $this->getObjectName($fieldName);
-
 
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -258,7 +271,8 @@ class ORM implements JsonSerializable
             }
         }
 
-        return "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
+        return  "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
+
     }
 
     /**

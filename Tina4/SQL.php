@@ -24,10 +24,13 @@ class SQL implements \JsonSerializable
 
     public function select($fields="*", $limit=10, $offset=0, $hasOne=[])
     {
+
         if (is_array($fields)) {
             $this->fields[] = $fields;
         } else {
+
             $this->fields = explode(",", $fields);
+
         }
         $this->limit = $limit;
         $this->offset = $offset;
@@ -111,7 +114,7 @@ class SQL implements \JsonSerializable
         //see if we have some foreign key references
         if (!empty($this->hasOne)) {
             foreach ($this->hasOne as $foreignKey) {
-                    $this->fields[] = $foreignKey->getDisplayFieldQuery();
+                $this->fields[] = $foreignKey->getDisplayFieldQuery();
             }
         }
 
@@ -124,6 +127,11 @@ class SQL implements \JsonSerializable
 
         if (!empty($this->filter) && is_array($this->filter)) {
             foreach ($this->filter as $filter) {
+                if (!empty($this->hasOne)) {
+                    foreach ($this->hasOne as $foreignKey) {
+                        $filter[1] = str_replace( $foreignKey->getFieldName(),  $foreignKey->getSubSelect(), $filter[1]);
+                    }
+                }
                 $sql .= "".$filter[0]. "\t".$filter[1]."\n";
             }
         }
