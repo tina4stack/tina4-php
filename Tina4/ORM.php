@@ -43,6 +43,11 @@ class ORM implements JsonSerializable
     public $fieldMapping = null;
 
     /**
+     * @var array An array of fields that do not belong to the table and should not be considered in an update or insert when saving
+     */
+    public $virtualFields = null;
+
+    /**
      * ORM constructor.
      * @param null $request A JSON input to populate the object\
      * @param boolean $fromDB True or false - is data from the database
@@ -118,9 +123,8 @@ class ORM implements JsonSerializable
                     if (property_exists($this, $key)) {
                         $this->{$key} = $value;
                     } else {
-                        if (empty($this->hasOne())) {
-                            throw new Exception("{$key} does not exist for " . get_class($this));
-                        }
+                        $this->{$key} = $value;
+                        $this->virtualFields[] = $key;
                     }
                 }
             }
@@ -218,6 +222,7 @@ class ORM implements JsonSerializable
 
         foreach ($tableData as $fieldName => $fieldValue) {
             if (empty($fieldValue)) continue;
+            if (in_array($fieldName, $this->virtualFields)) continue;
             $insertColumns[] = $this->getObjectName($fieldName);
             if ($fieldName === "id") {
                 if (!empty($this->DBA)) {
@@ -259,6 +264,7 @@ class ORM implements JsonSerializable
         }
 
         foreach ($tableData as $fieldName => $fieldValue) {
+            if (in_array($fieldName, $this->virtualFields)) continue;
 
             $fieldName = $this->getObjectName($fieldName);
 
@@ -301,7 +307,11 @@ class ORM implements JsonSerializable
             $fieldMapping = $this->fieldMapping;
         }
 
-        $protectedFields = ["primaryKey", "tableFilter", "DBA", "tableName", "fieldMapping"];
+        if (empty($this->virtualFields)) {
+            $this->virtualFields = [];
+        }
+
+        $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping"];
         foreach ($this as $fieldName => $value) {
             if (!in_array($fieldName, $protectedFields)) {
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
@@ -461,8 +471,10 @@ class ORM implements JsonSerializable
                 $fetchData = $this->DBA->fetch($sqlFetch, 1)->record(0);
 
                 $tableResult = [];
-                foreach ($fetchData as $fieldName => $fieldValue) {
-                    $tableResult[self::getObjectName($fieldName,true)] = $fieldValue;
+                if (!empty($fetchData)) {
+                    foreach ($fetchData as $fieldName => $fieldValue) {
+                        $tableResult[self::getObjectName($fieldName, true)] = $fieldValue;
+                    }
                 }
 
                 return (object)$tableResult;
@@ -620,6 +632,69 @@ class ORM implements JsonSerializable
      */
     public function belongsTo () {
         return [];
+    }
+
+    function generateCRUD($path="") {
+        $className = get_class($this);
+
+        if (empty($path)) {
+            $callingCode = '(new '.$className.'())->generateCRUD();';
+        } else {
+            $callingCode = '(new '.$className.'())->generateCRUD("' . $path . '");';
+        }
+
+        $backTrace = debug_backtrace()[0];
+        $fileName =  ($backTrace["file"]);
+        $line = $backTrace["line"];
+
+
+        if (empty($path)) $path = str_replace($_SERVER["DOCUMENT_ROOT"], "", str_replace (".php", "", realpath($fileName)));
+
+            $template = <<<'EOT'
+/**
+ * CRUD Prototype Example
+ */
+\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $object, $filter) {
+    switch ($action) {
+        case "form":
+            //Render a form here
+            return $htmlForm;
+            break;
+        case "create":   
+            //Return a script or html message here to reload the grid
+            //Modify variables on the object
+            return  "<script>grid.ajax.reload(null, false); showMessage ('Added');</script>";
+            break;
+        case "read":
+            //Return a dataset to be consumed by the grid with a filter
+            $where = "";
+            if (!empty($filter["where"])) {
+                $where = "and {$filter["where"]}";
+            }
+            
+            return   $object->select ("*", $filter["length"], $filter["start"])
+                            ->where("id <> 0 {$where}")
+                            ->orderBy($filter["orderBy"])
+                            ->asResult();
+            break;
+        case "update":
+            return "<script>grid.ajax.reload(null, false); showMessage ('Edited');</script>";
+            break;
+        case "delete":
+            return "<script>grid.ajax.reload(null, false); showMessage ('Deleted'); </script>";
+            break;
+    }
+});
+EOT;
+        $template = str_replace("[PATH]", $path, $template);
+        $template = str_replace("[OBJECT]", $className, $template);
+
+
+        $content = file_get_contents($fileName);
+
+        $content = str_replace ($callingCode, $template, $content);
+
+        file_put_contents( $fileName, $content);
     }
 
 
