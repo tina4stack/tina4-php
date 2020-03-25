@@ -36,7 +36,7 @@ class Route
      * @example "api/tests.php"
      *
      */
-    public static function add($routePath, $function)
+    public static function add($routePath, $function, $inlineParamsToRequest=false)
     {
         global $arrRoutes;
         $originalRoute = $routePath;
@@ -46,39 +46,40 @@ class Route
         foreach ($routes as $rid => $routePath) {
             if ($routePath !== "") {
                 if (substr($routePath, 0, 1) !== "/") $routePath = "/" . $routePath;
-                $arrRoutes[] = ["routePath" => $routePath, "method" => static::$method, "function" => $function, "originalRoute" => $originalRoute];
+                $arrRoutes[] = ["routePath" => $routePath, "method" => static::$method, "function" => $function, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
             }
         }
     }
 
+    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
     public static function get ($routePath, $function) {
         self::$method = TINA4_GET;
-        self::add($routePath, $function);
+        self::add($routePath, $function, true);
     }
 
     public static function put ($routePath, $function) {
         self::$method = TINA4_PUT;
-        self::add($routePath, $function);
+        self::add($routePath, $function, true);
     }
 
     public static function post ($routePath, $function) {
         self::$method = TINA4_POST;
-        self::add($routePath, $function);
+        self::add($routePath, $function, true);
     }
 
     public static function patch ($routePath, $function) {
         self::$method = TINA4_PATCH;
-        self::add($routePath, $function);
+        self::add($routePath, $function, true);
     }
 
     public static function delete ($routePath, $function) {
         self::$method = TINA4_DELETE;
-        self::add($routePath, $function);
+        self::add($routePath, $function, true);
     }
 
     public static function any ($routePath, $function) {
         self::$method = TINA4_ANY;
-        self::add($routePath, $function);
+        self::add($routePath, $function, true);
     }
 
 

@@ -9,6 +9,7 @@ class Request
 {
     public $data = null;
     public $params = null;
+    public $inlineParams = null;
     public $server = null;
     public $session = null;
 

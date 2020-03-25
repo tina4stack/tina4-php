@@ -16,6 +16,7 @@ class SQL implements \JsonSerializable
     public $limit;
     public $offset;
     public $hasOne;
+    public $noOfRecords;
 
     public function __construct($ORM)
     {
@@ -160,11 +161,12 @@ class SQL implements \JsonSerializable
         //run the query
         $sqlStatement = $this->generateSQLStatement();
         if (!empty($this->ORM) && !empty($this->ORM->DBA)) {
-            $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset)->records();
+            $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
+            $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
             //transform the records into an array of the ORM
             if (!empty($result)) {
-                foreach ($result as $id => $data) {
+                foreach ($result->records() as $id => $data) {
                     $record = clone $this->ORM;
                     $record->create($data, true);
                     $records[] = $record;
@@ -204,7 +206,7 @@ class SQL implements \JsonSerializable
      */
     public function asResult() {
         $records = $this->jsonSerialize();
-        return (new DataResult($records, null, count($records), $this->offset));
+        return (new DataResult($records, null, $this->noOfRecords, $this->offset));
     }
 
 

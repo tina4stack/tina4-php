@@ -185,16 +185,17 @@ class Routing
                 $doc = $reflection->getDocComment();
                 preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
+                $params = $this->getParams($response, $route["inlineParamsToRequest"]);
                 if (in_array("secure", $annotations[1])) {
                     $headers = getallheaders();
 
                     if (isset($headers["Authorization"]) && $this->auth->validToken($headers["Authorization"])) {
                         //call closure with & without params
-                        $result = call_user_func_array($route["function"], $this->getParams($response));
+                        $result = call_user_func_array($route["function"], $params);
                     }
                       else
                     if ($this->auth->tokenExists()) { //Tries to get a token from the session
-                        $result = call_user_func_array($route["function"], $this->getParams($response));
+                        $result = call_user_func_array($route["function"], $params);
                     } else {
                         $result = $response("Not authorized", HTTP_UNAUTHORIZED);
                     }
@@ -202,8 +203,7 @@ class Routing
                     $matched = true;
                     break;
                 } else {
-                    //call closure with & without params
-                    $result = call_user_func_array($route["function"], $this->getParams($response));
+                    $result = call_user_func_array($route["function"], $params);
                 }
 
                 //check for an empty result
@@ -303,12 +303,18 @@ class Routing
         return $matching;
     }
 
-    function getParams($response)
+    function getParams($response, $inlineToRequest=false)
     {
         $request = new \Tina4\Request(file_get_contents("php://input"));
 
+        if ($inlineToRequest) { //Pull the inlineParams into the request by resetting the params
+            $request->inlineParams = $this->params;
+            $this->params = [];
+        }
+
         $this->params[] = $response;
-        $this->params[] = $request; //TODO: check if header is JSON
+        $this->params[] = $request; //Check if header is JSON
+
         return $this->params;
     }
 

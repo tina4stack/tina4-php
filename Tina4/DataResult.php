@@ -74,6 +74,14 @@ class DataResult implements JsonSerializable
     }
 
     /**
+     * Gets back the number of records that were not filtered out by the pagination
+     * @return int
+     */
+    function getNoOfRecords() {
+        return $this->noOfRecords;
+    }
+
+    /**
      * Returns the fields and their types
      * @return mixed
      */
