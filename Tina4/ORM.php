@@ -654,7 +654,7 @@ class ORM implements JsonSerializable
 /**
  * CRUD Prototype Example
  */
-\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $object, $filter) {
+\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $object, $filter, $request) {
     switch ($action) {
         case "form":
             //Render a form here
