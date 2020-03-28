@@ -358,7 +358,9 @@ class ORM implements JsonSerializable
         }
 
         if (empty($this->DBA)) {
-            throw new Exception("No database connection assigned to the object");
+           return false;
+        } else {
+            return true;
         }
     }
 
@@ -498,7 +500,7 @@ class ORM implements JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
-        $this->checkDBConnection();
+        if (!$this->checkDBConnection()) return;
 
         $tableName = $this->getTableName($tableName);
 
@@ -537,7 +539,7 @@ class ORM implements JsonSerializable
      */
     function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
-        $this->checkDBConnection();
+        if (!$this->checkDBConnection()) return;
 
         $tableName = $this->getTableName($tableName);
 
