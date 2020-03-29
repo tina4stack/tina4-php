@@ -28,23 +28,4 @@ global $DBA;
 //For mysql - docker-compose up in the relevant docker folder before running
 //$DBA = new \Tina4\DataMySQL("127.0.0.1/5508:tina4", "tina4", "Password1234");
 
-new \Tina4\Tina4Php();
-
-$name = "TEST";
-
-$template = $html(
-        $head (
-            $title ("Hello Jayden")
-        ),
-        $body (
-            $h1 (["id" => "title"], "Hello World! {{name}}"),
-            $p(["style" => "background: green"],"Example of some text")
-        )
-    );
-
-echo \Tina4\renderTemplate($template, ["name" => $name]);
-
-$name = "TEST222";
-
-echo \Tina4\renderTemplate($template, ["name" => $name]);
-
+echo new \Tina4\Tina4Php();

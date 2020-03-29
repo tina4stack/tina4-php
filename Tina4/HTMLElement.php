@@ -1,6 +1,6 @@
 <?php
 
-const HTML_ELEMENTS = [":html",":a", ":br/",":!DOCTYPE"];
+const HTML_ELEMENTS = [":html",":a", ":br/",":!DOCTYPE", ":!--"];
 
 class HTMLElement {
     private $tag="";
@@ -65,6 +65,9 @@ class HTMLElement {
     {
         //Check what type of tag
         if ($this->tag[0] === "!")  {
+            if (substr()) {
+
+            }
             return "<$this->tag{$this->getAttributes()}>";
         } else
         if ($this->tag[strlen($this->tag)-1] === "/") {
@@ -76,42 +79,9 @@ class HTMLElement {
     }
 }
 
-$a = function (...$elements) {
-    return new HTMLElement(':a', $elements);
-};
-
-$p = function (...$elements) {
-    return new HTMLElement(':p', $elements);
-};
-
-$html = function (...$elements) {
-    return new HTMLElement(':html', $elements);
-};
-
-$head = function (...$elements) {
-    return new HTMLElement( ':head', $elements);
-};
-
-$title = function (...$elements) {
-    return new HTMLElement( ':title', $elements);
-};
-
-$body = function (...$elements) {
-    return new HTMLElement( ':body', $elements);
-};
-
-$h1 = function (...$elements) {
-    return new HTMLElement( ':h1', $elements);
-};
-
-$h2 = function (...$elements) {
-    return new HTMLElement( ':h2', $elements);
-};
-
-$h3 = function (...$elements) {
-    return new HTMLElement( ':h3', $elements);
-};
-
-$doctype = function (...$elements) {
-    return new HTMLElement(':!DOCTYPE', $elements);
-};
+//Dynamic code for creating HTML Elements
+foreach (HTML_ELEMENTS as $id => $ELEMENT) {
+    eval ('$'.$ELEMENT.' = function (...$elements) {
+           return new HTMLElement("'.$ELEMENT.'", $elements); 
+    }');
+}
