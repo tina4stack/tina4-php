@@ -149,7 +149,7 @@ class ORM implements JsonSerializable
             if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
-                if (ctype_upper($name[$i]) && $i != 0) {
+                if (strtoupper($name[$i]) && $i != 0 && ($i > 0 && $name[$i-1] !== strtoupper($name[$i-1]))) {
                     $fieldName .= "_" . $name[$i];
                 } else {
                     $fieldName .= $name[$i];
@@ -187,7 +187,7 @@ class ORM implements JsonSerializable
                     $fieldName = strtolower($name);
                 } else {
                     for ($i = 0; $i < strlen($name); $i++) {
-                        if ($name[$i] !== strtolower($name[$i])) {
+                        if ($name[$i] !== strtolower($name[$i]) && ($i > 0 && $name[$i-1] !== strtoupper($name[$i-1]))) {
                             $fieldName .= "_" . strtolower($name[$i]);
                         } else {
                             $fieldName .= $name[$i];

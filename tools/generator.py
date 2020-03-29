@@ -14,13 +14,14 @@ while i != -1:
 
 i = 0
 while i < len(functions):
+    print (functions[i]+'\n')
     if (i != 0):
         file.write('\n')
     else:
         file.write('const HTML_ELEMENTS = [')
         j = 0
         while j < len(functions):
-            file.write(':'+functions[j])
+            file.write('":'+functions[j]+'"')
             if (j != len(functions)-1):
                 file.write(', ')
             j += 1
@@ -28,3 +29,5 @@ while i < len(functions):
     file.write('$'+functions[i].replace('/', '').replace('!', '')+' = function(...$elements) {\n  return new \Tina4\HTMLElement(":' + functions[i].replace('/', '').replace('!', '') + '", $elements);\n};')
     i += 1
 
+file.close();
+read.close();
