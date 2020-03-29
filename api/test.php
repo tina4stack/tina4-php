@@ -7,4 +7,3 @@ echo $dom ( $doctype(["html"]), $html (
 
 ) );
 
-exit;
