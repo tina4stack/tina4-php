@@ -1,6 +1,8 @@
 <?php
 
-const HTML_ELEMENTS = [":html",":a", ":br/",":!DOCTYPE", ":!--"];
+namespace Tina4;
+
+const HTML_ELEMENTS = [":html",":a", ":p", ":br/",":!DOCTYPE", ":!--"];
 
 class HTMLElement {
     private $tag="";
@@ -64,14 +66,18 @@ class HTMLElement {
     function __toString()
     {
         //Check what type of tag
+        if ($this->tag === "document") {
+            return "{$this->getElements()}";
+        } else
         if ($this->tag[0] === "!")  {
-            if (substr()) {
-
+            if (strpos($this->tag, "!--") !== false) {
+                return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
+            } else {
+                return "<$this->tag{$this->getAttributes()}>";
             }
-            return "<$this->tag{$this->getAttributes()}>";
         } else
         if ($this->tag[strlen($this->tag)-1] === "/") {
-            return "<$this->tag{$this->getAttributes()}/>{$this->getElements()}";
+            return "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
         } else {
             return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
         }
@@ -81,13 +87,18 @@ class HTMLElement {
 
 //Dynamic code for creating HTML Elements
 foreach (HTML_ELEMENTS as $id => $ELEMENT) {
-    $variableName = strtolower(str_replace ("!", "", str_replace("-", "", str_replace("/", "", substr($ELEMENT,1)))));
-    if ($ELEMENT === ":!--") $variableName = "comment";
+
+    if ($ELEMENT === ":!--") {
+        $variableName = "comment";
+    } else {
+        $variableName = strtolower(str_replace("!", "", str_replace("-", "", str_replace("/", "", substr($ELEMENT, 1)))));
+    }
     eval ('$'.$variableName.' = function (...$elements) {
-           return new HTMLElement("'.$ELEMENT.'", $elements); 
+           return new \Tina4\HTMLElement("'.$ELEMENT.'", $elements); 
     };');
 }
 
+
 $dom = function (...$elements) {
-    return new HTMLElement("", $elements);
+    return new \Tina4\HTMLElement(":document", $elements);
 };
