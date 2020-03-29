@@ -357,29 +357,27 @@ function stringReplaceFirst($search, $replace, $content)
  */
 
 /**
- * Render twig template
- * @param string $fileName File name or path of twig template
- * @param array $data Array for data to be passed into twig template
+ * Render a twig file or string
+ * @param $fileNameString
+ * @param array $data
  * @return string
  * @throws \Twig\Error\LoaderError
- * @throws \Twig\Error\RuntimeError
- * @throws \Twig\Error\SyntaxError
- * @example examples\exampleTina4PHPRenderTemplateInAPI.php
  */
-function renderTemplate($fileName, $data = [])
+function renderTemplate($fileNameString, $data = [])
 {
-    $fileName = str_replace($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR, "", $fileName);
+    $fileName = str_replace($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR, "", $fileNameString);
     try {
         global $twig;
-        if ($twig->getLoader()->exists($fileName)) {
+        if ($twig->getLoader()->exists($fileNameString)) {
             return $twig->render($fileName, $data);
         }
         else
-            if ($twig->getLoader()->exists(basename($fileName))) {
+            if ($twig->getLoader()->exists(basename($fileNameString))) {
                 return $twig->render(basename($fileName), $data);
             }
-            else {
-                $renderFile = basename($fileName);
+              else
+            if (is_file($fileNameString)) {
+                $renderFile = basename($fileNameString);
                 $twigLoader = new \Twig\Loader\FilesystemLoader();
                 $newPath = dirname($fileName).DIRECTORY_SEPARATOR;
                 $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR. $newPath );
@@ -387,6 +385,10 @@ function renderTemplate($fileName, $data = [])
                 $fileName = basename($renderFile);
                 return $twig->render($renderFile, $data);
             }
+              else {
+                    $twig->setLoader(new \Twig\Loader\ArrayLoader(["template" => $fileNameString]));
+                    return $twig->render("template", $data);
+               }
     } catch (Exception $exception) {
         return $exception->getMessage();
     }

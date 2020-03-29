@@ -13,6 +13,9 @@
             "Tina4Php.php",
             "Tina4"
         ],
+        "files": [
+            "Tina4/Shape.php"
+        ],
         "psr-4": {
             "Tina4\\":"Tina4/"
         }

@@ -30,76 +30,19 @@
     </div>
     <div class="row">
         <div class="col-md-2" style="border: 1px solid black" id="fileTree">
-            
+
         </div>
         <div class="col-md-10" id="editor">
-    
+
         </div>
     </div>
     <div class="row">
         <div class="col-md-12" id="status-bar">
-            
+
         </div>
-    </div>    
+    </div>
 </div>
-<script>
-    let fileName = '/assets/code.twig';
 
-    function message(message) {
-        $('#status-bar').html(message);
-        setTimeout (function() {
-            $('#status-bar').html('');
-        }, 1000);
-    }
-    
-    function loadFileTree () {
-        $.post( "/code/files/tree", function (data) {
-            $('#fileTree').html(data);
-            $('#fileTree').jstree({});
-        });
-    }
 
-    function loadFile(file, editor) {
-        message ('Loading '+file+'...');
-        $.post( "/code/files/load", {fileName: file}, function( data ) {
-            editor.setValue (data);
-            fileName = file;
-        });
-    }
-    
-
-    function saveFile (fileName, editor) {
-        $.post( "/code/files/save", {fileName: fileName, fileContent: editor.getValue()}, function( data ) {
-            //console.log (data);
-            message (fileName+' saved');
-        });
-    }
-</script>
-<script src="/assets/ace/src/ace.js" type="text/javascript" charset="utf-8"></script>
-<script src="/assers/ace/ext-language_tools.js"></script>
-<script>
-
-     let editor = ace.edit("editor");
-     editor.setTheme("ace/theme/monokai");
-     editor.session.setMode("ace/mode/php");
-     
-
-     editor.commands.addCommand({
-         name: 'myCommand',
-         bindKey: {win: 'Ctrl-S',  mac: 'Command-S'},
-         exec: function(editor) {
-             saveFile (fileName, editor);
-         },
-         readOnly: true // false if this command should not apply in readOnly mode
-     });
-     
-     editor.setOptions({
-         enableBasicAutocompletion: true
-     });
-
-     loadFileTree();
-
-     loadFile(fileName, editor);
-</script>
 </body>
 </html>
