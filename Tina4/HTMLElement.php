@@ -81,7 +81,13 @@ class HTMLElement {
 
 //Dynamic code for creating HTML Elements
 foreach (HTML_ELEMENTS as $id => $ELEMENT) {
-    eval ('$'.$ELEMENT.' = function (...$elements) {
+    $variableName = strtolower(str_replace ("!", "", str_replace("-", "", str_replace("/", "", substr($ELEMENT,1)))));
+    if ($ELEMENT === ":!--") $variableName = "comment";
+    eval ('$'.$variableName.' = function (...$elements) {
            return new HTMLElement("'.$ELEMENT.'", $elements); 
-    }');
+    };');
 }
+
+$dom = function (...$elements) {
+    return new HTMLElement("", $elements);
+};

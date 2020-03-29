@@ -8,7 +8,7 @@
 use Tina4\ORM;
 
 require "vendor/autoload.php";
-require "Tina4/Shape.php";
+require "Tina4/HTMLElement.php";
 
 //temporary for running under non composer
 define("DEBUG_CONSOLE", 9001);
