@@ -1,0 +1,119 @@
+<!doctype>	Defines a document type
+<a>	Specific a anchor (Hyperlink)
+<abbr>	Describes an abbreviation (acronyms)
+<acronym>	Describes an acronyms	REMOVE
+<address>	Describes an address information
+<applet>	Embedding an applet in HTML document	REMOVE
+<area>	Defines an area in an image map
+<article>	Defines an article	NEW
+<aside>	Describes contain set(or write) on aside place in page contain	NEW
+<audio>	Specific audio content	NEW
+<b>	Specific text weight bold
+<base>	Define a base URL for all the links with in a web page
+<basefont>	Describes a default font color, size, face in a document	REMOVE
+<bb>	Define browser command, that command invoke as per client action	NEW/ REMOVE
+<bdo>	Specific direction of text display
+<big>	Defines a big text	REMOVE
+<blockquote>	Specifies a long quotation
+<body>	Defines a main section(body) part in HTML document
+<br />	Specific a single line break
+<button>	Specifies a press/push button
+<canvas>	Specifies the display graphics on HTML web documment	NEW
+<caption>	Define a table caption
+<center>	Specifies a text is display in center align	REMOVE
+<cite>	Specifies a text citation
+<code>	Specifies computer code text
+<col>	Specifies a each column within a <colgroup> element in table
+<colgroup>	Defines a group of one or more columns inside table
+<command>	Define a command button, invoke as per user action	NEW
+<datagrid>	Define a represent data in datagrid either list wise or tree wise	NEW/ REMOVE
+<datalist>	Define a list of pre-defined options surrounding <input> tag	NEW
+<dd>	Defines a definition description in a definition list
+<del>	Specific text deleted in web document
+<details>	Define a additional details hide or show as per user action	NEW
+<dfn>	Define a definition team
+<dialog>	Define a chat conversation between one or more person	NEW/ REMOVE
+<dir>	Define a directory list	REMOVE
+<div>	Define a division part
+<dl>	Define a definition list
+<dt>	Define a definition team
+<em>	Define a text is emphasize format
+<embed>	Define a embedding external application using a relative plug-in	NEW
+<eventsource>	Defines a source of event generates to remote server	NEW/ REMOVE
+<fieldset>	Defines a grouping of related form elements
+<figcaption>	Represents a caption text corresponding with a figure element	NEW
+<figure>	Represents self-contained content corresponding with a <figcaption> element	NEW
+<font>	Defines a font size, font face and font color for its text	REMOVE
+<footer>	Defines a footer section containing details about the author, copyright, contact us, sitemap, or links to related documents.	NEW
+<form>	Defines a form section that having interactive input controls to submit form information to a server.
+<frame>	Defines frame window.	REMOVE
+<frameset>	Used to holds one or more <frame> elements.	REMOVE
+<h1> to <h6>	Defines a Headings level from 1 to 6 different sizes.
+<head>	Defines header section of HTML document.
+<header>	Defines as a container that hold introductory content or navigation links.	NEW
+<hgroup>	Defines the heading of a section that hold the h1 to h6 tags.	NEW/ REMOVE
+<hr />	Represent a thematic break between paragraph-level tags. It is typically draw horizontal line.
+<html>	Define a document is a HTML markup language
+<i>	Defines a italic format text
+<iframe>	Defines a inline frame that embedded external content into current web document.
+<img>	Used to insert image into a web document.
+<input>	Define a get information in selected input
+<ins>	Used to indicate text that is inserted into a page and indicates changes to a document.
+<isindex>	Used to create a single line search prompt for querying the contents of the document.	REMOVE
+<kbd>	Used to identify text that are represents keyboard input.
+<keygen>	Used to generate signed certificate, which is used to authenticate to services.	NEW/ REMOVE
+<label>	Used to caption a text label with a form <input> element.
+<legend>	Used to add a caption (title) to a group of related form elements that are grouped together into the <fieldset> tag.
+<li>	Define a list item either ordered list or unordered list.
+<link>	Used to load an external stylesheets into HTML document.
+<map>	Defines an clickable image map.
+<mark>	Used to highlighted (marked) specific text.	NEW
+<menu>	Used to display a unordered list of items/menu of commands.
+<meta>	Used to provide structured metadata about a web page.
+<meter>	Used to measure data within a given range.	NEW
+<nav>	Used to defines group of navigation links.	NEW
+<noframes>	Used to provide a fallback content to the browser that does not support the <frame> element.	REMOVE
+<noscript>	Used to provide an fall-back content to the browser that does not support the JavaScript.
+<object>	Used to embedded objects such as images, audio, videos, Java applets, and Flash animations.
+<ol>	Defines an ordered list of items.
+<optgroup>	Used to create a grouping of options, the related options are grouped under specific headings.
+<option>	Represents option items within a <select>, <optgroup> or <datalist> element.
+<output>	Used for representing the result of a calculation.	NEW
+<p>	Used to represents a paragraph text.
+<param>	Provides parameters for embedded object element.
+<pre>	Used to represents preformatted text.
+<progress>	Represents the progress of a task.	NEW
+<q>	Represents the short quotation.
+<rp>	Used to provide parentheses around fall-back content to the browser that does not support the ruby annotations.	NEW
+<rt>	Specifies the ruby text of ruby annotation.	NEW
+<ruby>	Used to represents a ruby annotation.	NEW
+<s>	Text display in strikethrough style.
+<samp>	Represents text that should be interpreted as sample output from a computer program.
+<script>	Defines client-side JavaScript.
+<section>	Used to divide a document into number of different generic section.	NEW
+<select>	Used to create a drop-down list.
+<small>	Used to makes the text one size smaller.
+<source>	Used to specifies multiple media resources.	NEW
+<span>	Used to grouping and applying styles to inline elements.
+<strike>	Represents strikethrough text.	REMOVE
+<strong>	Represents strong emphasis greater important text.
+<style>	Used to add CSS style to an HTML document.
+<sub>	Represents inline subscript text.
+<sup>	Represents inline superscript text.
+<table>	Used to defines a table in an HTML document.
+<tbody>	Used for grouping table rows.
+<td>	Used for creates standard data cell in HTML table.
+<textarea>	Create multi-line text input.
+<tfoot>	Used to adding a footer to a table that containing summary of the table data.
+<th>	Used for creates header of a group of cell in HTML table.
+<thead>	Used to adding a header to a table that containing header information of the table.
+<time>	Represents the date and/or time in an HTML document.	NEW
+<title>	Represents title to an HTML document.
+<tr>	Defines a row of cells in a table.
+<track>	Represents text tracks for both the <audio> and <video> tags.	NEW
+<tt>	Represents teletype text.	REMOVE
+<u>	Represents underlined text.
+<ul>	Defines an unordered list of items.
+<var>	Represents a variable in a computer program or mathematical equation.
+<video>	Used to embed video content.	NEW
+<wbr>	Defines a word break opportunity in a long string of text.	NEW
