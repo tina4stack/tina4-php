@@ -14,7 +14,7 @@
             "Tina4"
         ],
         "files": [
-            "Tina4/Shape.php"
+            "Tina4/HTMLElement.php"
         ],
         "psr-4": {
             "Tina4\\":"Tina4/"
