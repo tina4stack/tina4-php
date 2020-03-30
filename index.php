@@ -22,6 +22,9 @@ class_alias("\Tina4\ORM", "Tina4Object");
 define ("TINA4_DEBUG", false);
 define ("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
 
+
+//define ("TINA4_GIT_MESSAGE", "Some useful text here");
+//define ("TINA4_GIT_ENABLED", true);
 global $DBA;
 //$DBA =  new \Tina4\DataSQLite3("auth.db");
 //For mysql - docker-compose up in the relevant docker folder before running
