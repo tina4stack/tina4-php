@@ -16,7 +16,7 @@ use JsonSerializable;
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
  * @package Tina4
  */
-class ORM implements JsonSerializable
+class ORM implements  \JsonSerializable
 {
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
@@ -128,10 +128,6 @@ class ORM implements JsonSerializable
                     }
                 }
             }
-
-
-
-
         }
     }
 
@@ -149,7 +145,7 @@ class ORM implements JsonSerializable
             if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
-                if (strtoupper($name[$i]) && $i != 0 && ($i > 0 && $name[$i-1] !== strtoupper($name[$i-1]))) {
+                if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name)-1 && (!\ctype_upper($name[$i-1]) || !\ctype_upper($name[$i+1]) )) {
                     $fieldName .= "_" . $name[$i];
                 } else {
                     $fieldName .= $name[$i];
@@ -157,7 +153,6 @@ class ORM implements JsonSerializable
             }
             return strtolower($fieldName);
         }
-
     }
 
     /**
@@ -187,7 +182,7 @@ class ORM implements JsonSerializable
                     $fieldName = strtolower($name);
                 } else {
                     for ($i = 0; $i < strlen($name); $i++) {
-                        if ($name[$i] !== strtolower($name[$i]) && ($i > 0 && $name[$i-1] !== strtoupper($name[$i-1]))) {
+                        if ($name[$i] !== strtolower($name[$i])) {
                             $fieldName .= "_" . strtolower($name[$i]);
                         } else {
                             $fieldName .= $name[$i];
@@ -200,6 +195,34 @@ class ORM implements JsonSerializable
         }
     }
 
+    function generateCreateSQL($tableData, $tableName = "")
+    {
+        $className = get_class($this);
+        $tableName = $this->getTableName($tableName);
+        $fields = [];
+        foreach ($tableData as $fieldName => $fieldValue) {
+            $property = new \ReflectionProperty($className, $fieldName);
+            preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
+            if (!empty( $annotations[1])) {
+                $fieldInfo = explode(" ", $annotations[1][0], 2);
+            } else {
+                $fieldInfo= [];
+            }
+            if (empty($fieldInfo[1])) {
+                if ($fieldName== "id") {
+                    $fieldInfo[1] = "integer not null";
+                } else {
+                    $fieldInfo[1] = "varchar(1000)";
+                }
+            }
+            $fields[] = $this->getObjectName($fieldName)." ".$fieldInfo[1];
+        }
+
+        $fields[] = "primary key (".$this->primaryKey.")";
+        return "create table {$tableName} (".join(",", $fields).")";
+    }
+
+
     /**
      * Generates an insert statement
      * @param array $tableData Array of table data
@@ -209,7 +232,6 @@ class ORM implements JsonSerializable
      */
     function generateInsertSQL($tableData, $tableName = "")
     {
-        $this->checkDBConnection();
         $tableName = $this->getTableName($tableName);
         $insertColumns = [];
         $insertValues = [];
@@ -350,7 +372,7 @@ class ORM implements JsonSerializable
      * If the object is not empty $DBA is instantiated
      * @throws Exception If no database connection is assigned to the object an exception is thrown
      */
-    function checkDBConnection()
+    function checkDBConnection($tableName="")
     {
         if (empty($this->DBA)) {
             global $DBA;
@@ -360,6 +382,14 @@ class ORM implements JsonSerializable
         if (empty($this->DBA)) {
            return false;
         } else {
+            //Check to see if the table exists
+            if (!$this->DBA->tableExists($tableName)) {
+                if (TINA4_DEBUG) {
+                    \Tina4\DebugLog::message("TINA4: We need to make a table for ".$tableName, TINA4_DEBUG_LEVEL);
+                }
+
+                $this->DBA->exec( $this->generateCreateSQL($this->getTableData($this->fieldMapping), $tableName) )  ;
+            }
             return true;
         }
     }
@@ -394,7 +424,7 @@ class ORM implements JsonSerializable
      * @param string $tableName The class name
      * @return string|null Returns the name of the table or null if it does not fit the if statements criteria
      */
-    function getTableName($tableName)
+    function getTableName($tableName="")
     {
         if (empty($tableName) && empty($this->tableName)) {
             $className = explode("\\", get_class($this));
@@ -422,9 +452,10 @@ class ORM implements JsonSerializable
      */
     function save($tableName = "", $fieldMapping = [])
     {
-        $this->checkDBConnection();
-
         $tableName = $this->getTableName($tableName);
+        $this->checkDBConnection($tableName);
+
+
         $tableData = $this->getTableData($fieldMapping);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
@@ -500,9 +531,8 @@ class ORM implements JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
-        if (!$this->checkDBConnection()) return;
-
         $tableName = $this->getTableName($tableName);
+        if (!$this->checkDBConnection($tableName)) return;
 
         if (!empty($filter)) {
             $sqlStatement = "select * from {$tableName} where {$filter}";

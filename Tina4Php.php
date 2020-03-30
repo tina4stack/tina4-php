@@ -231,7 +231,8 @@ class Tina4Php
         /**
          * @secure
          */
-        \Tina4\Route::post("/code/files/{action}", function($action, \Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::post("/code/files/{action}", function(\Tina4\Response $response, \Tina4\Request $request) {
+            $action = $request->inlineParams[0];
             if ($action == "load") {
                 return $response (file_get_contents($_SERVER["DOCUMENT_ROOT"]."/".$request->params["fileName"]), HTTP_OK, TEXT_HTML);
             } else
@@ -244,6 +245,29 @@ class Tina4Php
         /**
          * End of routes
          */
+
+        global $GIT;
+        if (defined("TINA4_GIT_ENABLED") && TINA4_GIT_ENABLED) {
+            try {
+                \Coyl\Git\Git::setBin("git");
+                $GIT = \Coyl\Git\Git::open(__DIR__);
+
+                $message = "";
+                if (defined ("TINA4_GIT_MESSAGE")) {
+                    $message = "\n".TINA4_GIT_MESSAGE;
+                }
+                    
+                try {
+                    $GIT->add("*");
+                    $GIT->commit("Tina4: Committed changes at " . date("Y-m-d H:i:s").$message);
+                } catch (Exception $e) {
+
+                }
+
+            } catch (Exception $e) {
+                echo $e->getMessage();
+            }
+        }
 
         global $cache;
 
