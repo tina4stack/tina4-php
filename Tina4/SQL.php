@@ -23,9 +23,16 @@ class SQL implements \JsonSerializable
         $this->ORM = clone $ORM;
     }
 
+    function translateFields ($fields) {
+        $result = [];
+        foreach ($fields as $id => $field) {
+            $result = $this->ORM->getFieldName ($field);
+        }
+        return $result;
+    }
+
     public function select($fields="*", $limit=10, $offset=0, $hasOne=[])
     {
-
         if (is_array($fields)) {
             $this->fields[] = $fields;
         } else {
@@ -90,6 +97,8 @@ class SQL implements \JsonSerializable
         } else {
             $this->groupBy = explode(",", $fields);
         }
+
+        $this->groupBy = $this->translateFields($this->groupBy);
         return $this;
     }
 
@@ -107,6 +116,7 @@ class SQL implements \JsonSerializable
 
                 $this->orderBy = explode(",", $fields);
             }
+            $this->orderBy = $this->translateFields($this->orderBy);
         }
         return $this;
     }

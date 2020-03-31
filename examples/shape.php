@@ -1,11 +1,11 @@
 <?php
 include "../Tina4/HTMLElement.php";
 
-echo $dom ( $doctype(["html"]), $html (
+$template = $dom ( $doctype(["html"]), $html (
     $head (
         $title ("A web page example")
     ),
-    $body (
+    $body (["style" => "background: red"],
         $br(), $p("I am a paragraph!")
     )
 ) );
