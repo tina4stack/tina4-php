@@ -206,7 +206,7 @@ class Tina4Php
         });
 
         \Tina4\Route::get("/auth/login", function(\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            $tina4Auth = (new Tina4Auth($tina4PHP->documentRoot))->load ('id = 1');
+            $tina4Auth = (new Tina4Auth())->load ('id = 1');
             if (empty($tina4Auth->username) && !(new Auth($tina4PHP->documentRoot))->tokenExists()) {
                 \Tina4\redirect("/auth/wizard");
                 exit;
@@ -216,7 +216,7 @@ class Tina4Php
         });
 
         \Tina4\Route::get("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
-            $tina4Auth = (new Tina4Auth($tina4PHP->documentRoot))->load ('id = 1');
+            $tina4Auth = (new Tina4Auth())->load ('id = 1');
             if (!empty($tina4Auth->username) && !(new Auth($tina4PHP->documentRoot))->tokenExists()) {
                 \Tina4\redirect("/auth/login");
                 exit;

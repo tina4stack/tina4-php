@@ -30,9 +30,12 @@ class Auth extends \Tina4\Data
         }
         $this->documentRoot = $documentRoot;
         //send to the wizard if config settings don't exist
-        $tina4Auth = (new Tina4Auth())->load ('id = 1');
-        if (!empty($tina4Auth->username)) {
-            $this->configured = true;
+
+        if (!empty($this->DBA)) {
+            $tina4Auth = (new Tina4Auth())->load('id = 1');
+            if (!empty($tina4Auth->username)) {
+                $this->configured = true;
+            }
         }
     }
 
@@ -84,7 +87,7 @@ class Auth extends \Tina4\Data
      */
     function tokenExists () {
         if (!$this->configured) {
-                \Tina4\redirect("/auth/wizard");
+            \Tina4\redirect("/auth/wizard");
         }
         if (isset($_SESSION["tina4:tokens"][$_SERVER["REMOTE_ADDR"]])) {
             return true;

@@ -117,7 +117,7 @@ class DataMySQL extends DataBase
                 }
 
 
-                if (is_array($records) && count($records) > 1) {
+                if (is_array($records) && count($records) >= 1) {
                     if (stripos($sql, "returning") === false) {
                         $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
@@ -129,10 +129,10 @@ class DataMySQL extends DataBase
                         $resultCount = null;
                     }
                 } else {
-                    $resultCount["COUNT_RECORDS"] = 1;
+                    $resultCount["COUNT_RECORDS"] = 0;
                 }
             } else {
-                $resultCount["COUNT_RECORDS"] = 1;
+                $resultCount["COUNT_RECORDS"] = 0;
             }
 
             //populate the fields

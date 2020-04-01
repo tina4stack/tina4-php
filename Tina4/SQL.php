@@ -26,7 +26,7 @@ class SQL implements \JsonSerializable
     function translateFields ($fields) {
         $result = [];
         foreach ($fields as $id => $field) {
-            $result = $this->ORM->getFieldName ($field);
+            $result[] = $this->ORM->getFieldName ($field);
         }
         return $result;
     }
@@ -118,6 +118,8 @@ class SQL implements \JsonSerializable
             }
             $this->orderBy = $this->translateFields($this->orderBy);
         }
+
+
         return $this;
     }
 
@@ -161,6 +163,7 @@ class SQL implements \JsonSerializable
             $sql .= "order by ".join (",", $this->orderBy)."\n";
         }
 
+
         return $sql;
     }
 
@@ -175,7 +178,8 @@ class SQL implements \JsonSerializable
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
             //transform the records into an array of the ORM
-            if (!empty($result)) {
+
+            if (!empty($result) && $this->noOfRecords > 0) {
                 foreach ($result->records() as $id => $data) {
                     $record = clone $this->ORM;
                     $record->create($data, true);
