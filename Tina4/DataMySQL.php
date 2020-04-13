@@ -125,8 +125,11 @@ class DataMySQL extends DataBase
 
                         $resultCount = @\mysqli_fetch_assoc($recordCount);
 
+                        if (empty($resultCount)) {
+                            $resultCount["COUNT_RECORDS"] = 0;
+                        }
                     } else {
-                        $resultCount = null;
+                        $resultCount["COUNT_RECORDS"] = 0;
                     }
                 } else {
                     $resultCount["COUNT_RECORDS"] = 0;
@@ -149,7 +152,10 @@ class DataMySQL extends DataBase
                     $fid++;
                 }
             }
+        } else {
+            $resultCount["COUNT_RECORDS"] = 0;
         }
+
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }

@@ -17,6 +17,8 @@ class SQL implements \JsonSerializable
     public $offset;
     public $hasOne;
     public $noOfRecords;
+    public $error;
+    public $lastSQL;
 
     public function __construct($ORM)
     {
@@ -52,19 +54,22 @@ class SQL implements \JsonSerializable
     }
 
     function where ($filter) {
-        $this->nextAnd = "where";
-        $this->filter[] = ["where", $filter];
+        if (trim($filter) !== "") {
+            $this->nextAnd = "where";
+            $this->filter[] = ["where", $filter];
+        }
         return $this;
     }
 
     function and ($filter) {
-        if ($this->nextAnd == "join") {
-            $this->join[] = ["and", $filter];
-        }else if ($this->nextAnd == "having") {
-            $this->having[] = ["and", $filter];
-        }
-        else {
-            $this->filter[] = ["and", $filter];
+        if (trim($filter) !== "") {
+            if ($this->nextAnd == "join") {
+                $this->join[] = ["and", $filter];
+            } else if ($this->nextAnd == "having") {
+                $this->having[] = ["and", $filter];
+            } else {
+                $this->filter[] = ["and", $filter];
+            }
         }
         return $this;
     }
@@ -76,13 +81,13 @@ class SQL implements \JsonSerializable
 
     function join ($tableName) {
         $this->nextAnd = "join";
-        $this->join[] = ["join", tableName];
+        $this->join[] = ["join", $tableName];
         return $this;
     }
 
     function leftJoin ($tableName) {
         $this->nextAnd = "join";
-        $this->join[] = ["left join", tableName];
+        $this->join[] = ["left join", $tableName];
         return $this;
     }
 
@@ -134,7 +139,7 @@ class SQL implements \JsonSerializable
         $sql = "select\t".join(",\n\t", $this->fields)."\nfrom\t{$this->tableName} t\n";
         if (!empty($this->join) && is_array($this->join)) {
             foreach ($this->join as $join) {
-                $sql .= $join[0]. " ".$join[1];
+                $sql .= $join[0]. " ".$join[1]."\n";
             }
         }
 
@@ -179,12 +184,18 @@ class SQL implements \JsonSerializable
             $records = [];
             //transform the records into an array of the ORM
 
-            if (!empty($result) && $this->noOfRecords > 0) {
+            $this->lastSQL = $sqlStatement;
+            $this->error = $this->ORM->DBA->error();
+
+
+            if (!empty($result->records()) && $this->noOfRecords > 0) {
                 foreach ($result->records() as $id => $data) {
                     $record = clone $this->ORM;
                     $record->create($data, true);
                     $records[] = $record;
                 }
+            } else {
+                $this->noOfRecords = 0;
             }
         } else {
             $records = ["error" => "No database connection or ORM specified"];
@@ -220,7 +231,11 @@ class SQL implements \JsonSerializable
      */
     public function asResult() {
         $records = $this->jsonSerialize();
-        return (new DataResult($records, null, $this->noOfRecords, $this->offset));
+        //error_log (print_r ($this->error,1));
+        if (!empty($this->error) && $this->error->getError()["errorCode"] == 0) {
+            $this->error = null;
+        }
+        return (new DataResult($records, null, $this->noOfRecords, $this->offset, $this->error));
     }
 
 
