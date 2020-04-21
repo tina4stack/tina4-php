@@ -2,11 +2,19 @@
 
 The purpose of this document is to outline what Tina4 capabilities exist, and what is available for use in projects. As this is a working document, parts of this may be old or incomplete. Each section shows the release version at which the documentation was correct.
 
+-----------------------------
+
 #### Class ORM (v0.0.60)
 
-function __construct(params): The ORM constructor
+This class ```implements JsonSerializable```, which allows it to redirect the PHP ```json_encode()``` to it's own ```jsonSerialize()```
 
-function create(params): Allows ORM to be created.
+**Object creation:** The  creation of the ORM object is handled by two functions together.
+
+```function __construct($request, $fromDB, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA)``` which is the PHP constructor used when an object is created. This is essentially empty, passing all the parameters through to the create funtion. 
+
+```function create($request, $fromDB, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA)``` does all the creation work. It populates the object with the ```$request``` variable, and can handle an array, object or JSON decodable string. If the ```$request``` is directly from the database, and ```$fromDB``` is true, then it will get the property names from the table field names, provided the ```$propertyName``` is ```property_name``` in the database table.
+
+
 
 function getFieldName(params): Gets the required field name from the database table.
 
@@ -49,6 +57,8 @@ function hasOne(): Empty function to be used for foreign key relationships
 function belongsTo(): Empty function to be used for foreign key relationships
 
 function generateCRUD(params): Possibly generates a CRUD template for Tina4
+
+------------------------------
 
 #### Class Response (v0.0.60)
 
