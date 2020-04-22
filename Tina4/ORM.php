@@ -685,36 +685,36 @@ class ORM implements  \JsonSerializable
             $template = <<<'EOT'
 /**
  * CRUD Prototype Example
+ * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
+            POST @ /path, /path/{id} - create & update
+            DELETE @ /path/{id} - delete for single
  */
 \Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $object, $filter, $request) {
     switch ($action) {
-        case "form":
-            //Render a form here
-            return $htmlForm;
-            break;
-        case "create":   
-            //Return a script or html message here to reload the grid
-            //Modify variables on the object
-            return  "<script>grid.ajax.reload(null, false); showMessage ('Added');</script>";
-            break;
-        case "read":
+       case "read":
             //Return a dataset to be consumed by the grid with a filter
             $where = "";
             if (!empty($filter["where"])) {
                 $where = "and {$filter["where"]}";
             }
-            
+        
             return   $object->select ("*", $filter["length"], $filter["start"])
-                            ->where("id <> 0 {$where}")
-                            ->orderBy($filter["orderBy"])
-                            ->asResult();
-            break;
+                ->where("{$where}")
+                ->orderBy($filter["orderBy"])
+                ->asResult();
+        break;
+        case "create":
+            //Manipulate the $object here
+            return (object)["httpCode" => 200, "message" => "OK"];
+        break;
         case "update":
-            return "<script>grid.ajax.reload(null, false); showMessage ('Edited');</script>";
-            break;
+            //Manipulate the $object here
+            return (object)["httpCode" => 200, "message" => "OK"];
+        break;
         case "delete":
-            return "<script>grid.ajax.reload(null, false); showMessage ('Deleted'); </script>";
-            break;
+            //Manipulate the $object here
+            return (object)["httpCode" => 200, "message" => "OK"];;
+        break;
     }
 });
 EOT;

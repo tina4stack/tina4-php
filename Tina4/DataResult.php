@@ -150,7 +150,7 @@ class DataResult implements JsonSerializable
             }
         }
 
-        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => null];
+        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => $this->getError()];
     }
 
     /**
@@ -159,7 +159,11 @@ class DataResult implements JsonSerializable
      */
     function getError()
     {
-        return $this->error->getError();
+        if (!empty($this->error)) {
+            return $this->error->getError();
+        } else {
+            return null;
+        }
     }
 
 }

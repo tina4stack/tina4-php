@@ -100,7 +100,9 @@ class ParseTemplate {
 
         if (isset($_SESSION)) {
             foreach ($_SESSION as $varName => $value) {
-                $content = str_replace('{{'.$varName.'}}', $value, $content);
+                if (!is_array($value) && !is_object($value)) {
+                    $content = str_replace('{{' . $varName . '}}', $value, $content);
+                }
             }
         }
 

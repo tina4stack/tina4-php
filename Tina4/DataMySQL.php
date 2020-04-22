@@ -117,7 +117,7 @@ class DataMySQL extends DataBase
                 }
 
 
-                if (is_array($records) && count($records) > 1) {
+                if (is_array($records) && count($records) >= 1) {
                     if (stripos($sql, "returning") === false) {
                         $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
@@ -125,14 +125,17 @@ class DataMySQL extends DataBase
 
                         $resultCount = @\mysqli_fetch_assoc($recordCount);
 
+                        if (empty($resultCount)) {
+                            $resultCount["COUNT_RECORDS"] = 0;
+                        }
                     } else {
-                        $resultCount = null;
+                        $resultCount["COUNT_RECORDS"] = 0;
                     }
                 } else {
-                    $resultCount["COUNT_RECORDS"] = 1;
+                    $resultCount["COUNT_RECORDS"] = 0;
                 }
             } else {
-                $resultCount["COUNT_RECORDS"] = 1;
+                $resultCount["COUNT_RECORDS"] = 0;
             }
 
             //populate the fields
@@ -149,7 +152,10 @@ class DataMySQL extends DataBase
                     $fid++;
                 }
             }
+        } else {
+            $resultCount["COUNT_RECORDS"] = 0;
         }
+
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
