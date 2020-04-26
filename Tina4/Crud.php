@@ -86,29 +86,30 @@ class Crud
      * @param $path
      * @param ORM $object
      * @param $function
+     * @param $secures
      */
-    public static function route ($path, \Tina4\ORM $object, $function) {
+    public static function route ($path, \Tina4\ORM $object, $function, $secure=false) {
         //What if the path has ids in it ? /store/{id}/{hash}
 
         //CREATE
         \Tina4\Route::get($path."/form",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($function) {
                 $htmlResult = $function ("form", null, null, $request);
-                return $response ($htmlResult, HTTP_OK, TEXT_HTML);
+                return $response ($htmlResult, HTTP_OK, APPLICATION_JSON);
             }
         );
 
         \Tina4\Route::post( $path,
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $object->create($request->params);
-                $htmlResult = $function ("create", $object, null, $request);
+                $object->create($request->data);
+                $jsonResult = $function ("create", $object, null, $request);
                 $object->save();
-                return $response ($htmlResult, HTTP_OK, TEXT_HTML);
+                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
 
         //READ
-        \Tina4\Route::get($path."/data",
+        \Tina4\Route::get($path,
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $filter = \Tina4\Crud::getDataTablesFilter();
                 $jsonResult = $function ("read", new $object(), $filter, $request);
@@ -116,23 +117,27 @@ class Crud
             }
         );
 
+
         //UPDATE
         \Tina4\Route::get($path."/{id}",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                $htmlResult = $function ("form", (new $object())->load("id = {$id}"), null, $request);
-                return $response ($htmlResult, HTTP_OK, TEXT_HTML);
+                $jsonResult = $function ("fetch", (new $object())->load("id = {$id}"), null, $request);
+                if (empty($jsonResult)) {
+                    $jsonResult = (new $object())->load("id = {$id}");
+                }
+                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
 
         \Tina4\Route::post( $path."/{id}",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                $object->create($request->params);
+                $object->create($request->data);
                 $object->load ("id = {$id}");
-                $htmlResult = $function ("update", $object, null, $request);
+                $jsonResult = $function ("update", $object, null, $request);
                 $object->save();
-                return $response ($htmlResult, HTTP_OK, TEXT_HTML);
+                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
 
@@ -142,9 +147,9 @@ class Crud
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
                 $object->create($request->params);
                 $object->load ("id = {$id}");
-                $htmlResult = $function ("delete", $object, null, $request);
+                $jsonResult = $function ("delete", $object, null, $request);
                 $object->delete();
-                return $response ($htmlResult);
+                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
 

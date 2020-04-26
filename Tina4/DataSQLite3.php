@@ -100,10 +100,17 @@ class DataSQLite3 extends DataBase
         return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }
 
+    public function native_tableExists($tableName)
+    {
+        $exists = $this->fetch ("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
+
+
+        return !empty($exists->records());
+    }
+
     public function native_getLastId()
     {
         $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
-
         return $lastId->record(0)->LAST_ID;
     }
 

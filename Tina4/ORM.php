@@ -16,7 +16,7 @@ use JsonSerializable;
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
  * @package Tina4
  */
-class ORM implements JsonSerializable
+class ORM implements  \JsonSerializable
 {
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
@@ -128,10 +128,6 @@ class ORM implements JsonSerializable
                     }
                 }
             }
-
-
-
-
         }
     }
 
@@ -149,7 +145,7 @@ class ORM implements JsonSerializable
             if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
-                if (ctype_upper($name[$i]) && $i != 0) {
+                if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name)-1 && (!\ctype_upper($name[$i-1]) || !\ctype_upper($name[$i+1]) )) {
                     $fieldName .= "_" . $name[$i];
                 } else {
                     $fieldName .= $name[$i];
@@ -157,7 +153,6 @@ class ORM implements JsonSerializable
             }
             return strtolower($fieldName);
         }
-
     }
 
     /**
@@ -200,6 +195,36 @@ class ORM implements JsonSerializable
         }
     }
 
+    function generateCreateSQL($tableData, $tableName = "")
+    {
+        $className = get_class($this);
+        $tableName = $this->getTableName($tableName);
+        $fields = [];
+        foreach ($tableData as $fieldName => $fieldValue) {
+            //@todo fix
+
+            $property = new \ReflectionProperty($className, $fieldName);
+            preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
+            if (!empty( $annotations[1])) {
+                $fieldInfo = explode(" ", $annotations[1][0], 2);
+            } else {
+                $fieldInfo= [];
+            }
+            if (empty($fieldInfo[1])) {
+                if ($fieldName== "id") {
+                    $fieldInfo[1] = "integer not null";
+                } else {
+                    $fieldInfo[1] = "varchar(1000)";
+                }
+            }
+            $fields[] = $this->getObjectName($fieldName)." ".$fieldInfo[1];
+        }
+
+        $fields[] = "primary key (".$this->primaryKey.")";
+        return "create table {$tableName} (".join(",", $fields).")";
+    }
+
+
     /**
      * Generates an insert statement
      * @param array $tableData Array of table data
@@ -209,7 +234,6 @@ class ORM implements JsonSerializable
      */
     function generateInsertSQL($tableData, $tableName = "")
     {
-        $this->checkDBConnection();
         $tableName = $this->getTableName($tableName);
         $insertColumns = [];
         $insertValues = [];
@@ -300,10 +324,10 @@ class ORM implements JsonSerializable
      * @param array $fieldMapping Array of field mapping
      * @return array Contains all table data
      */
-    function getTableData($fieldMapping = [])
+    function getTableData($fieldMapping = [], $fromDB = false)
     {
         $tableData = [];
-        if (!empty($this->fieldMapping) && empty($fieldMapping)) {
+        if (!empty($this->fieldMapping) && empty($fieldMapping) && $fromDB) {
             $fieldMapping = $this->fieldMapping;
         }
 
@@ -350,7 +374,7 @@ class ORM implements JsonSerializable
      * If the object is not empty $DBA is instantiated
      * @throws Exception If no database connection is assigned to the object an exception is thrown
      */
-    function checkDBConnection()
+    function checkDBConnection($tableName="")
     {
         if (empty($this->DBA)) {
             global $DBA;
@@ -360,6 +384,14 @@ class ORM implements JsonSerializable
         if (empty($this->DBA)) {
            return false;
         } else {
+            //Check to see if the table exists
+            if (!$this->DBA->tableExists($tableName)) {
+                if (TINA4_DEBUG) {
+                    \Tina4\DebugLog::message("TINA4: We need to make a table for ".$tableName, TINA4_DEBUG_LEVEL);
+                }
+
+                $this->DBA->exec( $this->generateCreateSQL($this->getTableData($this->fieldMapping, true), $tableName) )  ;
+            }
             return true;
         }
     }
@@ -394,7 +426,7 @@ class ORM implements JsonSerializable
      * @param string $tableName The class name
      * @return string|null Returns the name of the table or null if it does not fit the if statements criteria
      */
-    function getTableName($tableName)
+    function getTableName($tableName="")
     {
         if (empty($tableName) && empty($this->tableName)) {
             $className = explode("\\", get_class($this));
@@ -422,10 +454,11 @@ class ORM implements JsonSerializable
      */
     function save($tableName = "", $fieldMapping = [])
     {
-        $this->checkDBConnection();
-
         $tableName = $this->getTableName($tableName);
-        $tableData = $this->getTableData($fieldMapping);
+        $this->checkDBConnection($tableName);
+
+
+        $tableData = $this->getTableData($fieldMapping, true);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
         //See if the record exists already using the primary key
@@ -500,14 +533,13 @@ class ORM implements JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
-        if (!$this->checkDBConnection()) return;
-
         $tableName = $this->getTableName($tableName);
+        if (!$this->checkDBConnection($tableName)) return;
 
         if (!empty($filter)) {
             $sqlStatement = "select * from {$tableName} where {$filter}";
         } else {
-            $tableData = $this->getTableData($fieldMapping);
+            $tableData = $this->getTableData($fieldMapping, true);
             $primaryCheck = $this->getPrimaryCheck($tableData);
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
@@ -543,7 +575,7 @@ class ORM implements JsonSerializable
 
         $tableName = $this->getTableName($tableName);
 
-        $tableData = $this->getTableData($fieldMapping);
+        $tableData = $this->getTableData($fieldMapping, true);
         if (empty($filter)) {
             $filter = $this->getPrimaryCheck($tableData);
         }
@@ -558,6 +590,30 @@ class ORM implements JsonSerializable
             return (object)$error->getError();
         }
 
+    }
+
+    /**
+     * Excludes fields based on a json object or record
+     * @param $request
+     */
+
+    function exclude ($request) {
+        if ($request) {
+            if (!is_array($request) && !is_object($request) && json_decode((string)$request)) {
+                $request = json_decode((string)$request);
+                foreach ($request as $key => $value) {
+                    if ($key === $this->primaryKey) continue;
+                    unset($this->{$key});
+                }
+            } else {
+                foreach ($request as $key => $value) {
+                    if ($key === $this->primaryKey) continue;
+                    if (property_exists($this, $key)) {
+                       unset($this->{$key});
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -655,36 +711,36 @@ class ORM implements JsonSerializable
             $template = <<<'EOT'
 /**
  * CRUD Prototype Example
+ * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
+            POST @ /path, /path/{id} - create & update
+            DELETE @ /path/{id} - delete for single
  */
 \Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $object, $filter, $request) {
     switch ($action) {
-        case "form":
-            //Render a form here
-            return $htmlForm;
-            break;
-        case "create":   
-            //Return a script or html message here to reload the grid
-            //Modify variables on the object
-            return  "<script>grid.ajax.reload(null, false); showMessage ('Added');</script>";
-            break;
-        case "read":
+       case "read":
             //Return a dataset to be consumed by the grid with a filter
             $where = "";
             if (!empty($filter["where"])) {
                 $where = "and {$filter["where"]}";
             }
-            
+        
             return   $object->select ("*", $filter["length"], $filter["start"])
-                            ->where("id <> 0 {$where}")
-                            ->orderBy($filter["orderBy"])
-                            ->asResult();
-            break;
+                ->where("{$where}")
+                ->orderBy($filter["orderBy"])
+                ->asResult();
+        break;
+        case "create":
+            //Manipulate the $object here
+            return (object)["httpCode" => 200, "message" => "OK"];
+        break;
         case "update":
-            return "<script>grid.ajax.reload(null, false); showMessage ('Edited');</script>";
-            break;
+            //Manipulate the $object here
+            return (object)["httpCode" => 200, "message" => "OK"];
+        break;
         case "delete":
-            return "<script>grid.ajax.reload(null, false); showMessage ('Deleted'); </script>";
-            break;
+            //Manipulate the $object here
+            return (object)["httpCode" => 200, "message" => "OK"];;
+        break;
     }
 });
 EOT;

@@ -119,6 +119,16 @@ class DataBase
     }
 
     /**
+     * Abstract database table Exists
+     * @param $tableName
+     * @return bool
+     */
+    public function native_tableExists($tableName) {
+        \Tina4\DebugLog::message("Implement the public method native_tableExists for your database engine");
+        return false;
+    }
+
+    /**
      * Override this method for your specific database engine, this should work for most database engines
      * See https://datatables.net/manual/index
      * @return array
@@ -268,6 +278,15 @@ class DataBase
     public function getLastId()
     {
         return $this->native_getLastId();
+    }
+
+    /**
+     * Checks to see if a table exists
+     * @param $tableName
+     * @return mixed
+     */
+    public function tableExists($tableName) {
+        return $this->native_tableExists($tableName);
     }
 
     /**

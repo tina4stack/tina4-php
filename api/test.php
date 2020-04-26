@@ -1,9 +1,14 @@
 <?php
 
-include "./Tina4/HTMLElement.php";
 
-echo $dom ( $doctype(["html"]), $html (
-        $br(), $p("I am a paragraph!")
 
-) );
+\Tina4\Get::add("/test", function (\Tina4\Response $response) {
 
+    $object = new MapTest ();
+    $object->firstName = "HELLO";
+    $object->save();
+
+
+
+    return $response ( $object, HTTP_OK, APPLICATION_JSON);
+});

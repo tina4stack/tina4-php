@@ -33,6 +33,42 @@ class Tina4Php
     private $webRoot;
 
     /**
+     * Runs git on the repository
+     * @param $gitEnabled
+     * @param $gitMessage
+     * @param $push
+     */
+    function gitInit($gitEnabled, $gitMessage, $push=false) {
+        global $GIT;
+        if ($gitEnabled) {
+            try {
+                \Coyl\Git\Git::setBin("git");
+                $GIT = \Coyl\Git\Git::open($this->documentRoot);
+
+                $message = "";
+                if (!empty($gitMessage)) {
+                    $message = " ".$gitMessage;
+                }
+
+                try {
+                    if (strpos( $GIT->status(), "nothing to commit") === false) {
+                        $GIT->add("*");
+                        $GIT->commit("Tina4: Committed changes at " . date("Y-m-d H:i:s") . $message);
+                        if ($push) {
+                            $GIT->push();
+                        }
+                    }
+                } catch (Exception $e) {
+
+                }
+
+            } catch (Exception $e) {
+                echo $e->getMessage();
+            }
+        }
+    }
+
+    /**
      * Tina4Php constructor.
      * @param null $config
      * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
@@ -148,7 +184,7 @@ class Tina4Php
             }
         }
 
-        if (!file_exists($this->documentRoot ."/assets/index.twig")) {
+        if (!file_exists($this->documentRoot ."/assets/index.twig") && file_exists($this->documentRoot ."/assets/documentation.twig")) {
             file_put_contents("assets/index.twig", file_get_contents("assets/documentation.twig"));
         }
 
@@ -161,15 +197,17 @@ class Tina4Php
          * Built in routes
          */
 
-        \Tina4\Route::post("/auth/validate", function(\Tina4\Response $response, \Tina4\Request $request) {
-            $redirect = (new Auth($_SERVER["DOCUMENT_ROOT"]))->validateAuth ($request->params);
+        $tina4PHP = $this;
+
+        \Tina4\Route::post("/auth/validate", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+            $redirect = (new Auth($tina4PHP->documentRoot))->validateAuth ($request->params);
             \Tina4\redirect($redirect, HTTP_MOVED_PERMANENTLY);
             return $response ("None", HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::get("/auth/login", function(\Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::get("/auth/login", function(\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $tina4Auth = (new Tina4Auth())->load ('id = 1');
-            if (empty($tina4Auth->username) && !(new Auth($_SERVER["DOCUMENT_ROOT"]))->tokenExists()) {
+            if (empty($tina4Auth->username) && !(new Auth($tina4PHP->documentRoot))->tokenExists()) {
                 \Tina4\redirect("/auth/wizard");
                 exit;
             }
@@ -177,9 +215,9 @@ class Tina4Php
             return $response (\Tina4\renderTemplate("auth/generic.twig", $params), HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::get("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::get("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
             $tina4Auth = (new Tina4Auth())->load ('id = 1');
-            if (!empty($tina4Auth->username) && !(new Auth($_SERVER["DOCUMENT_ROOT"]))->tokenExists()) {
+            if (!empty($tina4Auth->username) && !(new Auth($tina4PHP->documentRoot))->tokenExists()) {
                 \Tina4\redirect("/auth/login");
                 exit;
             }
@@ -189,9 +227,9 @@ class Tina4Php
             return $response (\Tina4\renderTemplate("auth/generic.twig", $params), HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::post("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::post("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
             //Establish the auth module
-            $redirectPath = (new Auth($_SERVER["DOCUMENT_ROOT"]))->setupAuth($request);
+            $redirectPath = (new Auth($tina4PHP->documentRoot))->setupAuth($request);
 
             \Tina4\redirect($redirectPath);
             return $response ("", HTTP_OK, TEXT_HTML);
@@ -214,16 +252,16 @@ class Tina4Php
         /**
          * @secure
          */
-        \Tina4\Route::get("/code", function(\Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::get("/code", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
             return $response (\Tina4\renderTemplate("code.twig", $request->asArray()), HTTP_OK, TEXT_HTML);
         });
 
         /**
          * @secure
          */
-        \Tina4\Route::post("/code/files/tree", function(\Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::post("/code/files/tree", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
             //Read dir
-            $html = $this->iterateDirectory($_SERVER["DOCUMENT_ROOT"]);
+            $html = $this->iterateDirectory($tina4PHP->documentRoot);
 
             return $response ($html, HTTP_OK, TEXT_HTML);
         });
@@ -231,19 +269,25 @@ class Tina4Php
         /**
          * @secure
          */
-        \Tina4\Route::post("/code/files/{action}", function($action, \Tina4\Response $response, \Tina4\Request $request) {
+        \Tina4\Route::post("/code/files/{action}", function(\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+            $action = $request->inlineParams[0];
             if ($action == "load") {
-                return $response (file_get_contents($_SERVER["DOCUMENT_ROOT"]."/".$request->params["fileName"]), HTTP_OK, TEXT_HTML);
+                return $response (file_get_contents($tina4PHP->documentRoot."/".$request->params["fileName"]), HTTP_OK, TEXT_HTML);
             } else
                 if ($action == "save") {
+                    $this->gitInit(true, $request->params["commitMessage"], true);
                     file_put_contents($_SERVER["DOCUMENT_ROOT"]."/".$request->params["fileName"], $request->params["fileContent"]);
                     return $response ("Ok!", HTTP_OK, TEXT_HTML);
                 }
-        });
+        }) ;
 
         /**
          * End of routes
          */
+
+        if (defined ("TINA4_GIT_ENABLED") && TINA4_GIT_ENABLED) {
+            $this->gitInit(TINA4_GIT_ENABLED, (defined ("TINA4_GIT_MESSAGE")) ? TINA4_GIT_MESSAGE : "" );
+        }
 
         global $cache;
 
