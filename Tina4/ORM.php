@@ -324,10 +324,10 @@ class ORM implements  \JsonSerializable
      * @param array $fieldMapping Array of field mapping
      * @return array Contains all table data
      */
-    function getTableData($fieldMapping = [])
+    function getTableData($fieldMapping = [], $fromDB = false)
     {
         $tableData = [];
-        if (!empty($this->fieldMapping) && empty($fieldMapping)) {
+        if (!empty($this->fieldMapping) && empty($fieldMapping) && $fromDB) {
             $fieldMapping = $this->fieldMapping;
         }
 
@@ -390,7 +390,7 @@ class ORM implements  \JsonSerializable
                     \Tina4\DebugLog::message("TINA4: We need to make a table for ".$tableName, TINA4_DEBUG_LEVEL);
                 }
 
-                $this->DBA->exec( $this->generateCreateSQL($this->getTableData($this->fieldMapping), $tableName) )  ;
+                $this->DBA->exec( $this->generateCreateSQL($this->getTableData($this->fieldMapping, true), $tableName) )  ;
             }
             return true;
         }
@@ -458,7 +458,7 @@ class ORM implements  \JsonSerializable
         $this->checkDBConnection($tableName);
 
 
-        $tableData = $this->getTableData($fieldMapping);
+        $tableData = $this->getTableData($fieldMapping, true);
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
         //See if the record exists already using the primary key
@@ -539,7 +539,7 @@ class ORM implements  \JsonSerializable
         if (!empty($filter)) {
             $sqlStatement = "select * from {$tableName} where {$filter}";
         } else {
-            $tableData = $this->getTableData($fieldMapping);
+            $tableData = $this->getTableData($fieldMapping, true);
             $primaryCheck = $this->getPrimaryCheck($tableData);
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
@@ -575,7 +575,7 @@ class ORM implements  \JsonSerializable
 
         $tableName = $this->getTableName($tableName);
 
-        $tableData = $this->getTableData($fieldMapping);
+        $tableData = $this->getTableData($fieldMapping, true);
         if (empty($filter)) {
             $filter = $this->getPrimaryCheck($tableData);
         }
