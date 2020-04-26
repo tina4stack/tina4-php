@@ -201,6 +201,8 @@ class ORM implements  \JsonSerializable
         $tableName = $this->getTableName($tableName);
         $fields = [];
         foreach ($tableData as $fieldName => $fieldValue) {
+            //@todo fix
+
             $property = new \ReflectionProperty($className, $fieldName);
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
             if (!empty( $annotations[1])) {
@@ -588,6 +590,30 @@ class ORM implements  \JsonSerializable
             return (object)$error->getError();
         }
 
+    }
+
+    /**
+     * Excludes fields based on a json object or record
+     * @param $request
+     */
+
+    function exclude ($request) {
+        if ($request) {
+            if (!is_array($request) && !is_object($request) && json_decode((string)$request)) {
+                $request = json_decode((string)$request);
+                foreach ($request as $key => $value) {
+                    if ($key === $this->primaryKey) continue;
+                    unset($this->{$key});
+                }
+            } else {
+                foreach ($request as $key => $value) {
+                    if ($key === $this->primaryKey) continue;
+                    if (property_exists($this, $key)) {
+                       unset($this->{$key});
+                    }
+                }
+            }
+        }
     }
 
     /**

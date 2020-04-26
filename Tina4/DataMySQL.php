@@ -111,6 +111,7 @@ class DataMySQL extends DataBase
         if ($error->getError()["errorCode"] == 0) {
             if ($recordCursor->num_rows > 0) {
                 while ($record = @\mysqli_fetch_assoc($recordCursor)) {
+
                     if (is_array($record)) {
                         $records[] = (new DataRecord($record));
                     }

@@ -122,7 +122,11 @@ class Crud
         \Tina4\Route::get($path."/{id}",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                return $response ((new $object())->load("id = {$id}"), HTTP_OK, APPLICATION_JSON);
+                $jsonResult = $function ("fetch", (new $object())->load("id = {$id}"), null, $request);
+                if (empty($jsonResult)) {
+                    $jsonResult = (new $object())->load("id = {$id}");
+                }
+                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
 
@@ -133,7 +137,6 @@ class Crud
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("update", $object, null, $request);
                 $object->save();
-                error_log(print_r ($jsonResult, 1));
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );

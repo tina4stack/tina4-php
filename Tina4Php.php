@@ -184,7 +184,7 @@ class Tina4Php
             }
         }
 
-        if (!file_exists($this->documentRoot ."/assets/index.twig")) {
+        if (!file_exists($this->documentRoot ."/assets/index.twig") && file_exists($this->documentRoot ."/assets/documentation.twig")) {
             file_put_contents("assets/index.twig", file_get_contents("assets/documentation.twig"));
         }
 

@@ -108,6 +108,8 @@ class DataResult implements JsonSerializable
     }
 
 
+
+
     /**
      * Converts array of records to array of objects
      * @return false|string
@@ -125,6 +127,10 @@ class DataResult implements JsonSerializable
                 }
             }
         }
+
+
+
+
 
         if (!empty($results)) {
             return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => null]);
