@@ -715,7 +715,7 @@ class ORM implements  \JsonSerializable
             POST @ /path, /path/{id} - create & update
             DELETE @ /path/{id} - delete for single
  */
-\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $object, $filter, $request) {
+\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $[], $filter, $request) {
     switch ($action) {
        case "read":
             //Return a dataset to be consumed by the grid with a filter
@@ -733,13 +733,23 @@ class ORM implements  \JsonSerializable
             //Manipulate the $object here
             return (object)["httpCode" => 200, "message" => "OK"];
         break;
+         case "afterCreate":
+           //no return needed    
+        break;    
         case "update":
             //Manipulate the $object here
             return (object)["httpCode" => 200, "message" => "OK"];
         break;
+        case "updateDelete":
+           //no return needed    
+        break;       
         case "delete":
             //Manipulate the $object here
             return (object)["httpCode" => 200, "message" => "OK"];;
+        break;
+        case "afterDelete":
+           //no return needed
+            
         break;
     }
 });
