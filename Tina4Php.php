@@ -431,6 +431,8 @@ function renderTemplate($fileNameString, $data = [])
                     $newPath = dirname($fileName).DIRECTORY_SEPARATOR;
                     $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR. $newPath );
                     $twig->setLoader($twigLoader);
+                    $twig->addGlobal('Tina4', new \Tina4\Caller());
+                    $twig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR),0, -1) );
                     $fileName = basename($renderFile);
                     return $twig->render($renderFile, $data);
                 }
