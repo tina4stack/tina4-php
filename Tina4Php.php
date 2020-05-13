@@ -99,10 +99,10 @@ class Tina4Php
                 \Tina4\DebugLog::message("
   ___________   _____   __ __     ____  __________  __  ________
  /_  __/  _/ | / /   | / // /    / __ \/ ____/ __ )/ / / / ____/
-  / /  / //  |/ / /| |/ // /_   / / / / __/ / __  / / / / / __  
- / / _/ // /|  / ___ /__  __/  / /_/ / /___/ /_/ / /_/ / /_/ /  
-/_/ /___/_/ |_/_/  |_| /_/    /_____/_____/_____/\____/\____/   
-============================================================                                                                
+  / /  / //  |/ / /| |/ // /_   / / / / __/ / __  / / / / / __
+ / / _/ // /|  / ___ /__  __/  / /_/ / /___/ /_/ / /_/ / /_/ /
+/_/ /___/_/ |_/_/  |_| /_/    /_____/_____/_____/\____/\____/
+============================================================
 ", TINA4_DEBUG_LEVEL);
             }
         }
@@ -314,11 +314,16 @@ class Tina4Php
         $twigLoader = new \Twig\Loader\FilesystemLoader();
         foreach ($twigPaths as $twigPath) {
             $twigLoader->addPath($twigPath, '__main__');
+
         }
+
+
 
         $twig = new \Twig\Environment($twigLoader, ["debug" => true]);
         $twig->addExtension(new \Twig\Extension\DebugExtension());
         $twig->addGlobal('Tina4', new \Tina4\Caller());
+        $twig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $this->documentRoot),0, -1) );
+
 
     }
 
@@ -419,20 +424,20 @@ function renderTemplate($fileNameString, $data = [])
             if ($twig->getLoader()->exists(basename($fileNameString))) {
                 return $twig->render(basename($fileName), $data);
             }
-              else
-            if (is_file($fileNameString)) {
-                $renderFile = basename($fileNameString);
-                $twigLoader = new \Twig\Loader\FilesystemLoader();
-                $newPath = dirname($fileName).DIRECTORY_SEPARATOR;
-                $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR. $newPath );
-                $twig->setLoader($twigLoader);
-                $fileName = basename($renderFile);
-                return $twig->render($renderFile, $data);
-            }
-              else {
+            else
+                if (is_file($fileNameString)) {
+                    $renderFile = basename($fileNameString);
+                    $twigLoader = new \Twig\Loader\FilesystemLoader();
+                    $newPath = dirname($fileName).DIRECTORY_SEPARATOR;
+                    $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR. $newPath );
+                    $twig->setLoader($twigLoader);
+                    $fileName = basename($renderFile);
+                    return $twig->render($renderFile, $data);
+                }
+                else {
                     $twig->setLoader(new \Twig\Loader\ArrayLoader(["template" => $fileNameString]));
                     return $twig->render("template", $data);
-               }
+                }
     } catch (Exception $exception) {
         return $exception->getMessage();
     }
