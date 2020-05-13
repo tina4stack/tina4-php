@@ -22,6 +22,7 @@ class Crud
     /**
      * Returns an array of dataTables style filters for use in your queries
      * @return array
+     * @throws \Exception
      */
     public static function getDataTablesFilter() {
         $ORM = new \Tina4\ORM();
@@ -108,7 +109,7 @@ class Crud
                 }
                 $jsonResult = $function ("create", $object, null, $request);
                 $object->save();
-                $jsonResult = $function ("afterCreate", $object, null, $request);
+                $function ("afterCreate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -147,7 +148,7 @@ class Crud
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("update", $object, null, $request);
                 $object->save();
-                $jsonResult = $function ("afterUpdate", $object, null, $request);
+                $function ("afterUpdate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -160,7 +161,7 @@ class Crud
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("delete", $object, null, $request);
                 $object->delete();
-                $jsonResult = $function ("afterDelete", $object, null, $request);
+                $function ("afterDelete", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
