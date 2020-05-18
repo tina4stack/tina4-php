@@ -362,7 +362,7 @@ class ORM implements  \JsonSerializable
         $this->checkDBConnection();
         $tableName = $this->getTableName();
 
-        $sql = "select * from {$tableName}";
+        $sql = "select * from {$tableName}\n";
         if ($this->tableFilter) {
             $sql .= "where {$this->tableFilter}";
         }
