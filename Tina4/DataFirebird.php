@@ -77,7 +77,8 @@ class DataFirebird extends DataBase
         }
 
 
-        if (count($records) > 1) {
+
+        if (is_array($records) && count($records) > 1) {
             if (stripos($sql, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL)";
 
