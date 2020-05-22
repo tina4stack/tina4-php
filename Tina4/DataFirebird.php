@@ -115,4 +115,14 @@ class DataFirebird extends DataBase
         //No commit for sqlite
         ibase_commit($this->dbh);
     }
+
+    public function native_tableExists($tableName)
+    {
+        // table name must be in upper case
+        $tableName = strtoupper($tableName);
+        $exists = $this->fetch ("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+
+        return !empty($exists->records());
+    }
+
 }
