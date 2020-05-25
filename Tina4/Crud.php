@@ -37,6 +37,7 @@ class Crud
         }
 
         $filter = null;
+        $listOfColumnNames = null;
         if (!empty($request["search"])) {
             $search = $request["search"];
 
@@ -44,7 +45,19 @@ class Crud
                 $columnName = $ORM->getFieldName($column["data"]);
 
                 if (($column["searchable"] == "true") && !empty($search["value"])) {
-                    $filter[] = "upper(" . $columnName . ") like '%" . strtoupper($search["value"]) . "%'";
+                    //Add each searchable column to array
+                    $listOfColumnNames[] = $columnName;
+                    //Split search phrase into individual searchable words
+                    $splitValue = explode(" ", $search["value"]);
+
+                    //Iterate searchable words
+                    foreach ($splitValue as $singleValue) {
+                        //Check that the values aren't whitespaces
+                        if (!empty($singleValue)) {
+
+                            $filter[] = " like '%" . strtoupper($singleValue) . "%'";
+                        }
+                    }
                 }
             }
         }
@@ -63,8 +76,28 @@ class Crud
         }
 
         $where = "";
+        //Check that filter isn't empty
         if (is_array($filter) && count($filter) > 0) {
-            $where = "(" . join(" or ", $filter) . ")";
+            $whereArray = null;
+
+            //Concatenate row columns into a single searchable string
+
+            //Check for type of database
+            if (!empty($ORM->DBA) && get_class($ORM->DBA) === "Tina4\DataMySQL") {
+                //Mysql
+                $columnsToSearch = "concat(" . join(",' ',", $listOfColumnNames) . ")";
+            } else {
+                //Non-mysql
+                $columnsToSearch = join(" || ' ' || ", $listOfColumnNames);
+            }
+
+            //Create check statement per searched word
+            foreach ($filter as $searchFor) {
+                $whereArray[] = $columnsToSearch . $searchFor;
+            }
+
+            //Glue each searchable phrase with "and" to ensure that it contains all searched words
+            $where = join(" and ", $whereArray);
         }
 
         if (!empty($request["start"])) {
