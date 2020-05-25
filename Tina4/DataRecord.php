@@ -18,11 +18,14 @@ class DataRecord
 
     public function isBinary($string):bool
     {
-        if(!\ctype_print($string)){
-            return true;
+        $isBinary=false;
+        $string=str_ireplace("\t","",$string);
+        $string=str_ireplace("\n","",$string);
+        $string=str_ireplace("\r","",$string);
+        if(is_string($string) && ctype_print($string) === false){
+            $isBinary=true;
         }
-
-        return false;
+        return $isBinary;
     }
 
     /**
@@ -35,9 +38,8 @@ class DataRecord
             $this->original = (object)$record;
 
             foreach ($record as $column => $value) {
-
                 if ($this->isBinary($value)) {
-                    $value = null;
+                    $value = \base64_encode($value);
                     $this->original->{$column} = $value;
                 }
                 $columnName = $column;

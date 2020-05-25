@@ -33,6 +33,7 @@ class DataMySQL extends DataBase
 
 
         $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
+        $this->dbh->set_charset("utf8");
 
     }
 

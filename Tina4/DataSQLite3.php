@@ -86,6 +86,7 @@ class DataSQLite3 extends DataBase
             $fid = 0;
             $fields = [];
             foreach ($records[0] as $field => $value) {
+
                 $fields[] = (new DataField($fid, $recordCursor->columnName($fid), $recordCursor->columnName($fid), $recordCursor->columnType($fid)));
                 $fid++;
             }
@@ -96,6 +97,8 @@ class DataSQLite3 extends DataBase
         }
 
         $error = $this->error();
+
+
         
         return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }

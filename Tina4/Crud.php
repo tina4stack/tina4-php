@@ -22,6 +22,7 @@ class Crud
     /**
      * Returns an array of dataTables style filters for use in your queries
      * @return array
+     * @throws \Exception
      */
     public static function getDataTablesFilter() {
         $ORM = new \Tina4\ORM();
@@ -101,9 +102,14 @@ class Crud
 
         \Tina4\Route::post( $path,
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $object->create($request->data);
+                if (!empty($request->data)) {
+                    $object->create($request->data);
+                } else {
+                    $object->create($request->params);
+                }
                 $jsonResult = $function ("create", $object, null, $request);
                 $object->save();
+                $function ("afterCreate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -126,6 +132,7 @@ class Crud
                 if (empty($jsonResult)) {
                     $jsonResult = (new $object())->load("id = {$id}");
                 }
+
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -133,10 +140,15 @@ class Crud
         \Tina4\Route::post( $path."/{id}",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                $object->create($request->data);
+                if (!empty($request->data)) {
+                    $object->create($request->data);
+                } else {
+                    $object->create($request->params);
+                }
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("update", $object, null, $request);
                 $object->save();
+                $function ("afterUpdate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -149,6 +161,7 @@ class Crud
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("delete", $object, null, $request);
                 $object->delete();
+                $function ("afterDelete", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );

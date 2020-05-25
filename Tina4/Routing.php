@@ -22,6 +22,7 @@ class Routing
     private $auth;
     private $params;
     private $content;
+    private $root;
     private $subFolder; //Sub folder when stack runs under a directory
 
     /**
@@ -86,9 +87,14 @@ class Routing
      */
     function __construct($root = "", $urlToParse = "", $method = "")
     {
+        if (!empty($root)) {
+            $_SERVER["DOCUMENT_ROOT"] = $root;
+        }
+        $this->root = $root;
         $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
         $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
-        $_SERVER["DOCUMENT_ROOT"] = $root;
+        if (!defined("TINA4_BASE_URL")) define ("TINA4_BASE_URL", substr($this->subFolder,0, -1));
+
 
         if (TINA4_DEBUG) {
             \Tina4\DebugLog::message("TINA4: URL to parse " . $urlToParse, TINA4_DEBUG_LEVEL);
@@ -197,12 +203,12 @@ class Routing
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $params);
                     }
-                      else
-                    if ($this->auth->tokenExists()) { //Tries to get a token from the session
-                        $result = call_user_func_array($route["function"], $params);
-                    } else {
-                        $result = $response("Not authorized", HTTP_UNAUTHORIZED);
-                    }
+                    else
+                        if ($this->auth->tokenExists()) { //Tries to get a token from the session
+                            $result = call_user_func_array($route["function"], $params);
+                        } else {
+                            $result = $response("Not authorized", HTTP_UNAUTHORIZED);
+                        }
 
                     $matched = true;
                     break;
@@ -390,6 +396,9 @@ class Routing
     function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
         global $arrRoutes;
+        if (empty($this->root)) {
+            $this->root = $_SERVER["DOCUMENT_ROOT"];
+        }
 
         $paths = (object)[];
 
@@ -441,7 +450,9 @@ class Routing
                                     $queryParams = explode(",", $matches[2]);
                                 } else
                                     if ($matches[1] === "@example") {
-                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
+
+
+                                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\".$matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
 
                                     } else
                                         if ($matches[1] === "@secure") {
@@ -450,6 +461,8 @@ class Routing
 
                 }
             }
+
+
 
             $arguments = $reflection->getParameters();
 
