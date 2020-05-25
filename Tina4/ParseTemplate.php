@@ -7,8 +7,6 @@
  */
 namespace Tina4;
 
-use mysql_xdevapi\Exception;
-
 /**
  * Class ParseTemplate
  * @package Tina4
@@ -24,17 +22,23 @@ class ParseTemplate {
     private $twig;
     private $definedVariables;
     private $evals = [];
+    private $content;
+    private $subFolder="";
 
     /**
      * ParseTemplate constructor.
      * @param $root
      * @param string $fileName Name of the file
      * @param string $definedVariables
+     * @param string $subFolder
      * @throws \Exception Error on failure
      */
-    function __construct($root, $fileName, $definedVariables="") {
+    function    __construct($root, $fileName, $definedVariables="", $subFolder="") {
+
+        $fileName = preg_replace('#/+#','/',$fileName);
+
         if (TINA4_DEBUG) {
-            error_log("TINA4 Filename: " . $fileName);
+            \Tina4\DebugLog::message("TINA4 Filename: " . $fileName, TINA4_DEBUG_LEVEL);
         }
         if (defined("TINA4_TEMPLATE_LOCATIONS")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS;
@@ -42,9 +46,12 @@ class ParseTemplate {
         //set the working folder for the site
         $this->root = $root;
         //parse the file for objects and tags
+
         $this->content = $this->parseFile($fileName);
 
         $this->definedVariables = $definedVariables;
+
+        $this->subFolder = $subFolder;
     }
 
     /**
@@ -74,7 +81,7 @@ class ParseTemplate {
                 eval($eval);
             } catch (\ParseError $error) {
                 if (TINA4_DEBUG) {
-                    error_log("TINA4: Parse Error for " . $eval);
+                    \Tina4\DebugLog::message("TINA4: Parse Error for " . $eval, TINA4_DEBUG_LEVEL);
                 }
             }
         }
@@ -93,7 +100,9 @@ class ParseTemplate {
 
         if (isset($_SESSION)) {
             foreach ($_SESSION as $varName => $value) {
-                $content = str_replace('{{'.$varName.'}}', $value, $content);
+                if (!is_array($value) && !is_object($value)) {
+                    $content = str_replace('{{' . $varName . '}}', $value, $content);
+                }
             }
         }
 
@@ -204,10 +213,8 @@ class ParseTemplate {
         //find a file in the assets folder which matches the route given
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
 
-
-
         if (empty($ext)) {
-            $possibleFiles =  [ $fileName . ".html", $fileName.".twig" ];
+            $possibleFiles =  [ $fileName . ".html", $fileName.".twig", str_replace("/index", "", $fileName).".twig", str_replace("/index", "", $fileName).".html" ];
         } else {
             $possibleFiles = [$fileName];
 
@@ -217,6 +224,7 @@ class ParseTemplate {
         foreach ($this->locations as $lid => $location) {
             foreach ($possibleFiles as $id => $fileName) {
                 $testFile = $this->root . "/" . $location ."/". $fileName;
+                $testFile = preg_replace('#/+#','/',$testFile);
                 if (file_exists($testFile)) {
                     $realFileName = $testFile;
                     break;
@@ -227,15 +235,15 @@ class ParseTemplate {
 
         $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
 
+        \Tina4\DebugLog::message("Looking for file ".$realFileName, TINA4_DEBUG_LEVEL);
         if (file_exists($realFileName)) {
             //Render a twig file if the extension is twig
             if ($ext === "twig") {
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
-                $templateName = basename($realFileName);
 
-                $content = renderTemplate($templateName, $_SESSION["renderData"]);
+                $content = renderTemplate($realFileName, $_SESSION["renderData"]);
             } else {
                 $content = file_get_contents($realFileName);
                 $content = $this->parseSnippets($content);
@@ -243,8 +251,11 @@ class ParseTemplate {
                 $content = $this->parseVariables($content);
             }
         }   else {
+            \Tina4\DebugLog::message("Returning File not found {$fileName}", TINA4_DEBUG_LEVEL);
             $this->responseCode = 404;
-            $content = "<img src=\"/assets/images/404.jpg\">";
+            //What happens when this is under a web server sub folder ?
+            $content = "<img src=\"/{$this->subFolder}/assets/images/404.jpg\">";
+            $content = preg_replace('#/+#','/',$content);
         }
 
         return $content;

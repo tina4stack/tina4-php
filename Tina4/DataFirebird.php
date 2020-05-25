@@ -77,7 +77,8 @@ class DataFirebird extends DataBase
         }
 
 
-        if (count($records) > 1) {
+
+        if (is_array($records) && count($records) > 1) {
             if (stripos($sql, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL)";
 
@@ -114,4 +115,14 @@ class DataFirebird extends DataBase
         //No commit for sqlite
         ibase_commit($this->dbh);
     }
+
+    public function native_tableExists($tableName)
+    {
+        // table name must be in upper case
+        $tableName = strtoupper($tableName);
+        $exists = $this->fetch ("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+
+        return !empty($exists->records());
+    }
+
 }

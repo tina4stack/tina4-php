@@ -64,7 +64,7 @@ class DataBase
      */
     public function native_open()
     {
-        error_log("Implement the public method native_open for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_open for your database engine");
         return false;
     }
 
@@ -74,7 +74,7 @@ class DataBase
      */
     public function native_close()
     {
-        error_log("Implement the public method native_close for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_close for your database engine");
         return false;
     }
 
@@ -84,7 +84,7 @@ class DataBase
      */
     public function native_exec()
     {
-        error_log("Implement the public method native_exec for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_exec for your database engine");
         return false;
     }
 
@@ -94,7 +94,7 @@ class DataBase
      */
     public function native_error()
     {
-        error_log("Implement the public method native_error for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_error for your database engine");
         return false;
     }
 
@@ -104,7 +104,7 @@ class DataBase
      */
     public function native_getLastId()
     {
-        error_log("Implement the public method native_getLastId for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_getLastId for your database engine");
         return false;
     }
 
@@ -114,7 +114,17 @@ class DataBase
      */
     public function native_fetch()
     {
-        error_log("Implement the public method native_fetch for your database engine");
+        \Tina4\DebugLog::message("Implement the public method native_fetch for your database engine");
+        return false;
+    }
+
+    /**
+     * Abstract database table Exists
+     * @param $tableName
+     * @return bool
+     */
+    public function native_tableExists($tableName) {
+        \Tina4\DebugLog::message("Implement the public method native_tableExists for your database engine");
         return false;
     }
 
@@ -187,20 +197,20 @@ class DataBase
      */
     public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd")
     {
-        define("DATA_ARRAY", 0);
-        define("DATA_OBJECT", 1);
-        define("DATA_NUMERIC", 2);
+        if (!defined("DATA_ARRAY")) define("DATA_ARRAY", 0);
+        if (!defined("DATA_OBJECT")) define("DATA_OBJECT", 1);
+        if (!defined("DATA_NUMERIC")) define("DATA_NUMERIC", 2);
 
-        define("DATA_TYPE_TEXT", 0);
-        define("DATA_TYPE_NUMERIC", 1);
-        define("DATA_TYPE_BINARY", 2);
+        if (!defined("DATA_TYPE_TEXT")) define("DATA_TYPE_TEXT", 0);
+        if (!defined("DATA_TYPE_NUMERIC")) define("DATA_TYPE_NUMERIC", 1);
+        if (!defined("DATA_TYPE_BINARY")) define("DATA_TYPE_BINARY", 2);
 
-        define("DATA_ALIGN_LEFT", 0);
-        define("DATA_ALIGN_RIGHT", 1);
+        if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
+        if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
 
-        define("DATA_CASE_UPPER", 1);
+        if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", 1);
 
-        define("DATA_NO_SQL", "ERR001");
+        if (!defined("DATA_NO_SQL"))  define("DATA_NO_SQL", "ERR001");
 
         global $cache;
         if (!empty($cache)) {
@@ -268,6 +278,15 @@ class DataBase
     public function getLastId()
     {
         return $this->native_getLastId();
+    }
+
+    /**
+     * Checks to see if a table exists
+     * @param $tableName
+     * @return mixed
+     */
+    public function tableExists($tableName) {
+        return $this->native_tableExists($tableName);
     }
 
     /**

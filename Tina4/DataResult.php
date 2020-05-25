@@ -9,11 +9,13 @@
 
 namespace Tina4;
 
+use JsonSerializable;
+
 /**
  * Class DataResult Result of query
  * @package Tina4
  */
-class DataResult
+class DataResult implements JsonSerializable
 {
     /**
      * @var resource Records returned from query
@@ -72,6 +74,14 @@ class DataResult
     }
 
     /**
+     * Gets back the number of records that were not filtered out by the pagination
+     * @return int
+     */
+    function getNoOfRecords() {
+        return $this->noOfRecords;
+    }
+
+    /**
      * Returns the fields and their types
      * @return mixed
      */
@@ -98,19 +108,29 @@ class DataResult
     }
 
 
+
+
     /**
      * Converts array of records to array of objects
      * @return false|string
      */
     function __toString()
     {
-        $results = null;
+        $results = [];
 
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
-                $results[] = $record->asObject();
+                if (get_class($record) == "Tina4\DataRecord") {
+                    $results[] = $record->asObject();
+                } else {
+                    $results [] = (object) $record;
+                }
             }
         }
+
+
+
+
 
         if (!empty($results)) {
             return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => null]);
@@ -121,12 +141,35 @@ class DataResult
     }
 
     /**
+     * Makes a neat JSON response
+     */
+    public function jsonSerialize() {
+        $results = [];
+
+        if (!empty($this->records)) {
+            foreach ($this->records as $rid => $record) {
+                if (get_class($record) == "Tina4\DataRecord") {
+                    $results[] = $record->asObject();
+                } else {
+                    $results [] = (object) $record;
+                }
+            }
+        }
+
+        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => $this->getError()];
+    }
+
+    /**
      * Gets the error from the result if the query failed
      * @return mixed
      */
     function getError()
     {
-        return $this->error->getError();
+        if (!empty($this->error)) {
+            return $this->error->getError();
+        } else {
+            return null;
+        }
     }
 
 }

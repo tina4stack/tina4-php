@@ -2,3 +2,6 @@
 .idea
 /vendor/
 /cache/
+/assets/index.twig
+/auth.db
+/tools/HTMLFunctions.txt

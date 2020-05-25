@@ -9,6 +9,7 @@ class Request
 {
     public $data = null;
     public $params = null;
+    public $inlineParams = null;
     public $server = null;
     public $session = null;
 
@@ -46,6 +47,11 @@ class Request
     function __toString()
     {
         return json_encode($this->data);
+    }
+
+    function asArray() {
+
+        return (array)json_decode(json_encode($this->data));
     }
 
 }

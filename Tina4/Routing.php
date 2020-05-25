@@ -19,19 +19,64 @@ use http\Env\Request;
  */
 class Routing
 {
+    private $auth;
     private $params;
     private $content;
-    private $debug;
+    private $root;
+    private $subFolder; //Sub folder when stack runs under a directory
 
     /**
      * @var string Type of method
      */
     private $method;
 
+
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
     private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
+
+    function returnStatic($fileName) {
+        $fileName = preg_replace('#/+#','/',$fileName);
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        $mimeType = mime_content_type($fileName);
+
+        if ($ext === "svg") {
+            $mimeType = "image/svg+xml";
+        } else
+            if ($ext === "css") {
+                $mimeType = "text/css";
+            }
+            else
+                if ($ext === "js") {
+                    $mimeType = "application/javascript";
+                }
+        header('Content-Type: ' . $mimeType);
+        header('Cache-Control: max-age=' . (60 * 60) . ', public');
+        header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
+        $fh = fopen($fileName, 'r');
+        fpassthru($fh);
+        fclose($fh);
+        exit; //we are done here, file will be delivered
+    }
+
+    function includeDirectory($dirName) {
+        $d = dir($dirName);
+        while (($file = $d->read()) !== false) {
+            $pathInfo = pathinfo($file);
+            if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
+                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+                include_once $fileNameRoute;
+            } else {
+                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+                if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
+                    $this->includeDirectory($fileNameRoute);
+                }
+            }
+        }
+        $d->close();
+    }
 
     /**
      * Routing constructor.
@@ -42,13 +87,19 @@ class Routing
      */
     function __construct($root = "", $urlToParse = "", $method = "")
     {
-        $this->debug = TINA4_DEBUG;
-
-        $_SERVER["DOCUMENT_ROOT"] = $root;
-
-        if ($this->debug) {
-            error_log("TINA4: URL to parse " . $urlToParse);
+        if (!empty($root)) {
+            $_SERVER["DOCUMENT_ROOT"] = $root;
         }
+        $this->root = $root;
+        $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
+        $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
+        if (!defined("TINA4_BASE_URL")) define ("TINA4_BASE_URL", substr($this->subFolder,0, -1));
+
+
+        if (TINA4_DEBUG) {
+            \Tina4\DebugLog::message("TINA4: URL to parse " . $urlToParse, TINA4_DEBUG_LEVEL);
+        }
+
         global $arrRoutes;
 
         if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS)) {
@@ -76,13 +127,11 @@ class Routing
          */
         $response = new Response ();
 
-
-        //Initialize debugging
-        if ($this->debug) {
-            echo "<PRE>";
-        }
-
         $urlToParse = $this->cleanURL($urlToParse);
+
+        if (!empty($this->subFolder)) {
+            $urlToParse = str_replace($this->subFolder, "/", $urlToParse);
+        }
 
         //Generate a filename just in case the routing doesn't find anything
         if ($urlToParse === "/") {
@@ -93,27 +142,17 @@ class Routing
 
         //Clean up twig extensions
         $fileName = str_replace(".twig", "", $fileName);
-
-
-        // if requested file is'nt a php file
-        if (file_exists($root . $urlToParse) && $urlToParse !== "/") {
-            $ext = pathinfo($urlToParse, PATHINFO_EXTENSION);
-            $mimeType = mime_content_type($root . $urlToParse);
-
-            if ($ext === "svg") {
-                $mimeType = "image/svg+xml";
-            } else
-                if ($ext === "css") {
-                    $mimeType = "text/css";
+        // if requested file isn't a php file
+        if (file_exists($root . $urlToParse) && $urlToParse !== "/" && !is_dir($root . $urlToParse)) {
+            $this->returnStatic ($root. $urlToParse);
+        } else {
+            //Check the template locations
+            foreach (TINA4_TEMPLATE_LOCATIONS as $tid => $templateLocation) {
+                \Tina4\DebugLog::message($root."/".$templateLocation.$urlToParse, TINA4_DEBUG_LEVEL);
+                if (file_exists($root."/".$templateLocation.$urlToParse) && !is_dir($root."/".$templateLocation.$urlToParse)) {
+                    $this->returnStatic($root."/".$templateLocation."/".$urlToParse);
                 }
-            header('Content-Type: ' . $mimeType);
-            header('Cache-Control: max-age=' . (60 * 60) . ', public');
-            header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
-
-            $fh = fopen($root . $urlToParse, 'r');
-            fpassthru($fh);
-            fclose($fh);
-            exit; //we are done here, file will be delivered
+            }
         }
 
 
@@ -124,27 +163,17 @@ class Routing
 
         $this->content = "";
         $this->method = $method;
-        $this->debug("Root: {$root}");
-        $this->debug("URL: {$urlToParse}");
-        $this->debug("Method: {$method}");
+        \Tina4\DebugLog::message("Root: {$root}", TINA4_DEBUG_LEVEL);
+        \Tina4\DebugLog::message("URL: {$urlToParse}", TINA4_DEBUG_LEVEL);
+        \Tina4\DebugLog::message("Method: {$method}", TINA4_DEBUG_LEVEL);
 
         //include routes in routes folder
         foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
             if (file_exists(getcwd() . "/" . $route)) {
-
-                $d = dir(getcwd() . "/" . $route);
-
-
-                while (($file = $d->read()) !== false) {
-                    if ($file != "." && $file != "..") {
-                        $fileNameRoute = realpath(getcwd() . "/" . $route) . "/" . $file;
-                        require_once $fileNameRoute;
-                    }
-                }
-                $d->close();
+                $this->includeDirectory( getcwd(). "/". $route );
             } else {
-                if ($this->debug) {
-                    error_log("TINA4: " . getcwd() . "/" . $route . " not found!");
+                if (TINA4_DEBUG) {
+                    \Tina4\DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!",TINA4_DEBUG_LEVEL);
                 }
             }
         }
@@ -152,8 +181,8 @@ class Routing
         //determine what should be outputted and if the route is found
         $matched = false;
 
-        if ($this->debug) {
-            print_r($arrRoutes);
+        if (TINA4_DEBUG) {
+            \Tina4\DebugLog::message($arrRoutes, TINA4_DEBUG_LEVEL);
         }
 
         $result = null;
@@ -166,21 +195,25 @@ class Routing
                 $doc = $reflection->getDocComment();
                 preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
+                $params = $this->getParams($response, $route["inlineParamsToRequest"]);
                 if (in_array("secure", $annotations[1])) {
                     $headers = getallheaders();
 
-                    if (isset($headers["Authorization"]) && Auth::validToken($headers["Authorization"])) {
+                    if (isset($headers["Authorization"]) && $this->auth->validToken($headers["Authorization"])) {
                         //call closure with & without params
-                        $result = call_user_func_array($route["function"], $this->getParams($response));
-                    } else {
-                        $result = $response("Not authorized", 401);
+                        $result = call_user_func_array($route["function"], $params);
                     }
+                    else
+                        if ($this->auth->tokenExists()) { //Tries to get a token from the session
+                            $result = call_user_func_array($route["function"], $params);
+                        } else {
+                            $result = $response("Not authorized", HTTP_UNAUTHORIZED);
+                        }
 
                     $matched = true;
                     break;
                 } else {
-                    //call closure with & without params
-                    $result = call_user_func_array($route["function"], $this->getParams($response));
+                    $result = call_user_func_array($route["function"], $params);
                 }
 
                 //check for an empty result
@@ -199,20 +232,26 @@ class Routing
             if (empty($fileName)) {
                 $fileName = "index";
             }
-
-            if ($this->debug) {
-                error_log("TINA4: Variables\n" . print_r(get_defined_vars(), 1));
+            else if (strpos($fileName, "index") === false){
+                $fileName .= "/index";
             }
-            $this->content .= new ParseTemplate($root, $fileName, get_defined_vars());
+
+            if (TINA4_DEBUG) {
+                $variables = [];
+                foreach (get_defined_vars() as $varName => $variable) {
+                    if (!is_array($variable) && !is_object($variable)) {
+                        $variables[] = $varName . " => " . $variable;
+                    }
+                }
+
+                \Tina4\DebugLog::message("TINA4: Variables\n" . join("\n", $variables), TINA4_DEBUG_LEVEL);
+            }
+
+            $this->content .= new ParseTemplate($root, $fileName, get_defined_vars(), $this->subFolder);
         } else {
             $this->content = $result;
         }
 
-
-        //end debugging
-        if ($this->debug) {
-            echo "</PRE>";
-        }
     }
 
     /**
@@ -227,17 +266,6 @@ class Routing
     }
 
     /**
-     * Add date to bug message
-     * @param string $msg Message to be debugged
-     */
-    function debug($msg)
-    {
-        if ($this->debug) {
-            echo date("\nY-m-d h:i:s - ") . $msg . "\n";
-        }
-    }
-
-    /**
      * Check if path matches route path
      * @param string $path URL to parse
      * @param string $routePath Route path
@@ -245,7 +273,7 @@ class Routing
      */
     function matchPath($path, $routePath)
     {
-        $this->debug("Matching {$path} with {$routePath}");
+        \Tina4\DebugLog::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         if ($routePath !== "/") {
             $routePath .= "/";
         }
@@ -278,19 +306,25 @@ class Routing
 
         if ($matching) {
             $this->params = $variables;
-            $this->debug("Found match {$path} with {$routePath}");
+            \Tina4\DebugLog::message("Found match {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         } else {
-            $this->debug("No match for {$path} with {$routePath}");
+            \Tina4\DebugLog::message("No match for {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         }
         return $matching;
     }
 
-    function getParams($response)
+    function getParams($response, $inlineToRequest=false)
     {
         $request = new \Tina4\Request(file_get_contents("php://input"));
 
+        if ($inlineToRequest) { //Pull the inlineParams into the request by resetting the params
+            $request->inlineParams = $this->params;
+            $this->params = [];
+        }
+
         $this->params[] = $response;
-        $this->params[] = $request; //TODO: check if header is JSON
+        $this->params[] = $request; //Check if header is JSON
+
         return $this->params;
     }
 
@@ -362,6 +396,9 @@ class Routing
     function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
         global $arrRoutes;
+        if (empty($this->root)) {
+            $this->root = $_SERVER["DOCUMENT_ROOT"];
+        }
 
         $paths = (object)[];
 
@@ -413,7 +450,10 @@ class Routing
                                     $queryParams = explode(",", $matches[2]);
                                 } else
                                     if ($matches[1] === "@example") {
-                                        eval(' if (class_exists("' . trim(str_replace("\n", "", $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else {  $example = json_decode (json_encode($example)); }  } else {$example = (object)[];} ');
+
+
+                                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\".$matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
+
                                     } else
                                         if ($matches[1] === "@secure") {
                                             $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
@@ -421,6 +461,8 @@ class Routing
 
                 }
             }
+
+
 
             $arguments = $reflection->getParameters();
 

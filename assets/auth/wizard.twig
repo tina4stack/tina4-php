@@ -1,0 +1,47 @@
+<ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
+    <li class="nav-item">
+        <a class="nav-link active" id="pills-welcome-tab" data-toggle="pill" href="#pills-welcome" role="tab" aria-controls="pills-home" aria-selected="true">Introduction</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link disabled" id="pills-settings-tab" data-toggle="pill" href="#pills-settings" role="tab" aria-controls="pills-profile" aria-selected="false">Settings</a>
+    </li>
+</ul>
+<div class="tab-content" id="pills-tabContent">
+    <div class="tab-pane fade show active" id="pills-welcome" role="tabpanel" aria-labelledby="pills-welcome-tab">
+        <div class="card">
+            <div class="card-header">
+                Introduction
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Please read carefully and understand</h5>
+                <p class="card-text">The authentication mechanism provided by Tina4 is in no ways the most secure or best practice authentication mechanism. It is
+                there to provide the framework with some basic security during the creation of a MVP and should be replaced at a later point by a better mechanism
+                </p>
+                <p>
+                <div class="alert alert-info"><strong>Note!</strong> This requires a global database handler to be configured in your index.php file</div>
+                <pre style="background: lightblue; padding: 20px;"><code >global $DBA;
+$DBA = new  \Tina4\Data[SQLite3|MySQL|Firebird]([params ...]);
+                    </code></pre>
+
+                <a  class="btn btn-success" data-toggle="pill" href="#pills-settings" onclick="$('#pills-welcome-tab').removeClass('active'); $('#pills-settings-tab').removeClass('disabled'); $('#pills-settings-tab').addClass('active')">I Agree</a>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="pills-settings" role="tabpanel" aria-labelledby="pills-profile-tab">
+        <form action="/auth/wizard" method="post">
+            <div class="form-group">
+                <label>Master Username</label>
+                <input class="form-control" type="text" placeholder="Username" name="username" value="{{ settings.username }}" required>
+            </div>
+            <div class="form-group">
+                <label>Master Password</label>
+                <input class="form-control" type="password" placeholder="Password" name="password" value="">
+            </div>
+            <div class="form-group">
+                <label>Recovery Email</label>
+                <input class="form-control" type="email" placeholder="Email" name="email" value="{{ settings.email }}" required>
+            </div>
+            <button class="btn btn-success">Save & Configure</button>
+        </form>
+    </div>
+</div>

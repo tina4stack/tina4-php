@@ -66,14 +66,18 @@ class DataSQLite3 extends DataBase
     }
 
     public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+        $countRecords = 0;
+        $countRecords = @$this->dbh->querySingle("select count(*) as count from (".$sql.")");
+        
         $sql = $sql." limit {$offSet},{$noOfRecords}";
 
-        $recordCursor = $this->dbh->query($sql);
+        $recordCursor = @$this->dbh->query($sql);
         $records = [];
-        for ($i = 0; $i < $noOfRecords; $i++ ) {
-            $recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC);
-            if (!empty($recordArray)) {
-                $records[] = (new DataRecord($recordArray));
+        if (!empty($recordCursor)) {
+            while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
+                if (!empty($recordArray)) {
+                    $records[] = (new DataRecord($recordArray));
+                }
             }
         }
 
@@ -82,6 +86,7 @@ class DataSQLite3 extends DataBase
             $fid = 0;
             $fields = [];
             foreach ($records[0] as $field => $value) {
+
                 $fields[] = (new DataField($fid, $recordCursor->columnName($fid), $recordCursor->columnName($fid), $recordCursor->columnType($fid)));
                 $fid++;
             }
@@ -92,13 +97,23 @@ class DataSQLite3 extends DataBase
         }
 
         $error = $this->error();
-        return (new DataResult($records, $fields, $noOfRecords, $offSet, $error));
+
+
+        
+        return (new DataResult($records, $fields, $countRecords, $offSet, $error));
+    }
+
+    public function native_tableExists($tableName)
+    {
+        $exists = $this->fetch ("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
+
+
+        return !empty($exists->records());
     }
 
     public function native_getLastId()
     {
         $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
-
         return $lastId->record(0)->LAST_ID;
     }
 

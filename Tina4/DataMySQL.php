@@ -33,6 +33,7 @@ class DataMySQL extends DataBase
 
 
         $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
+        $this->dbh->set_charset("utf8");
 
     }
 
@@ -105,18 +106,20 @@ class DataMySQL extends DataBase
         $records = null;
         $record = null;
         $fields = null;
-        $resultCount = null;
+        $resultCount = [];
+        $resultCount["COUNT_RECORDS"] = 1;
 
         if ($error->getError()["errorCode"] == 0) {
             if ($recordCursor->num_rows > 0) {
                 while ($record = @\mysqli_fetch_assoc($recordCursor)) {
+
                     if (is_array($record)) {
                         $records[] = (new DataRecord($record));
                     }
                 }
 
 
-                if (is_array($records) && count($records) > 1) {
+                if (is_array($records) && count($records) >= 1) {
                     if (stripos($sql, "returning") === false) {
                         $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
@@ -124,14 +127,17 @@ class DataMySQL extends DataBase
 
                         $resultCount = @\mysqli_fetch_assoc($recordCount);
 
+                        if (empty($resultCount)) {
+                            $resultCount["COUNT_RECORDS"] = 0;
+                        }
                     } else {
-                        $resultCount = null;
+                        $resultCount["COUNT_RECORDS"] = 0;
                     }
                 } else {
-                    $resultCount["COUNT_RECORDS"] = 1;
+                    $resultCount["COUNT_RECORDS"] = 0;
                 }
             } else {
-                $resultCount["COUNT_RECORDS"] = 1;
+                $resultCount["COUNT_RECORDS"] = 0;
             }
 
             //populate the fields
@@ -148,7 +154,10 @@ class DataMySQL extends DataBase
                     $fid++;
                 }
             }
+        } else {
+            $resultCount["COUNT_RECORDS"] = 0;
         }
+
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }

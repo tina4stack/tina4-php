@@ -16,6 +16,18 @@ class DataRecord
 {
     private $original;
 
+    public function isBinary($string):bool
+    {
+        $isBinary=false;
+        $string=str_ireplace("\t","",$string);
+        $string=str_ireplace("\n","",$string);
+        $string=str_ireplace("\r","",$string);
+        if(is_string($string) && ctype_print($string) === false){
+            $isBinary=true;
+        }
+        return $isBinary;
+    }
+
     /**
      * DataRecord constructor Converts array to object
      * @param array $record Array of records
@@ -26,10 +38,18 @@ class DataRecord
             $this->original = (object)$record;
 
             foreach ($record as $column => $value) {
+                if ($this->isBinary($value)) {
+                    $value = \base64_encode($value);
+                    $this->original->{$column} = $value;
+                }
+                $columnName = $column;
+                $this->$columnName = $value;
                 $columnName = strtoupper($column);
                 $this->$columnName = $value;
             }
         }
+
+        //print_r ($record);
     }
 
     /**
