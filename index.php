@@ -21,8 +21,6 @@ define("DEBUG_NONE", 9004);
 class_alias("\Tina4\ORM", "Tina4Object");
 define ("TINA4_DEBUG", false);
 define ("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
-
-
 //define ("TINA4_GIT_MESSAGE", "Some useful text here");
 //define ("TINA4_GIT_ENABLED", true);
 global $DBA;
@@ -32,4 +30,7 @@ global $DBA;
 //For mysql - docker-compose up in the relevant docker folder before running
 //$DBA = new \Tina4\DataMySQL("127.0.0.1/5508:tina4", "tina4", "Password1234");
 
+
+//Use this if you are running a hosted app
+//define("TINA4_APP", "/templates/index.html");
 echo new \Tina4\Tina4Php();

@@ -253,9 +253,13 @@ class ParseTemplate {
         }   else {
             \Tina4\DebugLog::message("Returning File not found {$fileName}", TINA4_DEBUG_LEVEL);
             $this->responseCode = 404;
-            //What happens when this is under a web server sub folder ?
-            $content = "<img src=\"/{$this->subFolder}/assets/images/404.jpg\">";
-            $content = preg_replace('#/+#','/',$content);
+            if (!defined("TINA4_APP")) {
+                //What happens when this is under a web server sub folder ?
+                $content = "<img src=\"/{$this->subFolder}/assets/images/404.jpg\">";
+                $content = preg_replace('#/+#', '/', $content);
+            } else {
+                $content = file_get_contents("./".TINA4_APP);
+            }
         }
 
         return $content;
