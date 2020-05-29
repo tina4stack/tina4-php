@@ -551,12 +551,12 @@ class ORM implements  \JsonSerializable
             foreach ($fetchData as $fieldName => $fieldValue) {
                 $propertyName = self::getObjectName($fieldName, $fieldMapping);
                 if (property_exists($this, $propertyName) && empty($this->{$propertyName}) && $this->{$propertyName} !== "0") {
-                    $this->{self::getObjectName($fieldName, $fieldMapping)} = $fieldValue;
+                    $this->{$propertyName} = $fieldValue;
                 }
             }
             return $this;
         } else {
-            return $this;
+            return false;
         }
     }
 
