@@ -662,7 +662,7 @@ class ORM implements  \JsonSerializable
      */
     public function select($fields="*", $limit=10, $offset=0) {
         $tableName = $this->getTableName($this->tableName);
-        return (new \Tina4\SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName);
+        return (new \Tina4\SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName)->where($this->tableFilter);
     }
 
     /**
