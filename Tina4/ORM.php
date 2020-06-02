@@ -556,7 +556,7 @@ class ORM implements  \JsonSerializable
             }
             return $this;
         } else {
-            return $this;
+            return false;
         }
     }
 
