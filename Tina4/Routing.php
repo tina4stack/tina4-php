@@ -83,15 +83,22 @@ class Routing
      * @param string $root Where the document root is located
      * @param string $urlToParse URL being parsed
      * @param string $method Type of method e.g. ANY, POST, DELETE, etc
+     * @param object $config Config containing configs from the initialization
      * @throws \ReflectionException
      */
-    function __construct($root = "", $urlToParse = "", $method = "")
+    function __construct($root = "", $urlToParse = "", $method = "", $config=null)
     {
         if (!empty($root)) {
             $_SERVER["DOCUMENT_ROOT"] = $root;
         }
         $this->root = $root;
-        $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
+
+        if (!empty($config) && isset($config->auth)) {
+            $this->auth = $config->auth;
+        } else {
+            $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
+        }
+
         $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
         if (!defined("TINA4_BASE_URL")) define ("TINA4_BASE_URL", substr($this->subFolder,0, -1));
 

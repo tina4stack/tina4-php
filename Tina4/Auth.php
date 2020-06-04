@@ -36,6 +36,8 @@ class Auth extends \Tina4\Data
             if (!empty($tina4Auth->username)) {
                 $this->configured = true;
             }
+        } else {
+            $this->configured = true;
         }
     }
 
@@ -169,7 +171,7 @@ class Auth extends \Tina4\Data
     /**
      * Starts a php session
      */
-    public function initSession()
+    public function     initSession()
     {
         //make sure the session is started
         if (session_status() == PHP_SESSION_NONE) {
