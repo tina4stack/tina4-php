@@ -31,6 +31,31 @@ global $DBA;
 //$DBA = new \Tina4\DataMySQL("127.0.0.1/5508:tina4", "tina4", "Password1234");
 
 
+/**
+ * Custom auth example, please put in the app folder in it's own file to make it neat!
+ */
+class MyAuth extends \Tina4\Auth {
+
+    //Authorization header
+    function validToken($token)
+    {
+        echo "Write some auth code here to validate {$token} ";
+        return false;
+    }
+
+    //Session token if no auth header
+    function tokenExists()
+    {
+        echo "Write some code to check if a token exists in the session ";
+        return false;
+    }
+
+}
+
+$config = (object)[];
+//Uncomment if you want to play with auth
+//$config->auth = (new MyAuth());
+
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
-echo new \Tina4\Tina4Php();
+echo new \Tina4\Tina4Php($config);

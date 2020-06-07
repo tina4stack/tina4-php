@@ -23,6 +23,11 @@ class Tina4Php
     private $DBA;
 
     /**
+     * @var resource PHP object / array
+     */
+    private $config;
+
+    /**
      * @var false|string The place where Tina4 exists
      */
     private $documentRoot;
@@ -85,6 +90,8 @@ class Tina4Php
         if (!empty($DBA)) {
             $this->DBA = $DBA;
         }
+
+        $this->config = $config;
 
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
@@ -375,13 +382,13 @@ class Tina4Php
                 //Delete the first instance of the alias in the REQUEST_URI
                 $newRequestURI = stringReplaceFirst($_SERVER["CONTEXT_PREFIX"], "", $_SERVER["REQUEST_URI"]);
 
-                $string .= new \Tina4\Routing($this->documentRoot, $newRequestURI, $_SERVER["REQUEST_METHOD"]);
+                $string .= new \Tina4\Routing($this->documentRoot, $newRequestURI, $_SERVER["REQUEST_METHOD"], $this->config);
             } else {
-                $string .= new \Tina4\Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
+                $string .= new \Tina4\Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"], $this->config);
             }
 
         } else {
-            $string .= new \Tina4\Routing($this->documentRoot, "/", "GET");
+            $string .= new \Tina4\Routing($this->documentRoot, "/", "GET", $this->config);
         }
         return $string;
     }
