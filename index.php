@@ -39,22 +39,22 @@ class MyAuth extends \Tina4\Auth {
     //Authorization header
     function validToken($token)
     {
-        echo "Write some auth code here to validate {$token} ";
-        return false;
+        //echo "Write some auth code here to validate {$token} ";
+        return true;
     }
 
     //Session token if no auth header
     function tokenExists()
     {
-        echo "Write some code to check if a token exists in the session ";
-        return false;
+       // echo "Write some code to check if a token exists in the session ";
+        return true;
     }
 
 }
 
 $config = (object)[];
 //Uncomment if you want to play with auth
-//$config->auth = (new MyAuth());
+$config->auth = (new MyAuth());
 
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");

@@ -1,8 +1,14 @@
 <?php
 
 
-class ORMExample extends \Tina4\ORM
+class ORMExample extends \Tina4\ORM //orm_example
 {
+    /**
+     * @var integer auto_increment
+     */
   public $id;
-  public $name;
+    /**
+     * @var varchar (200)
+     */
+  public $sessionName; //session_name
 }
