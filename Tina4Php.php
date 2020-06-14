@@ -329,9 +329,10 @@ class Tina4Php
         $twig = new \Twig\Environment($twigLoader, ["debug" => true]);
         $twig->addExtension(new \Twig\Extension\DebugExtension());
         $twig->addGlobal('Tina4', new \Tina4\Caller());
-        $twig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $this->documentRoot),0, -1) );
 
-
+        $twig->addGlobal('baseUrl', substr(str_replace ("index.php", "", $_SERVER["PHP_SELF"]),0, -1));
+        $twig->addGlobal('baseURL', substr(str_replace ("index.php", "", $_SERVER["PHP_SELF"]), 0, -1));
+        $twig->addGlobal('uniqid', uniqid());
     }
 
     function iterateDirectory($path, $relativePath="")

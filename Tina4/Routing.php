@@ -99,7 +99,7 @@ class Routing
             $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
         }
 
-        $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
+        $this->subFolder = str_replace ("index.php", "", $_SERVER["PHP_SELF"]);
         if (!defined("TINA4_BASE_URL")) define ("TINA4_BASE_URL", substr($this->subFolder,0, -1));
 
 

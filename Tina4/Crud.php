@@ -127,8 +127,8 @@ class Crud
 
         //CREATE
         \Tina4\Route::get($path."/form",
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($function) {
-                $htmlResult = $function ("form", null, null, $request);
+            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
+                $htmlResult = $function ("form", $object, null, $request);
                 return $response ($htmlResult, HTTP_OK, APPLICATION_JSON);
             }
         );
