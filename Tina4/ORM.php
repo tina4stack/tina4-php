@@ -157,17 +157,28 @@ class ORM implements  \JsonSerializable
 
     /**
      * Gets a proper object name for returning back data
+     * Priority Order - Field Mapping
+     *                  given_name => givenName
+     *                  all lowercase on dbResult flag
+     *                  givenName => given_name (although unintended consequences possible)
      * @param string $name Improper object name
      * @param boolean $dbResult Is this a result set from the database?
      * @return string Proper object name
      */
     function getObjectName($name, $dbResult=false)
     {
-        if (!empty($this->fieldMapping) && $this->fieldMapping[$name]) {
-            return $this->fieldMapping[$name];
+        // fieldMapping is set as 'objectName' => 'databaseName' for write functions to work.
+        // fieldMapping flip to enable read functions to work.
+        if(!empty($this->fieldMapping)){
+            $fieldMapping =array_flip($this->fieldMapping);
+        }
+        // use the fieldmapping
+        if (!empty($fieldMapping) && $fieldMapping[$name]) {
+            return $fieldMapping[$name];
         } else {
             $fieldName = "";
             if (strpos($name, "_") !== false) {
+                // set   given_name => givenName
                 $name = strtolower($name);
                 for ($i = 0; $i < strlen($name); $i++) {
                     if ($name[$i] === "_") {
@@ -179,8 +190,11 @@ class ORM implements  \JsonSerializable
                 }
             } else {
                 if ($dbResult) {
+                    // set GivenName => givenname
                     $fieldName = strtolower($name);
                 } else {
+                    // intended givenName => given_name
+                    // but could have unintended consequesnces. GiVenNaMe => _gi_ven_na_me
                     for ($i = 0; $i < strlen($name); $i++) {
                         if ($name[$i] !== strtolower($name[$i])) {
                             $fieldName .= "_" . strtolower($name[$i]);
@@ -549,7 +563,7 @@ class ORM implements  \JsonSerializable
         if (!empty($fetchData->data)) {
             $fetchData = $fetchData->data[0];
             foreach ($fetchData as $fieldName => $fieldValue) {
-                $propertyName = self::getObjectName($fieldName, $fieldMapping);
+                $propertyName = self::getObjectName($fieldName);
                 if (property_exists($this, $propertyName) && empty($this->{$propertyName}) && $this->{$propertyName} !== "0") {
                     $this->{$propertyName} = $fieldValue;
                 }
