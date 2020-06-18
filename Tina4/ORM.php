@@ -21,7 +21,7 @@ class ORM implements  \JsonSerializable
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
      */
-    public $primaryKey = "id"; //Comma separated fields used for primary key
+    public $primaryKey = "id"; //Comma separated fields used for primary key in database form.
     /**
      * @var string  A filter for the table being referenced e.g. company_id = 10
      */
@@ -246,7 +246,7 @@ class ORM implements  \JsonSerializable
      * @return string Generated insert query
      * @throws Exception Error on failure
      */
-    function generateInsertSQL($tableData, $tableName = "")
+    function generateInsertSQL($tableData, $tableName = "", $primaryKey="")
     {
         $tableName = $this->getTableName($tableName);
         $insertColumns = [];
@@ -262,15 +262,6 @@ class ORM implements  \JsonSerializable
             if (empty($fieldValue)) continue;
             if (in_array($fieldName, $this->virtualFields)) continue;
             $insertColumns[] = $this->getObjectName($fieldName);
-            if ($fieldName === "id") {
-                if (!empty($this->DBA)) {
-                    if (get_class($this->DBA) === "Tina4\DataFirebird") {
-                        $returningStatement = " returning (id)";
-                    } else if (get_class($this->DBA) === "Tina4\DataSQLite3") {
-                        $returningStatement = "";
-                    }
-                }
-            }
             if (is_null($fieldValue)) $fieldValue = "null";
 
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -280,7 +271,12 @@ class ORM implements  \JsonSerializable
                 $insertValues[] = "'{$fieldValue}'";
             }
         }
-
+        // Create a returning statement that is database specific based on the primary key
+        if (!empty($primaryKey)) {
+            if (!empty($this->DBA)) {
+                $returningStatement = $this->DBA->getReturnStatement($primaryKey);
+            }
+        }
         return "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
     }
 
@@ -486,7 +482,7 @@ class ORM implements  \JsonSerializable
 
         if ($exists->recordsTotal == 0 || $exists->error == "") {
             if (empty($exists->data)) { //insert
-                $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
+                $sqlStatement = $this->generateInsertSQL($tableData, $tableName, $this->primaryKey);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
             }
@@ -496,24 +492,28 @@ class ORM implements  \JsonSerializable
 
             if (empty($error->getError()["errorCode"])) {
                 $this->DBA->commit();
-
-                //get last id
-                $lastId = $this->DBA->getLastId();
-
-                if (!empty($lastId)) {
-                    $this->{$this->primaryKey} = $lastId;
-                } else
-                    if (method_exists($error, "records") && !empty($error->records())) {
-                        $record = $error->record(0);
-                        $primaryFieldName = strtoupper($this->getObjectName($this->primaryKey));
-                        if ($record->{$primaryFieldName} !== "") {
-                            $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
-                        }
+                $lastId = "";
+                // Getting the new values for the primary keys
+                $records = $error->records();
+                if (!empty($records)){
+                    // Get the primary key values from the database returning statement
+                    foreach ($records as $id=>$record){
+                        $lastId = $record;
                     }
+                } else {
+                    // Get the primary key values from the database id generators. This may not be set for all DBA's
+                    $lastId = $this->DBA->getLastId();
+                }
+                // Setting the primary keys to their new values.
+                if (!empty($lastId)) {
+                    foreach (explode(",",strtoupper($this->primaryKey)) as $value){
+                        $this->{$this->getObjectName($value)} = $lastId->{$value};
+                    }
+                }
 
+                // Retrieving the inserted or updated record
                 $tableData = $this->getTableData();
                 $primaryCheck = $this->getPrimaryCheck($tableData);
-
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 

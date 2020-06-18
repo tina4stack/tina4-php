@@ -322,5 +322,11 @@ class DataBase
         return $this->native_error();
     }
 
-
+    /**
+     * writes a return statement for currently used database
+     * @return mixed
+     */
+    public function getReturnStatement($primaryKey){
+        return $this->native_getReturnStatement($primaryKey);
+    }
 }

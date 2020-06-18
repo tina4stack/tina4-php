@@ -125,4 +125,14 @@ class DataFirebird extends DataBase
         return !empty($exists->records());
     }
 
+    /**
+     * Creates a database specific return statement
+     * @param $primaryKey
+     * @return string
+     */
+    public function native_getReturnStatement($primaryKey)
+    {
+        return " returning " . $primaryKey;
+    }
+
 }
