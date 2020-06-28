@@ -6,16 +6,8 @@
  * Time: 10:50
  */
 use Tina4\ORM;
-
 require "vendor/autoload.php";
-
-//temporary for running under non composer
-define("DEBUG_CONSOLE", 9001);
-define("DEBUG_SCREEN", 9002);
-define("DEBUG_ALL", 9003);
-define("DEBUG_NONE", 9004);
-
-//if (file_exists("assets/index.twig")) unlink("assets/index.twig");
+require "Tina4Php.php";
 
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");
@@ -29,7 +21,6 @@ global $DBA;
 //$DBA =  new \Tina4\DataSQLite3("test.db");
 //For mysql - docker-compose up in the relevant docker folder before running
 //$DBA = new \Tina4\DataMySQL("127.0.0.1/5508:tina4", "tina4", "Password1234");
-
 
 /**
  * Custom auth example, please put in the app folder in it's own file to make it neat!

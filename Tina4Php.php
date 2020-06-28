@@ -11,6 +11,10 @@ namespace Tina4;
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
+if(!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
+if(!defined("DEBUG_SCREEN"))define("DEBUG_SCREEN", 9002);
+if(!defined("DEBUG_ALL"))define("DEBUG_ALL", 9003);
+if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
 /**
  * Class Tina4Php Main class used to set constants
  * @package Tina4
@@ -74,6 +78,33 @@ class Tina4Php
     }
 
     /**
+     * Logic to determine the subfolder - result must be /folder/
+     */
+    function getSubFolder() {
+
+        //Evaluate DOCUMENT_ROOT &&
+        $documentRoot = "";
+        if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
+            $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
+        } else
+            if (isset($_SERVER["DOCUMENT_ROOT"])) {
+                $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+            }
+        $scriptName = $_SERVER["SCRIPT_FILENAME"];
+
+
+
+        //str_replace($documentRoot, "", $scriptName);
+        $subFolder = dirname( str_replace($documentRoot, "", $scriptName));
+
+        if ($subFolder === "/" || $subFolder === "." || (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+            $subFolder = null;
+
+        }
+        return $subFolder;
+    }
+
+    /**
      * Tina4Php constructor.
      * @param null $config
      * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
@@ -133,6 +164,8 @@ class Tina4Php
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
         }
 
+
+
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
         }
@@ -154,15 +187,15 @@ class Tina4Php
         }
 
         if (!defined("TINA4_TEMPLATE_LOCATIONS")) {
-            define("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
+            define("TINA4_TEMPLATE_LOCATIONS", ["src/templates", "src/assets", "src/templates/snippets"]);
         }
 
         if (!defined("TINA4_ROUTE_LOCATIONS")) {
-            define("TINA4_ROUTE_LOCATIONS", ["api", "routes"]);
+            define("TINA4_ROUTE_LOCATIONS", ["src/api", "src/routes"]);
         }
 
         if (!defined("TINA4_INCLUDE_LOCATIONS")) {
-            define("TINA4_INCLUDE_LOCATIONS", ["app", "objects"]);
+            define("TINA4_INCLUDE_LOCATIONS", ["src/app", "src/objects"]);
         }
 
         if (!defined("TINA4_ALLOW_ORIGINS")) {
@@ -182,17 +215,13 @@ class Tina4Php
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects"];
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin"];
 
         foreach ($foldersToCopy as $id => $folder) {
             //Check if folder is there
-            if (!file_exists($this->documentRoot . "/{$folder}") && !file_exists("Tina4Php.php")) {
-                \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/{$folder}");
+            if (!file_exists($this->documentRoot . "/src/{$folder}") && !file_exists("Tina4Php.php")) {
+                \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/src/{$folder}");
             }
-        }
-
-        if (!file_exists($this->documentRoot ."/assets/index.twig") && file_exists($this->documentRoot ."/assets/documentation.twig")) {
-            file_put_contents("assets/index.twig", file_get_contents("assets/documentation.twig"));
         }
 
         //Add the .htaccess file for redirecting things
@@ -330,9 +359,11 @@ class Tina4Php
         $twig->addExtension(new \Twig\Extension\DebugExtension());
         $twig->addGlobal('Tina4', new \Tina4\Caller());
 
-        $twig->addGlobal('baseUrl', substr(str_replace ("index.php", "", $_SERVER["PHP_SELF"]),0, -1));
-        $twig->addGlobal('baseURL', substr(str_replace ("index.php", "", $_SERVER["PHP_SELF"]), 0, -1));
+        $subFolder = $this->getSubFolder();
+        $twig->addGlobal('baseUrl', $subFolder);
+        $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
+
     }
 
     function iterateDirectory($path, $relativePath="")
@@ -383,13 +414,13 @@ class Tina4Php
                 //Delete the first instance of the alias in the REQUEST_URI
                 $newRequestURI = stringReplaceFirst($_SERVER["CONTEXT_PREFIX"], "", $_SERVER["REQUEST_URI"]);
 
-                $string .= new \Tina4\Routing($this->documentRoot, $newRequestURI, $_SERVER["REQUEST_METHOD"], $this->config);
+                $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), $newRequestURI, $_SERVER["REQUEST_METHOD"], $this->config);
             } else {
-                $string .= new \Tina4\Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"], $this->config);
+                $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"], $this->config);
             }
 
         } else {
-            $string .= new \Tina4\Routing($this->documentRoot, "/", "GET", $this->config);
+            $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(),  "/", "GET", $this->config);
         }
         return $string;
     }

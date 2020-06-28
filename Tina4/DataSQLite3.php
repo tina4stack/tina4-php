@@ -62,7 +62,7 @@ class DataSQLite3 extends DataBase
     }
 
     public function native_error() {
-        return (new DataError( $this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
+        return (new \Tina4\DataError( $this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
     }
 
     public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
@@ -86,7 +86,6 @@ class DataSQLite3 extends DataBase
             $fid = 0;
             $fields = [];
             foreach ($records[0] as $field => $value) {
-
                 $fields[] = (new DataField($fid, $recordCursor->columnName($fid), $recordCursor->columnName($fid), $recordCursor->columnType($fid)));
                 $fid++;
             }
@@ -98,8 +97,6 @@ class DataSQLite3 extends DataBase
 
         $error = $this->error();
 
-
-        
         return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }
 
