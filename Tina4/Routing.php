@@ -456,7 +456,7 @@ class Routing
     static function recurseCopy($src, $dst)
     {
         $dir = opendir($src);
-        @mkdir($dst);
+        @mkdir($dst, $mode = 0755, true);
         while (false !== ($file = readdir($dir))) {
             if (($file != '.') && ($file != '..')) {
                 if (is_dir($src . '/' . $file)) {

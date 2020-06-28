@@ -255,7 +255,7 @@ class ParseTemplate {
             $this->responseCode = 404;
             if (!defined("TINA4_APP")) {
                 //What happens when this is under a web server sub folder ?
-                $content = "<img src=\"/{$this->subFolder}/assets/images/404.jpg\">";
+                $content = "<img src=\"/{$this->subFolder}/src/assets/images/404.jpg\">";
                 $content = preg_replace('#/+#', '/', $content);
             } else {
                 $content = file_get_contents("./".TINA4_APP);
