@@ -104,14 +104,13 @@ class DataSQLite3 extends DataBase
     {
         $exists = $this->fetch ("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
 
-
         return !empty($exists->records());
     }
 
     public function native_getLastId()
     {
         $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
-        return $lastId->record(0)->LAST_ID;
+        return $lastId->records(0)[0]->lastId;
     }
 
     public function native_commit() {

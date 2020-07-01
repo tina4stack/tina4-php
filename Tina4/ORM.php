@@ -47,6 +47,8 @@ class ORM implements  \JsonSerializable
      */
     public $virtualFields = null;
 
+    public $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany"];
+
     /**
      * ORM constructor.
      * @param null $request A JSON input to populate the object\
@@ -132,17 +134,16 @@ class ORM implements  \JsonSerializable
     }
 
     /**
-     * Gets the field mapping in the database
+     * Gets the field mapping in the database eg -> lastName maps to last_name
      * @param string $name Name of field required
      * @param array $fieldMapping Array of field mapping
      * @return string Required field name from database
      */
-    function getFieldName($name, $fieldMapping = [])
+    function getFieldName($name, $fieldMapping = [],$ignoreMapping=false)
     {
-        if (!empty($fieldMapping) && $fieldMapping[$name]) {
-            return $fieldMapping[$name];
+        if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
+                return $fieldMapping[$name];
         } else {
-            if (property_exists($this, $name)) return $name;
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
                 if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name)-1 && (!\ctype_upper($name[$i-1]) || !\ctype_upper($name[$i+1]) )) {
@@ -163,35 +164,15 @@ class ORM implements  \JsonSerializable
      */
     function getObjectName($name, $dbResult=false)
     {
-        if (!empty($this->fieldMapping) && $this->fieldMapping[$name]) {
-            return $this->fieldMapping[$name];
-        } else {
-            $fieldName = "";
-            if (strpos($name, "_") !== false) {
-                $name = strtolower($name);
-                for ($i = 0; $i < strlen($name); $i++) {
-                    if ($name[$i] === "_") {
-                        $i++;
-                        $fieldName .= strtoupper($name[$i]);
-                    } else {
-                        $fieldName .= $name[$i];
-                    }
-                }
+        if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
+            $fieldMap = array_flip($this->fieldMapping);
+            if (isset($fieldMap[$name])) {
+                return $fieldMap[$name];
             } else {
-                if ($dbResult) {
-                    $fieldName = strtolower($name);
-                } else {
-                    for ($i = 0; $i < strlen($name); $i++) {
-                        if ($name[$i] !== strtolower($name[$i])) {
-                            $fieldName .= "_" . strtolower($name[$i]);
-                        } else {
-                            $fieldName .= $name[$i];
-                        }
-                    }
-                }
+                return $name;
             }
-
-            return $fieldName;
+        } else {
+            return $name;
         }
     }
 
@@ -200,10 +181,10 @@ class ORM implements  \JsonSerializable
         $className = get_class($this);
         $tableName = $this->getTableName($tableName);
         $fields = [];
+
         foreach ($tableData as $fieldName => $fieldValue) {
             //@todo fix
-
-            $property = new \ReflectionProperty($className, $fieldName);
+            $property = new \ReflectionProperty($className, $this->getObjectName($fieldName));
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
             if (!empty( $annotations[1])) {
                 $fieldInfo = explode(" ", $annotations[1][0], 2);
@@ -211,7 +192,7 @@ class ORM implements  \JsonSerializable
                 $fieldInfo= [];
             }
             if (empty($fieldInfo[1])) {
-                if ($fieldName== "id") {
+                if ($fieldName == "id") {
                     $fieldInfo[1] = "integer not null";
                 } else {
                     $fieldInfo[1] = "varchar(1000)";
@@ -247,11 +228,11 @@ class ORM implements  \JsonSerializable
         foreach ($tableData as $fieldName => $fieldValue) {
             if (empty($fieldValue)) continue;
             if (in_array($fieldName, $this->virtualFields)) continue;
-            $insertColumns[] = $this->getObjectName($fieldName);
-            if ($fieldName === "id") {
+            $insertColumns[] = $this->getFieldName($fieldName);
+            if ($fieldName === $this->primaryKey) {
                 if (!empty($this->DBA)) {
                     if (get_class($this->DBA) === "Tina4\DataFirebird") {
-                        $returningStatement = " returning (id)";
+                        $returningStatement = " returning ({$this->primaryKey})";
                     } else if (get_class($this->DBA) === "Tina4\DataSQLite3") {
                         $returningStatement = "";
                     }
@@ -287,10 +268,9 @@ class ORM implements  \JsonSerializable
             unset($tableData[$foreignField]);
         }
 
+
         foreach ($tableData as $fieldName => $fieldValue) {
             if (in_array($fieldName, $this->virtualFields)) continue;
-
-            $fieldName = $this->getObjectName($fieldName);
 
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -322,6 +302,7 @@ class ORM implements  \JsonSerializable
      * Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
      * e.g. ["companyId" => "company_id", "storeId" => ]
      * @param array $fieldMapping Array of field mapping
+     * @param boolean $fromDB  flags it so the result is ready to go back to the database
      * @return array Contains all table data
      */
     function getTableData($fieldMapping = [], $fromDB = false)
@@ -331,13 +312,14 @@ class ORM implements  \JsonSerializable
             $fieldMapping = $this->fieldMapping;
         }
 
+
         if (empty($this->virtualFields)) {
             $this->virtualFields = [];
         }
 
-        $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping"];
+
         foreach ($this as $fieldName => $value) {
-            if (!in_array($fieldName, $protectedFields)) {
+            if (!in_array($fieldName, $this->protectedFields)) {
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
                 }
@@ -348,6 +330,21 @@ class ORM implements  \JsonSerializable
         //Now we need to add the foreign keys hasMany & hasOne
 
         return $tableData;
+    }
+
+    /**
+     * Returns back a list of field names on the ORM
+     * @return array
+     */
+    function getFieldNames () {
+        $fields = [];
+        foreach ($this as $fieldName => $value) {
+            if (!in_array($fieldName, $this->protectedFields)) {
+                $fields[] = $this->getFieldName($fieldName);
+            }
+        }
+
+        return $fields;
     }
 
     /**
@@ -386,7 +383,7 @@ class ORM implements  \JsonSerializable
         } else {
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
-                if (TINA4_DEBUG) {
+                if (defined ("TINA4_DEBUG") && TINA4_DEBUG) {
                     \Tina4\DebugLog::message("TINA4: We need to make a table for ".$tableName, TINA4_DEBUG_LEVEL);
                 }
 
@@ -403,14 +400,14 @@ class ORM implements  \JsonSerializable
      */
     function getPrimaryCheck($tableData)
     {
-        //print_r ($tableData);
         $primaryFields = explode(",", $this->primaryKey);
         $primaryFieldFilter = [];
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
-                $primaryTableField = $this->getObjectName($primaryField);
-                if (key_exists($primaryField, $tableData)) {
-                    $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryField] . "'");
+                $primaryTableField = $this->getFieldName($primaryField);
+
+                if (key_exists($primaryTableField, $tableData)) {
+                    $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
 
                 } else {
                     $primaryFieldFilter[] = "{$primaryTableField} is null";
@@ -454,17 +451,22 @@ class ORM implements  \JsonSerializable
      */
     function save($tableName = "", $fieldMapping = [])
     {
+        if (!empty($fieldMapping)) {
+            $this->fieldMapping = $fieldMapping;
+        }
+
         $tableName = $this->getTableName($tableName);
         $this->checkDBConnection($tableName);
 
 
         $tableData = $this->getTableData($fieldMapping, true);
+
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
         //See if the record exists already using the primary key
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
-        if (TINA4_DEBUG) {
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             \Tina4\DebugLog::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
         }
 
@@ -492,7 +494,7 @@ class ORM implements  \JsonSerializable
                     if (method_exists($error, "records") && !empty($error->records())) {
                         $record = $error->record(0);
                         $primaryFieldName = strtoupper($this->getObjectName($this->primaryKey));
-                        if ($record->{$primaryFieldName} !== "") {
+                        if (iiset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
                             $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
                         }
                     }
@@ -533,27 +535,42 @@ class ORM implements  \JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
+        if (!empty($fieldMapping)) {
+            $this->fieldMapping = $fieldMapping;
+        }
+
         $tableName = $this->getTableName($tableName);
         if (!$this->checkDBConnection($tableName)) return;
 
-        if (!empty($filter)) {
-            $sqlStatement = "select * from {$tableName} where {$filter}";
+        if (!empty($filter)) {$sqlStatement = "select * from {$tableName} where {$filter}";
         } else {
             $tableData = $this->getTableData($fieldMapping, true);
             $primaryCheck = $this->getPrimaryCheck($tableData);
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
 
-        $fetchData = json_decode($this->DBA->fetch($sqlStatement, 1) . "");
+        $fetchData = $this->DBA->fetch($sqlStatement, 1)->asObject();
 
-        if (!empty($fetchData->data)) {
-            $fetchData = $fetchData->data[0];
+        if (!empty($fetchData)) {
+            $fetchData = $fetchData[0];
+
+            $databaseFields = [];
             foreach ($fetchData as $fieldName => $fieldValue) {
-                $propertyName = self::getObjectName($fieldName, $fieldMapping);
-                if (property_exists($this, $propertyName) && empty($this->{$propertyName}) && $this->{$propertyName} !== "0") {
-                    $this->{self::getObjectName($fieldName, $fieldMapping)} = $fieldValue;
+                $ormField = $this->getObjectName($fieldName);
+                //We ignore mapping because we want to use this to determine the virtual fields in the class
+                $databaseFields[] = $this->getFieldName($ormField, null, true);
+                if (property_exists($this, $ormField) && empty($this->{$ormField}) && $this->{$ormField} !== "0") {
+                    $this->{$ormField} = $fieldValue;
                 }
             }
+
+            //work out the virtual fields here from the load
+            $virtualFields = array_diff($this->getFieldNames(), $databaseFields);
+
+            if (empty($this->virtualFields)) {
+                $this->virtualFields = $virtualFields;
+            }
+
             return $this;
         } else {
             return false;
