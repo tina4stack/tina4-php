@@ -170,7 +170,16 @@ class DataMySQL extends DataBase
     {
         $lastId = $this->fetch("SELECT LAST_INSERT_ID() as last_id");
 
-        return $lastId->record(0)->LAST_ID;
+        return $lastId->records(0)[0]->lastId;
+    }
+
+    public function native_tableExists($tableName) {
+        $exists = $this->fetch("SELECT * 
+                                    FROM information_schema.tables
+                                    WHERE table_schema = '{$this->databaseName}' 
+                                        AND table_name = '{$tableName}'", 1);
+
+        return !empty($exists->records());
     }
 
     /**

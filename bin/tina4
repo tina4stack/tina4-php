@@ -1,0 +1,42 @@
+#!/usr/bin/env php
+<?php
+
+$menu = [];
+
+function readLn($handle) {
+    $input = substr(fgets($handle), 0, -1);
+    return $input;
+}
+
+function drawMenu () {
+    echo "===========================================================\n";
+    echo "Menu\n";
+    echo "===========================================================\n";
+    echo "1. Setup database connection\n";
+    echo "2. Create ORM models from database \n";
+    echo "3. Create a new CRUD router to update a database table \n";
+    echo "4. New basic website template \n";
+    echo "Choose a menu option, type exit to quit:";
+}
+
+function handleMenu($handle) {
+    $input = "start";
+    while ($input !== "exit") {
+
+        switch ($input) {
+            case 1:
+                echo "1 was pressed";
+            break;
+            default:
+                drawMenu();
+                break;
+        }
+
+        $input = readLn($handle);
+    }
+    //handle line input
+}
+
+
+$handle = fopen ("php://stdin","r");
+handleMenu($handle);

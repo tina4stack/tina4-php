@@ -189,11 +189,7 @@ class SQL implements \JsonSerializable
 
 
             if (!empty($result->records()) && $this->noOfRecords > 0) {
-                foreach ($result->records() as $id => $data) {
-                    $record = clone $this->ORM;
-                    $record->create($data, true);
-                    $records[] = $record;
-                }
+                $records = $result->AsObject();
             } else {
                 $this->noOfRecords = 0;
             }

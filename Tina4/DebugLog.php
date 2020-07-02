@@ -9,7 +9,7 @@ class DebugLog
 {
     static function message($message, $debugType=DEBUG_NONE){
 
-        if($debugType == DEBUG_NONE) return;
+        if($debugType == DEBUG_NONE || TINA4_DEBUG === false) return;
 
         if (is_array($message)|| is_object($message)) {
             $message = print_r ($message, 1);
