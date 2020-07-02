@@ -121,15 +121,4 @@ class DataSQLite3 extends DataBase
         //No commit for sqlite
     }
 
-
-    /**
-     * Creates a database specific return statement
-     * @param $primaryKey
-     * @return string
-     */
-    public function native_getReturnStatement($primaryKey)
-    {
-        // Returning statement not supported by SQLite3
-        return "";
-    }
 }
