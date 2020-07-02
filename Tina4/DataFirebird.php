@@ -25,8 +25,7 @@ class DataFirebird extends DataBase
         $params = func_get_args();
 
         if (stripos($params[0], "returning") !== false) {
-            $fetchData = $this->fetch($params[0]);
-            return $fetchData;
+            return $this->fetch($params[0]);
         } else {
             $preparedQuery = @ibase_prepare($params[0]);
             if (!empty($preparedQuery)) {

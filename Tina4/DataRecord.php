@@ -57,6 +57,10 @@ class DataRecord implements JsonSerializable
                     }
                 }
             } else {
+                //We have a field which is all uppercase
+                if (strtoupper($name) === $name || strtolower($name) === $name) {
+                    return strtolower($name);
+                }
                 for ($i = 0; $i < strlen($name); $i++) {
                     if ($name[$i] !== strtolower($name[$i])) {
                         $fieldName .= "_" . strtolower($name[$i]);
