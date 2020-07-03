@@ -165,7 +165,7 @@ class ORM implements  \JsonSerializable
     function getObjectName($name, $dbResult=false)
     {
         if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
-            $fieldMap = array_flip($this->fieldMapping);
+            $fieldMap = array_change_key_case(array_flip($this->fieldMapping), CASE_LOWER);
             if (isset($fieldMap[$name])) {
                 return $fieldMap[$name];
             } else {
