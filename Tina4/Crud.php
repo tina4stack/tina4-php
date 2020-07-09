@@ -141,6 +141,7 @@ class Crud
                     $object->create($request->params);
                 }
                 $jsonResult = $function ("create", $object, null, $request);
+                $function ("beforeCreate", $object, null, $request);
                 $object->save();
                 $function ("afterCreate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
@@ -180,6 +181,7 @@ class Crud
                 }
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("update", $object, null, $request);
+                $function ("beforeUpdate", $object, null, $request);
                 $object->save();
                 $function ("afterUpdate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
@@ -193,6 +195,7 @@ class Crud
                 $object->create($request->params);
                 $object->load ("id = {$id}");
                 $jsonResult = $function ("delete", $object, null, $request);
+                $function ("beforeDelete", $object, null, $request);
                 $object->delete();
                 $function ("afterDelete", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);

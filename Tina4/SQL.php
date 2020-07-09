@@ -4,6 +4,7 @@ namespace Tina4;
 
 class SQL implements \JsonSerializable
 {
+    public $DBA;
     public $ORM;
     public $fields;
     public $tableName;
@@ -20,9 +21,18 @@ class SQL implements \JsonSerializable
     public $error;
     public $lastSQL;
 
-    public function __construct($ORM)
+    public function __construct($ORM=null)
     {
-        $this->ORM = clone $ORM;
+        if (!empty($ORM)) {
+            $this->ORM = clone $ORM;
+            $this->DBA = $this->ORM->DBA;
+        } else {
+            //See if we can db connection from global $DBA
+            global $DBA;
+            if (!empty($DBA)) {
+                $this->DBA = $DBA;
+            }
+        }
     }
 
     function translateFields ($fields) {
@@ -54,6 +64,7 @@ class SQL implements \JsonSerializable
     }
 
     function where ($filter) {
+        //@todo parse filter
         if (trim($filter) !== "") {
             $this->nextAnd = "where";
             $this->filter[] = ["where", $filter];
@@ -62,6 +73,7 @@ class SQL implements \JsonSerializable
     }
 
     function and ($filter) {
+        //@todo parse filter
         if (trim($filter) !== "") {
             if ($this->nextAnd == "join") {
                 $this->join[] = ["and", $filter];
@@ -75,6 +87,7 @@ class SQL implements \JsonSerializable
     }
 
     function or ($filter) {
+        //@todo parse filter
         $this->filter[] = ["or", $filter];
         return $this;
     }
@@ -92,6 +105,7 @@ class SQL implements \JsonSerializable
     }
 
     function on ($filter) {
+        //@todo parse filter
         $this->join[] = ["on", $filter];
         return $this;
     }
@@ -178,14 +192,14 @@ class SQL implements \JsonSerializable
     public function jsonSerialize() {
         //run the query
         $sqlStatement = $this->generateSQLStatement();
-        if (!empty($this->ORM) && !empty($this->ORM->DBA)) {
-            $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
+        if (!empty($this->DBA)) {
+            $result = $this->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
             //transform the records into an array of the ORM
 
             $this->lastSQL = $sqlStatement;
-            $this->error = $this->ORM->DBA->error();
+            $this->error = $this->DBA->error();
 
 
             if (!empty($result->records()) && $this->noOfRecords > 0) {
@@ -214,9 +228,10 @@ class SQL implements \JsonSerializable
      */
     public function asArray() {
         $records = $this->jsonSerialize();
+        if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {
-            $result[] = $record->getTableData();
+            $result[] = (array)$record;
         }
         return $result;
     }
