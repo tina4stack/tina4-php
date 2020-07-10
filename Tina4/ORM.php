@@ -142,7 +142,7 @@ class ORM implements  \JsonSerializable
     function getFieldName($name, $fieldMapping = [],$ignoreMapping=false)
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
-                return $fieldMapping[$name];
+            return $fieldMapping[$name];
         } else {
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
@@ -159,10 +159,10 @@ class ORM implements  \JsonSerializable
     /**
      * Gets a proper object name for returning back data
      * @param string $name Improper object name
-     * @param boolean $dbResult Is this a result set from the database?
+     * @param boolean $camelCase Return the name as camel case
      * @return string Proper object name
      */
-    function getObjectName($name, $dbResult=false)
+    function getObjectName($name, $camelCase=false)
     {
         if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
             $fieldMap = array_flip($this->fieldMapping);
@@ -172,7 +172,21 @@ class ORM implements  \JsonSerializable
                 return $name;
             }
         } else {
-            return $name;
+            if (!$camelCase) {
+                return $name;
+            } else {
+                $fieldName = "";
+                $name = strtolower($name);
+                for ($i = 0; $i < strlen($name); $i++) {
+                    if ($name[$i] === "_") {
+                        $i++;
+                        $fieldName .= strtoupper($name[$i]);
+                    } else {
+                        $fieldName .= $name[$i];
+                    }
+                }
+                return $fieldName;
+            }
         }
     }
 
@@ -182,9 +196,14 @@ class ORM implements  \JsonSerializable
         $tableName = $this->getTableName($tableName);
         $fields = [];
 
+
+
         foreach ($tableData as $fieldName => $fieldValue) {
             //@todo fix
-            $property = new \ReflectionProperty($className, $this->getObjectName($fieldName));
+
+
+            $property = new \ReflectionProperty($className, $this->getObjectName($fieldName, true));
+
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
             if (!empty( $annotations[1])) {
                 $fieldInfo = explode(" ", $annotations[1][0], 2);
@@ -379,7 +398,7 @@ class ORM implements  \JsonSerializable
         }
 
         if (empty($this->DBA)) {
-           return false;
+            return false;
         } else {
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
@@ -387,7 +406,7 @@ class ORM implements  \JsonSerializable
                     \Tina4\DebugLog::message("TINA4: We need to make a table for ".$tableName, TINA4_DEBUG_LEVEL);
                 }
 
-                $this->DBA->exec( $this->generateCreateSQL($this->getTableData($this->fieldMapping, true), $tableName) )  ;
+                $this->DBA->exec( $this->generateCreateSQL($this->getTableData(), $tableName) )  ;
             }
             return true;
         }
@@ -626,7 +645,7 @@ class ORM implements  \JsonSerializable
                 foreach ($request as $key => $value) {
                     if ($key === $this->primaryKey) continue;
                     if (property_exists($this, $key)) {
-                       unset($this->{$key});
+                        unset($this->{$key});
                     }
                 }
             }
@@ -725,7 +744,7 @@ class ORM implements  \JsonSerializable
 
         if (empty($path)) $path = str_replace($_SERVER["DOCUMENT_ROOT"], "", str_replace (".php", "", realpath($fileName)));
 
-            $template = <<<'EOT'
+        $template = <<<'EOT'
 /**
  * CRUD Prototype Example
  * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
