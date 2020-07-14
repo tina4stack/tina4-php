@@ -25,7 +25,7 @@ and running, there is a lot of documentation out there that will get you up and 
 
 Most important is to enable remote debugging in your php.ini file 
 
-```editorconfig
+```sh
 [XDebug]
 xdebug.remote_enable = 1
 xdebug.remote_autostart = 1
