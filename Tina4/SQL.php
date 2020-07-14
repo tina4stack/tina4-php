@@ -132,7 +132,6 @@ class SQL implements \JsonSerializable
             if (is_array($fields)) {
                 $this->orderBy = $fields;
             } else {
-
                 $this->orderBy = explode(",", $fields);
             }
             $this->orderBy = $this->translateFields($this->orderBy);
@@ -196,14 +195,22 @@ class SQL implements \JsonSerializable
             $result = $this->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
-            //transform the records into an array of the ORM
+            //transform the records into an array of the ORM if ORM exists
+
 
             $this->lastSQL = $sqlStatement;
             $this->error = $this->DBA->error();
 
 
             if (!empty($result->records()) && $this->noOfRecords > 0) {
+
                 $records = $result->AsObject();
+                if (!empty($this->ORM)) {
+                    foreach ($records as $id => $record) {
+                        $this->ORM->mapFromRecord ($record, true);
+                        $records[$id] = $this->ORM;
+                    }
+                }
             } else {
                 $this->noOfRecords = 0;
             }
