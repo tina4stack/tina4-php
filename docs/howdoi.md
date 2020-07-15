@@ -25,12 +25,16 @@ Notice the convention of using the `hostname:[database|database-path]` except wh
    $DBA = new \Tina4\DataFirebird("localhost:/home/database/FIREBIRD.DB", "sysdba", "masterkey");
 
    //SQLite
-   $DBA = new \Tina4\DataSQLite("/home/someplace/my.db");
+   $DBA = new \Tina4\DataSQLite3("/home/someplace/my.db");
  
 ```
 
 ## Query the database for some records
 
+
+## Get an array of ORM objects
+
+Given that you have an object extending \Tina4\ORM it will get "magical powers", namely the ability to create, load & save
 
 ## Add a REST end point
 
@@ -45,7 +49,7 @@ The request exposes more information which comes from the browser, in the case o
 
 //Inline Params
 \Tina4\Get::add("/utilities/import/subscription-types/{id}", function($id, \Tina4\Response $response, \Tina4\Request $request){
-
+    
 });
 
 

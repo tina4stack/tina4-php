@@ -38,7 +38,11 @@ class SQL implements \JsonSerializable
     function translateFields ($fields) {
         $result = [];
         foreach ($fields as $id => $field) {
-            $result[] = $this->ORM->getFieldName ($field);
+            if (!empty($ORM)) {
+                $result[] = $this->ORM->getFieldName($field);
+            } else {
+                $result[] = $field;
+            }
         }
         return $result;
     }
@@ -201,14 +205,12 @@ class SQL implements \JsonSerializable
             $this->lastSQL = $sqlStatement;
             $this->error = $this->DBA->error();
 
-
             if (!empty($result->records()) && $this->noOfRecords > 0) {
-
                 $records = $result->AsObject();
                 if (!empty($this->ORM)) {
                     foreach ($records as $id => $record) {
                         $this->ORM->mapFromRecord ($record, true);
-                        $records[$id] = $this->ORM;
+                        $records[$id] = clone $this->ORM;
                     }
                 }
             } else {
@@ -235,6 +237,9 @@ class SQL implements \JsonSerializable
      */
     public function asArray() {
         $records = $this->jsonSerialize();
+
+
+
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {
