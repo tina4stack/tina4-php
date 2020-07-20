@@ -38,7 +38,11 @@ class SQL implements \JsonSerializable
     function translateFields ($fields) {
         $result = [];
         foreach ($fields as $id => $field) {
-            $result[] = $this->ORM->getFieldName ($field);
+            if (!empty($ORM)) {
+                $result[] = $this->ORM->getFieldName($field);
+            } else {
+                $result[] = $field;
+            }
         }
         return $result;
     }
@@ -132,7 +136,6 @@ class SQL implements \JsonSerializable
             if (is_array($fields)) {
                 $this->orderBy = $fields;
             } else {
-
                 $this->orderBy = explode(",", $fields);
             }
             $this->orderBy = $this->translateFields($this->orderBy);
@@ -196,14 +199,20 @@ class SQL implements \JsonSerializable
             $result = $this->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
-            //transform the records into an array of the ORM
+            //transform the records into an array of the ORM if ORM exists
+
 
             $this->lastSQL = $sqlStatement;
             $this->error = $this->DBA->error();
 
-
             if (!empty($result->records()) && $this->noOfRecords > 0) {
                 $records = $result->AsObject();
+                if (!empty($this->ORM)) {
+                    foreach ($records as $id => $record) {
+                        $this->ORM->mapFromRecord ($record, true);
+                        $records[$id] = clone $this->ORM;
+                    }
+                }
             } else {
                 $this->noOfRecords = 0;
             }
@@ -228,6 +237,9 @@ class SQL implements \JsonSerializable
      */
     public function asArray() {
         $records = $this->jsonSerialize();
+
+
+
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {

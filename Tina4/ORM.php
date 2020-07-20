@@ -157,6 +157,25 @@ class ORM implements  \JsonSerializable
     }
 
     /**
+     * Return a camel cased version of the name
+     * @param $name
+     * @return string
+     */
+    function camelCase($name) {
+        $fieldName = "";
+        $name = strtolower($name);
+        for ($i = 0; $i < strlen($name); $i++) {
+            if ($name[$i] === "_") {
+                $i++;
+                $fieldName .= strtoupper($name[$i]);
+            } else {
+                $fieldName .= $name[$i];
+            }
+        }
+        return $fieldName;
+    }
+
+    /**
      * Gets a proper object name for returning back data
      * @param string $name Improper object name
      * @param boolean $camelCase Return the name as camel case
@@ -165,27 +184,25 @@ class ORM implements  \JsonSerializable
     function getObjectName($name, $camelCase=false)
     {
         if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
-            $fieldMap = array_flip($this->fieldMapping);
+            $fieldMap = array_change_key_case(array_flip($this->fieldMapping), CASE_LOWER);
+
+
             if (isset($fieldMap[$name])) {
                 return $fieldMap[$name];
             } else {
-                return $name;
+
+                if (!$camelCase) {
+                    return $name;
+                } else {
+                    echo "Name {$name} is ".$this->camelCase($name);
+                    return $this->camelCase($name);
+                }
             }
         } else {
             if (!$camelCase) {
                 return $name;
             } else {
-                $fieldName = "";
-                $name = strtolower($name);
-                for ($i = 0; $i < strlen($name); $i++) {
-                    if ($name[$i] === "_") {
-                        $i++;
-                        $fieldName .= strtoupper($name[$i]);
-                    } else {
-                        $fieldName .= $name[$i];
-                    }
-                }
-                return $fieldName;
+                return $this->camelCase($name);
             }
         }
     }
@@ -318,7 +335,7 @@ class ORM implements  \JsonSerializable
     }
 
     /**
-     * Gets the information to generate a REST friendly object, $fieldMapping is an array of fields mapping the object to table field names
+     * Gets the information to generate a DB friendly object, $fieldMapping is an array of fields mapping the object to table field names
      * e.g. ["companyId" => "company_id", "storeId" => ]
      * @param array $fieldMapping Array of field mapping
      * @param boolean $fromDB  flags it so the result is ready to go back to the database
@@ -331,11 +348,9 @@ class ORM implements  \JsonSerializable
             $fieldMapping = $this->fieldMapping;
         }
 
-
         if (empty($this->virtualFields)) {
             $this->virtualFields = [];
         }
-
 
         foreach ($this as $fieldName => $value) {
             if (!in_array($fieldName, $this->protectedFields)) {
@@ -352,6 +367,21 @@ class ORM implements  \JsonSerializable
     }
 
     /**
+     * Gets back the object data from the ORM object without the additional protected bits
+     * @return array
+     */
+    function getObjectData()
+    {
+        $tableData = [];
+        foreach ($this as $fieldName => $value) {
+            if (!in_array($fieldName, $this->protectedFields)) {
+                $tableData[$fieldName] = $value;
+            }
+        }
+        return $tableData;
+    }
+
+    /**
      * Returns back a list of field names on the ORM
      * @return array
      */
@@ -364,25 +394,6 @@ class ORM implements  \JsonSerializable
         }
 
         return $fields;
-    }
-
-    /**
-     * Gets records from a table using the default $DBA
-     * @param integer $limit Number of rows contained in result set
-     * @param integer $offset The row number of where to start receiving data
-     * @return DataRecord
-     * @throws Exception Error on failure
-     */
-    function getRecords($limit = 10, $offset = 0)
-    {
-        $this->checkDBConnection();
-        $tableName = $this->getTableName();
-
-        $sql = "select * from {$tableName}\n";
-        if ($this->tableFilter) {
-            $sql .= "where {$this->tableFilter}";
-        }
-        return $this->DBA->fetch($sql, $limit, $offset);
     }
 
     /**
@@ -424,7 +435,6 @@ class ORM implements  \JsonSerializable
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
                 $primaryTableField = $this->getFieldName($primaryField);
-
                 if (key_exists($primaryTableField, $tableData)) {
                     $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
 
@@ -491,54 +501,78 @@ class ORM implements  \JsonSerializable
 
         $exists = json_decode($this->DBA->fetch($sqlCheck, 1) . "");
 
+
+        $getLastId = false;
         if ($exists->recordsTotal == 0 || $exists->error == "") {
             if (empty($exists->data)) { //insert
+                $getLastId = (empty($this->{$this->primaryKey}));
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
             }
 
+
             $error = $this->DBA->exec($sqlStatement);
+
 
 
             if (empty($error->getError()["errorCode"])) {
                 $this->DBA->commit();
 
                 //get last id
-                $lastId = $this->DBA->getLastId();
-
-                if (!empty($lastId)) {
-                    $this->{$this->primaryKey} = $lastId;
-                } else
-                    if (method_exists($error, "records") && !empty($error->records())) {
-                        $record = $error->record(0);
-                        $primaryFieldName = strtoupper($this->getObjectName($this->primaryKey));
-                        if (iiset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
-                            $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
+                if ($getLastId) {
+                    $lastId = $this->DBA->getLastId();
+                    if (!empty($lastId)) {
+                        $this->{$this->primaryKey} = $lastId;
+                    } else
+                        if (method_exists($error, "records") && !empty($error->records())) {
+                            $record = $error->record(0);
+                            $primaryFieldName = strtoupper($this->getObjectName($this->primaryKey));
+                            if (iiset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
+                                $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
+                            }
                         }
-                    }
+                }
 
                 $tableData = $this->getTableData();
                 $primaryCheck = $this->getPrimaryCheck($tableData);
 
-
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
-                $fetchData = $this->DBA->fetch($sqlFetch, 1)->record(0);
+                $fetchData = $this->DBA->fetch($sqlFetch, 1)->asArray();
 
-                $tableResult = [];
-                if (!empty($fetchData)) {
-                    foreach ($fetchData as $fieldName => $fieldValue) {
-                        $tableResult[self::getObjectName($fieldName, true)] = $fieldValue;
-                    }
-                }
+                $this->mapFromRecord($fetchData[0], true);
 
-                return (object)$tableResult;
+                return $this->asObject();
             } else {
                 throw new Exception(print_r($error->getError(), 1));
             }
         } else {
             throw new Exception(print_r($exists->error, 1));
+        }
+    }
+
+    /**
+     * Maps a result set or database load to the ORM object using the field mappings
+     * @param $record
+     * @param bool $overRide Overrides existing entries
+     */
+    function mapFromRecord ($record, $overRide=false) {
+        $databaseFields = [];
+        foreach ($record as $fieldName => $fieldValue) {
+            $ormField = $this->getObjectName($fieldName);
+            //We ignore mapping because we want to use this to determine the virtual fields in the class
+            $databaseFields[] = $this->getFieldName($ormField, null, true);
+            if (property_exists($this, $ormField) && (empty($this->{$ormField}) && $this->{$ormField} !== "0") || $overRide) {
+                $this->{$ormField} = $fieldValue;
+            }
+        }
+
+        //work out the virtual fields here from the load
+        $virtualFields = array_diff($this->getFieldNames(), $databaseFields);
+
+        if (empty($this->virtualFields)) {
+            $this->virtualFields = $virtualFields;
         }
     }
 
@@ -570,26 +604,11 @@ class ORM implements  \JsonSerializable
 
         $fetchData = $this->DBA->fetch($sqlStatement, 1)->asObject();
 
+
         if (!empty($fetchData)) {
+            //Get the first record
             $fetchData = $fetchData[0];
-
-            $databaseFields = [];
-            foreach ($fetchData as $fieldName => $fieldValue) {
-                $ormField = $this->getObjectName($fieldName);
-                //We ignore mapping because we want to use this to determine the virtual fields in the class
-                $databaseFields[] = $this->getFieldName($ormField, null, true);
-                if (property_exists($this, $ormField) && empty($this->{$ormField}) && $this->{$ormField} !== "0") {
-                    $this->{$ormField} = $fieldValue;
-                }
-            }
-
-            //work out the virtual fields here from the load
-            $virtualFields = array_diff($this->getFieldNames(), $databaseFields);
-
-            if (empty($this->virtualFields)) {
-                $this->virtualFields = $virtualFields;
-            }
-
+            $this->mapFromRecord($fetchData);
             return $this;
         } else {
             return false;
@@ -679,14 +698,22 @@ class ORM implements  \JsonSerializable
      */
     function __toString()
     {
-        return json_encode($this->getTableData());
+        return json_encode($this->jsonSerialize());
+    }
+
+    function asObject() {
+        return (object)$this->jsonSerialize();
+    }
+
+    function asArray() {
+        return $this->jsonSerialize();
     }
 
     /**
      * Makes a neat JSON response
      */
     public function jsonSerialize() {
-        return $this->getTableData();
+        return $this->getObjectData();
     }
 
     /**
@@ -698,6 +725,7 @@ class ORM implements  \JsonSerializable
      */
     public function select($fields="*", $limit=10, $offset=0) {
         $tableName = $this->getTableName($this->tableName);
+
         return (new \Tina4\SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName);
     }
 
