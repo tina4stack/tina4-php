@@ -28,9 +28,17 @@ Notice the convention of using the `hostname:[database|database-path]` except wh
    $DBA = new \Tina4\DataSQLite3("/home/someplace/my.db");
  
 ```
+## Build a class with database access
+
+## Save a record using the ORM
+
+## Secure a rest end point
+
+## Add a filter to process records when they are extracted from the database
+
+## Exclude some fields from being displayed on REST result or query
 
 ## Query the database for some records
-
 
 ## Get an array of ORM objects
 
@@ -38,7 +46,7 @@ Given that you have an object extending \Tina4\ORM it will get "magical powers",
 
 ## Add a REST end point
 
-The REST end point is easily added with an anonymous method to handle the request, the anonymous method should have the response variable.
+The REST end point is easily added, with an anonymous method to handle the request, the anonymous method should have the response variable.
 The request exposes more information which comes from the browser, in the case of parameters.
 
 ```php
@@ -51,6 +59,15 @@ The request exposes more information which comes from the browser, in the case o
 \Tina4\Get::add("/utilities/import/subscription-types/{id}", function($id, \Tina4\Response $response, \Tina4\Request $request){
     
 });
+
+//Other Forms of routers
+\Tina4\Post::add(...);
+
+\Tina4\Patch::add(...);
+
+\Tina4\Put::add(...);
+
+\Tina4\Delete::add(...);
 
 
 ```

@@ -25,9 +25,9 @@ class Migration extends \Tina4\Data {
     private $delim = ";";
     /**
      * The database connection
-     * @var Debby
+     * @var DataBase
      */
-    private $DEB = null;
+    private $DBA = null;
 
     /**
      * Constructor for Migrations
@@ -47,7 +47,7 @@ class Migration extends \Tina4\Data {
                 . "content blob,"
                 . "passed integer default 0,"
                 . "primary key (migration_id))");
-            $this->DEB->commit();
+            $this->DBA->commit();
         }
 
         if ($runMigrations && file_exists ($this->migrationPath)) {
@@ -102,7 +102,7 @@ class Migration extends \Tina4\Data {
             $runsql = false;
             if (empty($record)) {
                 echo "<span style=\"color:orange;\">RUNNING:\"{$migrationId} {$description}\" ...</span>\n";
-                $transId = $this->DEB->startTransaction();
+                $transId = $this->DBA->startTransaction();
 
                 $sqlInsert = "insert into tina4_migration (migration_id, description, content, passed)
                                 values ('{$migrationId}', '{$description}', ?, 0)";
@@ -141,7 +141,7 @@ class Migration extends \Tina4\Data {
                         $success = $this->DBA->exec($sql, $transId);
 
                         if (!$success) {
-                            echo "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:".$this->DEB->getError()."\n";
+                            echo "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:".$this->DBA->getError()."\n";
                             $error = true;
                             break;
                         } else {
@@ -160,13 +160,13 @@ class Migration extends \Tina4\Data {
 
                     //we need to make sure the commit resulted in no errors
                     if ($this->DBA->getError() !== "No Error") {
-                        echo "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:".$this->DEB->getError()."\n";
+                        echo "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:".$this->DBA->getError()."\n";
                         $this->DBA->rollbackTransaction($transId);
                         $error = true;
                         break;
                     }
                     else {
-                        $transId = $this->DEB->startTransaction();
+                        $transId = $this->DBA->startTransaction();
                         $this->DBA->exec ("update tina4_migration set passed = 1 where migration_id = '{$migrationId}'", $transId);
                         $this->DBA->commit($transId);
                         echo "<span style=\"color:green;\">PASSED: \"{$migrationId} {$description}\"</span>\n";
