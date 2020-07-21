@@ -124,4 +124,9 @@ class DataFirebird extends DataBase
         return !empty($exists->records());
     }
 
+    public function native_getLastId()
+    {
+        return false;
+    }
+
 }

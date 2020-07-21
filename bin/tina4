@@ -1,5 +1,7 @@
 #!/usr/bin/env php
 <?php
+global $settings;
+$settings = [];
 
 $menu = [];
 
@@ -19,22 +21,144 @@ function drawMenu () {
     echo "Choose a menu option, type exit to quit:";
 }
 
-function handleMenu($handle) {
-    $input = "start";
-    while ($input !== "exit") {
+function processCreateConnection($step, $input, $handle) {
+    global $settings;
 
-        switch ($input) {
-            case 1:
-                echo "1 was pressed";
+    if ($step == 1 && !empty($input)) {
+        $settings["dbType"] = $input;
+        //If SQLite go past the host name
+        if ($settings["dbType"] == 1) {
+            $settings["hostName"] = "";
+            $step = 2;
+        }
+    } else
+        if ($step == 2 && !empty($input)) {
+            $settings["hostName"] = $input;
+        } else
+            if ($step == 3 && !empty($input)) {
+                $settings["databasePath"] = $input;
+                if ($settings["dbType"] == 1) {
+                    $settings["username"] = "";
+                    $settings["password"] = "";
+                    $step = 5;
+                }
+            } else
+                if ($step == 4 && !empty($input)) {
+                    $settings["username"] = $input;
+                } else
+                    if ($step == 5 && !empty($input)) {
+                        $settings["password"] = $input;
+                    }
+
+    switch ($step) {
+        //host name
+        case 1:
+            $step = 2;
+            echo "Hostname?\n";
+            echo ":";
             break;
+        //database path
+        case 2:
+            $step = 3;
+            echo "Database Name or Path?\n";
+            echo ":";
+            break;
+        //user name
+        case 3:
+            $step = 4;
+            echo "Username?\n";
+            echo ":";
+            break;
+        //password
+        case 4:
+            $step = 5;
+            echo "Password?\n";
+            echo ":";
+            break;
+        case 5:
+            $step = 6;
+            switch ($settings["dbType"]) {
+                case 1:
+                    $settings["configString"] = '$DBA = new \Tina4\DataSQLite3("[databasePath]");';
+                    break;
+                case 2:
+                    $settings["configString"] = '$DBA = new \Tina4\DataMySQL("[hostName]:[databasePath]", "[username]", "[password]");';
+                    break;
+                case 3:
+                    $settings["configString"] = '$DBA = new \Tina4\DataFirebird("[hostName]:[databasePath]", "[username]", "[password]");';
+                    break;
+            }
+
+            $settings["configString"] = str_replace('[databasePath]', $settings["databasePath"], $settings["configString"]);
+            $settings["configString"] = str_replace('[hostName]', $settings["hostName"], $settings["configString"]);
+            $settings["configString"] = str_replace('[username]', $settings["username"], $settings["configString"]);
+            $settings["configString"] = str_replace('[password]', $settings["password"], $settings["configString"]);
+
+            $indexContent = file_get_contents("./index.php");
+
+            //existing record
+            $findDBA = '/^\$DBA(.*)/m';
+            preg_match($findDBA, $indexContent, $matches, PREG_OFFSET_CAPTURE);
+
+            if (!empty ($matches) ) {
+                $indexContent = str_replace($matches[0], $settings["configString"], $indexContent);
+                $settings["newIndex"] = $indexContent;
+                echo "We are going to replace an existing connection in index.php for {$settings["databasePath"]} ?\n";
+                echo "y/n:";
+            } else {
+                $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;'."\n".$settings["configString"]."\n".'echo new \Tina4\Tina4Php(', $indexContent);
+                $settings["newIndex"] = $indexContent;
+                echo "We are going to add a connection in index.php for {$settings["databasePath"]} ?\n";
+                echo "y/n:";
+            }
+
+            break;
+        case 6:
+            $step = 0;
+            if ($input == "y") {
+                print_r ($settings);
+
+            } else {
+                echo "You will be returned back to the menu, hit Enter!";
+            }
+            break;
+        default:
+            $step = 1;
+            echo "Type of database ?\n";
+            echo "- 1. SQLite\n";
+            echo "- 2. MYSQL\n";
+            echo "- 3. Firebird\n";
+            echo "Choose database option:";
+            break;
+    }
+
+    return $step;
+}
+
+function handleMenu($handle) {
+    $menu = "start";
+    $step = 0;
+    $input = null;
+    while ($menu !== "exit") {
+
+        switch ($menu) {
+            case 1:
+                $step =  processCreateConnection($step, $input, $handle);
+                if ($step != 0) {
+                    $input = readLn($handle);
+                }
+                break;
             default:
                 drawMenu();
+
                 break;
         }
+        if (empty($input)) {
+            $menu = readLn($handle);
+        }
 
-        $input = readLn($handle);
     }
-    //handle line input
+
 }
 
 

@@ -98,7 +98,7 @@ class DataResult implements JsonSerializable
      */
     function records($original=false)
     {
-        $results = null;
+        $results = [];
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
                 $results[] = $record->asObject($original);
@@ -133,8 +133,10 @@ class DataResult implements JsonSerializable
     public function asArray($original=false) {
         //$records = $this->jsonSerialize();
         $result = [];
-        foreach ($this->records() as $id => $record) {
-            $result[] = (array)$record;
+        if (!empty($this->records)) {
+            foreach ($this->records() as $id => $record) {
+                $result[] = (array)$record;
+            }
         }
         return $result;
     }

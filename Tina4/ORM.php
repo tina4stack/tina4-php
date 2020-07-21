@@ -47,7 +47,12 @@ class ORM implements  \JsonSerializable
      */
     public $virtualFields = null;
 
-    public $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany"];
+    /**
+     * @var array An array of fields that belong to the table and should not be returned in the object
+     */
+    public $excludeFields = [];
+
+    public $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields"];
 
     /**
      * ORM constructor.
@@ -261,19 +266,18 @@ class ORM implements  \JsonSerializable
             unset($tableData[$foreignField]);
         }
 
+
+        $keyInFieldList = false;
         foreach ($tableData as $fieldName => $fieldValue) {
+
             if (empty($fieldValue)) continue;
             if (in_array($fieldName, $this->virtualFields)) continue;
             $insertColumns[] = $this->getFieldName($fieldName);
-            if ($fieldName === $this->primaryKey) {
-                if (!empty($this->DBA)) {
-                    if (get_class($this->DBA) === "Tina4\DataFirebird") {
-                        $returningStatement = " returning ({$this->primaryKey})";
-                    } else if (get_class($this->DBA) === "Tina4\DataSQLite3") {
-                        $returningStatement = "";
-                    }
-                }
+
+            if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->primaryKey)) {
+                $keyInFieldList = true;
             }
+
             if (is_null($fieldValue)) $fieldValue = "null";
 
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -281,6 +285,14 @@ class ORM implements  \JsonSerializable
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
                 $insertValues[] = "'{$fieldValue}'";
+            }
+        }
+
+        if (!empty($this->DBA) && !$keyInFieldList) {
+            if (get_class($this->DBA) === "Tina4\DataFirebird") {
+                $returningStatement = " returning (".$this->getFieldName($this->primaryKey).")";
+            } else if (get_class($this->DBA) === "Tina4\DataSQLite3") {
+                $returningStatement = "";
             }
         }
 
@@ -372,9 +384,14 @@ class ORM implements  \JsonSerializable
      */
     function getObjectData()
     {
+        //See if we have exclude fields for parsing
+        if (!empty($this->excludeFields) && is_string($this->excludeFields)) {
+            $this->excludeFields = explode(",", $this->excludeFields);
+        }
+
         $tableData = [];
         foreach ($this as $fieldName => $value) {
-            if (!in_array($fieldName, $this->protectedFields)) {
+            if (!in_array($fieldName, $this->protectedFields) && !in_array($fieldName, $this->excludeFields)) {
                 $tableData[$fieldName] = $value;
             }
         }
@@ -505,7 +522,8 @@ class ORM implements  \JsonSerializable
         $getLastId = false;
         if ($exists->recordsTotal == 0 || $exists->error == "") {
             if (empty($exists->data)) { //insert
-                $getLastId = (empty($this->{$this->primaryKey}));
+                //echo "Primary Key {$this->{$this->primaryKey}}";
+                $getLastId = ("{$this->{$this->primaryKey}}" === "");
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
@@ -525,13 +543,16 @@ class ORM implements  \JsonSerializable
                     if (!empty($lastId)) {
                         $this->{$this->primaryKey} = $lastId;
                     } else
+
                         if (method_exists($error, "records") && !empty($error->records())) {
-                            $record = $error->record(0);
-                            $primaryFieldName = strtoupper($this->getObjectName($this->primaryKey));
-                            if (iiset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
+                            $record = $error->asObject()[0];
+
+                            $primaryFieldName = ($this->getObjectName($this->primaryKey));
+                            if (isset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
                                 $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
                             }
                         }
+
                 }
 
                 $tableData = $this->getTableData();
@@ -540,6 +561,7 @@ class ORM implements  \JsonSerializable
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
                 $fetchData = $this->DBA->fetch($sqlFetch, 1)->asArray();
+
 
                 $this->mapFromRecord($fetchData[0], true);
 
