@@ -20,7 +20,13 @@ class SQL implements \JsonSerializable
     public $noOfRecords;
     public $error;
     public $lastSQL;
+    public $excludeFields;
+    public $filterMethod; //Special variable pointing to an anonymous function which takes in a record for manipulation
 
+    /**
+     * SQL constructor.
+     * @param null $ORM If the ORM object is empty it will default to the global $DBA variable for a database connection
+     */
     public function __construct($ORM=null)
     {
         if (!empty($ORM)) {
@@ -33,6 +39,19 @@ class SQL implements \JsonSerializable
                 $this->DBA = $DBA;
             }
         }
+    }
+
+    /**
+     * Excludes fields from the result set
+     * @param $fields
+     */
+    function exclude($fields) {
+        if (is_array($fields)) {
+            $this->excludeFields[] = $fields;
+        } else {
+            $this->excludeFields = explode(",", $fields);
+        }
+        return $this;
     }
 
     function translateFields ($fields) {
@@ -210,7 +229,20 @@ class SQL implements \JsonSerializable
                 if (!empty($this->ORM)) {
                     foreach ($records as $id => $record) {
                         $this->ORM->mapFromRecord ($record, true);
-                        $records[$id] = clone $this->ORM;
+                        $newRecord = clone $this->ORM;
+
+                        if (!empty($this->excludeFields)) {
+                            foreach ($this->excludeFields as $eid => $excludeField) {
+                                if (property_exists($newRecord, $excludeField)) {
+                                    unset($newRecord->{$excludeField});
+                                }
+                            }
+                        }
+
+                        if (!empty($this->filterMethod)) {
+                            $this->filterMethod($newRecord);
+                        }
+                        $records[$id] = $newRecord;
                     }
                 }
             } else {
@@ -237,9 +269,6 @@ class SQL implements \JsonSerializable
      */
     public function asArray() {
         $records = $this->jsonSerialize();
-
-
-
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {

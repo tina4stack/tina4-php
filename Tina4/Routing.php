@@ -249,7 +249,7 @@ class Routing
          * @param null $contentType
          * @return false|string
          */
-        $response = new Response ();
+        $response = new \Tina4\Response ();
 
         $urlToParse = $this->cleanURL($urlToParse);
 
@@ -342,8 +342,13 @@ class Routing
                 }
 
                 //check for an empty result
-                if (empty($result)) {
+                if (empty($result) && !is_array($result) && !is_object($result)) {
                     $result = "";
+                } else {
+                    if (!is_string($result)) {
+                        $result = json_encode($result);
+                    }
+                    //After this point the JsonSerializable should take care of complex objects
                 }
 
                 $matched = true;
