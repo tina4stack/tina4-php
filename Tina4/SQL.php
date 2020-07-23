@@ -21,7 +21,7 @@ class SQL implements \JsonSerializable
     public $error;
     public $lastSQL;
     public $excludeFields;
-    public $filterMethod; //Special variable pointing to an anonymous function which takes in a record for manipulation
+    public $filterMethod = []; //Special variable pointing to an anonymous function which takes in a record for manipulation
 
     /**
      * SQL constructor.
@@ -53,6 +53,8 @@ class SQL implements \JsonSerializable
         }
         return $this;
     }
+
+
 
     function translateFields ($fields) {
         $result = [];
@@ -164,6 +166,17 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
+    /**
+     * A method which will filter the records
+     * @param $filterMethod
+     */
+    function filter($filterMethod) {
+        if (!empty($filterMethod)) {
+            $this->filterMethod[] = $filterMethod;
+        }
+        return $this;
+    }
+
     function generateSQLStatement() {
         //see if we have some foreign key references
         if (!empty($this->hasOne)) {
@@ -238,9 +251,10 @@ class SQL implements \JsonSerializable
                                 }
                             }
                         }
-
                         if (!empty($this->filterMethod)) {
-                            $this->filterMethod($newRecord);
+                            foreach ($this->filterMethod as $id => $filterMethod) {
+                                call_user_func($filterMethod, $newRecord);
+                            }
                         }
                         $records[$id] = $newRecord;
                     }

@@ -294,10 +294,11 @@ class DataBase
      * @param string $sql SQL Query to fetch wanted data
      * @param int $noOfRecords Number of records wanted to return
      * @param int $offSet Row offset for fetched data
+     * @param array $fieldMapping Array of mapped fields for mapping to different results
      * @return array DataResult Array of query result data
      * @example examples\exampleDataBaseFetch.php
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0)
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping=[])
     {
         $params = func_get_args();
         return call_user_func_array(array($this, "native_fetch"), $params);

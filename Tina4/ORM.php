@@ -52,7 +52,12 @@ class ORM implements  \JsonSerializable
      */
     public $excludeFields = [];
 
-    public $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields"];
+    /**
+     * @var null A method which filters a record when it is read from the database
+     */
+    public $filterMethod = [];
+
+    public $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "filterMethod"];
 
     /**
      * ORM constructor.
@@ -222,8 +227,6 @@ class ORM implements  \JsonSerializable
 
         foreach ($tableData as $fieldName => $fieldValue) {
             //@todo fix
-
-
             $property = new \ReflectionProperty($className, $this->getObjectName($fieldName, true));
 
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
@@ -497,7 +500,7 @@ class ORM implements  \JsonSerializable
      */
     function save($tableName = "", $fieldMapping = [])
     {
-        if (!empty($fieldMapping)) {
+        if (!empty($fieldMapping) && empty($this->fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
 
@@ -560,7 +563,7 @@ class ORM implements  \JsonSerializable
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
-                $fetchData = $this->DBA->fetch($sqlFetch, 1)->asArray();
+                $fetchData = $this->DBA->fetch($sqlFetch, 1, 0, $fieldMapping)->asArray();
 
 
                 $this->mapFromRecord($fetchData[0], true);
@@ -610,7 +613,7 @@ class ORM implements  \JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
-        if (!empty($fieldMapping)) {
+        if (!empty($fieldMapping) && empty($this->fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
 
@@ -624,8 +627,9 @@ class ORM implements  \JsonSerializable
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
 
-        $fetchData = $this->DBA->fetch($sqlStatement, 1)->asObject();
 
+
+        $fetchData = $this->DBA->fetch($sqlStatement, 1, 0,$fieldMapping)->asObject();
 
         if (!empty($fetchData)) {
             //Get the first record
