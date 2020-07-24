@@ -87,9 +87,10 @@ class DataMySQL extends DataBase
      * @param string $sql SQL Query
      * @param integer $noOfRecords Number of records requested
      * @param integer $offSet Record offset
+     * @param array $fieldMapping Mapped Fields
      * @return bool|DataResult
      */
-    public function native_fetch($sql = "", $noOfRecords = 10, $offSet = 0)
+    public function native_fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping=[])
     {
         $initialSQL = $sql;
 
@@ -114,7 +115,7 @@ class DataMySQL extends DataBase
                 while ($record = @\mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
-                        $records[] = (new DataRecord($record));
+                        $records[] = (new DataRecord($record, $fieldMapping));
                     }
                 }
 

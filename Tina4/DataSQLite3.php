@@ -65,7 +65,15 @@ class DataSQLite3 extends DataBase
         return (new \Tina4\DataError( $this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
     }
 
-    public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+    /**
+     * Native fetch for SQLite
+     * @param string $sql
+     * @param int $noOfRecords
+     * @param int $offSet
+     * @param array $fieldMapping
+     * @return bool|DataResult
+     */
+    public function native_fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
         $countRecords = 0;
         $countRecords = @$this->dbh->querySingle("select count(*) as count from (".$sql.")");
         
@@ -76,7 +84,7 @@ class DataSQLite3 extends DataBase
         if (!empty($recordCursor)) {
             while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
                 if (!empty($recordArray)) {
-                    $records[] = (new DataRecord($recordArray));
+                    $records[] = (new DataRecord($recordArray, $fieldMapping));
                 }
             }
         }

@@ -16,6 +16,7 @@ use JsonSerializable;
 class DataRecord implements JsonSerializable
 {
     private $original;
+    private $fieldMapping;
 
     /**
      * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
@@ -42,6 +43,14 @@ class DataRecord implements JsonSerializable
      */
     function getObjectName($name, $fieldMapping=[])
     {
+        if (!empty($this->fieldMapping) && empty($fieldMapping)) {
+            $fieldMapping = $this->fieldMapping;
+        }
+
+        print_r ($fieldMapping);
+
+        $fieldMapping = array_flip($fieldMapping);
+
         if (!empty($fieldMapping) && $fieldMapping[$name]) {
             return $fieldMapping[$name];
         } else {
@@ -77,9 +86,14 @@ class DataRecord implements JsonSerializable
     /**
      * DataRecord constructor Converts array to object
      * @param array $record Array of records
+     * @param array $fieldMapping Array of field mapping
      */
-    function __construct($record)
+    function __construct($record, $fieldMapping=[])
     {
+        if (!empty($fieldMapping)) {
+            $this->fieldMapping = $fieldMapping;
+        }
+
         if (!empty($record)) {
             $this->original = (object)$record;
             foreach ($record as $column => $value) {

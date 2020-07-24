@@ -43,7 +43,15 @@ class DataFirebird extends DataBase
         return (new DataError( $errorCode, $errorMessage));
     }
 
-    public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+    /**
+     * Firebird implementation of fetch
+     * @param string $sql
+     * @param int $noOfRecords
+     * @param int $offSet
+     * @param $fieldMapping
+     * @return bool|DataResult
+     */
+    public function native_fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
         $initialSQL = $sql;
         if (stripos($sql, "returning") === false) {
             //inject in the limits for the select - in Firebird select first x skip y
@@ -72,7 +80,7 @@ class DataFirebird extends DataBase
                     $record[$key] = $content;
                 }
             }
-            $records[] = (new DataRecord( $record ));
+            $records[] = (new DataRecord( $record, $fieldMapping ));
         }
 
 
