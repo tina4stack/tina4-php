@@ -48,7 +48,7 @@ class DataRecord implements JsonSerializable
         }
         $fieldMapping = array_flip($fieldMapping);
 
-        if (!empty($fieldMapping) && $fieldMapping[$name]) {
+        if (!empty($fieldMapping) && isset($fieldMapping[$name])) {
             return $fieldMapping[$name];
         } else {
             $fieldName = "";
