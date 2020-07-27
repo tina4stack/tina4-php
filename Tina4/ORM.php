@@ -57,7 +57,17 @@ class ORM implements  \JsonSerializable
      */
     public $filterMethod = [];
 
-    public $protectedFields = ["primaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "filterMethod"];
+    /**
+     * @var bool $softDelete Default is up to you to handle
+     */
+    public $softDelete=false;
+
+    /**
+     * @var bool $genPrimaryKey Default is off because the process to generate a new key is slower use select max and could end up with race conditions, use at own risk
+     */
+    public $genPrimaryKey=false;
+
+    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "filterMethod", "softDelete"];
 
     /**
      * ORM constructor.
@@ -196,7 +206,6 @@ class ORM implements  \JsonSerializable
         if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
             $fieldMap = array_change_key_case(array_flip($this->fieldMapping), CASE_LOWER);
 
-
             if (isset($fieldMap[$name])) {
                 return $fieldMap[$name];
             } else {
@@ -277,7 +286,7 @@ class ORM implements  \JsonSerializable
             if (in_array($fieldName, $this->virtualFields)) continue;
             $insertColumns[] = $this->getFieldName($fieldName);
 
-            if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->primaryKey)) {
+            if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
                 $keyInFieldList = true;
             }
 
@@ -289,6 +298,17 @@ class ORM implements  \JsonSerializable
                 $fieldValue = str_replace("'", "''", $fieldValue);
                 $insertValues[] = "'{$fieldValue}'";
             }
+        }
+
+        //Create a new primary key because we are not using a generator or auto increment
+        if (!$keyInFieldList && $this->genPrimaryKey) {
+            $sqlGen = "select max(".$this->getFieldName($this->primaryKey).") as new_id from {$tableName}";
+            $maxResult = $this->DBA->fetch ($sqlGen)->AsObject();
+            $insertColumns[] = $this->getFieldName($this->primaryKey);
+            $newId = $maxResult[0]->newId;
+            $newId++;
+            $this->{$this->primaryKey} = $newId;
+            $insertValues[] = $newId;
         }
 
         if (!empty($this->DBA) && !$keyInFieldList) {
@@ -805,32 +825,55 @@ class ORM implements  \JsonSerializable
             POST @ /path, /path/{id} - create & update
             DELETE @ /path/{id} - delete for single
  */
-\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $[], $filter, $request) {
+\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $[OBJECT_NAME], $filter, $request) {
     switch ($action) {
+       case "form":
+            //Return back a form to be submitted to the create
+             
+            $content = \Tina4\renderTemplate("forms/admin/[OBJECT_NAME].twig", []);
+
+            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => "Add [OBJECT]", "onclick" => "if ( $('#[OBJECT_NAME]').valid() ) { saveForm('[OBJECT_NAME]', '" . TINA4_BASE_URL . "[PATH]', 'message'); }", "content" => $content]);
+       break;
+       case "fetch":
+            //Return back a form to be submitted to the create
+             
+            $content = \Tina4\renderTemplate("forms/admin/[OBJECT_NAME].twig", []);
+
+            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => "Add [OBJECT]", "onclick" => "if ( $('#[OBJECT_NAME]').valid() ) { saveForm('[OBJECT_NAME]', '" . TINA4_BASE_URL . "[PATH]', 'message'); }", "content" => $content]);
+       break;
        case "read":
             //Return a dataset to be consumed by the grid with a filter
             $where = "";
             if (!empty($filter["where"])) {
-                $where = "and {$filter["where"]}";
+                $where = "{$filter["where"]}";
             }
         
-            return   $object->select ("*", $filter["length"], $filter["start"])
+            return   $[OBJECT_NAME]->select ("*", $filter["length"], $filter["start"])
                 ->where("{$where}")
                 ->orderBy($filter["orderBy"])
                 ->asResult();
         break;
+        case "beforeCreate":
+           //no return needed    
+        break;    
         case "create":
             //Manipulate the $object here
             return (object)["httpCode" => 200, "message" => "OK"];
         break;
-         case "afterCreate":
+        case "afterCreate":
            //no return needed    
-        break;    
+        break; 
+        case "beforeUpdate":
+           //no return needed    
+        break;      
         case "update":
             //Manipulate the $object here
             return (object)["httpCode" => 200, "message" => "OK"];
         break;
-        case "updateDelete":
+        case "afterUpdate":
+           //no return needed    
+        break;
+        case "beforeDelete":
            //no return needed    
         break;       
         case "delete":
@@ -846,6 +889,7 @@ class ORM implements  \JsonSerializable
 EOT;
         $template = str_replace("[PATH]", $path, $template);
         $template = str_replace("[OBJECT]", $className, $template);
+        $template = str_replace("[OBJECT_NAME]", $this->camelCase($className), $template);
 
 
         $content = file_get_contents($fileName);

@@ -46,12 +46,9 @@ class DataRecord implements JsonSerializable
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
         }
-
-        print_r ($fieldMapping);
-
         $fieldMapping = array_flip($fieldMapping);
 
-        if (!empty($fieldMapping) && $fieldMapping[$name]) {
+        if (!empty($fieldMapping) && isset($fieldMapping[$name])) {
             return $fieldMapping[$name];
         } else {
             $fieldName = "";
