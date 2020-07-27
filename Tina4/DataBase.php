@@ -188,6 +188,39 @@ class DataBase
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
     }
 
+    function native_commit($transactionId=null) {
+        \Tina4\DebugLog::message("Implement the public method native_commit for your database engine");
+        return false;
+    }
+
+    /**
+     * Rollback transactions
+     * @param null $transactionId
+     * @return bool
+     */
+    function native_rollback($transactionId=null) {
+        \Tina4\DebugLog::message("Implement the public method native_rollback for your database engine");
+        return false;
+    }
+
+    /**
+     * @param bool $onState Turn autocommit on or off
+     * @return bool
+     */
+    function native_autoCommit($onState=true) {
+        \Tina4\DebugLog::message("Implement the public method native_autoCommit for your database engine");
+        return false;
+    }
+
+    /**
+     * Start the transaction
+     * @return bool
+     */
+    function native_startTransaction() {
+        \Tina4\DebugLog::message("Implement the public method native_startTransaction for your database engine");
+        return false;
+    }
+
     /**
      * DataBase constructor.
      * @param $database - In the form [host/port:database]
@@ -306,13 +339,35 @@ class DataBase
 
     /**
      * Sets database commit from currently used database
+     * @param $transactionId Id of the transaction
      * @return mixed
      */
-    public function commit()
+    public function commit($transactionId=null)
     {
-        return $this->native_commit();
+        return $this->native_commit($transactionId);
     }
 
+    public function rollback($transactionId=null)
+    {
+        return $this->native_rollback($transactionId);
+    }
+
+    /**
+     * Set autocommit on or off
+     * @param bool $onState
+     * @return bool
+     */
+    public function autoCommit($onState=true) {
+        return $this->native_autoCommit($onState);
+    }
+
+    /**
+     * Starts a transaction
+     * @return integer
+     */
+    public function startTransaction() {
+        return $this->native_startTransaction();
+    }
 
     /**
      * Sets database errors from currently used database

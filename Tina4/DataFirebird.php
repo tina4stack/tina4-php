@@ -118,11 +118,54 @@ class DataFirebird extends DataBase
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
 
-    public function native_commit() {
-        //No commit for sqlite
-        ibase_commit($this->dbh);
+    /**
+     * Commit
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_commit($transactionId=null) {
+        if (!empty($transactionId)) {
+            return @ibase_commit($transactionId);
+        } else {
+            return @ibase_commit($this->dbh);
+        }
     }
 
+    /**
+     * Rollback
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_rollback($transactionId = null)
+    {
+        if (!empty($transactionId)) {
+            return @ibase_rollback($transactionId);
+        } else {
+            return @ibase_rollback($this->dbh);
+        }
+    }
+
+    /**
+     * Auto commit on for Firebird
+     * @param bool $onState
+     * @return bool|void
+     */
+    public function native_autoCommit($onState=false)
+    {
+        //Firebird has commit off by default
+        return true;
+    }
+
+    public function native_startTransaction()
+    {
+        return @ibase_trans(IBASE_COMMITTED, $this->dbh);
+    }
+
+    /**
+     * Check if table exists
+     * @param $tableName
+     * @return bool
+     */
     public function native_tableExists($tableName)
     {
         // table name must be in upper case

@@ -138,20 +138,30 @@ class Routing
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         $mimeType = mime_content_type($fileName);
 
-        if ($ext === "mp4") {
-            $mimeType = "video/mp4";
-        }
-            else
-        if ($ext === "svg") {
-            $mimeType = "image/svg+xml";
-        }
-            else
-        if ($ext === "css") {
-            $mimeType = "text/css";
-        }
-            else
-        if ($ext === "js") {
-            $mimeType = "application/javascript";
+        switch ($ext) {
+            case "png":
+            case "jpeg":
+                $mimeType = "image/{$ext}";
+                break;
+            case "svg":
+                $mimeType = "image/svg+xml";
+                break;
+            case "css":
+                $mimeType = "text/css";
+                break;
+            case "pdf":
+                $mimeType = "application/pdf";
+                break;
+            case "js":
+                $mimeType = "application/javascript";
+                break;
+            case "mp4":
+                $mimeType = "video/mp4";
+                break;
+            default:
+                $mimeType = "text/html";
+                break;
+
         }
 
         if (isset($_SERVER['HTTP_RANGE']))  { // do it for any device that supports byte-ranges not only iPhone

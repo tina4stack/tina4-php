@@ -31,6 +31,7 @@ class DataMySQL extends DataBase
             throw new \Exception("Mysql extension for PHP needs to be installed");
         }
 
+       
 
         $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
         $this->dbh->set_charset("utf8");
@@ -58,12 +59,54 @@ class DataMySQL extends DataBase
             $fetchData = $this->fetch($params[0]);
             return $fetchData;
         } else {
+            $preparedQuery = \mysqli_prepare($this->dbh, $params[0]);
 
-
-            $preparedQuery = @\mysqli_prepare($this->dbh, $params[0]);
             if (!empty($preparedQuery)) {
-                $params[0] = $preparedQuery;
-                @call_user_func_array("\mysqli_execute", $params);
+                unset($params[0]);
+                if (!empty($params)) {
+                    $paramTypes = "";
+                    foreach ($params as $pid => $param) {
+                        if (is_numeric($param)) {
+                            $paramTypes .= "d";
+                        }
+                            else
+                        if (is_integer($param))
+                        {
+                            $paramTypes .= "i";
+                        }
+                            else
+                        if (is_string($param))
+                        {
+                            $paramTypes .= "s";
+                        }
+                            else
+                        {
+                            $paramTypes .= "b";
+                        }
+                    }
+
+                    $params = array_merge([$preparedQuery,$paramTypes], $params);
+                    //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
+                    function refValues($arr){
+                        if (strnatcmp(phpversion(),'5.3') >= 0) //Reference is required for PHP 5.3+
+                        {
+                            $refs = array();
+                            foreach($arr as $key => $value)
+                                $refs[$key] = &$arr[$key];
+                            return $refs;
+                        }
+                        return $arr;
+                    }
+
+                    call_user_func_array("\mysqli_stmt_bind_param", refValues($params));
+                    \mysqli_stmt_execute($preparedQuery);
+                    \mysqli_stmt_affected_rows($preparedQuery);
+                    \mysqli_stmt_close($preparedQuery);
+                } else {
+                    $params[0] = $preparedQuery;
+                    @call_user_func_array("\mysqli_execute", $params);
+                }
+
             }
 
             return $this->error();
@@ -185,10 +228,30 @@ class DataMySQL extends DataBase
 
     /**
      * Commits
+     * @param null $transactionId
      */
-    public function native_commit()
+    public function native_commit($transactionId=null)
     {
-        //No commit for sqlite
-        \mysqli_commit($this->dbh);
+        return @\mysqli_commit($this->dbh);
+    }
+
+    public function native_rollback($transactionId = null)
+    {
+        return @\mysqli_rollback($this->dbh);
+    }
+
+    public function native_startTransaction()
+    {
+        return @\mysqli_begin_transaction($this->dbh);
+    }
+
+    /**
+     * Auto commit on for mysql
+     * @param bool $onState
+     * @return bool|void
+     */
+    public function native_autoCommit($onState = true)
+    {
+        $this->dbh->autocommit($onState);
     }
 }

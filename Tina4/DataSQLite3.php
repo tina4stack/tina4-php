@@ -121,8 +121,44 @@ class DataSQLite3 extends DataBase
         return $lastId->records(0)[0]->lastId;
     }
 
-    public function native_commit() {
+    /**
+     * Commit
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_commit($transactionId=null) {
         //No commit for sqlite
+        return true;
+    }
+
+    /**
+     * Rollback
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_rollback($transactionId=null) {
+        //No transactions for sqlite
+        return true;
+    }
+
+    /**
+     * Start transaction
+     * @return bool
+     */
+    public function native_startTransaction() {
+        //No transactions for sqlite
+        return true;
+    }
+
+    /**
+     * Auto commit on for SQlite
+     * @param bool $onState
+     * @return bool|void
+     */
+    public function native_autoCommit($onState=false)
+    {
+        //SQlite has no commits
+        return true;
     }
 
 }

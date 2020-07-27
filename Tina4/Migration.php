@@ -17,7 +17,7 @@ class Migration extends \Tina4\Data {
      * The migration path
      * @var String
      */
-    private $migrationPath = "migration";
+    private $migrationPath = "migrations";
     /**
      * The delimiter
      * @var String
@@ -27,7 +27,7 @@ class Migration extends \Tina4\Data {
      * The database connection
      * @var DataBase
      */
-    private $DBA = null;
+    public $DBA = null;
 
     /**
      * Constructor for Migrations
@@ -36,11 +36,15 @@ class Migration extends \Tina4\Data {
      * @param String $migrationPath relative path to your web folder
      * @param String $delim A delimiter to say how your SQL is run
      */
-    function __construct($migrationPath = "./migration", $delim = ";", $runMigrations=false) {
+    function __construct($migrationPath = "./migrations", $delim = ";") {
+        parent::__construct();
         $this->delim = $delim;
         $this->migrationPath = $migrationPath;
 
-        if ( !$this->DBA->tableExists("tina4_maggy")) {
+        //Turn off auto commits so we can roll back
+        $this->DBA->autoCommit(false);
+
+        if ( !$this->DBA->tableExists("tina4_migration")) {
             $this->DBA->exec("create table tina4_migration ("
                 . "migration_id varchar (14) not null,"
                 . "description varchar (1000) default '',"
@@ -48,11 +52,6 @@ class Migration extends \Tina4\Data {
                 . "passed integer default 0,"
                 . "primary key (migration_id))");
             $this->DBA->commit();
-        }
-
-        if ($runMigrations && file_exists ($this->migrationPath)) {
-            //Run the migration
-            $this->doMigration();
         }
     }
 
@@ -66,15 +65,19 @@ class Migration extends \Tina4\Data {
      * DO NOT USE COMMIT STATEMENTS IN YOUR MIGRATIONS , RATHER BREAK THINGS UP INTO SMALLER LOGICAL PIECES
      */
     function doMigration() {
+        $result = "";
+        if (!file_exists($this->migrationPath)) die("{$this->migrationPath} not found!");
         $dirHandle = opendir($this->migrationPath);
         $error = false;
         set_time_limit ( 0 );
 
-        echo "<pre>";
-        echo "STARTING Maggy ....\n";
+
+
+        $result .= "<pre>";
+        $result .=  "<span style=\"color:green;\">STARTING Migrations ....</span>\n";
 
         $error = false;
-        error_reporting(0);
+        error_reporting(E_ALL);
         $fileArray = [];
         while (false !== ($entry = readdir($dirHandle)) && !$error) {
             if ($entry != "." && $entry != ".." && stripos($entry, ".sql")) {
@@ -83,15 +86,16 @@ class Migration extends \Tina4\Data {
                 $fileArray[$fileParts[0]] = $entry;
             }
         }
-
-
         asort ($fileArray);
 
         foreach ( $fileArray as $fid => $entry ) {
             $fileParts = explode(".", $entry);
             $fileParts = explode(" ", $fileParts[0]);
             $sqlCheck = "select * from tina4_migration where migration_id = '{$fileParts[0]}'";
-            $record = $this->DBA->fetch($sqlCheck)->AsArray();
+            $record = $this->DBA->fetch($sqlCheck)->AsObject();
+            if (!empty($record)) {
+                $record = $record[0];
+            }
 
             $migrationId = $fileParts[0];
             unset($fileParts[0]);
@@ -101,24 +105,24 @@ class Migration extends \Tina4\Data {
 
             $runsql = false;
             if (empty($record)) {
-                echo "<span style=\"color:orange;\">RUNNING:\"{$migrationId} {$description}\" ...</span>\n";
+                $result .=  "<span style=\"color:orange;\">RUNNING:\"{$migrationId} {$description}\" ...</span>\n";
                 $transId = $this->DBA->startTransaction();
 
                 $sqlInsert = "insert into tina4_migration (migration_id, description, content, passed)
                                 values ('{$migrationId}', '{$description}', ?, 0)";
 
 
-                $this->DBA->exec($sqlInsert, $transId, substr($content, 0, 10000));
+                $this->DBA->exec($sqlInsert, substr($content, 0, 10000));
                 $this->DBA->commit($transId);
                 $runsql = true;
             } else {
 
-                if ($record->PASSED === "0" || $record->PASSED === "" || $record->PASSED == 0) {
-                    echo "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
+                if ($record->passed === "0" || $record->passed === "" || $record->passed == 0) {
+                    $result .=  "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
                     $runsql = true;
                 } else
-                    if ($record->PASSED === "1" || $record->PASSED == 1 ) {
-                        echo "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
+                    if ($record->passed === "1" || $record->passed == 1 ) {
+                        $result .=  "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
                         $runsql = false;
                     }
             }
@@ -138,52 +142,58 @@ class Migration extends \Tina4\Data {
                 $error = false;
                 foreach ($content as $cid => $sql) {
                     if (!empty(trim($sql))) {
-                        $success = $this->DBA->exec($sql, $transId);
-
-                        if (!$success) {
-                            echo "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:".$this->DBA->getError()."\n";
+                        $success = $this->DBA->exec($sql);
+                        if ($success->getError()["errorMessage"] !== "") {
+                            $result .=  "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:".$success->getError()["errorMessage"]."\n";
                             $error = true;
                             break;
                         } else {
-                            echo "<span style=\"color:green;\">PASSED:</span> ";
+                            $result .=  "<span style=\"color:green;\">PASSED:</span> ";
                         }
-                        echo $sql . " ...\n";
+                        $result .= $sql . " ...\n";
                     }
                 }
 
                 if ($error) {
-                    echo "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nAll Transactions Rolled Back ...\n";
-                    $this->DBA->rollbackTransaction($transId);
+                    $result .=  "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nAll Transactions Rolled Back ...\n";
+                    $this->DBA->rollback($transId);
                 } else {
 
                     $this->DBA->commit( $transId );
 
                     //we need to make sure the commit resulted in no errors
-                    if ($this->DBA->getError() !== "No Error") {
-                        echo "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:".$this->DBA->getError()."\n";
-                        $this->DBA->rollbackTransaction($transId);
+                    if ($this->DBA->error()->getError()["errorMessage"] !== "") {
+                        $result .=  "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:".$this->DBA->error()->getError()["errorMessage"]."\n";
+                        $this->DBA->rollback($transId);
                         $error = true;
                         break;
                     }
                     else {
                         $transId = $this->DBA->startTransaction();
-                        $this->DBA->exec ("update tina4_migration set passed = 1 where migration_id = '{$migrationId}'", $transId);
+                        $this->DBA->exec ("update tina4_migration set passed = 1 where migration_id = '{$migrationId}'");
                         $this->DBA->commit($transId);
-                        echo "<span style=\"color:green;\">PASSED: \"{$migrationId} {$description}\"</span>\n";
+                        $result .=  "<span style=\"color:green;\">PASSED: \"{$migrationId} {$description}\"</span>\n";
                     }
                 }
             }
         }
 
-        if (!$error) echo "FINISHED!";
+        if (!$error)  $result .=  "<span style=\"color:green;\">FINISHED! ....</span>\n";
         error_reporting(E_ALL);
-        echo "</pre>";
+        $result .=  "</pre>";
+
+        return $result;
     }
 
 
     function createMigration($description,$content) {
-        $fileName = $this->migrationPath."/".date("Ymdhis")." ".$description.".sql";
-        file_put_contents($fileName, $content );
+        if (!empty($description) && !empty($content)) {
+            $fileName = $this->migrationPath . "/" . date("Ymdhis") . " " . $description . ".sql";
+            file_put_contents($fileName, $content);
+            return "Migration created {$fileName}";
+        } else {
+            return "Failed to create a migration, needs description & content";
+        }
     }
 
 }
