@@ -222,6 +222,14 @@ class DataBase
     }
 
     /**
+     * Implement to fetch the metadata
+     */
+    function native_getDatabase() {
+        \Tina4\DebugLog::message("Implement the public method native_getDatabase for your database engine");
+        return false;
+    }
+
+    /**
      * DataBase constructor.
      * @param $database - In the form [host/port:database]
      * @param string $username Database user username
@@ -376,6 +384,15 @@ class DataBase
     public function error()
     {
         return $this->native_error();
+    }
+
+    /**
+     * Returns metadata of the database
+     *  $database => [tables][fields]
+     * @return mixed
+     */
+    public function getDatabase() {
+        return $this->native_getDatabase();
     }
 
 

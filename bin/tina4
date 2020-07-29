@@ -1,7 +1,15 @@
 #!/usr/bin/env php
 <?php
+global $rootPath;
+$rootPath = __DIR__;
+$binFile = str_replace("/tina4", "", $argv[0]);
+$rootPath = str_replace($binFile, "", $rootPath);
 global $settings;
 $settings = [];
+define("TINA4_SUPPRESS", 1);
+if (file_exists("index.php")){
+    include "index.php";
+}
 
 $menu = [];
 
@@ -19,6 +27,108 @@ function drawMenu () {
     echo "3. Create a new CRUD router to update a database table \n";
     echo "4. New basic website template \n";
     echo "Choose a menu option, type exit to quit:";
+}
+
+function processCreateORMfromDB($step, $input, $handle) {
+    global $settings;
+    global $rootPath;
+    if ($step == 1 && !empty($input)) {
+        $settings["tableIndex"] = $input;
+    }
+
+    if ($step == 2 && !empty($input)) {
+        if ($input == "n") {
+            $step = 0;
+        } else {
+            $step = 2;
+        }
+    }
+
+    switch ($step) {
+        case 1:
+            $step = 2;
+            global $DBA;
+            $database = $DBA->getDatabase();
+            $no = 0;
+            foreach ($database as $table => $fields) {
+                $no++;
+                if ($no == $settings["tableIndex"] || $settings["tableIndex"] == "all") {
+                    echo str_repeat("=", 40)."\n";
+                    echo "Table: {$table}\n";
+                    echo str_repeat("=", 40)."\n";
+                    foreach ($fields as $id => $field) {
+                        echo "{$field["field"]}\n";
+                    }
+                    $settings["tableData"][] = ["table" => $table, "fields" => $fields];
+                }
+            }
+
+            if ($settings["tableIndex"] == "all") {
+                $settings["database"]  = $database;
+                echo "You want to convert all the tables in the database ?\n";
+            }
+
+            echo "Is this correct ? (y/n):";
+            break;
+        case 2:
+            $step = 3;
+            $record = new \Tina4\DataRecord();
+            foreach ($settings["tableData"] as $id => $data) {
+                $className = ucwords($record->getObjectName($data["table"]));
+
+                $fields = [];
+                $primaryKey = "";
+                foreach ($data["fields"] as $id => $field) {
+                    if ($id == 0 || $field["pk"] == "PRI") {
+                        $primaryKey = $field["field"];
+                    }
+
+                    $fields[] = "\tpublic \$" . $record->getObjectName($field["field"]) . ";";
+                }
+
+                $definition = '<?php
+class [CLASS_NAME] extends \Tina4\Orm
+{
+    public $tableName="[TABLE_NAME]";
+    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
+    //public $softDelete=true; //uncomment for soft deletes in crud
+    
+[FIELDS]
+}';
+
+                $fileName = "{$rootPath}src/objects/" . $className . ".php";
+                echo "Creating object in {$fileName} {$className}\n";
+                if (!file_exists($fileName)) {
+                    $definition = str_replace("[PRIMARY_KEY]", $primaryKey, $definition);
+                    $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
+                    $definition = str_replace("[CLASS_NAME]", $className, $definition);
+                    $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
+                    file_put_contents($fileName, $definition);
+                }
+            }
+            echo "Done!\n";
+            break;
+        case 3:
+            $step = 0;
+            break;
+        default:
+            $step = 1;
+            global $DBA;
+            $database = $DBA->getDatabase();
+
+            $no = 0;
+            foreach ($database as $table => $fields) {
+                $no++;
+                echo "{$no}.) {$table}\n";
+            }
+            echo "Type 'all' to convert all the tables, no existing objects will be over written\n";
+            echo "Choose table:";
+
+            break;
+
+    }
+
+    return $step;
 }
 
 function processCreateConnection($step, $input, $handle) {
@@ -117,7 +227,6 @@ function processCreateConnection($step, $input, $handle) {
             $step = 0;
             if ($input == "y") {
                 print_r ($settings);
-
             } else {
                 echo "You will be returned back to the menu, hit Enter!";
             }
@@ -144,6 +253,12 @@ function handleMenu($handle) {
         switch ($menu) {
             case 1:
                 $step =  processCreateConnection($step, $input, $handle);
+                if ($step != 0) {
+                    $input = readLn($handle);
+                }
+                break;
+            case 2:
+                $step =  processCreateORMfromDB($step, $input, $handle);
                 if ($step != 0) {
                     $input = readLn($handle);
                 }

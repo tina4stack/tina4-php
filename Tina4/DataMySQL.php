@@ -148,7 +148,7 @@ class DataMySQL extends DataBase
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
-        $recordCursor = @\mysqli_query($this->dbh, $sql);
+        $recordCursor = \mysqli_query($this->dbh, $sql);
 
 
         $error = $this->error();
@@ -162,7 +162,7 @@ class DataMySQL extends DataBase
 
         if ($error->getError()["errorCode"] == 0) {
             if ($recordCursor->num_rows > 0) {
-                while ($record = @\mysqli_fetch_assoc($recordCursor)) {
+                while ($record = \mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
                         $records[] = (new DataRecord($record, $fieldMapping));
@@ -174,9 +174,9 @@ class DataMySQL extends DataBase
                     if (stripos($sql, "returning") === false) {
                         $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
-                        $recordCount = @\mysqli_query($this->dbh, $sqlCount);
+                        $recordCount = \mysqli_query($this->dbh, $sqlCount);
 
-                        $resultCount = @\mysqli_fetch_assoc($recordCount);
+                        $resultCount = \mysqli_fetch_assoc($recordCount);
 
                         if (empty($resultCount)) {
                             $resultCount["COUNT_RECORDS"] = 0;
@@ -190,6 +190,8 @@ class DataMySQL extends DataBase
             } else {
                 $resultCount["COUNT_RECORDS"] = 0;
             }
+
+
 
             //populate the fields
             $fid = 0;
@@ -260,5 +262,39 @@ class DataMySQL extends DataBase
     public function native_autoCommit($onState = true)
     {
         $this->dbh->autocommit($onState);
+    }
+
+    public function native_getDatabase()
+    {
+        $sqlTables = "SELECT table_name, table_type, engine
+                      FROM INFORMATION_SCHEMA.tables
+                     WHERE upper(table_schema) = upper('{$this->databaseName}')
+                     ORDER BY table_type ASC, table_name DESC";
+        $tables    = $this->fetch( $sqlTables, 10000,0 )->asObject();
+        $database = [];
+        foreach ( $tables as $id => $record ) {
+            $sqlInfo = "SELECT *
+                        FROM information_schema.COLUMNS   
+                        WHERE upper(table_schema) = upper('{$this->databaseName}')
+                                    AND TABLE_NAME = '{$record->tableName}'
+                         ORDER BY ORDINAL_POSITION";
+
+            $tableInfo = $this->fetch( $sqlInfo )->asObject();
+
+
+            //Go through the tables and extract their column information
+            foreach ( $tableInfo as $tid => $trecord ) {
+                $database[trim( $record->tableName )][$tid]["column"]      = $trecord->ordinalPosition;
+                $database[trim( $record->tableName )][$tid]["field"]       = trim( $trecord->columnName );
+                $database[trim( $record->tableName )][$tid]["description"] = trim( $trecord->extra );
+                $database[trim( $record->tableName )][$tid]["type"]        = trim( $trecord->dataType );
+                $database[trim( $record->tableName )][$tid]["length"]      = trim( $trecord->characterMaximumLength );
+                $database[trim( $record->tableName )][$tid]["precision"]   = $trecord->numericPrecision;
+                $database[trim( $record->tableName )][$tid]["default"]     = trim( $trecord->columnDefault );
+                $database[trim( $record->tableName )][$tid]["notnull"]     = trim( $trecord->isNullable );
+                $database[trim( $record->tableName )][$tid]["pk"]          = trim( $trecord->columnKey );
+            }
+        }
+        return $database;
     }
 }

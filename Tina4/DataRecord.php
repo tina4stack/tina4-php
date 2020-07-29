@@ -85,7 +85,7 @@ class DataRecord implements JsonSerializable
      * @param array $record Array of records
      * @param array $fieldMapping Array of field mapping
      */
-    function __construct($record, $fieldMapping=[])
+    function __construct($record=null, $fieldMapping=[])
     {
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;

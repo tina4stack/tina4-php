@@ -42,6 +42,12 @@ class Tina4Php
     private $webRoot;
 
     /**
+     * Suppress output
+     * @var bool
+     */
+    private $suppress = false;
+
+    /**
      * Runs git on the repository
      * @param $gitEnabled
      * @param $gitMessage
@@ -97,7 +103,7 @@ class Tina4Php
         //str_replace($documentRoot, "", $scriptName);
         $subFolder = dirname( str_replace($documentRoot, "", $scriptName));
 
-        if ($subFolder === "/" || $subFolder === "." || (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+        if ($subFolder === "/" || $subFolder === "." || isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
             $subFolder = null;
 
         }
@@ -120,6 +126,10 @@ class Tina4Php
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
+        }
+
+        if (defined("TINA4_SUPPRESS")) {
+            $this->suppress = true;
         }
 
         $this->config = $config;
@@ -380,7 +390,6 @@ class Tina4Php
         $twig->addGlobal('baseUrl', $subFolder);
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
-
     }
 
     function iterateDirectory($path, $relativePath="")
@@ -421,6 +430,9 @@ class Tina4Php
      */
     function __toString()
     {
+        //No processing, we simply want the include to work
+        if ($this->suppress) return "";
+
         $string = "";
 
         if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
@@ -439,6 +451,7 @@ class Tina4Php
         } else {
             $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(),  "/", "GET", $this->config);
         }
+
         return $string;
     }
 }
