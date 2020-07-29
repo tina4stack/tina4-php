@@ -54,7 +54,6 @@ class Crud
                     foreach ($splitValue as $singleValue) {
                         //Check that the values aren't whitespaces
                         if (!empty($singleValue)) {
-
                             $filter[] = " like '%" . strtoupper($singleValue) . "%'";
                         }
                     }
@@ -111,6 +110,7 @@ class Crud
         } else {
             $length = 10;
         }
+
 
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
     }

@@ -2,7 +2,7 @@
 namespace Tina4;
 /**
  * Description of Tina4 Migration
- * There are some "rules" that Maggy prescribes for the migrations and it would be in your best interests to follow them.
+ * There are some "rules" that Tina4 prescribes for the migrations and it would be in your best interests to follow them.
  * 1.) File formats are in the following format:
  *     YYYYMMDDHHMMSS Description of migration followed by dot sql
  *     Example: 01012015101525 The first migration.sql
@@ -122,6 +122,9 @@ class Migration extends \Tina4\Data {
                     $runsql = true;
                 } else
                     if ($record->passed === "1" || $record->passed == 1 ) {
+                        //Update the migration with the latest copy
+                        $sqlUpdate = "update tina4_migration set content =? where migration_id = '{$migrationId}'";
+                        $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
                         $result .=  "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
                         $runsql = false;
                     }

@@ -48,6 +48,22 @@ class DataMySQL extends DataBase
     }
 
     /**
+     * Helper to make ref values for exec injection
+     * @param $arr
+     * @return array
+     */
+    function refValues($arr){
+        if (strnatcmp(phpversion(),'5.3') >= 0) //Reference is required for PHP 5.3+
+        {
+            $refs = array();
+            foreach($arr as $key => $value)
+                $refs[$key] = &$arr[$key];
+            return $refs;
+        }
+        return $arr;
+    }
+
+    /**
      * Executes
      * @return array|bool
      */
@@ -87,18 +103,9 @@ class DataMySQL extends DataBase
 
                     $params = array_merge([$preparedQuery,$paramTypes], $params);
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
-                    function refValues($arr){
-                        if (strnatcmp(phpversion(),'5.3') >= 0) //Reference is required for PHP 5.3+
-                        {
-                            $refs = array();
-                            foreach($arr as $key => $value)
-                                $refs[$key] = &$arr[$key];
-                            return $refs;
-                        }
-                        return $arr;
-                    }
 
-                    call_user_func_array("\mysqli_stmt_bind_param", refValues($params));
+
+                    call_user_func_array("\mysqli_stmt_bind_param", $this->refValues($params));
                     \mysqli_stmt_execute($preparedQuery);
                     \mysqli_stmt_affected_rows($preparedQuery);
                     \mysqli_stmt_close($preparedQuery);
