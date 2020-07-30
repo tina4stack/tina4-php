@@ -48,7 +48,7 @@ function processCreateORMfromDB($step, $input, $handle) {
         case 1:
             $step = 2;
             global $DBA;
-            $database = $DBA->getDatabase();
+            $database = $settings["database"];
             $no = 0;
             foreach ($database as $table => $fields) {
                 $no++;
@@ -96,10 +96,14 @@ class [CLASS_NAME] extends \Tina4\Orm
 [FIELDS]
 }';
 
-                $fileName = "{$rootPath}src/objects/" . $className . ".php";
+                if (file_exists("Tina4Php.php")) {
+                    $fileName = "{$rootPath}/objects/" . $className . ".php";
+                } else {
+                    $fileName = "{$rootPath}src/objects/" . $className . ".php";
+                }
                 echo "Creating object in {$fileName} {$className}\n";
                 if (!file_exists($fileName)) {
-                    $definition = str_replace("[PRIMARY_KEY]", $primaryKey, $definition);
+                    $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);
                     $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
                     $definition = str_replace("[CLASS_NAME]", $className, $definition);
                     $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
@@ -114,7 +118,12 @@ class [CLASS_NAME] extends \Tina4\Orm
         default:
             $step = 1;
             global $DBA;
-            $database = $DBA->getDatabase();
+            if (empty($settings["database"])) {
+                $database = $DBA->getDatabase();
+                $settings["database"] = $database;
+            } else {
+                $database = $settings["database"];
+            }
 
             $no = 0;
             foreach ($database as $table => $fields) {
