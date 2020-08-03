@@ -853,36 +853,29 @@ class ORM implements  \JsonSerializable
                 ->orderBy($filter["orderBy"])
                 ->asResult();
         break;
-        case "beforeCreate":
-           //no return needed    
-        break;    
         case "create":
             //Manipulate the $object here
-            return (object)["httpCode" => 200, "message" => "OK"];
+            
         break;
         case "afterCreate":
-           //no return needed    
-        break; 
-        case "beforeUpdate":
-           //no return needed    
-        break;      
+           //return needed 
+           return (object)["httpCode" => 200, "message" => "OK"];  
+        break;    
         case "update":
             //Manipulate the $object here
-            return (object)["httpCode" => 200, "message" => "OK"];
+            
         break;
         case "afterUpdate":
-           //no return needed    
-        break;
-        case "beforeDelete":
-           //no return needed    
-        break;       
+           //return needed 
+           return (object)["httpCode" => 200, "message" => "OK"];
+        break;   
         case "delete":
             //Manipulate the $object here
-            return (object)["httpCode" => 200, "message" => "OK"];;
+           
         break;
         case "afterDelete":
-           //no return needed
-            
+            //return needed 
+            return (object)["httpCode" => 200, "message" => "OK"]; 
         break;
     }
 });
@@ -897,6 +890,11 @@ EOT;
         $content = str_replace ($callingCode, $template, $content);
 
         file_put_contents( $fileName, $content);
+        
+        //create some crud forms
+        
+        
+        
     }
 
 
