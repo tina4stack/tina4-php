@@ -474,7 +474,7 @@ class ORM implements  \JsonSerializable
         $primaryFieldFilter = [];
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
-                $primaryTableField = $this->getFieldName($primaryField);
+                $primaryTableField = $this->getFieldName($primaryField, $this->fieldMapping);
                 if (key_exists($primaryTableField, $tableData)) {
                     $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
 
@@ -896,6 +896,5 @@ EOT;
         
         
     }
-
 
 }
