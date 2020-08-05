@@ -53,6 +53,11 @@ class ORM implements  \JsonSerializable
     public $excludeFields = [];
 
     /**
+     * @var array An array of fields that are readonly and should not be updated or inserted
+     */
+    public $readOnlyFields = [];
+
+    /**
      * @var null A method which filters a record when it is read from the database
      */
     public $filterMethod = [];
@@ -67,7 +72,10 @@ class ORM implements  \JsonSerializable
      */
     public $genPrimaryKey=false;
 
-    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "filterMethod", "softDelete"];
+    /**
+     * @var string[] Fields that do not need to be returned in the resulting ORM object serialization
+     */
+    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
 
     /**
      * ORM constructor.
@@ -157,12 +165,13 @@ class ORM implements  \JsonSerializable
      * Gets the field mapping in the database eg -> lastName maps to last_name
      * @param string $name Name of field required
      * @param array $fieldMapping Array of field mapping
+     * @param bool $ignoreMapping Ignore the field mapping
      * @return string Required field name from database
      */
     function getFieldName($name, $fieldMapping = [],$ignoreMapping=false)
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
-            return $fieldMapping[$name];
+            return strtolower($fieldMapping[$name]);
         } else {
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
@@ -283,7 +292,7 @@ class ORM implements  \JsonSerializable
         foreach ($tableData as $fieldName => $fieldValue) {
 
             if (empty($fieldValue)) continue;
-            if (in_array($fieldName, $this->virtualFields)) continue;
+            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
@@ -341,7 +350,7 @@ class ORM implements  \JsonSerializable
 
 
         foreach ($tableData as $fieldName => $fieldValue) {
-            if (in_array($fieldName, $this->virtualFields)) continue;
+            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
 
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -472,13 +481,15 @@ class ORM implements  \JsonSerializable
     {
         $primaryFields = explode(",", $this->primaryKey);
         $primaryFieldFilter = [];
+
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
                 $primaryTableField = $this->getFieldName($primaryField, $this->fieldMapping);
                 if (key_exists($primaryTableField, $tableData)) {
                     $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
-
                 } else {
+                    error_log($primaryTableField.print_r ($this->fieldMapping, 1));
+
                     $primaryFieldFilter[] = "{$primaryTableField} is null";
                 }
             }
@@ -566,7 +577,6 @@ class ORM implements  \JsonSerializable
                     if (!empty($lastId)) {
                         $this->{$this->primaryKey} = $lastId;
                     } else
-
                         if (method_exists($error, "records") && !empty($error->records())) {
                             $record = $error->asObject()[0];
 
@@ -584,7 +594,6 @@ class ORM implements  \JsonSerializable
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
                 $fetchData = $this->DBA->fetch($sqlFetch, 1, 0, $fieldMapping)->asArray();
-
 
                 $this->mapFromRecord($fetchData[0], true);
 
@@ -646,8 +655,6 @@ class ORM implements  \JsonSerializable
             $primaryCheck = $this->getPrimaryCheck($tableData);
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
-
-
 
         $fetchData = $this->DBA->fetch($sqlStatement, 1, 0,$fieldMapping)->asObject();
 
