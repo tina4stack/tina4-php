@@ -23,7 +23,7 @@ class Routing
     private $params;
     private $content;
     private $root;
-    private $subFolder; //Sub folder when stack runs under a directory
+    private $subFolder=""; //Sub folder when stack runs under a directory
 
     /**
      * @var string Type of method
@@ -36,28 +36,147 @@ class Routing
      */
     private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
 
+    function rangeDownload($file) {
+
+        $fp = @fopen($file, 'rb');
+
+        $size   = filesize($file); // File size
+        $length = $size;           // Content length
+        $start  = 0;               // Start byte
+        $end    = $size - 1;       // End byte
+        // Now that we've gotten so far without errors we send the accept range header
+        /* At the moment we only support single ranges.
+         * Multiple ranges requires some more work to ensure it works correctly
+         * and comply with the spesifications: http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
+         *
+         * Multirange support annouces itself with:
+         * header('Accept-Ranges: bytes');
+         *
+         * Multirange content must be sent with multipart/byteranges mediatype,
+         * (mediatype = mimetype)
+         * as well as a boundry header to indicate the various chunks of data.
+         */
+        header("Accept-Ranges: 0-$length");
+        // header('Accept-Ranges: bytes');
+        // multipart/byteranges
+        // http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
+        if (isset($_SERVER['HTTP_RANGE'])) {
+
+            $c_start = $start;
+            $c_end   = $end;
+            // Extract the range string
+            list(, $range) = explode('=', $_SERVER['HTTP_RANGE'], 2);
+            // Make sure the client hasn't sent us a multibyte range
+            if (strpos($range, ',') !== false) {
+
+                // (?) Shoud this be issued here, or should the first
+                // range be used? Or should the header be ignored and
+                // we output the whole content?
+                header('HTTP/1.1 416 Requested Range Not Satisfiable');
+                header("Content-Range: bytes $start-$end/$size");
+                // (?) Echo some info to the client?
+                exit;
+            }
+            // If the range starts with an '-' we start from the beginning
+            // If not, we forward the file pointer
+            // And make sure to get the end byte if spesified
+            if ($range == '-') {
+                // The n-number of the last bytes is requested
+                $c_start = $size - substr($range, 1);
+            }
+            else {
+
+                $range  = explode('-', $range);
+                $c_start = $range[0];
+                $c_end   = (isset($range[1]) && is_numeric($range[1])) ? $range[1] : $size;
+            }
+            /* Check the range and make sure it's treated according to the specs.
+             * http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
+             */
+            // End bytes can not be larger than $end.
+            $c_end = ($c_end > $end) ? $end : $c_end;
+            // Validate the requested range and return an error if it's not correct.
+            if ($c_start > $c_end || $c_start > $size - 1 || $c_end >= $size) {
+
+                header('HTTP/1.1 416 Requested Range Not Satisfiable');
+                header("Content-Range: bytes $start-$end/$size");
+                // (?) Echo some info to the client?
+                exit;
+            }
+            $start  = $c_start;
+            $end    = $c_end;
+            $length = $end - $start + 1; // Calculate new content length
+            fseek($fp, $start);
+            header('HTTP/1.1 206 Partial Content');
+        }
+        // Notify the client the byte range we'll be outputting
+        header("Content-Range: bytes $start-$end/$size");
+        header("Content-Length: $length");
+
+        // Start buffered download
+        $buffer = 1024 * 8;
+        while(!feof($fp) && ($p = ftell($fp)) <= $end) {
+
+            if ($p + $buffer > $end) {
+
+                // In case we're only outputtin a chunk, make sure we don't
+                // read past the length
+                $buffer = $end - $p + 1;
+            }
+            set_time_limit(0); // Reset time limit for big files
+            echo fread($fp, $buffer);
+            flush(); // Free up memory. Otherwise large files will trigger PHP's memory limit.
+        }
+
+        fclose($fp);
+
+    }
+
     function returnStatic($fileName) {
+
         $fileName = preg_replace('#/+#','/',$fileName);
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         $mimeType = mime_content_type($fileName);
 
-        if ($ext === "svg") {
-            $mimeType = "image/svg+xml";
-        } else
-            if ($ext === "css") {
+        switch ($ext) {
+            case "png":
+            case "jpeg":
+                $mimeType = "image/{$ext}";
+                break;
+            case "svg":
+                $mimeType = "image/svg+xml";
+                break;
+            case "css":
                 $mimeType = "text/css";
-            }
-            else
-                if ($ext === "js") {
-                    $mimeType = "application/javascript";
-                }
-        header('Content-Type: ' . $mimeType);
-        header('Cache-Control: max-age=' . (60 * 60) . ', public');
-        header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+                break;
+            case "pdf":
+                $mimeType = "application/pdf";
+                break;
+            case "js":
+                $mimeType = "application/javascript";
+                break;
+            case "mp4":
+                $mimeType = "video/mp4";
+                break;
+            default:
+                $mimeType = "text/html";
+                break;
 
-        $fh = fopen($fileName, 'r');
-        fpassthru($fh);
-        fclose($fh);
+        }
+
+        if (isset($_SERVER['HTTP_RANGE']))  { // do it for any device that supports byte-ranges not only iPhone
+            $this->rangeDownload($fileName);
+            exit;
+        }
+        else {
+            header('Content-Type: ' . $mimeType);
+            header('Cache-Control: max-age=' . (60 * 60) . ', public');
+            header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
+            $fh = fopen($fileName, 'r');
+            fpassthru($fh);
+            fclose($fh);
+        }
         exit; //we are done here, file will be delivered
     }
 
@@ -78,23 +197,38 @@ class Routing
         $d->close();
     }
 
+
+
+
     /**
      * Routing constructor.
      * @param string $root Where the document root is located
+     * @param string $subFolder Subfolder where the project sits
      * @param string $urlToParse URL being parsed
      * @param string $method Type of method e.g. ANY, POST, DELETE, etc
+     * @param object $config Config containing configs from the initialization
      * @throws \ReflectionException
      */
-    function __construct($root = "", $urlToParse = "", $method = "")
+    function __construct($root = "", $subFolder="", $urlToParse = "", $method = "", $config=null)
     {
         if (!empty($root)) {
             $_SERVER["DOCUMENT_ROOT"] = $root;
         }
-        $this->root = $root;
-        $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
-        $this->subFolder = str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $root);
-        if (!defined("TINA4_BASE_URL")) define ("TINA4_BASE_URL", substr($this->subFolder,0, -1));
 
+        $this->root = $root;
+
+        if (!empty($config) && isset($config->auth)) {
+            $this->auth = $config->auth;
+        } else {
+            $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
+        }
+
+        if (!empty($subFolder)) {
+            $this->subFolder = $subFolder . "/";
+            if (!defined("TINA4_BASE_URL")) define("TINA4_BASE_URL", $subFolder);
+        } else {
+            if (!defined("TINA4_BASE_URL")) define("TINA4_BASE_URL", "");
+        }
 
         if (TINA4_DEBUG) {
             \Tina4\DebugLog::message("TINA4: URL to parse " . $urlToParse, TINA4_DEBUG_LEVEL);
@@ -125,9 +259,10 @@ class Routing
          * @param null $contentType
          * @return false|string
          */
-        $response = new Response ();
+        $response = new \Tina4\Response ();
 
         $urlToParse = $this->cleanURL($urlToParse);
+
 
         if (!empty($this->subFolder)) {
             $urlToParse = str_replace($this->subFolder, "/", $urlToParse);
@@ -217,8 +352,13 @@ class Routing
                 }
 
                 //check for an empty result
-                if (empty($result)) {
+                if (empty($result) && !is_array($result) && !is_object($result)) {
                     $result = "";
+                } else {
+                    if (!is_string($result)) {
+                        $result = json_encode($result);
+                    }
+                    //After this point the JsonSerializable should take care of complex objects
                 }
 
                 $matched = true;
@@ -331,7 +471,7 @@ class Routing
     static function recurseCopy($src, $dst)
     {
         $dir = opendir($src);
-        @mkdir($dst);
+        @mkdir($dst, $mode = 0755, true);
         while (false !== ($file = readdir($dir))) {
             if (($file != '.') && ($file != '..')) {
                 if (is_dir($src . '/' . $file)) {

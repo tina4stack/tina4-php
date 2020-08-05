@@ -11,6 +11,10 @@ namespace Tina4;
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
+if(!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
+if(!defined("DEBUG_SCREEN"))define("DEBUG_SCREEN", 9002);
+if(!defined("DEBUG_ALL"))define("DEBUG_ALL", 9003);
+if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
 /**
  * Class Tina4Php Main class used to set constants
  * @package Tina4
@@ -23,6 +27,11 @@ class Tina4Php
     private $DBA;
 
     /**
+     * @var resource PHP object / array
+     */
+    private $config;
+
+    /**
      * @var false|string The place where Tina4 exists
      */
     private $documentRoot;
@@ -31,6 +40,12 @@ class Tina4Php
      * @var false|string The place where the website exists
      */
     private $webRoot;
+
+    /**
+     * Suppress output
+     * @var bool
+     */
+    private $suppress = false;
 
     /**
      * Runs git on the repository
@@ -69,6 +84,33 @@ class Tina4Php
     }
 
     /**
+     * Logic to determine the subfolder - result must be /folder/
+     */
+    function getSubFolder() {
+
+        //Evaluate DOCUMENT_ROOT &&
+        $documentRoot = "";
+        if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
+            $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
+        } else
+            if (isset($_SERVER["DOCUMENT_ROOT"])) {
+                $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+            }
+        $scriptName = $_SERVER["SCRIPT_FILENAME"];
+
+
+
+        //str_replace($documentRoot, "", $scriptName);
+        $subFolder = dirname( str_replace($documentRoot, "", $scriptName));
+
+        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+            $subFolder = null;
+
+        }
+        return $subFolder;
+    }
+
+    /**
      * Tina4Php constructor.
      * @param null $config
      * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
@@ -85,6 +127,12 @@ class Tina4Php
         if (!empty($DBA)) {
             $this->DBA = $DBA;
         }
+
+        if (defined("TINA4_SUPPRESS")) {
+            $this->suppress = true;
+        }
+
+        $this->config = $config;
 
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
@@ -126,6 +174,8 @@ class Tina4Php
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
         }
 
+
+
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
         }
@@ -147,15 +197,15 @@ class Tina4Php
         }
 
         if (!defined("TINA4_TEMPLATE_LOCATIONS")) {
-            define("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
+            define("TINA4_TEMPLATE_LOCATIONS", ["src/templates", "src/assets", "src/templates/snippets"]);
         }
 
         if (!defined("TINA4_ROUTE_LOCATIONS")) {
-            define("TINA4_ROUTE_LOCATIONS", ["api", "routes"]);
+            define("TINA4_ROUTE_LOCATIONS", ["src/api", "src/routes"]);
         }
 
         if (!defined("TINA4_INCLUDE_LOCATIONS")) {
-            define("TINA4_INCLUDE_LOCATIONS", ["app", "objects"]);
+            define("TINA4_INCLUDE_LOCATIONS", ["src/app", "src/objects"]);
         }
 
         if (!defined("TINA4_ALLOW_ORIGINS")) {
@@ -175,17 +225,13 @@ class Tina4Php
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects"];
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin"];
 
         foreach ($foldersToCopy as $id => $folder) {
             //Check if folder is there
-            if (!file_exists($this->documentRoot . "/{$folder}") && !file_exists("Tina4Php.php")) {
-                \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/{$folder}");
+            if (!file_exists($this->documentRoot . "/src/{$folder}") && !file_exists("Tina4Php.php")) {
+                \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/src/{$folder}");
             }
-        }
-
-        if (!file_exists($this->documentRoot ."/assets/index.twig") && file_exists($this->documentRoot ."/assets/documentation.twig")) {
-            file_put_contents("assets/index.twig", file_get_contents("assets/documentation.twig"));
         }
 
         //Add the .htaccess file for redirecting things
@@ -240,7 +286,6 @@ class Tina4Php
         });
 
 
-
         //code routes
 
 
@@ -280,6 +325,24 @@ class Tina4Php
                     return $response ("Ok!", HTTP_OK, TEXT_HTML);
                 }
         }) ;
+
+        //migration routes
+        \Tina4\Route::get("/migrate", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+            $result = (new \Tina4\Migration())->doMigration();
+            return $response ($result, HTTP_OK, TEXT_HTML);
+        });
+
+        \Tina4\Route::get("/migrate/create", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+            $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
+            return $response ($html, HTTP_OK, TEXT_HTML);
+        });
+
+        \Tina4\Route::post("/migrate/create", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+            $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
+            return $response ($result, HTTP_OK, TEXT_HTML);
+        });
+
+
 
         /**
          * End of routes
@@ -322,9 +385,11 @@ class Tina4Php
         $twig = new \Twig\Environment($twigLoader, ["debug" => true]);
         $twig->addExtension(new \Twig\Extension\DebugExtension());
         $twig->addGlobal('Tina4', new \Tina4\Caller());
-        $twig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $this->documentRoot),0, -1) );
 
-
+        $subFolder = $this->getSubFolder();
+        $twig->addGlobal('baseUrl', $subFolder);
+        $twig->addGlobal('baseURL', $subFolder);
+        $twig->addGlobal('uniqid', uniqid());
     }
 
     function iterateDirectory($path, $relativePath="")
@@ -365,6 +430,9 @@ class Tina4Php
      */
     function __toString()
     {
+        //No processing, we simply want the include to work
+        if ($this->suppress) return "";
+
         $string = "";
 
         if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
@@ -375,14 +443,15 @@ class Tina4Php
                 //Delete the first instance of the alias in the REQUEST_URI
                 $newRequestURI = stringReplaceFirst($_SERVER["CONTEXT_PREFIX"], "", $_SERVER["REQUEST_URI"]);
 
-                $string .= new \Tina4\Routing($this->documentRoot, $newRequestURI, $_SERVER["REQUEST_METHOD"]);
+                $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), $newRequestURI, $_SERVER["REQUEST_METHOD"], $this->config);
             } else {
-                $string .= new \Tina4\Routing($this->documentRoot, $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"]);
+                $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), $_SERVER["REQUEST_URI"], $_SERVER["REQUEST_METHOD"], $this->config);
             }
 
         } else {
-            $string .= new \Tina4\Routing($this->documentRoot, "/", "GET");
+            $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(),  "/", "GET", $this->config);
         }
+
         return $string;
     }
 }

@@ -54,7 +54,6 @@ class Crud
                     foreach ($splitValue as $singleValue) {
                         //Check that the values aren't whitespaces
                         if (!empty($singleValue)) {
-
                             $filter[] = " like '%" . strtoupper($singleValue) . "%'";
                         }
                     }
@@ -112,6 +111,7 @@ class Crud
             $length = 10;
         }
 
+
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
     }
 
@@ -120,6 +120,7 @@ class Crud
      * @param $path
      * @param ORM $object
      * @param $function
+     * @params $secure
      * @param $secures
      */
     public static function route ($path, \Tina4\ORM $object, $function, $secure=false) {
@@ -127,8 +128,8 @@ class Crud
 
         //CREATE
         \Tina4\Route::get($path."/form",
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($function) {
-                $htmlResult = $function ("form", null, null, $request);
+            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
+                $htmlResult = $function ("form", $object, null, $request);
                 return $response ($htmlResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -140,9 +141,9 @@ class Crud
                 } else {
                     $object->create($request->params);
                 }
-                $jsonResult = $function ("create", $object, null, $request);
+                $function ("create", $object, null, $request);
                 $object->save();
-                $function ("afterCreate", $object, null, $request);
+                $jsonResult =  $function ("afterCreate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -161,9 +162,10 @@ class Crud
         \Tina4\Route::get($path."/{id}",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                $jsonResult = $function ("fetch", (new $object())->load("id = {$id}"), null, $request);
+
+                $jsonResult = $function ("fetch", (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'"), null, $request);
                 if (empty($jsonResult)) {
-                    $jsonResult = (new $object())->load("id = {$id}");
+                    $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
                 }
 
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
@@ -178,10 +180,10 @@ class Crud
                 } else {
                     $object->create($request->params);
                 }
-                $object->load ("id = {$id}");
-                $jsonResult = $function ("update", $object, null, $request);
+                $object->load ("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $function ("update", $object, null, $request);
                 $object->save();
-                $function ("afterUpdate", $object, null, $request);
+                $jsonResult = $function ("afterUpdate", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );
@@ -191,10 +193,12 @@ class Crud
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
                 $object->create($request->params);
-                $object->load ("id = {$id}");
-                $jsonResult = $function ("delete", $object, null, $request);
-                $object->delete();
-                $function ("afterDelete", $object, null, $request);
+                $object->load ("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $function ("delete", $object, null, $request);
+                if (!$object->softDelete) {
+                    $object->delete();
+                }
+                $jsonResult = $function ("afterDelete", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
             }
         );

@@ -62,10 +62,18 @@ class DataSQLite3 extends DataBase
     }
 
     public function native_error() {
-        return (new DataError( $this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
+        return (new \Tina4\DataError( $this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
     }
 
-    public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+    /**
+     * Native fetch for SQLite
+     * @param string $sql
+     * @param int $noOfRecords
+     * @param int $offSet
+     * @param array $fieldMapping
+     * @return bool|DataResult
+     */
+    public function native_fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
         $countRecords = 0;
         $countRecords = @$this->dbh->querySingle("select count(*) as count from (".$sql.")");
         
@@ -76,7 +84,7 @@ class DataSQLite3 extends DataBase
         if (!empty($recordCursor)) {
             while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
                 if (!empty($recordArray)) {
-                    $records[] = (new DataRecord($recordArray));
+                    $records[] = (new DataRecord($recordArray, $fieldMapping));
                 }
             }
         }
@@ -86,7 +94,6 @@ class DataSQLite3 extends DataBase
             $fid = 0;
             $fields = [];
             foreach ($records[0] as $field => $value) {
-
                 $fields[] = (new DataField($fid, $recordCursor->columnName($fid), $recordCursor->columnName($fid), $recordCursor->columnType($fid)));
                 $fid++;
             }
@@ -98,8 +105,6 @@ class DataSQLite3 extends DataBase
 
         $error = $this->error();
 
-
-        
         return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }
 
@@ -107,18 +112,81 @@ class DataSQLite3 extends DataBase
     {
         $exists = $this->fetch ("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
 
-
         return !empty($exists->records());
     }
 
     public function native_getLastId()
     {
         $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
-        return $lastId->record(0)->LAST_ID;
+        return $lastId->records(0)[0]->lastId;
     }
 
-    public function native_commit() {
+    /**
+     * Commit
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_commit($transactionId=null) {
         //No commit for sqlite
+        return true;
+    }
+
+    /**
+     * Rollback
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_rollback($transactionId=null) {
+        //No transactions for sqlite
+        return true;
+    }
+
+    /**
+     * Start transaction
+     * @return bool
+     */
+    public function native_startTransaction() {
+        //No transactions for sqlite
+        return true;
+    }
+
+    /**
+     * Auto commit on for SQlite
+     * @param bool $onState
+     * @return bool|void
+     */
+    public function native_autoCommit($onState=false)
+    {
+        //SQlite has no commits
+        return true;
+    }
+
+    function native_getDatabase()
+    {
+        $sqlTables = "select name as table_name
+                      from sqlite_master
+                     where type='table'
+                  order by name";
+        $tables    = $this->fetch( $sqlTables, 1000, 0 )->asObject();
+        $database = [];
+        foreach ( $tables as $id => $record ) {
+            $sqlInfo   = "pragma table_info($record->tableName);";
+            $tableInfo = $this->fetch( $sqlInfo, 1000, 0 )->AsObject();
+
+            //Go through the tables and extract their column information
+            foreach ( $tableInfo as $tid => $trecord ) {
+                $database[trim( $record->tableName )][$tid]["column"]      = $trecord->cid;
+                $database[trim( $record->tableName )][$tid]["field"]       = trim( $trecord->name );
+                $database[trim( $record->tableName )][$tid]["description"] = "";
+                $database[trim( $record->tableName )][$tid]["type"]        = trim( $trecord->type );
+                $database[trim( $record->tableName )][$tid]["length"]      = "";
+                $database[trim( $record->tableName )][$tid]["precision"]   = "";
+                $database[trim( $record->tableName )][$tid]["default"]     = trim( $trecord->dfltValue );
+                $database[trim( $record->tableName )][$tid]["notnull"]     = trim( $trecord->notnull );
+                $database[trim( $record->tableName )][$tid]["pk"]          = trim( $trecord->pk );
+            }
+        }
+        return $database;
     }
 
 }

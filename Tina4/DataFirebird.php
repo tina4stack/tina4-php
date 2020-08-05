@@ -25,8 +25,7 @@ class DataFirebird extends DataBase
         $params = func_get_args();
 
         if (stripos($params[0], "returning") !== false) {
-            $fetchData = $this->fetch($params[0]);
-            return $fetchData;
+            return $this->fetch($params[0]);
         } else {
             $preparedQuery = @ibase_prepare($params[0]);
             if (!empty($preparedQuery)) {
@@ -44,7 +43,15 @@ class DataFirebird extends DataBase
         return (new DataError( $errorCode, $errorMessage));
     }
 
-    public function native_fetch($sql="", $noOfRecords=10, $offSet=0) {
+    /**
+     * Firebird implementation of fetch
+     * @param string $sql
+     * @param int $noOfRecords
+     * @param int $offSet
+     * @param $fieldMapping
+     * @return bool|DataResult
+     */
+    public function native_fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
         $initialSQL = $sql;
         if (stripos($sql, "returning") === false) {
             //inject in the limits for the select - in Firebird select first x skip y
@@ -73,7 +80,7 @@ class DataFirebird extends DataBase
                     $record[$key] = $content;
                 }
             }
-            $records[] = (new DataRecord( $record ));
+            $records[] = (new DataRecord( $record, $fieldMapping ));
         }
 
 
@@ -111,11 +118,54 @@ class DataFirebird extends DataBase
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
 
-    public function native_commit() {
-        //No commit for sqlite
-        ibase_commit($this->dbh);
+    /**
+     * Commit
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_commit($transactionId=null) {
+        if (!empty($transactionId)) {
+            return @ibase_commit($transactionId);
+        } else {
+            return @ibase_commit($this->dbh);
+        }
     }
 
+    /**
+     * Rollback
+     * @param null $transactionId
+     * @return bool
+     */
+    public function native_rollback($transactionId = null)
+    {
+        if (!empty($transactionId)) {
+            return @ibase_rollback($transactionId);
+        } else {
+            return @ibase_rollback($this->dbh);
+        }
+    }
+
+    /**
+     * Auto commit on for Firebird
+     * @param bool $onState
+     * @return bool|void
+     */
+    public function native_autoCommit($onState=false)
+    {
+        //Firebird has commit off by default
+        return true;
+    }
+
+    public function native_startTransaction()
+    {
+        return @ibase_trans(IBASE_COMMITTED, $this->dbh);
+    }
+
+    /**
+     * Check if table exists
+     * @param $tableName
+     * @return bool
+     */
     public function native_tableExists($tableName)
     {
         // table name must be in upper case
@@ -123,6 +173,114 @@ class DataFirebird extends DataBase
         $exists = $this->fetch ("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
 
         return !empty($exists->records());
+    }
+
+    public function native_getLastId()
+    {
+        return false;
+    }
+
+    public function native_getDatabase()
+    {
+        $sqlTables = 'select distinct rdb$relation_name as table_name
+                      from rdb$relation_fields
+                     where rdb$system_flag=0
+                       and rdb$view_context is null';
+
+        $tables = $this->fetch($sqlTables, 1000, 0)->AsObject();
+        $database = [];
+        foreach ($tables as $id => $record) {
+            $sqlInfo = 'SELECT r.RDB$FIELD_NAME AS field_name,
+                           r.RDB$DESCRIPTION AS field_description,
+                           r.RDB$DEFAULT_VALUE AS field_default_value,
+                           r.RDB$NULL_FLAG AS field_not_null_constraint,
+                           f.RDB$FIELD_LENGTH AS field_length,
+                           f.RDB$FIELD_PRECISION AS field_precision,
+                           f.RDB$FIELD_SCALE AS field_scale,
+                           CASE f.RDB$FIELD_TYPE
+                              WHEN 261 THEN \'BLOB\'
+                              WHEN 14 THEN \'CHAR\'
+                              WHEN 40 THEN \'CSTRING\'
+                              WHEN 11 THEN \'D_FLOAT\'
+                              WHEN 27 THEN \'DOUBLE\'
+                              WHEN 10 THEN \'FLOAT\'
+                              WHEN 16 THEN \'INT64\'
+                              WHEN 8 THEN \'INTEGER\'
+                              WHEN 9 THEN \'QUAD\'
+                              WHEN 7 THEN \'SMALLINT\'
+                              WHEN 12 THEN \'DATE\'
+                              WHEN 13 THEN \'TIME\'
+                              WHEN 35 THEN \'TIMESTAMP\'
+                              WHEN 37 THEN \'VARCHAR\'
+                              ELSE \'UNKNOWN\'
+                            END AS field_type,
+                            f.RDB$FIELD_SUB_TYPE AS field_subtype,
+                            coll.RDB$COLLATION_NAME AS field_collation,
+                            cset.RDB$CHARACTER_SET_NAME AS field_charset
+                       FROM RDB$RELATION_FIELDS r
+                       LEFT JOIN RDB$FIELDS f ON r.RDB$FIELD_SOURCE = f.RDB$FIELD_NAME
+                       LEFT JOIN RDB$COLLATIONS coll ON r.RDB$COLLATION_ID = coll.RDB$COLLATION_ID
+                        AND f.RDB$CHARACTER_SET_ID = coll.RDB$CHARACTER_SET_ID
+                       LEFT JOIN RDB$CHARACTER_SETS cset ON f.RDB$CHARACTER_SET_ID = cset.RDB$CHARACTER_SET_ID
+                      WHERE r.RDB$RELATION_NAME = \'' . $record->tableName . '\'
+                    ORDER BY r.RDB$FIELD_POSITION';
+            $tableInfo = $this->fetch($sqlInfo, 1000, 0)->AsObject();
+
+
+            $primaryKeys = $this->fetch('SELECT rc.RDB$CONSTRAINT_NAME,
+                                                      s.RDB$FIELD_NAME AS field_name,
+                                                      rc.RDB$CONSTRAINT_TYPE AS constraint_type,
+                                                      i.RDB$DESCRIPTION AS description,
+                                                      rc.RDB$DEFERRABLE AS is_deferrable,
+                                                      rc.RDB$INITIALLY_DEFERRED AS is_deferred,
+                                                      refc.RDB$UPDATE_RULE AS on_update,
+                                                      refc.RDB$DELETE_RULE AS on_delete,
+                                                      refc.RDB$MATCH_OPTION AS match_type,
+                                                      i2.RDB$RELATION_NAME AS references_table,
+                                                      s2.RDB$FIELD_NAME AS references_field,
+                                                      (s.RDB$FIELD_POSITION + 1) AS field_position
+                                                 FROM RDB$INDEX_SEGMENTS s
+                                            LEFT JOIN RDB$INDICES i ON i.RDB$INDEX_NAME = s.RDB$INDEX_NAME
+                                            LEFT JOIN RDB$RELATION_CONSTRAINTS rc ON rc.RDB$INDEX_NAME = s.RDB$INDEX_NAME
+                                            LEFT JOIN RDB$REF_CONSTRAINTS refc ON rc.RDB$CONSTRAINT_NAME = refc.RDB$CONSTRAINT_NAME
+                                            LEFT JOIN RDB$RELATION_CONSTRAINTS rc2 ON rc2.RDB$CONSTRAINT_NAME = refc.RDB$CONST_NAME_UQ
+                                            LEFT JOIN RDB$INDICES i2 ON i2.RDB$INDEX_NAME = rc2.RDB$INDEX_NAME
+                                            LEFT JOIN RDB$INDEX_SEGMENTS s2 ON i2.RDB$INDEX_NAME = s2.RDB$INDEX_NAME
+                                                WHERE i.RDB$RELATION_NAME=\'' . $record->tableName . '\'
+                                                  AND rc.RDB$CONSTRAINT_TYPE IS NOT NULL
+                                             ORDER BY s.RDB$FIELD_POSITION')->AsObject();
+
+
+
+            $PK = [];
+            foreach ($primaryKeys as $pkid => $primaryKey) {
+                $PK[$primaryKey->fieldName]["IS_PRIMARY_KEY"] = ($primaryKey->constraintType === "PRIMARY KEY");
+                $PK[$primaryKey->fieldName]["IS_FOREIGN_KEY"] = ($primaryKey->constraintType === "FOREIGN KEY");
+                $PK[$primaryKey->fieldName]["CONSTRAINT_TYPE"] = $primaryKey->constraintType;
+            }
+
+
+            //Go through the tables and extract their column information
+            foreach ($tableInfo as $tid => $trecord) {
+                $database[trim($record->tableName)][$tid]["column"] = $tid;
+                $database[trim($record->tableName)][$tid]["field"] = trim($trecord->fieldName);
+                $database[trim($record->tableName)][$tid]["description"] = trim($trecord->fieldDescription);
+                $database[trim($record->tableName)][$tid]["type"] = trim($trecord->fieldType);
+                $database[trim($record->tableName)][$tid]["length"] = trim($trecord->fieldLength);
+                $database[trim($record->tableName)][$tid]["precision"] = trim($trecord->fieldPrecision);
+                $database[trim($record->tableName)][$tid]["default"] = trim($trecord->fieldDefaultValue);
+                if (!empty($trecord->fieldNotNullContraint)) {
+                    $database[trim($record->tableName)][$tid]["notnull"] = trim($trecord->fieldNotNullContraint);
+                }
+                if (!empty($PK[$trecord->fieldName])) {
+                    $database[trim($record->tableName)][$tid]["pk"] = trim($PK[$trecord->fieldName]["CONSTRAINT_TYPE"]);
+                } else {
+                    $database[trim($record->tableName)][$tid]["pk"] = "";
+                }
+            }
+        }
+
+        return $database;
     }
 
 }

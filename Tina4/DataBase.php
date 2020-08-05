@@ -188,6 +188,47 @@ class DataBase
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
     }
 
+    function native_commit($transactionId=null) {
+        \Tina4\DebugLog::message("Implement the public method native_commit for your database engine");
+        return false;
+    }
+
+    /**
+     * Rollback transactions
+     * @param null $transactionId
+     * @return bool
+     */
+    function native_rollback($transactionId=null) {
+        \Tina4\DebugLog::message("Implement the public method native_rollback for your database engine");
+        return false;
+    }
+
+    /**
+     * @param bool $onState Turn autocommit on or off
+     * @return bool
+     */
+    function native_autoCommit($onState=true) {
+        \Tina4\DebugLog::message("Implement the public method native_autoCommit for your database engine");
+        return false;
+    }
+
+    /**
+     * Start the transaction
+     * @return bool
+     */
+    function native_startTransaction() {
+        \Tina4\DebugLog::message("Implement the public method native_startTransaction for your database engine");
+        return false;
+    }
+
+    /**
+     * Implement to fetch the metadata
+     */
+    function native_getDatabase() {
+        \Tina4\DebugLog::message("Implement the public method native_getDatabase for your database engine");
+        return false;
+    }
+
     /**
      * DataBase constructor.
      * @param $database - In the form [host/port:database]
@@ -294,10 +335,11 @@ class DataBase
      * @param string $sql SQL Query to fetch wanted data
      * @param int $noOfRecords Number of records wanted to return
      * @param int $offSet Row offset for fetched data
+     * @param array $fieldMapping Array of mapped fields for mapping to different results
      * @return array DataResult Array of query result data
      * @example examples\exampleDataBaseFetch.php
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0)
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping=[])
     {
         $params = func_get_args();
         return call_user_func_array(array($this, "native_fetch"), $params);
@@ -305,13 +347,35 @@ class DataBase
 
     /**
      * Sets database commit from currently used database
+     * @param $transactionId Id of the transaction
      * @return mixed
      */
-    public function commit()
+    public function commit($transactionId=null)
     {
-        return $this->native_commit();
+        return $this->native_commit($transactionId);
     }
 
+    public function rollback($transactionId=null)
+    {
+        return $this->native_rollback($transactionId);
+    }
+
+    /**
+     * Set autocommit on or off
+     * @param bool $onState
+     * @return bool
+     */
+    public function autoCommit($onState=true) {
+        return $this->native_autoCommit($onState);
+    }
+
+    /**
+     * Starts a transaction
+     * @return integer
+     */
+    public function startTransaction() {
+        return $this->native_startTransaction();
+    }
 
     /**
      * Sets database errors from currently used database
@@ -320,6 +384,15 @@ class DataBase
     public function error()
     {
         return $this->native_error();
+    }
+
+    /**
+     * Returns metadata of the database
+     *  $database => [tables][fields]
+     * @return mixed
+     */
+    public function getDatabase() {
+        return $this->native_getDatabase();
     }
 
 

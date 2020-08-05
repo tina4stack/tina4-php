@@ -4,6 +4,7 @@ namespace Tina4;
 
 class SQL implements \JsonSerializable
 {
+    public $DBA;
     public $ORM;
     public $fields;
     public $tableName;
@@ -19,16 +20,50 @@ class SQL implements \JsonSerializable
     public $noOfRecords;
     public $error;
     public $lastSQL;
+    public $excludeFields;
+    public $filterMethod = []; //Special variable pointing to an anonymous function which takes in a record for manipulation
 
-    public function __construct($ORM)
+    /**
+     * SQL constructor.
+     * @param null $ORM If the ORM object is empty it will default to the global $DBA variable for a database connection
+     */
+    public function __construct($ORM=null)
     {
-        $this->ORM = clone $ORM;
+        if (!empty($ORM)) {
+            $this->ORM = clone $ORM;
+            $this->DBA = $this->ORM->DBA;
+        } else {
+            //See if we can db connection from global $DBA
+            global $DBA;
+            if (!empty($DBA)) {
+                $this->DBA = $DBA;
+            }
+        }
     }
+
+    /**
+     * Excludes fields from the result set
+     * @param $fields
+     */
+    function exclude($fields) {
+        if (is_array($fields)) {
+            $this->excludeFields[] = $fields;
+        } else {
+            $this->excludeFields = explode(",", $fields);
+        }
+        return $this;
+    }
+
+
 
     function translateFields ($fields) {
         $result = [];
         foreach ($fields as $id => $field) {
-            $result[] = $this->ORM->getFieldName ($field);
+            if (!empty($ORM)) {
+                $result[] = $this->ORM->getFieldName($field);
+            } else {
+                $result[] = $field;
+            }
         }
         return $result;
     }
@@ -54,6 +89,7 @@ class SQL implements \JsonSerializable
     }
 
     function where ($filter) {
+        //@todo parse filter
         if (trim($filter) !== "") {
             $this->nextAnd = "where";
             $this->filter[] = ["where", $filter];
@@ -62,6 +98,7 @@ class SQL implements \JsonSerializable
     }
 
     function and ($filter) {
+        //@todo parse filter
         if (trim($filter) !== "") {
             if ($this->nextAnd == "join") {
                 $this->join[] = ["and", $filter];
@@ -75,6 +112,7 @@ class SQL implements \JsonSerializable
     }
 
     function or ($filter) {
+        //@todo parse filter
         $this->filter[] = ["or", $filter];
         return $this;
     }
@@ -92,6 +130,7 @@ class SQL implements \JsonSerializable
     }
 
     function on ($filter) {
+        //@todo parse filter
         $this->join[] = ["on", $filter];
         return $this;
     }
@@ -118,13 +157,23 @@ class SQL implements \JsonSerializable
             if (is_array($fields)) {
                 $this->orderBy = $fields;
             } else {
-
                 $this->orderBy = explode(",", $fields);
             }
             $this->orderBy = $this->translateFields($this->orderBy);
         }
 
 
+        return $this;
+    }
+
+    /**
+     * A method which will filter the records
+     * @param $filterMethod
+     */
+    function filter($filterMethod) {
+        if (!empty($filterMethod)) {
+            $this->filterMethod[] = $filterMethod;
+        }
         return $this;
     }
 
@@ -178,21 +227,37 @@ class SQL implements \JsonSerializable
     public function jsonSerialize() {
         //run the query
         $sqlStatement = $this->generateSQLStatement();
-        if (!empty($this->ORM) && !empty($this->ORM->DBA)) {
-            $result = $this->ORM->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
+        if (!empty($this->DBA)) {
+            $result = $this->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
-            //transform the records into an array of the ORM
+            //transform the records into an array of the ORM if ORM exists
+
 
             $this->lastSQL = $sqlStatement;
-            $this->error = $this->ORM->DBA->error();
-
+            $this->error = $this->DBA->error();
 
             if (!empty($result->records()) && $this->noOfRecords > 0) {
-                foreach ($result->records() as $id => $data) {
-                    $record = clone $this->ORM;
-                    $record->create($data, true);
-                    $records[] = $record;
+                $records = $result->AsObject();
+                if (!empty($this->ORM)) {
+                    foreach ($records as $id => $record) {
+                        $this->ORM->mapFromRecord ($record, true);
+                        $newRecord = clone $this->ORM;
+
+                        if (!empty($this->excludeFields)) {
+                            foreach ($this->excludeFields as $eid => $excludeField) {
+                                if (property_exists($newRecord, $excludeField)) {
+                                    unset($newRecord->{$excludeField});
+                                }
+                            }
+                        }
+                        if (!empty($this->filterMethod)) {
+                            foreach ($this->filterMethod as $id => $filterMethod) {
+                                call_user_func($filterMethod, $newRecord);
+                            }
+                        }
+                        $records[$id] = $newRecord;
+                    }
                 }
             } else {
                 $this->noOfRecords = 0;
@@ -218,9 +283,10 @@ class SQL implements \JsonSerializable
      */
     public function asArray() {
         $records = $this->jsonSerialize();
+        if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {
-            $result[] = $record->getTableData();
+            $result[] = (array)$record;
         }
         return $result;
     }

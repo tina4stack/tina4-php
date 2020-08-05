@@ -4,86 +4,101 @@
     <title>Tina4- This Is Not Another Framework</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#317EFB" />
-    <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sketchy/bootstrap.min.css" rel="stylesheet" integrity="sha384-2kOE+STGAkgemIkUbGtoZ8dJLqfvJ/xzRnimSkQN7viOfwRvWseF7lqcuNXmjwrL" crossorigin="anonymous">
+    <link href="https://bootswatch.com/4/cerulean/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
     <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.1/styles/atom-one-dark.min.css">
     <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.1/highlight.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js" integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm" crossorigin="anonymous"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Tina4 - This Is Not Another 4ramework</h1>
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
-            <a class="navbar-brand" href="#">Tina4</a>
-            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarColor03" aria-controls="navbarColor03" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+<div class="container">
+    <h1>Tina4 - This Is Not Another 4ramework</h1>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Tina4</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarColor03" aria-controls="navbarColor03" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-            <div class="collapse navbar-collapse" id="navbarColor03">
-                <ul class="navbar-nav mr-auto">
-                    <li class="nav-item active">
-                        <a class="nav-link" href="#installation">Installation <span class="sr-only">(current)</span></a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#routing">Routing</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#templating">Templating</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#orm">ORM</a>
-                    </li>
-                </ul>
-            </div>
-        </nav>
+        <div class="collapse navbar-collapse" id="navbarColor03">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item active">
+                    <a class="nav-link" href="#installation">Installation <span class="sr-only">(current)</span></a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#routing">Routing</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#databases">Databases</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#templating">Templating</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#orm">ORM</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
 
-        <br>
+    <br>
 
-        <div class="card" id="installation">
-            <div class="card-header">Installation</div>
-            <div class="card-body">
-                <h4>Installation</h4>
-                <p>Install composer and run the following command from your project folder</p>
-                <pre><code class="bash">
+    <div class="card" id="installation">
+        <div class="card-header">Installation</div>
+        <div class="card-body">
+            <h4>Installation</h4>
+            <p>Install composer and run the following command from your project folder</p>
+            <pre><code class="bash">
 composer require andrevanzuydam\tina4php
                 </code></pre>
-                    <h4>index.php</h4><p>Create an index.php file in your project folder after composer has installed the library, add the following code</p>
-                <pre><code class="php">&lt;?php
+            <h4>index.php</h4><p>Create an index.php file in your project folder after composer has installed the library, add the following code</p>
+            <pre><code class="php">&lt;?php
 require "vendor/autoload.php";
 echo new \Tina4\Tina4Php();</code></pre>
 
-                <h4>Run your application</h4>
-                <pre><code class="bash">
+            <h4>Run your application</h4>
+            <pre><code class="bash">
 php -S localhost:7124 index.php
                 </code></pre>
 
-                <h4>Run with debugging (assumes you have xdebug enabled for PHP)</h4>
-                <pre><code class="bash">
+            <h4>Run with debugging (assumes you have xdebug enabled for PHP)</h4>
+            <pre><code class="bash">
 XDEBUG_CONFIG="remote_host=127.0.0.1" php -S localhost:7124 index.php
                 </code></pre>
-            </div>
         </div>
+    </div>
 
-        <br>
+    <br>
 
-        <div class="card" id="routing">
-            <div class="card-header">Routing</div>
-            <div class="card-body">
-                <h4>Routing</h4>
-                <p>Tina4 supports all the routing methods you should need to create an API or web site. Routes can be annotated to render <a href="/swagger">Swagger</a> documentation</p>
-                <p>In the next section we will look at a few examples</p>
-                <h5>Hello World</h5>
-                <p>Create a hello.php file in the routes or api folder, you can also name the file any name you want.</p>
-                <pre><code>&lt;?php
+    <div class="card" id="routing">
+        <div class="card-header">Routing & Swagger Annotations</div>
+        <div class="card-body">
+            <h4>Routing</h4>
+            <p>Tina4 supports all the routing methods you should need to create an API or web site. Routes can be annotated to render <a href="/swagger">Swagger</a> documentation</p>
+
+            <p>
+                <b> Most important features </b>
+            <ul>
+                <li>Inline Params - any params you embed in the route with {} - example /employees/{id}  </li>
+                <li>\Tina4\Response object - An anonymous function which will take three params (html|object|array, http response code, content type)</li>
+                <li>\Tina4\Request object - An object which contains request parameters sent to the server</li>
+            </ul>
+
+
+            </p>
+
+            <p>In the next section we will look at a few examples</p>
+            <h5>Hello World</h5>
+            <p>Create a hello.php file in the routes or api folder, you can also name the file any name you want.</p>
+            <pre><code>&lt;?php
 Tina4\Get::add( "/hello-world", function (Tina4\Response $response) {
     return $response ("Hello World");
 });
                     </code></pre>
-                <p>Browse to <a href="/hello-world">/hello-world</a> end point to see your handy work</p>
+            <p>Browse to <a href="/hello-world">/hello-world</a> end point to see your handy work</p>
 
-                <h5>Hello Annotations</h5>
-                <p>How about the same route with a parameter and then to test it we can use Swagger UI. The new code can simply be appended to the same file you just created</p>
-                <pre><code>&lt;?php
+            <h5>Hello Annotations</h5>
+            <p>How about the same route with a parameter and then to test it we can use Swagger UI. The new code can simply be appended to the same file you just created</p>
+            <pre><code>&lt;?php
 /**
  * Hello world end point with a parameter
  * @description Hello World Annotation
@@ -94,35 +109,35 @@ Tina4\Get::add( "/hello-world/{name}", function ($name, Tina4\Response $response
     return $response ("Hello World {$name}");
 });
                     </code></pre>
-                <p>Browsing to the <a href="/swagger">Swagger</a> documentation should result in a UI where you can test your end point.  Click on the "Try it out" button and input a param for name</p>
-            </div>
+            <p>Browsing to the <a href="/swagger">Swagger</a> documentation should result in a UI where you can test your end point.  Click on the "Try it out" button and input a param for name</p>
         </div>
-
-        <br>
-
-        <div class="card" id="templating">
-            <div class="card-header">Templating</div>
-            <div class="card-body">
-                <h4>Templating</h4>
-
-            </div>
-        </div>
-
-        <br>
-
-        <div class="card" id="orm">
-            <div class="card-header">ORM</div>
-            <div class="card-body">
-                <h4>ORM</h4>
-
-            </div>
-        </div>
-
     </div>
 
+    <br>
+
+    <div class="card" id="templating">
+        <div class="card-header">Templating</div>
+        <div class="card-body">
+            <h4>Templating</h4>
+
+        </div>
+    </div>
+
+    <br>
+
+    <div class="card" id="orm">
+        <div class="card-header">ORM</div>
+        <div class="card-body">
+            <h4>ORM</h4>
+
+        </div>
+    </div>
+
+</div>
 
 
-    <script>hljs.initHighlightingOnLoad();</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
 </body>
 
 

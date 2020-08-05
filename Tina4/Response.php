@@ -51,7 +51,7 @@ class Response
                     break;
                 case APPLICATION_XML:
 
-                    break;
+                break;
                 default:
                     $contentType = APPLICATION_JSON;
                     $content = json_encode($content);
