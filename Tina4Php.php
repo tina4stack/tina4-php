@@ -390,6 +390,14 @@ class Tina4Php
         $twig->addGlobal('baseUrl', $subFolder);
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
+
+        if (isset($config["twigFilters"]) && !empty($config["twigFilters"])) {
+            foreach ($config["twigFilters"] as $name => $method) {
+                $filter = new \Twig\TwigFilter($name, $method);
+
+                $twig->addFilter($filter);
+            }
+        }
     }
 
     function iterateDirectory($path, $relativePath="")
