@@ -186,6 +186,23 @@ class ORM implements  \JsonSerializable
     }
 
     /**
+     * Gets a nice name for a column for display purposes
+     * @param $name
+     * @return string
+     */
+    function getTableColumnName($name) {
+        $fieldName = "";
+        for ($i = 0; $i < strlen($name); $i++) {
+            if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name)-1 && (!\ctype_upper($name[$i-1]) || !\ctype_upper($name[$i+1]) )) {
+                $fieldName .= " " . $name[$i];
+            } else {
+                $fieldName .= $name[$i];
+            }
+        }
+        return ucwords($fieldName);
+    }
+
+    /**
      * Return a camel cased version of the name
      * @param $name
      * @return string
@@ -810,13 +827,24 @@ class ORM implements  \JsonSerializable
     }
 
     function generateCRUD($path="") {
-        $className = get_class($this);
 
+        $className = get_class($this);
         if (empty($path)) {
             $callingCode = '(new '.$className.'())->generateCRUD();';
         } else {
             $callingCode = '(new '.$className.'())->generateCRUD("' . $path . '");';
         }
+
+        if (empty($path)) {
+            $backtrace = debug_backtrace();
+            $path = $backtrace[1]["args"][0];
+
+            $path = str_replace(getcwd().DIRECTORY_SEPARATOR."src", "", $path);
+            $path = str_replace(".php", "", $path);
+            $path = str_replace(DIRECTORY_SEPARATOR, "/", $path);
+        }
+        
+
 
         $backTrace = debug_backtrace()[0];
         $fileName =  ($backTrace["file"]);
@@ -827,26 +855,28 @@ class ORM implements  \JsonSerializable
 
         $template = <<<'EOT'
 /**
- * CRUD Prototype Example
- * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
+ * CRUD Prototype [OBJECT] Modify as needed
+ * Creates  GET @ /path, /path/{id}, - fetch,form for whole or for single
             POST @ /path, /path/{id} - create & update
             DELETE @ /path/{id} - delete for single
  */
 \Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $[OBJECT_NAME], $filter, $request) {
     switch ($action) {
        case "form":
-            //Return back a form to be submitted to the create
-             
-            $content = \Tina4\renderTemplate("forms/admin/[OBJECT_NAME].twig", []);
-
-            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => "Add [OBJECT]", "onclick" => "if ( $('#[OBJECT_NAME]').valid() ) { saveForm('[OBJECT_NAME]', '" . TINA4_BASE_URL . "[PATH]', 'message'); }", "content" => $content]);
-       break;
        case "fetch":
             //Return back a form to be submitted to the create
              
-            $content = \Tina4\renderTemplate("forms/admin/[OBJECT_NAME].twig", []);
+            if ($action == "form") {
+                $title = "Add [OBJECT]";
+                $savePath =  TINA4_BASE_URL . "[PATH]";
+                $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", []);
+            } else {
+                $title = "Edit [OBJECT]";
+                $savePath =  TINA4_BASE_URL . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
+                $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", ["data" => $[OBJECT_NAME]]);
+            }
 
-            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => "Add [OBJECT]", "onclick" => "if ( $('#[OBJECT_NAME]').valid() ) { saveForm('[OBJECT_NAME]', '" . TINA4_BASE_URL . "[PATH]', 'message'); }", "content" => $content]);
+            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => $title, "onclick" => "if ( $('#[OBJECT_NAME]Form').valid() ) { saveForm('[OBJECT_NAME]Form', '" .$savePath."', 'message'); }", "content" => $content]);
        break;
        case "read":
             //Return a dataset to be consumed by the grid with a filter
@@ -866,7 +896,7 @@ class ORM implements  \JsonSerializable
         break;
         case "afterCreate":
            //return needed 
-           return (object)["httpCode" => 200, "message" => "OK"];  
+           return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Created');</script>"];
         break;    
         case "update":
             //Manipulate the $object here
@@ -874,7 +904,7 @@ class ORM implements  \JsonSerializable
         break;
         case "afterUpdate":
            //return needed 
-           return (object)["httpCode" => 200, "message" => "OK"];
+           return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Updated');</script>"];
         break;   
         case "delete":
             //Manipulate the $object here
@@ -882,7 +912,7 @@ class ORM implements  \JsonSerializable
         break;
         case "afterDelete":
             //return needed 
-            return (object)["httpCode" => 200, "message" => "OK"]; 
+            return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Deleted');</script>"];
         break;
     }
 });
@@ -890,18 +920,57 @@ EOT;
         $template = str_replace("[PATH]", $path, $template);
         $template = str_replace("[OBJECT]", $className, $template);
         $template = str_replace("[OBJECT_NAME]", $this->camelCase($className), $template);
+        $template = str_replace("[PRIMARY_KEY]", $this->primaryKey, $template);
+        $template = str_replace("[GRID_ID]", $this->camelCase($className), $template);
+        $template = str_replace("[TEMPLATE_PATH]", str_replace(DIRECTORY_SEPARATOR, "/", $path), $template);
 
 
         $content = file_get_contents($fileName);
 
-        $content = str_replace ($callingCode, $template, $content);
+
+        
+        //create a crud grid and form
+        $formData = $this->getObjectData();
+
+        $tableColumns = [];
+        $tableColumnMappings = [];
+        $tableFields = [];
+        foreach ($formData as $columnName => $value) {
+            $tableColumns[] = $this->getTableColumnName($columnName);
+            $tableColumnMappings[] = $columnName;
+            $tableFields[] = ["fieldName" => $columnName, "fieldLabel" => $this->getTableColumnName($columnName)];
+        }
+
+        $componentPath = getcwd().DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."templates".str_replace("/", DIRECTORY_SEPARATOR, $path);
+
+        if (!file_exists($componentPath)) {
+            mkdir ($componentPath, "0755", true);
+        }
+
+        $gridFilePath = $componentPath.DIRECTORY_SEPARATOR."grid.twig";
+
+        $formFilePath = $componentPath.DIRECTORY_SEPARATOR."form.twig";
+
+        //create the grid
+        $gridHtml = \Tina4\renderTemplate("components/grid.twig", ["gridTitle" => $className , "gridId" => $this->camelCase($className) , "primaryKey" => $this->primaryKey, "tableColumns" => $tableColumns, "tableColumnMappings" => $tableColumnMappings, "apiPath" => $path, "baseUrl" => TINA4_BASE_URL]);
+
+        file_put_contents($gridFilePath, $gridHtml);
+
+        //create the form
+        $formHtml = \Tina4\renderTemplate("components/form.twig", ["formId" => $this->camelCase($className) , "primaryKey" => $this->primaryKey, "tableFields" => $tableFields, "baseUrl" => TINA4_BASE_URL]);
+
+        file_put_contents($formFilePath, $formHtml);
+
+        $gridRouterCode = '
+\Tina4\Get::add("'.$path.'/grid", function (\Tina4\Response $response){
+    return $response (\Tina4\renderTemplate("'.$path.'/grid.twig"), HTTP_OK, TEXT_HTML);
+});
+        ';
+
+        $content = str_replace ($callingCode, $template.PHP_EOL.PHP_EOL.$gridRouterCode, $content);
 
         file_put_contents( $fileName, $content);
-        
-        //create some crud forms
-        
-        
-        
+
     }
 
 }
