@@ -944,7 +944,7 @@ EOT;
         $componentPath = getcwd().DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."templates".str_replace("/", DIRECTORY_SEPARATOR, $path);
 
         if (!file_exists($componentPath)) {
-            mkdir ($componentPath, "0755", true);
+            mkdir ($componentPath, 0755, true);
         }
 
         $gridFilePath = $componentPath.DIRECTORY_SEPARATOR."grid.twig";
@@ -962,12 +962,12 @@ EOT;
         file_put_contents($formFilePath, $formHtml);
 
         $gridRouterCode = '
-\Tina4\Get::add("'.$path.'/grid", function (\Tina4\Response $response){
+\Tina4\Get::add("'.$path.'/landing", function (\Tina4\Response $response){
     return $response (\Tina4\renderTemplate("'.$path.'/grid.twig"), HTTP_OK, TEXT_HTML);
 });
         ';
 
-        $content = str_replace ($callingCode, $template.PHP_EOL.PHP_EOL.$gridRouterCode, $content);
+        $content = str_replace ($callingCode, $gridRouterCode.PHP_EOL.$template, $content);
 
         file_put_contents( $fileName, $content);
 
