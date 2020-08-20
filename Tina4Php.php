@@ -121,7 +121,7 @@ class Tina4Php
      * @throws \ReflectionException
      * @throws \Twig\Error\LoaderError
      */
-    function __construct($config = null)
+    function __construct(\Tina4\Config $config = null)
     {
         global $DBA;
         if (!empty($DBA)) {
@@ -391,8 +391,8 @@ class Tina4Php
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
 
-        if (isset($config->twigFilters) && !empty($config->twigFilters)) {
-            foreach ($config->twigFilters as $name => $method) {
+        if (!empty($config->getTwigFilters())) {
+            foreach ($config->getTwigFilters() as $name => $method) {
                 $filter = new \Twig\TwigFilter($name, $method);
                 $twig->addFilter($filter);
             }
@@ -513,8 +513,11 @@ function renderTemplate($fileNameString, $data = [])
                     return $twig->render($renderFile, $data);
                 }
                 else {
-                    $twig->setLoader(new \Twig\Loader\ArrayLoader(["template" => $fileNameString]));
-                    return $twig->render("template", $data);
+                    $loader = $twig->getLoader();
+                    $twig->setLoader(new \Twig\Loader\ArrayLoader(["template".md5($fileNameString) => $fileNameString]));
+                    $render = $twig->render("template".md5($fileNameString), $data);
+                    $twig->setLoader($loader);
+                    return $render;
                 }
     } catch (Exception $exception) {
         return $exception->getMessage();

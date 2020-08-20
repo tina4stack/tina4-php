@@ -94,6 +94,25 @@ class ORM implements  \JsonSerializable
         $this->create ($request, $fromDB, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA);
     }
 
+
+    /**
+     * Saves a file into the database
+     * @param $fieldName
+     * @param $fileInputName
+     */
+    function saveFile($fieldName, $fileInputName) {
+        $tableName = $this->getTableName();
+        $tableData = $this->getTableData();
+        if (!empty($_FILES) && isset($_FILES[$fileInputName])) {
+            $primaryCheck = $this->getPrimaryCheck($tableData);
+            $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+            $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
+            $this->DBA->commit();
+        } else {
+            return false;
+        }
+    }
+
     /**
      * Allows ORM to be created
      * @param null $request

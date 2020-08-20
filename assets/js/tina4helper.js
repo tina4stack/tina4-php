@@ -8,7 +8,6 @@ function getFormData(formName) {
                 if (fileData !== undefined) {
                     data.append (element.name, fileData, fileData.name);
                 }
-                data.append(element.name, element.value);
             } else
             if (element.type == 'checkbox') {
                 if (element.checked) { data.append(element.name, element.value) } else { data.append(element.name, 0) };

@@ -50,12 +50,12 @@ class MyAuth extends \Tina4\Auth {
 
 }
 
-$config = (object)[];
+$config = \Tina4\Config();
 //Uncomment if you want to play with auth
-//$config->auth = (new MyAuth());
-$config->twigFilters["myFilter"] = function ($name) {
+//$config->setAuth((new MyAuth()));
+$config->addFilter("myFilter", function ($name) {
     return str_shuffle($name);
-};
+});
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
 echo new \Tina4\Tina4Php($config);
