@@ -50,12 +50,15 @@ class MyAuth extends \Tina4\Auth {
 
 }
 
-$config = \Tina4\Config();
+//$config = \Tina4\Config();
+
 //Uncomment if you want to play with auth
 //$config->setAuth((new MyAuth()));
-$config->addFilter("myFilter", function ($name) {
-    return str_shuffle($name);
-});
+
+
+//$config->addFilter("myFilter", function ($name) {
+//    return str_shuffle($name);
+//});
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
-echo new \Tina4\Tina4Php($config);
+echo new \Tina4\Tina4Php();

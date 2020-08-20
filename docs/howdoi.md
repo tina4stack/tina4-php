@@ -202,10 +202,11 @@ If you need to add your own filters in Twig you use the config passed to Tina4Ph
 
 ### Examples
 ```php
-$config = (object)[];
-$config->twigFilters["myFilter"] = function ($name) {
+$config = \Tina4\Config();
+
+$config->addFilter("myFilter", function ($name) {
     return str_shuffle($name);
-};
+});
 
 echo (new \Tina4\Tina4Php($config));
 ```

@@ -391,7 +391,7 @@ class Tina4Php
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
 
-        if (!empty($config->getTwigFilters())) {
+        if (!empty($config) && !empty($config->getTwigFilters())) {
             foreach ($config->getTwigFilters() as $name => $method) {
                 $filter = new \Twig\TwigFilter($name, $method);
                 $twig->addFilter($filter);
