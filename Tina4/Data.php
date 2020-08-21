@@ -5,13 +5,21 @@ class Data
 {
     public $DBA;
 
-    function __construct()
+    /**
+     * Data constructor.
+     * @param null $DBA param of database
+     */
+    function __construct($DBA=null)
     {
-        global $DBA;
-        if ($DBA) {
+        if (!empty($DBA)) {
             $this->DBA = $DBA;
         } else {
-            $this->DBA = null;
+            global $DBA;
+            if ($DBA) {
+                $this->DBA = $DBA;
+            } else {
+                $this->DBA = null;
+            }
         }
     }
 

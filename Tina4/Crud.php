@@ -1,20 +1,51 @@
 <?php
 namespace Tina4;
 
-
 class Crud
 {
     /**
-     * Generates a form for use in CRUD
-     * @param int $columns
-     * @param null $ignoreFields
-     * @param string $namePrefix
+     * Adds a form input
+     * @param $name
+     * @param $placeHolder
+     * @param $label
+     * @param $value
+     * @param $type
+     * @param array $lookupData for when the type is select, key value pair
+     * @return object
+     */
+    public static function addFormInput($name,$value="",$placeHolder="",$type="text",$label="", $lookupData=[]) {
+        if (empty($label) && !empty($placeHolder)) $label = $placeHolder;
+        return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type];
+    }
+
+
+    /**
+     * Generates a form
+     * @param $formInputs
+     * @param int $noOfColumns
+     * @param string $formName
      * @param string $groupClass
      * @param string $inputClass
      * @return string
      */
-    public function generateForm($columns=1, $ignoreFields=null, $namePrefix="", $groupClass="form-group", $inputClass="form-control") {
-        $html = "coming";
+    public static function generateForm($formInputs, $noOfColumns=1, $formName="data", $formMethod="post", $formAction="", $groupClass="form-group", $inputClass="form-control") {
+        $fields = [];
+        foreach ($formInputs as $id => $formInput) {
+            $fields[] = _div (["class" => $groupClass],
+                            _label($formInput->label),
+                            _input(["class" => $inputClass,
+                                    "type" => $formInput->type,
+                                    "name" => $formInput->name,
+                                    "id" => $formInput->name,
+                                    "placeholder" => $formInput->placeHolder,
+                                    "value" => $formInput->value]
+                                )
+                        );
+        }
+
+        $html = _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
+            $fields
+        );
 
         return $html;
     }
