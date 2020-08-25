@@ -259,7 +259,7 @@ class Routing
          * @param null $contentType
          * @return false|string
          */
-        $response = new \Tina4\Response ();
+        $response = new \Tina4\Response();
 
         $urlToParse = $this->cleanURL($urlToParse);
 

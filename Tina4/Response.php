@@ -36,8 +36,16 @@ class Response
 
                 break;
                 default:
-                    $contentType = APPLICATION_JSON;
-                    $content = json_encode($content);
+                    if (is_object($content) && get_class($content) === "Tina4\HTMLElement") {
+                        $content .= "";
+                    }
+                    //Try determine the  content type
+                    if (!is_string($content) && (is_object($content) || is_array($content))) {
+                        $contentType = APPLICATION_JSON;
+                        $content = json_encode($content);
+                    } else {
+                        $contentType = TEXT_HTML;
+                    }
                     break;
             }
 
@@ -47,6 +55,7 @@ class Response
             if (!empty($content)) {
                 header("Content-Type: {$contentType}");
             }
+
         return $content;
     }
 }
