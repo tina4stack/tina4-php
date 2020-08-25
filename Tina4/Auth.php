@@ -63,9 +63,6 @@ class Auth extends \Tina4\Data
      * Checks for $_SESSION["tokens"]
      */
     function tokenExists () {
-        if (!$this->configured) {
-            \Tina4\redirect("/auth/wizard");
-        }
         if (isset($_SESSION["tina4:tokens"][$_SERVER["REMOTE_ADDR"]])) {
             return true;
         } else {

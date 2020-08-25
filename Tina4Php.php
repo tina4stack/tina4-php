@@ -335,8 +335,6 @@ class Tina4Php
 
         }
 
-
-
         $twig = new \Twig\Environment($twigLoader, ["debug" => true]);
         $twig->addExtension(new \Twig\Extension\DebugExtension());
         $twig->addGlobal('Tina4', new \Tina4\Caller());
@@ -393,7 +391,6 @@ class Tina4Php
      */
     function __toString()
     {
-
         //No processing, we simply want the include to work
         if ($this->suppress) {
             echo "Tina4 in suppressed mode";
@@ -474,6 +471,7 @@ function renderTemplate($fileNameString, $data = [])
                     return $twig->render($renderFile, $data);
                 }
                 else {
+
                     $loader = $twig->getLoader();
                     $twig->setLoader(new \Twig\Loader\ArrayLoader(["template".md5($fileNameString) => $fileNameString]));
                     $render = $twig->render("template".md5($fileNameString), $data);
