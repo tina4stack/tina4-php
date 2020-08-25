@@ -169,7 +169,14 @@ class Tina4Php
         }
 
         global $auth;
-        $auth = new \Tina4\Auth($this->documentRoot);
+
+        if (!empty($config) && $config->getAuthentication() !== false) {
+            $auth = $config->getAuthentication();
+        }
+         else {
+             $auth = new \Tina4\Auth($this->documentRoot);
+         }
+
         //Check security
         if (!file_exists($this->documentRoot."secrets")) {
             $auth->generateSecureKeys();
@@ -239,17 +246,6 @@ class Tina4Php
          */
 
         $tina4PHP = $this;
-
-        \Tina4\Route::post("/auth/validate", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
-            $redirect = (new Auth($tina4PHP->documentRoot))->validateAuth ($request->params);
-            \Tina4\redirect($redirect, HTTP_MOVED_PERMANENTLY);
-            return $response ("None", HTTP_OK, TEXT_HTML);
-        });
-
-        \Tina4\Route::get("/delete-index", function(\Tina4\Response $response) {
-            unlink("assets/index.twig");
-            \Tina4\redirect("/");
-        });
 
         /**
          * @secure

@@ -52,14 +52,10 @@ function showForm(action, loadURL, targetDiv) {
     });
 }
 
-function saveForm(formName, postURL, targetDiv) {
-    if (targetDiv === undefined) targetDiv = 'message';
-    //compile a data model
-    let data = getFormData(formName);
-
+function postUrl(url, data, targetDiv) {
     $.ajax({
         method: 'POST',
-        url: postURL,
+        url: url,
         data: data,
         processData: false,
         contentType: false
@@ -70,6 +66,14 @@ function saveForm(formName, postURL, targetDiv) {
             $('#' + targetDiv).html(data);
         }
     });
+}
+
+function saveForm(formName, postURL, targetDiv) {
+    if (targetDiv === undefined) targetDiv = 'message';
+    //compile a data model
+    let data = getFormData(formName);
+
+    postURL(postURL, data, targetDiv);
 }
 
 function showMessage (message) {

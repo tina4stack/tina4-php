@@ -8,6 +8,7 @@
 namespace Tina4;
 
 use Nowakowskir\JWT\Exceptions\IntegrityViolationException;
+use Nowakowskir\JWT\Exceptions\InvalidStructureException;
 use Nowakowskir\JWT\TokenDecoded;
 use Nowakowskir\JWT\TokenEncoded;
 use Nowakowskir\JWT\JWT;
@@ -105,6 +106,15 @@ class Auth extends \Tina4\Data
      */
     public function getToken($payLoad=[]) {
         self::initSession();
+
+        if (!is_array($payLoad) && !empty($payLoad)) {
+            if (is_object($payLoad)) {
+                $payLoad = (array)$payLoad;
+            } else {
+                $payLoad = ["value" => $payLoad];
+            }
+        }
+
         $tokenDecoded = new TokenDecoded([], $payLoad);
         $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
         $tokenString = $tokenEncoded->__toString();
@@ -122,13 +132,16 @@ class Auth extends \Tina4\Data
         \Tina4\DebugLog::message("Validating token");
         self::initSession();
 
+        $token = trim(str_replace("Bearer ", "", $token));
+
+
         if (isset($_SESSION["tina4:authToken"]) && empty($token)) {
             $token = $_SESSION["tina4:authToken"];
         }
 
         try {
             $tokenEncoded = new TokenEncoded($token);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             \Tina4\DebugLog::message("Encoded token input failed! ".$e->getMessage());
             return false;
         }
@@ -140,7 +153,7 @@ class Auth extends \Tina4\Data
             // Handle token not trusted
             \Tina4\DebugLog::message("Validating {$token} failed!");
             return false;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             // Handle other validation exceptions
             \Tina4\DebugLog::message("Validating {$token} failed! ".$e->getMessage());
             return false;

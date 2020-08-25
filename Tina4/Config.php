@@ -4,7 +4,7 @@ namespace Tina4;
 class Config
 {
     private $twigFilters = [];
-    private $authMechanism;
+    private $authMechanism = null;
 
 
     function addTwigFilter ($filterName, $function) {
@@ -20,6 +20,10 @@ class Config
     }
 
     function getAuthentication() {
-        return $this->authMechanism;
+        if (!empty($this->authMechanism)) {
+            return $this->authMechanism;
+        } else {
+            return false;
+        }
     }
 }
