@@ -165,17 +165,15 @@ class Tina4Php
 
 
         if (file_exists("Tina4Php.php")) {
-            $this->documentRoot = realpath(dirname(__FILE__));
+            $this->documentRoot = realpath(dirname(__FILE__)).DIRECTORY_SEPARATOR;
         }
 
+        global $auth;
+        $auth = new \Tina4\Auth($this->documentRoot);
         //Check security
         if (!file_exists($this->documentRoot."secrets")) {
-            $auth = new \Tina4\Auth($this->documentRoot);
             $auth->generateSecureKeys();
         }
-
-
-
 
         \Tina4\DebugLog::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
 
@@ -300,10 +298,6 @@ class Tina4Php
             $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
-
-
-
-
 
         /**
          * End of routes
