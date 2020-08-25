@@ -64,7 +64,7 @@ class Auth extends \Tina4\Data
      * Checks for $_SESSION["tokens"]
      */
     function tokenExists () {
-        if (isset($_SESSION["tina4:tokens"][$_SERVER["REMOTE_ADDR"]])) {
+        if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;
         } else {
             return false;
@@ -80,6 +80,7 @@ class Auth extends \Tina4\Data
      */
     function validateAuth ($request, $lastPath=null) {
         self::initSession();
+
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
             $lastPath = $_SESSION["tina4:lastPath"];
         } else {
@@ -95,7 +96,6 @@ class Auth extends \Tina4\Data
     function clearTokens () {
         self::initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
-            unset($_SESSION["tina4:tokens"]);
             unset($_SESSION["tina4:authToken"]);
         }
     }
@@ -133,7 +133,6 @@ class Auth extends \Tina4\Data
         self::initSession();
 
         $token = trim(str_replace("Bearer ", "", $token));
-
 
         if (isset($_SESSION["tina4:authToken"]) && empty($token)) {
             $token = $_SESSION["tina4:authToken"];
