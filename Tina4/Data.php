@@ -11,14 +11,27 @@ class Data
      */
     function __construct($DBA=null)
     {
-        if (!empty($DBA)) {
+        //Check if we have a database connection declared as global , add it to the data class
+        foreach ($GLOBALS as $dbName => $GLOBAL) {
+            if (is_object($GLOBAL)) {
+                DebugLog::message("Found {$dbName}: ".get_parent_class($GLOBAL));
+                if (get_parent_class($GLOBAL) === "Tina4\DataBase") {
+                    DebugLog::message("Adding {$dbName}");
+                    $this->{$dbName} = $GLOBAL;
+                }
+            }
+        }
+
+        DebugLog::message("HELLO!!!");
+
+        //Assign database connections directly based on the variables
+        if (!empty($DBA) && !is_array($DBA)) {
             $this->DBA = $DBA;
         } else {
-            global $DBA;
-            if ($DBA) {
-                $this->DBA = $DBA;
-            } else {
-                $this->DBA = null;
+            if (is_array($DBA)) {
+                foreach ($DBA as $dbName => $dbHandle) {
+                    $this->{$dbName} = $dbHandle;
+                }
             }
         }
     }

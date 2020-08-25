@@ -29,59 +29,20 @@ class Auth extends \Tina4\Data
             $_SESSION["tina4:lastPath"] = $lastPath;
         }
         $this->documentRoot = $documentRoot;
-        //send to the wizard if config settings don't exist
-
-        if (!empty($this->DBA)) {
-            $tina4Auth = (new Tina4Auth())->load('id = 1');
-            if (!empty($tina4Auth->username)) {
-                $this->configured = true;
-            }
-        } else {
-            $this->configured = true;
-        }
+        //Load secrets
     }
 
-
-    /**
-     * Setup an auth database
-     * @param $request
-     * @return string
-     * @throws \Exception
-     */
-    function setupAuth ($request) {
-        if (empty($this->DBA)) {
-            throw new \Exception("No global for DBA");
+    function generateSecureKeys() {
+        DebugLog::message("Generating Auth keys");
+        if (file_exists($this->documentRoot."secrets")) {
+            DebugLog::message("Secrets folder exists already, please remove");
+            return false;
         }
-
-        $this->DBA->exec ("
-            create table tina4_auth (
-                id integer default 0 not null,
-                username varchar (100) default '',
-                password varchar (300) default '',
-                email varchar (300) default '',
-                primary key (id) 
-            );
-        ");
-
-        $this->DBA->exec ("
-            create table tina4_log (
-                id integer default 0 not null,
-                user_id integer default 0 not null references tina4_auth(id),
-                content varchar (5000) default '',
-                primary key (id) 
-            );
-        ");
-
-
-        $tina4Auth = new \Tina4\Tina4Auth($request->params);
-        if (!empty($request->params["password"])) {
-            $tina4Auth->password = password_hash($request->params["password"], PASSWORD_BCRYPT);
-        } else {
-            $tina4Auth->password = null;
-        }
-        $tina4Auth->save();
-
-        return "/auth/login";
+        mkdir($this->documentRoot."secrets");
+        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key`;
+        `chmod 600 secrets/private.key`;
+        `openssl rsa -in private.key -pubout -outform PEM -out secrets/public.pub`;
+        return true;
     }
 
     /**
@@ -112,15 +73,6 @@ class Auth extends \Tina4\Data
         } else {
             $lastPath = "/";
         }
-        $tina4Auth = (new \Tina4\Tina4Auth())->load ("username = '{$request["username"]}'");
-        if (!empty($tina4Auth->username)) {
-            if (password_verify($request["password"], $tina4Auth->password)) {
-                $_SESSION["tina4:currentUser"] = $tina4Auth->getTableData();
-                $this->getToken();
-            }
-        } else {
-            $this->clearTokens();
-        }
 
         return $lastPath;
     }
@@ -142,12 +94,8 @@ class Auth extends \Tina4\Data
      */
     public function getToken() {
         self::initSession();
-        if (isset($_SERVER["REMOTE_ADDR"])) {
-            $token = md5($_SERVER["REMOTE_ADDR"].date("Y-m-d h:i:s"));
-            $_SESSION["tina4:tokens"][$_SERVER["REMOTE_ADDR"]] = $token;
-        } else {
-            $token = md5(date("Y-m-d h:i:s"));
-        }
+
+        $token = "";
         $_SESSION["tina4:authToken"] = $token;
         session_write_close();
         return $token;
@@ -171,7 +119,7 @@ class Auth extends \Tina4\Data
     /**
      * Starts a php session
      */
-    public function     initSession()
+    public function initSession()
     {
         //make sure the session is started
         if (session_status() == PHP_SESSION_NONE) {

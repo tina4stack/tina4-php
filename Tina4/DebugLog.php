@@ -1,13 +1,11 @@
 <?php
 namespace Tina4;
-if(!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
-if(!defined("DEBUG_SCREEN"))define("DEBUG_SCREEN", 9002);
-if(!defined("DEBUG_ALL"))define("DEBUG_ALL", 9003);
-if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
 
 class DebugLog
 {
     static function message($message, $debugType=DEBUG_NONE){
+
+        if (defined("TINA4_DEBUG_LEVEL")) $debugType = TINA4_DEBUG_LEVEL;
 
         if($debugType == DEBUG_NONE || TINA4_DEBUG === false) return;
 

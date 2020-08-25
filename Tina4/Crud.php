@@ -3,6 +3,34 @@ namespace Tina4;
 
 class Crud
 {
+    //Common inputs, firstName,lastName,email,mobileNo,address1,address2,cityTown,postalCode,Country
+
+    /*
+<input type="button">
+<input type="checkbox">
+<input type="color">
+<input type="date">
+<input type="datetime-local">
+<input type="email">
+<input type="file">
+<input type="hidden">
+<input type="image">
+<input type="month">
+<input type="number">
+<input type="password">
+<input type="radio">
+<input type="range">
+<input type="reset">
+<input type="search">
+<input type="submit">
+<input type="tel">
+<input type="text">
+<input type="time">
+<input type="url">
+<input type="week">
+     */
+
+
     /**
      * Adds a form input
      * @param $name
@@ -13,9 +41,9 @@ class Crud
      * @param array $lookupData for when the type is select, key value pair
      * @return object
      */
-    public static function addFormInput($name,$value="",$placeHolder="",$type="text",$label="", $lookupData=[]) {
+    public static function addFormInput($name,$value="",$placeHolder="",$type="text", $required=false, $javascript="", $label="", $lookupData=[]) {
         if (empty($label) && !empty($placeHolder)) $label = $placeHolder;
-        return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type];
+        return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type, "required" => $required];
     }
 
 
@@ -31,8 +59,9 @@ class Crud
     public static function generateForm($formInputs, $noOfColumns=1, $formName="data", $formMethod="post", $formAction="", $groupClass="form-group", $inputClass="form-control") {
         $fields = [];
         foreach ($formInputs as $id => $formInput) {
+            if ($formInput->type == "text" || $formInput->type == "password" || $formInput->type == "text" )
             $fields[] = _div (["class" => $groupClass],
-                            _label($formInput->label),
+                            _label(["for" => $formInput->name], $formInput->label),
                             _input(["class" => $inputClass,
                                     "type" => $formInput->type,
                                     "name" => $formInput->name,
@@ -44,7 +73,7 @@ class Crud
         }
 
         $html = _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
-            $fields
+            _div (["class" => "row"], $fields)
         );
 
         return $html;

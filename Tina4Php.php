@@ -11,10 +11,6 @@ namespace Tina4;
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
-if(!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
-if(!defined("DEBUG_SCREEN"))define("DEBUG_SCREEN", 9002);
-if(!defined("DEBUG_ALL"))define("DEBUG_ALL", 9003);
-if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
 /**
  * Class Tina4Php Main class used to set constants
  * @package Tina4
@@ -123,21 +119,21 @@ class Tina4Php
      */
     function __construct(\Tina4\Config $config = null)
     {
+        DebugLog::message("Beginning of Tina4PHP Initialization");
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
         }
 
         if (defined("TINA4_SUPPRESS")) {
-            $this->suppress = true;
+            DebugLog::message("We are suppressing the output of routes - TINA4_SUPPRESS has been declared as TRUE");
+            $this->suppress = TINA4_SUPPRESS;
         }
 
         $this->config = $config;
-
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
-            if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
-            define ("TINA4_DEBUG_LEVEL", DEBUG_NONE);
+           define ("TINA4_DEBUG_LEVEL", DEBUG_NONE);
         }
 
         if (!defined("TINA4_DEBUG")) {
@@ -155,14 +151,6 @@ class Tina4Php
             }
         }
 
-        if (!defined("TINA4_POST")) define("TINA4_POST", "POST");
-        if (!defined("TINA4_GET")) define("TINA4_GET", "GET");
-        if (!defined("TINA4_ANY")) define("TINA4_ANY", "ANY");
-        if (!defined("TINA4_PUT")) define("TINA4_PUT", "PUT");
-        if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
-        if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
-        if (!defined("TINA4_DOCUMENT_ROOT")) define ("TINA4_DOCUMENT_ROOT", null);
-
         $debugBackTrace = debug_backtrace();
         $callerFile = $debugBackTrace[0]["file"]; //calling file /.../.../index.php
         $callerDir = str_replace("index.php", "", $callerFile);
@@ -179,6 +167,15 @@ class Tina4Php
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__));
         }
+
+        //Check security
+        if (!file_exists($this->documentRoot."secrets")) {
+            $auth = new \Tina4\Auth($this->documentRoot);
+            $auth->generateSecureKeys();
+        }
+
+
+
 
         \Tina4\DebugLog::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
 
@@ -251,44 +248,6 @@ class Tina4Php
             return $response ("None", HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::get("/auth/login", function(\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            $tina4Auth = (new Tina4Auth())->load ('id = 1');
-            if (empty($tina4Auth->username) && !(new Auth($tina4PHP->documentRoot))->tokenExists()) {
-                \Tina4\redirect("/auth/wizard");
-                exit;
-            }
-            $params = array_merge(["Action" => "Login"], $request->asArray());
-            return $response (\Tina4\renderTemplate("auth/generic.twig", $params), HTTP_OK, TEXT_HTML);
-        });
-
-        \Tina4\Route::get("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
-            $tina4Auth = (new Tina4Auth())->load ('id = 1');
-            if (!empty($tina4Auth->username) && !(new Auth($tina4PHP->documentRoot))->tokenExists()) {
-                \Tina4\redirect("/auth/login");
-                exit;
-            }
-            $tina4Auth = (new Tina4Auth())->load ('id = 1');
-
-            $params = array_merge(["Action" => "Wizard", "settings" => $tina4Auth->getTableData()], $request->asArray());
-            return $response (\Tina4\renderTemplate("auth/generic.twig", $params), HTTP_OK, TEXT_HTML);
-        });
-
-        \Tina4\Route::post("/auth/wizard", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
-            //Establish the auth module
-            $redirectPath = (new Auth($tina4PHP->documentRoot))->setupAuth($request);
-
-            \Tina4\redirect($redirectPath);
-            return $response ("", HTTP_OK, TEXT_HTML);
-        });
-
-        \Tina4\Route::get("/auth/register", function(\Tina4\Response $response, \Tina4\Request $request) {
-            return $response ("", HTTP_OK, TEXT_HTML);
-        });
-
-
-        //code routes
-
-
         \Tina4\Route::get("/delete-index", function(\Tina4\Response $response) {
             unlink("assets/index.twig");
             \Tina4\redirect("/");
@@ -341,6 +300,8 @@ class Tina4Php
             $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
+
+
 
 
 
@@ -397,6 +358,7 @@ class Tina4Php
                 $twig->addFilter($filter);
             }
         }
+        DebugLog::message("End of Tina4PHP Initialization");
     }
 
     function iterateDirectory($path, $relativePath="")
@@ -437,10 +399,14 @@ class Tina4Php
      */
     function __toString()
     {
-        //No processing, we simply want the include to work
-        if ($this->suppress) return "";
 
+        //No processing, we simply want the include to work
+        if ($this->suppress) {
+            echo "Tina4 in suppressed mode";
+            return "";
+        }
         $string = "";
+
 
         if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
 
@@ -456,6 +422,7 @@ class Tina4Php
             }
 
         } else {
+
             $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(),  "/", "GET", $this->config);
         }
 
