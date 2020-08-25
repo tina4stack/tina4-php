@@ -16,7 +16,7 @@ define("TINA4_INCLUDE_LOCATIONS", ["app", "objects"]);
 
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");
-define ("TINA4_DEBUG", false);
+define ("TINA4_DEBUG", true);
 define ("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
 //define ("TINA4_GIT_MESSAGE", "Some useful text here");
 //define ("TINA4_GIT_ENABLED", true);
