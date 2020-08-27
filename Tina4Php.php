@@ -340,7 +340,9 @@ class Tina4Php
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
 
+
         if (!empty($config) && !empty($config->getTwigFilters())) {
+           
             foreach ($config->getTwigFilters() as $name => $method) {
                 $filter = new \Twig\TwigFilter($name, $method);
                 $twig->addFilter($filter);
@@ -447,12 +449,13 @@ function renderTemplate($fileNameString, $data = [])
     $fileName = str_replace($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR, "", $fileNameString);
     try {
         global $twig;
-        if ($twig->getLoader()->exists($fileNameString)) {
-            return $twig->render($fileName, $data);
+        $internalTwig = clone $twig;
+        if ($internalTwig->getLoader()->exists($fileNameString)) {
+            return $internalTwig->render($fileName, $data);
         }
         else
-            if ($twig->getLoader()->exists(basename($fileNameString))) {
-                return $twig->render(basename($fileName), $data);
+            if ($internalTwig->getLoader()->exists(basename($fileNameString))) {
+                return $internalTwig->render(basename($fileName), $data);
             }
             else
                 if (is_file($fileNameString)) {
@@ -460,18 +463,15 @@ function renderTemplate($fileNameString, $data = [])
                     $twigLoader = new \Twig\Loader\FilesystemLoader();
                     $newPath = dirname($fileName).DIRECTORY_SEPARATOR;
                     $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR. $newPath );
-                    $twig->setLoader($twigLoader);
-                    $twig->addGlobal('Tina4', new \Tina4\Caller());
-                    $twig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR),0, -1) );
+                    $internalTwig->setLoader($twigLoader);
+                    $internalTwig->addGlobal('Tina4', new \Tina4\Caller());
+                    $internalTwig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR),0, -1) );
                     $fileName = basename($renderFile);
-                    return $twig->render($renderFile, $data);
+                    return $internalTwig->render($renderFile, $data);
                 }
                 else {
-
-                    $loader = $twig->getLoader();
-                    $twig->setLoader(new \Twig\Loader\ArrayLoader(["template".md5($fileNameString) => $fileNameString]));
-                    $render = $twig->render("template".md5($fileNameString), $data);
-                    $twig->setLoader($loader);
+                    $internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template".md5($fileNameString) => $fileNameString]));
+                    $render = $internalTwig->render("template".md5($fileNameString), $data);
                     return $render;
                 }
     } catch (Exception $exception) {

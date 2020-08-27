@@ -364,6 +364,7 @@ class ORM implements  \JsonSerializable
             }
         }
 
+        DebugLog::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
         return "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
     }
 
@@ -376,6 +377,7 @@ class ORM implements  \JsonSerializable
      */
     function generateUpdateSQL($tableData, $filter, $tableName = "")
     {
+
         $tableName = $this->getTableName($tableName);
         $updateValues = [];
 
@@ -386,6 +388,7 @@ class ORM implements  \JsonSerializable
 
 
         foreach ($tableData as $fieldName => $fieldValue) {
+
             if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
 
             if (is_null($fieldValue)) $fieldValue = "null";
@@ -397,6 +400,7 @@ class ORM implements  \JsonSerializable
             }
         }
 
+        DebugLog::message("update {$tableName} set " . join(",", $updateValues) . " where {$filter}");
         return  "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
 
     }

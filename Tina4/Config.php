@@ -16,6 +16,7 @@ class Config
     }
 
     function getTwigFilters() {
+       
         return $this->twigFilters;
     }
 
