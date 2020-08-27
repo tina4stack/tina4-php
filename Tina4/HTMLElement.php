@@ -25,7 +25,11 @@ class HTMLElement {
                     if (is_numeric($pId)) {
                         $this->elements[] = $param;
                     } else {
-                        $this->attributes[] = [$pId => $param];
+                        if ($pId == "_" || $pId == "" ||  $pId == " ") {
+                            $this->attributes[] = [$param];
+                        } else {
+                            $this->attributes[] = [$pId => $param];
+                        }
                     }
                 }
             }
@@ -64,7 +68,9 @@ class HTMLElement {
                                 $value="false";
                             }
                         }
-                        $html .= " {$key}=\"{$value}\"";
+                        if ($value !== null) {
+                            $html .= " {$key}=\"{$value}\"";
+                        }
                     }
                 }
             }

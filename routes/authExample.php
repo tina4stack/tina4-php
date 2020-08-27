@@ -8,5 +8,5 @@
 
 \Tina4\Post::add("/auth/example/sign", function(\Tina4\Response $response, \Tina4\Request $request) {
     global $auth;
-    return $response ($auth->getToken("ME!"), HTTP_OK);
+    return $response ($auth->getToken(["data" => ["name" => "test"], "sub" => "1234567890", "iss" => "https://tina4php.com"]), HTTP_OK);
 });
