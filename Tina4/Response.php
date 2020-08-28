@@ -2,24 +2,7 @@
 
 namespace Tina4;
 
-define("HTTP_OK", 200);
-define("HTTP_CREATED", 201);
-define("HTTP_NO_CONTENT", 204);
-define("HTTP_BAD_REQUEST", 400);
-define("HTTP_UNAUTHORIZED", 401);
-define("HTTP_FORBIDDEN", 403);
-define("HTTP_NOT_FOUND", 404);
-define("HTTP_METHOD_NOT_ALLOWED", 405);
-define("HTTP_RESOURCE_CONFLICT", 409);
-define("HTTP_MOVED_PERMANENTLY", 301);
-define("HTTP_INTERNAL_SERVER_ERROR", 500);
-define("HTTP_NOT_IMPLEMENTED", 501);
 
-
-define("TEXT_HTML", "text/html");
-define("TEXT_PLAIN", "text/plain");
-define("APPLICATION_JSON", "application/json");
-define("APPLICATION_XML", "application/xml");
 
 /**
  * Class Response Used in apis to return a response
@@ -40,9 +23,12 @@ class Response
         if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"])) {
             $contentType = $_SERVER["CONTENT_TYPE"];
         } else {
-            $contentType = TEXT_HTML;
+            if (empty($contentType)) {
+                $contentType = TEXT_HTML;
+            }
         }
         http_response_code($httpCode);
+
         if (!empty($content) && (is_array($content) || is_object($content))) {
 
             switch ($contentType) {
@@ -50,11 +36,19 @@ class Response
                     $content = json_encode($content);
                     break;
                 case APPLICATION_XML:
-
+                    $content = self::generateValidXmlFromArray($content);
                 break;
                 default:
-                    $contentType = APPLICATION_JSON;
-                    $content = json_encode($content);
+                    if (is_object($content) && get_class($content) === "Tina4\HTMLElement") {
+                        $content .= "";
+                    }
+                    //Try determine the  content type
+                    if (!is_string($content) && (is_object($content) || is_array($content))) {
+                        $contentType = APPLICATION_JSON;
+                        $content = json_encode($content);
+                    } else {
+                        $contentType = TEXT_HTML;
+                    }
                     break;
             }
 
@@ -64,6 +58,51 @@ class Response
             if (!empty($content)) {
                 header("Content-Type: {$contentType}");
             }
+
         return $content;
+    }
+
+    //XML Serialize taken from Stack Overflow
+    //https://stackoverflow.com/questions/137021/php-object-as-xml-document
+
+
+    /**
+     * Initializes the XML header
+     * @param $array
+     * @param string $node_block
+     * @param string $node_name
+     * @return string
+     */
+    public static function generateValidXmlFromArray($array, $node_block='nodes', $node_name='node') {
+        $xml = '<?xml version="1.0" encoding="UTF-8" ?>';
+
+        $xml .= '<' . $node_block . '>';
+        $xml .= self::generateXmlFromArray($array, $node_name);
+        $xml .= '</' . $node_block . '>';
+
+        return $xml;
+    }
+
+    /**
+     * Creates XML from an array
+     * @param $array
+     * @param $node_name
+     * @return string
+     */
+    private static function generateXmlFromArray($array, $node_name) {
+        $xml = '';
+
+        if (is_array($array) || is_object($array)) {
+            foreach ($array as $key=>$value) {
+                if (is_numeric($key)) {
+                    $key = $node_name;
+                }
+                $xml .= '<' . $key . '>' . self::generateXmlFromArray($value, $node_name) . '</' . $key . '>';
+            }
+        } else {
+            $xml = htmlspecialchars($array, ENT_QUOTES);
+        }
+
+        return $xml;
     }
 }

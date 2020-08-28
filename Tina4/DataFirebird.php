@@ -14,7 +14,8 @@ class DataFirebird extends DataBase
     public function native_open() {
         inherited:
 
-        $this->dbh = ibase_connect($this->hostName.":".$this->databaseName, $this->username, $this->password); //create the new database or open existing one
+
+        $this->dbh = ibase_pconnect($this->hostName."/".$this->port.":".$this->databaseName, $this->username, $this->password); //create the new database or open existing one
     }
 
     public function native_close() {
@@ -82,8 +83,6 @@ class DataFirebird extends DataBase
             }
             $records[] = (new DataRecord( $record, $fieldMapping ));
         }
-
-
 
         if (is_array($records) && count($records) > 1) {
             if (stripos($sql, "returning") === false) {

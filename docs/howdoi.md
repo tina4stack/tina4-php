@@ -196,5 +196,23 @@ We really hate to write too much code, a ``|`` will separate the different end p
 });
 ```
 
+## Add my own filters to twig
+
+If you need to add your own filters in Twig you use the config passed to Tina4Php on running Tina4 in the index file
+
+### Examples
+```php
+$config = \Tina4\Config();
+
+$config->addFilter("myFilter", function ($name) {
+    return str_shuffle($name);
+});
+
+echo (new \Tina4\Tina4Php($config));
+```
+Somewhere in Twig, in a template, far far away ...
+```twig
+<label>{{ "NAME" | myFilter  }}</label>
+```
 
 

@@ -223,8 +223,8 @@ class ParseTemplate {
         $realFileName = $fileName;
         foreach ($this->locations as $lid => $location) {
             foreach ($possibleFiles as $id => $fileName) {
-                $testFile = $this->root . "/" . $location ."/". $fileName;
-                $testFile = preg_replace('#/+#','/',$testFile);
+                $testFile = $this->root . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR. $fileName;
+                $testFile = preg_replace('#/+#',DIRECTORY_SEPARATOR,$testFile);
                 if (file_exists($testFile)) {
                     $realFileName = $testFile;
                     break;
@@ -255,7 +255,11 @@ class ParseTemplate {
             $this->responseCode = 404;
             if (!defined("TINA4_APP")) {
                 //What happens when this is under a web server sub folder ?
-                $content = "<img src=\"/{$this->subFolder}/src/assets/images/404.jpg\">";
+                if (file_exists("./assets/images/404.jpg")) {
+                    $content = "<img src=\"/assets/images/404.jpg\">";
+                } else {
+                    $content = "<img src=\"/{$this->subFolder}/src/assets/images/404.jpg\">";
+                }
                 $content = preg_replace('#/+#', '/', $content);
             } else {
                 $content = file_get_contents("./".TINA4_APP);

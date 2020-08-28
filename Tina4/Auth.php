@@ -7,14 +7,22 @@
  */
 namespace Tina4;
 
+use Nowakowskir\JWT\Exceptions\IntegrityViolationException;
+use Nowakowskir\JWT\Exceptions\InvalidStructureException;
+use Nowakowskir\JWT\TokenDecoded;
+use Nowakowskir\JWT\TokenEncoded;
+use Nowakowskir\JWT\JWT;
+
 /**
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
  */
 class Auth extends \Tina4\Data
 {
-    private  $documentRoot;
-    private  $configured = false;
+    private $documentRoot;
+    private $configured = false;
+    private $privateKey;
+    private $publicKey;
 
     /**
      * Auth constructor.
@@ -25,73 +33,38 @@ class Auth extends \Tina4\Data
     {
         parent::__construct();
         self::initSession();
-        if ($lastPath !== "/auth/login" && $lastPath !== "/auth/validate") {
-            $_SESSION["tina4:lastPath"] = $lastPath;
-        }
-        $this->documentRoot = $documentRoot;
-        //send to the wizard if config settings don't exist
 
-        if (!empty($this->DBA)) {
-            $tina4Auth = (new Tina4Auth())->load('id = 1');
-            if (!empty($tina4Auth->username)) {
-                $this->configured = true;
-            }
-        } else {
-            $this->configured = true;
+        $_SESSION["tina4:lastPath"] = $lastPath;
+
+        $this->documentRoot = $documentRoot;
+
+        //Load secrets
+        if (file_exists($this->documentRoot."secrets".DIRECTORY_SEPARATOR."private.key")) {
+            $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
+        }
+        if (file_exists($this->documentRoot."secrets".DIRECTORY_SEPARATOR."public.pub")) {
+            $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         }
     }
 
-
-    /**
-     * Setup an auth database
-     * @param $request
-     * @return string
-     * @throws \Exception
-     */
-    function setupAuth ($request) {
-        if (empty($this->DBA)) {
-            throw new \Exception("No global for DBA");
+    function generateSecureKeys() {
+        DebugLog::message("Generating Auth keys");
+        if (file_exists($this->documentRoot."secrets")) {
+            DebugLog::message("Secrets folder exists already, please remove");
+            return false;
         }
-
-        $this->DBA->exec ("
-            create table tina4_auth (
-                id integer default 0 not null,
-                username varchar (100) default '',
-                password varchar (300) default '',
-                email varchar (300) default '',
-                primary key (id) 
-            );
-        ");
-
-        $this->DBA->exec ("
-            create table tina4_log (
-                id integer default 0 not null,
-                user_id integer default 0 not null references tina4_auth(id),
-                content varchar (5000) default '',
-                primary key (id) 
-            );
-        ");
-
-
-        $tina4Auth = new \Tina4\Tina4Auth($request->params);
-        if (!empty($request->params["password"])) {
-            $tina4Auth->password = password_hash($request->params["password"], PASSWORD_BCRYPT);
-        } else {
-            $tina4Auth->password = null;
-        }
-        $tina4Auth->save();
-
-        return "/auth/login";
+        mkdir($this->documentRoot."secrets");
+        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key`;
+        `chmod 600 secrets/private.key`;
+        `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
+        return true;
     }
 
     /**
      * Checks for $_SESSION["tokens"]
      */
     function tokenExists () {
-        if (!$this->configured) {
-            \Tina4\redirect("/auth/wizard");
-        }
-        if (isset($_SESSION["tina4:tokens"][$_SERVER["REMOTE_ADDR"]])) {
+        if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;
         } else {
             return false;
@@ -107,19 +80,11 @@ class Auth extends \Tina4\Data
      */
     function validateAuth ($request, $lastPath=null) {
         self::initSession();
+
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
             $lastPath = $_SESSION["tina4:lastPath"];
         } else {
             $lastPath = "/";
-        }
-        $tina4Auth = (new \Tina4\Tina4Auth())->load ("username = '{$request["username"]}'");
-        if (!empty($tina4Auth->username)) {
-            if (password_verify($request["password"], $tina4Auth->password)) {
-                $_SESSION["tina4:currentUser"] = $tina4Auth->getTableData();
-                $this->getToken();
-            }
-        } else {
-            $this->clearTokens();
         }
 
         return $lastPath;
@@ -131,7 +96,6 @@ class Auth extends \Tina4\Data
     function clearTokens () {
         self::initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
-            unset($_SESSION["tina4:tokens"]);
             unset($_SESSION["tina4:authToken"]);
         }
     }
@@ -140,17 +104,23 @@ class Auth extends \Tina4\Data
      * Gets an auth token for validating against secure URLS for the session
      * @return string
      */
-    public function getToken() {
+    public function getToken($payLoad=[]) {
         self::initSession();
-        if (isset($_SERVER["REMOTE_ADDR"])) {
-            $token = md5($_SERVER["REMOTE_ADDR"].date("Y-m-d h:i:s"));
-            $_SESSION["tina4:tokens"][$_SERVER["REMOTE_ADDR"]] = $token;
-        } else {
-            $token = md5(date("Y-m-d h:i:s"));
+
+        if (!is_array($payLoad) && !empty($payLoad)) {
+            if (is_object($payLoad)) {
+                $payLoad = (array)$payLoad;
+            } else {
+                $payLoad = ["value" => $payLoad];
+            }
         }
-        $_SESSION["tina4:authToken"] = $token;
+
+        $tokenDecoded = new TokenDecoded([], $payLoad);
+        $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
+        $tokenString = $tokenEncoded->__toString();
+        $_SESSION["tina4:authToken"] = $tokenString;
         session_write_close();
-        return $token;
+        return $tokenString;
     }
 
     /**
@@ -159,19 +129,66 @@ class Auth extends \Tina4\Data
      * @return bool
      */
     public function validToken($token) {
+        \Tina4\DebugLog::message("Validating token");
         self::initSession();
-        if (isset($_SESSION["tina4:authToken"]) && $_SESSION["tina4:authToken"] === $token) {
-            return true;
-        } else {
-            \Tina4\DebugLog::message("Validating {$token} failed!");
+
+        $token = trim(str_replace("Bearer ", "", $token));
+
+        if (isset($_SESSION["tina4:authToken"]) && empty($token)) {
+            $token = $_SESSION["tina4:authToken"];
+        }
+
+        try {
+            $tokenEncoded = new TokenEncoded($token);
+        } catch (\Exception $e) {
+            \Tina4\DebugLog::message("Encoded token input failed! ".$e->getMessage());
             return false;
         }
+
+        try {
+            $tokenEncoded->validate($this->publicKey, JWT::ALGORITHM_RS256);
+            return true;
+        } catch (IntegrityViolationException $e) {
+            // Handle token not trusted
+            \Tina4\DebugLog::message("Validating {$token} failed!");
+            return false;
+        } catch (\Exception $e) {
+            // Handle other validation exceptions
+            \Tina4\DebugLog::message("Validating {$token} failed! ".$e->getMessage());
+            return false;
+        }
+    }
+
+    function getPayLoad($token) {
+        \Tina4\DebugLog::message("Getting token payload");
+        try {
+            $tokenEncoded = new TokenEncoded($token);
+        } catch (Exception $e) {
+            \Tina4\DebugLog::message("Encoded token input failed! ".$e->getMessage());
+            return false;
+        }
+
+        try {
+            $tokenEncoded->validate($this->publicKey, JWT::ALGORITHM_RS256);
+        } catch (IntegrityViolationException $e) {
+            // Handle token not trusted
+            \Tina4\DebugLog::message("Validating {$token} failed!");
+            return false;
+        } catch (Exception $e) {
+            // Handle other validation exceptions
+            \Tina4\DebugLog::message("Validating {$token} failed! ".$e->getMessage());
+            return false;
+        }
+
+        $tokenDecoded = $tokenEncoded->decode();
+
+        return $tokenDecoded->getPayload();
     }
 
     /**
      * Starts a php session
      */
-    public function     initSession()
+    public function initSession()
     {
         //make sure the session is started
         if (session_status() == PHP_SESSION_NONE) {

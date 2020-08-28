@@ -53,6 +53,11 @@ class ORM implements  \JsonSerializable
     public $excludeFields = [];
 
     /**
+     * @var array An array of fields that are readonly and should not be updated or inserted
+     */
+    public $readOnlyFields = [];
+
+    /**
      * @var null A method which filters a record when it is read from the database
      */
     public $filterMethod = [];
@@ -67,7 +72,10 @@ class ORM implements  \JsonSerializable
      */
     public $genPrimaryKey=false;
 
-    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "filterMethod", "softDelete"];
+    /**
+     * @var string[] Fields that do not need to be returned in the resulting ORM object serialization
+     */
+    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
 
     /**
      * ORM constructor.
@@ -84,6 +92,38 @@ class ORM implements  \JsonSerializable
     function __construct($request = null, $fromDB=false, $tableName = "",  $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
         $this->create ($request, $fromDB, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA);
+    }
+
+
+    /**
+     * Saves a file into the database
+     * @param $fieldName
+     * @param $fileInputName
+     */
+    function saveFile($fieldName, $fileInputName) {
+        $tableName = $this->getTableName();
+        $tableData = $this->getTableData();
+        if (!empty($_FILES) && isset($_FILES[$fileInputName])) {
+            $primaryCheck = $this->getPrimaryCheck($tableData);
+            $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+            $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
+            $this->DBA->commit();
+        } else {
+            return false;
+        }
+    }
+
+    function saveBlob ($fieldName, $content) {
+        $tableName = $this->getTableName();
+        $tableData = $this->getTableData();
+        if (!empty($content)) {
+            $primaryCheck = $this->getPrimaryCheck($tableData);
+            $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+            $this->DBA->exec($sql, $content);
+            $this->DBA->commit();
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -157,12 +197,13 @@ class ORM implements  \JsonSerializable
      * Gets the field mapping in the database eg -> lastName maps to last_name
      * @param string $name Name of field required
      * @param array $fieldMapping Array of field mapping
+     * @param bool $ignoreMapping Ignore the field mapping
      * @return string Required field name from database
      */
     function getFieldName($name, $fieldMapping = [],$ignoreMapping=false)
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
-            return $fieldMapping[$name];
+            return strtolower($fieldMapping[$name]);
         } else {
             $fieldName = "";
             for ($i = 0; $i < strlen($name); $i++) {
@@ -174,6 +215,23 @@ class ORM implements  \JsonSerializable
             }
             return strtolower($fieldName);
         }
+    }
+
+    /**
+     * Gets a nice name for a column for display purposes
+     * @param $name
+     * @return string
+     */
+    function getTableColumnName($name) {
+        $fieldName = "";
+        for ($i = 0; $i < strlen($name); $i++) {
+            if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name)-1 && (!\ctype_upper($name[$i-1]) || !\ctype_upper($name[$i+1]) )) {
+                $fieldName .= " " . $name[$i];
+            } else {
+                $fieldName .= $name[$i];
+            }
+        }
+        return ucwords($fieldName);
     }
 
     /**
@@ -283,7 +341,7 @@ class ORM implements  \JsonSerializable
         foreach ($tableData as $fieldName => $fieldValue) {
 
             if (empty($fieldValue)) continue;
-            if (in_array($fieldName, $this->virtualFields)) continue;
+            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
@@ -319,6 +377,7 @@ class ORM implements  \JsonSerializable
             }
         }
 
+        DebugLog::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
         return "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
     }
 
@@ -331,6 +390,7 @@ class ORM implements  \JsonSerializable
      */
     function generateUpdateSQL($tableData, $filter, $tableName = "")
     {
+
         $tableName = $this->getTableName($tableName);
         $updateValues = [];
 
@@ -340,8 +400,10 @@ class ORM implements  \JsonSerializable
         }
 
 
+
         foreach ($tableData as $fieldName => $fieldValue) {
-            if (in_array($fieldName, $this->virtualFields)) continue;
+
+            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
 
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -352,6 +414,7 @@ class ORM implements  \JsonSerializable
             }
         }
 
+        DebugLog::message("update {$tableName} set " . join(",", $updateValues) . " where {$filter}");
         return  "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
 
     }
@@ -472,13 +535,15 @@ class ORM implements  \JsonSerializable
     {
         $primaryFields = explode(",", $this->primaryKey);
         $primaryFieldFilter = [];
+
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
                 $primaryTableField = $this->getFieldName($primaryField, $this->fieldMapping);
                 if (key_exists($primaryTableField, $tableData)) {
                     $primaryFieldFilter[] = str_replace ("= ''",  "is null",  "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
-
                 } else {
+                    error_log($primaryTableField.print_r ($this->fieldMapping, 1));
+
                     $primaryFieldFilter[] = "{$primaryTableField} is null";
                 }
             }
@@ -566,7 +631,6 @@ class ORM implements  \JsonSerializable
                     if (!empty($lastId)) {
                         $this->{$this->primaryKey} = $lastId;
                     } else
-
                         if (method_exists($error, "records") && !empty($error->records())) {
                             $record = $error->asObject()[0];
 
@@ -584,7 +648,6 @@ class ORM implements  \JsonSerializable
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
                 $fetchData = $this->DBA->fetch($sqlFetch, 1, 0, $fieldMapping)->asArray();
-
 
                 $this->mapFromRecord($fetchData[0], true);
 
@@ -633,6 +696,7 @@ class ORM implements  \JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
+
         if (!empty($fieldMapping) && empty($this->fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
@@ -646,8 +710,6 @@ class ORM implements  \JsonSerializable
             $primaryCheck = $this->getPrimaryCheck($tableData);
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
-
-
 
         $fetchData = $this->DBA->fetch($sqlStatement, 1, 0,$fieldMapping)->asObject();
 
@@ -803,13 +865,24 @@ class ORM implements  \JsonSerializable
     }
 
     function generateCRUD($path="") {
-        $className = get_class($this);
 
+        $className = get_class($this);
         if (empty($path)) {
             $callingCode = '(new '.$className.'())->generateCRUD();';
         } else {
             $callingCode = '(new '.$className.'())->generateCRUD("' . $path . '");';
         }
+
+        if (empty($path)) {
+            $backtrace = debug_backtrace();
+            $path = $backtrace[1]["args"][0];
+
+            $path = str_replace(getcwd().DIRECTORY_SEPARATOR."src", "", $path);
+            $path = str_replace(".php", "", $path);
+            $path = str_replace(DIRECTORY_SEPARATOR, "/", $path);
+        }
+        
+
 
         $backTrace = debug_backtrace()[0];
         $fileName =  ($backTrace["file"]);
@@ -820,26 +893,28 @@ class ORM implements  \JsonSerializable
 
         $template = <<<'EOT'
 /**
- * CRUD Prototype Example
- * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
+ * CRUD Prototype [OBJECT] Modify as needed
+ * Creates  GET @ /path, /path/{id}, - fetch,form for whole or for single
             POST @ /path, /path/{id} - create & update
             DELETE @ /path/{id} - delete for single
  */
 \Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $[OBJECT_NAME], $filter, $request) {
     switch ($action) {
        case "form":
-            //Return back a form to be submitted to the create
-             
-            $content = \Tina4\renderTemplate("forms/admin/[OBJECT_NAME].twig", []);
-
-            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => "Add [OBJECT]", "onclick" => "if ( $('#[OBJECT_NAME]').valid() ) { saveForm('[OBJECT_NAME]', '" . TINA4_BASE_URL . "[PATH]', 'message'); }", "content" => $content]);
-       break;
        case "fetch":
             //Return back a form to be submitted to the create
              
-            $content = \Tina4\renderTemplate("forms/admin/[OBJECT_NAME].twig", []);
+            if ($action == "form") {
+                $title = "Add [OBJECT]";
+                $savePath =  TINA4_BASE_URL . "[PATH]";
+                $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", []);
+            } else {
+                $title = "Edit [OBJECT]";
+                $savePath =  TINA4_BASE_URL . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
+                $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", ["data" => $[OBJECT_NAME]]);
+            }
 
-            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => "Add [OBJECT]", "onclick" => "if ( $('#[OBJECT_NAME]').valid() ) { saveForm('[OBJECT_NAME]', '" . TINA4_BASE_URL . "[PATH]', 'message'); }", "content" => $content]);
+            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => $title, "onclick" => "if ( $('#[OBJECT_NAME]Form').valid() ) { saveForm('[OBJECT_NAME]Form', '" .$savePath."', 'message'); }", "content" => $content]);
        break;
        case "read":
             //Return a dataset to be consumed by the grid with a filter
@@ -859,7 +934,7 @@ class ORM implements  \JsonSerializable
         break;
         case "afterCreate":
            //return needed 
-           return (object)["httpCode" => 200, "message" => "OK"];  
+           return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Created');</script>"];
         break;    
         case "update":
             //Manipulate the $object here
@@ -867,7 +942,7 @@ class ORM implements  \JsonSerializable
         break;
         case "afterUpdate":
            //return needed 
-           return (object)["httpCode" => 200, "message" => "OK"];
+           return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Updated');</script>"];
         break;   
         case "delete":
             //Manipulate the $object here
@@ -875,7 +950,7 @@ class ORM implements  \JsonSerializable
         break;
         case "afterDelete":
             //return needed 
-            return (object)["httpCode" => 200, "message" => "OK"]; 
+            return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Deleted');</script>"];
         break;
     }
 });
@@ -883,18 +958,57 @@ EOT;
         $template = str_replace("[PATH]", $path, $template);
         $template = str_replace("[OBJECT]", $className, $template);
         $template = str_replace("[OBJECT_NAME]", $this->camelCase($className), $template);
+        $template = str_replace("[PRIMARY_KEY]", $this->primaryKey, $template);
+        $template = str_replace("[GRID_ID]", $this->camelCase($className), $template);
+        $template = str_replace("[TEMPLATE_PATH]", str_replace(DIRECTORY_SEPARATOR, "/", $path), $template);
 
 
         $content = file_get_contents($fileName);
 
-        $content = str_replace ($callingCode, $template, $content);
+
+        
+        //create a crud grid and form
+        $formData = $this->getObjectData();
+
+        $tableColumns = [];
+        $tableColumnMappings = [];
+        $tableFields = [];
+        foreach ($formData as $columnName => $value) {
+            $tableColumns[] = $this->getTableColumnName($columnName);
+            $tableColumnMappings[] = $columnName;
+            $tableFields[] = ["fieldName" => $columnName, "fieldLabel" => $this->getTableColumnName($columnName)];
+        }
+
+        $componentPath = getcwd().DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."templates".str_replace("/", DIRECTORY_SEPARATOR, $path);
+
+        if (!file_exists($componentPath)) {
+            mkdir ($componentPath, 0755, true);
+        }
+
+        $gridFilePath = $componentPath.DIRECTORY_SEPARATOR."grid.twig";
+
+        $formFilePath = $componentPath.DIRECTORY_SEPARATOR."form.twig";
+
+        //create the grid
+        $gridHtml = \Tina4\renderTemplate("components/grid.twig", ["gridTitle" => $className , "gridId" => $this->camelCase($className) , "primaryKey" => $this->primaryKey, "tableColumns" => $tableColumns, "tableColumnMappings" => $tableColumnMappings, "apiPath" => $path, "baseUrl" => TINA4_BASE_URL]);
+
+        file_put_contents($gridFilePath, $gridHtml);
+
+        //create the form
+        $formHtml = \Tina4\renderTemplate("components/form.twig", ["formId" => $this->camelCase($className) , "primaryKey" => $this->primaryKey, "tableFields" => $tableFields, "baseUrl" => TINA4_BASE_URL]);
+
+        file_put_contents($formFilePath, $formHtml);
+
+        $gridRouterCode = '
+\Tina4\Get::add("'.$path.'/landing", function (\Tina4\Response $response){
+    return $response (\Tina4\renderTemplate("'.$path.'/grid.twig"), HTTP_OK, TEXT_HTML);
+});
+        ';
+
+        $content = str_replace ($callingCode, $gridRouterCode.PHP_EOL.$template, $content);
 
         file_put_contents( $fileName, $content);
-        
-        //create some crud forms
-        
-        
-        
+
     }
 
 }

@@ -209,7 +209,7 @@ class Routing
      * @param object $config Config containing configs from the initialization
      * @throws \ReflectionException
      */
-    function __construct($root = "", $subFolder="", $urlToParse = "", $method = "", $config=null)
+    function __construct($root = "", $subFolder="", $urlToParse = "", $method = "", \Tina4\Config $config=null)
     {
         if (!empty($root)) {
             $_SERVER["DOCUMENT_ROOT"] = $root;
@@ -217,8 +217,8 @@ class Routing
 
         $this->root = $root;
 
-        if (!empty($config) && isset($config->auth)) {
-            $this->auth = $config->auth;
+        if (!empty($config) && !empty($config->getAuthentication())) {
+            $this->auth = $config->getAuthentication();
         } else {
             $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
         }
@@ -259,7 +259,7 @@ class Routing
          * @param null $contentType
          * @return false|string
          */
-        $response = new \Tina4\Response ();
+        $response = new \Tina4\Response();
 
         $urlToParse = $this->cleanURL($urlToParse);
 

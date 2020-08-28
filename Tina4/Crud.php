@@ -1,20 +1,126 @@
 <?php
 namespace Tina4;
 
-
 class Crud
 {
+    //Common inputs, firstName,lastName,email,mobileNo,address1,address2,cityTown,postalCode,Country
+
+    /*
+<input type="button">
+<input type="checkbox">
+<input type="color">
+<input type="date">
+<input type="datetime-local">
+<input type="email">
+<input type="file">
+<input type="hidden">
+<input type="image">
+<input type="month">
+<input type="number">
+<input type="password">
+<input type="radio">
+<input type="range">
+<input type="reset">
+<input type="search">
+<input type="submit">
+<input type="tel">
+<input type="text">
+<input type="time">
+<input type="url">
+<input type="week">
+     */
+
     /**
-     * Generates a form for use in CRUD
-     * @param int $columns
-     * @param null $ignoreFields
-     * @param string $namePrefix
+     *
+     * @param $name
+     * @param string $value
+     * @param string $placeHolder
+     * @param string $type
+     * @param false $required
+     * @param string $javascript
+     * @param array $lookupData
+     * @param string $label
+     * @return object
+     */
+    public static function addFormInput($name,$value="",$placeHolder="",$type="text", $required=false, $javascript="", $lookupData=[], $label="") {
+        if (empty($label) && !empty($placeHolder)) $label = $placeHolder;
+        return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type, "required" => $required, "javascript" => $javascript, "options" => $lookupData ];
+    }
+
+
+    /**
+     * Generates a form
+     * @param $formInputs
+     * @param int $noOfColumns
+     * @param string $formName
      * @param string $groupClass
      * @param string $inputClass
      * @return string
      */
-    public function generateForm($columns=1, $ignoreFields=null, $namePrefix="", $groupClass="form-group", $inputClass="form-control") {
-        $html = "coming";
+    public static function generateForm($formInputs, $noOfColumns=1, $formName="data", $formMethod="post", $formAction=null, $groupClass="form-group", $inputClass="form-control", $columnClass="col-md-", $imageClass="img-thumbnail rounded mx-auto ") {
+        $fields = [];
+        $colSpan = 12 / $noOfColumns;
+        foreach ($formInputs as $id => $formInput) {
+            if (in_array($formInput->type, ["text", "password", "hidden", "color", "file", "tel", "date", "datetime-local", "email", "month", "number", "search", "time", "url", "week"])) {
+                $fields[] = _div(["class" => $columnClass.$colSpan], _div (["class" => $groupClass],
+                    _label(["for" => $formInput->name], $formInput->label),
+                    _input(["class" => $inputClass,
+                            "type" => $formInput->type,
+                            "name" => $formInput->name,
+                            "id" => $formInput->name,
+                            "placeholder" => $formInput->placeHolder,
+                            "value" => $formInput->value,
+                            "required" => $formInput->required,
+                            "_" => $formInput->javascript]
+                    )
+                ));
+            } elseif ($formInput->type == "select") {
+                $options = [];
+                $selected = null;
+                foreach ($formInput->options as $key => $value) {
+
+                    if ($key == $formInput->value) {
+
+                        $selected = ["selected" => true];
+                    } else {
+                        $selected = null;
+                    }
+                    $options[] = _option(["value" => $key, $selected], $value);
+                }
+
+                $fields[] =  _div(["class" => $columnClass.$colSpan], _div (["class" => $groupClass],
+                    _label(["for" => $formInput->name], $formInput->label),
+                    _select(["class" => $inputClass,
+                            "name" => $formInput->name,
+                            "id" => $formInput->name,
+                            "required" => $formInput->required,
+                            "_" => $formInput->javascript],
+                            $options
+                    )
+                ));
+            } elseif ($formInput->type == "image") {
+                $fields[] =  _div(["class" => $columnClass.$colSpan], _div (["class" => $groupClass],
+                    _label(["for" => $formInput->name], $formInput->label),
+                    _br(),
+                    _img(["src" => "data:image/png;base64,".$formInput->value, "class" => $imageClass]),
+                    _br(),
+                    _input([
+                            "type" => "file",
+                            "name" => $formInput->name,
+                            "id" => $formInput->name,
+                            "placeholder" => $formInput->placeHolder,
+                            "value" => $formInput->value,
+                            "required" => $formInput->required,
+                            "_" => $formInput->javascript]
+                    )
+                ));
+            }
+
+        }
+
+        $html = _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
+            _div (["class" => "row"], $fields)
+        );
 
         return $html;
     }
@@ -130,7 +236,7 @@ class Crud
         \Tina4\Route::get($path."/form",
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $htmlResult = $function ("form", $object, null, $request);
-                return $response ($htmlResult, HTTP_OK, APPLICATION_JSON);
+                return $response ($htmlResult, HTTP_OK);
             }
         );
 
@@ -144,7 +250,7 @@ class Crud
                 $function ("create", $object, null, $request);
                 $object->save();
                 $jsonResult =  $function ("afterCreate", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
+                return $response ($jsonResult, HTTP_OK);
             }
         );
 
@@ -153,7 +259,7 @@ class Crud
             function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
                 $filter = \Tina4\Crud::getDataTablesFilter();
                 $jsonResult = $function ("read", new $object(), $filter, $request);
-                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
+                return $response ($jsonResult, HTTP_OK);
             }
         );
 
@@ -168,7 +274,7 @@ class Crud
                     $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
                 }
 
-                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
+                return $response ($jsonResult, HTTP_OK);
             }
         );
 
@@ -184,7 +290,7 @@ class Crud
                 $function ("update", $object, null, $request);
                 $object->save();
                 $jsonResult = $function ("afterUpdate", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
+                return $response ($jsonResult, HTTP_OK);
             }
         );
 
@@ -199,7 +305,7 @@ class Crud
                     $object->delete();
                 }
                 $jsonResult = $function ("afterDelete", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK, APPLICATION_JSON);
+                return $response ($jsonResult, HTTP_OK);
             }
         );
 
