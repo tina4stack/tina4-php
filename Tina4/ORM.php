@@ -113,6 +113,19 @@ class ORM implements  \JsonSerializable
         }
     }
 
+    function saveBlob ($fieldName, $content) {
+        $tableName = $this->getTableName();
+        $tableData = $this->getTableData();
+        if (!empty($content)) {
+            $primaryCheck = $this->getPrimaryCheck($tableData);
+            $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+            $this->DBA->exec($sql, $content);
+            $this->DBA->commit();
+        } else {
+            return false;
+        }
+    }
+
     /**
      * Allows ORM to be created
      * @param null $request
@@ -385,6 +398,7 @@ class ORM implements  \JsonSerializable
             $foreignField = $this->getObjectName($hasOne->getFieldName());
             unset($tableData[$foreignField]);
         }
+
 
 
         foreach ($tableData as $fieldName => $fieldValue) {
@@ -682,6 +696,7 @@ class ORM implements  \JsonSerializable
      */
     function load($filter = "", $tableName = "", $fieldMapping = [])
     {
+
         if (!empty($fieldMapping) && empty($this->fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
