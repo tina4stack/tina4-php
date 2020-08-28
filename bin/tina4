@@ -89,7 +89,7 @@ function processCreateORMfromDB($step, $input, $handle) {
                 }
 
                 $definition = '<?php
-class [CLASS_NAME] extends \Tina4\Orm
+class [CLASS_NAME] extends \Tina4\ORM
 {
     public $tableName="[TABLE_NAME]";
     public $primaryKey="[PRIMARY_KEY]"; //set for primary key
