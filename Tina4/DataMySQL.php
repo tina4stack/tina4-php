@@ -212,6 +212,13 @@ class DataMySQL extends DataBase
             $resultCount["COUNT_RECORDS"] = 0;
         }
 
+        //Ensures the pointer is at the end in order to close the connection - Might be a buggy fix
+        if(strpos($sql, "call") !== false){
+            while(@\mysqli_next_result($this->dbh)){
+
+            }
+        }
+
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
     }
