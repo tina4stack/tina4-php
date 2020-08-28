@@ -71,7 +71,7 @@ class DataMySQL extends DataBase
     {
         $params = func_get_args();
 
-        if (stripos($params[0], "returning") !== false) {
+        if (stripos($params[0], "call") !== false) {
             $fetchData = $this->fetch($params[0]);
             return $fetchData;
         } else {
@@ -144,7 +144,8 @@ class DataMySQL extends DataBase
     {
         $initialSQL = $sql;
 
-        if (strpos($sql, "limit") === false) {
+        //Don't add a limit if there is a limit already or if there is a stored procedure call
+        if (strpos($sql, "limit") === false || strpos($sql, "call") === false) {
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
