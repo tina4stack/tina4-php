@@ -309,11 +309,11 @@ class ORM implements  \JsonSerializable
                     $fieldInfo[1] = "varchar(1000)";
                 }
             }
-            $fields[] = $this->getObjectName($fieldName)." ".$fieldInfo[1];
+            $fields[] = "\t".$this->getObjectName($fieldName)." ".$fieldInfo[1];
         }
 
         $fields[] = "primary key (".$this->primaryKey.")";
-        return "create table {$tableName} (".join(",", $fields).")";
+        return "create table {$tableName} (\n".join(",\n", $fields)."\n)";
     }
 
 
