@@ -339,9 +339,9 @@ class ORM implements  \JsonSerializable
 
         $keyInFieldList = false;
         foreach ($tableData as $fieldName => $fieldValue) {
-
             if (empty($fieldValue)) continue;
-            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
+            if ($fieldName == "form_token") continue; //form token is reserved
+            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields) || in_array($fieldName, $this->excludeFields)) continue;
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
@@ -402,8 +402,8 @@ class ORM implements  \JsonSerializable
 
 
         foreach ($tableData as $fieldName => $fieldValue) {
-
-            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields)) continue;
+            if ($fieldName == "form_token") continue; //form token is reserved
+            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields) || in_array($fieldName, $this->excludeFields)) continue;
 
             if (is_null($fieldValue)) $fieldValue = "null";
             if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
@@ -477,6 +477,7 @@ class ORM implements  \JsonSerializable
 
         $tableData = [];
         foreach ($this as $fieldName => $value) {
+
             if (!in_array($fieldName, $this->protectedFields) && !in_array($fieldName, $this->excludeFields)) {
                 $tableData[$fieldName] = $value;
             }

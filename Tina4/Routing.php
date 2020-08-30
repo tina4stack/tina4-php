@@ -34,7 +34,7 @@ class Routing
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
-    private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.]*)\\//";
+    private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.\\_]*)\\//";
 
     function rangeDownload($file) {
 
