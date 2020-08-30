@@ -340,7 +340,6 @@ class Tina4Php
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
 
-
         if (!empty($config) && !empty($config->getTwigFilters())) {
            
             foreach ($config->getTwigFilters() as $name => $method) {
@@ -348,6 +347,16 @@ class Tina4Php
                 $twig->addFilter($filter);
             }
         }
+
+        //Add form Token
+        $filter = new \Twig\TwigFilter("formToken", function($payload) use ($auth) {
+            if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
+               return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
+            }
+        }) ;
+
+        $twig->addFilter($filter);
+
         //Class mapping
         if (!class_exists("Tina4\Orm")) {
             class_alias('Tina4\ORM', 'Tina4\Orm');

@@ -71,6 +71,12 @@ class Auth extends \Tina4\Data
         }
     }
 
+    function getSessionToken() {
+        if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
+            return $_SESSION["tina4:authToken"];
+        }
+    }
+
     /**
      * Validate the request
      * @param $request

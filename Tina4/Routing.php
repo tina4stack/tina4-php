@@ -198,6 +198,16 @@ class Routing
     }
 
 
+    function forbidden() {
+        if (file_exists("./assets/images/403.jpg")) {
+            $content = "<img src=\"/assets/images/403.jpg\">";
+        } else {
+            $content = "<img src=\"/{$this->subFolder}src/assets/images/403.jpg\">";
+        }
+        http_response_code(HTTP_FORBIDDEN);
+        echo $content;
+        die();
+    }
 
 
     /**
@@ -220,7 +230,7 @@ class Routing
         if (!empty($config) && !empty($config->getAuthentication())) {
             $this->auth = $config->getAuthentication();
         } else {
-            $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
+            $this->auth = new \Tina4\Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
         }
 
         if (!empty($subFolder)) {
@@ -342,13 +352,26 @@ class Routing
                         if ($this->auth->tokenExists()) { //Tries to get a token from the session
                             $result = call_user_func_array($route["function"], $params);
                         } else {
-                            $result = $response("Not authorized", HTTP_UNAUTHORIZED);
+                            $this->forbidden();
                         }
 
                     $matched = true;
                     break;
                 } else {
-                    $result = call_user_func_array($route["function"], $params);
+                    if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE])) {
+                        //Check for the formToken request variable
+                        if ( !$this->auth->validToken($_REQUEST["formToken"])) {
+                            $this->forbidden();
+                        } else {
+                            $result = call_user_func_array($route["function"], $params);
+                        }
+                    } else {
+                        if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE])) {
+                            $result = call_user_func_array($route["function"], $params);
+                        } else {
+                            $this->forbidden();
+                        }
+                    }
                 }
 
                 //check for an empty result
@@ -386,6 +409,7 @@ class Routing
 
                 \Tina4\DebugLog::message("TINA4: Variables\n" . join("\n", $variables), TINA4_DEBUG_LEVEL);
             }
+
 
             $this->content .= new ParseTemplate($root, $fileName, get_defined_vars(), $this->subFolder);
         } else {

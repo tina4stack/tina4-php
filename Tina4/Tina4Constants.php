@@ -3,6 +3,9 @@ namespace Tina4;
 
 if (!defined("TINA4_SUPPRESS")) define ("TINA4_SUPPRESS", false);
 
+//CSFR
+if (!defined("TINA4_SECURE")) define ("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
+
 //Debug Types
 if(!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
 if(!defined("DEBUG_SCREEN"))define("DEBUG_SCREEN", 9002);
