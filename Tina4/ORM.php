@@ -520,7 +520,13 @@ class ORM implements  \JsonSerializable
                     \Tina4\DebugLog::message("TINA4: We need to make a table for ".$tableName, TINA4_DEBUG_LEVEL);
                 }
 
-                $this->DBA->exec( $this->generateCreateSQL($this->getTableData(), $tableName) )  ;
+                $sql = $this->generateCreateSQL($this->getTableData(), $tableName);
+
+                //Make a migration for it
+                $migrate = (new \Tina4\Migration());
+                $migrate->createMigration("Create table {$tableName}", $sql);
+
+                $this->DBA->exec( $sql )  ;
             }
             return true;
         }

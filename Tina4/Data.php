@@ -21,9 +21,6 @@ class Data
                 }
             }
         }
-
-        DebugLog::message("HELLO!!!");
-
         //Assign database connections directly based on the variables
         if (!empty($DBA) && !is_array($DBA)) {
             $this->DBA = $DBA;
