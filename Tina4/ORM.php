@@ -105,6 +105,7 @@ class ORM implements  \JsonSerializable
         $tableData = $this->getTableData();
         if (!empty($_FILES) && isset($_FILES[$fileInputName])) {
             $primaryCheck = $this->getPrimaryCheck($tableData);
+            $fieldName = $this->getFieldName($fieldName);
             $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
             $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
             $this->DBA->commit();
@@ -118,6 +119,7 @@ class ORM implements  \JsonSerializable
         $tableData = $this->getTableData();
         if (!empty($content)) {
             $primaryCheck = $this->getPrimaryCheck($tableData);
+            $fieldName = $this->getFieldName($fieldName);
             $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
             $this->DBA->exec($sql, $content);
             $this->DBA->commit();
@@ -887,7 +889,7 @@ class ORM implements  \JsonSerializable
             $path = str_replace(".php", "", $path);
             $path = str_replace(DIRECTORY_SEPARATOR, "/", $path);
         }
-        
+
 
 
         $backTrace = debug_backtrace()[0];
@@ -972,7 +974,7 @@ EOT;
         $content = file_get_contents($fileName);
 
 
-        
+
         //create a crud grid and form
         $formData = $this->getObjectData();
 

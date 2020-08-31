@@ -286,7 +286,27 @@ class Tina4Php
         });
 
         \Tina4\Route::get("/migrate/create", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
-            $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
+          //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
+
+            $html = _html(
+                _body (_style(
+                        "body { font-family: Arial; border: 1px solid black; padding: 20px; }
+                        label{ display:block; margin-top: 5px; } 
+                        input, textarea { width: 100%; font-size: 14px; } 
+                        button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }
+                        "),
+                     _form (["class" => "form", "method" =>  "post"],
+                     _label("Migration Description"),
+                     _input(["type" => "text", "name"=>"description"]),
+                     _label("SQL Statement"),
+                     _textarea (["rows"=>"20",
+                                 "name"=>"sql"]),
+                     _br(),
+                     _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
+                     _button("Create Migration")
+                     )
+                 )
+            );
             return $response ($html, HTTP_OK, TEXT_HTML);
         });
 
