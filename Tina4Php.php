@@ -339,6 +339,7 @@ class Tina4Php
         $twig->addGlobal('baseUrl', $subFolder);
         $twig->addGlobal('baseURL', $subFolder);
         $twig->addGlobal('uniqid', uniqid());
+        $twig->addGlobal('formToken', $auth->getSessionToken());
 
         if (!empty($config) && !empty($config->getTwigFilters())) {
            

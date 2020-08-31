@@ -62,7 +62,8 @@ class Crud
         $colSpan = 12 / $noOfColumns;
         foreach ($formInputs as $id => $formInput) {
             if (in_array($formInput->type, ["text", "password", "hidden", "color", "file", "tel", "date", "datetime-local", "email", "month", "number", "search", "time", "url", "week"])) {
-                $fields[] = _div(["class" => $columnClass.$colSpan], _div (["class" => $groupClass],
+                $fields[] = _div(["class" => $columnClass.$colSpan],
+                    _div (["class" => $groupClass],
                     _label(["for" => $formInput->name], $formInput->label),
                     _input(["class" => $inputClass,
                             "type" => $formInput->type,
@@ -78,9 +79,7 @@ class Crud
                 $options = [];
                 $selected = null;
                 foreach ($formInput->options as $key => $value) {
-
                     if ($key == $formInput->value) {
-
                         $selected = ["selected" => true];
                     } else {
                         $selected = null;
@@ -115,7 +114,6 @@ class Crud
                     )
                 ));
             }
-
         }
 
         $html = _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],

@@ -741,9 +741,8 @@ class ORM implements  \JsonSerializable
      */
     function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
-        if (!$this->checkDBConnection()) return;
-
         $tableName = $this->getTableName($tableName);
+        if (!$this->checkDBConnection($tableName)) return;
 
         $tableData = $this->getTableData($fieldMapping, true);
         if (empty($filter)) {
