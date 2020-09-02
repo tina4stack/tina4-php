@@ -108,10 +108,17 @@ class Auth extends \Tina4\Data
 
     /**
      * Gets an auth token for validating against secure URLS for the session
+     * @param array $payLoad
+     * @param string $privateKey
+     * @param string $encryption
      * @return string
      */
-    public function getToken($payLoad=[]) {
+    public function getToken($payLoad=[], $privateKey="", $encryption=JWT::ALGORITHM_RS256) {
         self::initSession();
+
+        if (!empty($privateKey)) {
+            $this->privateKey = $privateKey;
+        }
 
         if (!is_array($payLoad) && !empty($payLoad)) {
             if (is_object($payLoad)) {
@@ -122,6 +129,7 @@ class Auth extends \Tina4\Data
         }
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
+
         $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
         $tokenString = $tokenEncoded->__toString();
         $_SESSION["tina4:authToken"] = $tokenString;
@@ -132,11 +140,17 @@ class Auth extends \Tina4\Data
     /**
      * Checks if an auth token in the header is valid against the session
      * @param $token
+     * @param string $publicKey
+     * @param string $encryption
      * @return bool
      */
-    public function validToken($token) {
+    public function validToken($token, $publicKey="", $encryption=JWT::ALGORITHM_RS256) {
         \Tina4\DebugLog::message("Validating token");
         self::initSession();
+
+        if (!empty($publicKey)) {
+            $this->publicKey = $publicKey;
+        }
 
         $token = trim(str_replace("Bearer ", "", $token));
 
@@ -152,7 +166,7 @@ class Auth extends \Tina4\Data
         }
 
         try {
-            $tokenEncoded->validate($this->publicKey, JWT::ALGORITHM_RS256);
+            $tokenEncoded->validate($this->publicKey, $encryption);
             return true;
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
@@ -165,8 +179,13 @@ class Auth extends \Tina4\Data
         }
     }
 
-    function getPayLoad($token) {
+    function getPayLoad($token, $publicKey="", $encryption=JWT::ALGORITHM_RS256) {
         \Tina4\DebugLog::message("Getting token payload");
+
+        if (!empty($publicKey)) {
+            $this->publicKey = $publicKey;
+        }
+
         try {
             $tokenEncoded = new TokenEncoded($token);
         } catch (Exception $e) {
@@ -175,7 +194,7 @@ class Auth extends \Tina4\Data
         }
 
         try {
-            $tokenEncoded->validate($this->publicKey, JWT::ALGORITHM_RS256);
+            $tokenEncoded->validate($this->publicKey, $encryption);
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
             \Tina4\DebugLog::message("Validating {$token} failed!");
