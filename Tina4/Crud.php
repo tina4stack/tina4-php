@@ -301,6 +301,8 @@ class Crud
                 $function ("delete", $object, null, $request);
                 if (!$object->softDelete) {
                     $object->delete();
+                } else {
+                    $object->save();
                 }
                 $jsonResult = $function ("afterDelete", $object, null, $request);
                 return $response ($jsonResult, HTTP_OK);
