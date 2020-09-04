@@ -120,6 +120,10 @@ class Tina4Php
     function __construct(\Tina4\Config $config = null)
     {
         DebugLog::message("Beginning of Tina4PHP Initialization");
+
+        //Initialize the environment variables
+        (new Env());
+
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
