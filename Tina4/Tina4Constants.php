@@ -1,6 +1,5 @@
 <?php
 namespace Tina4;
-
 if (!defined("TINA4_SUPPRESS")) define ("TINA4_SUPPRESS", false);
 
 //CSFR
@@ -50,3 +49,68 @@ if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
 if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
 if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", 1);
 if (!defined("DATA_NO_SQL"))  define("DATA_NO_SQL", "ERR001");
+
+//Initialize the ENV
+(new \Tina4\Env());
+
+/**
+ * Redirect
+ * @param string $url The URL to be redirected to
+ * @param integer $statusCode Code of status
+ * @example examples\exampleTina4PHPRedirect.php
+ */
+function redirect($url, $statusCode = 303)
+{
+    //Define URL to test from parsed string
+    $testURL = parse_url($url);
+
+    //Check if test URL contains a scheme (http or https) or if it contains a host name
+    if ((!isset($testURL["scheme"]) || $testURL["scheme"] == "") && (!isset($testURL["host"]) || $testURL["host"] == "")) {
+
+        //Check if the current page uses an alias and if the parsed URL string is an absolute URL
+        if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "" && substr($url, 0, 1) === '/') {
+
+            //Append the prefix to the absolute path
+            header('Location: ' . $_SERVER["CONTEXT_PREFIX"] . $url, true, $statusCode);
+            die();
+        } else {
+            header('Location: ' . $url, true, $statusCode);
+            die();
+        }
+
+    } else {
+        header('Location: ' . $url, true, $statusCode);
+        die();
+    }
+
+}
+
+/**
+ * Autoloader
+ * @param $class
+ */
+function tina4_autoloader($class)
+{
+    $root = dirname(__FILE__);
+
+    $class = explode("\\", $class);
+    $class = $class[count($class) - 1];
+
+    $fileName = "{$root}".DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
+
+    if (file_exists($fileName)) {
+        require_once $fileName;
+    } else {
+        if (defined("TINA4_INCLUDE_LOCATIONS") && is_array(TINA4_INCLUDE_LOCATIONS)) {
+            foreach (TINA4_INCLUDE_LOCATIONS as $lid => $location) {
+                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR."{$location}".DIRECTORY_SEPARATOR."{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR."{$location}".DIRECTORY_SEPARATOR."{$class}.php";
+                    break;
+                }
+            }
+        }
+    }
+
+}
+
+spl_autoload_register('Tina4\tina4_autoloader');

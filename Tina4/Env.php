@@ -42,14 +42,19 @@ class Env
                     if (isset($variables[0]) && isset($variables[1])) {
                         if (!defined($variables[0])) {
                             DebugLog::message("Defining {$variables[0]} = $variables[1]");
-                            define($variables[0], $variables[1]);
+                            //echo 'return (defined("'.$variables[1].'") ? '.$variables[1].' : "'.$variables[1].'");';
+                            if (defined($variables[1])) {
+                                define($variables[0], eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
+                            } else {
+                                define($variables[0], $variables[1]);
+                            }
                         }
                     }
                 }
             }
 
         } else {
-            die("No environment .env file found");
+            die("No environment {$fileName} file found");
         }
     }
 }

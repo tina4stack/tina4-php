@@ -3,7 +3,7 @@ namespace Tina4;
 
 class DebugLog
 {
-    static function message($message, $debugType=DEBUG_NONE){
+    static function message($message, $debugType=9004){
 
         if (defined("TINA4_DEBUG_LEVEL")) $debugType = TINA4_DEBUG_LEVEL;
 
