@@ -40,13 +40,13 @@ class Env
                 } else {
                     $variables = explode("=", $line, 2);
                     if (isset($variables[0]) && isset($variables[1])) {
-                        if (!defined($variables[0])) {
+                        if (!defined(trim($variables[0]))) {
                             DebugLog::message("Defining {$variables[0]} = $variables[1]");
                             //echo 'return (defined("'.$variables[1].'") ? '.$variables[1].' : "'.$variables[1].'");';
                             if (defined($variables[1])) {
-                                define($variables[0], eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
+                                define(trim($variables[0]), eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
                             } else {
-                                define($variables[0], $variables[1]);
+                                define(trim($variables[0]), $variables[1]);
                             }
                         }
                     }

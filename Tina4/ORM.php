@@ -906,7 +906,7 @@ class ORM implements  \JsonSerializable
             POST @ /path, /path/{id} - create & update
             DELETE @ /path/{id} - delete for single
  */
-\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, $[OBJECT_NAME], $filter, $request) {
+\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, [OBJECT] $[OBJECT_NAME], $filter, $request) {
     switch ($action) {
        case "form":
        case "fetch":
@@ -938,7 +938,6 @@ class ORM implements  \JsonSerializable
         break;
         case "create":
             //Manipulate the $object here
-            
         break;
         case "afterCreate":
            //return needed 
