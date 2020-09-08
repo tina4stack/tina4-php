@@ -54,7 +54,7 @@ class Auth extends \Tina4\Data
             return false;
         }
         mkdir($this->documentRoot."secrets");
-        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key`;
+        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
         return true;
@@ -151,6 +151,8 @@ class Auth extends \Tina4\Data
         if (!empty($publicKey)) {
             $this->publicKey = $publicKey;
         }
+
+        if (empty($this->publicKey)) return false;
 
         $token = trim(str_replace("Bearer ", "", $token));
 
