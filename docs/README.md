@@ -26,8 +26,10 @@ You can do this if your composer and PHP are already available to you on your co
 mkdir tina4example
 cd tina4example
 echo '<?php require "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
-composer require andrevanzuydam/tina4php 
+composer require andrevanzuydam/tina4php
+echo .>.env 
 php -S localhost:7145 index.php 
+
 ```
 
 Browse to http://localhost:7145 in your favourite browser
@@ -37,6 +39,7 @@ Browse to http://localhost:7145 in your favourite browser
 * I created a tina4example folder
 * I made and index.php with the bare minimum for Tina4 to run
 * I installed the composer dependencies for tina4php
+* I created env file
 * I started up the inbuilt web server
 
 Continue to [recommendations](recommendations.md) or [installation](installation.md)
