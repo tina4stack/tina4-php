@@ -16,7 +16,7 @@ Tina uses the following methods to make development quicker
 * IDE development tool > Tool used when writing code, debugging or version control Eg. PHPStorm; Visual Studio Code
 * PHP 7.1 >  Open source general-purpose scripting language used in software/web development
 * Composer > PHP package manager used to manage dependence between your libraries and PHP software/website 
-
+* OpenSSl > A toolkit used for Security Layer protocols between a computer network and Internet servers
 
 ## Who should use Tina4 ?
 
