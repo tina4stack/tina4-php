@@ -1,5 +1,9 @@
 # Getting Started
-## What's Tina about ?
+## What's Tina about?
+
+This is not another framework. Keep things simple and efficient. Tina4 is perfect if you want to build a website, create APIs or if you want to learn a structured PHP framework.
+
+## How Tina can help you about?
 
 Tina uses the following methods to make development quicker
 
@@ -9,8 +13,10 @@ Tina uses the following methods to make development quicker
 * Simple code layout and structure
 
 ## Requires
-* PHP 7.1 >
-* Composer
+* IDE development tool > Tool used when writing code, debugging or version control Eg. PHPStorm; Visual Studio Code
+* PHP 7.1 >  Open source general-purpose scripting language used in software/web development
+* Composer > PHP package manager used to manage dependence between your libraries and PHP software/website 
+
 
 ## Who should use Tina4 ?
 
@@ -37,7 +43,7 @@ Browse to http://localhost:7145 in your favourite browser
 ## What did I just do?
 
 * I created a tina4example folder
-* I made and index.php with the bare minimum for Tina4 to run
+* I made an index.php with the bare minimum for Tina4 to run
 * I installed the composer dependencies for tina4php
 * I created env file
 * I started up the inbuilt web server
