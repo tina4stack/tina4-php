@@ -119,7 +119,6 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
 
 ## Map my ORM field to a database field which doesn't follow the Tina4 pattern
 
-
 ## Annotate my REST for swagger
 
 ## Secure a REST end point

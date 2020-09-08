@@ -1,9 +1,10 @@
 <?php
-
-
 namespace Tina4;
-
-
+/**
+ * @todo This is a work in progress
+ * Class Swagger
+ * @package Tina4
+ */
 class Swagger implements  \JsonSerializable
 {
     function __construct()

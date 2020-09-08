@@ -55,7 +55,10 @@ class SQL implements \JsonSerializable
     }
 
 
-
+    /**
+     * @param $fields
+     * @return array
+     */
     function translateFields ($fields) {
         $result = [];
         foreach ($fields as $id => $field) {
@@ -68,6 +71,14 @@ class SQL implements \JsonSerializable
         return $result;
     }
 
+    /**
+     * Selects fields from the database
+     * @param string $fields
+     * @param int $limit
+     * @param int $offset
+     * @param array $hasOne
+     * @return $this
+     */
     public function select($fields="*", $limit=10, $offset=0, $hasOne=[])
     {
         if (is_array($fields)) {
