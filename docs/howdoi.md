@@ -214,5 +214,23 @@ Somewhere in Twig, in a template, far far away ...
 ```twig
 <label>{{ "NAME" | myFilter  }}</label>
 ```
+## Install my own IDE tool
+There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS.
 
+* Step 1 >
+
+   For PHPStorm navigate to : https://www.jetbrains.com/phpstorm/download
+
+   OR
+
+   For Visual Studio Code navigate to : https://code.visualstudio.com/download
+
+* Step 2  > Choose the correct installation for your Operating Software (eg. Windows, Mac or Linux) and download the installer or installation files
+
+* Step 3 > After the installation file download is complete, run the installation file and follow the prompts
+
+
+The installation window will inform you once the installation is complete.
+
+Please note, if you want to install the IDE tools via command line, the commands will be available on the download pages also.  
 
