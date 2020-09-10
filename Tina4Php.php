@@ -388,10 +388,6 @@ class Tina4Php
 
         $twig->addFilter($filter);
 
-        //Class mapping
-        if (!class_exists("Tina4\Orm")) {
-            class_alias('Tina4\ORM', 'Tina4\Orm');
-        }
         DebugLog::message("End of Tina4PHP Initialization");
     }
 
