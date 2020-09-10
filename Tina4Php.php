@@ -69,11 +69,11 @@ class Tina4Php
                             $GIT->push();
                         }
                     }
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
 
                 }
 
-            } catch (Exception $e) {
+            } catch (\Exception $e) {
                 echo $e->getMessage();
             }
         }
@@ -127,7 +127,7 @@ class Tina4Php
         }
 
         if (defined("TINA4_SUPPRESS")) {
-            DebugLog::message("We are suppressing the output of routes - TINA4_SUPPRESS has been declared as TRUE");
+            DebugLog::message("Check if Tina4 is being suppressed");
             $this->suppress = TINA4_SUPPRESS;
         }
 
@@ -278,7 +278,8 @@ class Tina4Php
                     file_put_contents($_SERVER["DOCUMENT_ROOT"]."/".$request->params["fileName"], $request->params["fileContent"]);
                     return $response ("Ok!", HTTP_OK, TEXT_HTML);
                 }
-        }) ;
+            return $response("");
+        });
 
         //migration routes
         \Tina4\Route::get("/migrate", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
@@ -383,8 +384,10 @@ class Tina4Php
         $filter = new \Twig\TwigFilter("formToken", function($payload) use ($auth) {
             if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
                return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
+            } else {
+               return "";
             }
-        }) ;
+        });
 
         $twig->addFilter($filter);
 
@@ -514,7 +517,7 @@ function renderTemplate($fileNameString, $data = [])
                     $render = $internalTwig->render("template".md5($fileNameString), $data);
                     return $render;
                 }
-    } catch (Exception $exception) {
+    } catch (\Exception $exception) {
         return $exception->getMessage();
     }
 }

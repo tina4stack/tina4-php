@@ -177,10 +177,10 @@ class ParseTemplate {
                     return "[Method {$parts["method"]} not found on ".get_class($object)."]";
                 }
             } else {
-                $objectReflection = new ReflectionClass($object);
+                $objectReflection = new \ReflectionClass($object);
                 return $objectReflection->newInstanceArgs($parts["params"]);
             }
-
+        return null;
     }
 
     /**

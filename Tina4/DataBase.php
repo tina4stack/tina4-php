@@ -332,7 +332,7 @@ class DataBase
 
     /**
      * Sets database commit from currently used database
-     * @param $transactionId Id of the transaction
+     * @param $transactionId integer Id of the transaction
      * @return mixed
      */
     public function commit($transactionId=null)

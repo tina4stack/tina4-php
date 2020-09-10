@@ -80,8 +80,8 @@ function processCreateORMfromDB($step, $input, $handle) {
 
                 $fields = [];
                 $primaryKey = "";
-                foreach ($data["fields"] as $id => $field) {
-                    if ($id == 0 || $field["pk"] == "PRI") {
+                foreach ($data["fields"] as $fid => $field) {
+                    if ($fid == 0 || $field["pk"] == "PRI") {
                         $primaryKey = $field["field"];
                     }
 
