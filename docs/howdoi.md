@@ -3,7 +3,7 @@
 This is a quick reference for doing things in the Tina4 environment which will hopefully make your journey easier.
 If you come up with something cool that you want to add here, please contribute.
 ## Install IDE tool
-There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS.
+There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS. Follow these instructions to install an IDE tool on your system.
 
 * Step 1 >
 
@@ -24,7 +24,7 @@ Please note, if you want to install the IDE tools via command line, the commands
 ## Install PHP 
 
 Follow these instructions to install PHP on your system. 
-### For Windows
+
 * Step 1 > Navigate to : https://www.php.net/downloads.php
 
         Download the current stable version for your  Operating System. Download the zip files or content.
@@ -53,7 +53,7 @@ Follow these instructions to install PHP on your system.
             Find ";extension=tidy" and remove the semicolon infront of the word extension
             Find ";extension=xmlrpc" and remove the semicolon infront of the word extension
             Find ";extension=xsl" and remove the semicolon infront of the word extension
-        Hit Ctrl+S or save changes you just made to "php.ini" file. 
+        Press Ctrl+S or save changes you just made to "php.ini" file. 
 
 * Step 4 > Change path environment variable.
     
@@ -70,7 +70,34 @@ Follow these instructions to install PHP on your system.
        To ensure your changes take effect you may restart your device. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. 
        The PHP version and details will appear in the terminal.    
         
-        
+## Install Xdebug
+
+Follow these instructions to install Xdebug on your system.
+
+* Step 1 > Navigate to : https://xdebug.org/download
+            
+    Download the correct version for your  Operating System (e.g. Windows 10 32bit or 64bit, Mac or Linux). Download the installer or content. 
+    
+* Step 2 > After the download is complete, copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
+    
+    It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
+
+* Step 3 > Configure "php.ini" file:
+
+        Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
+        Add the following line "zend_extension="E:\php\ext\php_xdebug.dll" in the extensions directory list (HINT: its above Module Settings) . 
+            *Please ensure that the "php_xdebug.dll" file location is correct* 
+        Add the following line "xdebug.remote_enable = 1" in the extensions directory list.
+        Add the following line "xdebug.remote_autostart = 1 " in the extensions directory list.
+        Press Ctrl+S or save changes you just made to "php.ini" file.
+             
+* Step 4 > Complete Installation.
+           
+            After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
+            This will list all modules and you will see Xdebug listed in "PHP Modules" and "Zend Modules".
+            
+## Install Composer
+
 ## Connect to a database
 
 There are 3 database engines currently supported, we are happy to add more if required but for now they are:
@@ -79,7 +106,7 @@ There are 3 database engines currently supported, we are happy to add more if re
 * MySQL
 * SQLite
 
-The database connection is established in a global variable called `$DBA` in the index.php file for convinience, you could put it anywhere as long as it is global and required before any database functionality is required.
+The database connection is established in a global variable called `$DBA` in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required.
 
 ### Examples:
 
