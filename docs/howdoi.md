@@ -3,6 +3,56 @@
 This is a quick reference for doing things in the Tina4 environment which will hopefully make your journey easier.
 If you come up with something cool that you want to add here, please contribute.
 
+## Install PHP 
+
+Follow these instructions to install PHP on your system. 
+### For Windows
+* Step 1 > Navigate to : https://www.php.net/downloads.php
+
+        Download the current stable version for your  Operating System. Download the zip files or content.
+
+* Step 2 > Unpack the zip file or content into a directory of your choice.
+
+        eg. C:/php
+        
+* Step 3 > Configure "php.ini" file: 
+ 
+        Go to the folder where you extracted PHP. 
+        Delete file named "php.ini". 
+        Rename file named "php.ini-development" to "php-ini".
+        Open php.ini file by opening it with Notepad or IDE tool 
+            Find ';extension_dir = "ext"' and remove the semicolon infront of the word extension
+            Find ";extension=curl" and remove the semicolon infront of the word extension
+            Find ";extension=fileinfo" and remove the semicolon infront of the word extension
+            Find ";extension=gd2" and remove the semicolon infront of the word extension
+            Find ";extension=intl" and remove the semicolon infront of the word extension
+            Find ";extension=mbstring" and remove the semicolon infront of the word extension
+            Find ";extension=openssl" and remove the semicolon infront of the word extension
+            Find ";extension=pdo_mysql" and remove the semicolon infront of the word extension
+            Find ";extension=shmop" and remove the semicolon infront of the word extension
+            Find ";extension=soap" and remove the semicolon infront of the word extension
+            Find ";extension=sqlite3" and remove the semicolon infront of the word extension
+            Find ";extension=tidy" and remove the semicolon infront of the word extension
+            Find ";extension=xmlrpc" and remove the semicolon infront of the word extension
+            Find ";extension=xsl" and remove the semicolon infront of the word extension
+        Hit Ctrl+S or save changes you just made to "php.ini" file. 
+
+* Step 4 > Change path environment variable.
+    
+        Open Control Panel
+        Go to System
+        Go to Advanced system settings
+        Go to Environment variable 
+        Look for "Path" in the "Variable" column and click Edit.
+        Click on Browse, locate the PHP folder you uxtracted. 
+        Click OK and then click Ok again to close the "Edit environment variable" window.
+
+* Step 5 > Complete Installation.
+
+       To ensure your changes take effect you may restart your device. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. 
+       The PHP version and details will appear in the terminal.    
+        
+        
 ## Connect to a database
 
 There are 3 database engines currently supported, we are happy to add more if required but for now they are:
@@ -11,7 +61,7 @@ There are 3 database engines currently supported, we are happy to add more if re
 * MySQL
 * SQLite
 
-The database connection is established in a global variable called `$DBA` in the index.php file for convinience, you could put it anywhere as long as it is global and required before any database functionlity is required.
+The database connection is established in a global variable called `$DBA` in the index.php file for convinience, you could put it anywhere as long as it is global and required before any database functionality is required.
 
 ### Examples:
 
@@ -214,7 +264,7 @@ Somewhere in Twig, in a template, far far away ...
 ```twig
 <label>{{ "NAME" | myFilter  }}</label>
 ```
-## Install my own IDE tool
+## Install IDE tool
 There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS.
 
 * Step 1 >
@@ -225,7 +275,7 @@ There are various IDE tools you can use to write code for your software or websi
 
    For Visual Studio Code navigate to : https://code.visualstudio.com/download
 
-* Step 2  > Choose the correct installation for your Operating Software (eg. Windows, Mac or Linux) and download the installer or installation files
+* Step 2  > Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files
 
 * Step 3 > After the installation file download is complete, run the installation file and follow the prompts
 
