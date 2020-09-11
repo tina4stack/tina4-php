@@ -112,6 +112,8 @@ class ORM implements  \JsonSerializable
         } else {
             return false;
         }
+
+        return true;
     }
 
     function saveBlob ($fieldName, $content) {
@@ -126,6 +128,7 @@ class ORM implements  \JsonSerializable
         } else {
             return false;
         }
+        return true;
     }
 
     /**
@@ -711,7 +714,7 @@ class ORM implements  \JsonSerializable
         }
 
         $tableName = $this->getTableName($tableName);
-        if (!$this->checkDBConnection($tableName)) return;
+        if (!$this->checkDBConnection($tableName)) return false;
 
         if (!empty($filter)) {$sqlStatement = "select * from {$tableName} where {$filter}";
         } else {
@@ -744,7 +747,7 @@ class ORM implements  \JsonSerializable
     function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
         $tableName = $this->getTableName($tableName);
-        if (!$this->checkDBConnection($tableName)) return;
+        if (!$this->checkDBConnection($tableName)) return false;
 
         $tableData = $this->getTableData($fieldMapping, true);
         if (empty($filter)) {

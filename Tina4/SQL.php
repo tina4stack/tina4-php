@@ -263,7 +263,7 @@ class SQL implements \JsonSerializable
                             }
                         }
                         if (!empty($this->filterMethod)) {
-                            foreach ($this->filterMethod as $id => $filterMethod) {
+                            foreach ($this->filterMethod as $fid => $filterMethod) {
                                 call_user_func($filterMethod, $newRecord);
                             }
                         }

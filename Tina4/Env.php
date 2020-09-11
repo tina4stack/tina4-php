@@ -22,7 +22,9 @@ class Env
      * @param $environment
      */
     function readParams($environment) {
-        $fileName = "./.env";
+        $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
+        $vendorDir = dirname(dirname($reflection->getFileName()));
+        $fileName = $vendorDir.DIRECTORY_SEPARATOR."..".DIRECTORY_SEPARATOR.".env";
         if (!empty($environment)) {
             $fileName .= ".{$environment}";
         }

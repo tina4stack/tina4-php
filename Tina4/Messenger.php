@@ -26,13 +26,13 @@ class Messenger
      *
      * The sendMail function takes on a number of params and sends and email to a receipient.
      *
-     * @param Array $recipients This can be a String or Array, the Array should be ; delimited ["name" => "Test", "email" => "email@email.com"]
-     * @param String $subject The subject for the email
-     * @param Array/String $message The message to send to the Receipient - can be ["template" => "twigFile", "data" => Array or Object]
-     * @param String $fromName The name of the person sending the message
-     * @param String $fromAddress The address of the person sending the message
-     * @param Array $attachments An Array of file paths to be attached in the form array ["name" => "File Description", "path" => "/path/to/file" ]
-     * @param Array $bcc
+     * @param $recipients array This can be a String or Array, the Array should be ; delimited ["name" => "Test", "email" => "email@email.com"]
+     * @param $subject string The subject for the email
+     * @param $message array/string The message to send to the Receipient - can be ["template" => "twigFile", "data" => Array or Object]
+     * @param $fromName string The name of the person sending the message
+     * @param $fromAddress string The address of the person sending the message
+     * @param $attachments array An Array of file paths to be attached in the form array ["name" => "File Description", "path" => "/path/to/file" ]
+     * @param $bcc array
      * @return Boolean true, false
      */
     function sendEmail ($recipients, $subject, $message, $fromName, $fromAddress, $attachments=null, $bcc=null) {
@@ -138,20 +138,13 @@ class Messenger
 
                         $mailSent = $phpMailer->send();
 
-                    } catch (Exception $e) {
+                    } catch (\Exception $e) {
                         $mailSent = false;
                         \Tina4\DebugLog::message("Messenger Error:".$e->getMessage());
                     }
-
-
                 }
-
-
             }
-
-
-
-        } catch(Exception $e) {
+        } catch(\Exception $e) {
             $mailSent =  false;
         }
 

@@ -23,7 +23,7 @@ class DataRecord implements JsonSerializable
      * @param $string
      * @return bool
      */
-    public function isBinary($string):bool
+    public function isBinary($string)
     {
         $isBinary=false;
         $string=str_ireplace("\t","",$string);
@@ -142,6 +142,8 @@ class DataRecord implements JsonSerializable
         $columnName = strtoupper($name);
         if (!empty($this->original) && !empty($this->$columnName)) {
             return $this->$columnName;
+        } else {
+            return false;
         }
     }
 

@@ -75,6 +75,10 @@ class Auth extends \Tina4\Data
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return $_SESSION["tina4:authToken"];
         }
+          else {
+              return false;
+          }
+
     }
 
     /**
@@ -190,7 +194,7 @@ class Auth extends \Tina4\Data
 
         try {
             $tokenEncoded = new TokenEncoded($token);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             \Tina4\DebugLog::message("Encoded token input failed! ".$e->getMessage());
             return false;
         }
@@ -201,7 +205,7 @@ class Auth extends \Tina4\Data
             // Handle token not trusted
             \Tina4\DebugLog::message("Validating {$token} failed!");
             return false;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             // Handle other validation exceptions
             \Tina4\DebugLog::message("Validating {$token} failed! ".$e->getMessage());
             return false;
