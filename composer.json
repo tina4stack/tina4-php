@@ -7,7 +7,8 @@
         "phpfastcache/phpfastcache": "^7.0",
         "coyl/git": "^0.1.7",
         "ext-json": "*",
-        "nowakowskir/php-jwt": "^1.1"
+        "nowakowskir/php-jwt": "^1.1",
+
     },
     "autoload": {
         "classmap": [
@@ -23,5 +24,6 @@
         }
     },
     "require-dev": {
+        "ext-mysqli": "*"
     }
 }
