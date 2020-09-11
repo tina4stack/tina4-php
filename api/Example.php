@@ -15,7 +15,9 @@ use Nowakowskir\JWT\JWT;
 });
 
 
-
+/**
+ * Function to generate Auth key
+ */
 \Tina4\Get::add("/test-token", function(){
     global $auth;
     //$auth = \Tina4\Auth();
