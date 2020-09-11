@@ -98,6 +98,21 @@ Follow these instructions to install Xdebug on your system.
             
 ## Install Composer
 
+Follow these instructions to install Composer on your system. 
+
+* Step 1 > Navigate to : https://getcomposer.org/download/
+
+* Step 2 > Download the latest stable version (can be found under Manual Download)
+     
+* Step 3 > After the installation file download is complete, run the installation file and follow the prompts
+
+The installation window will inform you once the installation is complete.
+
+Please note, if you want to install the IDE tools via command line, the commands will be available on the download pages also.
+
+## Install OpenSSL
+
+
 ## Connect to a database
 
 There are 3 database engines currently supported, we are happy to add more if required but for now they are:
