@@ -45,13 +45,7 @@ Step 6 > run "php -S localhost:7145 index.php" in command terminal
 ```sh
 Step 1 > run "mkdir tina4example" in command terminal
 Step 2 > run "cd tina4example" in command terminal
-Step 3 > create a PHP file named "index.php" with the following: 
-
-    <?php
-
-      require "vendor/autoload.php"; 
-      echo new \Tina4\Tina4Php();
-
+Step 3 > run "echo ^<?php require_once "vendor/autoload.php"; echo new \Tina4\Tina4Php(); ^ > index.php" in command terminal
 Step 4 >  run "composer require andrevanzuydam/tina4php" in command terminal
 Step 5 > run "echo .>.env" in command terminal
 Step 6 > run "php -S localhost:7145 index.php" in command terminal 
