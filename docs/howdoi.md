@@ -20,7 +20,7 @@ There are various IDE tools you can use to write code for your software or websi
 
 The installation window will inform you once the installation is complete.
 
-Please note, if you want to install the IDE tools via command line, the commands will be available on the download pages also.
+*PLEASE NOTE:* If you want to install the IDE tools via command line, the commands will be available on the download pages also.
 ## Install PHP 
 
 Follow these instructions to install PHP on your system. 
@@ -93,8 +93,9 @@ Follow these instructions to install Xdebug on your system.
              
 * Step 4 > Complete Installation.
            
-            After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
-            This will list all modules and you will see Xdebug listed in "PHP Modules" and "Zend Modules".
+            After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "openssl version" and pushing Enter. 
+            This will display the OpenSSL version if installed correctly. If an error is returned, the installation was unsuccessful. 
+            In this case, uninstall OpenSSL and follow the steps again. 
             
 ## Install Composer
 
@@ -108,11 +109,42 @@ Follow these instructions to install Composer on your system.
 
 The installation window will inform you once the installation is complete.
 
-Please note, if you want to install the IDE tools via command line, the commands will be available on the download pages also.
+*PLEASE NOTE:* If you want to install Composer via command line, the commands will be available on the download pages also.
 
 ## Install OpenSSL
 
+Follow these instructions to install OpenSSL on your system. 
 
+* Step 1 > For Windows > Navigate to :https://slproweb.com/products/Win32OpenSSL.html
+           For Mac & Linux > Navigate to :https://www.openssl.org/source/
+
+* Step 2 > Download version v1.1.1 Light 
+
+   Download the correct version for your  Operating System (e.g. Windows 10 32bit or 64bit, Mac or Linux). Download the installer or content.
+     
+* Step 3 > After the installation file download is complete, run the installation file and follow the prompts.
+
+   The installation window will inform you once the installation is complete.
+
+* Step 4 > Change path environment variable.
+    
+        Open Control Panel
+        Go to System
+        Go to Advanced system settings
+        Go to Environment variable 
+        Look for "Path" in the "Variable" column and click Edit.
+        Click on Browse, locate the "bin" folder directory where you installed OpenSSL (e.g. C:\Program Files\OpenSSL-Win64\bin). 
+        Click OK and then click Ok again to close the "Edit environment variable" window.  
+
+*PLEASE NOTE:* If you want to install OpenSSL via command visit:
+
+For Mac:
+https://franz.com/support/openssl-mac.lhtml OR https://stackoverflow.com/questions/15185661/update-openssl-on-os-x-with-homebrew
+
+For Unix:
+https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/
+OR
+https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/
 ## Connect to a database
 
 There are 3 database engines currently supported, we are happy to add more if required but for now they are:
