@@ -41,4 +41,5 @@ if ($auth->validToken($token)) {
 //});
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
-echo new \Tina4\Tina4Php($config);
+
+\Tina4\runTina4($config);

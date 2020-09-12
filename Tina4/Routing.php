@@ -11,8 +11,6 @@
 
 namespace Tina4;
 
-use http\Env\Request;
-
 /**
  * Class Routing
  * @package Tina4
@@ -69,7 +67,7 @@ class Routing
             // Make sure the client hasn't sent us a multibyte range
             if (strpos($range, ',') !== false) {
 
-                // (?) Shoud this be issued here, or should the first
+                // (?) Should this be issued here, or should the first
                 // range be used? Or should the header be ignored and
                 // we output the whole content?
                 header('HTTP/1.1 416 Requested Range Not Satisfiable');
@@ -79,7 +77,7 @@ class Routing
             }
             // If the range starts with an '-' we start from the beginning
             // If not, we forward the file pointer
-            // And make sure to get the end byte if spesified
+            // And make sure to get the end byte if specified
             if ($range == '-') {
                 // The n-number of the last bytes is requested
                 $c_start = $size - substr($range, 1);
@@ -133,11 +131,8 @@ class Routing
     }
 
     function returnStatic($fileName) {
-
         $fileName = preg_replace('#/+#','/',$fileName);
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
-        $mimeType = mime_content_type($fileName);
-
         switch ($ext) {
             case "png":
             case "jpeg":
@@ -180,6 +175,10 @@ class Routing
         exit; //we are done here, file will be delivered
     }
 
+    /**
+     * Recursively includes directories
+     * @param $dirName
+     */
     function includeDirectory($dirName) {
         $d = dir($dirName);
         while (($file = $d->read()) !== false) {
@@ -198,11 +197,14 @@ class Routing
     }
 
 
+    /**
+     * Throws a forbidden message
+     */
     function forbidden() {
         if (file_exists("./assets/images/403.jpg")) {
-            $content = "<img src=\"/assets/images/403.jpg\">";
+            $content = "<img alt=\"403 Forbidden\" src=\"/assets/images/403.jpg\">";
         } else {
-            $content = "<img src=\"/{$this->subFolder}src/assets/images/403.jpg\">";
+            $content = "<img alt=\"403 Forbidden\" src=\"/{$this->subFolder}src/assets/images/403.jpg\">";
         }
         http_response_code(HTTP_FORBIDDEN);
         echo $content;
@@ -216,8 +218,9 @@ class Routing
      * @param string $subFolder Subfolder where the project sits
      * @param string $urlToParse URL being parsed
      * @param string $method Type of method e.g. ANY, POST, DELETE, etc
-     * @param object $config Config containing configs from the initialization
+     * @param Config|null $config Config containing configs from the initialization
      * @throws \ReflectionException
+     * @throws \Exception
      */
     function __construct($root = "", $subFolder="", $urlToParse = "", $method = "", \Tina4\Config $config=null)
     {
@@ -416,6 +419,7 @@ class Routing
             $this->content = $result;
         }
 
+        return false;
     }
 
     /**
@@ -444,10 +448,9 @@ class Routing
         preg_match_all($this->pathMatchExpression, $path, $matchesPath);
         preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
 
+        $variables = [];
         if (count($matchesPath[1]) == count($matchesRoute[1])) {
             $matching = true;
-            $variables = [];
-
             foreach ($matchesPath[1] as $rid => $matchPath) {
                 if (!empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
                     $variables[] = $matchPath;
@@ -519,34 +522,21 @@ class Routing
     }
 
     /**
-     * Convert a multi-dimensional array into a single-dimensional array.
-     * @param array $array The multi-dimensional array.
-     * @return array|bool
-     * @author Sean Cannon, LitmusBox.com | seanc@litmusbox.com
+     * Returns the annotations for a class
+     * @param $class
+     * @return false|mixed
      */
-    function array_flatten($array)
-    {
-        if (!is_array($array)) {
-            return false;
-        }
-        $result = array();
-        foreach ($array as $key => $value) {
-            if (is_array($value)) {
-                $result = array_merge($result, $this->array_flatten($value));
-            } else {
-                $result[$key] = $value;
-            }
-        }
-        return $result;
-    }
-
-
     function getClassAnnotations($class)
     {
-        $r = new \ReflectionClass($class);
-        $doc = $r->getDocComment();
-        preg_match_all('#@(.*?)\n#s', $doc, $annotations);
-        return $annotations[1];
+        try {
+            $r = new \ReflectionClass($class);
+            $doc = $r->getDocComment();
+            preg_match_all('#@(.*?)\n#s', $doc, $annotations);
+            return $annotations[1];
+        } catch (\ReflectionException $e) {
+            \Tina4\DebugLog::message("Could not get annotations for {$class}");
+        }
+        return false;
     }
 
     /**
@@ -559,222 +549,7 @@ class Routing
      */
     function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
-        global $arrRoutes;
-        if (empty($this->root)) {
-            $this->root = $_SERVER["DOCUMENT_ROOT"];
-        }
-
-        $paths = (object)[];
-
-        foreach ($arrRoutes as $arId => $route) {
-            $method = strtolower($route["method"]);
-            //echo $method;
-
-            $reflection = new \ReflectionFunction($route["function"]);
-
-            $doc = $reflection->getDocComment();
-            preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
-
-
-            $summary = "None";
-            $description = "None";
-            $tags = [];
-            $queryParams = [];
-
-
-            $addParams = [];
-            $example = (object)[];
-            foreach ($annotations[0] as $aid => $annotation) {
-                preg_match_all('/^(@[a-zA-Z]*)([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
-
-                if (count($matches) > 0) {
-                    $matches = $matches[0];
-                } else {
-                    $matches = null;
-                }
-
-                if (!empty($matches[2])) {
-                    $matches[2] = trim($matches[2]);
-                }
-
-                if (!empty($matches)) {
-                    if ($matches[1] === "@summary") {
-                        $summary = $matches[2];
-                    } else
-                        if ($matches[1] === "@description") {
-                            $description = str_replace("\n", "", $matches[2]);
-                        } else
-                            if ($matches[1] === "@tags") {
-                                $tags = explode(",", $matches[2]);
-                                foreach ($tags as $tid => $tag) {
-                                    $tags[$tid] = str_replace("\n", "", $tag);
-                                }
-                            } else
-                                if ($matches[1] === "@queryParams") {
-                                    $queryParams = explode(",", $matches[2]);
-                                } else
-                                    if ($matches[1] === "@example") {
-
-
-                                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\".$matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "getTableData")) { $example = (object)$example->getTableData(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
-
-                                    } else
-                                        if ($matches[1] === "@secure") {
-                                            $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
-                                        }
-
-                }
-            }
-
-
-
-            $arguments = $reflection->getParameters();
-
-            $params = json_decode(json_encode($arguments));
-            $params = array_merge($params, $addParams);
-
-            $propertyIn = "in";
-            $propertyType = "type";
-            $propertyName = "name";
-
-            foreach ($params as $pid => $param) {
-
-                if (!isset($params[$pid]->{$propertyIn})) {
-                    $params[$pid]->{$propertyIn} = "path";
-                }
-
-                if (!isset($params[$pid]->{$propertyType})) {
-                    $params[$pid]->{$propertyType} = "string";
-                }
-
-                if ($params[$pid]->name === "response" || $params[$pid]->name === "request") {
-                    unset($params[$pid]);
-                }
-            }
-
-            foreach ($queryParams as $pid => $param) {
-                $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string"];
-                array_push($params, $newParam);
-            }
-
-            $params = json_decode(json_encode(array_values($params)));
-
-            if ($description !== "None") {
-                if ($method === "any") {
-                    $paths->{$route["routePath"]} = (object)[
-                        "get" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => $params,
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]
-
-                        ],
-                        "delete" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => $params,
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]
-
-                        ],
-                        "put" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "consumes" => "application/json",
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]),
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]
-
-                        ],
-                        "post" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "consumes" => "application/json",
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]),
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]
-
-                        ]
-
-                    ];
-                } else {
-
-
-                    if ($method === "post" || $method === "patch") {
-                        $params = array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]);
-                    }
-                    if (!empty($paths->{$route["routePath"]})) {
-                        $paths->{$route["routePath"]}->{$method} = (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => $params,
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]];
-                    } else {
-                        $paths->{$route["routePath"]} = (object)[
-                            "{$method}" => (object)[
-                                "tags" => $tags,
-                                "summary" => $summary,
-                                "description" => $description,
-                                "produces" => ["application/json", "html/text"],
-                                "parameters" => $params,
-                                "responses" => (object)[
-                                    "200" => (object)["description" => "Success"],
-                                    "400" => (object)["description" => "Failed"]
-
-                                ]
-
-                            ]
-                        ];
-                    }
-                }
-
-            }
-        }
-
-
-        $swagger = [
-            "swagger" => "2.0",
-            "host" => $_SERVER["HTTP_HOST"],
-            "info" => [
-                "title" => $title,
-                "description" => $description,
-                "version" => $version
-            ],
-            "security" => ["ApiKeyAuth" => "", "Oauth2" => ["read", "write"]],
-            "basePath" => '/',
-            "paths" => $paths
-
-        ];
-
-        header("Content-Type: application/json");
-        return json_encode($swagger, JSON_UNESCAPED_SLASHES);
+       return (new \Tina4\Swagger($this->root, $title, $description, $version))->jsonSerialize();
     }
 
 }

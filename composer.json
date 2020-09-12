@@ -23,6 +23,7 @@
         }
     },
     "require-dev": {
-        "ext-mysqli": "*"
+        "ext-mysqli": "*",
+        "ext-apache": "*"
     }
 }

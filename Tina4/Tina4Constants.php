@@ -114,3 +114,19 @@ function tina4_autoloader($class)
 }
 
 spl_autoload_register('Tina4\tina4_autoloader');
+
+/**
+ * @param null $config
+ * @return bool
+ * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
+ * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverException
+ * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverNotFoundException
+ * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
+ * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException
+ * @throws \ReflectionException
+ * @throws \Twig\Error\LoaderError
+ */
+function runTina4($config=null) {
+    echo new \Tina4\Tina4Php($config);
+    return true;
+}
