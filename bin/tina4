@@ -15,10 +15,14 @@ if (file_exists("index.php")) {
 
 $menu = [];
 
+/**
+ * Reads input from the commandline
+ * @param $handle
+ * @return false|string
+ */
 function readLn($handle)
 {
-    $input = substr(fgets($handle), 0, -1);
-    return $input;
+    return substr(fgets($handle), 0, -1);
 }
 
 function drawMenu()

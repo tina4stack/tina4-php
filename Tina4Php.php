@@ -509,8 +509,7 @@ function renderTemplate($fileNameString, $data = [])
                     return $internalTwig->render($renderFile, $data);
                 } else {
                     $internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
-                    $render = $internalTwig->render("template" . md5($fileNameString), $data);
-                    return $render;
+                    return $internalTwig->render("template" . md5($fileNameString), $data);
                 }
     } catch (\Exception $exception) {
         return $exception->getMessage();

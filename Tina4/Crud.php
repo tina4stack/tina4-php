@@ -124,11 +124,9 @@ class Crud
             }
         }
 
-        $html = _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
+        return _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
             _div(["class" => "row"], $fields)
         );
-
-        return $html;
     }
 
     /**
