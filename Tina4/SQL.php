@@ -13,7 +13,7 @@ class SQL implements \JsonSerializable
     public $groupBy;
     public $having;
     public $orderBy;
-    public $nextAnd="join";
+    public $nextAnd = "join";
     public $limit;
     public $offset;
     public $hasOne;
@@ -27,7 +27,7 @@ class SQL implements \JsonSerializable
      * SQL constructor.
      * @param null $ORM If the ORM object is empty it will default to the global $DBA variable for a database connection
      */
-    public function __construct($ORM=null)
+    public function __construct($ORM = null)
     {
         if (!empty($ORM)) {
             $this->ORM = clone $ORM;
@@ -45,30 +45,14 @@ class SQL implements \JsonSerializable
      * Excludes fields from the result set
      * @param $fields
      */
-    function exclude($fields) {
+    function exclude($fields)
+    {
         if (is_array($fields)) {
             $this->excludeFields[] = $fields;
         } else {
             $this->excludeFields = explode(",", $fields);
         }
         return $this;
-    }
-
-
-    /**
-     * @param $fields
-     * @return array
-     */
-    function translateFields ($fields) {
-        $result = [];
-        foreach ($fields as $id => $field) {
-            if (!empty($ORM)) {
-                $result[] = $this->ORM->getFieldName($field);
-            } else {
-                $result[] = $field;
-            }
-        }
-        return $result;
     }
 
     /**
@@ -79,7 +63,7 @@ class SQL implements \JsonSerializable
      * @param array $hasOne
      * @return $this
      */
-    public function select($fields="*", $limit=10, $offset=0, $hasOne=[])
+    public function select($fields = "*", $limit = 10, $offset = 0, $hasOne = [])
     {
         if (is_array($fields)) {
             $this->fields[] = $fields;
@@ -94,12 +78,14 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    function from($tableName) {
+    function from($tableName)
+    {
         $this->tableName = $tableName;
         return $this;
     }
 
-    function where ($filter) {
+    function where($filter)
+    {
         //@todo parse filter
         if (trim($filter) !== "") {
             $this->nextAnd = "where";
@@ -108,7 +94,8 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    function and ($filter) {
+    function and($filter)
+    {
         //@todo parse filter
         if (trim($filter) !== "") {
             if ($this->nextAnd == "join") {
@@ -122,31 +109,36 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    function or ($filter) {
+    function or($filter)
+    {
         //@todo parse filter
         $this->filter[] = ["or", $filter];
         return $this;
     }
 
-    function join ($tableName) {
+    function join($tableName)
+    {
         $this->nextAnd = "join";
         $this->join[] = ["join", $tableName];
         return $this;
     }
 
-    function leftJoin ($tableName) {
+    function leftJoin($tableName)
+    {
         $this->nextAnd = "join";
         $this->join[] = ["left join", $tableName];
         return $this;
     }
 
-    function on ($filter) {
+    function on($filter)
+    {
         //@todo parse filter
         $this->join[] = ["on", $filter];
         return $this;
     }
 
-    function groupBy ($fields) {
+    function groupBy($fields)
+    {
         if (is_array($fields)) {
             $this->groupBy = $fields;
         } else {
@@ -157,13 +149,32 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    function having ($filter) {
+    /**
+     * @param $fields
+     * @return array
+     */
+    function translateFields($fields)
+    {
+        $result = [];
+        foreach ($fields as $id => $field) {
+            if (!empty($ORM)) {
+                $result[] = $this->ORM->getFieldName($field);
+            } else {
+                $result[] = $field;
+            }
+        }
+        return $result;
+    }
+
+    function having($filter)
+    {
         $this->nextAnd = "having";
         $this->having[] = ["having", $filter];
         return $this;
     }
 
-    function orderBy ($fields) {
+    function orderBy($fields)
+    {
         if (!empty($fields)) {
             if (is_array($fields)) {
                 $this->orderBy = $fields;
@@ -181,65 +192,32 @@ class SQL implements \JsonSerializable
      * A method which will filter the records
      * @param $filterMethod
      */
-    function filter($filterMethod) {
+    function filter($filterMethod)
+    {
         if (!empty($filterMethod)) {
             $this->filterMethod[] = $filterMethod;
         }
         return $this;
     }
 
-    function generateSQLStatement() {
-        //see if we have some foreign key references
-        if (!empty($this->hasOne)) {
-            foreach ($this->hasOne as $foreignKey) {
-                $this->fields[] = $foreignKey->getDisplayFieldQuery();
-            }
-        }
-
-        $sql = "select\t".join(",\n\t", $this->fields)."\nfrom\t{$this->tableName} t\n";
-        if (!empty($this->join) && is_array($this->join)) {
-            foreach ($this->join as $join) {
-                $sql .= $join[0]. " ".$join[1]."\n";
-            }
-        }
-
-        if (!empty($this->filter) && is_array($this->filter)) {
-            foreach ($this->filter as $filter) {
-                if (!empty($this->hasOne)) {
-                    foreach ($this->hasOne as $foreignKey) {
-                        $filter[1] = str_replace( $foreignKey->getFieldName(),  $foreignKey->getSubSelect(), $filter[1]);
-                    }
-                }
-                $sql .= "".$filter[0]. "\t".$filter[1]."\n";
-            }
-        }
-
-        if (!empty($this->groupBy) && is_array($this->groupBy)) {
-            $sql .= "group by ".join (",", $this->groupBy)."\n";
-        }
-
-        if (!empty($this->having) && is_array($this->having)) {
-            foreach ($this->having as $filter) {
-                $sql .= $filter[0]. "\t".$filter[1]."\n";
-            }
-        }
-
-        if (!empty($this->orderBy) && is_array($this->orderBy)) {
-            $sql .= "order by ".join (",", $this->orderBy)."\n";
-        }
-
-
-        return $sql;
+    /**
+     * Gets an array of objects
+     * @return array|mixed
+     */
+    public function asObject()
+    {
+        return $this->jsonSerialize();
     }
 
     /**
      * Makes a neat JSON response
      */
-    public function jsonSerialize() {
+    public function jsonSerialize()
+    {
         //run the query
         $sqlStatement = $this->generateSQLStatement();
         if (!empty($this->DBA)) {
-            $result = $this->DBA->fetch ($sqlStatement, $this->limit, $this->offset);
+            $result = $this->DBA->fetch($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
             //transform the records into an array of the ORM if ORM exists
@@ -252,7 +230,7 @@ class SQL implements \JsonSerializable
                 $records = $result->AsObject();
                 if (!empty($this->ORM)) {
                     foreach ($records as $id => $record) {
-                        $this->ORM->mapFromRecord ($record, true);
+                        $this->ORM->mapFromRecord($record, true);
                         $newRecord = clone $this->ORM;
 
                         if (!empty($this->excludeFields)) {
@@ -280,19 +258,57 @@ class SQL implements \JsonSerializable
         return $records;
     }
 
-    /**
-     * Gets an array of objects
-     * @return array|mixed
-     */
-    public function asObject() {
-        return $this->jsonSerialize();
+    function generateSQLStatement()
+    {
+        //see if we have some foreign key references
+        if (!empty($this->hasOne)) {
+            foreach ($this->hasOne as $foreignKey) {
+                $this->fields[] = $foreignKey->getDisplayFieldQuery();
+            }
+        }
+
+        $sql = "select\t" . join(",\n\t", $this->fields) . "\nfrom\t{$this->tableName} t\n";
+        if (!empty($this->join) && is_array($this->join)) {
+            foreach ($this->join as $join) {
+                $sql .= $join[0] . " " . $join[1] . "\n";
+            }
+        }
+
+        if (!empty($this->filter) && is_array($this->filter)) {
+            foreach ($this->filter as $filter) {
+                if (!empty($this->hasOne)) {
+                    foreach ($this->hasOne as $foreignKey) {
+                        $filter[1] = str_replace($foreignKey->getFieldName(), $foreignKey->getSubSelect(), $filter[1]);
+                    }
+                }
+                $sql .= "" . $filter[0] . "\t" . $filter[1] . "\n";
+            }
+        }
+
+        if (!empty($this->groupBy) && is_array($this->groupBy)) {
+            $sql .= "group by " . join(",", $this->groupBy) . "\n";
+        }
+
+        if (!empty($this->having) && is_array($this->having)) {
+            foreach ($this->having as $filter) {
+                $sql .= $filter[0] . "\t" . $filter[1] . "\n";
+            }
+        }
+
+        if (!empty($this->orderBy) && is_array($this->orderBy)) {
+            $sql .= "order by " . join(",", $this->orderBy) . "\n";
+        }
+
+
+        return $sql;
     }
 
     /**
      * Gets the result as a generic array without the extra object information
      * @return array
      */
-    public function asArray() {
+    public function asArray()
+    {
         $records = $this->jsonSerialize();
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
@@ -306,7 +322,8 @@ class SQL implements \JsonSerializable
      * Gets the records as a result
      * @return mixed
      */
-    public function asResult() {
+    public function asResult()
+    {
         $records = $this->jsonSerialize();
         //error_log (print_r ($this->error,1));
         if (!empty($this->error) && $this->error->getError()["errorCode"] == 0) {

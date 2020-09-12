@@ -1,4 +1,5 @@
 <?php
+
 namespace Tina4;
 
 class Data
@@ -9,12 +10,12 @@ class Data
      * Data constructor.
      * @param null $DBA param of database
      */
-    function __construct($DBA=null)
+    function __construct($DBA = null)
     {
         //Check if we have a database connection declared as global , add it to the data class
         foreach ($GLOBALS as $dbName => $GLOBAL) {
             if (is_object($GLOBAL)) {
-                DebugLog::message("Found {$dbName}: ".get_parent_class($GLOBAL));
+                DebugLog::message("Found {$dbName}: " . get_parent_class($GLOBAL));
                 if (get_parent_class($GLOBAL) === "Tina4\DataBase") {
                     DebugLog::message("Adding {$dbName}");
                     $this->{$dbName} = $GLOBAL;

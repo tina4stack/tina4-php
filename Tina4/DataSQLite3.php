@@ -5,6 +5,7 @@
  * Date: 2016/03/27
  * Time: 09:53 PM
  */
+
 namespace Tina4;
 
 class DataSQLite3 implements DataBase
@@ -14,7 +15,8 @@ class DataSQLite3 implements DataBase
     /**
      * Open an SQLite3 connection
      */
-    public function open() {
+    public function open()
+    {
         $this->dbh = (new \SQLite3($this->databaseName)); //create the new database or open existing one
         $this->dbh->busyTimeout(5000); //prevent database locks
         $this->dbh->exec('PRAGMA journal_mode = wal;'); //help with concurrency
@@ -23,7 +25,8 @@ class DataSQLite3 implements DataBase
     /**
      * Closes the SQLite3 connection
      */
-    public function close() {
+    public function close()
+    {
         $this->dbh->close();
     }
 
@@ -31,7 +34,8 @@ class DataSQLite3 implements DataBase
      * Executes a query
      * @return array|bool|mixed
      */
-    public function exec() {
+    public function exec()
+    {
         $params = func_get_args();
 
         $sql = $params[0];
@@ -47,19 +51,13 @@ class DataSQLite3 implements DataBase
                 $param = $this->dbh->escapeString($param);
                 if (is_numeric($param)) {
                     @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_FLOAT);
-                }
-                else
-                    if (is_integer($param))
-                    {
+                } else
+                    if (is_integer($param)) {
                         @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_INTEGER);
-                    }
-                    else
-                        if (is_string($param))
-                        {
+                    } else
+                        if (is_string($param)) {
                             @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
-                        }
-                        else
-                        {
+                        } else {
                             @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_BLOB);
                         }
             }
@@ -75,8 +73,16 @@ class DataSQLite3 implements DataBase
      * Error from the database
      * @return bool|DataError
      */
-    public function error() {
-        return (new \Tina4\DataError( $this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
+    public function error()
+    {
+        return (new DataError($this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
+    }
+
+    public function tableExists($tableName)
+    {
+        $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
+
+        return !empty($exists->records());
     }
 
     /**
@@ -87,10 +93,11 @@ class DataSQLite3 implements DataBase
      * @param array $fieldMapping
      * @return bool|DataResult
      */
-    public function fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
-        $countRecords = $this->dbh->querySingle("select count(*) as count from (".$sql.")");
-        
-        $sql = $sql." limit {$offSet},{$noOfRecords}";
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    {
+        $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
+
+        $sql = $sql . " limit {$offSet},{$noOfRecords}";
 
         $recordCursor = $this->dbh->query($sql);
         $records = [];
@@ -120,13 +127,6 @@ class DataSQLite3 implements DataBase
         return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }
 
-    public function tableExists($tableName)
-    {
-        $exists = $this->fetch ("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
-
-        return !empty($exists->records());
-    }
-
     public function getLastId()
     {
         $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
@@ -138,7 +138,8 @@ class DataSQLite3 implements DataBase
      * @param null $transactionId
      * @return bool
      */
-    public function commit($transactionId=null) {
+    public function commit($transactionId = null)
+    {
         //No commit for sqlite
         return true;
     }
@@ -148,7 +149,8 @@ class DataSQLite3 implements DataBase
      * @param null $transactionId
      * @return bool
      */
-    public function rollback($transactionId=null) {
+    public function rollback($transactionId = null)
+    {
         //No transactions for sqlite
         return true;
     }
@@ -157,7 +159,8 @@ class DataSQLite3 implements DataBase
      * Start transaction
      * @return bool
      */
-    public function startTransaction() {
+    public function startTransaction()
+    {
         //No transactions for sqlite
         return true;
     }
@@ -167,7 +170,7 @@ class DataSQLite3 implements DataBase
      * @param bool $onState
      * @return bool|void
      */
-    public function autoCommit($onState=false)
+    public function autoCommit($onState = false)
     {
         //SQlite has no commits
         return true;
@@ -179,23 +182,23 @@ class DataSQLite3 implements DataBase
                       from sqlite_master
                      where type='table'
                   order by name";
-        $tables    = $this->fetch( $sqlTables, 1000, 0 )->asObject();
+        $tables = $this->fetch($sqlTables, 1000, 0)->asObject();
         $database = [];
-        foreach ( $tables as $id => $record ) {
-            $sqlInfo   = "pragma table_info($record->tableName);";
-            $tableInfo = $this->fetch( $sqlInfo, 1000, 0 )->AsObject();
+        foreach ($tables as $id => $record) {
+            $sqlInfo = "pragma table_info($record->tableName);";
+            $tableInfo = $this->fetch($sqlInfo, 1000, 0)->AsObject();
 
             //Go through the tables and extract their column information
-            foreach ( $tableInfo as $tid => $tRecord ) {
-                $database[trim( $record->tableName )][$tid]["column"]      = $tRecord->cid;
-                $database[trim( $record->tableName )][$tid]["field"]       = trim( $tRecord->name );
-                $database[trim( $record->tableName )][$tid]["description"] = "";
-                $database[trim( $record->tableName )][$tid]["type"]        = trim( $tRecord->type );
-                $database[trim( $record->tableName )][$tid]["length"]      = "";
-                $database[trim( $record->tableName )][$tid]["precision"]   = "";
-                $database[trim( $record->tableName )][$tid]["default"]     = trim( $tRecord->dfltValue );
-                $database[trim( $record->tableName )][$tid]["notnull"]     = trim( $tRecord->notnull );
-                $database[trim( $record->tableName )][$tid]["pk"]          = trim( $tRecord->pk );
+            foreach ($tableInfo as $tid => $tRecord) {
+                $database[trim($record->tableName)][$tid]["column"] = $tRecord->cid;
+                $database[trim($record->tableName)][$tid]["field"] = trim($tRecord->name);
+                $database[trim($record->tableName)][$tid]["description"] = "";
+                $database[trim($record->tableName)][$tid]["type"] = trim($tRecord->type);
+                $database[trim($record->tableName)][$tid]["length"] = "";
+                $database[trim($record->tableName)][$tid]["precision"] = "";
+                $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->dfltValue);
+                $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->notnull);
+                $database[trim($record->tableName)][$tid]["pk"] = trim($tRecord->pk);
             }
         }
         return $database;

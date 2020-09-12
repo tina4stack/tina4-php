@@ -77,7 +77,8 @@ class DataResult implements JsonSerializable
      * Gets back the number of records that were not filtered out by the pagination
      * @return int
      */
-    function getNoOfRecords() {
+    function getNoOfRecords()
+    {
         return $this->noOfRecords;
     }
 
@@ -91,12 +92,22 @@ class DataResult implements JsonSerializable
     }
 
     /**
+     * Gets an array of objects
+     * @param boolean $original Original field names
+     * @return array|mixed
+     */
+    public function asObject($original = false)
+    {
+        return $this->records($original);
+    }
+
+    /**
      * Converts returned results as array of objects
      * @param boolean $original Original field name
      * @return array|null
      * @example examples\exampleDataResultRecords.php
      */
-    function records($original=false)
+    function records($original = false)
     {
         $results = [];
         if (!empty($this->records)) {
@@ -109,19 +120,11 @@ class DataResult implements JsonSerializable
     }
 
     /**
-     * Gets an array of objects
-     * @param boolean $original Original field names
-     * @return array|mixed
-     */
-    public function asObject($original=false) {
-        return $this->records($original);
-    }
-
-    /**
      * Gets an array of objects in the original form
      * @return array|mixed
      */
-    public function asOriginal() {
+    public function asOriginal()
+    {
         return $this->records(true);
     }
 
@@ -130,7 +133,8 @@ class DataResult implements JsonSerializable
      * @param boolean $original Original field names
      * @return array
      */
-    public function asArray($original=false) {
+    public function asArray($original = false)
+    {
         //$records = $this->jsonSerialize();
         $result = [];
         if (!empty($this->records)) {
@@ -140,7 +144,7 @@ class DataResult implements JsonSerializable
         }
         return $result;
     }
-    
+
     /**
      * Converts array of records to array of objects
      * @return false|string
@@ -154,7 +158,7 @@ class DataResult implements JsonSerializable
                 if (get_class($record) == "Tina4\DataRecord") {
                     $results[] = $record->asObject();
                 } else {
-                    $results [] = (object) $record;
+                    $results [] = (object)$record;
                 }
             }
         }
@@ -170,7 +174,8 @@ class DataResult implements JsonSerializable
     /**
      * Makes a neat JSON response
      */
-    public function jsonSerialize() {
+    public function jsonSerialize()
+    {
         $results = [];
 
         if (!empty($this->records)) {
@@ -178,7 +183,7 @@ class DataResult implements JsonSerializable
                 if (get_class($record) == "Tina4\DataRecord") {
                     $results[] = $record->asObject();
                 } else {
-                    $results [] = (object) $record;
+                    $results [] = (object)$record;
                 }
             }
         }

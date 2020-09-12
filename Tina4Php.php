@@ -44,69 +44,6 @@ class Tina4Php
     private $suppress = false;
 
     /**
-     * Runs git on the repository
-     * @param $gitEnabled
-     * @param $gitMessage
-     * @param $push
-     */
-    function gitInit($gitEnabled, $gitMessage, $push=false) {
-        global $GIT;
-        if ($gitEnabled) {
-            try {
-                \Coyl\Git\Git::setBin("git");
-                $GIT = \Coyl\Git\Git::open($this->documentRoot);
-
-                $message = "";
-                if (!empty($gitMessage)) {
-                    $message = " ".$gitMessage;
-                }
-
-                try {
-                    if (strpos( $GIT->status(), "nothing to commit") === false) {
-                        $GIT->add("*");
-                        $GIT->commit("Tina4: Committed changes at " . date("Y-m-d H:i:s") . $message);
-                        if ($push) {
-                            $GIT->push();
-                        }
-                    }
-                } catch (\Exception $e) {
-
-                }
-
-            } catch (\Exception $e) {
-                echo $e->getMessage();
-            }
-        }
-    }
-
-    /**
-     * Logic to determine the subfolder - result must be /folder/
-     */
-    function getSubFolder() {
-
-        //Evaluate DOCUMENT_ROOT &&
-        $documentRoot = "";
-        if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
-            $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
-        } else
-            if (isset($_SERVER["DOCUMENT_ROOT"])) {
-                $documentRoot = $_SERVER["DOCUMENT_ROOT"];
-            }
-        $scriptName = $_SERVER["SCRIPT_FILENAME"];
-
-
-
-        //str_replace($documentRoot, "", $scriptName);
-        $subFolder = dirname( str_replace($documentRoot, "", $scriptName));
-
-        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
-            $subFolder = null;
-
-        }
-        return $subFolder;
-    }
-
-    /**
      * Tina4Php constructor.
      * @param null $config
      * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
@@ -134,7 +71,7 @@ class Tina4Php
         $this->config = $config;
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
-           define ("TINA4_DEBUG_LEVEL", DEBUG_NONE);
+            define("TINA4_DEBUG_LEVEL", DEBUG_NONE);
         }
 
         if (!defined("TINA4_DEBUG")) {
@@ -157,29 +94,27 @@ class Tina4Php
         $callerDir = str_replace("index.php", "", $callerFile);
 
         //root of the website
-        if (defined ("TINA4_DOCUMENT_ROOT") && empty(TINA4_DOCUMENT_ROOT)) {
+        if (defined("TINA4_DOCUMENT_ROOT") && empty(TINA4_DOCUMENT_ROOT)) {
             $this->documentRoot = $callerDir;
         } else {
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
         }
 
 
-
         if (file_exists("Tina4Php.php")) {
-            $this->documentRoot = realpath(dirname(__FILE__)).DIRECTORY_SEPARATOR;
+            $this->documentRoot = realpath(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
         }
 
         global $auth;
 
         if (!empty($config) && $config->getAuthentication() !== false) {
             $auth = $config->getAuthentication();
+        } else {
+            $auth = new \Tina4\Auth($this->documentRoot);
         }
-         else {
-             $auth = new \Tina4\Auth($this->documentRoot);
-         }
 
         //Check security
-        if (!file_exists($this->documentRoot."secrets")) {
+        if (!file_exists($this->documentRoot . "secrets")) {
             $auth->generateSecureKeys();
         }
 
@@ -251,14 +186,14 @@ class Tina4Php
         /**
          * @secure
          */
-        \Tina4\Route::get("/code", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+        \Tina4\Route::get("/code", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             return $response (\Tina4\renderTemplate("code.twig", $request->asArray()), HTTP_OK, TEXT_HTML);
         });
 
         /**
          * @secure
          */
-        \Tina4\Route::post("/code/files/tree", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+        \Tina4\Route::post("/code/files/tree", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             //Read dir
             $html = $this->iterateDirectory($tina4PHP->documentRoot);
 
@@ -268,51 +203,51 @@ class Tina4Php
         /**
          * @secure
          */
-        \Tina4\Route::post("/code/files/{action}", function(\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+        \Tina4\Route::post("/code/files/{action}", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $action = $request->inlineParams[0];
             if ($action == "load") {
-                return $response (file_get_contents($tina4PHP->documentRoot."/".$request->params["fileName"]), HTTP_OK, TEXT_HTML);
+                return $response (file_get_contents($tina4PHP->documentRoot . "/" . $request->params["fileName"]), HTTP_OK, TEXT_HTML);
             } else
                 if ($action == "save") {
                     $this->gitInit(true, $request->params["commitMessage"], true);
-                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/".$request->params["fileName"], $request->params["fileContent"]);
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/" . $request->params["fileName"], $request->params["fileContent"]);
                     return $response ("Ok!", HTTP_OK, TEXT_HTML);
                 }
             return $response("");
         });
 
         //migration routes
-        \Tina4\Route::get("/migrate", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+        \Tina4\Route::get("/migrate", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $result = (new \Tina4\Migration())->doMigration();
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::get("/migrate/create", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
-          //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
+        \Tina4\Route::get("/migrate/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+            //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
 
             $html = _html(
-                _body (_style(
-                        "body { font-family: Arial; border: 1px solid black; padding: 20px; }
+                _body(_style(
+                    "body { font-family: Arial; border: 1px solid black; padding: 20px; }
                         label{ display:block; margin-top: 5px; } 
                         input, textarea { width: 100%; font-size: 14px; } 
                         button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }
                         "),
-                     _form (["class" => "form", "method" =>  "post"],
-                     _label("Migration Description"),
-                     _input(["type" => "text", "name"=>"description"]),
-                     _label("SQL Statement"),
-                     _textarea (["rows"=>"20",
-                                 "name"=>"sql"]),
-                     _br(),
-                     _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
-                     _button("Create Migration")
-                     )
-                 )
+                    _form(["class" => "form", "method" => "post"],
+                        _label("Migration Description"),
+                        _input(["type" => "text", "name" => "description"]),
+                        _label("SQL Statement"),
+                        _textarea(["rows" => "20",
+                            "name" => "sql"]),
+                        _br(),
+                        _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
+                        _button("Create Migration")
+                    )
+                )
             );
             return $response ($html, HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::post("/migrate/create", function(\Tina4\Response $response, \Tina4\Request $request)  use ($tina4PHP)  {
+        \Tina4\Route::post("/migrate/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
@@ -321,8 +256,8 @@ class Tina4Php
          * End of routes
          */
 
-        if (defined ("TINA4_GIT_ENABLED") && TINA4_GIT_ENABLED) {
-            $this->gitInit(TINA4_GIT_ENABLED, (defined ("TINA4_GIT_MESSAGE")) ? TINA4_GIT_MESSAGE : "" );
+        if (defined("TINA4_GIT_ENABLED") && TINA4_GIT_ENABLED) {
+            $this->gitInit(TINA4_GIT_ENABLED, (defined("TINA4_GIT_MESSAGE")) ? TINA4_GIT_MESSAGE : "");
         }
 
         global $cache;
@@ -373,7 +308,7 @@ class Tina4Php
 
 
         if (!empty($config) && !empty($config->getTwigFilters())) {
-           
+
             foreach ($config->getTwigFilters() as $name => $method) {
                 $filter = new \Twig\TwigFilter($name, $method);
                 $twig->addFilter($filter);
@@ -381,11 +316,11 @@ class Tina4Php
         }
 
         //Add form Token
-        $filter = new \Twig\TwigFilter("formToken", function($payload) use ($auth) {
+        $filter = new \Twig\TwigFilter("formToken", function ($payload) use ($auth) {
             if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
-               return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
+                return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
             } else {
-               return "";
+                return "";
             }
         });
 
@@ -394,35 +329,98 @@ class Tina4Php
         DebugLog::message("End of Tina4PHP Initialization");
     }
 
-    function iterateDirectory($path, $relativePath="")
+    function iterateDirectory($path, $relativePath = "")
     {
         if (empty($relativePath)) $relativePath = $path;
         $files = scandir($path);
-        asort ($files);
+        asort($files);
 
         $dirItems = [];
         $fileItems = [];
 
         foreach ($files as $id => $fileName) {
             if ($fileName[0] == "." || $fileName == "cache" || $fileName == "vendor") continue;
-            if (is_dir($path."/".$fileName) && $fileName != "." && $fileName != "..")
-            {
-                $html = '<li data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/folder-invoices.png"}\'>'.$fileName;
-                $html .= $this->iterateDirectory($path."/".$fileName, $relativePath);
+            if (is_dir($path . "/" . $fileName) && $fileName != "." && $fileName != "..") {
+                $html = '<li data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/folder-invoices.png"}\'>' . $fileName;
+                $html .= $this->iterateDirectory($path . "/" . $fileName, $relativePath);
                 $html .= "</li>";
                 $dirItems[] = $html;
 
             } else {
-                $fileItems[] = '<li ondblclick="loadFile(\''.str_replace($relativePath."/", "", $path."/".$fileName).'\', editor)" data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/file.png"}\'>'.$fileName.'</li>';
+                $fileItems[] = '<li ondblclick="loadFile(\'' . str_replace($relativePath . "/", "", $path . "/" . $fileName) . '\', editor)" data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/file.png"}\'>' . $fileName . '</li>';
             }
 
         }
 
         $html = "<ul>";
-        $html .= join ("", $dirItems);
-        $html .= join ("", $fileItems);
+        $html .= join("", $dirItems);
+        $html .= join("", $fileItems);
         $html .= "</ul>";
         return $html;
+    }
+
+    /**
+     * Runs git on the repository
+     * @param $gitEnabled
+     * @param $gitMessage
+     * @param $push
+     */
+    function gitInit($gitEnabled, $gitMessage, $push = false)
+    {
+        global $GIT;
+        if ($gitEnabled) {
+            try {
+                \Coyl\Git\Git::setBin("git");
+                $GIT = \Coyl\Git\Git::open($this->documentRoot);
+
+                $message = "";
+                if (!empty($gitMessage)) {
+                    $message = " " . $gitMessage;
+                }
+
+                try {
+                    if (strpos($GIT->status(), "nothing to commit") === false) {
+                        $GIT->add("*");
+                        $GIT->commit("Tina4: Committed changes at " . date("Y-m-d H:i:s") . $message);
+                        if ($push) {
+                            $GIT->push();
+                        }
+                    }
+                } catch (\Exception $e) {
+
+                }
+
+            } catch (\Exception $e) {
+                echo $e->getMessage();
+            }
+        }
+    }
+
+    /**
+     * Logic to determine the subfolder - result must be /folder/
+     */
+    function getSubFolder()
+    {
+
+        //Evaluate DOCUMENT_ROOT &&
+        $documentRoot = "";
+        if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
+            $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
+        } else
+            if (isset($_SERVER["DOCUMENT_ROOT"])) {
+                $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+            }
+        $scriptName = $_SERVER["SCRIPT_FILENAME"];
+
+
+        //str_replace($documentRoot, "", $scriptName);
+        $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
+
+        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+            $subFolder = null;
+
+        }
+        return $subFolder;
     }
 
     /**
@@ -455,7 +453,7 @@ class Tina4Php
 
         } else {
 
-            $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(),  "/", "GET", $this->config);
+            $string .= new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), "/", "GET", $this->config);
         }
 
         return $string;
@@ -489,32 +487,29 @@ function stringReplaceFirst($search, $replace, $content)
  */
 function renderTemplate($fileNameString, $data = [])
 {
-    $fileName = str_replace($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR, "", $fileNameString);
+    $fileName = str_replace($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR, "", $fileNameString);
     try {
         global $twig;
         $internalTwig = clone $twig;
         if ($internalTwig->getLoader()->exists($fileNameString)) {
             return $internalTwig->render($fileName, $data);
-        }
-        else
+        } else
             if ($internalTwig->getLoader()->exists(basename($fileNameString))) {
                 return $internalTwig->render(basename($fileName), $data);
-            }
-            else
+            } else
                 if (is_file($fileNameString)) {
                     $renderFile = basename($fileNameString);
                     $twigLoader = new \Twig\Loader\FilesystemLoader();
-                    $newPath = dirname($fileName).DIRECTORY_SEPARATOR;
-                    $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR. $newPath );
+                    $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
+                    $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . $newPath);
                     $internalTwig->setLoader($twigLoader);
                     $internalTwig->addGlobal('Tina4', new \Tina4\Caller());
-                    $internalTwig->addGlobal('baseUrl', substr(str_replace (realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR),0, -1) );
+                    $internalTwig->addGlobal('baseUrl', substr(str_replace(realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR), 0, -1));
                     $fileName = basename($renderFile);
                     return $internalTwig->render($renderFile, $data);
-                }
-                else {
-                    $internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template".md5($fileNameString) => $fileNameString]));
-                    $render = $internalTwig->render("template".md5($fileNameString), $data);
+                } else {
+                    $internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
+                    $render = $internalTwig->render("template" . md5($fileNameString), $data);
                     return $render;
                 }
     } catch (\Exception $exception) {

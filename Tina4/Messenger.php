@@ -5,19 +5,21 @@
  * Date: 5/19/2016
  * Time: 12:09 PM
  */
+
 namespace Tina4;
 
 class Messenger
 {
-     /**
+    /**
      * Messenger constructor.
      * @param array $settings
      */
-    function __construct (\Tina4\MessengerSettings $settings = null) {
+    function __construct(MessengerSettings $settings = null)
+    {
         if (!empty($settings)) {
             $this->settings = $settings;
         } else {
-            $this->settings = new \Tina4\MessengerSettings();
+            $this->settings = new MessengerSettings();
         }
     }
 
@@ -35,7 +37,8 @@ class Messenger
      * @param $bcc array
      * @return Boolean true, false
      */
-    function sendEmail ($recipients, $subject, $message, $fromName, $fromAddress, $attachments=null, $bcc=null) {
+    function sendEmail($recipients, $subject, $message, $fromName, $fromAddress, $attachments = null, $bcc = null)
+    {
         //define the headers we want passed. Note that they are separated with \r\n
         $boundary_rel = md5(uniqid(time()));
         $boundary_alt = md5(uniqid(time()));
@@ -46,7 +49,7 @@ class Messenger
 
         if (is_array($message) && $this->settings->useTwigTemplates) {
             //We are using twig so we need to render the message
-            $message = \Tina4\renderTemplate($this->settings->templatePath."/".$message["template"], $message["data"]);
+            $message = renderTemplate($this->settings->templatePath . "/" . $message["template"], $message["data"]);
         }
 
 
@@ -60,14 +63,14 @@ class Messenger
 
 
         try {
-            if (!file_exists($_SERVER["DOCUMENT_ROOT"]."/messenger/spool")) {
+            if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool")) {
                 mkdir($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool", 0755, true);
             }
-            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/messenger/spool/email_".date("d_m_Y_h_i_s").".eml", $headers.$message);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml", $headers . $message);
 
 
             if (!$this->settings->usePHPMailer) {
-                \Tina4\DebugLog::message("Sending email using PHP mail");
+                DebugLog::message("Sending email using PHP mail");
                 $message = $this->prepareHtmlMail($message, $eol, "--" . $boundary_rel, "--" . $boundary_alt);
 
                 if (!empty($this->settings->smtpPort)) {
@@ -96,12 +99,12 @@ class Messenger
                             $phpMailer->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_LOWLEVEL;                      // Enable verbose debug output
                         }
                         $phpMailer->isSMTP();                                            // Send using SMTP
-                        $phpMailer->Host       = $this->settings->smtpServer;                    // Set the SMTP server to send through
-                        $phpMailer->SMTPAuth   = true;                                   // Enable SMTP authentication
-                        $phpMailer->Username   = $this->settings->smtpUsername;                     // SMTP username
-                        $phpMailer->Password   = $this->settings->smtpPassword;                               // SMTP password
+                        $phpMailer->Host = $this->settings->smtpServer;                    // Set the SMTP server to send through
+                        $phpMailer->SMTPAuth = true;                                   // Enable SMTP authentication
+                        $phpMailer->Username = $this->settings->smtpUsername;                     // SMTP username
+                        $phpMailer->Password = $this->settings->smtpPassword;                               // SMTP password
                         $phpMailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
-                        $phpMailer->Port       = 25;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
+                        $phpMailer->Port = 25;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
                         $phpMailer->SMTPOptions = [
                             'ssl' => [
                                 'verify_peer' => false,
@@ -130,28 +133,28 @@ class Messenger
                                 $phpMailer->addAttachment($attachment["path"], $attachment["name"]);
                             }
                         }
-                                                // Content
+                        // Content
                         $phpMailer->isHTML(true);                                  // Set email format to HTML
                         $phpMailer->Subject = $subject;
-                        $phpMailer->Body    = $message;
-                        $phpMailer->AltBody = str_replace("<br>", "\n",  strip_tags($message, "<br>"));
+                        $phpMailer->Body = $message;
+                        $phpMailer->AltBody = str_replace("<br>", "\n", strip_tags($message, "<br>"));
 
                         $mailSent = $phpMailer->send();
 
                     } catch (\Exception $e) {
                         $mailSent = false;
-                        \Tina4\DebugLog::message("Messenger Error:".$e->getMessage());
+                        DebugLog::message("Messenger Error:" . $e->getMessage());
                     }
                 }
             }
-        } catch(\Exception $e) {
-            $mailSent =  false;
+        } catch (\Exception $e) {
+            $mailSent = false;
         }
 
         if ($mailSent) {
-            \Tina4\DebugLog::message("Message sending successful");
+            DebugLog::message("Message sending successful");
         } else {
-            \Tina4\DebugLog::message("Message sending failed");
+            DebugLog::message("Message sending failed");
         }
 
         return $mailSent ? true : false;
@@ -164,8 +167,9 @@ class Messenger
      * @param $boundary_alt
      * @return string
      */
-    function prepareHtmlMail($html, $eol, $boundary_rel, $boundary_alt) {
-        preg_match_all('~<img.*?src=.([\/.a-z0-9:;,+=_-]+).*?>~si',$html,$matches);
+    function prepareHtmlMail($html, $eol, $boundary_rel, $boundary_alt)
+    {
+        preg_match_all('~<img.*?src=.([\/.a-z0-9:;,+=_-]+).*?>~si', $html, $matches);
 
         $i = 0;
         $paths = array();
@@ -173,10 +177,10 @@ class Messenger
         foreach ($matches[1] as $img) {
             $img_old = $img;
 
-            if(strpos($img, "http://") === false) {
+            if (strpos($img, "http://") === false) {
                 $paths[$i]['img'] = $img;
                 $content_id = md5($img);
-                $html = str_replace($img_old,'cid:'.$content_id,$html);
+                $html = str_replace($img_old, 'cid:' . $content_id, $html);
                 $paths[$i++]['cid'] = $content_id;
             }
         }
@@ -193,7 +197,7 @@ class Messenger
         foreach ($paths as $key => $path) {
             $message_part = "";
 
-            $img_data = explode(",",$path["img"]);
+            $img_data = explode(",", $path["img"]);
 
             $imgdata = base64_decode($img_data[1]);
 
@@ -202,7 +206,7 @@ class Messenger
             $mime_type = finfo_buffer($f, $imgdata, FILEINFO_MIME_TYPE);
 
             $filename = "image_{$key}";
-            switch($mime_type){
+            switch ($mime_type) {
                 case "image/jpeg":
                 case "image/png":
                 case "image/gif":
@@ -217,7 +221,7 @@ class Messenger
             $message_part .= "Content-ID: <{$path['cid']}>{$eol}";
             $message_part .= "X-Attachment-Id: {$path['cid']}{$eol}{$eol}";
             $message_part .= $img_data[1];
-            $multipart .= "{$boundary_rel}{$eol}".$message_part."{$eol}";
+            $multipart .= "{$boundary_rel}{$eol}" . $message_part . "{$eol}";
         }
 
         $multipart .= "{$boundary_rel}--";
@@ -231,7 +235,8 @@ class Messenger
      * @param string $message Message to be sent
      * @param string $countryPrefix Prefix to determine country of origin
      */
-    function sendText ($mobileNo, $message="", $countryPrefix="01") {
+    function sendText($mobileNo, $message = "", $countryPrefix = "01")
+    {
         $this->sendSMS($mobileNo, $message, $countryPrefix);
     }
 
@@ -242,13 +247,14 @@ class Messenger
      * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
      * @return String Result of SMS send
      */
-    function sendSMS ($mobileNo, $message="", $countryPrefix="27") {
-        $cellphone = $this->formatMobile ($mobileNo, $countryPrefix);
+    function sendSMS($mobileNo, $message = "", $countryPrefix = "27")
+    {
+        $cellphone = $this->formatMobile($mobileNo, $countryPrefix);
         $curl = curl_init($this->settings->bulkSMSURL);
         curl_setopt($curl, CURLOPT_POST, 1);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, 'concat_text_sms_max_parts=4&allow_concat_text_sms=1&username='.$this->bulkSMSUsername.'&password='.$this->bulkSMSPassword.'&message='.$message.'&msisdn='.$cellphone);
-        $request=curl_exec($curl);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, 'concat_text_sms_max_parts=4&allow_concat_text_sms=1&username=' . $this->bulkSMSUsername . '&password=' . $this->bulkSMSPassword . '&message=' . $message . '&msisdn=' . $cellphone);
+        $request = curl_exec($curl);
         curl_close($curl);
         return stripos($request, "IN_PROGRESS") !== false;
     }
@@ -259,33 +265,29 @@ class Messenger
      * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
      * @return string
      */
-    function formatMobile($cellphone, $countryPrefix="27")
+    function formatMobile($cellphone, $countryPrefix = "27")
     {
         $ilen = strlen($cellphone);
         $tmpCel = '';
         $i = 0;
-        while ($i < $ilen)
-        {
-            $val = substr($cellphone, $i,1);
-            if (is_numeric($val))
-            {
-                $tmpcel = $tmpCel . substr($cellphone, $i,1);
+        while ($i < $ilen) {
+            $val = substr($cellphone, $i, 1);
+            if (is_numeric($val)) {
+                $tmpcel = $tmpCel . substr($cellphone, $i, 1);
             }
-            $i ++;
+            $i++;
         }
 
         $tmpcel = trim($tmpcel);
-        if (substr($tmpcel, 0,1) === "0")
-        {
+        if (substr($tmpcel, 0, 1) === "0") {
             $tmpcel = substr_replace($tmpcel, $countryPrefix, 0, 1);
-        }else if(strlen($tmpcel)< 11){
-            $tmpcel = $countryPrefix.$tmpcel;
+        } else if (strlen($tmpcel) < 11) {
+            $tmpcel = $countryPrefix . $tmpcel;
         }
 
-        if ((strlen($tmpcel)< 11) || (strlen($tmpcel)>11)) {
+        if ((strlen($tmpcel) < 11) || (strlen($tmpcel) > 11)) {
             return "Failed";
-        }
-        else {
+        } else {
             return $tmpcel;
         }
     }

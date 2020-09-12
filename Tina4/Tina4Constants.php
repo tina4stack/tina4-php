@@ -1,15 +1,16 @@
 <?php
+
 namespace Tina4;
-if (!defined("TINA4_SUPPRESS")) define ("TINA4_SUPPRESS", false);
+if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
 
 //CSFR
-if (!defined("TINA4_SECURE")) define ("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
+if (!defined("TINA4_SECURE")) define("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
 
 //Debug Types
-if(!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
-if(!defined("DEBUG_SCREEN"))define("DEBUG_SCREEN", 9002);
-if(!defined("DEBUG_ALL"))define("DEBUG_ALL", 9003);
-if(!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
+if (!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
+if (!defined("DEBUG_SCREEN")) define("DEBUG_SCREEN", 9002);
+if (!defined("DEBUG_ALL")) define("DEBUG_ALL", 9003);
+if (!defined("DEBUG_NONE")) define("DEBUG_NONE", 9004);
 
 if (!defined("HTTP_OK")) define("HTTP_OK", 200);
 if (!defined("HTTP_CREATED")) define("HTTP_CREATED", 201);
@@ -31,7 +32,7 @@ if (!defined("TINA4_ANY")) define("TINA4_ANY", "ANY");
 if (!defined("TINA4_PUT")) define("TINA4_PUT", "PUT");
 if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
 if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
-if (!defined("TINA4_DOCUMENT_ROOT")) define ("TINA4_DOCUMENT_ROOT", null);
+if (!defined("TINA4_DOCUMENT_ROOT")) define("TINA4_DOCUMENT_ROOT", null);
 
 
 if (!defined("TEXT_HTML")) define("TEXT_HTML", "text/html");
@@ -48,10 +49,10 @@ if (!defined("DATA_TYPE_BINARY")) define("DATA_TYPE_BINARY", 2);
 if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
 if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
 if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", 1);
-if (!defined("DATA_NO_SQL"))  define("DATA_NO_SQL", "ERR001");
+if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 
 //Initialize the ENV
-(new \Tina4\Env());
+(new Env());
 
 /**
  * Redirect
@@ -96,15 +97,15 @@ function tina4_autoloader($class)
     $class = explode("\\", $class);
     $class = $class[count($class) - 1];
 
-    $fileName = "{$root}".DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
+    $fileName = "{$root}" . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
 
     if (file_exists($fileName)) {
         require_once $fileName;
     } else {
         if (defined("TINA4_INCLUDE_LOCATIONS") && is_array(TINA4_INCLUDE_LOCATIONS)) {
             foreach (TINA4_INCLUDE_LOCATIONS as $lid => $location) {
-                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR."{$location}".DIRECTORY_SEPARATOR."{$class}.php")) {
-                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR."{$location}".DIRECTORY_SEPARATOR."{$class}.php";
+                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
                     break;
                 }
             }
@@ -126,7 +127,8 @@ spl_autoload_register('Tina4\tina4_autoloader');
  * @throws \ReflectionException
  * @throws \Twig\Error\LoaderError
  */
-function runTina4($config=null) {
-    echo new \Tina4\Tina4Php($config);
+function runTina4($config = null)
+{
+    echo new Tina4Php($config);
     return true;
 }

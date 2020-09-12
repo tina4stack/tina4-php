@@ -5,7 +5,7 @@
  * Date: 2019-08-18
  * Time: 10:50
  */
-use Tina4\ORM;
+
 require "vendor/autoload.php";
 require "Tina4Php.php";
 require "Tina4/Config.php";
@@ -16,8 +16,8 @@ define("TINA4_INCLUDE_LOCATIONS", ["app", "objects"]);
 
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");
-define ("TINA4_DEBUG", true);
-define ("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
+define("TINA4_DEBUG", true);
+define("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
 //define ("TINA4_GIT_MESSAGE", "Some useful text here");
 //define ("TINA4_GIT_ENABLED", true);
 global $DBA;

@@ -6,7 +6,9 @@
  * Time: 04:35 PM
  * Notes: A record is a single part of the result set
  */
+
 namespace Tina4;
+
 use JsonSerializable;
 
 /**
@@ -19,20 +21,71 @@ class DataRecord implements JsonSerializable
     private $fieldMapping;
 
     /**
+     * DataRecord constructor Converts array to object
+     * @param array $record Array of records
+     * @param array $fieldMapping Array of field mapping
+     */
+    function __construct($record = null, $fieldMapping = [])
+    {
+        if (!empty($fieldMapping)) {
+            $this->fieldMapping = $fieldMapping;
+        }
+
+        if (!empty($record)) {
+            $this->original = (object)$record;
+            foreach ($record as $column => $value) {
+                if ($this->isBinary($value)) {
+                    $value = \base64_encode($value);
+                    $this->original->{$column} = $value;
+                }
+                $this->{$column} = $value;
+            }
+        }
+    }
+
+    /**
      * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
      * @param $string
      * @return bool
      */
     public function isBinary($string)
     {
-        $isBinary=false;
-        $string=str_ireplace("\t","",$string);
-        $string=str_ireplace("\n","",$string);
-        $string=str_ireplace("\r","",$string);
-        if(is_string($string) && ctype_print($string) === false){
-            $isBinary=true;
+        $isBinary = false;
+        $string = str_ireplace("\t", "", $string);
+        $string = str_ireplace("\n", "", $string);
+        $string = str_ireplace("\r", "", $string);
+        if (is_string($string) && ctype_print($string) === false) {
+            $isBinary = true;
         }
         return $isBinary;
+    }
+
+    /**
+     * Converts array to object
+     * @param bool $original Whether to get the result as original field names
+     * @return object
+     */
+    function asObject($original = false)
+    {
+        if ($original) {
+            return $this->original;
+        } else {
+            return $this->transformObject();
+        }
+    }
+
+    /**
+     * Transform to a camel case result
+     */
+    function transformObject()
+    {
+        $object = (object)[];
+        foreach ($this->original as $column => $value) {
+            $columnName = $this->getObjectName($column);
+            $object->$columnName = $value;
+        }
+
+        return $object;
     }
 
     /**
@@ -41,7 +94,7 @@ class DataRecord implements JsonSerializable
      * @param array $fieldMapping Field mapping to map fields
      * @return string Proper object name
      */
-    function getObjectName($name, $fieldMapping=[])
+    function getObjectName($name, $fieldMapping = [])
     {
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
@@ -79,66 +132,18 @@ class DataRecord implements JsonSerializable
         }
     }
 
-
-    /**
-     * DataRecord constructor Converts array to object
-     * @param array $record Array of records
-     * @param array $fieldMapping Array of field mapping
-     */
-    function __construct($record=null, $fieldMapping=[])
+    function asJSON()
     {
-        if (!empty($fieldMapping)) {
-            $this->fieldMapping = $fieldMapping;
-        }
-
-        if (!empty($record)) {
-            $this->original = (object)$record;
-            foreach ($record as $column => $value) {
-                if ($this->isBinary($value)) {
-                    $value = \base64_encode($value);
-                    $this->original->{$column} = $value;
-                }
-                $this->{$column} = $value;
-            }
-        }
-    }
-
-    /**
-     * Transform to a camel case result
-     */
-    function transformObject () {
-        $object = (object)[];
-        foreach ($this->original as $column => $value) {
-            $columnName = $this->getObjectName($column);
-            $object->$columnName = $value;
-        }
-
-       return $object;
-    }
-
-    /**
-     * Converts array to object
-     * @param bool $original Whether to get the result as original field names
-     * @return object
-     */
-    function asObject ($original=false) {
-        if ($original) {
-            return $this->original;
-        } else {
-            return $this->transformObject();
-        }
-    }
-
-    function asJSON () {
-        return json_encode($this->original,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     function __toString()
     {
-        return json_encode($this->original, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    function byName ($name) {
+    function byName($name)
+    {
         $columnName = strtoupper($name);
         if (!empty($this->original) && !empty($this->$columnName)) {
             return $this->$columnName;
@@ -149,6 +154,6 @@ class DataRecord implements JsonSerializable
 
     public function jsonSerialize()
     {
-        return json_encode($this->original,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

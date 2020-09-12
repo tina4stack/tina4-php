@@ -1,16 +1,17 @@
 <?php
+
 namespace Tina4;
 /**
  * @todo This is a work in progress
  * Class Swagger
  * @package Tina4
  */
-class Swagger implements  \JsonSerializable
+class Swagger implements \JsonSerializable
 {
     public $root;
     public $swagger = [];
 
-    function __construct($root=null, $title="Open API", $description="API Documentation", $version="1.0.0")
+    function __construct($root = null, $title = "Open API", $description = "API Documentation", $version = "1.0.0")
     {
         global $arrRoutes;
         if (empty($this->root)) {
@@ -69,7 +70,7 @@ class Swagger implements  \JsonSerializable
                                     if ($matches[1] === "@example") {
 
 
-                                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\".$matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "asArray")) { $example = (object)$example->asArray(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
+                                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\" . $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "asArray")) { $example = (object)$example->asArray(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
 
                                     } else
                                         if ($matches[1] === "@secure") {
@@ -78,7 +79,6 @@ class Swagger implements  \JsonSerializable
 
                 }
             }
-
 
 
             $arguments = $reflection->getParameters();
@@ -211,19 +211,19 @@ class Swagger implements  \JsonSerializable
             }
         }
 
-       $this->swagger =   [
-           "openapi" => "3.0.0",
-           "host" => $_SERVER["HTTP_HOST"],
-           "info" => [
-               "title" => $title,
-               "description" => $description,
-               "version" => $version
-           ],
-           "security" => ["ApiKeyAuth" => "", "Oauth2" => ["read", "write"]],
-           "basePath" => '/',
-           "paths" => $paths
+        $this->swagger = [
+            "openapi" => "3.0.0",
+            "host" => $_SERVER["HTTP_HOST"],
+            "info" => [
+                "title" => $title,
+                "description" => $description,
+                "version" => $version
+            ],
+            "security" => ["ApiKeyAuth" => "", "Oauth2" => ["read", "write"]],
+            "basePath" => '/',
+            "paths" => $paths
 
-       ];
+        ];
 
     }
 

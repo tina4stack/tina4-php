@@ -5,6 +5,7 @@
  * Date: 2016/02/15
  * Time: 03:24 PM
  */
+
 namespace Tina4;
 
 /**
@@ -12,7 +13,8 @@ namespace Tina4;
  * Patch route intercepts patch calls made to the web server e.g. Patch::add()
  * @package Tina4
  */
-class Patch extends Route {
+class Patch extends Route
+{
     /**
      * @var string Sets $method to PATCH
      */

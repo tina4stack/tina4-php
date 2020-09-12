@@ -5,6 +5,7 @@
  * Date: 5/19/2016
  * Time: 11:19 AM
  */
+
 namespace Tina4;
 
 class DataFirebird implements DataBase
@@ -18,7 +19,8 @@ class DataFirebird implements DataBase
      * @param bool $persistent
      * @throws \Exception
      */
-    public function open($persistent=true) {
+    public function open($persistent = true)
+    {
         if (!function_exists("ibase_pconnect")) {
             throw new \Exception("Firebird extension for PHP needs to be installed");
         }
@@ -33,7 +35,8 @@ class DataFirebird implements DataBase
     /**
      * Close a Firebird database connection
      */
-    public function close() {
+    public function close()
+    {
         ibase_close($this->dbh);
     }
 
@@ -41,7 +44,8 @@ class DataFirebird implements DataBase
      * Execute a firebird query, format is query followed by params or variables
      * @return array|bool
      */
-    public function exec() {
+    public function exec()
+    {
         $params = func_get_args();
 
         if (stripos($params[0], "returning") !== false) {
@@ -58,16 +62,6 @@ class DataFirebird implements DataBase
     }
 
     /**
-     * Returns an error
-     * @return bool|DataError
-     */
-    public function error() {
-        $errorCode = ibase_errcode();
-        $errorMessage = ibase_errmsg();
-        return (new DataError( $errorCode, $errorMessage));
-    }
-
-    /**
      * Firebird implementation of fetch
      * @param string $sql
      * @param int $noOfRecords
@@ -75,7 +69,8 @@ class DataFirebird implements DataBase
      * @param $fieldMapping
      * @return bool|DataResult
      */
-    public function fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    {
         $initialSQL = $sql;
         if (stripos($sql, "returning") === false) {
             //inject in the limits for the select - in Firebird select first x skip y
@@ -86,14 +81,14 @@ class DataFirebird implements DataBase
             $sql = substr($sql, 0, $posSelect) . $limit . substr($sql, $posSelect);   //select first 10 skip 10 from table
         }
 
-        $recordCursor = @ibase_query($this->dbh, $sql );
+        $recordCursor = @ibase_query($this->dbh, $sql);
 
         $records = null;
         $record = null;
 
-        while($record = @ibase_fetch_assoc($recordCursor)) {
+        while ($record = @ibase_fetch_assoc($recordCursor)) {
             foreach ($record as $key => $value) {
-                if (substr($value, 0,2) === "0x") {
+                if (substr($value, 0, 2) === "0x") {
                     //Get the blob information
                     $blobData = ibase_blob_info($this->dbh, $value);
                     //Get a handle to the blob
@@ -104,7 +99,7 @@ class DataFirebird implements DataBase
                     $record[$key] = $content;
                 }
             }
-            $records[] = (new DataRecord( $record, $fieldMapping ));
+            $records[] = (new DataRecord($record, $fieldMapping));
         }
 
         if (is_array($records) && count($records) > 1) {
@@ -141,11 +136,23 @@ class DataFirebird implements DataBase
     }
 
     /**
+     * Returns an error
+     * @return bool|DataError
+     */
+    public function error()
+    {
+        $errorCode = ibase_errcode();
+        $errorMessage = ibase_errmsg();
+        return (new DataError($errorCode, $errorMessage));
+    }
+
+    /**
      * Commit
      * @param null $transactionId
      * @return bool
      */
-    public function commit($transactionId=null) {
+    public function commit($transactionId = null)
+    {
         if (!empty($transactionId)) {
             return ibase_commit($transactionId);
         } else {
@@ -172,7 +179,7 @@ class DataFirebird implements DataBase
      * @param bool $onState
      * @return bool|void
      */
-    public function autoCommit($onState=false)
+    public function autoCommit($onState = false)
     {
         //Firebird has commit off by default
         return true;
@@ -196,7 +203,7 @@ class DataFirebird implements DataBase
     {
         // table name must be in upper case
         $tableName = strtoupper($tableName);
-        $exists = $this->fetch ("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+        $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
 
         return !empty($exists->records());
     }
@@ -275,7 +282,6 @@ class DataFirebird implements DataBase
                                                 WHERE i.RDB$RELATION_NAME=\'' . $record->tableName . '\'
                                                   AND rc.RDB$CONSTRAINT_TYPE IS NOT NULL
                                              ORDER BY s.RDB$FIELD_POSITION')->AsObject();
-
 
 
             $PK = [];

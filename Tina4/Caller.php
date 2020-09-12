@@ -1,6 +1,8 @@
 <?php
+
 namespace Tina4;
-class Caller {
+class Caller
+{
     /**
      * Method to call classes using twig
      * Example in twig {{ Tina4.call ("Class", "Method", "Params") }}
@@ -9,8 +11,9 @@ class Caller {
      * @param array $params
      * @return string
      */
-    function call ($class, $method="", $params=[]) {
-        eval ('$class = new '.$class.'();');
+    function call($class, $method = "", $params = [])
+    {
+        eval ('$class = new ' . $class . '();');
         if (!is_array($params)) {
             $params[] = $params;
         }

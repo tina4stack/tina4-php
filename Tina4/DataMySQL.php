@@ -47,22 +47,6 @@ class DataMySQL implements DataBase
     }
 
     /**
-     * Helper to make ref values for exec injection
-     * @param $arr
-     * @return array
-     */
-    function refValues($arr){
-        if (strnatcmp(phpversion(),'5.3') >= 0) //Reference is required for PHP 5.3+
-        {
-            $refs = array();
-            foreach($arr as $key => $value)
-                $refs[$key] = &$arr[$key];
-            return $refs;
-        }
-        return $arr;
-    }
-
-    /**
      * Executes
      * @return array|bool
      */
@@ -82,24 +66,18 @@ class DataMySQL implements DataBase
                     foreach ($params as $pid => $param) {
                         if (is_numeric($param)) {
                             $paramTypes .= "d";
-                        }
-                            else
-                        if (is_integer($param))
-                        {
-                            $paramTypes .= "i";
-                        }
-                            else
-                        if (is_string($param))
-                        {
-                            $paramTypes .= "s";
-                        }
-                            else
-                        {
-                            $paramTypes .= "b";
-                        }
+                        } else
+                            if (is_integer($param)) {
+                                $paramTypes .= "i";
+                            } else
+                                if (is_string($param)) {
+                                    $paramTypes .= "s";
+                                } else {
+                                    $paramTypes .= "b";
+                                }
                     }
 
-                    $params = array_merge([$preparedQuery,$paramTypes], $params);
+                    $params = array_merge([$preparedQuery, $paramTypes], $params);
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
 
                     call_user_func_array("mysqli_stmt_bind_param", $this->refValues($params));
@@ -118,18 +96,6 @@ class DataMySQL implements DataBase
     }
 
     /**
-     * Gets MySQL errors
-     * @return bool|DataError
-     */
-    public function error()
-    {
-        $errorNo = mysqli_errno($this->dbh);
-        $errorMessage = mysqli_error($this->dbh);
-
-        return (new DataError($errorNo, $errorMessage));
-    }
-
-    /**
      * Fetches records from database
      * @param string $sql SQL Query
      * @param integer $noOfRecords Number of records requested
@@ -137,7 +103,7 @@ class DataMySQL implements DataBase
      * @param array $fieldMapping Mapped Fields
      * @return bool|DataResult
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping=[])
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
     {
         $initialSQL = $sql;
 
@@ -204,12 +170,41 @@ class DataMySQL implements DataBase
         }
 
         //Ensures the pointer is at the end in order to close the connection - Might be a buggy fix
-        if(strpos($sql, "call") !== false){
-            while ( mysqli_next_result($this->dbh) ){
+        if (strpos($sql, "call") !== false) {
+            while (mysqli_next_result($this->dbh)) {
             }
         }
 
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
+    }
+
+    /**
+     * Gets MySQL errors
+     * @return bool|DataError
+     */
+    public function error()
+    {
+        $errorNo = mysqli_errno($this->dbh);
+        $errorMessage = mysqli_error($this->dbh);
+
+        return (new DataError($errorNo, $errorMessage));
+    }
+
+    /**
+     * Helper to make ref values for exec injection
+     * @param $arr
+     * @return array
+     */
+    function refValues($arr)
+    {
+        if (strnatcmp(phpversion(), '5.3') >= 0) //Reference is required for PHP 5.3+
+        {
+            $refs = array();
+            foreach ($arr as $key => $value)
+                $refs[$key] = &$arr[$key];
+            return $refs;
+        }
+        return $arr;
     }
 
     /**
@@ -222,7 +217,8 @@ class DataMySQL implements DataBase
         return $lastId->records(0)[0]->lastId;
     }
 
-    public function tableExists($tableName) {
+    public function tableExists($tableName)
+    {
         $exists = $this->fetch("SELECT * 
                                     FROM information_schema.tables
                                     WHERE table_schema = '{$this->databaseName}' 
@@ -235,7 +231,7 @@ class DataMySQL implements DataBase
      * @param null $transactionId
      * @return bool
      */
-    public function commit($transactionId=null)
+    public function commit($transactionId = null)
     {
         return mysqli_commit($this->dbh);
     }
@@ -266,29 +262,29 @@ class DataMySQL implements DataBase
                       FROM INFORMATION_SCHEMA.tables
                      WHERE upper(table_schema) = upper('{$this->databaseName}')
                      ORDER BY table_type ASC, table_name DESC";
-        $tables    = $this->fetch( $sqlTables, 10000,0 )->asObject();
+        $tables = $this->fetch($sqlTables, 10000, 0)->asObject();
         $database = [];
-        foreach ( $tables as $id => $record ) {
+        foreach ($tables as $id => $record) {
             $sqlInfo = "SELECT *
                         FROM information_schema.COLUMNS   
                         WHERE upper(table_schema) = upper('{$this->databaseName}')
                                     AND TABLE_NAME = '{$record->tableName}'
                          ORDER BY ORDINAL_POSITION";
 
-            $tableInfo = $this->fetch( $sqlInfo )->asObject();
+            $tableInfo = $this->fetch($sqlInfo)->asObject();
 
 
             //Go through the tables and extract their column information
-            foreach ( $tableInfo as $tid => $tRecord ) {
-                $database[trim( $record->tableName )][$tid]["column"]      = $tRecord->ordinalPosition;
-                $database[trim( $record->tableName )][$tid]["field"]       = trim( $tRecord->columnName );
-                $database[trim( $record->tableName )][$tid]["description"] = trim( $tRecord->extra );
-                $database[trim( $record->tableName )][$tid]["type"]        = trim( $tRecord->dataType );
-                $database[trim( $record->tableName )][$tid]["length"]      = trim( $tRecord->characterMaximumLength );
-                $database[trim( $record->tableName )][$tid]["precision"]   = $tRecord->numericPrecision;
-                $database[trim( $record->tableName )][$tid]["default"]     = trim( $tRecord->columnDefault );
-                $database[trim( $record->tableName )][$tid]["notnull"]     = trim( $tRecord->isNullable );
-                $database[trim( $record->tableName )][$tid]["pk"]          = trim( $tRecord->columnKey );
+            foreach ($tableInfo as $tid => $tRecord) {
+                $database[trim($record->tableName)][$tid]["column"] = $tRecord->ordinalPosition;
+                $database[trim($record->tableName)][$tid]["field"] = trim($tRecord->columnName);
+                $database[trim($record->tableName)][$tid]["description"] = trim($tRecord->extra);
+                $database[trim($record->tableName)][$tid]["type"] = trim($tRecord->dataType);
+                $database[trim($record->tableName)][$tid]["length"] = trim($tRecord->characterMaximumLength);
+                $database[trim($record->tableName)][$tid]["precision"] = $tRecord->numericPrecision;
+                $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->columnDefault);
+                $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->isNullable);
+                $database[trim($record->tableName)][$tid]["pk"] = trim($tRecord->columnKey);
             }
         }
         return $database;

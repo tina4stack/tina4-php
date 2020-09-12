@@ -19,16 +19,18 @@ class DataReference
         $this->displayField = $displayField;
     }
 
-    function getFieldName() {
-        return "{$this->tableName}_{$this->displayField}";
+    function getDisplayFieldQuery()
+    {
+        return "{$this->getSubSelect()} as {$this->getFieldName()}";
     }
 
-    function getSubSelect() {
+    function getSubSelect()
+    {
         return "(select {$this->displayField} from {$this->tableName} where {$this->foreignKey} = t.{$this->fieldName})";
     }
 
-    function getDisplayFieldQuery ()
+    function getFieldName()
     {
-        return "{$this->getSubSelect()} as {$this->getFieldName()}";
+        return "{$this->tableName}_{$this->displayField}";
     }
 }
