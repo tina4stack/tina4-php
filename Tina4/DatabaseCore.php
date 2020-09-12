@@ -59,6 +59,7 @@ trait DataBaseCore
     public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd")
     {
         global $cache;
+        
         if (!empty($cache)) {
             $this->cache = $cache;
         }
@@ -82,5 +83,6 @@ trait DataBaseCore
         }
         $this->dateFormat = $dateFormat;
         $this->open();
+
     }
 }

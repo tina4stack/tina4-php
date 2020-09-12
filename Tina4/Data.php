@@ -12,13 +12,12 @@ class Data
      */
     function __construct($DBA = null)
     {
-        global $DBA;
-
         //Check if we have a database connection declared as global , add it to the data class
         foreach ($GLOBALS as $dbName => $GLOBAL) {
-            if (is_object($GLOBAL)) {
-                DebugLog::message("Found {$dbName}: " . get_class($GLOBAL));
-                if (get_class($GLOBAL) === "Tina4\DataBase") {
+
+            if (!empty($GLOBAL)) {
+                if ($dbName[0] == "_" || $dbName === "cache") continue;
+                if (is_object($GLOBAL) && in_array(get_class($GLOBAL) , TINA4_DATABASE_TYPES) ) {
                     DebugLog::message("Adding {$dbName}");
                     $this->{$dbName} = $GLOBAL;
                 }

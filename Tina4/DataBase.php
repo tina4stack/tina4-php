@@ -13,6 +13,16 @@ namespace Tina4;
  */
 interface DataBase
 {
+
+    /**
+     * DataBase constructor.
+     * @param $database
+     * @param string $username
+     * @param string $password
+     * @param string $dateFormat
+     */
+    public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd");
+
     public function close();
 
     /**

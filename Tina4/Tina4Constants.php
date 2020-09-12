@@ -2,9 +2,10 @@
 
 namespace Tina4;
 if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
-
 //CSFR
 if (!defined("TINA4_SECURE")) define("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
+
+if (!defined("TINA4_DATABASE_TYPES")) define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"]);
 
 //Debug Types
 if (!defined("DEBUG_CONSOLE")) define("DEBUG_CONSOLE", 9001);
