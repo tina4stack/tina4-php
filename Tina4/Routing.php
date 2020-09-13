@@ -41,10 +41,11 @@ class Routing
      * @param string $urlToParse URL being parsed
      * @param string $method Type of method e.g. ANY, POST, DELETE, etc
      * @param Config|null $config Config containing configs from the initialization
+     * @param bool $suppressed Don't output headers
      * @throws \ReflectionException
      * @throws \Exception
      */
-    function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null)
+    function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null, $suppressed=false)
     {
         if (!empty($root)) {
             $_SERVER["DOCUMENT_ROOT"] = $root;
@@ -71,19 +72,21 @@ class Routing
 
         global $arrRoutes;
 
-        if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS)) {
-            if (key_exists("HTTP_ORIGIN", $_SERVER)) {
-                header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
+        if (!$suppressed) {
+            if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS)) {
+                if (key_exists("HTTP_ORIGIN", $_SERVER)) {
+                    header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
+                }
+                header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
+                header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+                header('Access-Control-Allow-Credentials: true');
             }
-            header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
-            header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-            header('Access-Control-Allow-Credentials: true');
-        }
 
-        if ($method === "OPTIONS") {
-            http_response_code(200);
-            $this->content = "";
-            return true;
+            if ($method === "OPTIONS") {
+                http_response_code(200);
+                $this->content = "";
+                return true;
+            }
         }
 
         //Gives back things in an orderly fashion for API responses
@@ -137,13 +140,15 @@ class Routing
         DebugLog::message("URL: {$urlToParse}", TINA4_DEBUG_LEVEL);
         DebugLog::message("Method: {$method}", TINA4_DEBUG_LEVEL);
 
-        //include routes in routes folder
-        foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
-            if (file_exists(getcwd() . "/" . $route)) {
-                $this->includeDirectory(getcwd() . "/" . $route);
-            } else {
-                if (TINA4_DEBUG) {
-                    DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+        if (defined ("TINA4_ROUTE_LOCATIONS")) {
+            //include routes in routes folder
+            foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
+                if (file_exists(getcwd() . "/" . $route)) {
+                    $this->includeDirectory(getcwd() . "/" . $route);
+                } else {
+                    if (TINA4_DEBUG) {
+                        DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+                    }
                 }
             }
         }

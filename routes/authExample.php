@@ -20,3 +20,4 @@
     global $auth;
     return $response ($auth->getToken(["data" => ["name" => "test"], "sub" => "1234567890", "iss" => "https://tina4php.com"]), HTTP_OK);
 });
+

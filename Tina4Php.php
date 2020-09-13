@@ -100,7 +100,6 @@ class Tina4Php
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
         }
 
-
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
         }
@@ -125,31 +124,13 @@ class Tina4Php
 
         \Tina4\DebugLog::message("TINA4: web path " . $this->webRoot);
 
-        //check for composer defines
-        if (file_exists($this->webRoot . "/vendor/autoload.php")) {
-            require_once $this->webRoot . "/vendor/autoload.php";
-        }
+        if (!defined("TINA4_TEMPLATE_LOCATIONS")) define("TINA4_TEMPLATE_LOCATIONS", ["src/templates", "src/assets", "src/templates/snippets"]);
 
-        if (file_exists($this->documentRoot . "/vendor/autoload.php")) {
-            require_once $this->documentRoot . "/vendor/autoload.php";
-        }
+        if (!defined("TINA4_ROUTE_LOCATIONS")) define("TINA4_ROUTE_LOCATIONS", ["src/api", "src/routes"]);
 
-        if (!defined("TINA4_TEMPLATE_LOCATIONS")) {
-            define("TINA4_TEMPLATE_LOCATIONS", ["src/templates", "src/assets", "src/templates/snippets"]);
-        }
+        if (!defined("TINA4_INCLUDE_LOCATIONS")) define("TINA4_INCLUDE_LOCATIONS", ["src/app", "src/objects", "src/services"]);
 
-        if (!defined("TINA4_ROUTE_LOCATIONS")) {
-            define("TINA4_ROUTE_LOCATIONS", ["src/api", "src/routes"]);
-        }
-
-        if (!defined("TINA4_INCLUDE_LOCATIONS")) {
-            define("TINA4_INCLUDE_LOCATIONS", ["src/app", "src/objects"]);
-        }
-
-        if (!defined("TINA4_ALLOW_ORIGINS")) {
-            define("TINA4_ALLOW_ORIGINS", ["*"]);
-        }
-
+        if (!defined("TINA4_ALLOW_ORIGINS")) define("TINA4_ALLOW_ORIGINS", ["*"]);
 
         //Setup caching options
         $TINA4_CACHE_CONFIG =
@@ -163,7 +144,7 @@ class Tina4Php
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin"];
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin", "processes"];
 
         foreach ($foldersToCopy as $id => $folder) {
             //Check if folder is there
@@ -432,11 +413,15 @@ class Tina4Php
     {
         //No processing, we simply want the include to work
         if ($this->suppress) {
-            echo "Tina4 in suppressed mode";
+            DebugLog::message("Tina4 in suppressed mode");
+            //Need to include the include locations here
+            if (defined ("TINA4_ROUTE_LOCATIONS")) {
+                //include routes in routes folder
+                $routing = new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), "/", "NONE", $this->config, true);
+            }
             return "";
         }
         $string = "";
-
 
         if (isset($_SERVER["REQUEST_URI"]) && isset($_SERVER["REQUEST_METHOD"])) {
 

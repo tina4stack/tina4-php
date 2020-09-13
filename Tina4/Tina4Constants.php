@@ -1,6 +1,9 @@
 <?php
 
 namespace Tina4;
+
+
+
 if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
 //CSFR
 if (!defined("TINA4_SECURE")) define("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
