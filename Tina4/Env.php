@@ -7,6 +7,10 @@ class Env
 {
     private $environment = "";
 
+    /**
+     * Env constructor.
+     * @param string $forceEnvironment
+     */
     function __construct($forceEnvironment = "")
     {
         if (!empty(getenv("ENVIRONMENT"))) {
@@ -39,8 +43,8 @@ class Env
                 if (empty($line)) {
                     //Ignore blanks
                 } else
-                    if ($line[0] == "[" && $line[strlen($line) - 1] == "]") {
-                        //Ignore [Sections]
+                    if ($line[0] == "[" && $line[strlen($line) - 1] == "]" || $line[0] == "#") {
+                        //Ignore [Sections] && Comments #
                     } else {
                         $variables = explode("=", $line, 2);
                         if (isset($variables[0]) && isset($variables[1])) {
@@ -56,7 +60,6 @@ class Env
                         }
                     }
             }
-
         } else {
             die("No environment {$fileName} file found");
         }

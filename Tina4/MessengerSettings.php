@@ -15,6 +15,10 @@ class MessengerSettings
     public $useTwigTemplates = true;
     public $templatePath = "messenger"; //off the templates or assets folder
 
+    /**
+     * MessengerSettings constructor.
+     * @param false $usePHPMailer
+     */
     function __construct($usePHPMailer = false)
     {
         $this->usePHPMailer = $usePHPMailer;

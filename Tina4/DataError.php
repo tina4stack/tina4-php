@@ -37,6 +37,9 @@ class DataError
         return $this->errorCode . " " . $this->errorMessage;
     }
 
+    /**
+     * @return false|string
+     */
     function __toString()
     {
         return json_encode($this->getError());

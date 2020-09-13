@@ -258,6 +258,10 @@ class Routing
         return $url[0];
     }
 
+    /**
+     * Get static files
+     * @param $fileName
+     */
     function returnStatic($fileName)
     {
         $fileName = preg_replace('#/+#', '/', $fileName);
@@ -285,7 +289,6 @@ class Routing
             default:
                 $mimeType = "text/html";
                 break;
-
         }
 
         if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
@@ -303,6 +306,10 @@ class Routing
         exit; //we are done here, file will be delivered
     }
 
+    /**
+     * Method to download / stream files
+     * @param $file
+     */
     function rangeDownload($file)
     {
 
@@ -468,6 +475,12 @@ class Routing
         return $matching;
     }
 
+    /**
+     * Get the params
+     * @param $response
+     * @param false $inlineToRequest
+     * @return array
+     */
     function getParams($response, $inlineToRequest = false)
     {
         $request = new Request(file_get_contents("php://input"));
@@ -498,6 +511,11 @@ class Routing
         die();
     }
 
+    /**
+     * Recursively copy the files
+     * @param $src
+     * @param $dst
+     */
     static function recurseCopy($src, $dst)
     {
         $dir = opendir($src);

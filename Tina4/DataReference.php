@@ -11,6 +11,13 @@ class DataReference
     private $foreignKey;
     private $displayField;
 
+    /**
+     * DataReference constructor for linking ORM
+     * @param $fieldName
+     * @param $tableName
+     * @param $foreignKey
+     * @param $displayField
+     */
     function __construct($fieldName, $tableName, $foreignKey, $displayField)
     {
         $this->fieldName = $fieldName;

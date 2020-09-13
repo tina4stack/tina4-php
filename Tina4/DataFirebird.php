@@ -208,11 +208,19 @@ class DataFirebird implements DataBase
         return !empty($exists->records());
     }
 
+    /**
+     * Get the last id
+     * @return bool
+     */
     public function getLastId()
     {
         return false;
     }
 
+    /**
+     * Get the database metadata
+     * @return array|mixed
+     */
     public function getDatabase()
     {
         $sqlTables = 'select distinct rdb$relation_name as table_name

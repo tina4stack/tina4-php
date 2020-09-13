@@ -23,6 +23,10 @@ interface DataBase
      */
     public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd");
 
+    /**
+     * Close the database connection
+     * @return mixed
+     */
     public function close();
 
     /**
@@ -60,7 +64,6 @@ interface DataBase
      * @param $transactionId integer Id of the transaction
      * @return mixed
      */
-
     public function rollback($transactionId = null);
 
     /**

@@ -10,6 +10,10 @@ class HTMLElement
     private $attributes = [];
     private $elements = [];
 
+    /**
+     * HTMLElement constructor.
+     * @param mixed ...$elements
+     */
     function __construct(...$elements)
     {
         //elements can be attributes or body parts
@@ -26,6 +30,10 @@ class HTMLElement
         return $this;
     }
 
+    /**
+     * Sort the elements
+     * @param $element
+     */
     function sortElements($element)
     {
         foreach ($element as $pId => $param) {
@@ -53,6 +61,10 @@ class HTMLElement
         }
     }
 
+    /**
+     * Outputs the html
+     * @return string
+     */
     function __toString()
     {
         //Check what type of tag

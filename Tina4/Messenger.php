@@ -12,7 +12,7 @@ class Messenger
 {
     /**
      * Messenger constructor.
-     * @param array $settings
+     * @param MessengerSettings|null $settings
      */
     function __construct(MessengerSettings $settings = null)
     {

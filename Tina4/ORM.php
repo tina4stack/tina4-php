@@ -216,6 +216,7 @@ class ORM implements \JsonSerializable
      * Saves a file into the database
      * @param $fieldName
      * @param $fileInputName
+     * @return bool
      */
     function saveFile($fieldName, $fileInputName)
     {
@@ -337,6 +338,12 @@ class ORM implements \JsonSerializable
         return join(" and ", $primaryFieldFilter);
     }
 
+    /**
+     * Saves binary content to a field in the table
+     * @param $fieldName
+     * @param $content
+     * @return bool
+     */
     function saveBlob($fieldName, $content)
     {
         $tableName = $this->getTableName();
@@ -442,7 +449,8 @@ class ORM implements \JsonSerializable
     /**
      * Checks if there is a database connection assigned to the object
      * If the object is not empty $DBA is instantiated
-     * @throws Exception If no database connection is assigned to the object an exception is thrown
+     * @param string $tableName
+     * @return bool
      */
     function checkDBConnection($tableName = "")
     {
@@ -472,6 +480,13 @@ class ORM implements \JsonSerializable
         }
     }
 
+    /**
+     * Generate SQL for creating a table
+     * @param $tableData
+     * @param string $tableName
+     * @return string
+     * @throws \ReflectionException
+     */
     function generateCreateSQL($tableData, $tableName = "")
     {
         $className = get_class($this);
@@ -655,6 +670,10 @@ class ORM implements \JsonSerializable
         return $fields;
     }
 
+    /**
+     * Get back an object
+     * @return object
+     */
     function asObject()
     {
         return (object)$this->jsonSerialize();
@@ -736,7 +755,6 @@ class ORM implements \JsonSerializable
      * Excludes fields based on a json object or record
      * @param $request
      */
-
     function exclude($request)
     {
         if ($request) {
@@ -826,6 +844,10 @@ class ORM implements \JsonSerializable
         return json_encode($this->jsonSerialize());
     }
 
+    /**
+     * Return the object as an array
+     * @return array|mixed
+     */
     function asArray()
     {
         return $this->jsonSerialize();
@@ -865,9 +887,13 @@ class ORM implements \JsonSerializable
         return [];
     }
 
+    /**
+     * Generates CRUD
+     * @param string $path
+     * @throws \Twig\Error\LoaderError
+     */
     function generateCRUD($path = "")
     {
-
         $className = get_class($this);
         if (empty($path)) {
             $callingCode = '(new ' . $className . '())->generateCRUD();';

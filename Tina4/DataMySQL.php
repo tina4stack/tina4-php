@@ -217,6 +217,11 @@ class DataMySQL implements DataBase
         return $lastId->records(0)[0]->lastId;
     }
 
+    /**
+     * Check if the table exists
+     * @param $tableName
+     * @return bool|mixed
+     */
     public function tableExists($tableName)
     {
         $exists = $this->fetch("SELECT * 
@@ -236,11 +241,20 @@ class DataMySQL implements DataBase
         return mysqli_commit($this->dbh);
     }
 
+    /**
+     * Rollback the transaction
+     * @param null $transactionId
+     * @return bool|mixed
+     */
     public function rollback($transactionId = null)
     {
         return mysqli_rollback($this->dbh);
     }
 
+    /**
+     * Start the transaction
+     * @return bool|int
+     */
     public function startTransaction()
     {
         return mysqli_begin_transaction($this->dbh);
@@ -256,6 +270,10 @@ class DataMySQL implements DataBase
         $this->dbh->autocommit($onState);
     }
 
+    /**
+     * Gets the database metadata
+     * @return array|mixed
+     */
     public function getDatabase()
     {
         $sqlTables = "SELECT table_name, table_type, engine

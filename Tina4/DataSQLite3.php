@@ -78,6 +78,11 @@ class DataSQLite3 implements DataBase
         return (new DataError($this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
     }
 
+    /**
+     * Check if table exists
+     * @param $tableName
+     * @return bool|mixed
+     */
     public function tableExists($tableName)
     {
         $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");

@@ -16,10 +16,17 @@ class Process
         $this->name = $name;
     }
 
+    /**
+     * Can run
+     * @return bool
+     */
     function canRun() {
         return true;
     }
 
+    /**
+     * The script that runs things
+     */
     function run () {
         echo "You should overwrite this!";
     }

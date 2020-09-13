@@ -132,16 +132,27 @@ class DataRecord implements JsonSerializable
         }
     }
 
+    /**
+     * @return false|string
+     */
     function asJSON()
     {
         return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    /**
+     * @return false|string
+     */
     function __toString()
     {
         return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    /**
+     * Get the value by the field name
+     * @param $name
+     * @return false
+     */
     function byName($name)
     {
         $columnName = strtoupper($name);
@@ -152,6 +163,10 @@ class DataRecord implements JsonSerializable
         }
     }
 
+    /**
+     * Serialize
+     * @return false|mixed|string
+     */
     public function jsonSerialize()
     {
         return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
