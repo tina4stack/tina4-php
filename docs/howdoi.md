@@ -264,26 +264,48 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
 
 ORM gives you the ability to write queries using [Object Oriented Programming](https://en.wikipedia.org/wiki/Object-oriented_programming) in your preferred programming language. Click the link for a list of [ORM software](https://en.wikipedia.org/wiki/List_of_object-relational_mapping_software) used for various programming languages. ORM allows you to interact with your database without using SQL.
 
+### Example:
+
 ```php
 <?php
 class MySQLDatabase { //create class and name for your database
 
-    private $connection; //establish private connection between user and database
-    public $tableName = "my_weird_database_table"; //name of your table
-    public $id = ""; //assign user id which will be stored in database
-    public $name = "";//assign user name which will be stored in database
-    private $password = "";//assign user password which will be stored in database
-    public $email = "";//assign user email which will be stored in database
-}
+    /**
+     * ORM constructor.
+     * @param null $request A JSON input to populate the object\
+     * @param boolean $fromDB True or false - is data from the database
+     * @param string $tableName The name of the table that this object maps in the database
+     * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
+     * @param string $primaryKey The primary key of the table
+     * @param string $tableFilter A filter to limit the records when the data is fetched into the class
+     * @param DataBase $DBA A relevant database connection to fetch information from
+     * @throws Exception Error on failure
+     * @example examples/exampleORMObject.php Create class object extending ORM
+     */
 
 ```
 
 ## Annotate my REST for swagger
 
+[Annotation](https://en.wikipedia.org/wiki/Annotation#Software_and_engineering) is adding extra information in your script associated with a particular function or statement. You can apply it to constructors, declarations, fields, methods, parameters and variables. 
+Tina4 uses [Swagger](https://en.wikipedia.org/wiki/OpenAPI_Specification) which is an Open Source [REST API](https://en.wikipedia.org/wiki/Representational_state_transfer). Below you will see how to annotate your REST API with Swagger. Here you can explain how one component is dependant on another.
 
+### Example:
+
+```php
+<?php
+class MySQLDatabase { //create class and name for your database
+/**
+ * @description A swagger annotation
+ * @tags Testing AUTH
+ * @example AUTH
+ * @secure
+ */
+}
+```
 
 ## Secure a REST end point
-An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other. A [REST API](https://en.wikipedia.org/wiki/Representational_state_transfer) will include your website's URL and use various methods to perform tasks (e.g GET, POST, PUT, PATCH).
+An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other.  It includes your website's URL and uses various methods to perform tasks (e.g GET, POST, PUT, PATCH). 
 ##### 8 Design Principles 
 Saltzer and Schroeder wrote a paper called "[The Protection of Information in Computer Systems](http://web.mit.edu/Saltzer/www/publications/protection/)" which highlighted 8 design principles for securing your data and information:
 
