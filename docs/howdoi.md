@@ -340,7 +340,80 @@ Consider these factors or use it as a checklist for your system security when cr
 
 ## Add a filter to process records when they are extracted from the database
 
-https://swcarpentry.github.io/sql-novice-survey/03-filter/
+We use the SELECT, FROM, WHERE, ORDER BY  and other statements when writing to or querying our database. You can add filters when processing records from your database.
+Below is an example of how to add a filter when extracting or processing information from your database:
+
+##### Example:
+Lets assume a table in your database has this data stored:
+```php
++----+------------+-----------+----------------------+
+| id | first_name | last_name | email                |
++----+------------+-----------+----------------------+
+|  1 | Peter      | Griffin   | peterg@mail.com      |
+|  2 | Rick       | Sanchez   | ricks@mail.com       |
+|  3 | Morty      | Smith     | mortys@mail.com      |
+|  4 | Peter      | Parker    | perterp@mail.com     |
+|  5 | Clancy     | Gilroy    | clancyg@mail.com     |
++----+------------+-----------+----------------------+
+```
+And the filter you want to add is for all the entries with the name "Peter":
+
+```php
+<?php
+$servername = "localhost";
+$username = "username";
+$password = "password";
+$dbname = "myDB";
+
+// Create connection between the server and database
+$conn = new sql($servername, $username, $password, $dbname);
+// Check connection between the server and database, the unsuccessful the user gets error
+if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+}
+// the asterisk below selects all the data in the table and the filter is added with the WHERE statement
+$sql = "SELECT * 
+          FROM MyGuests
+         WHERE first_name='Peter'";
+$result = $conn->query($sql);
+
+if($result = sql_query($link, $sql)){
+    if(sql_num_rows($result) > 0){
+        echo "<table>";
+            echo "<tr>";
+                echo "<th>id</th>";
+                echo "<th>first_name</th>";
+                echo "<th>last_name</th>";
+                echo "<th>email</th>";
+            echo "</tr>";
+        while($row = sql_fetch_array($result)){
+            echo "<tr>";
+                echo "<td>" . $row['id'] . "</td>";
+                echo "<td>" . $row['first_name'] . "</td>";
+                echo "<td>" . $row['last_name'] . "</td>";
+                echo "<td>" . $row['email'] . "</td>";
+            echo "</tr>";
+        }
+        echo "</table>";
+        // Close result set
+        sql_free_result($result);
+    } else{
+        echo "No records matching your query were found.";
+    }
+} else{
+    echo "ERROR: Could not able to execute $sql. " . sql_error($link);
+}
+$conn->close(); // close connection once query is handled
+```
+After your database has been filtered you will get a result with the following table:
+```php
++----+------------+-----------+---------------------+
+| id | first_name | last_name | email               |
++----+------------+-----------+---------------------+
+|  1 | Peter      | Griffin   | peterg@mail.com     |
+|  4 | Peter      | Parker    | peterp@mail.com     |
++----+------------+-----------+---------------------+
+```
 
 ## Exclude some fields from being displayed on REST result or query
 
