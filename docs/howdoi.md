@@ -145,6 +145,7 @@ For Unix:
 https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/
 OR
 https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/
+
 ## Connect to a database
 
 There are 3 database engines currently supported, we are happy to add more if required but for now they are:
@@ -261,12 +262,49 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
 
 ## Map my ORM field to a database field which doesn't follow the Tina4 pattern
 
+https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/basic-mapping.html
 
 ## Annotate my REST for swagger
 
+https://help.hcltechsw.com/commerce/8.0.0/tutorials/tutorial/twv_restconfig7_annotate.html
+
 ## Secure a REST end point
+An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other. A REST API will include your website's URL and use various methods to perform tasks (e.g GET, POST, PUT, PATCH).
+##### 8 Design Principles 
+Saltzer and Schroeder wrote a paper called "The Protection of Information in Computer Systems" which highlighted 8 design principles for securing your data and information:
+
+* __Least Privilege__ : Only give a user the required permission they need to complete their task. Remove any access when no longer in use and more permission can be granted if required.
+* __Economy of Mechanism__: Your design must be as simple as possible. Keep the components and interactions between everything (database, API's etc) simple to understand.
+* __Fail-Safe Defaults__: The default access level to resources on your system for users should be "denied" unless explicit permission is granted.
+* __Open Design__: This principle gives importance to building an open and transparent system. For example, the Open Source community where there are no confidential algorithms or secrets.
+* __Complete Mediation__: Your system must validate user access rights and not rely on the cached permission matrix. If user access permission is revoked, but is not reflected in the permission matrix, then your system security is at risk. 
+* __Least Common Mechanism__: This deals with the risk involved with sharing state between your systems components. If the shared state can be corrupted that means other components can be corrupted.   
+* __Seperation of Privilege__: Granting a user permission should be based purely on a single (or combination of) condition, which is what type of permission is required for the type of task or resource.
+* __Psychological Acceptability__: Simply put, your security should not make the user experience worse. Your mechanism should not make resources more difficult to access than if the mechanism were never present.  
+
+##### Secure REST API Best Practice
+Consider these factors or use it as a checklist for your system security when creating your REST API's 
+
+* Think Simple : Make your system as secure as it needs to be, nothing more, nothing less. If you make it unnecessarily complex, there will be holes in your system which can be exploited or corrupted.  
+* Use HTTPS :  By using a [SSL](https://www.ssl.com/faqs/faq-what-is-ssl/) handshake or protocol, the process of randomly generating access tokens or authentication credentials is simplified and makes your system secure.    
+
+         For example, its safer to get a SSL certificate for your website.
+         Your website URL will go from http://www.youtsite.com to https://www.yoursite.com
+
+* Never expose information on URLs : API keys, session tokens, passwords and usernames must not appear in the URL as it is captured in server logs and makes your system exploitable. 
+
+        This is an example of poor security as the username and security token is exposed in the URL:
+        
+        https://www.rickandmorty.com/authuser?user=ted&authz_token=1234&expire=1500000000
+        
+* Use OAuth : OAuth 2.0 authorization framework enables a third-party application to obtain limited access to an HTTP service, either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP service, or by allowing the third-party application to obtain access on its behalf.
+* Use Password Hash : Increase the security of your system by keeping [passwords hashed](https://www.maketecheasier.com/what-is-password-hashing/). It transforms user passwords in your database into String and passwords cannot be retrieved if there is unauthorized access.
+* Add Timestamps in Request : Add timestap parmeters to your API requests so that the server compares the timestamp of the request to the current timestamp. The request is only accepted if both timestamps are within reasonable timeframe. This safeguards your system from [brute force](https://en.wikipedia.org/wiki/Brute-force_attack) attacks or a [replay attack](https://en.wikipedia.org/wiki/Replay_attack).
+* Input Validation : Use [validation](https://en.wikipedia.org/wiki/Data_validation) checks to make your system more secure. Any requests must be immediately rejected if validation fails. 
 
 ## Add a filter to process records when they are extracted from the database
+
+https://swcarpentry.github.io/sql-novice-survey/03-filter/
 
 ## Exclude some fields from being displayed on REST result or query
 
