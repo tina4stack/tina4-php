@@ -269,7 +269,7 @@ https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/basic-ma
 https://help.hcltechsw.com/commerce/8.0.0/tutorials/tutorial/twv_restconfig7_annotate.html
 
 ## Secure a REST end point
-An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other. A REST API will include your website's URL and use various methods to perform tasks (e.g GET, POST, PUT, PATCH).
+An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other. A [REST API](https://en.wikipedia.org/wiki/Representational_state_transfer) will include your website's URL and use various methods to perform tasks (e.g GET, POST, PUT, PATCH).
 ##### 8 Design Principles 
 Saltzer and Schroeder wrote a paper called "[The Protection of Information in Computer Systems](http://web.mit.edu/Saltzer/www/publications/protection/)" which highlighted 8 design principles for securing your data and information:
 
