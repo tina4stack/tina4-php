@@ -194,7 +194,7 @@ class MyDBActiveObject extends \Tina4\Data
 
 ## Save a record using the ORM
 
-The ORM in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.
+The [ORM](https://en.wikipedia.org/wiki/Object-relational_mapping) in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.
 It is required to extend the ``\Tina4\ORM`` class to make the magic happen.
 
 ### Examples:
@@ -262,11 +262,25 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
 
 ## Map my ORM field to a database field which doesn't follow the Tina4 pattern
 
-https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/basic-mapping.html
+ORM gives you the ability to write queries using [Object Oriented Programming](https://en.wikipedia.org/wiki/Object-oriented_programming) in your preferred programming language. Click the link for a list of [ORM software](https://en.wikipedia.org/wiki/List_of_object-relational_mapping_software) used for various programming languages. ORM allows you to interact with your database without using SQL.
+
+```php
+<?php
+class MySQLDatabase { //create class and name for your database
+
+    private $connection; //establish private connection between user and database
+    public $tableName = "my_weird_database_table"; //name of your table
+    public $id = ""; //assign user id which will be stored in database
+    public $name = "";//assign user name which will be stored in database
+    private $password = "";//assign user password which will be stored in database
+    public $email = "";//assign user email which will be stored in database
+}
+
+```
 
 ## Annotate my REST for swagger
 
-https://help.hcltechsw.com/commerce/8.0.0/tutorials/tutorial/twv_restconfig7_annotate.html
+
 
 ## Secure a REST end point
 An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other. A [REST API](https://en.wikipedia.org/wiki/Representational_state_transfer) will include your website's URL and use various methods to perform tasks (e.g GET, POST, PUT, PATCH).
