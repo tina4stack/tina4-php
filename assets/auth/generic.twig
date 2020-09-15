@@ -1,3 +1,13 @@
+{#
+# Tina4 : This Is Not Another Framework
+# Created with : PHPStorm
+# User : andrevanzuydam
+# Copyright (C)
+# Contact : andre@codeinfinity.co.za
+#}
+
+{# HTML script which includes Jquery and Bootstrap. Gives user option to register or login #}
+{# Includes TWIG script required based on user selected option #}
 <!DOCTYPE html>
 <html>
 <head>
@@ -11,7 +21,7 @@
     {% if Action == "Login" %}
         {% include "auth/login.twig" %}
     {% elseif Action == "Register" %}
-        {% include "auth/register.twig" %}
+        {% include "auth/register.twig" %}   {# does not exist #}
     {% else %}
         {% include "auth/wizard.twig" %}
     {% endif %}
