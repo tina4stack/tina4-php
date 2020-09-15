@@ -1,4 +1,15 @@
 <?php
+/*
+ * Tina4 : This Is Not Another Framework
+ * Created with : PHPStorm
+ * User : andrevanzuydam
+ * Copyright (C)
+ * Contact : andre@codeinfinity.co.za
+*/
+
+/**
+ * @description Imports JSON Web Token library
+ */
 use Nowakowskir\JWT\JWT;
 
 /**
@@ -16,7 +27,7 @@ use Nowakowskir\JWT\JWT;
 
 
 /**
- * Function to generate Auth key
+ * @description Function to authenticate/retrieve user Web Token
  */
 \Tina4\Get::add("/test-token", function(){
     global $auth;
