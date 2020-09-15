@@ -1,5 +1,13 @@
 #!/usr/bin/env php
 <?php
+/*
+ * Tina4 : This Is Not Another Framework
+ * Created with : PHPStorm
+ * User : andrevanzuydam
+ * Copyright (C)
+ * Contact : andre@codeinfinity.co.za
+*/
+
 global $rootPath;
 $rootPath = str_replace("\n", "", `cd`);
 $rootPath = str_replace("\r", "", $rootPath);
@@ -15,11 +23,21 @@ if (file_exists("index.php")){
 
 $menu = [];
 
+/**
+ * Reads input from the commandline
+ * @param $handle
+ * @return false|string
+ */
 function readLn($handle) {
     $input = substr(fgets($handle), 0, -1);
     return $input;
 }
 
+/**
+ * Function to draw menu and options
+ * @param
+ * @return Menu|string
+ */
 function drawMenu () {
     echo "===========================================================\n";
     echo "Menu\n";
@@ -31,6 +49,11 @@ function drawMenu () {
     echo "Choose a menu option, type exit to quit:";
 }
 
+/**
+ * Function to create database mapping and gives user various required action responses
+ * @param $step, $input, $handle
+ * @return $step
+ */
 function processCreateORMfromDB($step, $input, $handle) {
     global $settings;
     global $rootPath;
@@ -89,14 +112,14 @@ function processCreateORMfromDB($step, $input, $handle) {
                 }
 
                 $definition = '<?php
-class [CLASS_NAME] extends \Tina4\ORM
-{
-    public $tableName="[TABLE_NAME]";
-    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
-    //public $softDelete=true; //uncomment for soft deletes in crud
-    
-[FIELDS]
-}';
+                                class [CLASS_NAME] extends \Tina4\ORM
+                               {
+                                    public $tableName="[TABLE_NAME]";
+                                    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
+                                    //public $softDelete=true; //uncomment for soft deletes in crud
+                                    
+                                    [FIELDS]
+                               }';
 
                 if (file_exists("Tina4Php.php")) {
                     $fileName = "{$rootPath}".DIRECTORY_SEPARATOR."objects".DIRECTORY_SEPARATOR. $className . ".php";
@@ -142,6 +165,11 @@ class [CLASS_NAME] extends \Tina4\ORM
     return $step;
 }
 
+/**
+ * Function to connect to database and gives user DB type options
+ * @param $step, $input, $handle
+ * @return $step
+ */
 function processCreateConnection($step, $input, $handle) {
     global $settings;
 
@@ -255,6 +283,10 @@ function processCreateConnection($step, $input, $handle) {
     return $step;
 }
 
+/**
+ * Function for menu handler with users DB connection & DB mapping
+ * @param $handle
+ */
 function handleMenu($handle) {
     $menu = "start";
     $step = 0;
