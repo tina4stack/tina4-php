@@ -360,8 +360,8 @@ And the filter you want to add is for all the entries with the name "Peter":
 
 ```php
 <?php
-$servername = "localhost";
-$username = "username";
+$servername = "localhost"; //input the credentials for each field, 
+$username = "username";   //as it will give you access to the database.
 $password = "password";
 $dbname = "myDB";
 
@@ -371,14 +371,14 @@ $conn = new sql($servername, $username, $password, $dbname);
 if ($conn->connect_error) {
   die("Connection failed: " . $conn->connect_error);
 }
-// the asterisk below selects all the data in the table and the filter is added with the WHERE statement
+// The asterisk below selects all the data in the table and the filter is added with the WHERE statement
 $sql = "SELECT * 
           FROM MyGuests
          WHERE first_name='Peter'";
 $result = $conn->query($sql);
 
-if($result = sql_query($link, $sql)){
-    if(sql_num_rows($result) > 0){
+if($result = query($conn, $sql)){
+    if(num_rows($result) > 0){
         echo "<table>";
             echo "<tr>";
                 echo "<th>id</th>";
@@ -386,7 +386,7 @@ if($result = sql_query($link, $sql)){
                 echo "<th>last_name</th>";
                 echo "<th>email</th>";
             echo "</tr>";
-        while($row = sql_fetch_array($result)){
+        while($row = fetch_array($result)){
             echo "<tr>";
                 echo "<td>" . $row['id'] . "</td>";
                 echo "<td>" . $row['first_name'] . "</td>";
@@ -395,13 +395,13 @@ if($result = sql_query($link, $sql)){
             echo "</tr>";
         }
         echo "</table>";
-        // Close result set
-        sql_free_result($result);
+        // Function to display result set or give error
+        free_result($result);
     } else{
         echo "No records matching your query were found.";
     }
 } else{
-    echo "ERROR: Could not able to execute $sql. " . sql_error($link);
+    echo "ERROR: Could not able to execute $sql. " . connect_error($conn);
 }
 $conn->close(); // close connection once query is handled
 ```
