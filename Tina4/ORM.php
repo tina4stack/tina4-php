@@ -955,25 +955,21 @@ class ORM implements \JsonSerializable
                 ->orderBy($filter["orderBy"])
                 ->asResult();
         break;
+        case "update":
         case "create":
+        case "delete":
             //Manipulate the $object here
+            
+            
         break;
         case "afterCreate":
            //return needed 
            return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Created');</script>"];
         break;    
-        case "update":
-            //Manipulate the $object here
-            
-        break;
         case "afterUpdate":
            //return needed 
            return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Updated');</script>"];
         break;   
-        case "delete":
-            //Manipulate the $object here
-           
-        break;
         case "afterDelete":
             //return needed 
             return (object)["httpCode" => 200, "message" => "<script>[GRID_ID]Grid.ajax.reload(null, false); showMessage ('[OBJECT] Deleted');</script>"];

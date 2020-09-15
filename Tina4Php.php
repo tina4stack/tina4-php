@@ -287,6 +287,10 @@ class Tina4Php
             $twig->addGlobal('uniqid', uniqid());
             $twig->addGlobal('formToken', $auth->getSessionToken());
 
+            if (isset($_COOKIE) && !empty($_COOKIE)) {
+                $twig->addGlobal('cookie', $_COOKIE);
+            }
+
             if (isset($_SESSION) && !empty($_SESSION)) {
                 $twig->addGlobal('session', $_SESSION);
             }
