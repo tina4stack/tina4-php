@@ -1022,10 +1022,11 @@ EOT;
         //create the form
         $formHtml = renderTemplate("components/form.twig", ["formId" => $this->camelCase($className), "primaryKey" => $this->primaryKey, "tableFields" => $tableFields, "baseUrl" => TINA4_BASE_URL]);
 
+        $formHtml = str_replace("&quot;", '"', $formHtml);
         file_put_contents($formFilePath, $formHtml);
 
         $gridRouterCode = '
-Get::add("' . $path . '/landing", function (Response $response){
+Get::add("' . $path . '/landing", function (\Tina4\Response $response){
     return $response (renderTemplate("' . $path . '/grid.twig"), HTTP_OK, TEXT_HTML);
 });
         ';
