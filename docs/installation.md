@@ -17,7 +17,7 @@ Running this in your command line will install Tina4 and create all the dependen
 Navigate to your project folder
 
 ```bash
-1. Ensure your command terminal is in the right directory by running this command:
+1. Ensure your command terminal is pointed to the right directory by running this command:
     
     cd your_project_folder
 
