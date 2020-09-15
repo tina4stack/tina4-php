@@ -925,7 +925,7 @@ class ORM implements \JsonSerializable
             POST @ /path, /path/{id} - create & update
             DELETE @ /path/{id} - delete for single
  */
-Crud::route ("[PATH]", new [OBJECT](), function ($action, [OBJECT] $[OBJECT_NAME], $filter, $request) {
+\Tina4\Crud::route ("[PATH]", new [OBJECT](), function ($action, [OBJECT] $[OBJECT_NAME], $filter, \Tina4\Request $request) {
     switch ($action) {
        case "form":
        case "fetch":
@@ -934,14 +934,14 @@ Crud::route ("[PATH]", new [OBJECT](), function ($action, [OBJECT] $[OBJECT_NAME
             if ($action == "form") {
                 $title = "Add [OBJECT]";
                 $savePath =  TINA4_BASE_URL . "[PATH]";
-                $content = renderTemplate("[TEMPLATE_PATH]/form.twig", []);
+                $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", []);
             } else {
                 $title = "Edit [OBJECT]";
                 $savePath =  TINA4_BASE_URL . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
-                $content = renderTemplate("[TEMPLATE_PATH]/form.twig", ["data" => $[OBJECT_NAME]]);
+                $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", ["data" => $[OBJECT_NAME]]);
             }
 
-            return renderTemplate("components/modalForm.twig", ["title" => $title, "onclick" => "if ( $('#[OBJECT_NAME]Form').valid() ) { saveForm('[OBJECT_NAME]Form', '" .$savePath."', 'message'); }", "content" => $content]);
+            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => $title, "onclick" => "if ( $('#[OBJECT_NAME]Form').valid() ) { saveForm('[OBJECT_NAME]Form', '" .$savePath."', 'message'); }", "content" => $content]);
        break;
        case "read":
             //Return a dataset to be consumed by the grid with a filter
@@ -1026,7 +1026,7 @@ EOT;
         file_put_contents($formFilePath, $formHtml);
 
         $gridRouterCode = '
-Get::add("' . $path . '/landing", function (\Tina4\Response $response){
+\Tina4\Get::add("' . $path . '/landing", function (\Tina4\Response $response){
     return $response (renderTemplate("' . $path . '/grid.twig"), HTTP_OK, TEXT_HTML);
 });
         ';
