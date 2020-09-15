@@ -23,19 +23,67 @@ if (file_exists($stopFileName)) {
 
 \Tina4\DebugLog::message("Running from folder {$rootPath}");
 \Tina4\DebugLog::message("Running Tina4 service");
+
+//Garbage collection
+gc_enable();
+
 while (TRUE && !file_exists($stopFileName)) {
     $service = new \Tina4\Service();
     $processes = $service->getProcesses();
 
+
+    while (ob_get_level()) {
+        ob_end_flush();
+    }
+
+    // start output buffering
+    if (ob_get_length() === false) {
+        ob_start();
+    }
+
     if (!empty($processes)) {
+
         foreach ($processes as $id => $process) {
 
             try {
+
                 if (get_class($process) !== "__PHP_Incomplete_Class") {
-                    \Tina4\DebugLog::message("Running {$process->name}");
-                    if ($process->canRun()) {
-                        $process->run();
+                    //How to know we are not on server?
+                    if (TINA4_DEBUG) {
+                        \Tina4\DebugLog::message("Running {$process->name}");
+
+
+
+                        $reflection = new \ReflectionClass(get_class($process));
+                        $code = file_get_contents($reflection->getFileName());
+                        $code = str_replace('<?php', '', $code);
+                        $aliasNumber = rand(1000, 9999);
+
+
+                        if (isset($settings[$process->name]) && $settings[$process->name]["hash"] == md5($code)) {
+                            $aliasNumber = $settings[$process->name]["instance"];
+                        } else {
+                            $settings[$process->name]["hash"] = md5($code);
+                            $settings[$process->name]["instance"] = $aliasNumber;
+                            $code = str_replace(get_class($process), get_class($process) . $aliasNumber, $code);
+                            //Load new class
+                            eval($code);
+                        }
+
+                        eval('$runner = new ' . get_class($process) . $aliasNumber . '();');
+                        if ($runner->canRun()) {
+                            $runner->run();
+                        }
+                        unset ($runner);
+                        $runner = null;
+                    }  else {
+                       if ($process->canRun()) {
+                           $process->run();
+                       }
+                       unset($process);
                     }
+
+                    gc_collect_cycles();
                 } else {
                     \Tina4\DebugLog::message("Could not load registered process, make sure it is in one of the TINA4_INCLUDE_LOCATIONS");
                 }
@@ -48,4 +96,6 @@ while (TRUE && !file_exists($stopFileName)) {
         \Tina4\DebugLog::message("Nothing found to run");
     }
     sleep($service->getSleepTime());
+    //clean up
+    unset($service);
 }

@@ -133,6 +133,10 @@ spl_autoload_register('Tina4\tina4_autoloader');
  */
 function runTina4($config = null)
 {
-    echo new Tina4Php($config);
+    try {
+        echo new Tina4Php($config);
+    } catch(\Exception $exception) {
+        die("Ooops ".$exception->getMessage());
+    }
     return true;
 }

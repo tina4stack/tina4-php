@@ -30,6 +30,23 @@ class Service extends Data
     }
 
     /**
+     * Add process to the list to be run
+     * @param Process $process
+     */
+    public function removeProcess($name) {
+        if (file_exists($this->servicePath)) {
+            $services = unserialize(file_get_contents($this->servicePath));
+        } else {
+            $services = [];
+        }
+
+        if (isset($services[$name])) {
+            unset($services[$name]);
+            file_put_contents($this->servicePath, serialize($services));
+        }
+    }
+
+    /**
      * Get a list of processes
      * @return array|mixed
      */

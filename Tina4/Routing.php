@@ -417,7 +417,7 @@ class Routing
             $pathInfo = pathinfo($file);
             if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
-                include_once $fileNameRoute;
+                require $fileNameRoute;
             } else {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
                 if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
@@ -518,18 +518,22 @@ class Routing
      */
     static function recurseCopy($src, $dst)
     {
-        $dir = opendir($src);
-        @mkdir($dst, $mode = 0755, true);
-        while (false !== ($file = readdir($dir))) {
-            if (($file != '.') && ($file != '..')) {
-                if (is_dir($src . '/' . $file)) {
-                    self::recurseCopy($src . '/' . $file, $dst . '/' . $file);
-                } else {
-                    copy($src . '/' . $file, $dst . '/' . $file);
+        if (file_exists($src)) {
+            $dir = opendir($src);
+            if (!file_exists($dst)) {
+                mkdir($dst, $mode = 0755, true);
+            }
+            while (false !== ($file = readdir($dir))) {
+                if (($file != '.') && ($file != '..')) {
+                    if (is_dir($src . '/' . $file)) {
+                        self::recurseCopy($src . '/' . $file, $dst . '/' . $file);
+                    } else {
+                        copy($src . '/' . $file, $dst . '/' . $file);
+                    }
                 }
             }
+            closedir($dir);
         }
-        closedir($dir);
     }
 
 

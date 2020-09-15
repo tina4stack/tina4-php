@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f342758e4e6484c5616f7f2955046350",
+    "content-hash": "e4d2fb6135488042e22092ae36f233ab",
     "packages": [
         {
             "name": "coyl/git",
@@ -48,6 +48,33 @@
                 "php-git"
             ],
             "time": "2017-09-12T08:37:07+00:00"
+        },
+        {
+            "name": "felippe-regazio/php-hot-reloader",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/felippe-regazio/php-hot-reloader.git",
+                "reference": "77b28e5a1949a69b1ce694c04a0613b0ccb991b9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/felippe-regazio/php-hot-reloader/zipball/77b28e5a1949a69b1ce694c04a0613b0ccb991b9",
+                "reference": "77b28e5a1949a69b1ce694c04a0613b0ccb991b9",
+                "shasum": ""
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "HotReloader\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "A class to add a complete live reload feature to any php project",
+            "time": "2020-05-30T16:51:02+00:00"
         },
         {
             "name": "nlp-tools/nlp-tools",
@@ -504,7 +531,9 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {
+        "felippe-regazio/php-hot-reloader": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

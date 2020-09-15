@@ -43,3 +43,4 @@ if ($auth->validToken($token)) {
 //define("TINA4_APP", "/templates/index.html");
 
 \Tina4\runTina4($config);
+//WARNING NO CODE BELOW LINE 45 WILL BE RUN

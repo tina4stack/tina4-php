@@ -206,6 +206,13 @@ class Auth extends Data
         return $tokenString;
     }
 
+    /**
+     * Gets the payload from token
+     * @param $token
+     * @param string $publicKey
+     * @param string $encryption
+     * @return array|false
+     */
     function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         DebugLog::message("Getting token payload");

@@ -106,10 +106,12 @@ class Tina4Php
 
         global $auth;
 
-        if (!empty($config) && $config->getAuthentication() !== false) {
-            $auth = $config->getAuthentication();
-        } else {
-            $auth = new \Tina4\Auth($this->documentRoot);
+        if (empty($auth)) {
+            if (!empty($config) && $config->getAuthentication() !== false) {
+                $auth = $config->getAuthentication();
+            } else {
+                $auth = new \Tina4\Auth($this->documentRoot);
+            }
         }
 
         //Check security
@@ -132,11 +134,6 @@ class Tina4Php
 
         if (!defined("TINA4_ALLOW_ORIGINS")) define("TINA4_ALLOW_ORIGINS", ["*"]);
 
-        //Setup caching options
-        $TINA4_CACHE_CONFIG =
-            new ConfigurationOption([
-                "path" => $this->documentRoot . "/cache"
-            ]);
 
         /**
          * Global array to store the routes that are declared during runtime
@@ -144,12 +141,12 @@ class Tina4Php
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin", "processes"];
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin", "services"];
 
         foreach ($foldersToCopy as $id => $folder) {
             //Check if folder is there
-            if (!file_exists($this->documentRoot . "/src/{$folder}") && !file_exists("Tina4Php.php")) {
-                \Tina4\Routing::recurseCopy($this->webRoot . "/{$folder}", $this->documentRoot . "/src/{$folder}");
+            if (!file_exists(realpath($this->documentRoot . "/src/{$folder}")) && !file_exists("Tina4Php.php")) {
+                \Tina4\Routing::recurseCopy(realpath($this->webRoot . "/{$folder}"), str_replace("../", "", $this->documentRoot . "/src/{$folder}"));
             }
         }
 
@@ -242,70 +239,82 @@ class Tina4Php
         }
 
         global $cache;
+        //On a rerun need to check if we have already instantiated the cache
+        if (!empty($cache)) {
+            //Setup caching options
+            $TINA4_CACHE_CONFIG =
+                new ConfigurationOption([
+                    "path" => $this->documentRoot . "/cache"
+                ]);
 
-        CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
+            CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
 
-        $cache = CacheManager::getInstance("files");
+            $cache = CacheManager::getInstance("files");
+        }
 
         global $twig;
 
-        $twigPaths = TINA4_TEMPLATE_LOCATIONS;
+        //Twig initialization
+        if (empty($twig)) {
 
-        \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+            $twigPaths = TINA4_TEMPLATE_LOCATIONS;
 
-        if (TINA4_DEBUG) {
-            \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1), TINA4_DEBUG_LEVEL);
-        }
+            \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
 
-        foreach ($twigPaths as $tid => $twigPath) {
-            if (!file_exists(str_replace("//", "/", $this->documentRoot . "/" . $twigPath))) {
-                unset($twigPaths[$tid]);
+            if (TINA4_DEBUG) {
+                \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1), TINA4_DEBUG_LEVEL);
             }
-        }
 
-        $twigLoader = new \Twig\Loader\FilesystemLoader();
-        foreach ($twigPaths as $twigPath) {
-            $twigLoader->addPath($twigPath, '__main__');
-
-        }
-
-        $twig = new \Twig\Environment($twigLoader, ["debug" => true, "cache" => "./cache"]);
-        $twig->addExtension(new \Twig\Extension\DebugExtension());
-        $twig->addGlobal('Tina4', new \Tina4\Caller());
-
-        $subFolder = $this->getSubFolder();
-        $twig->addGlobal('baseUrl', $subFolder);
-        $twig->addGlobal('baseURL', $subFolder);
-        $twig->addGlobal('uniqid', uniqid());
-        $twig->addGlobal('formToken', $auth->getSessionToken());
-
-        if (isset($_SESSION) && !empty($_SESSION)) {
-            $twig->addGlobal('session', $_SESSION);
-        }
-
-        if (isset($_REQUEST) && !empty($_REQUEST)) {
-            $twig->addGlobal('request', $_REQUEST);
-        }
-
-
-        if (!empty($config) && !empty($config->getTwigFilters())) {
-
-            foreach ($config->getTwigFilters() as $name => $method) {
-                $filter = new \Twig\TwigFilter($name, $method);
-                $twig->addFilter($filter);
+            foreach ($twigPaths as $tid => $twigPath) {
+                if (!file_exists(str_replace("//", "/", $this->documentRoot . "/" . $twigPath))) {
+                    unset($twigPaths[$tid]);
+                }
             }
-        }
 
-        //Add form Token
-        $filter = new \Twig\TwigFilter("formToken", function ($payload) use ($auth) {
-            if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
-                return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
-            } else {
-                return "";
+            $twigLoader = new \Twig\Loader\FilesystemLoader();
+            foreach ($twigPaths as $twigPath) {
+                $twigLoader->addPath($twigPath, '__main__');
+
             }
-        });
 
-        $twig->addFilter($filter);
+            $twig = new \Twig\Environment($twigLoader, ["debug" => true, "cache" => "./cache"]);
+            $twig->addExtension(new \Twig\Extension\DebugExtension());
+            $twig->addGlobal('Tina4', new \Tina4\Caller());
+
+            $subFolder = $this->getSubFolder();
+            $twig->addGlobal('baseUrl', $subFolder);
+            $twig->addGlobal('baseURL', $subFolder);
+            $twig->addGlobal('uniqid', uniqid());
+            $twig->addGlobal('formToken', $auth->getSessionToken());
+
+            if (isset($_SESSION) && !empty($_SESSION)) {
+                $twig->addGlobal('session', $_SESSION);
+            }
+
+            if (isset($_REQUEST) && !empty($_REQUEST)) {
+                $twig->addGlobal('request', $_REQUEST);
+            }
+
+
+            if (!empty($config) && !empty($config->getTwigFilters())) {
+
+                foreach ($config->getTwigFilters() as $name => $method) {
+                    $filter = new \Twig\TwigFilter($name, $method);
+                    $twig->addFilter($filter);
+                }
+            }
+
+            //Add form Token
+            $filter = new \Twig\TwigFilter("formToken", function ($payload) use ($auth) {
+                if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
+                    return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
+                } else {
+                    return "";
+                }
+            });
+
+            $twig->addFilter($filter);
+        }
 
         DebugLog::message("End of Tina4PHP Initialization");
     }
