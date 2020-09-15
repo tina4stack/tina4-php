@@ -1,3 +1,12 @@
+/*
+* Tina4 : This Is Not Another Framework
+* Created with : PHPStorm
+* User : andrevanzuydam
+* Copyright (C)
+* Contact : andre@codeinfinity.co.za
+ */
+
+// Function which retrieves user form data and returns it
 function getFormData(formName) {
     var data = new FormData();
     console.log ('Getting form data for '+formName);
@@ -19,7 +28,7 @@ function getFormData(formName) {
     return data;
 }
 
-
+// Function to load page URL with the specified additional HTTP headers using AJAX DOM and GET method
 function loadPage (loadURL, targetDiv) {
     if (targetDiv === undefined) targetDiv = 'content';
     console.log ('LOADING', loadURL);
@@ -31,6 +40,7 @@ function loadPage (loadURL, targetDiv) {
     });
 }
 
+// Function to load form and display it on webpage using AJAX DOM
 function showForm(action, loadURL, targetDiv) {
     console.log (action, loadURL, targetDiv);
     if (targetDiv === undefined) targetDiv = 'form';
@@ -52,6 +62,7 @@ function showForm(action, loadURL, targetDiv) {
     });
 }
 
+// Function which handles user data and page URL and secures it using AJAX DOM and POST method
 function postUrl(url, data, targetDiv) {
     $.ajax({
         method: 'POST',
@@ -68,6 +79,7 @@ function postUrl(url, data, targetDiv) {
     });
 }
 
+// Function which retrieves form data and securely saves it
 function saveForm(formName, postURL, targetDiv) {
     if (targetDiv === undefined) targetDiv = 'message';
     //compile a data model
@@ -76,6 +88,7 @@ function saveForm(formName, postURL, targetDiv) {
     postURL(postURL, data, targetDiv);
 }
 
+// Function to display system message to user
 function showMessage (message) {
     $('#message').html('<div class="alert alert-info alert-dismissible fade show"><strong>Info</strong> '+message+'</div>');
 }
