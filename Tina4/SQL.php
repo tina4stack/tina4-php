@@ -68,9 +68,7 @@ class SQL implements \JsonSerializable
         if (is_array($fields)) {
             $this->fields[] = $fields;
         } else {
-
-            $this->fields = explode(",", $fields);
-
+            $this->fields = array_map('trim', explode(',', $fields));
         }
         $this->limit = $limit;
         $this->offset = $offset;
@@ -142,7 +140,7 @@ class SQL implements \JsonSerializable
         if (is_array($fields)) {
             $this->groupBy = $fields;
         } else {
-            $this->groupBy = explode(",", $fields);
+            $this->groupBy = array_map('trim', explode(',', $fields));
         }
 
         $this->groupBy = $this->translateFields($this->groupBy);
@@ -179,7 +177,7 @@ class SQL implements \JsonSerializable
             if (is_array($fields)) {
                 $this->orderBy = $fields;
             } else {
-                $this->orderBy = explode(",", $fields);
+                $this->orderBy = array_map('trim', explode(',', $fields));
             }
             $this->orderBy = $this->translateFields($this->orderBy);
         }
@@ -222,7 +220,6 @@ class SQL implements \JsonSerializable
             $records = [];
             //transform the records into an array of the ORM if ORM exists
 
-
             $this->lastSQL = $sqlStatement;
             $this->error = $this->DBA->error();
 
@@ -230,8 +227,9 @@ class SQL implements \JsonSerializable
                 $records = $result->AsObject();
                 if (!empty($this->ORM)) {
                     foreach ($records as $id => $record) {
-                        $this->ORM->mapFromRecord($record, true);
                         $newRecord = clone $this->ORM;
+                        $newRecord->mapFromRecord($record, true);
+
 
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
@@ -240,11 +238,24 @@ class SQL implements \JsonSerializable
                                 }
                             }
                         }
+
+                        //Apply a filter to the record
                         if (!empty($this->filterMethod)) {
                             foreach ($this->filterMethod as $fid => $filterMethod) {
                                 call_user_func($filterMethod, $newRecord);
                             }
                         }
+
+                        //Only return what was requested
+                        if (!empty($this->fields) && $this->fields[0] !== "*") {
+                            foreach ($newRecord as $key => $value) {
+                                if (in_array($key, $newRecord->protectedFields)) continue;
+                                if (!in_array($key, $this->fields) ) {
+                                    unset($newRecord->{$key});
+                                }
+                            }
+                        }
+
                         $records[$id] = $newRecord;
                     }
                 }
@@ -313,7 +324,14 @@ class SQL implements \JsonSerializable
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {
-            $result[] = (array)$record;
+
+            if (get_parent_class($record) === "Tina4\ORM") {
+                $result[] = $record->asArray();
+            }
+              else {
+                  $result[] = (array)$record;
+              }
+
         }
         return $result;
     }
