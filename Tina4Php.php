@@ -90,7 +90,8 @@ class Tina4Php
         }
 
         $debugBackTrace = debug_backtrace();
-        $callerFile = $debugBackTrace[0]["file"]; //calling file /.../.../index.php
+
+        $callerFile = $debugBackTrace[1]["file"]; //calling file /.../.../index.php
         $callerDir = str_replace("index.php", "", $callerFile);
 
         //root of the website
@@ -144,9 +145,8 @@ class Tina4Php
         $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin", "services"];
 
         foreach ($foldersToCopy as $id => $folder) {
-            //Check if folder is there
-            if (!file_exists(realpath($this->documentRoot . "/src/{$folder}")) && !file_exists("Tina4Php.php")) {
-                \Tina4\Routing::recurseCopy(realpath($this->webRoot . "/{$folder}"), str_replace("../", "", $this->documentRoot . "/src/{$folder}"));
+            if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."{$folder}")) {
+                \Tina4\Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR."{$folder}", $this->documentRoot . DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."{$folder}");
             }
         }
 
