@@ -5,6 +5,7 @@
  * Date: 2016/02/15
  * Time: 03:25 PM
  */
+
 namespace Tina4;
 
 /**
@@ -12,7 +13,8 @@ namespace Tina4;
  * The Any route intercepts any type of call that can be made to the web server e.g. Any::add()
  * @package Tina4
  */
-class Any extends Route {
+class Any extends Route
+{
     /**
      * @var string Sets $method to ANY
      */

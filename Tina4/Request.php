@@ -1,4 +1,5 @@
 <?php
+
 namespace Tina4;
 
 /**
@@ -49,7 +50,8 @@ class Request
         return json_encode($this->data);
     }
 
-    function asArray() {
+    function asArray()
+    {
 
         return (array)json_decode(json_encode($this->data));
     }

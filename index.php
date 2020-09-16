@@ -5,19 +5,19 @@
  * Date: 2019-08-18
  * Time: 10:50
  */
-use Tina4\ORM;
+
 require "vendor/autoload.php";
 require "Tina4Php.php";
 require "Tina4/Config.php";
 
 define("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
 define("TINA4_ROUTE_LOCATIONS", ["api", "routes"]);
-define("TINA4_INCLUDE_LOCATIONS", ["app", "objects"]);
+define("TINA4_INCLUDE_LOCATIONS", ["app", "objects", "services"]);
 
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");
-define ("TINA4_DEBUG", true);
-define ("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
+define("TINA4_DEBUG", true);
+define("TINA4_DEBUG_LEVEL", DEBUG_CONSOLE);
 //define ("TINA4_GIT_MESSAGE", "Some useful text here");
 //define ("TINA4_GIT_ENABLED", true);
 global $DBA;
@@ -41,4 +41,6 @@ if ($auth->validToken($token)) {
 //});
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
-echo new \Tina4\Tina4Php($config);
+
+\Tina4\runTina4($config);
+//WARNING NO CODE BELOW LINE 45 WILL BE RUN

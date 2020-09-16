@@ -1,6 +1,12 @@
 <?php
+
 namespace Tina4;
 
+/**
+ * Class Crud
+ * This is for helping doing heavy lifting and helping with mundane tasks
+ * @package Tina4
+ */
 class Crud
 {
     //Common inputs, firstName,lastName,email,mobileNo,address1,address2,cityTown,postalCode,Country
@@ -42,9 +48,10 @@ class Crud
      * @param string $label
      * @return object
      */
-    public static function addFormInput($name,$value="",$placeHolder="",$type="text", $required=false, $javascript="", $lookupData=[], $label="") {
+    public static function addFormInput($name, $value = "", $placeHolder = "", $type = "text", $required = false, $javascript = "", $lookupData = [], $label = "")
+    {
         if (empty($label) && !empty($placeHolder)) $label = $placeHolder;
-        return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type, "required" => $required, "javascript" => $javascript, "options" => $lookupData ];
+        return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type, "required" => $required, "javascript" => $javascript, "options" => $lookupData];
     }
 
 
@@ -57,24 +64,25 @@ class Crud
      * @param string $inputClass
      * @return string
      */
-    public static function generateForm($formInputs, $noOfColumns=1, $formName="data", $formMethod="post", $formAction=null, $groupClass="form-group", $inputClass="form-control", $columnClass="col-md-", $imageClass="img-thumbnail rounded mx-auto ") {
+    public static function generateForm($formInputs, $noOfColumns = 1, $formName = "data", $formMethod = "post", $formAction = null, $groupClass = "form-group", $inputClass = "form-control", $columnClass = "col-md-", $imageClass = "img-thumbnail rounded mx-auto ")
+    {
         $fields = [];
         $colSpan = 12 / $noOfColumns;
         foreach ($formInputs as $id => $formInput) {
             if (in_array($formInput->type, ["text", "password", "hidden", "color", "file", "tel", "date", "datetime-local", "email", "month", "number", "search", "time", "url", "week"])) {
-                $fields[] = _div(["class" => $columnClass.$colSpan],
-                    _div (["class" => $groupClass],
-                    _label(["for" => $formInput->name], $formInput->label),
-                    _input(["class" => $inputClass,
-                            "type" => $formInput->type,
-                            "name" => $formInput->name,
-                            "id" => $formInput->name,
-                            "placeholder" => $formInput->placeHolder,
-                            "value" => $formInput->value,
-                            "required" => $formInput->required,
-                            "_" => $formInput->javascript]
-                    )
-                ));
+                $fields[] = _div(["class" => $columnClass . $colSpan],
+                    _div(["class" => $groupClass],
+                        _label(["for" => $formInput->name], $formInput->label),
+                        _input(["class" => $inputClass,
+                                "type" => $formInput->type,
+                                "name" => $formInput->name,
+                                "id" => $formInput->name,
+                                "placeholder" => $formInput->placeHolder,
+                                "value" => $formInput->value,
+                                "required" => $formInput->required,
+                                "_" => $formInput->javascript]
+                        )
+                    ));
             } elseif ($formInput->type == "select") {
                 $options = [];
                 $selected = null;
@@ -87,21 +95,21 @@ class Crud
                     $options[] = _option(["value" => $key, $selected], $value);
                 }
 
-                $fields[] =  _div(["class" => $columnClass.$colSpan], _div (["class" => $groupClass],
+                $fields[] = _div(["class" => $columnClass . $colSpan], _div(["class" => $groupClass],
                     _label(["for" => $formInput->name], $formInput->label),
                     _select(["class" => $inputClass,
-                            "name" => $formInput->name,
-                            "id" => $formInput->name,
-                            "required" => $formInput->required,
-                            "_" => $formInput->javascript],
-                            $options
+                        "name" => $formInput->name,
+                        "id" => $formInput->name,
+                        "required" => $formInput->required,
+                        "_" => $formInput->javascript],
+                        $options
                     )
                 ));
             } elseif ($formInput->type == "image") {
-                $fields[] =  _div(["class" => $columnClass.$colSpan], _div (["class" => $groupClass],
+                $fields[] = _div(["class" => $columnClass . $colSpan], _div(["class" => $groupClass],
                     _label(["for" => $formInput->name], $formInput->label),
                     _br(),
-                    _img(["src" => "data:image/png;base64,".$formInput->value, "class" => $imageClass]),
+                    _img(["src" => "data:image/png;base64," . $formInput->value, "class" => $imageClass]),
                     _br(),
                     _input([
                             "type" => "file",
@@ -116,11 +124,102 @@ class Crud
             }
         }
 
-        $html = _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
-            _div (["class" => "row"], $fields)
+        return _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
+            _div(["class" => "row"], $fields)
+        );
+    }
+
+    /**
+     * CRUD ROUTING FOR DATATABLES
+     * @param $path
+     * @param ORM $object
+     * @param $function
+     * @params $secure
+     * @param $secures
+     */
+    public static function route($path, ORM $object, $function, $secure = false)
+    {
+        //What if the path has ids in it ? /store/{id}/{hash}
+
+        //CREATE
+        Route::get($path . "/form",
+            function (Response $response, Request $request) use ($object, $function) {
+                $htmlResult = $function ("form", $object, null, $request);
+                return $response ($htmlResult, HTTP_OK);
+            }
         );
 
-        return $html;
+        Route::post($path,
+            function (Response $response, Request $request) use ($object, $function) {
+                if (!empty($request->data)) {
+                    $object->create($request->data);
+                } else {
+                    $object->create($request->params);
+                }
+                $function ("create", $object, null, $request);
+                $object->save();
+                $jsonResult = $function ("afterCreate", $object, null, $request);
+                return $response ($jsonResult, HTTP_OK);
+            }
+        );
+
+        //READ
+        Route::get($path,
+            function (Response $response, Request $request) use ($object, $function) {
+                $filter = Crud::getDataTablesFilter();
+                $jsonResult = $function ("read", new $object(), $filter, $request);
+                return $response ($jsonResult, HTTP_OK);
+            }
+        );
+
+
+        //UPDATE
+        Route::get($path . "/{id}",
+            function (Response $response, Request $request) use ($object, $function) {
+                $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
+
+                $jsonResult = $function ("fetch", (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'"), null, $request);
+                if (empty($jsonResult)) {
+                    $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                }
+
+                return $response ($jsonResult, HTTP_OK);
+            }
+        );
+
+        Route::post($path . "/{id}",
+            function (Response $response, Request $request) use ($object, $function) {
+                $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
+                if (!empty($request->data)) {
+                    $object->create($request->data);
+                } else {
+                    $object->create($request->params);
+                }
+                $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $function ("update", $object, null, $request);
+                $object->save();
+                $jsonResult = $function ("afterUpdate", $object, null, $request);
+                return $response ($jsonResult, HTTP_OK);
+            }
+        );
+
+        //DELETE
+        Route::delete($path . "/{id}",
+            function (Response $response, Request $request) use ($object, $function) {
+                $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
+                $object->create($request->params);
+                $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $function ("delete", $object, null, $request);
+                if (!$object->softDelete) {
+                    $object->delete();
+                } else {
+                    $object->save();
+                }
+                $jsonResult = $function ("afterDelete", $object, null, $request);
+                return $response ($jsonResult, HTTP_OK);
+            }
+        );
+
     }
 
     /**
@@ -128,8 +227,9 @@ class Crud
      * @return array
      * @throws \Exception
      */
-    public static function getDataTablesFilter() {
-        $ORM = new \Tina4\ORM();
+    public static function getDataTablesFilter()
+    {
+        $ORM = new ORM();
         $request = $_REQUEST;
 
         if (!empty($request["columns"])) {
@@ -169,7 +269,7 @@ class Crud
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
                 $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"]);
-                $ordering[] = $columnName. " " . $orderEntry["dir"];
+                $ordering[] = $columnName . " " . $orderEntry["dir"];
             }
         }
 
@@ -215,100 +315,7 @@ class Crud
             $length = 10;
         }
 
-
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
-    }
-
-    /**
-     * CRUD ROUTING FOR DATATABLES
-     * @param $path
-     * @param ORM $object
-     * @param $function
-     * @params $secure
-     * @param $secures
-     */
-    public static function route ($path, \Tina4\ORM $object, $function, $secure=false) {
-        //What if the path has ids in it ? /store/{id}/{hash}
-
-        //CREATE
-        \Tina4\Route::get($path."/form",
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $htmlResult = $function ("form", $object, null, $request);
-                return $response ($htmlResult, HTTP_OK);
-            }
-        );
-
-        \Tina4\Route::post( $path,
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                if (!empty($request->data)) {
-                    $object->create($request->data);
-                } else {
-                    $object->create($request->params);
-                }
-                $function ("create", $object, null, $request);
-                $object->save();
-                $jsonResult =  $function ("afterCreate", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK);
-            }
-        );
-
-        //READ
-        \Tina4\Route::get($path,
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $filter = \Tina4\Crud::getDataTablesFilter();
-                $jsonResult = $function ("read", new $object(), $filter, $request);
-                return $response ($jsonResult, HTTP_OK);
-            }
-        );
-
-
-        //UPDATE
-        \Tina4\Route::get($path."/{id}",
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-
-                $jsonResult = $function ("fetch", (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'"), null, $request);
-                if (empty($jsonResult)) {
-                    $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
-                }
-
-                return $response ($jsonResult, HTTP_OK);
-            }
-        );
-
-        \Tina4\Route::post( $path."/{id}",
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                if (!empty($request->data)) {
-                    $object->create($request->data);
-                } else {
-                    $object->create($request->params);
-                }
-                $object->load ("{$object->getFieldName($object->primaryKey)} = '{$id}'");
-                $function ("update", $object, null, $request);
-                $object->save();
-                $jsonResult = $function ("afterUpdate", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK);
-            }
-        );
-
-        //DELETE
-        \Tina4\Route::delete ( $path."/{id}",
-            function (\Tina4\Response $response, \Tina4\Request $request) use ($object, $function) {
-                $id = $request->inlineParams[count($request->inlineParams)-1]; //get the id on the last param
-                $object->create($request->params);
-                $object->load ("{$object->getFieldName($object->primaryKey)} = '{$id}'");
-                $function ("delete", $object, null, $request);
-                if (!$object->softDelete) {
-                    $object->delete();
-                } else {
-                    $object->save();
-                }
-                $jsonResult = $function ("afterDelete", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK);
-            }
-        );
-
     }
 
 }
