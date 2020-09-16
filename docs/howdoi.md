@@ -1,3 +1,11 @@
+<!--
+// Tina4 : This Is Not Another Framework
+// Created with : PHPStorm
+// User : andrevanzuydam
+// Copyright (C)
+// Contact : andre@codeinfinity.co.za
+-->
+
 # How do I?
 
 This is a quick reference for doing things in the Tina4 environment which will hopefully make your journey easier.
@@ -262,158 +270,63 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
 
 ## Map my ORM field to a database field which doesn't follow the Tina4 pattern
 
-ORM gives you the ability to write queries using [Object Oriented Programming](https://en.wikipedia.org/wiki/Object-oriented_programming) in your preferred programming language. Click the link for a list of [ORM software](https://en.wikipedia.org/wiki/List_of_object-relational_mapping_software) used for various programming languages. ORM allows you to interact with your database without using SQL.
-
 ### Example:
 
 ```php
-<?php
-class MySQLDatabase { //create class and name for your database
 
-    /**
-     * ORM constructor.
-     * @param null $request A JSON input to populate the object\
-     * @param boolean $fromDB True or false - is data from the database
-     * @param string $tableName The name of the table that this object maps in the database
-     * @param string $fieldMapping Mapping for fields in the array form ["field" => "table_field"]
-     * @param string $primaryKey The primary key of the table
-     * @param string $tableFilter A filter to limit the records when the data is fetched into the class
-     * @param DataBase $DBA A relevant database connection to fetch information from
-     * @throws Exception Error on failure
-     * @example examples/exampleORMObject.php Create class object extending ORM
-     */
+Lorem Ipsum
 
 ```
-
 ## Annotate my REST for swagger
 
-[Annotation](https://en.wikipedia.org/wiki/Annotation#Software_and_engineering) is adding extra information in your script associated with a particular function or statement. You can apply it to constructors, declarations, fields, methods, parameters and variables. 
-Tina4 uses [Swagger](https://en.wikipedia.org/wiki/OpenAPI_Specification) which is an Open Source [REST API](https://en.wikipedia.org/wiki/Representational_state_transfer). Below you will see how to annotate your REST API with Swagger. Here you can explain how one component is dependant on another.
+Its good to explain how one component is dependant on another.
 
 ### Example:
 
 ```php
 <?php
-class MySQLDatabase { //create class and name for your database
+
 /**
  * @description A swagger annotation
- * @tags Testing AUTH
- * @example AUTH
- * @secure
+ * @tags Example
+ * @example 
  */
-}
+function example () {
+};
 ```
-
 ## Secure a REST end point
-An end point is also known as an Application Programming Interface (API), which allows your systems components to interact or communicate with each other.  It includes your website's URL and uses various methods to perform tasks (e.g GET, POST, PUT, PATCH). 
-##### 8 Design Principles 
-Saltzer and Schroeder wrote a paper called "[The Protection of Information in Computer Systems](http://web.mit.edu/Saltzer/www/publications/protection/)" which highlighted 8 design principles for securing your data and information:
 
-* __Least Privilege__ : Only give a user the required permission they need to complete their task. Remove any access when no longer in use and more permission can be granted if required.
-* __Economy of Mechanism__: Your design must be as simple as possible. Keep the components and interactions between everything (database, API's etc) simple to understand.
-* __Fail-Safe Defaults__: The default access level to resources on your system for users should be "denied" unless explicit permission is granted.
-* __Open Design__: This principle gives importance to building an open and transparent system. For example, the Open Source community where there are no confidential algorithms or secrets.
-* __Complete Mediation__: Your system must validate user access rights and not rely on the cached permission matrix. If user access permission is revoked, but is not reflected in the permission matrix, then your system security is at risk. 
-* __Least Common Mechanism__: This deals with the risk involved with sharing state between your systems components. If the shared state can be corrupted that means other components can be corrupted.   
-* __Seperation of Privilege__: Granting a user permission should be based purely on a single (or combination of) condition, which is what type of permission is required for the type of task or resource.
-* __Psychological Acceptability__: Simply put, your security should not make the user experience worse. Your mechanism should not make resources more difficult to access than if the mechanism were never present.  
+As easy as adding @secure in your annotation
 
-##### Secure REST API Best Practice
-Consider these factors or use it as a checklist for your system security when creating your REST API's 
+### Example:
 
-* Think Simple : Make your system as secure as it needs to be, nothing more, nothing less. If you make it unnecessarily complex, there will be holes in your system which can be exploited or corrupted.  
-* Use HTTPS :  By using a [SSL](https://www.ssl.com/faqs/faq-what-is-ssl/) handshake or protocol, the process of randomly generating access tokens or authentication credentials is simplified and makes your system secure.    
+```php
+<?php
 
-         For example, its safer to get a SSL certificate for your website.
-         Your website URL will go from http://www.youtsite.com to https://www.yoursite.com
-
-* Never expose information on URLs : API keys, session tokens, passwords and usernames must not appear in the URL as it is captured in server logs and makes your system exploitable. 
-
-        This is an example of poor security as the username and security token is exposed in the URL:
-        
-        https://www.rickandmorty.com/authuser?user=ted&authz_token=1234&expire=1500000000
-        
-* Use OAuth : OAuth 2.0 authorization framework enables a third-party application to obtain limited access to an HTTP service, either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP service, or by allowing the third-party application to obtain access on its behalf.
-* Use Password Hash : Increase the security of your system by keeping [passwords hashed](https://www.maketecheasier.com/what-is-password-hashing/). It transforms user passwords in your database into String and passwords cannot be retrieved if there is unauthorized access.
-* Add Timestamps in Request : Add timestap parmeters to your API requests so that the server compares the timestamp of the request to the current timestamp. The request is only accepted if both timestamps are within reasonable timeframe. This safeguards your system from [brute force](https://en.wikipedia.org/wiki/Brute-force_attack) attacks or a [replay attack](https://en.wikipedia.org/wiki/Replay_attack).
-* Input Validation : Use [validation](https://en.wikipedia.org/wiki/Data_validation) checks to make your system more secure. Any requests must be immediately rejected if validation fails. 
+/**
+ * @description A swagger annotation
+ * @tags Example
+ * @example 
+ * @secure 
+ */
+function example () {
+};
+```
 
 ## Add a filter to process records when they are extracted from the database
 
-We use the SELECT, FROM, WHERE, ORDER BY  and other statements when writing to or querying our database. You can add filters when processing records from your database.
-Below is an example of how to add a filter when extracting or processing information from your database:
+Lets say you want to filter the database for all the entries with the first name "Peter":
 
 ##### Example:
-Lets assume a table in your database has this data stored:
-```php
-+----+------------+-----------+----------------------+
-| id | first_name | last_name | email                |
-+----+------------+-----------+----------------------+
-|  1 | Peter      | Griffin   | peterg@mail.com      |
-|  2 | Rick       | Sanchez   | ricks@mail.com       |
-|  3 | Morty      | Smith     | mortys@mail.com      |
-|  4 | Peter      | Parker    | perterp@mail.com     |
-|  5 | Clancy     | Gilroy    | clancyg@mail.com     |
-+----+------------+-----------+----------------------+
-```
-And the filter you want to add is for all the entries with the name "Peter":
-
 ```php
 <?php
-$servername = "localhost"; //input the credentials for each field, 
-$username = "username";   //as it will give you access to the database.
-$password = "password";
-$dbname = "myDB";
 
-// Create connection between the server and database
-$conn = new sql($servername, $username, $password, $dbname);
-// Check connection between the server and database, the unsuccessful the user gets error
-if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
-}
-// The asterisk below selects all the data in the table and the filter is added with the WHERE statement
-$sql = "SELECT * 
+$sql = "SELECT *   
           FROM MyGuests
          WHERE first_name='Peter'";
-$result = $conn->query($sql);
 
-if($result = query($conn, $sql)){
-    if(num_rows($result) > 0){
-        echo "<table>";
-            echo "<tr>";
-                echo "<th>id</th>";
-                echo "<th>first_name</th>";
-                echo "<th>last_name</th>";
-                echo "<th>email</th>";
-            echo "</tr>";
-        while($row = fetch_array($result)){
-            echo "<tr>";
-                echo "<td>" . $row['id'] . "</td>";
-                echo "<td>" . $row['first_name'] . "</td>";
-                echo "<td>" . $row['last_name'] . "</td>";
-                echo "<td>" . $row['email'] . "</td>";
-            echo "</tr>";
-        }
-        echo "</table>";
-        // Function to display result set or give error
-        free_result($result);
-    } else{
-        echo "No records matching your query were found.";
-    }
-} else{
-    echo "ERROR: Could not able to execute $sql. " . connect_error($conn);
-}
-$conn->close(); // close connection once query is handled
 ```
-After your database has been filtered you will get a result with the following table:
-```php
-+----+------------+-----------+---------------------+
-| id | first_name | last_name | email               |
-+----+------------+-----------+---------------------+
-|  1 | Peter      | Griffin   | peterg@mail.com     |
-|  4 | Peter      | Parker    | peterp@mail.com     |
-+----+------------+-----------+---------------------+
-```
+
 
 ## Exclude some fields from being displayed on REST result or query
 
@@ -436,6 +349,15 @@ class OtherUser extends \Tina4\ORM { //assumes we have a table user in the datab
 ```
 
 ## Query the database for some records
+
+```php
+<?php
+
+$sql = "SELECT *   
+          FROM MyGuests
+         WHERE first_name='Peter'";
+$result = $conn->query($sql);
+```
 
 ## Get an array of ORM objects
 

@@ -1,3 +1,11 @@
+<!--
+// Tina4 : This Is Not Another Framework
+// Created with : PHPStorm
+// User : andrevanzuydam
+// Copyright (C)
+// Contact : andre@codeinfinity.co.za
+-->
+
 # Recommendations
 
 ## Introduction
@@ -15,13 +23,15 @@ A text editor is just that, something to edit text and it doesn't give any guida
 
 Two popular IDEs which support PHP debugging are:
 
-* Visual Studio Code
-* PHPStorm
+* [Visual Studio Code](https://code.visualstudio.com/download)
+* [PHPStorm](https://www.jetbrains.com/phpstorm/download)
 
 ## Debugging
 
 The most popular PHP debugging extension is [Xdebug](https://xdebug.org/docs/install) and we recommend that you get this installed as soon as you have your PHP up 
 and running, there is a lot of documentation out there that will get you up and running quickly.
+
+See [How Do I - Install Xdebug](../docs/howdoi.md/#Install Xdebug)
 
 Most important is to enable remote debugging in your php.ini file 
 
