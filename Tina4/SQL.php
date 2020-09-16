@@ -239,20 +239,20 @@ class SQL implements \JsonSerializable
                             }
                         }
 
-                        //Apply a filter to the record
-                        if (!empty($this->filterMethod)) {
-                            foreach ($this->filterMethod as $fid => $filterMethod) {
-                                call_user_func($filterMethod, $newRecord);
-                            }
-                        }
-
                         //Only return what was requested
                         if (!empty($this->fields) && $this->fields[0] !== "*") {
                             foreach ($newRecord as $key => $value) {
                                 if (in_array($key, $newRecord->protectedFields)) continue;
-                                if (!in_array($key, $this->fields) ) {
+                                if (!in_array($this->ORM->getFieldName($key), $this->fields) ) {
                                     unset($newRecord->{$key});
                                 }
+                            }
+                        }
+
+                        //Apply a filter to the record
+                        if (!empty($this->filterMethod)) {
+                            foreach ($this->filterMethod as $fid => $filterMethod) {
+                                call_user_func($filterMethod, $newRecord);
                             }
                         }
 
@@ -310,7 +310,6 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
-
         return $sql;
     }
 
@@ -324,13 +323,12 @@ class SQL implements \JsonSerializable
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {
-
             if (get_parent_class($record) === "Tina4\ORM") {
                 $result[] = $record->asArray();
             }
-              else {
-                  $result[] = (array)$record;
-              }
+            else {
+                $result[] = (array)$record;
+            }
 
         }
         return $result;
@@ -349,6 +347,4 @@ class SQL implements \JsonSerializable
         }
         return (new DataResult($records, null, $this->noOfRecords, $this->offset, $this->error));
     }
-
-
 }

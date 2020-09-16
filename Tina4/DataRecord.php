@@ -30,7 +30,6 @@ class DataRecord implements JsonSerializable
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
-
         if (!empty($record)) {
             $this->original = (object)$record;
             foreach ($record as $column => $value) {
@@ -82,7 +81,8 @@ class DataRecord implements JsonSerializable
         $object = (object)[];
         foreach ($this->original as $column => $value) {
             $columnName = $this->getObjectName($column);
-            $object->$columnName = $value;
+            //$object->{$column} = $value; to be added in
+            $object->{$columnName} = $value;
         }
 
         return $object;
