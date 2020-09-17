@@ -61,7 +61,9 @@ class Env
                     }
             }
         } else {
-            die("No environment {$fileName} file found");
+            DebugLog::message("Created an ENV file for you {$fileName}");
+            file_put_contents($fileName, "[Example Env File]\nVERSION=1.0.0\n");
+
         }
     }
 }
