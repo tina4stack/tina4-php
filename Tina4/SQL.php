@@ -243,7 +243,7 @@ class SQL implements \JsonSerializable
                         if (!empty($this->fields) && $this->fields[0] !== "*") {
                             foreach ($newRecord as $key => $value) {
                                 if (in_array($key, $newRecord->protectedFields)) continue;
-                                if (!in_array($this->ORM->getFieldName($key), $this->fields) ) {
+                                if (!in_array($this->ORM->getFieldName($key), $this->fields) && strpos($key, " as") !== false && strpos($key, ".") !== false ) {
                                     unset($newRecord->{$key});
                                 }
                             }
