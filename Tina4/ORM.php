@@ -540,7 +540,7 @@ class ORM implements \JsonSerializable
 
         $keyInFieldList = false;
         foreach ($tableData as $fieldName => $fieldValue) {
-            if (empty($fieldValue)) continue;
+            if (empty($fieldValue) && $fieldValue !== 0) continue;
             if ($fieldName == "form_token") continue; //form token is reserved
             if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields) || in_array($fieldName, $this->excludeFields)) continue;
             $insertColumns[] = $this->getFieldName($fieldName);
