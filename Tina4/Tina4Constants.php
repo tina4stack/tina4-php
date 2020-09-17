@@ -56,37 +56,7 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 //Initialize the ENV
 (new \Tina4\Env());
 
-/**
- * Redirect
- * @param string $url The URL to be redirected to
- * @param integer $statusCode Code of status
- * @example examples\exampleTina4PHPRedirect.php
- */
-function redirect($url, $statusCode = 303)
-{
-    //Define URL to test from parsed string
-    $testURL = parse_url($url);
 
-    //Check if test URL contains a scheme (http or https) or if it contains a host name
-    if ((!isset($testURL["scheme"]) || $testURL["scheme"] == "") && (!isset($testURL["host"]) || $testURL["host"] == "")) {
-
-        //Check if the current page uses an alias and if the parsed URL string is an absolute URL
-        if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "" && substr($url, 0, 1) === '/') {
-
-            //Append the prefix to the absolute path
-            header('Location: ' . $_SERVER["CONTEXT_PREFIX"] . $url, true, $statusCode);
-            die();
-        } else {
-            header('Location: ' . $url, true, $statusCode);
-            die();
-        }
-
-    } else {
-        header('Location: ' . $url, true, $statusCode);
-        die();
-    }
-
-}
 
 /**
  * Autoloader
