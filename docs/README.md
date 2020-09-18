@@ -9,7 +9,7 @@ Tina uses the following methods to make development quicker
 * Simple code layout and structure
 
 ## Requires
-* PHP 7.1 >
+* PHP 7.1 > See [installing PHP 7.4](installing-php.md)
 * Composer
 
 ## Who should use Tina4 ?

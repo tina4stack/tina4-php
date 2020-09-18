@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "83b23a475dbfb08148bc83b4cd1a6e80",
+    "content-hash": "e4d2fb6135488042e22092ae36f233ab",
     "packages": [
         {
             "name": "coyl/git",
@@ -48,6 +48,78 @@
                 "php-git"
             ],
             "time": "2017-09-12T08:37:07+00:00"
+        },
+        {
+            "name": "felippe-regazio/php-hot-reloader",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/felippe-regazio/php-hot-reloader.git",
+                "reference": "77b28e5a1949a69b1ce694c04a0613b0ccb991b9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/felippe-regazio/php-hot-reloader/zipball/77b28e5a1949a69b1ce694c04a0613b0ccb991b9",
+                "reference": "77b28e5a1949a69b1ce694c04a0613b0ccb991b9",
+                "shasum": ""
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "HotReloader\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "A class to add a complete live reload feature to any php project",
+            "time": "2020-05-30T16:51:02+00:00"
+        },
+        {
+            "name": "nlp-tools/nlp-tools",
+            "version": "v0.1.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/angeloskath/php-nlp-tools.git",
+                "reference": "bbccab0f3ca7277bdf7b292ba67ca644efd0cefe"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/angeloskath/php-nlp-tools/zipball/bbccab0f3ca7277bdf7b292ba67ca644efd0cefe",
+                "reference": "bbccab0f3ca7277bdf7b292ba67ca644efd0cefe",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-0": {
+                    "NlpTools\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "WTFPL"
+            ],
+            "authors": [
+                {
+                    "name": "Angelos Katharopoulos",
+                    "email": "angelos@yourse.gr"
+                }
+            ],
+            "description": "NlpTools is a set of php 5.3+ classes for beginner to semi advanced natural language processing work.",
+            "keywords": [
+                "machine learning",
+                "nlp"
+            ],
+            "time": "2016-11-03T15:34:42+00:00"
         },
         {
             "name": "nowakowskir/php-jwt",
@@ -459,7 +531,9 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {
+        "felippe-regazio/php-hot-reloader": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

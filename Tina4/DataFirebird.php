@@ -5,43 +5,69 @@
  * Date: 5/19/2016
  * Time: 11:19 AM
  */
+
 namespace Tina4;
 
-class DataFirebird extends DataBase
+class DataFirebird implements DataBase
 {
+    use DataBaseCore;
+
     public $port = 3050;
 
-    public function native_open() {
-        inherited:
+    /**
+     * Open a Firebird database connection
+     * @param bool $persistent
+     * @throws \Exception
+     */
+    public function open($persistent = true)
+    {
+        if (!function_exists("ibase_pconnect")) {
+            throw new \Exception("Firebird extension for PHP needs to be installed");
+        }
 
-
-        $this->dbh = ibase_pconnect($this->hostName."/".$this->port.":".$this->databaseName, $this->username, $this->password); //create the new database or open existing one
+        if ($persistent) {
+            $this->dbh = ibase_pconnect($this->hostName . "/" . $this->port . ":" . $this->databaseName, $this->username, $this->password);
+        } else {
+            $this->dbh = ibase_connect($this->hostName . "/" . $this->port . ":" . $this->databaseName, $this->username, $this->password);
+        }
     }
 
-    public function native_close() {
+    /**
+     * Close a Firebird database connection
+     */
+    public function close()
+    {
         ibase_close($this->dbh);
     }
 
-    public function native_exec() {
-        $params = func_get_args();
+    /**
+     * Execute a firebird query, format is query followed by params or variables
+     * @return array|bool
+     */
+    public function exec()
+    {
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         if (stripos($params[0], "returning") !== false) {
             return $this->fetch($params[0]);
         } else {
-            $preparedQuery = @ibase_prepare($params[0]);
+            if (!empty($tranID)) {
+                $preparedQuery = ibase_prepare($this->dbh, $tranId, $params[0]);
+            } else {
+                $preparedQuery = ibase_prepare($this->dbh, $params[0]);
+            }
+
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-                @call_user_func_array("ibase_execute", $params);
+
+
+                call_user_func_array("ibase_execute", $params);
             }
 
             return $this->error();
         }
-    }
-
-    public function native_error() {
-        $errorCode = ibase_errcode();
-        $errorMessage = ibase_errmsg();
-        return (new DataError( $errorCode, $errorMessage));
     }
 
     /**
@@ -52,7 +78,8 @@ class DataFirebird extends DataBase
      * @param $fieldMapping
      * @return bool|DataResult
      */
-    public function native_fetch($sql="", $noOfRecords=10, $offSet=0, $fieldMapping=[]) {
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    {
         $initialSQL = $sql;
         if (stripos($sql, "returning") === false) {
             //inject in the limits for the select - in Firebird select first x skip y
@@ -63,14 +90,14 @@ class DataFirebird extends DataBase
             $sql = substr($sql, 0, $posSelect) . $limit . substr($sql, $posSelect);   //select first 10 skip 10 from table
         }
 
-        $recordCursor = @ibase_query($this->dbh, $sql );
+        $recordCursor = @ibase_query($this->dbh, $sql);
 
         $records = null;
         $record = null;
 
-        while($record = @ibase_fetch_assoc($recordCursor)) {
+        while ($record = @ibase_fetch_assoc($recordCursor)) {
             foreach ($record as $key => $value) {
-                if (substr($value, 0,2) === "0x") {
+                if (substr($value, 0, 2) === "0x") {
                     //Get the blob information
                     $blobData = ibase_blob_info($this->dbh, $value);
                     //Get a handle to the blob
@@ -81,16 +108,16 @@ class DataFirebird extends DataBase
                     $record[$key] = $content;
                 }
             }
-            $records[] = (new DataRecord( $record, $fieldMapping ));
+            $records[] = (new DataRecord($record, $fieldMapping));
         }
 
         if (is_array($records) && count($records) > 1) {
             if (stripos($sql, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL)";
 
-                $recordCount = @ibase_query($this->dbh, $sqlCount);
+                $recordCount = ibase_query($this->dbh, $sqlCount);
 
-                $resultCount = @ibase_fetch_assoc($recordCount);
+                $resultCount = ibase_fetch_assoc($recordCount);
 
 
             } else {
@@ -118,15 +145,27 @@ class DataFirebird extends DataBase
     }
 
     /**
+     * Returns an error
+     * @return bool|DataError
+     */
+    public function error()
+    {
+        $errorCode = ibase_errcode();
+        $errorMessage = ibase_errmsg();
+        return (new DataError($errorCode, $errorMessage));
+    }
+
+    /**
      * Commit
      * @param null $transactionId
      * @return bool
      */
-    public function native_commit($transactionId=null) {
+    public function commit($transactionId = null)
+    {
         if (!empty($transactionId)) {
-            return @ibase_commit($transactionId);
+            return ibase_commit($transactionId);
         } else {
-            return @ibase_commit($this->dbh);
+            return ibase_commit($this->dbh);
         }
     }
 
@@ -135,12 +174,12 @@ class DataFirebird extends DataBase
      * @param null $transactionId
      * @return bool
      */
-    public function native_rollback($transactionId = null)
+    public function rollback($transactionId = null)
     {
         if (!empty($transactionId)) {
-            return @ibase_rollback($transactionId);
+            return ibase_rollback($transactionId);
         } else {
-            return @ibase_rollback($this->dbh);
+            return ibase_rollback($this->dbh);
         }
     }
 
@@ -149,15 +188,19 @@ class DataFirebird extends DataBase
      * @param bool $onState
      * @return bool|void
      */
-    public function native_autoCommit($onState=false)
+    public function autoCommit($onState = false)
     {
         //Firebird has commit off by default
         return true;
     }
 
-    public function native_startTransaction()
+    /**
+     * Start Transaction
+     * @return false|int|resource
+     */
+    public function startTransaction()
     {
-        return @ibase_trans(IBASE_COMMITTED, $this->dbh);
+        return ibase_trans(IBASE_COMMITTED, $this->dbh);
     }
 
     /**
@@ -165,21 +208,29 @@ class DataFirebird extends DataBase
      * @param $tableName
      * @return bool
      */
-    public function native_tableExists($tableName)
+    public function tableExists($tableName) : bool
     {
         // table name must be in upper case
         $tableName = strtoupper($tableName);
-        $exists = $this->fetch ("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+        $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
 
         return !empty($exists->records());
     }
 
-    public function native_getLastId()
+    /**
+     * Get the last id
+     * @return integer
+     */
+    public function getLastId() : integer
     {
-        return false;
+        return -1;
     }
 
-    public function native_getDatabase()
+    /**
+     * Get the database metadata
+     * @return array|mixed
+     */
+    public function getDatabase()
     {
         $sqlTables = 'select distinct rdb$relation_name as table_name
                       from rdb$relation_fields
@@ -250,7 +301,6 @@ class DataFirebird extends DataBase
                                              ORDER BY s.RDB$FIELD_POSITION')->AsObject();
 
 
-
             $PK = [];
             foreach ($primaryKeys as $pkid => $primaryKey) {
                 $PK[$primaryKey->fieldName]["IS_PRIMARY_KEY"] = ($primaryKey->constraintType === "PRIMARY KEY");
@@ -260,19 +310,19 @@ class DataFirebird extends DataBase
 
 
             //Go through the tables and extract their column information
-            foreach ($tableInfo as $tid => $trecord) {
+            foreach ($tableInfo as $tid => $tRecord) {
                 $database[trim($record->tableName)][$tid]["column"] = $tid;
-                $database[trim($record->tableName)][$tid]["field"] = trim($trecord->fieldName);
-                $database[trim($record->tableName)][$tid]["description"] = trim($trecord->fieldDescription);
-                $database[trim($record->tableName)][$tid]["type"] = trim($trecord->fieldType);
-                $database[trim($record->tableName)][$tid]["length"] = trim($trecord->fieldLength);
-                $database[trim($record->tableName)][$tid]["precision"] = trim($trecord->fieldPrecision);
-                $database[trim($record->tableName)][$tid]["default"] = trim($trecord->fieldDefaultValue);
+                $database[trim($record->tableName)][$tid]["field"] = trim($tRecord->fieldName);
+                $database[trim($record->tableName)][$tid]["description"] = trim($tRecord->fieldDescription);
+                $database[trim($record->tableName)][$tid]["type"] = trim($tRecord->fieldType);
+                $database[trim($record->tableName)][$tid]["length"] = trim($tRecord->fieldLength);
+                $database[trim($record->tableName)][$tid]["precision"] = trim($tRecord->fieldPrecision);
+                $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->fieldDefaultValue);
                 if (!empty($trecord->fieldNotNullContraint)) {
-                    $database[trim($record->tableName)][$tid]["notnull"] = trim($trecord->fieldNotNullContraint);
+                    $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->fieldNotNullContraint);
                 }
                 if (!empty($PK[$trecord->fieldName])) {
-                    $database[trim($record->tableName)][$tid]["pk"] = trim($PK[$trecord->fieldName]["CONSTRAINT_TYPE"]);
+                    $database[trim($record->tableName)][$tid]["pk"] = trim($PK[$tRecord->fieldName]["CONSTRAINT_TYPE"]);
                 } else {
                     $database[trim($record->tableName)][$tid]["pk"] = "";
                 }

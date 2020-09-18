@@ -12,8 +12,10 @@ namespace Tina4;
  * Class DataMySQL Instantiates database functions
  * @package Tina4
  */
-class DataMySQL extends DataBase
+class DataMySQL implements DataBase
 {
+    use DataBaseCore;
+
     /**
      * @var integer Port number used by MySQL
      */
@@ -24,16 +26,13 @@ class DataMySQL extends DataBase
      * @return bool|void
      * @throws \Exception
      */
-    public function native_open()
+    public function open()
     {
-        inherited:
         if (!function_exists("mysqli_connect")) {
             throw new \Exception("Mysql extension for PHP needs to be installed");
         }
 
-       
-
-        $this->dbh = \mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
+        $this->dbh = mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
         $this->dbh->set_charset("utf8");
 
     }
@@ -42,40 +41,25 @@ class DataMySQL extends DataBase
      * Closes database connection
      * @return bool|void
      */
-    public function native_close()
+    public function close()
     {
         mysqli_close($this->dbh);
-    }
-
-    /**
-     * Helper to make ref values for exec injection
-     * @param $arr
-     * @return array
-     */
-    function refValues($arr){
-        if (strnatcmp(phpversion(),'5.3') >= 0) //Reference is required for PHP 5.3+
-        {
-            $refs = array();
-            foreach($arr as $key => $value)
-                $refs[$key] = &$arr[$key];
-            return $refs;
-        }
-        return $arr;
     }
 
     /**
      * Executes
      * @return array|bool
      */
-    public function native_exec()
+    public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         if (stripos($params[0], "call") !== false) {
-            $fetchData = $this->fetch($params[0]);
-            return $fetchData;
+            return $this->fetch($params[0]);
         } else {
-            $preparedQuery = \mysqli_prepare($this->dbh, $params[0]);
+            $preparedQuery = mysqli_prepare($this->dbh, $params[0]);
 
             if (!empty($preparedQuery)) {
                 unset($params[0]);
@@ -84,52 +68,33 @@ class DataMySQL extends DataBase
                     foreach ($params as $pid => $param) {
                         if (is_numeric($param)) {
                             $paramTypes .= "d";
-                        }
-                            else
-                        if (is_integer($param))
-                        {
-                            $paramTypes .= "i";
-                        }
-                            else
-                        if (is_string($param))
-                        {
-                            $paramTypes .= "s";
-                        }
-                            else
-                        {
-                            $paramTypes .= "b";
-                        }
+                        } else
+                            if (is_integer($param)) {
+                                $paramTypes .= "i";
+                            } else
+                                if (is_string($param)) {
+                                    $paramTypes .= "s";
+                                } else {
+                                    $paramTypes .= "b";
+                                }
                     }
 
-                    $params = array_merge([$preparedQuery,$paramTypes], $params);
+                    $params = array_merge([$preparedQuery, $paramTypes], $params);
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
 
-
-                    call_user_func_array("\mysqli_stmt_bind_param", $this->refValues($params));
-                    \mysqli_stmt_execute($preparedQuery);
-                    \mysqli_stmt_affected_rows($preparedQuery);
-                    \mysqli_stmt_close($preparedQuery);
+                    call_user_func_array("mysqli_stmt_bind_param", $this->refValues($params));
+                    mysqli_stmt_execute($preparedQuery);
+                    mysqli_stmt_affected_rows($preparedQuery);
+                    mysqli_stmt_close($preparedQuery);
                 } else {
                     $params[0] = $preparedQuery;
-                    @call_user_func_array("\mysqli_execute", $params);
+                    call_user_func_array("mysqli_execute", $params);
                 }
 
             }
 
             return $this->error();
         }
-    }
-
-    /**
-     * Gets MySQL errors
-     * @return bool|DataError
-     */
-    public function native_error()
-    {
-        $errorNo = @\mysqli_errno($this->dbh);
-        $errorMessage = @\mysqli_error($this->dbh);
-
-        return (new DataError($errorNo, $errorMessage));
     }
 
     /**
@@ -140,7 +105,7 @@ class DataMySQL extends DataBase
      * @param array $fieldMapping Mapped Fields
      * @return bool|DataResult
      */
-    public function native_fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping=[])
+    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
     {
         $initialSQL = $sql;
 
@@ -149,11 +114,8 @@ class DataMySQL extends DataBase
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
-        $recordCursor = \mysqli_query($this->dbh, $sql);
-
-
+        $recordCursor = mysqli_query($this->dbh, $sql);
         $error = $this->error();
-
 
         $records = null;
         $record = null;
@@ -163,21 +125,20 @@ class DataMySQL extends DataBase
 
         if ($error->getError()["errorCode"] == 0) {
             if ($recordCursor->num_rows > 0) {
-                while ($record = \mysqli_fetch_assoc($recordCursor)) {
+                while ($record = mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
                         $records[] = (new DataRecord($record, $fieldMapping));
                     }
                 }
 
-
                 if (is_array($records) && count($records) >= 1) {
                     if (stripos($sql, "returning") === false) {
                         $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
-                        $recordCount = \mysqli_query($this->dbh, $sqlCount);
+                        $recordCount = mysqli_query($this->dbh, $sqlCount);
 
-                        $resultCount = \mysqli_fetch_assoc($recordCount);
+                        $resultCount = mysqli_fetch_assoc($recordCount);
 
                         if (empty($resultCount)) {
                             $resultCount["COUNT_RECORDS"] = 0;
@@ -192,14 +153,12 @@ class DataMySQL extends DataBase
                 $resultCount["COUNT_RECORDS"] = 0;
             }
 
-
-
             //populate the fields
             $fid = 0;
             $fields = [];
             if (!empty($records)) {
                 //$record = $records[0];
-                $fields = @mysqli_fetch_fields($recordCursor);
+                $fields = mysqli_fetch_fields($recordCursor);
 
                 foreach ($fields as $fieldId => $fieldInfo) {
                     $fieldInfo = (array)json_decode(json_encode($fieldInfo));
@@ -213,53 +172,96 @@ class DataMySQL extends DataBase
         }
 
         //Ensures the pointer is at the end in order to close the connection - Might be a buggy fix
-        if(strpos($sql, "call") !== false){
-            while(@\mysqli_next_result($this->dbh)){
-
+        if (strpos($sql, "call") !== false) {
+            while (mysqli_next_result($this->dbh)) {
             }
         }
 
-
         return (new DataResult($records, $fields, $resultCount["COUNT_RECORDS"], $offSet, $error));
+    }
+
+    /**
+     * Gets MySQL errors
+     * @return bool|DataError
+     */
+    public function error()
+    {
+        $errorNo = mysqli_errno($this->dbh);
+        $errorMessage = mysqli_error($this->dbh);
+
+        return (new DataError($errorNo, $errorMessage));
+    }
+
+    /**
+     * Helper to make ref values for exec injection
+     * @param $arr
+     * @return array
+     */
+    function refValues($arr)
+    {
+        if (strnatcmp(phpversion(), '5.3') >= 0) //Reference is required for PHP 5.3+
+        {
+            $refs = array();
+            foreach ($arr as $key => $value)
+                $refs[$key] = &$arr[$key];
+            return $refs;
+        }
+        return $arr;
     }
 
     /**
      * Gets the last inserted row's ID from database
      * @return bool
      */
-    public function native_getLastId()
+    public function getLastId()
     {
         $lastId = $this->fetch("SELECT LAST_INSERT_ID() as last_id");
-
         return $lastId->records(0)[0]->lastId;
     }
 
-    public function native_tableExists($tableName) {
+    /**
+     * Check if the table exists
+     * @param $tableName
+     * @return bool|mixed
+     */
+    public function tableExists($tableName)
+    {
         $exists = $this->fetch("SELECT * 
                                     FROM information_schema.tables
                                     WHERE table_schema = '{$this->databaseName}' 
                                         AND table_name = '{$tableName}'", 1);
-
         return !empty($exists->records());
     }
 
     /**
      * Commits
      * @param null $transactionId
+     * @return bool
      */
-    public function native_commit($transactionId=null)
+    public function commit($transactionId = null)
     {
-        return @\mysqli_commit($this->dbh);
+        return mysqli_commit($this->dbh);
     }
 
-    public function native_rollback($transactionId = null)
+    /**
+     * Rollback the transaction
+     * @param null $transactionId
+     * @return bool|mixed
+     */
+    public function rollback($transactionId = null)
     {
-        return @\mysqli_rollback($this->dbh);
+        return mysqli_rollback($this->dbh);
     }
 
-    public function native_startTransaction()
+    /**
+     * Start the transaction
+     * @return bool|int
+     */
+    public function startTransaction()
     {
-        return @\mysqli_begin_transaction($this->dbh);
+        $this->dbh->autocommit(false);
+        return mysqli_begin_transaction($this->dbh);
+        return "Resource id #0";
     }
 
     /**
@@ -267,42 +269,47 @@ class DataMySQL extends DataBase
      * @param bool $onState
      * @return bool|void
      */
-    public function native_autoCommit($onState = true)
+    public function autoCommit($onState = true)
     {
         $this->dbh->autocommit($onState);
     }
 
-    public function native_getDatabase()
+    /**
+     * Gets the database metadata
+     * @return array|mixed
+     */
+    public function getDatabase()
     {
         $sqlTables = "SELECT table_name, table_type, engine
                       FROM INFORMATION_SCHEMA.tables
                      WHERE upper(table_schema) = upper('{$this->databaseName}')
                      ORDER BY table_type ASC, table_name DESC";
-        $tables    = $this->fetch( $sqlTables, 10000,0 )->asObject();
+        $tables = $this->fetch($sqlTables, 10000, 0)->asObject();
         $database = [];
-        foreach ( $tables as $id => $record ) {
+        foreach ($tables as $id => $record) {
             $sqlInfo = "SELECT *
                         FROM information_schema.COLUMNS   
                         WHERE upper(table_schema) = upper('{$this->databaseName}')
                                     AND TABLE_NAME = '{$record->tableName}'
                          ORDER BY ORDINAL_POSITION";
 
-            $tableInfo = $this->fetch( $sqlInfo )->asObject();
+            $tableInfo = $this->fetch($sqlInfo)->asObject();
 
 
             //Go through the tables and extract their column information
-            foreach ( $tableInfo as $tid => $trecord ) {
-                $database[trim( $record->tableName )][$tid]["column"]      = $trecord->ordinalPosition;
-                $database[trim( $record->tableName )][$tid]["field"]       = trim( $trecord->columnName );
-                $database[trim( $record->tableName )][$tid]["description"] = trim( $trecord->extra );
-                $database[trim( $record->tableName )][$tid]["type"]        = trim( $trecord->dataType );
-                $database[trim( $record->tableName )][$tid]["length"]      = trim( $trecord->characterMaximumLength );
-                $database[trim( $record->tableName )][$tid]["precision"]   = $trecord->numericPrecision;
-                $database[trim( $record->tableName )][$tid]["default"]     = trim( $trecord->columnDefault );
-                $database[trim( $record->tableName )][$tid]["notnull"]     = trim( $trecord->isNullable );
-                $database[trim( $record->tableName )][$tid]["pk"]          = trim( $trecord->columnKey );
+            foreach ($tableInfo as $tid => $tRecord) {
+                $database[trim($record->tableName)][$tid]["column"] = $tRecord->ordinalPosition;
+                $database[trim($record->tableName)][$tid]["field"] = trim($tRecord->columnName);
+                $database[trim($record->tableName)][$tid]["description"] = trim($tRecord->extra);
+                $database[trim($record->tableName)][$tid]["type"] = trim($tRecord->dataType);
+                $database[trim($record->tableName)][$tid]["length"] = trim($tRecord->characterMaximumLength);
+                $database[trim($record->tableName)][$tid]["precision"] = $tRecord->numericPrecision;
+                $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->columnDefault);
+                $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->isNullable);
+                $database[trim($record->tableName)][$tid]["pk"] = trim($tRecord->columnKey);
             }
         }
         return $database;
     }
+
 }

@@ -5,22 +5,28 @@ $rootPath = str_replace("\n", "", `cd`);
 $rootPath = str_replace("\r", "", $rootPath);
 
 $binFile = str_replace("/tina4", "", $argv[0]);
-$rootPath = str_replace($binFile, "", $rootPath).DIRECTORY_SEPARATOR;
+$rootPath = str_replace($binFile, "", $rootPath) . DIRECTORY_SEPARATOR;
 global $settings;
 $settings = [];
 define("TINA4_SUPPRESS", 1);
-if (file_exists("index.php")){
+if (file_exists("index.php")) {
     include "index.php";
 }
 
 $menu = [];
 
-function readLn($handle) {
-    $input = substr(fgets($handle), 0, -1);
-    return $input;
+/**
+ * Reads input from the commandline
+ * @param $handle
+ * @return false|string
+ */
+function readLn($handle)
+{
+    return substr(fgets($handle), 0, -1);
 }
 
-function drawMenu () {
+function drawMenu()
+{
     echo "===========================================================\n";
     echo "Menu\n";
     echo "===========================================================\n";
@@ -31,7 +37,8 @@ function drawMenu () {
     echo "Choose a menu option, type exit to quit:";
 }
 
-function processCreateORMfromDB($step, $input, $handle) {
+function processCreateORMfromDB($step, $input, $handle)
+{
     global $settings;
     global $rootPath;
     if ($step == 1 && !empty($input)) {
@@ -55,9 +62,9 @@ function processCreateORMfromDB($step, $input, $handle) {
             foreach ($database as $table => $fields) {
                 $no++;
                 if ($no == $settings["tableIndex"] || $settings["tableIndex"] == "all") {
-                    echo str_repeat("=", 40)."\n";
+                    echo str_repeat("=", 40) . "\n";
                     echo "Table: {$table}\n";
-                    echo str_repeat("=", 40)."\n";
+                    echo str_repeat("=", 40) . "\n";
                     foreach ($fields as $id => $field) {
                         echo "{$field["field"]}\n";
                     }
@@ -66,7 +73,7 @@ function processCreateORMfromDB($step, $input, $handle) {
             }
 
             if ($settings["tableIndex"] == "all") {
-                $settings["database"]  = $database;
+                $settings["database"] = $database;
                 echo "You want to convert all the tables in the database ?\n";
             }
 
@@ -80,8 +87,8 @@ function processCreateORMfromDB($step, $input, $handle) {
 
                 $fields = [];
                 $primaryKey = "";
-                foreach ($data["fields"] as $id => $field) {
-                    if ($id == 0 || $field["pk"] == "PRI") {
+                foreach ($data["fields"] as $fid => $field) {
+                    if ($fid == 0 || $field["pk"] == "PRI") {
                         $primaryKey = $field["field"];
                     }
 
@@ -99,9 +106,9 @@ class [CLASS_NAME] extends \Tina4\ORM
 }';
 
                 if (file_exists("Tina4Php.php")) {
-                    $fileName = "{$rootPath}".DIRECTORY_SEPARATOR."objects".DIRECTORY_SEPARATOR. $className . ".php";
+                    $fileName = "{$rootPath}" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
                 } else {
-                    $fileName = "{$rootPath}src".DIRECTORY_SEPARATOR."objects".DIRECTORY_SEPARATOR. $className . ".php";
+                    $fileName = "{$rootPath}src" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
                 }
                 echo "Creating object in {$fileName} {$className}\n";
                 if (!file_exists($fileName)) {
@@ -142,7 +149,8 @@ class [CLASS_NAME] extends \Tina4\ORM
     return $step;
 }
 
-function processCreateConnection($step, $input, $handle) {
+function processCreateConnection($step, $input, $handle)
+{
     global $settings;
 
     if ($step == 1 && !empty($input)) {
@@ -221,13 +229,13 @@ function processCreateConnection($step, $input, $handle) {
             $findDBA = '/^\$DBA(.*)/m';
             preg_match($findDBA, $indexContent, $matches, PREG_OFFSET_CAPTURE);
 
-            if (!empty ($matches) ) {
+            if (!empty ($matches)) {
                 $indexContent = str_replace($matches[0], $settings["configString"], $indexContent);
                 $settings["newIndex"] = $indexContent;
                 echo "We are going to replace an existing connection in index.php for {$settings["databasePath"]} ?\n";
                 echo "y/n:";
             } else {
-                $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;'."\n".$settings["configString"]."\n".'echo new \Tina4\Tina4Php(', $indexContent);
+                $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;' . "\n" . $settings["configString"] . "\n" . 'echo new \Tina4\Tina4Php(', $indexContent);
                 $settings["newIndex"] = $indexContent;
                 echo "We are going to add a connection in index.php for {$settings["databasePath"]} ?\n";
                 echo "y/n:";
@@ -237,7 +245,7 @@ function processCreateConnection($step, $input, $handle) {
         case 6:
             $step = 0;
             if ($input == "y") {
-                print_r ($settings);
+                print_r($settings);
             } else {
                 echo "You will be returned back to the menu, hit Enter!";
             }
@@ -255,7 +263,8 @@ function processCreateConnection($step, $input, $handle) {
     return $step;
 }
 
-function handleMenu($handle) {
+function handleMenu($handle)
+{
     $menu = "start";
     $step = 0;
     $input = null;
@@ -263,13 +272,13 @@ function handleMenu($handle) {
 
         switch ($menu) {
             case 1:
-                $step =  processCreateConnection($step, $input, $handle);
+                $step = processCreateConnection($step, $input, $handle);
                 if ($step != 0) {
                     $input = readLn($handle);
                 }
                 break;
             case 2:
-                $step =  processCreateORMfromDB($step, $input, $handle);
+                $step = processCreateORMfromDB($step, $input, $handle);
                 if ($step != 0) {
                     $input = readLn($handle);
                 }
@@ -288,5 +297,5 @@ function handleMenu($handle) {
 }
 
 
-$handle = fopen ("php://stdin","r");
+$handle = fopen("php://stdin", "r");
 handleMenu($handle);

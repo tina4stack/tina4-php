@@ -30,14 +30,6 @@ class DataError
     }
 
     /**
-     * @return array Containing The code and message of the error
-     */
-    function getError()
-    {
-        return ["errorCode" => $this->errorCode, "errorMessage" => $this->errorMessage];
-    }
-
-    /**
      * @return string Contains the code and message of the error as a single string
      */
     function getErrorText()
@@ -45,8 +37,19 @@ class DataError
         return $this->errorCode . " " . $this->errorMessage;
     }
 
+    /**
+     * @return false|string
+     */
     function __toString()
     {
         return json_encode($this->getError());
+    }
+
+    /**
+     * @return array Containing The code and message of the error
+     */
+    function getError()
+    {
+        return ["errorCode" => $this->errorCode, "errorMessage" => $this->errorMessage];
     }
 }

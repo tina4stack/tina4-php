@@ -5,6 +5,7 @@
  * Date: 2016/02/15
  * Time: 03:24 PM
  */
+
 namespace Tina4;
 
 /**
@@ -12,7 +13,8 @@ namespace Tina4;
  * Put route intercepts put calls made to the web server e.g. Put::add()
  * @package Tina4
  */
-class Put extends Route {
+class Put extends Route
+{
     /**
      * @var string Sets $method to PUT
      */

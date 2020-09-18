@@ -5,19 +5,19 @@
  * Date: 2018/05/30
  * Time: 22:24
  */
+
 namespace Tina4;
 
 use Nowakowskir\JWT\Exceptions\IntegrityViolationException;
-use Nowakowskir\JWT\Exceptions\InvalidStructureException;
+use Nowakowskir\JWT\JWT;
 use Nowakowskir\JWT\TokenDecoded;
 use Nowakowskir\JWT\TokenEncoded;
-use Nowakowskir\JWT\JWT;
 
 /**
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
  */
-class Auth extends \Tina4\Data
+class Auth extends Data
 {
     private $documentRoot;
     private $configured = false;
@@ -29,7 +29,7 @@ class Auth extends \Tina4\Data
      * @param string $documentRoot
      * @throws \Exception
      */
-    function __construct($documentRoot="", $lastPath="/")
+    function __construct($documentRoot = "", $lastPath = "/")
     {
         parent::__construct();
         self::initSession();
@@ -39,22 +39,38 @@ class Auth extends \Tina4\Data
         $this->documentRoot = $documentRoot;
 
         //Load secrets
-        if (file_exists($this->documentRoot."secrets".DIRECTORY_SEPARATOR."private.key")) {
+        if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
         }
-        if (file_exists($this->documentRoot."secrets".DIRECTORY_SEPARATOR."public.pub")) {
+        if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         }
     }
 
-    function generateSecureKeys() {
+    /**
+     * Starts a php session
+     */
+    public function initSession()
+    {
+        //make sure the session is started
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
+    }
+
+    /**
+     * Creates a secrets folder and generates keys for the application
+     * @return bool
+     */
+    function generateSecureKeys()
+    {
         DebugLog::message("Generating Auth keys");
-        if (file_exists($this->documentRoot."secrets")) {
+        if (file_exists($this->documentRoot . "secrets")) {
             DebugLog::message("Secrets folder exists already, please remove");
             return false;
         }
-        mkdir($this->documentRoot."secrets");
-        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key`;
+        mkdir($this->documentRoot . "secrets");
+        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
         return true;
@@ -63,12 +79,68 @@ class Auth extends \Tina4\Data
     /**
      * Checks for $_SESSION["tokens"]
      */
-    function tokenExists () {
+    function tokenExists()
+    {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;
         } else {
             return false;
         }
+    }
+
+    /**
+     * Checks if an auth token in the header is valid against the session
+     * @param $token
+     * @param string $publicKey
+     * @param string $encryption
+     * @return bool
+     */
+    public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    {
+        DebugLog::message("Validating token");
+        self::initSession();
+
+        if (!empty($publicKey)) {
+            $this->publicKey = $publicKey;
+        }
+
+        if (empty($this->publicKey)) return false;
+
+        $token = trim(str_replace("Bearer ", "", $token));
+
+        if (isset($_SESSION["tina4:authToken"]) && empty($token)) {
+            $token = $_SESSION["tina4:authToken"];
+        }
+
+        try {
+            $tokenEncoded = new TokenEncoded($token);
+        } catch (\Exception $e) {
+            DebugLog::message("Encoded token input failed! " . $e->getMessage());
+            return false;
+        }
+
+        try {
+            $tokenEncoded->validate($this->publicKey, $encryption);
+            return true;
+        } catch (IntegrityViolationException $e) {
+            // Handle token not trusted
+            DebugLog::message("Validating {$token} failed!");
+            return false;
+        } catch (\Exception $e) {
+            // Handle other validation exceptions
+            DebugLog::message("Validating {$token} failed! " . $e->getMessage());
+            return false;
+        }
+    }
+
+    function getSessionToken()
+    {
+        if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
+            return $_SESSION["tina4:authToken"];
+        } else {
+            return false;
+        }
+
     }
 
     /**
@@ -78,7 +150,8 @@ class Auth extends \Tina4\Data
      * @return string
      * @throws \Exception
      */
-    function validateAuth ($request, $lastPath=null) {
+    function validateAuth($request, $lastPath = null)
+    {
         self::initSession();
 
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
@@ -93,7 +166,8 @@ class Auth extends \Tina4\Data
     /**
      * Clears the session auth tokens
      */
-    function clearTokens () {
+    function clearTokens()
+    {
         self::initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
             unset($_SESSION["tina4:authToken"]);
@@ -102,10 +176,18 @@ class Auth extends \Tina4\Data
 
     /**
      * Gets an auth token for validating against secure URLS for the session
+     * @param array $payLoad
+     * @param string $privateKey
+     * @param string $encryption
      * @return string
      */
-    public function getToken($payLoad=[]) {
+    public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256)
+    {
         self::initSession();
+
+        if (!empty($privateKey)) {
+            $this->privateKey = $privateKey;
+        }
 
         if (!is_array($payLoad) && !empty($payLoad)) {
             if (is_object($payLoad)) {
@@ -116,6 +198,7 @@ class Auth extends \Tina4\Data
         }
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
+
         $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
         $tokenString = $tokenEncoded->__toString();
         $_SESSION["tina4:authToken"] = $tokenString;
@@ -124,75 +207,41 @@ class Auth extends \Tina4\Data
     }
 
     /**
-     * Checks if an auth token in the header is valid against the session
+     * Gets the payload from token
      * @param $token
-     * @return bool
+     * @param string $publicKey
+     * @param string $encryption
+     * @return array|false
      */
-    public function validToken($token) {
-        \Tina4\DebugLog::message("Validating token");
-        self::initSession();
+    function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    {
+        DebugLog::message("Getting token payload");
 
-        $token = trim(str_replace("Bearer ", "", $token));
-
-        if (isset($_SESSION["tina4:authToken"]) && empty($token)) {
-            $token = $_SESSION["tina4:authToken"];
+        if (!empty($publicKey)) {
+            $this->publicKey = $publicKey;
         }
 
         try {
             $tokenEncoded = new TokenEncoded($token);
         } catch (\Exception $e) {
-            \Tina4\DebugLog::message("Encoded token input failed! ".$e->getMessage());
+            DebugLog::message("Encoded token input failed! " . $e->getMessage());
             return false;
         }
 
         try {
-            $tokenEncoded->validate($this->publicKey, JWT::ALGORITHM_RS256);
-            return true;
+            $tokenEncoded->validate($this->publicKey, $encryption);
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
-            \Tina4\DebugLog::message("Validating {$token} failed!");
+            DebugLog::message("Validating {$token} failed!");
             return false;
         } catch (\Exception $e) {
             // Handle other validation exceptions
-            \Tina4\DebugLog::message("Validating {$token} failed! ".$e->getMessage());
-            return false;
-        }
-    }
-
-    function getPayLoad($token) {
-        \Tina4\DebugLog::message("Getting token payload");
-        try {
-            $tokenEncoded = new TokenEncoded($token);
-        } catch (Exception $e) {
-            \Tina4\DebugLog::message("Encoded token input failed! ".$e->getMessage());
-            return false;
-        }
-
-        try {
-            $tokenEncoded->validate($this->publicKey, JWT::ALGORITHM_RS256);
-        } catch (IntegrityViolationException $e) {
-            // Handle token not trusted
-            \Tina4\DebugLog::message("Validating {$token} failed!");
-            return false;
-        } catch (Exception $e) {
-            // Handle other validation exceptions
-            \Tina4\DebugLog::message("Validating {$token} failed! ".$e->getMessage());
+            DebugLog::message("Validating {$token} failed! " . $e->getMessage());
             return false;
         }
 
         $tokenDecoded = $tokenEncoded->decode();
 
         return $tokenDecoded->getPayload();
-    }
-
-    /**
-     * Starts a php session
-     */
-    public function initSession()
-    {
-        //make sure the session is started
-        if (session_status() == PHP_SESSION_NONE) {
-            session_start();
-        }
     }
 }

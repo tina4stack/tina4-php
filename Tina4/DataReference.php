@@ -11,6 +11,13 @@ class DataReference
     private $foreignKey;
     private $displayField;
 
+    /**
+     * DataReference constructor for linking ORM
+     * @param $fieldName
+     * @param $tableName
+     * @param $foreignKey
+     * @param $displayField
+     */
     function __construct($fieldName, $tableName, $foreignKey, $displayField)
     {
         $this->fieldName = $fieldName;
@@ -19,16 +26,18 @@ class DataReference
         $this->displayField = $displayField;
     }
 
-    function getFieldName() {
-        return "{$this->tableName}_{$this->displayField}";
+    function getDisplayFieldQuery()
+    {
+        return "{$this->getSubSelect()} as {$this->getFieldName()}";
     }
 
-    function getSubSelect() {
+    function getSubSelect()
+    {
         return "(select {$this->displayField} from {$this->tableName} where {$this->foreignKey} = t.{$this->fieldName})";
     }
 
-    function getDisplayFieldQuery ()
+    function getFieldName()
     {
-        return "{$this->getSubSelect()} as {$this->getFieldName()}";
+        return "{$this->tableName}_{$this->displayField}";
     }
 }
