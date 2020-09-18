@@ -530,7 +530,6 @@ function redirect($url, $statusCode = 303)
 
         //Check if the current page uses an alias and if the parsed URL string is an absolute URL
         if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "" && substr($url, 0, 1) === '/') {
-
             //Append the prefix to the absolute path
             header('Location: ' . $_SERVER["CONTEXT_PREFIX"] . $url, true, $statusCode);
             die();

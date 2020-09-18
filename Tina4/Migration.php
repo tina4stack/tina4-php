@@ -38,7 +38,7 @@ class Migration extends Data
      * @param String $migrationPath relative path to your web folder
      * @param String $delim A delimiter to say how your SQL is run
      */
-    function __construct($migrationPath = "./migrations", $delim = ";")
+    public function __construct($migrationPath = "./migrations", $delim = ";")
     {
         parent::__construct();
         $this->delim = $delim;
@@ -67,7 +67,7 @@ class Migration extends Data
      *
      * DO NOT USE COMMIT STATEMENTS IN YOUR MIGRATIONS , RATHER BREAK THINGS UP INTO SMALLER LOGICAL PIECES
      */
-    function doMigration()
+    public function doMigration()
     {
         $result = "";
         if (!file_exists($this->migrationPath)) die("{$this->migrationPath} not found!");
@@ -148,7 +148,7 @@ class Migration extends Data
                 foreach ($content as $cid => $sql) {
                     if (!empty(trim($sql))) {
                         $success = $this->DBA->exec($sql);
-                        if ($success->getError()["errorMessage"] !== "") {
+                        if ($success->getError()["errorMessage"] !== "" && $success->getError()["errorMessage"] !== "not an error") {
                             $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:" . $success->getError()["errorMessage"] . "\n";
                             $error = true;
                             break;
@@ -167,7 +167,7 @@ class Migration extends Data
                     $this->DBA->commit($transId);
 
                     //we need to make sure the commit resulted in no errors
-                    if ($this->DBA->error()->getError()["errorMessage"] !== "") {
+                    if ($this->DBA->error()->getError()["errorMessage"] !== "" && $this->DBA->error()->getError()["errorMessage"] !== "not an error") {
                         $result .= "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:" . $this->DBA->error()->getError()["errorMessage"] . "\n";
                         $this->DBA->rollback($transId);
                         $error = true;
@@ -190,10 +190,21 @@ class Migration extends Data
     }
 
 
-    function createMigration($description, $content)
+    /**
+     *
+     * @param $description
+     * @param $content
+     * @return string
+     */
+    public function createMigration($description, $content)
     {
         if (!empty($description) && !empty($content)) {
-            $fileName = $this->migrationPath . "/" . date("Ymdhis") . " " . $description . ".sql";
+            if (!file_exists($this->migrationPath)) {
+                if (!mkdir($concurrentDirectory = $this->migrationPath, 0755, true) && !is_dir($concurrentDirectory)) {
+                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                }
+            }
+            $fileName = $this->migrationPath . DIRECTORY_SEPARATOR . date("Ymdhis") . " " . $description . ".sql";
             file_put_contents($fileName, $content);
             return "Migration created {$fileName}";
         } else {
