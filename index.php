@@ -1,4 +1,4 @@
-<?php
+1test.db$DBA = new \Tina4\DataSQLite3("test.db");<?php
 /**
  * Created by PhpStorm.
  * User: andrevanzuydam

@@ -22,7 +22,10 @@ $menu = [];
  */
 function readLn($handle)
 {
-    return substr(fgets($handle), 0, -1);
+    $line = fgets($handle);
+    $line = str_replace("\n", "", $line);
+    $line = str_replace("\r", "", $line);
+    return $line;
 }
 
 function drawMenu()
@@ -127,6 +130,10 @@ class [CLASS_NAME] extends \Tina4\ORM
         default:
             $step = 1;
             global $DBA;
+
+            if (empty($DBA)) {
+               die("First setup a database connection!");
+            }
             if (empty($settings["database"])) {
                 $database = $DBA->getDatabase();
                 $settings["database"] = $database;
@@ -245,7 +252,7 @@ function processCreateConnection($step, $input, $handle)
         case 6:
             $step = 0;
             if ($input == "y") {
-                print_r($settings);
+                file_put_contents("./index.php", $settings);
             } else {
                 echo "You will be returned back to the menu, hit Enter!";
             }
@@ -256,7 +263,7 @@ function processCreateConnection($step, $input, $handle)
             echo "- 1. SQLite\n";
             echo "- 2. MYSQL\n";
             echo "- 3. Firebird\n";
-            echo "Choose database option:";
+            echo "Choose database option or hit enter to be returned to the main menu:";
             break;
     }
 
@@ -268,7 +275,10 @@ function handleMenu($handle)
     $menu = "start";
     $step = 0;
     $input = null;
-    while ($menu !== "exit") {
+
+
+
+    while ($menu != "exit") {
 
         switch ($menu) {
             case 1:
@@ -288,6 +298,7 @@ function handleMenu($handle)
 
                 break;
         }
+
         if (empty($input)) {
             $menu = readLn($handle);
         }
