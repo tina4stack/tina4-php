@@ -53,7 +53,7 @@ class DataFirebird implements DataBase
         if (stripos($params[0], "returning") !== false) {
             return $this->fetch($params[0]);
         } else {
-            if (!empty($tranID)) {
+            if (!empty($tranId)) {
                 $preparedQuery = ibase_prepare($this->dbh, $tranId, $params[0]);
             } else {
                 $preparedQuery = ibase_prepare($this->dbh, $params[0]);
@@ -219,11 +219,11 @@ class DataFirebird implements DataBase
 
     /**
      * Get the last id
-     * @return integer
+     * @return int
      */
-    public function getLastId() : integer
+    public function getLastId()
     {
-        return -1;
+        return null;
     }
 
     /**

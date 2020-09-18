@@ -28,6 +28,9 @@ class SQLTest extends \Codeception\Test\Unit
         $this->assertIsArray($array[0], "Result is not an array");
         $object = (new \Tina4\SQL($this->testORM))->select()->from("test")->where("the_key = 1")->asObject();
 
+
+
+
         $this->assertIsObject($object[0], "Result is not an object");
         $array = (new \Tina4\SQL())->select()->from("test")->where("the_key = 2")->asArray();
 
