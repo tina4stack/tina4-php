@@ -85,4 +85,24 @@ trait DataBaseCore
         $this->open();
 
     }
+
+    /**
+     * Parses the params into params & sql, checks for SQL injection
+     * @param $params
+     * @return array
+     */
+    function parseParams($params) {
+        $tranId = "";
+        $newParams = [];
+        for ($i = 0, $iMax = count($params); $i < $iMax; $i++) {
+            if (strpos($params[$i] . "", "Resource id #") !== false) {
+                $tranId = $params[$i];
+            } else {
+                $newParams[] = $params[$i];
+            }
+        }
+
+        return ["params" => $newParams, "tranId" => $tranId];
+    }
+
 }

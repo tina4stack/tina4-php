@@ -52,7 +52,9 @@ class DataMySQL implements DataBase
      */
     public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         if (stripos($params[0], "call") !== false) {
             return $this->fetch($params[0]);
@@ -257,7 +259,9 @@ class DataMySQL implements DataBase
      */
     public function startTransaction()
     {
+        $this->dbh->autocommit(false);
         return mysqli_begin_transaction($this->dbh);
+        return "Resource id #0";
     }
 
     /**

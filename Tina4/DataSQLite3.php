@@ -36,7 +36,9 @@ class DataSQLite3 implements DataBase
      */
     public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         $sql = $params[0];
 

@@ -44,6 +44,10 @@ class Migration extends Data
         $this->delim = $delim;
         $this->migrationPath = $migrationPath;
 
+        if ($this->DBA === null)
+        {
+            die("Please make sure you have a global \$DBA connection in your index.php");
+        }
         //Turn off auto commits so we can roll back
         $this->DBA->autoCommit(false);
 
@@ -70,6 +74,7 @@ class Migration extends Data
     public function doMigration()
     {
         $result = "";
+        echo "<pre>";
         if (!file_exists($this->migrationPath)) die("{$this->migrationPath} not found!");
         $dirHandle = opendir($this->migrationPath);
         $error = false;
@@ -80,7 +85,7 @@ class Migration extends Data
         $result .= "<span style=\"color:green;\">STARTING Migrations ....</span>\n";
 
         $error = false;
-        error_reporting(E_ALL);
+        error_reporting(0);
         $fileArray = [];
         while (false !== ($entry = readdir($dirHandle)) && !$error) {
             if ($entry != "." && $entry != ".." && stripos($entry, ".sql")) {
@@ -102,7 +107,7 @@ class Migration extends Data
 
             $migrationId = $fileParts[0];
             unset($fileParts[0]);
-            $description = join(" ", $fileParts);
+            $description = implode(" ", $fileParts);
 
             $content = file_get_contents($this->migrationPath . "/" . $entry);
 
@@ -147,8 +152,12 @@ class Migration extends Data
                 $error = false;
                 foreach ($content as $cid => $sql) {
                     if (!empty(trim($sql))) {
-                        $success = $this->DBA->exec($sql);
-                        if ($success->getError()["errorMessage"] !== "" && $success->getError()["errorMessage"] !== "not an error") {
+                        $success = $this->DBA->exec($sql, $transId);
+
+
+
+
+                        if ($success->getError()["errorMessage"] !== "" && $success->getError()["errorMessage"] !== "not an error" && $success->getError()["errorMessage"] !== false) {
                             $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:" . $success->getError()["errorMessage"] . "\n";
                             $error = true;
                             break;
@@ -167,7 +176,7 @@ class Migration extends Data
                     $this->DBA->commit($transId);
 
                     //we need to make sure the commit resulted in no errors
-                    if ($this->DBA->error()->getError()["errorMessage"] !== "" && $this->DBA->error()->getError()["errorMessage"] !== "not an error") {
+                    if ($this->DBA->error()->getError()["errorMessage"] !== "" && $this->DBA->error()->getError()["errorMessage"] !== "not an error" && $success->getError()["errorMessage"] !== false) {
                         $result .= "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:" . $this->DBA->error()->getError()["errorMessage"] . "\n";
                         $this->DBA->rollback($transId);
                         $error = true;

@@ -119,6 +119,25 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
         $this->testORM->currentAge = 10;
         $this->testORM->save();
 
+    }
+
+    public function testTransaction()
+    {
+        $tranId = $this->DBA->startTransaction();
+        $this->DBA->exec ("delete from test", $tranId);
+        $this->DBA->rollback();
+
+        $count = $this->DBA->fetch("select count(*) from test")->asArray();
+
+        $this->assertEquals($count[0]["count"], 3);
+
+        $tranId = $this->DBA->startTransaction();
+        $this->DBA->exec ("delete from test", $tranId);
+        $this->DBA->commit();
+
+        $count = $this->DBA->fetch("select count(*) from test")->asArray();
+
+        $this->assertEquals($count[0]["count"], 0);
 
 
     }

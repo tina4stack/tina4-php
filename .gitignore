@@ -13,3 +13,7 @@
 /tests/composer.lock
 /tests/.env
 /tests/test.db
+tests/tests/acceptance/
+tests/tests/functional/
+/.env
+/migrations/

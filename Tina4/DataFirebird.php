@@ -46,15 +46,24 @@ class DataFirebird implements DataBase
      */
     public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         if (stripos($params[0], "returning") !== false) {
             return $this->fetch($params[0]);
         } else {
-            $preparedQuery = @ibase_prepare($params[0]);
+            if (!empty($tranID)) {
+                $preparedQuery = ibase_prepare($this->dbh, $tranId, $params[0]);
+            } else {
+                $preparedQuery = ibase_prepare($this->dbh, $params[0]);
+            }
+
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-                @call_user_func_array("ibase_execute", $params);
+
+
+                call_user_func_array("ibase_execute", $params);
             }
 
             return $this->error();
@@ -168,9 +177,9 @@ class DataFirebird implements DataBase
     public function rollback($transactionId = null)
     {
         if (!empty($transactionId)) {
-            return @ibase_rollback($transactionId);
+            return ibase_rollback($transactionId);
         } else {
-            return @ibase_rollback($this->dbh);
+            return ibase_rollback($this->dbh);
         }
     }
 
@@ -199,7 +208,7 @@ class DataFirebird implements DataBase
      * @param $tableName
      * @return bool
      */
-    public function tableExists($tableName)
+    public function tableExists($tableName) : bool
     {
         // table name must be in upper case
         $tableName = strtoupper($tableName);
@@ -210,11 +219,11 @@ class DataFirebird implements DataBase
 
     /**
      * Get the last id
-     * @return bool
+     * @return integer
      */
-    public function getLastId()
+    public function getLastId() : integer
     {
-        return false;
+        return -1;
     }
 
     /**

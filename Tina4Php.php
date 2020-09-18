@@ -195,12 +195,12 @@ class Tina4Php
         });
 
         //migration routes
-        \Tina4\Route::get("/migrate", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+        \Tina4\Route::get("/migrate|/migrations|/migration", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $result = (new \Tina4\Migration())->doMigration();
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::get("/migrate/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+        \Tina4\Route::get("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
 
             $html = _html(
@@ -225,7 +225,7 @@ class Tina4Php
             return $response ($html, HTTP_OK, TEXT_HTML);
         });
 
-        \Tina4\Route::post("/migrate/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+        \Tina4\Route::post("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
             return $response ($result, HTTP_OK, TEXT_HTML);
         });

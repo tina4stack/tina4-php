@@ -92,7 +92,7 @@ class DataBaseSQLiteTest extends \Codeception\Test\Unit
         $result = $this->testORM->save();
 
 
-        $this->testORM->load("key_value = 2");
+        $this->testORM->load("the_key = 2");
         $this->assertEquals("New ORM", $this->testORM->firstName);
         $this->assertEquals("New ORM", $this->testORM->lastName);
 
