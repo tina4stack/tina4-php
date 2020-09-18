@@ -38,7 +38,13 @@ class Env
         }
         if (file_exists($fileName)) {
             DebugLog::message("Parsing {$fileName}");
-            $fileContents = explode(PHP_EOL, file_get_contents($fileName));
+
+            $fileContents = file_get_contents($fileName);
+            if (strpos($fileContents, "\r")) {
+                $fileContents = explode("\r\n", $fileContents);
+            } else {
+                $fileContents = explode("\n", $fileContents);
+            }
             foreach ($fileContents as $id => $line) {
                 if (empty($line)) {
                     //Ignore blanks
@@ -62,7 +68,7 @@ class Env
             }
         } else {
             DebugLog::message("Created an ENV file for you {$fileName}");
-            file_put_contents($fileName, "[Example Env File]\nVERSION=1.0.0\n");
+            file_put_contents($fileName, "[Example Env File]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=DEBUG_CONSOLE");
 
         }
     }

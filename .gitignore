@@ -7,3 +7,9 @@
 /auth.db
 /tools/HTMLFunctions.txt
 /secrets/
+/tests/vendor/
+/tests/tests/_data/
+/tests/tests/_output/
+/tests/composer.lock
+/tests/.env
+/tests/test.db
