@@ -124,21 +124,35 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
 
     public function testTransaction()
     {
+        $count = $this->DBA->fetch("select count(*) from test")->asArray();
+
+
+
+
         $tranId = $this->DBA->startTransaction();
         $this->DBA->exec ("delete from test", $tranId);
         $this->DBA->rollback($tranId);
 
-        $count = $this->DBA->fetch("select count(*) from test")->asArray();
 
-        $this->assertEquals($count[0]["count"], 3);
+
+        $count2 = $this->DBA->fetch("select count(*) from test")->asArray();
+
+
+        $this->assertEquals($count2[0]["count"], 3);
+
+        $this->DBA->commit();
 
         $tranId = $this->DBA->startTransaction();
+
+
         $this->DBA->exec ("delete from test", $tranId);
         $this->DBA->commit($tranId);
 
         $count = $this->DBA->fetch("select count(*) from test")->asArray();
 
         $this->assertEquals($count[0]["count"], 0);
+
+        $this->DBA->commit();
 
 
     }

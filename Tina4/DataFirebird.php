@@ -61,8 +61,6 @@ class DataFirebird implements DataBase
 
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-
-
                 call_user_func_array("ibase_execute", $params);
             }
 
@@ -200,7 +198,8 @@ class DataFirebird implements DataBase
      */
     public function startTransaction()
     {
-        return ibase_trans(IBASE_COMMITTED, $this->dbh);
+        
+        return ibase_trans(IBASE_COMMITTED + IBASE_NOWAIT, $this->dbh);
     }
 
     /**
