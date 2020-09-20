@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f342758e4e6484c5616f7f2955046350",
+    "content-hash": "5b6561e02b32eb46a725e054647e0512",
     "packages": [
         {
             "name": "coyl/git",
