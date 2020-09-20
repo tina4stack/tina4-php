@@ -58,6 +58,7 @@ class Tina4Php
     {
         DebugLog::message("Beginning of Tina4PHP Initialization");
 
+
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
@@ -123,18 +124,37 @@ class Tina4Php
         \Tina4\DebugLog::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
 
         //root of tina4
-        $this->webRoot = realpath(dirname(__FILE__));
+        $this->webRoot = realpath(__DIR__);
 
         \Tina4\DebugLog::message("TINA4: web path " . $this->webRoot);
 
-        if (!defined("TINA4_TEMPLATE_LOCATIONS")) define("TINA4_TEMPLATE_LOCATIONS", ["src/templates", "src/assets", "src/templates/snippets"]);
+        if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")){
+            if (defined("TINA4_TEMPLATE_LOCATIONS")) {
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS , Module::getTemplateFolders()));
+            } else {
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src/templates", "src/assets", "src/templates/snippets"], Module::getTemplateFolders()));
+            }
+        }
 
-        if (!defined("TINA4_ROUTE_LOCATIONS")) define("TINA4_ROUTE_LOCATIONS", ["src/api", "src/routes"]);
+        if (!defined("TINA4_ROUTE_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_ROUTE_LOCATIONS")) {
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS , Module::getTemplateFolders()));
+            } else {
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src/api", "src/routes"], Module::getRouteFolders()));
+            }
+        }
 
-        if (!defined("TINA4_INCLUDE_LOCATIONS")) define("TINA4_INCLUDE_LOCATIONS", ["src/app", "src/objects", "src/services"]);
+        if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_INCLUDE_LOCATIONS")) {
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
+            } else {
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+            }
+        }
 
-        if (!defined("TINA4_ALLOW_ORIGINS")) define("TINA4_ALLOW_ORIGINS", ["*"]);
-
+        if (!defined("TINA4_ALLOW_ORIGINS")) {
+            define("TINA4_ALLOW_ORIGINS", ["*"]);
+        }
 
         /**
          * Global array to store the routes that are declared during runtime
@@ -142,7 +162,7 @@ class Tina4Php
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "bin", "services"];
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services"];
 
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."{$folder}") && !file_exists("Tina4Php.php")) {
@@ -257,7 +277,9 @@ class Tina4Php
         //Twig initialization
         if (empty($twig)) {
 
-            $twigPaths = TINA4_TEMPLATE_LOCATIONS;
+
+            $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
+
 
             \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
 
@@ -266,15 +288,16 @@ class Tina4Php
             }
 
             foreach ($twigPaths as $tid => $twigPath) {
-                if (!file_exists(str_replace("//", "/", $this->documentRoot . "/" . $twigPath))) {
-                    unset($twigPaths[$tid]);
+                if (!file_exists(str_replace(DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath))) {
+                    if (!file_exists($twigPath)) {
+                        unset($twigPaths[$tid]);
+                    }
                 }
             }
 
             $twigLoader = new \Twig\Loader\FilesystemLoader();
             foreach ($twigPaths as $twigPath) {
                 $twigLoader->addPath($twigPath, '__main__');
-
             }
 
             $twig = new \Twig\Environment($twigLoader, ["debug" => true, "cache" => "./cache"]);
@@ -284,7 +307,7 @@ class Tina4Php
             $subFolder = $this->getSubFolder();
             $twig->addGlobal('baseUrl', $subFolder);
             $twig->addGlobal('baseURL', $subFolder);
-            $twig->addGlobal('uniqid', uniqid());
+            $twig->addGlobal('uniqid', uniqid('', true));
             $twig->addGlobal('formToken', $auth->getSessionToken());
 
             if (isset($_COOKIE) && !empty($_COOKIE)) {
@@ -323,7 +346,13 @@ class Tina4Php
         DebugLog::message("End of Tina4PHP Initialization");
     }
 
-    function iterateDirectory($path, $relativePath = "")
+    /**
+     * Iterate the directory
+     * @param $path
+     * @param string $relativePath
+     * @return string
+     */
+    public function iterateDirectory($path, $relativePath = "")
     {
         if (empty($relativePath)) $relativePath = $path;
         $files = scandir($path);
@@ -359,7 +388,7 @@ class Tina4Php
      * @param $gitMessage
      * @param $push
      */
-    function gitInit($gitEnabled, $gitMessage, $push = false)
+    public function gitInit($gitEnabled, $gitMessage, $push = false)
     {
         global $GIT;
         if ($gitEnabled) {
@@ -393,9 +422,8 @@ class Tina4Php
     /**
      * Logic to determine the subfolder - result must be /folder/
      */
-    function getSubFolder()
+    public function getSubFolder()
     {
-
         //Evaluate DOCUMENT_ROOT &&
         $documentRoot = "";
         if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
@@ -489,6 +517,7 @@ function renderTemplate($fileNameString, $data = [])
     try {
         global $twig;
         $internalTwig = clone $twig;
+
         if ($internalTwig->getLoader()->exists($fileNameString)) {
             return $internalTwig->render($fileName, $data);
         } else

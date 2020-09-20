@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e4d2fb6135488042e22092ae36f233ab",
+    "content-hash": "f342758e4e6484c5616f7f2955046350",
     "packages": [
         {
             "name": "coyl/git",
@@ -48,33 +48,6 @@
                 "php-git"
             ],
             "time": "2017-09-12T08:37:07+00:00"
-        },
-        {
-            "name": "felippe-regazio/php-hot-reloader",
-            "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/felippe-regazio/php-hot-reloader.git",
-                "reference": "77b28e5a1949a69b1ce694c04a0613b0ccb991b9"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/felippe-regazio/php-hot-reloader/zipball/77b28e5a1949a69b1ce694c04a0613b0ccb991b9",
-                "reference": "77b28e5a1949a69b1ce694c04a0613b0ccb991b9",
-                "shasum": ""
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "HotReloader\\": "src"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "description": "A class to add a complete live reload feature to any php project",
-            "time": "2020-05-30T16:51:02+00:00"
         },
         {
             "name": "nlp-tools/nlp-tools",
@@ -367,7 +340,7 @@
         },
         {
             "name": "symfony/polyfill-ctype",
-            "version": "v1.18.0",
+            "version": "v1.18.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/polyfill-ctype.git",
@@ -443,16 +416,16 @@
         },
         {
             "name": "twig/twig",
-            "version": "v1.43.0",
+            "version": "v1.43.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/twigphp/Twig.git",
-                "reference": "597a03e85a60af6feee4f5127f3ef4279a1694c3"
+                "reference": "2311602f6a208715252febe682fa7c38e56a3373"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/twigphp/Twig/zipball/597a03e85a60af6feee4f5127f3ef4279a1694c3",
-                "reference": "597a03e85a60af6feee4f5127f3ef4279a1694c3",
+                "url": "https://api.github.com/repos/twigphp/Twig/zipball/2311602f6a208715252febe682fa7c38e56a3373",
+                "reference": "2311602f6a208715252febe682fa7c38e56a3373",
                 "shasum": ""
             },
             "require": {
@@ -505,18 +478,6 @@
             ],
             "funding": [
                 {
-                    "url": "https://certification.symfony.com/",
-                    "type": "custom"
-                },
-                {
-                    "url": "https://live.symfony.com/",
-                    "type": "custom"
-                },
-                {
-                    "url": "https://symfony.com/cloud/",
-                    "type": "custom"
-                },
-                {
                     "url": "https://github.com/fabpot",
                     "type": "github"
                 },
@@ -525,15 +486,13 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2020-07-05T13:00:49+00:00"
+            "time": "2020-08-05T15:05:05+00:00"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "felippe-regazio/php-hot-reloader": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

@@ -45,7 +45,7 @@ class Routing
      * @throws \ReflectionException
      * @throws \Exception
      */
-    function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null, $suppressed=false)
+    public function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null, $suppressed=false)
     {
         if (!empty($root)) {
             $_SERVER["DOCUMENT_ROOT"] = $root;
@@ -120,7 +120,7 @@ class Routing
             $this->returnStatic($root . $urlToParse);
         } else {
             //Check the template locations
-            foreach (TINA4_TEMPLATE_LOCATIONS as $tid => $templateLocation) {
+            foreach (TINA4_TEMPLATE_LOCATIONS_INTERNAL as $tid => $templateLocation) {
                 DebugLog::message($root . "/" . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
                 if (file_exists($root . "/" . $templateLocation . $urlToParse) && !is_dir($root . "/" . $templateLocation . $urlToParse)) {
                     $this->returnStatic($root . "/" . $templateLocation . "/" . $urlToParse);
@@ -140,9 +140,13 @@ class Routing
         DebugLog::message("URL: {$urlToParse}", TINA4_DEBUG_LEVEL);
         DebugLog::message("Method: {$method}", TINA4_DEBUG_LEVEL);
 
-        if (defined ("TINA4_ROUTE_LOCATIONS")) {
+        if (defined ("TINA4_ROUTE_LOCATIONS_INTERNAL")) {
             //include routes in routes folder
-            foreach (TINA4_ROUTE_LOCATIONS as $rid => $route) {
+            foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $rid => $route) {
+                if (file_exists($route)) {
+                    $this->includeDirectory($route);
+                }
+                    else
                 if (file_exists(getcwd() . "/" . $route)) {
                     $this->includeDirectory(getcwd() . "/" . $route);
                 } else {
@@ -252,7 +256,7 @@ class Routing
      * @param string $url URL to be cleaned that may contain "?"
      * @return mixed Part of the URL before the "?" if it existed
      */
-    function cleanURL($url)
+    public function cleanURL($url)
     {
         $url = explode("?", $url, 2);
         return $url[0];
@@ -410,7 +414,7 @@ class Routing
      * Recursively includes directories
      * @param $dirName
      */
-    function includeDirectory($dirName)
+    public function includeDirectory($dirName)
     {
         $d = dir($dirName);
         while (($file = $d->read()) !== false) {
@@ -434,7 +438,7 @@ class Routing
      * @param string $routePath Route path
      * @return bool Whether or not they match
      */
-    function matchPath($path, $routePath)
+    public function matchPath($path, $routePath)
     {
         DebugLog::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         if ($routePath !== "/") {
@@ -481,7 +485,7 @@ class Routing
      * @param false $inlineToRequest
      * @return array
      */
-    function getParams($response, $inlineToRequest = false)
+    public function getParams($response, $inlineToRequest = false)
     {
         $request = new Request(file_get_contents("php://input"));
 
