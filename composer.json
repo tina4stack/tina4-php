@@ -22,7 +22,5 @@
     "psr-4": {
       "Tina4\\": "Tina4/"
     }
-  },
-  "require-dev": {
   }
 }
