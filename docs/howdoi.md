@@ -74,7 +74,7 @@ Once running you must add /migrate/create into your browser URL.
 Create your table and click "Create Table".
 You will be shown that the migration was created and a SQL file with the table you just created will be in the migration folder.  
 ```
-![alt text](../assets/images/migration.png)
+![alt text](../assets/images/migrate.png)
 
   
 
@@ -201,11 +201,7 @@ Its good to explain how one component is dependant on another.
  * @param $fields
  * 
  */
-  function exclude($fields)
-    {
-      //Your
-      //Code 
-    }
+
 ```
 ## Secure a REST end point
 
@@ -221,11 +217,7 @@ As easy as adding @secure in your annotation
  * @param $fields
  * @secure
  */
-  function exclude($fields)
-    {
-      //Your
-      //Code 
-    }
+
 ```
 
 ## Add a filter to process records when they are extracted from the database
