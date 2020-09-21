@@ -10,149 +10,6 @@
 
 This is a quick reference for doing things in the Tina4 environment which will hopefully make your journey easier.
 If you come up with something cool that you want to add here, please contribute.
-## Install IDE tool
-There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS. Follow these instructions to install an IDE tool on your system.
-
-* Step 1 >
-
-   For PHPStorm navigate to : https://www.jetbrains.com/phpstorm/download
-
-   OR
-
-   For Visual Studio Code navigate to : https://code.visualstudio.com/download
-
-* Step 2  > Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files
-
-* Step 3 > After the installation file download is complete, run the installation file and follow the prompts
-
-
-The installation window will inform you once the installation is complete.
-
-*PLEASE NOTE:* If you want to install the IDE tools via command line, the commands will be available on the download pages also.
-## Install PHP 
-
-Follow these instructions to install PHP on your system. 
-
-* Step 1 > Navigate to : https://www.php.net/downloads.php
-
-        Download the current stable version for your  Operating System. Download the zip files or content.
-
-* Step 2 > Unpack the zip file or content into a directory of your choice.
-
-        eg. C:/php
-        
-* Step 3 > Configure "php.ini" file: 
- 
-        Go to the folder where you extracted PHP. 
-        Delete file named "php.ini". 
-        Rename file named "php.ini-development" to "php-ini".
-        Open php.ini file by opening it with Notepad or IDE tool 
-            Find ';extension_dir = "ext"' and remove the semicolon infront of the word extension
-            Find ";extension=curl" and remove the semicolon infront of the word extension
-            Find ";extension=fileinfo" and remove the semicolon infront of the word extension
-            Find ";extension=gd2" and remove the semicolon infront of the word extension
-            Find ";extension=intl" and remove the semicolon infront of the word extension
-            Find ";extension=mbstring" and remove the semicolon infront of the word extension
-            Find ";extension=openssl" and remove the semicolon infront of the word extension
-            Find ";extension=pdo_mysql" and remove the semicolon infront of the word extension
-            Find ";extension=shmop" and remove the semicolon infront of the word extension
-            Find ";extension=soap" and remove the semicolon infront of the word extension
-            Find ";extension=sqlite3" and remove the semicolon infront of the word extension
-            Find ";extension=tidy" and remove the semicolon infront of the word extension
-            Find ";extension=xmlrpc" and remove the semicolon infront of the word extension
-            Find ";extension=xsl" and remove the semicolon infront of the word extension
-        Press Ctrl+S or save changes you just made to "php.ini" file. 
-
-* Step 4 > Change path environment variable.
-    
-        Open Control Panel
-        Go to System
-        Go to Advanced system settings
-        Go to Environment variable 
-        Look for "Path" in the "Variable" column and click Edit.
-        Click on Browse, locate the PHP folder you uxtracted. 
-        Click OK and then click Ok again to close the "Edit environment variable" window.
-
-* Step 5 > Complete Installation.
-
-       To ensure your changes take effect you may restart your device. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. 
-       The PHP version and details will appear in the terminal.    
-        
-## Install Xdebug
-
-Follow these instructions to install Xdebug on your system.
-
-* Step 1 > Navigate to : https://xdebug.org/download
-            
-    Download the correct version for your  Operating System (e.g. Windows 10 32bit or 64bit, Mac or Linux). Download the installer or content. 
-    
-* Step 2 > After the download is complete, copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
-    
-    It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
-
-* Step 3 > Configure "php.ini" file:
-
-        Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
-        Add the following line "zend_extension="E:\php\ext\php_xdebug.dll" in the extensions directory list (HINT: its above Module Settings) . 
-            *Please ensure that the "php_xdebug.dll" file location is correct* 
-        Add the following line "xdebug.remote_enable = 1" in the extensions directory list.
-        Add the following line "xdebug.remote_autostart = 1 " in the extensions directory list.
-        Press Ctrl+S or save changes you just made to "php.ini" file.
-             
-* Step 4 > Complete Installation.
-           
-            After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "openssl version" and pushing Enter. 
-            This will display the OpenSSL version if installed correctly. If an error is returned, the installation was unsuccessful. 
-            In this case, uninstall OpenSSL and follow the steps again. 
-            
-## Install Composer
-
-Follow these instructions to install Composer on your system. 
-
-* Step 1 > Navigate to : https://getcomposer.org/download/
-
-* Step 2 > Download the latest stable version (can be found under Manual Download)
-     
-* Step 3 > After the installation file download is complete, run the installation file and follow the prompts
-
-The installation window will inform you once the installation is complete.
-
-*PLEASE NOTE:* If you want to install Composer via command line, the commands will be available on the download pages also.
-
-## Install OpenSSL
-
-Follow these instructions to install OpenSSL on your system. 
-
-* Step 1 > For Windows > Navigate to :https://slproweb.com/products/Win32OpenSSL.html
-           For Mac & Linux > Navigate to :https://www.openssl.org/source/
-
-* Step 2 > Download version v1.1.1 Light 
-
-   Download the correct version for your  Operating System (e.g. Windows 10 32bit or 64bit, Mac or Linux). Download the installer or content.
-     
-* Step 3 > After the installation file download is complete, run the installation file and follow the prompts.
-
-   The installation window will inform you once the installation is complete.
-
-* Step 4 > Change path environment variable.
-    
-        Open Control Panel
-        Go to System
-        Go to Advanced system settings
-        Go to Environment variable 
-        Look for "Path" in the "Variable" column and click Edit.
-        Click on Browse, locate the "bin" folder directory where you installed OpenSSL (e.g. C:\Program Files\OpenSSL-Win64\bin). 
-        Click OK and then click Ok again to close the "Edit environment variable" window.  
-
-*PLEASE NOTE:* If you want to install OpenSSL via command visit:
-
-For Mac:
-https://franz.com/support/openssl-mac.lhtml OR https://stackoverflow.com/questions/15185661/update-openssl-on-os-x-with-homebrew
-
-For Unix:
-https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/
-OR
-https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/
 
 ## Connect to a database
 
@@ -163,23 +20,64 @@ There are 3 database engines currently supported, we are happy to add more if re
 * SQLite
 
 The database connection is established in a global variable called `$DBA` in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required.
+For testing purpose, you can use the SQLite database type below.
 
 ### Examples:
 
 Notice the convention of using the `hostname:[database|database-path]` except when it is SQLite which then becomes the local path.
 
+For MySQL database type:
 ```php
-   global $DBA;
-   //MySQL
-   $DBA = new \Tina4\DataMySQL("localhost:database", "admin", "cool1234");
-   
-   //Firebird 
-   $DBA = new \Tina4\DataFirebird("localhost:/home/database/FIREBIRD.DB", "sysdba", "masterkey");
 
-   //SQLite
-   $DBA = new \Tina4\DataSQLite3("/home/someplace/my.db");
- 
+<?php
+
+global $DBA;
+
+//MySQL
+$DBA = new \Tina4\DataMySQL("localhost:database", "admin", "cool1234");
+
+echo new \Tina4\Tina4Php();
+
 ```
+For Firebird database type:
+```php
+
+<?php
+
+global $DBA;
+
+//Firebird 
+$DBA = new \Tina4\DataFirebird("localhost:/home/database/FIREBIRD.DB", "sysdba", "masterkey");
+     
+```
+For SQLite database type:
+```php
+
+<?php
+
+global $DBA;
+
+//SQLite
+$DBA = new \Tina4\DataSQLite3("/home/someplace/my.db");
+
+
+```
+
+## Create a table/migration
+
+You want to create a table for the database? Before you continue,please ensure you have a "migration" folder e.g. C:/yourprojectfolder/migration
+
+### Example
+```sh
+Spin up a web server to view your porject on your web broser. Do this by running "php -S localhost:7145 index.php" in command terminal.
+Once running you must add /migrate/create into your browser URL.
+Create your table and click "Create Table".
+You will be shown that the migration was created and a SQL file with the table you just created will be in the migration folder.  
+```
+![alt text](../assets/images/migration.png)
+
+  
+
 ## Build a class with database access
 
 By default we have a global ``$DBA`` variable and it will get passed into your class if you extend ``\Tina4\Data``.
@@ -188,6 +86,9 @@ It is advised to store these classes in the app folder.
 ### Example:
 
 ```php
+
+<?php
+
 class MyDBActiveObject extends \Tina4\Data
 {
     /**
@@ -198,6 +99,7 @@ class MyDBActiveObject extends \Tina4\Data
     }   
 
 }
+
 ```
 
 ## Save a record using the ORM
@@ -208,6 +110,9 @@ It is required to extend the ``\Tina4\ORM`` class to make the magic happen.
 ### Examples:
 
 ```php
+
+<?php
+
 //we need a class extending the ORM
 class User extends \Tina4\ORM { //assumes we have a table user in the database
     public $id; //primary key because it is first
@@ -274,7 +179,12 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
 
 ```php
 
-Lorem Ipsum
+<?php
+
+public $fieldMapping = [
+    "id" => "ID",
+    "code" => "CODE",       
+    "name" => "NAME"];
 
 ```
 ## Annotate my REST for swagger
@@ -288,11 +198,14 @@ Its good to explain how one component is dependant on another.
 
 /**
  * @description A swagger annotation
- * @tags Example
- * @example 
+ * @param $fields
+ * 
  */
-function example () {
-};
+  function exclude($fields)
+    {
+      //Your
+      //Code 
+    }
 ```
 ## Secure a REST end point
 
@@ -305,12 +218,14 @@ As easy as adding @secure in your annotation
 
 /**
  * @description A swagger annotation
- * @tags Example
- * @example 
- * @secure 
+ * @param $fields
+ * @secure
  */
-function example () {
-};
+  function exclude($fields)
+    {
+      //Your
+      //Code 
+    }
 ```
 
 ## Add a filter to process records when they are extracted from the database
