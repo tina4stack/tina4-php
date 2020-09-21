@@ -121,9 +121,9 @@ class Routing
         } else {
             //Check the template locations
             foreach (TINA4_TEMPLATE_LOCATIONS_INTERNAL as $tid => $templateLocation) {
-                DebugLog::message($root . "/" . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
-                if (file_exists($root . "/" . $templateLocation . $urlToParse) && !is_dir($root . "/" . $templateLocation . $urlToParse)) {
-                    $this->returnStatic($root . "/" . $templateLocation . "/" . $urlToParse);
+                DebugLog::message($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
+                if (file_exists($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
+                    $this->returnStatic($root . DIRECTORY_SEPARATOR . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);
                 }
             }
         }

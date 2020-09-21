@@ -43,8 +43,8 @@ class ParseTemplate
         if (TINA4_DEBUG) {
             DebugLog::message("TINA4 Filename: " . $fileName, TINA4_DEBUG_LEVEL);
         }
-        if (defined("TINA4_TEMPLATE_LOCATIONS")) {
-            $this->locations = TINA4_TEMPLATE_LOCATIONS;
+        if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
+            $this->locations = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
         }
         //set the working folder for the site
         $this->root = $root;
@@ -73,20 +73,19 @@ class ParseTemplate
 
         if (empty($ext)) {
             $possibleFiles = [$fileName . ".html", $fileName . ".twig", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
+            $possibleFiles = array_unique($possibleFiles);
         } else {
             $possibleFiles = [$fileName];
 
         }
 
         $realFileName = $fileName;
-        foreach ($this->locations as $lid => $location) {
-            foreach ($possibleFiles as $id => $fileName) {
-                $testFile = $this->root . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $fileName;
-                $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
-                if (file_exists($testFile)) {
-                    $realFileName = $testFile;
-                    break;
-                }
+        foreach ($this->locations as $lid => $location) foreach ($possibleFiles as $id => $fileName) {
+            $testFile = $this->root . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $fileName;
+            $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
+            if (file_exists($testFile)) {
+                $realFileName = $testFile;
+                break;
             }
         }
 
