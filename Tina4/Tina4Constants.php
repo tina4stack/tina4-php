@@ -1,6 +1,7 @@
 <?php
 
 use Tina4\HTMLElement;
+use Tina4\Module;
 
 if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
 //CSFR
@@ -62,6 +63,14 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
  */
 function tina4_autoloader($class)
 {
+    if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
+        if (defined("TINA4_INCLUDE_LOCATIONS")) {
+            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
+        } else {
+            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+        }
+    }
+
     $root = __DIR__;
 
     $class = explode("\\", $class);
