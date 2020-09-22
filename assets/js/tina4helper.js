@@ -14,8 +14,14 @@ function getFormData(formName) {
                 } else {
                     data.append(element.name, 0)
                 }
-                ;
-            } else {
+            } else if (element.type == 'radio') {
+                if (element.checked) {
+                    data.append(element.name, element.value)
+                } else {
+                    data.append(element.name, 0)
+                }
+            }
+              else {
                 data.append(element.name, element.value);
             }
         }
