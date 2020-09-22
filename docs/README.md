@@ -5,10 +5,9 @@
 // Copyright (C)
 // Contact : andre@codeinfinity.co.za
 -->
-
+## Tina4 - This is Not Another Framework ##
 # Getting Started
-## What's Tina about?
-
+Tina4 is a light weight routing and templating system which allows you to write websites and API applications very quickly.
 This is not another framework. Keep things simple and efficient. Tina4 is perfect if you want to build a website, create APIs or if you want to learn a structured PHP framework.
 
 ## How Tina can help you about?
