@@ -3,6 +3,7 @@
 /**
  * @tags examples
  * @description Test
+ *
  */
 \Tina4\Get::add("/auth/example", function (\Tina4\Response $response) {
     $html = \Tina4\renderTemplate("example.twig", ["publicKey" => str_replace("\r", "", str_replace("\n", "", file_get_contents("./secrets/public.pub")))]);
