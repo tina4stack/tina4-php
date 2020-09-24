@@ -81,7 +81,7 @@ class DataRecord implements JsonSerializable
         $object = (object)[];
         foreach ($this->original as $column => $value) {
             $columnName = $this->getObjectName($column);
-            //$object->{$column} = $value; to be added in
+            $object->{$column} = $value; // to be added in
             $object->{$columnName} = $value;
         }
 
@@ -107,7 +107,7 @@ class DataRecord implements JsonSerializable
             $fieldName = "";
             if (strpos($name, "_") !== false) {
                 $name = strtolower($name);
-                for ($i = 0; $i < strlen($name); $i++) {
+                for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
                     if ($name[$i] === "_") {
                         $i++;
                         $fieldName .= strtoupper($name[$i]);
@@ -120,7 +120,7 @@ class DataRecord implements JsonSerializable
                 if (strtoupper($name) === $name || strtolower($name) === $name) {
                     return strtolower($name);
                 }
-                for ($i = 0; $i < strlen($name); $i++) {
+                for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
                     if ($name[$i] !== strtolower($name[$i])) {
                         $fieldName .= "_" . strtolower($name[$i]);
                     } else {

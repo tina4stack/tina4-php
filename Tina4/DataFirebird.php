@@ -53,7 +53,7 @@ class DataFirebird implements DataBase
         if (stripos($params[0], "returning") !== false) {
             return $this->fetch($params[0]);
         } else {
-            if (!empty($tranID)) {
+            if (!empty($tranId)) {
                 $preparedQuery = ibase_prepare($this->dbh, $tranId, $params[0]);
             } else {
                 $preparedQuery = ibase_prepare($this->dbh, $params[0]);
@@ -61,8 +61,6 @@ class DataFirebird implements DataBase
 
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-
-
                 call_user_func_array("ibase_execute", $params);
             }
 
@@ -200,7 +198,8 @@ class DataFirebird implements DataBase
      */
     public function startTransaction()
     {
-        return ibase_trans(IBASE_COMMITTED, $this->dbh);
+        
+        return ibase_trans(IBASE_COMMITTED + IBASE_NOWAIT, $this->dbh);
     }
 
     /**
@@ -219,11 +218,11 @@ class DataFirebird implements DataBase
 
     /**
      * Get the last id
-     * @return integer
+     * @return int
      */
-    public function getLastId() : integer
+    public function getLastId()
     {
-        return -1;
+        return null;
     }
 
     /**

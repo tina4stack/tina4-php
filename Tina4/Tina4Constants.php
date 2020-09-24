@@ -1,6 +1,7 @@
 <?php
 
 use Tina4\HTMLElement;
+use Tina4\Module;
 
 if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
 //CSFR
@@ -56,15 +57,21 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 //Initialize the ENV
 (new \Tina4\Env());
 
-
-
 /**
  * Autoloader
  * @param $class
  */
 function tina4_autoloader($class)
 {
-    $root = dirname(__FILE__);
+    if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
+        if (defined("TINA4_INCLUDE_LOCATIONS")) {
+            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
+        } else {
+            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+        }
+    }
+
+    $root = __DIR__;
 
     $class = explode("\\", $class);
     $class = $class[count($class) - 1];
@@ -73,17 +80,18 @@ function tina4_autoloader($class)
 
     if (file_exists($fileName)) {
         require_once $fileName;
-    } else {
-        if (defined("TINA4_INCLUDE_LOCATIONS") && is_array(TINA4_INCLUDE_LOCATIONS)) {
-            foreach (TINA4_INCLUDE_LOCATIONS as $lid => $location) {
-                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
-                    break;
-                }
+    } else if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
+        foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $lid => $location) {
+            if (file_exists($location.DIRECTORY_SEPARATOR."{$class}.php")) {
+                require_once $location.DIRECTORY_SEPARATOR."{$class}.php";
+                break;
+            } else
+            if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                break;
             }
         }
     }
-
 }
 
 spl_autoload_register('tina4_autoloader');
@@ -104,7 +112,7 @@ function runTina4($config = null)
     try {
         echo new Tina4Php($config);
     } catch(\Exception $exception) {
-        die("Ooops ".$exception->getMessage());
+        die("Tina4 caused an exception ".$exception->getMessage());
     }
     return true;
 }

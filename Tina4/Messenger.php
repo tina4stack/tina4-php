@@ -104,7 +104,7 @@ class Messenger
                         $phpMailer->Username = $this->settings->smtpUsername;                     // SMTP username
                         $phpMailer->Password = $this->settings->smtpPassword;                               // SMTP password
                         $phpMailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
-                        $phpMailer->Port = 25;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
+                        $phpMailer->Port = $this->settings->smtpPort;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
                         $phpMailer->SMTPOptions = [
                             'ssl' => [
                                 'verify_peer' => false,

@@ -11,4 +11,5 @@ class ORMExample extends \Tina4\ORM //orm_example
      * @var varchar (200)
      */
     public $sessionName; //session_name
+
 }

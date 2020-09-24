@@ -27,8 +27,9 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
     public function testFirebirdCreateTable()
     {
         //create a table
-        $result = $this->DBA->exec("create table test (the_key integer not null, first_name varchar(100), surname varchar(100), current_age integer, current_salary numeric (10,2), birth_date date, the_time time, primary key(the_key))");
-        $result = $this->DBA->exec ("CREATE GENERATOR GEN_TEST_ID");
+        $this->DBA->exec("create table test (the_key integer not null, first_name varchar(100), surname varchar(100), current_age integer, current_salary numeric (10,2), birth_date date, the_time time, primary key(the_key))");
+        $this->DBA->exec ("DROP GENERATOR GEN_TEST_ID");
+        $this->DBA->exec ("CREATE GENERATOR GEN_TEST_ID");
         $result = $this->DBA->exec ("CREATE TRIGGER TEST_BI FOR TEST
                                         ACTIVE BEFORE INSERT POSITION 0
                                         AS
@@ -58,7 +59,7 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
     }
 
     public function testFirebirdFetch () {
-        $result = $this->DBA->fetch("select * from test");
+        $this->DBA->fetch("select * from test");
 
         $result = $this->DBA->fetch("select * from test")->asArray();
 
@@ -123,21 +124,35 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
 
     public function testTransaction()
     {
-        $tranId = $this->DBA->startTransaction();
-        $this->DBA->exec ("delete from test", $tranId);
-        $this->DBA->rollback();
-
         $count = $this->DBA->fetch("select count(*) from test")->asArray();
 
-        $this->assertEquals($count[0]["count"], 3);
+
+
 
         $tranId = $this->DBA->startTransaction();
         $this->DBA->exec ("delete from test", $tranId);
+        $this->DBA->rollback($tranId);
+
+
+
+        $count2 = $this->DBA->fetch("select count(*) from test")->asArray();
+
+
+        $this->assertEquals($count2[0]["count"], 3);
+
         $this->DBA->commit();
+
+        $tranId = $this->DBA->startTransaction();
+
+
+        $this->DBA->exec ("delete from test", $tranId);
+        $this->DBA->commit($tranId);
 
         $count = $this->DBA->fetch("select count(*) from test")->asArray();
 
         $this->assertEquals($count[0]["count"], 0);
+
+        $this->DBA->commit();
 
 
     }

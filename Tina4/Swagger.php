@@ -37,6 +37,7 @@ class Swagger implements \JsonSerializable
 
 
             $addParams = [];
+            $security = [];
             $example = (object)[];
             foreach ($annotations[0] as $aid => $annotation) {
                 preg_match_all('/^(@[a-zA-Z]*)([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
@@ -74,7 +75,7 @@ class Swagger implements \JsonSerializable
 
                                     } else
                                         if ($matches[1] === "@secure") {
-                                            $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
+                                            $security[] = (object)["bearerAuth" => []];
                                         }
 
                 }
@@ -121,6 +122,7 @@ class Swagger implements \JsonSerializable
                             "description" => $description,
                             "produces" => ["application/json", "html/text"],
                             "parameters" => $params,
+                            "security" => $security,
                             "responses" => (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
@@ -134,6 +136,7 @@ class Swagger implements \JsonSerializable
                             "description" => $description,
                             "produces" => ["application/json", "html/text"],
                             "parameters" => $params,
+                            "security" => $security,
                             "responses" => (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
@@ -148,6 +151,7 @@ class Swagger implements \JsonSerializable
                             "consumes" => "application/json",
                             "produces" => ["application/json", "html/text"],
                             "parameters" => array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]),
+                            "security" => $security,
                             "responses" => (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
@@ -162,6 +166,7 @@ class Swagger implements \JsonSerializable
                             "consumes" => "application/json",
                             "produces" => ["application/json", "html/text"],
                             "parameters" => array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]),
+                            "security" => $security,
                             "responses" => (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
@@ -184,6 +189,7 @@ class Swagger implements \JsonSerializable
                             "description" => $description,
                             "produces" => ["application/json", "html/text"],
                             "parameters" => $params,
+                            "security" => $security,
                             "responses" => (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
@@ -197,6 +203,7 @@ class Swagger implements \JsonSerializable
                                 "description" => $description,
                                 "produces" => ["application/json", "html/text"],
                                 "parameters" => $params,
+                                "security" => $security,
                                 "responses" => (object)[
                                     "200" => (object)["description" => "Success"],
                                     "400" => (object)["description" => "Failed"]
@@ -219,7 +226,7 @@ class Swagger implements \JsonSerializable
                 "description" => $description,
                 "version" => $version
             ],
-            "security" => ["ApiKeyAuth" => "", "Oauth2" => ["read", "write"]],
+            "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],
             "basePath" => '/',
             "paths" => $paths
 
