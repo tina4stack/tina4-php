@@ -260,7 +260,7 @@ class Tina4Php
 
         global $cache;
         //On a rerun need to check if we have already instantiated the cache
-        if (!empty($cache)) {
+        if (empty($cache)) {
             //Setup caching options
             $TINA4_CACHE_CONFIG =
                 new ConfigurationOption([
