@@ -7,8 +7,8 @@
 <script>let publicKey = '{{ publicKey }}';</script>
 {% endblock %}
 {% block content %}
-
-<textarea id="key"></textarea>
+    {{ formToken }}
+<textarea id="key">{{ formToken }}</textarea>
 <button onclick="validateKey()">Validate</button>
 <script>
 
@@ -25,5 +25,7 @@
 
     getKey();
 </script>
+
+
 
 {% endblock %}

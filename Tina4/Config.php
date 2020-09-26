@@ -13,7 +13,7 @@ class Config
      * @param $filterName string Name of the filter
      * @param $function null Anonymous function which takes parameters based on the name of the twig filter
      */
-    function addTwigFilter($filterName, $function)
+    public function addTwigFilter($filterName, $function)
     {
         $this->twigFilters[$filterName] = $function;
     }
@@ -22,7 +22,7 @@ class Config
      * Sets an auth parameter
      * @param $auth Auth
      */
-    function setAuth(Auth $auth)
+    public function setAuth(Auth $auth)
     {
         $this->authMechanism = $auth;
     }
@@ -31,7 +31,7 @@ class Config
      * Sets an auth parameter - alias of setAuth
      * @param $auth Auth
      */
-    function setAuthentication(Auth $auth)
+    public function setAuthentication(Auth $auth)
     {
         $this->authMechanism = $auth;
     }
@@ -40,7 +40,7 @@ class Config
      * Gets all the twig filters
      * @return array
      */
-    function getTwigFilters()
+    public function getTwigFilters()
     {
         return $this->twigFilters;
     }
@@ -49,7 +49,7 @@ class Config
      * Gets the auth variable
      * @return false|null
      */
-    function getAuthentication()
+    public function getAuthentication()
     {
         if (!empty($this->authMechanism)) {
             return $this->authMechanism;

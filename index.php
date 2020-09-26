@@ -28,18 +28,14 @@ global $DBA;
 $config = new \Tina4\Config();
 
 //Uncomment if you want to play with auth
-//$config->setAuth((new MyAuth()));
+$config->setAuth((new MyAuth()));
 
-/*$auth = new \Tina4\Auth();
-$token = $auth->getToken(["name" => "Test Name"]);
-if ($auth->validToken($token)) {
-    print_r ($auth->getPayLoad($token));
-}*/
 //$config->addFilter("myFilter", function ($name) {
 //    return str_shuffle($name);
 //});
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
+
 
 echo new \Tina4\Tina4Php($config);
 //WARNING NO CODE BELOW LINE 45 WILL BE RUN

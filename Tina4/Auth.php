@@ -45,6 +45,8 @@ class Auth extends Data
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         }
+
+        $this->getToken("default");
     }
 
     /**
@@ -199,7 +201,7 @@ class Auth extends Data
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 
-        $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
+        $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
         $tokenString = $tokenEncoded->__toString();
         $_SESSION["tina4:authToken"] = $tokenString;
         session_write_close();
@@ -213,7 +215,7 @@ class Auth extends Data
      * @param string $encryption
      * @return array|false
      */
-    function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         DebugLog::message("Getting token payload");
 
