@@ -17,6 +17,7 @@ use Exception;
  */
 class ORM implements \JsonSerializable
 {
+    use Utility;
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
      */
@@ -88,7 +89,7 @@ class ORM implements \JsonSerializable
      * @throws Exception Error on failure
      * @example examples/exampleORMObject.php Create class object extending ORM
      */
-    function __construct($request = null, $fromDB = false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
+    public function __construct($request = null, $fromDB = false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
         $this->create($request, $fromDB, $tableName, $fieldMapping, $primaryKey, $tableFilter, $DBA);
     }
@@ -104,7 +105,7 @@ class ORM implements \JsonSerializable
      * @param null $DBA
      * @throws Exception
      */
-    function create($request = null, $fromDB = false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
+    public function create($request = null, $fromDB = false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
         if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
             throw new Exception("Input is not an array or object");
@@ -167,7 +168,7 @@ class ORM implements \JsonSerializable
      * @param boolean $camelCase Return the name as camel case
      * @return string Proper object name
      */
-    function getObjectName($name, $camelCase = false)
+    public function getObjectName($name, $camelCase = false)
     {
         if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
             $fieldMap = array_change_key_case(array_flip($this->fieldMapping), CASE_LOWER);
@@ -197,11 +198,11 @@ class ORM implements \JsonSerializable
      * @param $name
      * @return string
      */
-    function camelCase($name)
+    public function camelCase($name)
     {
         $fieldName = "";
         $name = strtolower($name);
-        for ($i = 0; $i < strlen($name); $i++) {
+        for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
             if ($name[$i] === "_") {
                 $i++;
                 $fieldName .= strtoupper($name[$i]);
@@ -218,7 +219,7 @@ class ORM implements \JsonSerializable
      * @param $fileInputName
      * @return bool
      */
-    function saveFile($fieldName, $fileInputName)
+    public function saveFile($fieldName, $fileInputName)
     {
         $tableName = $this->getTableName();
         $tableData = $this->getTableData();
@@ -240,7 +241,7 @@ class ORM implements \JsonSerializable
      * @param string $tableName The class name
      * @return string|null Returns the name of the table or null if it does not fit the if statements criteria
      */
-    function getTableName($tableName = "")
+    public function getTableName($tableName = "")
     {
         if (empty($tableName) && empty($this->tableName)) {
             $className = explode("\\", get_class($this));
@@ -263,13 +264,13 @@ class ORM implements \JsonSerializable
      * @param bool $ignoreMapping Ignore the field mapping
      * @return string Required field name from database
      */
-    function getFieldName($name, $fieldMapping = [], $ignoreMapping = false)
+    public function getFieldName($name, $fieldMapping = [], $ignoreMapping = false)
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
             return strtolower($fieldMapping[$name]);
         } else {
             $fieldName = "";
-            for ($i = 0; $i < strlen($name); $i++) {
+            for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
                 if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name) - 1 && (!\ctype_upper($name[$i - 1]) || !\ctype_upper($name[$i + 1]))) {
                     $fieldName .= "_" . $name[$i];
                 } else {
@@ -287,7 +288,7 @@ class ORM implements \JsonSerializable
      * @param boolean $fromDB flags it so the result is ready to go back to the database
      * @return array Contains all table data
      */
-    function getTableData($fieldMapping = [], $fromDB = false)
+    public function getTableData($fieldMapping = [], $fromDB = false)
     {
         $tableData = [];
         if (!empty($this->fieldMapping) && empty($fieldMapping) && $fromDB) {
@@ -317,7 +318,7 @@ class ORM implements \JsonSerializable
      * @param array $tableData Array of table data
      * @return string e.g. "id = ''"
      */
-    function getPrimaryCheck($tableData)
+    public function getPrimaryCheck($tableData)
     {
         $primaryFields = explode(",", $this->primaryKey);
         $primaryFieldFilter = [];
@@ -344,7 +345,7 @@ class ORM implements \JsonSerializable
      * @param $content
      * @return bool
      */
-    function saveBlob($fieldName, $content)
+    public function saveBlob($fieldName, $content)
     {
         $tableName = $this->getTableName();
         $tableData = $this->getTableData();
@@ -370,7 +371,7 @@ class ORM implements \JsonSerializable
      * @example examples\exampleORMGenerateUpdateSQL.php For update of database row
      * @example examples\exampleORMCreateTriggerUsingGenerateUpdateSQL.php For creating an external database trigger
      */
-    function save($tableName = "", $fieldMapping = [])
+    public function save($tableName = "", $fieldMapping = [])
     {
         if (!empty($fieldMapping) && empty($this->fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
@@ -451,8 +452,9 @@ class ORM implements \JsonSerializable
      * If the object is not empty $DBA is instantiated
      * @param string $tableName
      * @return bool
+     * @throws \ReflectionException
      */
-    function checkDBConnection($tableName = "")
+    public function checkDBConnection($tableName = "")
     {
         if (empty($this->DBA)) {
             global $DBA;
@@ -487,7 +489,7 @@ class ORM implements \JsonSerializable
      * @return string
      * @throws \ReflectionException
      */
-    function generateCreateSQL($tableData, $tableName = "")
+    public function generateCreateSQL($tableData, $tableName = "")
     {
         $className = get_class($this);
         $tableName = $this->getTableName($tableName);
@@ -525,7 +527,7 @@ class ORM implements \JsonSerializable
      * @return string Generated insert query
      * @throws Exception Error on failure
      */
-    function generateInsertSQL($tableData, $tableName = "")
+    public function generateInsertSQL($tableData, $tableName = "")
     {
         $tableName = $this->getTableName($tableName);
         $insertColumns = [];
@@ -540,21 +542,35 @@ class ORM implements \JsonSerializable
 
         $keyInFieldList = false;
         foreach ($tableData as $fieldName => $fieldValue) {
-            if (empty($fieldValue) && $fieldValue !== 0) continue;
-            if ($fieldName == "form_token") continue; //form token is reserved
-            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields) || in_array($fieldName, $this->excludeFields)) continue;
+            if (empty($fieldValue) && $fieldValue !== 0) {
+                continue;
+            }
+            if ($fieldName === "form_token") {
+                continue;
+            } //form token is reserved
+            if (in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+                continue;
+            }
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
                 $keyInFieldList = true;
             }
 
-            if (is_null($fieldValue)) $fieldValue = "null";
+            if (is_null($fieldValue)) {
+                $fieldValue = "null";
+            }
 
-            if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
+            if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
                 $insertValues[] = $fieldValue;
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
+
+
+                if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
+                    $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
+                }
+
                 $insertValues[] = "'{$fieldValue}'";
             }
         }
@@ -599,7 +615,7 @@ class ORM implements \JsonSerializable
      * @param string $tableName Name of the table
      * @return string Generated update query
      */
-    function generateUpdateSQL($tableData, $filter, $tableName = "")
+    public function generateUpdateSQL($tableData, $filter, $tableName = "")
     {
 
         $tableName = $this->getTableName($tableName);
@@ -612,14 +628,25 @@ class ORM implements \JsonSerializable
 
 
         foreach ($tableData as $fieldName => $fieldValue) {
-            if ($fieldName == "form_token") continue; //form token is reserved
-            if (in_array($fieldName, $this->virtualFields) || in_array($fieldName, $this->readOnlyFields) || in_array($fieldName, $this->excludeFields)) continue;
+            if ($fieldName == "form_token") {
+                continue;
+            } //form token is reserved
+            if (in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+                continue;
+            }
 
-            if (is_null($fieldValue)) $fieldValue = "null";
-            if ($fieldValue === "null" || is_numeric($fieldValue) && !gettype($fieldValue) === "string") {
+            if (is_null($fieldValue)) {
+                $fieldValue = "null";
+            }
+            if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
                 $updateValues[] = "{$fieldName} = {$fieldValue}";
             } else {
                 $fieldValue = str_replace("'", "''", $fieldValue);
+
+                if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
+                    $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
+                }
+
                 $updateValues[] = "{$fieldName} = '{$fieldValue}'";
             }
         }

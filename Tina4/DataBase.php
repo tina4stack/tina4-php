@@ -21,7 +21,7 @@ interface DataBase
      * @param string $password
      * @param string $dateFormat
      */
-    public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd");
+    public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d");
 
     /**
      * Close the database connection
@@ -91,4 +91,16 @@ interface DataBase
      * @return mixed
      */
     public function getDatabase();
+
+    /**
+     * Returns default date format
+     * @return mixed
+     */
+    public function getDefaultDatabaseDateFormat();
+
+    /**
+     * Returns the default database port
+     * @return mixed
+     */
+    public function getDefaultDatabasePort();
 }

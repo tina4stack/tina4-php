@@ -17,11 +17,6 @@ class DataMySQL implements DataBase
     use DataBaseCore;
 
     /**
-     * @var integer Port number used by MySQL
-     */
-    public $port = 3306;
-
-    /**
      * Opens database connection
      * @return bool|void
      * @throws \Exception
@@ -128,7 +123,7 @@ class DataMySQL implements DataBase
                 while ($record = mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
-                        $records[] = (new DataRecord($record, $fieldMapping));
+                        $records[] = (new DataRecord($record, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
                     }
                 }
 
@@ -197,13 +192,14 @@ class DataMySQL implements DataBase
      * @param $arr
      * @return array
      */
-    function refValues($arr)
+    public function refValues($arr)
     {
         if (strnatcmp(phpversion(), '5.3') >= 0) //Reference is required for PHP 5.3+
         {
             $refs = array();
-            foreach ($arr as $key => $value)
+            foreach ($arr as $key => $value) {
                 $refs[$key] = &$arr[$key];
+            }
             return $refs;
         }
         return $arr;
@@ -312,4 +308,13 @@ class DataMySQL implements DataBase
         return $database;
     }
 
+    public function getDefaultDatabaseDateFormat()
+    {
+       return "Y-m-d";
+    }
+
+    public function getDefaultDatabasePort()
+    {
+        return 3306;
+    }
 }

@@ -12,8 +12,6 @@ class DataFirebird implements DataBase
 {
     use DataBaseCore;
 
-    public $port = 3050;
-
     /**
      * Open a Firebird database connection
      * @param bool $persistent
@@ -24,6 +22,10 @@ class DataFirebird implements DataBase
         if (!function_exists("ibase_pconnect")) {
             throw new \Exception("Firebird extension for PHP needs to be installed");
         }
+
+        //Set the returning format to something we can expect to transform
+        ini_set( "ibase.dateformat", str_replace("Y", "%Y",  str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat() ) ) ) );
+        ini_set( "ibase.timestampformat", str_replace("Y", "%Y",  str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat() ) ) ) . " %H:%M:%S" );
 
         if ($persistent) {
             $this->dbh = ibase_pconnect($this->hostName . "/" . $this->port . ":" . $this->databaseName, $this->username, $this->password);
@@ -106,7 +108,7 @@ class DataFirebird implements DataBase
                     $record[$key] = $content;
                 }
             }
-            $records[] = (new DataRecord($record, $fieldMapping));
+            $records[] = (new DataRecord($record, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
         }
 
         if (is_array($records) && count($records) > 1) {
@@ -331,4 +333,13 @@ class DataFirebird implements DataBase
         return $database;
     }
 
+    public function getDefaultDatabaseDateFormat()
+    {
+        return "m/d/Y";
+    }
+
+    public function getDefaultDatabasePort()
+    {
+        return 3050;
+    }
 }

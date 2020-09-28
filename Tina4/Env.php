@@ -49,7 +49,7 @@ class Env
                 if (empty($line)) {
                     //Ignore blanks
                 } else
-                    if ($line[0] == "[" && $line[strlen($line) - 1] == "]" || $line[0] == "#") {
+                    if (($line[0] == "[" && $line[strlen($line) - 1] == "]") || ($line[0] == "#")) {
                         //Ignore [Sections] && Comments #
                     } else {
                         $variables = explode("=", $line, 2);
@@ -60,7 +60,12 @@ class Env
                                 if (defined($variables[1])) {
                                     define(trim($variables[0]), eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
                                 } else {
-                                    define(trim($variables[0]), $variables[1]);
+                                    if (strpos($variables[1], '"') !== false || strpos($variables[1], '[') !== false ) {
+                                        $variable = eval('return ' . $variables[1] . ';');
+                                    } else {
+                                        $variable = $variables[1];
+                                    }
+                                    define(trim($variables[0]), $variable);
                                 }
                             }
                         }
