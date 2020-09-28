@@ -28,20 +28,24 @@ trait Utility
      * @return string
      */
     public function formatDate($dateString, $databaseFormat, $outputFormat) {
-        if (substr($dateString,-1,1) == "Z") {
-            $delimiter="T";
-            $dateParts = explode($delimiter, $dateString);
-            $d = \DateTime::createFromFormat($databaseFormat,  $dateParts[0]);
-            return $d->format($outputFormat).$delimiter.$dateParts[1];
-        } else {
-            $databaseFormat .= " H:i:s";
-            if (strpos($outputFormat, "T")) {
-                $outputFormat .= "H:i:s";
+        if (!empty($dateString)) {
+            if (substr($dateString, -1, 1) == "Z") {
+                $delimiter = "T";
+                $dateParts = explode($delimiter, $dateString);
+                $d = \DateTime::createFromFormat($databaseFormat, $dateParts[0]);
+                return $d->format($outputFormat) . $delimiter . $dateParts[1];
             } else {
-                $outputFormat .= " H:i:s";
+                $databaseFormat .= " H:i:s";
+                if (strpos($outputFormat, "T")) {
+                    $outputFormat .= "H:i:s";
+                } else {
+                    $outputFormat .= " H:i:s";
+                }
+                $d = \DateTime::createFromFormat($databaseFormat, $dateString);
+                return $d->format($outputFormat);
             }
-            $d = \DateTime::createFromFormat($databaseFormat,  $dateString);
-            return $d->format($outputFormat);
+        } else {
+            return null;
         }
     }
 }
