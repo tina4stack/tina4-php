@@ -30,14 +30,17 @@ trait Utility
     public function formatDate($dateString, $databaseFormat, $outputFormat) {
         if (substr($dateString,-1,1) == "Z") {
             $delimiter="T";
-        } else {
-            $delimiter=" ";
-        }
-        $dateParts = explode ($delimiter, $dateString);
-        $d = \DateTime::createFromFormat($databaseFormat,  $dateParts[0]);
-        if (count($dateParts) > 1) {
+            $dateParts = explode($delimiter, $dateString);
+            $d = \DateTime::createFromFormat($databaseFormat,  $dateParts[0]);
             return $d->format($outputFormat).$delimiter.$dateParts[1];
         } else {
+            $databaseFormat .= " H:i:s";
+            if (strpos($outputFormat, "T")) {
+                $outputFormat .= "H:i:s";
+            } else {
+                $outputFormat .= " H:i:s";
+            }
+            $d = \DateTime::createFromFormat($databaseFormat,  $dateString);
             return $d->format($outputFormat);
         }
     }

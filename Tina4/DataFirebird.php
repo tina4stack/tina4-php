@@ -11,6 +11,7 @@ namespace Tina4;
 class DataFirebird implements DataBase
 {
     use DataBaseCore;
+    use Utility;
 
     /**
      * Open a Firebird database connection

@@ -11,6 +11,7 @@ namespace Tina4;
 class DataSQLite3 implements DataBase
 {
     use DataBaseCore;
+    use Utility;
 
     /**
      * Open an SQLite3 connection

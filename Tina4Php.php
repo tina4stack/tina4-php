@@ -339,6 +339,16 @@ class Tina4Php
                     return "";
                 }
             });
+            $twig->addFilter($filter);
+
+            $filter = new \Twig\TwigFilter("dateValue", function($dateString) {
+                global $DBA;
+                if (!empty($DBA)) {
+                    return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d\T");
+                } else {
+                    return $dateString."LLL";
+                }
+            });
 
             $twig->addFilter($filter);
         }

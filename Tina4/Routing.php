@@ -185,9 +185,7 @@ class Routing
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $params);
                     } else
-                        if ($this->auth->tokenExists()) { //Tries to get a token from the session
-                            $result = call_user_func_array($route["function"], $params);
-                        } else {
+                        {
                             $this->forbidden();
                         }
 

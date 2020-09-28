@@ -15,6 +15,7 @@ namespace Tina4;
 class DataMySQL implements DataBase
 {
     use DataBaseCore;
+    use Utility;
 
     /**
      * Opens database connection
