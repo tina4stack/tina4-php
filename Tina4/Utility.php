@@ -33,7 +33,11 @@ trait Utility
                 $delimiter = "T";
                 $dateParts = explode($delimiter, $dateString);
                 $d = \DateTime::createFromFormat($databaseFormat, $dateParts[0]);
-                return $d->format($outputFormat) . $delimiter . $dateParts[1];
+                if ($d) {
+                    return $d->format($outputFormat) . $delimiter . $dateParts[1];
+                } else {
+                    return null;
+                }
             } else {
                 $databaseFormat .= " H:i:s";
                 if (strpos($outputFormat, "T")) {
@@ -42,7 +46,11 @@ trait Utility
                     $outputFormat .= " H:i:s";
                 }
                 $d = \DateTime::createFromFormat($databaseFormat, $dateString);
-                return $d->format($outputFormat);
+                if ($d) {
+                    return $d->format($outputFormat);
+                } else {
+                    return null;
+                }
             }
         } else {
             return null;
