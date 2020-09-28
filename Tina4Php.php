@@ -344,9 +344,13 @@ class Tina4Php
             $filter = new \Twig\TwigFilter("dateValue", function($dateString) {
                 global $DBA;
                 if (!empty($DBA)) {
-                    return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d\T");
+                    if (substr($dateString,-1,1) == "Z") {
+                        return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"),0, -1);
+                    } else {
+                        return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d\T");
+                    }
                 } else {
-                    return $dateString."LLL";
+                    return $dateString;
                 }
             });
 
@@ -448,7 +452,7 @@ class Tina4Php
         //str_replace($documentRoot, "", $scriptName);
         $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
 
-        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
             $subFolder = null;
 
         }
