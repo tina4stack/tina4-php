@@ -34,9 +34,9 @@ For MySQL database type:
 global $DBA;
 
 //MySQL
-$DBA = new \Tina4\DataMySQL("localhost:database", "admin", "cool1234");
+$DBA = new \Tina4\DataMySQL("localhost:somedatabase", DB_USERNAME, DB_PASSWORD, "d/m/Y");
 
-echo new \Tina4\Tina4Php();
+
 
 ```
 For Firebird database type:
@@ -333,4 +333,12 @@ Somewhere in Twig, in a template, far far away ...
 <label>{{ "NAME" | myFilter  }}</label>
 ```
   
+## Add localized date format
 
+If you want Tina to get the Users time and date information correct this is how
+
+### Example
+```php
+<label for="startDate">Start Date</label>
+<input class="form-control" type="datetime-local" name="startDate" placeholder="Start Date" value="{{ data.startDate | dateValue}}">
+```
