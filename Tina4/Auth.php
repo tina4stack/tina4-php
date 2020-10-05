@@ -38,6 +38,11 @@ class Auth extends Data
 
         $this->documentRoot = $documentRoot;
 
+        //Check security
+        if (!file_exists($this->documentRoot . "secrets")) {
+            $this->generateSecureKeys();
+        }
+
         //Load secrets
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");

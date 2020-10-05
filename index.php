@@ -23,7 +23,7 @@ global $DBA;
 //$DBA = (new \Tina4\DataFirebird(FIREBIRD_DATABASE,FIREBIRD_USERNAME,FIREBIRD_PASSWORD));
 //$DBA =  new \Tina4\DataSQLite3("auth.db");
 //For mysql - docker-compose up in the relevant docker folder before running
-//$DBA = new \Tina4\DataMySQL("127.0.0.1/5508:tina4", "tina4", "Password1234");
+//$DBA = new \Tina4\DataMySQL("127.0.0.1/5508:tina4", "tina4", "Password1234", "d/m/Y");
 
 $config = new \Tina4\Config();
 

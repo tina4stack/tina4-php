@@ -12,4 +12,5 @@ class ORMExample extends \Tina4\ORM //orm_example
      */
     public $sessionName; //session_name
 
+    public $helloWorld;
 }
