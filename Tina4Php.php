@@ -545,17 +545,17 @@ function renderTemplate($fileNameString, $data = [])
             } else
                 if (is_file($fileNameString)) {
                     $renderFile = basename($fileNameString);
-                    $twigLoader = new \Twig\Loader\FilesystemLoader();
                     $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-                    $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . $newPath);
-                    $internalTwig->setLoader($twigLoader);
-                    $internalTwig->addGlobal('Tina4', new \Tina4\Caller());
-                    $internalTwig->addGlobal('baseUrl', substr(str_replace(realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR), 0, -1));
-                    $fileName = basename($renderFile);
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . $newPath);
                     return $internalTwig->render($renderFile, $data);
                 } else {
-                    $internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
-                    return $internalTwig->render("template" . md5($fileNameString), $data);
+                    if (!is_file($fileNameString)) {
+                        $fileName = ".".DIRECTORY_SEPARATOR."cache".DIRECTORY_SEPARATOR."template" . md5($fileNameString).".twig";
+                        file_put_contents($fileName, $fileNameString);
+                    }
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] ."cache");
+                    //$internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
+                    return $internalTwig->render("template" . md5($fileNameString).".twig", $data);
                 }
     } catch (\Exception $exception) {
         return $exception->getMessage();
