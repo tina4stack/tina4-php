@@ -37,5 +37,6 @@ $config->setAuth((new MyAuth()));
 //define("TINA4_APP", "/templates/index.html");
 
 
+
 echo new \Tina4\Tina4Php($config);
 //WARNING NO CODE BELOW LINE 45 WILL BE RUN

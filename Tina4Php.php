@@ -322,6 +322,11 @@ class Tina4Php
                 $twig->addGlobal('request', $_REQUEST);
             }
 
+            if (!empty($config) && !empty($config->getTwigGlobals())) {
+                foreach ($config->getTwigGlobals() as $name => $method) {
+                    $twig->addGlobal($name, $method);
+                }
+            }
 
             if (!empty($config) && !empty($config->getTwigFilters())) {
 

@@ -5,8 +5,8 @@ namespace Tina4;
 class Config
 {
     private $twigFilters = [];
+    private $twigGlobals = [];
     private $authMechanism = null;
-
 
     /**
      * Adds a twig filter for use in your templates
@@ -17,6 +17,17 @@ class Config
     {
         $this->twigFilters[$filterName] = $function;
     }
+
+    /**
+     * Adds a twig global function
+     * @param $globalName
+     * @param $function
+     */
+    public function addTwigGlobal($globalName, $function)
+    {
+        $this->twigGlobals[$globalName] = $function;
+    }
+
 
     /**
      * Sets an auth parameter
@@ -43,6 +54,15 @@ class Config
     public function getTwigFilters()
     {
         return $this->twigFilters;
+    }
+
+    /**
+     * Gets all the twig globals
+     * @return array
+     */
+    public function getTwigGlobals()
+    {
+        return $this->twigGlobals;
     }
 
     /**

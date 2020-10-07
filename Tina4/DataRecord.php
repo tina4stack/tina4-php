@@ -43,13 +43,19 @@ class DataRecord implements JsonSerializable
                 }
 
                 if ($this->isDate($value, $databaseFormat)) {
+
+
                     $value = $this->formatDate($value, $databaseFormat, $outputFormat);
+
+
                     $this->original->{$column} = $value;
                 }
                 
                 
                 $this->{$column} = $value;
             }
+
+
         }
     }
 

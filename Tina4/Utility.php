@@ -39,11 +39,13 @@ trait Utility
                     return null;
                 }
             } else {
-                $databaseFormat .= " H:i:s";
-                if (strpos($outputFormat, "T")) {
-                    $outputFormat .= "H:i:s";
-                } else {
-                    $outputFormat .= " H:i:s";
+                if (strpos($dateString,":") !== false) {
+                    $databaseFormat .= " H:i:s";
+                    if (strpos($outputFormat, "T")) {
+                        $outputFormat .= "H:i:s";
+                    } else {
+                        $outputFormat .= " H:i:s";
+                    }
                 }
                 $d = \DateTime::createFromFormat($databaseFormat, $dateString);
                 if ($d) {

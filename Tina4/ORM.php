@@ -594,6 +594,7 @@ class ORM implements \JsonSerializable
             }
         }
 
+
         DebugLog::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
         return "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
     }
@@ -666,9 +667,12 @@ class ORM implements \JsonSerializable
         $databaseFields = [];
         foreach ($record as $fieldName => $fieldValue) {
             $ormField = $this->getObjectName($fieldName);
+
             //We ignore mapping because we want to use this to determine the virtual fields in the class
             $databaseFields[] = $this->getFieldName($ormField, null, true);
-            if (property_exists($this, $ormField) && (empty($this->{$ormField}) && $this->{$ormField} !== "0") || $overRide) {
+
+            if ((property_exists($this, $ormField) && (empty($this->{$ormField}) && $this->{$ormField} !== "0")) || $overRide) {
+
                 $this->{$ormField} = $fieldValue;
             }
         }
