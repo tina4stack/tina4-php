@@ -36,6 +36,7 @@ $config->setAuth((new MyAuth()));
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
 
+//exec("ls -l", $output);
 
 
 echo new \Tina4\Tina4Php($config);

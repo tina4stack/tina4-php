@@ -118,6 +118,10 @@ function runTina4($config = null)
 }
 
 
+function _shape (...$elements) {
+    return new HTMLElement(":", $elements);
+}
+
 /**
  * HTML TAG _doctype
  * @param $elements
