@@ -28,7 +28,7 @@ global $DBA;
 $config = new \Tina4\Config();
 
 //Uncomment if you want to play with auth
-$config->setAuth((new MyAuth()));
+//$config->setAuth((new MyAuth()));
 
 //$config->addFilter("myFilter", function ($name) {
 //    return str_shuffle($name);

@@ -3,6 +3,6 @@
         "codeception/codeception": "^4.1",
         "codeception/module-phpbrowser": "^1.0.0",
         "codeception/module-asserts": "^1.0.0",
-        "andrevanzuydam/tina4php": "^v0.1.14"
+        "andrevanzuydam/tina4php": "^v0.1.24"
     }
 }

@@ -51,7 +51,9 @@ class Auth extends Data
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         }
 
-        $this->getToken("default");
+        if (get_called_class() === "Tina4\Auth") {
+            $this->getToken("default");
+        }
     }
 
     /**
@@ -69,14 +71,16 @@ class Auth extends Data
      * Creates a secrets folder and generates keys for the application
      * @return bool
      */
-    function generateSecureKeys()
+    public function generateSecureKeys()
     {
         DebugLog::message("Generating Auth keys");
         if (file_exists($this->documentRoot . "secrets")) {
             DebugLog::message("Secrets folder exists already, please remove");
             return false;
         }
-        mkdir($this->documentRoot . "secrets");
+        if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
+            throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+        }
         `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;

@@ -1056,7 +1056,7 @@ EOT;
 
         $gridRouterCode = '
 \Tina4\Get::add("' . $path . '/landing", function (\Tina4\Response $response){
-    return $response (renderTemplate("' . $path . '/grid.twig"), HTTP_OK, TEXT_HTML);
+    return $response (\Tina4\renderTemplate("' . $path . '/grid.twig"), HTTP_OK, TEXT_HTML);
 });
         ';
 
