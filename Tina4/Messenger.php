@@ -49,7 +49,11 @@ class Messenger
 
         if (is_array($message) && $this->settings->useTwigTemplates) {
             //We are using twig so we need to render the message
-            $message = renderTemplate($this->settings->templatePath . "/" . $message["template"], $message["data"]);
+            if (file_exists($this->settings->templatePath . "/" . $message["template"])) {
+                $message = renderTemplate($this->settings->templatePath . "/" . $message["template"], $message["data"]);
+            } else {
+                $message = renderTemplate( $message["template"], $message["data"]);
+            }
         }
 
 

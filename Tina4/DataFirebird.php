@@ -320,10 +320,10 @@ class DataFirebird implements DataBase
                 $database[trim($record->tableName)][$tid]["length"] = trim($tRecord->fieldLength);
                 $database[trim($record->tableName)][$tid]["precision"] = trim($tRecord->fieldPrecision);
                 $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->fieldDefaultValue);
-                if (!empty($trecord->fieldNotNullContraint)) {
+                if (!empty($tRecord->fieldNotNullContraint)) {
                     $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->fieldNotNullContraint);
                 }
-                if (!empty($PK[$trecord->fieldName])) {
+                if (!empty($PK[$tRecord->fieldName])) {
                     $database[trim($record->tableName)][$tid]["pk"] = trim($PK[$tRecord->fieldName]["CONSTRAINT_TYPE"]);
                 } else {
                     $database[trim($record->tableName)][$tid]["pk"] = "";
