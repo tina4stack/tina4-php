@@ -80,8 +80,8 @@ class ParseTemplate
         }
 
         $realFileName = $fileName;
-        foreach ($this->locations as $lid => $location) foreach ($possibleFiles as $id => $fileName) {
-            $testFile = $this->root . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $fileName;
+        foreach ($this->locations as $lid => $location) foreach ($possibleFiles as $id => $parseFileName) {
+            $testFile = $this->root . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $parseFileName;
             $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
             if (file_exists($testFile)) {
                 $realFileName = $testFile;

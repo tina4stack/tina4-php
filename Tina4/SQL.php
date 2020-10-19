@@ -214,8 +214,13 @@ class SQL implements \JsonSerializable
     {
         //run the query
         $sqlStatement = $this->generateSQLStatement();
+
+
         if (!empty($this->DBA)) {
             $result = $this->DBA->fetch($sqlStatement, $this->limit, $this->offset);
+
+
+
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
             //transform the records into an array of the ORM if ORM exists
@@ -230,9 +235,9 @@ class SQL implements \JsonSerializable
                         $newRecord = clone $this->ORM;
                         $newRecord->mapFromRecord($record, true);
 
-
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
+
                                 if (property_exists($newRecord, $excludeField)) {
                                     unset($newRecord->{$excludeField});
                                 }
@@ -243,7 +248,7 @@ class SQL implements \JsonSerializable
                         if (!empty($this->fields) && $this->fields[0] !== "*") {
                             foreach ($newRecord as $key => $value) {
                                 if (in_array($key, $newRecord->protectedFields)) continue;
-                                if (!in_array($this->ORM->getFieldName($key), $this->fields) && strpos($key, " as") !== false && strpos($key, ".") !== false ) {
+                                if (!in_array($this->ORM->getFieldName($key), $this->fields) && strpos($key, " as") === false && strpos($key, ".") === false ) {
                                     unset($newRecord->{$key});
                                 }
                             }
@@ -251,6 +256,7 @@ class SQL implements \JsonSerializable
 
                         //Apply a filter to the record
                         if (!empty($this->filterMethod)) {
+
                             foreach ($this->filterMethod as $fid => $filterMethod) {
                                 call_user_func($filterMethod, $newRecord);
                             }
@@ -266,9 +272,14 @@ class SQL implements \JsonSerializable
             $records = ["error" => "No database connection or ORM specified"];
         }
 
+
+
         return $records;
     }
 
+    /**
+     * @return string
+     */
     function generateSQLStatement()
     {
         //see if we have some foreign key references
@@ -310,6 +321,7 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
+
         return $sql;
     }
 
@@ -324,13 +336,14 @@ class SQL implements \JsonSerializable
         $result = [];
         foreach ($records as $id => $record) {
             if (get_parent_class($record) === "Tina4\ORM") {
-                $result[] = $record->asArray();
+                 $result[] = $record->asArray();
             }
             else {
                 $result[] = (array)$record;
             }
 
         }
+
         return $result;
     }
 

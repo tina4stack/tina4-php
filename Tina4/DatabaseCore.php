@@ -19,7 +19,7 @@ trait DataBaseCore
     /**
      * @var integer $port Port number of database
      */
-    //public $port; //Declare in the implementation
+    public $port; //Declare in the implementation
 
     /**
      * @var string $hostName Name of host
@@ -56,7 +56,7 @@ trait DataBaseCore
      * @param string $password Database user password
      * @param string $dateFormat Format of date
      */
-    public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd")
+    public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d")
     {
         global $cache;
         
@@ -76,6 +76,8 @@ trait DataBaseCore
                 $port = explode("/", $this->hostName);
                 $this->hostName = $port[0];
                 $this->port = $port[1];
+            } else {
+                $this->port = $this->getDefaultDatabasePort();
             }
         } else {
             $this->hostName = "";
@@ -104,5 +106,7 @@ trait DataBaseCore
 
         return ["params" => $newParams, "tranId" => $tranId];
     }
+
+
 
 }

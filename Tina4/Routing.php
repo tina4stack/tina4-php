@@ -73,10 +73,13 @@ class Routing
         global $arrRoutes;
 
         if (!$suppressed) {
-            if (in_array("*", TINA4_ALLOW_ORIGINS) || in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS)) {
+            if (in_array("*", TINA4_ALLOW_ORIGINS) || (key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
                 if (key_exists("HTTP_ORIGIN", $_SERVER)) {
                     header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
+                } else {
+                    header ( 'Access-Control-Allow-Origin: ' . join(",", TINA4_ALLOW_ORIGINS));
                 }
+                header('Vary: Origin');
                 header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
                 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
                 header('Access-Control-Allow-Credentials: true');
@@ -182,9 +185,7 @@ class Routing
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $params);
                     } else
-                        if ($this->auth->tokenExists()) { //Tries to get a token from the session
-                            $result = call_user_func_array($route["function"], $params);
-                        } else {
+                        {
                             $this->forbidden();
                         }
 

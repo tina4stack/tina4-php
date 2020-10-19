@@ -71,6 +71,11 @@ class HTMLElement
         if ($this->tag === "document") {
             return "{$this->getElements()}";
         } else
+
+            if ($this->tag === "") {
+                return "{$this->getElements()}";
+            }
+              else
             if ($this->tag[0] === "!") {
                 if (strpos($this->tag, "!--") !== false) {
                     return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";

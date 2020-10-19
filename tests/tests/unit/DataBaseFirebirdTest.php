@@ -118,7 +118,17 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
         $this->testORM->firstName = "New ORM New ID";
         $this->testORM->lastName = "New ORM New ID";
         $this->testORM->currentAge = 10;
+        $this->testORM->birthDate = date("m/d/Y");
         $this->testORM->save();
+
+    }
+
+    function testDateFormatting () {
+        $this->DBA->dateFormat = "d/m/Y";
+
+        $record = $this->DBA->fetch("select * from test")->asArray();
+
+
 
     }
 
@@ -156,6 +166,7 @@ class DataBaseFirebirdTest extends \Codeception\Test\Unit
 
 
     }
+
 
 
 }

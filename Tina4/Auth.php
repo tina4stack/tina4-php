@@ -38,12 +38,21 @@ class Auth extends Data
 
         $this->documentRoot = $documentRoot;
 
+        //Check security
+        if (!file_exists($this->documentRoot . "secrets")) {
+            $this->generateSecureKeys();
+        }
+
         //Load secrets
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
         }
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
+        }
+
+        if (get_called_class() === "Tina4\Auth") {
+            $this->getToken("default");
         }
     }
 
@@ -62,14 +71,16 @@ class Auth extends Data
      * Creates a secrets folder and generates keys for the application
      * @return bool
      */
-    function generateSecureKeys()
+    public function generateSecureKeys()
     {
         DebugLog::message("Generating Auth keys");
         if (file_exists($this->documentRoot . "secrets")) {
             DebugLog::message("Secrets folder exists already, please remove");
             return false;
         }
-        mkdir($this->documentRoot . "secrets");
+        if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
+            throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+        }
         `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
@@ -199,7 +210,7 @@ class Auth extends Data
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 
-        $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
+        $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
         $tokenString = $tokenEncoded->__toString();
         $_SESSION["tina4:authToken"] = $tokenString;
         session_write_close();
@@ -213,7 +224,7 @@ class Auth extends Data
      * @param string $encryption
      * @return array|false
      */
-    function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         DebugLog::message("Getting token payload");
 

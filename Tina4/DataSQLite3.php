@@ -11,6 +11,7 @@ namespace Tina4;
 class DataSQLite3 implements DataBase
 {
     use DataBaseCore;
+    use Utility;
 
     /**
      * Open an SQLite3 connection
@@ -111,7 +112,7 @@ class DataSQLite3 implements DataBase
         if (!empty($recordCursor)) {
             while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
                 if (!empty($recordArray)) {
-                    $records[] = (new DataRecord($recordArray, $fieldMapping));
+                    $records[] = (new DataRecord($recordArray, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
                 }
             }
         }
@@ -211,4 +212,13 @@ class DataSQLite3 implements DataBase
         return $database;
     }
 
+    public function getDefaultDatabaseDateFormat()
+    {
+       return "Y-m-d";
+    }
+
+    public function getDefaultDatabasePort()
+    {
+       return null;
+    }
 }

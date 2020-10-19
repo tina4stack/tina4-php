@@ -304,7 +304,10 @@ class Tina4Php
             $twig->addExtension(new \Twig\Extension\DebugExtension());
             $twig->addGlobal('Tina4', new \Tina4\Caller());
 
+
+
             $subFolder = $this->getSubFolder();
+            $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
             $twig->addGlobal('baseUrl', $subFolder);
             $twig->addGlobal('baseURL', $subFolder);
             $twig->addGlobal('uniqid', uniqid('', true));
@@ -322,6 +325,11 @@ class Tina4Php
                 $twig->addGlobal('request', $_REQUEST);
             }
 
+            if (!empty($config) && !empty($config->getTwigGlobals())) {
+                foreach ($config->getTwigGlobals() as $name => $method) {
+                    $twig->addGlobal($name, $method);
+                }
+            }
 
             if (!empty($config) && !empty($config->getTwigFilters())) {
 
@@ -337,6 +345,20 @@ class Tina4Php
                     return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
                 } else {
                     return "";
+                }
+            });
+            $twig->addFilter($filter);
+
+            $filter = new \Twig\TwigFilter("dateValue", function($dateString) {
+                global $DBA;
+                if (!empty($DBA)) {
+                    if (substr($dateString,-1,1) == "Z") {
+                        return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"),0, -1);
+                    } else {
+                        return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d\T");
+                    }
+                } else {
+                    return $dateString;
                 }
             });
 
@@ -438,7 +460,7 @@ class Tina4Php
         //str_replace($documentRoot, "", $scriptName);
         $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
 
-        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
             $subFolder = null;
 
         }
@@ -526,17 +548,17 @@ function renderTemplate($fileNameString, $data = [])
             } else
                 if (is_file($fileNameString)) {
                     $renderFile = basename($fileNameString);
-                    $twigLoader = new \Twig\Loader\FilesystemLoader();
                     $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-                    $twigLoader->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . $newPath);
-                    $internalTwig->setLoader($twigLoader);
-                    $internalTwig->addGlobal('Tina4', new \Tina4\Caller());
-                    $internalTwig->addGlobal('baseUrl', substr(str_replace(realpath($_SERVER["DOCUMENT_ROOT"]), "", $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR), 0, -1));
-                    $fileName = basename($renderFile);
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . $newPath);
                     return $internalTwig->render($renderFile, $data);
                 } else {
-                    $internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
-                    return $internalTwig->render("template" . md5($fileNameString), $data);
+                    if (!is_file($fileNameString)) {
+                        $fileName = ".".DIRECTORY_SEPARATOR."cache".DIRECTORY_SEPARATOR."template" . md5($fileNameString).".twig";
+                        file_put_contents($fileName, $fileNameString);
+                    }
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] ."cache");
+                    //$internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
+                    return $internalTwig->render("template" . md5($fileNameString).".twig", $data);
                 }
     } catch (\Exception $exception) {
         return $exception->getMessage();

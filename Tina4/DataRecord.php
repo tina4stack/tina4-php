@@ -17,6 +17,8 @@ use JsonSerializable;
  */
 class DataRecord implements JsonSerializable
 {
+    use Utility;
+
     private $original;
     private $fieldMapping;
 
@@ -24,8 +26,10 @@ class DataRecord implements JsonSerializable
      * DataRecord constructor Converts array to object
      * @param array $record Array of records
      * @param array $fieldMapping Array of field mapping
+     * @param string $databaseFormat Input format use the PHP date format conventions
+     * @param string $outputFormat Output date format - use the PHP date format conventions
      */
-    function __construct($record = null, $fieldMapping = [])
+    public function __construct($record = null, $fieldMapping = [], $databaseFormat="Y-m-d", $outputFormat="Y-m-d")
     {
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
@@ -37,10 +41,25 @@ class DataRecord implements JsonSerializable
                     $value = \base64_encode($value);
                     $this->original->{$column} = $value;
                 }
+
+                if ($this->isDate($value, $databaseFormat)) {
+
+
+                    $value = $this->formatDate($value, $databaseFormat, $outputFormat);
+
+
+                    $this->original->{$column} = $value;
+                }
+                
+                
                 $this->{$column} = $value;
             }
+
+
         }
     }
+
+
 
     /**
      * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
@@ -76,7 +95,7 @@ class DataRecord implements JsonSerializable
     /**
      * Transform to a camel case result
      */
-    function transformObject()
+    public function transformObject()
     {
         $object = (object)[];
         foreach ($this->original as $column => $value) {
@@ -94,7 +113,7 @@ class DataRecord implements JsonSerializable
      * @param array $fieldMapping Field mapping to map fields
      * @return string Proper object name
      */
-    function getObjectName($name, $fieldMapping = [])
+    public function getObjectName($name, $fieldMapping = [])
     {
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
@@ -143,7 +162,7 @@ class DataRecord implements JsonSerializable
     /**
      * @return false|string
      */
-    function __toString()
+    public function __toString()
     {
         return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
@@ -153,7 +172,7 @@ class DataRecord implements JsonSerializable
      * @param $name
      * @return false
      */
-    function byName($name)
+    public function byName($name)
     {
         $columnName = strtoupper($name);
         if (!empty($this->original) && !empty($this->$columnName)) {
