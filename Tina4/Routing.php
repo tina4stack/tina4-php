@@ -32,7 +32,7 @@ class Routing
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
-    private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.\\_]*)\\//";
+    private $pathMatchExpression = "/([a-zA-Z0-9\\%\\ \\! \\-\\}\\{\\.\\_]*)\\//";
 
     /**
      * Routing constructor.
@@ -149,14 +149,14 @@ class Routing
                 if (file_exists($route)) {
                     $this->includeDirectory($route);
                 }
-                    else
-                if (file_exists(getcwd() . "/" . $route)) {
-                    $this->includeDirectory(getcwd() . "/" . $route);
-                } else {
-                    if (TINA4_DEBUG) {
-                        DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+                else
+                    if (file_exists(getcwd() . "/" . $route)) {
+                        $this->includeDirectory(getcwd() . "/" . $route);
+                    } else {
+                        if (TINA4_DEBUG) {
+                            DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+                        }
                     }
-                }
             }
         }
 
@@ -185,9 +185,9 @@ class Routing
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $params);
                     } else
-                        {
-                            $this->forbidden();
-                        }
+                    {
+                        $this->forbidden();
+                    }
 
                     $matched = true;
                     break;
@@ -453,7 +453,7 @@ class Routing
             $matching = true;
             foreach ($matchesPath[1] as $rid => $matchPath) {
                 if (!empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
-                    $variables[] = $matchPath;
+                    $variables[] = urldecode($matchPath);
                 } else
                     if (!empty($matchesRoute[1][$rid])) {
 
