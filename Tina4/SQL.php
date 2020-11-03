@@ -219,8 +219,6 @@ class SQL implements \JsonSerializable
         if (!empty($this->DBA)) {
             $result = $this->DBA->fetch($sqlStatement, $this->limit, $this->offset);
 
-
-
             $this->noOfRecords = $result->getNoOfRecords();
             $records = [];
             //transform the records into an array of the ORM if ORM exists
@@ -230,10 +228,15 @@ class SQL implements \JsonSerializable
 
             if (!empty($result->records()) && $this->noOfRecords > 0) {
                 $records = $result->AsObject();
+
+
+
                 if (!empty($this->ORM)) {
                     foreach ($records as $id => $record) {
                         $newRecord = clone $this->ORM;
                         $newRecord->mapFromRecord($record, true);
+
+
 
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
@@ -243,6 +246,8 @@ class SQL implements \JsonSerializable
                                 }
                             }
                         }
+
+
 
                         //Only return what was requested
                         if (!empty($this->fields) && $this->fields[0] !== "*") {

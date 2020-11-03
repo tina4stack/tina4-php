@@ -28,6 +28,9 @@ trait Utility
      * @return string
      */
     public function formatDate($dateString, $databaseFormat, $outputFormat) {
+        //Hacky fix for weird dates?
+        $dateString = str_replace(".000000", "", $dateString);
+
         if (!empty($dateString)) {
             if (substr($dateString, -1, 1) == "Z") {
                 $delimiter = "T";
