@@ -59,6 +59,7 @@ class Tina4Php
         DebugLog::message("Beginning of Tina4PHP Initialization");
 
 
+
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
@@ -100,6 +101,10 @@ class Tina4Php
             $this->documentRoot = $callerDir;
         } else {
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
+        }
+
+        if (strpos($this->documentRoot, ".php") !== false) {
+            $this->documentRoot = dirname($this->documentRoot)."/";
         }
 
         if (file_exists("Tina4Php.php")) {
@@ -163,6 +168,9 @@ class Tina4Php
         $arrRoutes = [];
 
         $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services"];
+
+
+
 
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."{$folder}") && !file_exists("Tina4Php.php")) {
@@ -297,7 +305,7 @@ class Tina4Php
 
             $twigLoader = new \Twig\Loader\FilesystemLoader();
             foreach ($twigPaths as $twigPath) {
-                $twigLoader->addPath($twigPath, '__main__');
+                $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath), '__main__');
             }
 
             $twig = new \Twig\Environment($twigLoader, ["debug" => true, "cache" => "./cache"]);
