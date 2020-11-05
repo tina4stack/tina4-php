@@ -155,7 +155,7 @@ class SQL implements \JsonSerializable
     {
         $result = [];
         foreach ($fields as $id => $field) {
-            if (!empty($ORM)) {
+            if (!empty($this->ORM)) {
                 $result[] = $this->ORM->getFieldName($field);
             } else {
                 $result[] = $field;
