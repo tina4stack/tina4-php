@@ -210,6 +210,8 @@ class SQL implements \JsonSerializable
 
     /**
      * Cleans up column names for JsonSerializable
+     * @param $fields
+     * @return array
      */
     public function getColumnNames($fields) {
         $columnNames = [];
