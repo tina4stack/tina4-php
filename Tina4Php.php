@@ -363,7 +363,7 @@ class Tina4Php
                     if (substr($dateString,-1,1) == "Z") {
                         return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"),0, -1);
                     } else {
-                        return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d\T");
+                        return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d");
                     }
                 } else {
                     return $dateString;
