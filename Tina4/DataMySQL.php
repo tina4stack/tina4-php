@@ -290,7 +290,7 @@ class DataMySQL implements DataBase
                                     AND TABLE_NAME = '{$record->tableName}'
                          ORDER BY ORDINAL_POSITION";
 
-            $tableInfo = $this->fetch($sqlInfo)->asObject();
+            $tableInfo = $this->fetch($sqlInfo, 10000)->asObject();
 
 
             //Go through the tables and extract their column information

@@ -180,7 +180,6 @@ class ORM implements \JsonSerializable
                 if (!$camelCase) {
                     return $name;
                 } else {
-                    echo "Name {$name} is " . $this->camelCase($name);
                     return $this->camelCase($name);
                 }
             }
@@ -205,7 +204,9 @@ class ORM implements \JsonSerializable
         for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
             if ($name[$i] === "_") {
                 $i++;
-                $fieldName .= strtoupper($name[$i]);
+                if ($i < strlen($name)) {
+                    $fieldName .= strtoupper($name[$i]);
+                }
             } else {
                 $fieldName .= $name[$i];
             }
@@ -404,7 +405,6 @@ class ORM implements \JsonSerializable
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
             }
-
 
             $error = $this->DBA->exec($sqlStatement);
 

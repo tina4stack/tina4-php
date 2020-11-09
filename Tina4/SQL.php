@@ -339,7 +339,7 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
-
+        \Tina4\DebugLog::message("SQL:".$sql);
         return $sql;
     }
 
