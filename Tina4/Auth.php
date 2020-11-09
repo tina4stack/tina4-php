@@ -210,10 +210,15 @@ class Auth extends Data
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 
-        $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
-        $tokenString = $tokenEncoded->__toString();
-        $_SESSION["tina4:authToken"] = $tokenString;
-        session_write_close();
+        if (!empty($this->privateKey)) {
+
+            $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
+            $tokenString = $tokenEncoded->__toString();
+            $_SESSION["tina4:authToken"] = $tokenString;
+            session_write_close();
+        } else {
+            $tokenString = "secrets folder is empty of tokens";
+        }
         return $tokenString;
     }
 
