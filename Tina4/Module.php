@@ -115,6 +115,8 @@ class Module
                 }
             }
         }
+
+        
         return $routes;
     }
 
