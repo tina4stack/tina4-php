@@ -297,9 +297,11 @@ class Tina4Php
 
             foreach ($twigPaths as $tid => $twigPath) {
 
-                if (!file_exists(str_replace(DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath))) {
-                    if (!file_exists($twigPath)) {
-                        unset($twigPaths[$tid]);
+                if (!is_array($twigPath)) {
+                    if (!file_exists(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath))) {
+                        if (!file_exists($twigPath)) {
+                            unset($twigPaths[$tid]);
+                        }
                     }
                 }
             }
@@ -308,6 +310,12 @@ class Tina4Php
 
 
             foreach ($twigPaths as $twigPath) {
+                if (is_array($twigPath)) {
+                    if (isset($twigPath["nameSpace"])) {
+                        $twigLoader->addPath($twigPath["path"], $twigPath["nameSpace"]);
+                    }
+                }
+                  else
                 if (file_exists($twigPath)) {
                     $twigLoader->addPath($twigPath, '__main__');
                 } else {

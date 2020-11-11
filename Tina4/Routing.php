@@ -124,6 +124,11 @@ class Routing
         } else {
             //Check the template locations
             foreach (TINA4_TEMPLATE_LOCATIONS_INTERNAL as $tid => $templateLocation) {
+                if (is_array($templateLocation)) {
+                    if (isset($templateLocation["path"])) {
+                        $templateLocation = $templateLocation["path"];
+                    }
+                }
                 DebugLog::message($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
                 if (file_exists($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
                     $this->returnStatic($root . DIRECTORY_SEPARATOR . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);

@@ -5,6 +5,8 @@ namespace Tina4;
 class Module
 {
 
+    public static $nameSpace = "module";
+
     public static function getModuleFolder() {
         $backtrace = debug_backtrace();
         if (isset($backtrace[1])) {
@@ -15,12 +17,27 @@ class Module
     }
 
     /**
-     * Adds a module
+     * Sets the name space for the module
      * @param $name
-     * @param string $version
      */
-    public static function addModule($name="Tina4Module",$version="1.0.0") {
+    public static function setNameSpace($name) {
+        self::$nameSpace = $name;
+    }
+
+    /**
+     * Adds a module
+     * @param string $name
+     * @param string $version
+     * @param string $namespace
+     */
+    public static function addModule($name="Tina4Module",$version="1.0.0", $namespace="") {
         $moduleFolder = self::getModuleFolder();
+
+        if (empty($namespace)) {
+            self::setNameSpace($name);
+        } else {
+            self::setNameSpace($namespace);
+        }
 
         global $_TINA4_MODULES;
         if (empty($_TINA4_MODULES)) {
@@ -111,12 +128,12 @@ class Module
         }  else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["templatePath"] as $routePath) {
-                    $routes[] = $routePath;
+                    $routes[] = ["path" => $routePath, "nameSpace" => self::$nameSpace];
                 }
             }
         }
 
-        
+
         return $routes;
     }
 

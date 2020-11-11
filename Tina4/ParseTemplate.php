@@ -81,6 +81,11 @@ class ParseTemplate
 
         $realFileName = $fileName;
         foreach ($this->locations as $lid => $location) foreach ($possibleFiles as $id => $parseFileName) {
+            if (is_array($location)) { //@todo refactor
+                if (isset($location["path"])) {
+                    $location = $location["path"];
+                }
+            }
             $testFile = $this->root . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $parseFileName;
             $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
             if (file_exists($testFile)) {
