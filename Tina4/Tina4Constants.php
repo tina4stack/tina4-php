@@ -86,9 +86,32 @@ function tina4_autoloader($class)
                 require_once $location.DIRECTORY_SEPARATOR."{$class}.php";
                 break;
             } else
-            if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
-                break;
+                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                    break;
+                }
+                else {
+                    autoLoadFolders($_SERVER["DOCUMENT_ROOT"],$location,$class);
+                }
+        }
+    }
+}
+
+/**
+ * Recursive include
+ * @param $documentRoot
+ * @param $location
+ * @param $class
+ */
+function autoLoadFolders($documentRoot, $location, $class) {
+    $subFolders = scandir($documentRoot.$location);
+    foreach ($subFolders as $id => $file) {
+        if (is_dir(realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR.$file)) && $file !== "." && $file !== "..") {
+            $fileName = realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR. $file .DIRECTORY_SEPARATOR . "{$class}.php");
+            if (file_exists($fileName)) {
+                require_once $fileName;
+            } else {
+                autoLoadFolders($documentRoot, $location . DIRECTORY_SEPARATOR . $file, $class);
             }
         }
     }

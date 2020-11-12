@@ -65,7 +65,7 @@ class Swagger implements \JsonSerializable
                                     $tags[$tid] = str_replace("\n", "", $tag);
                                 }
                             } else
-                                if ($matches[1] === "@queryParams") {
+                                if ($matches[1] === "@queryParams" || $matches[1] === "@params") {
                                     $queryParams = explode(",", $matches[2]);
                                 } else
                                     if ($matches[1] === "@example") {

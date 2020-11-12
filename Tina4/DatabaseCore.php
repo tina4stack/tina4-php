@@ -67,7 +67,7 @@ trait DataBaseCore
         $this->username = $username;
         $this->password = $password;
 
-        if (strpos($database, ":") !== false) {
+        if (strpos($database, ":") !== false && strpos($database, "memory") === false ) {
             $database = explode(":", $database, 2);
             $this->hostName = $database[0];
             $this->databaseName = $database[1];
