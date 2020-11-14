@@ -78,12 +78,12 @@ function postUrl(url, data, targetDiv) {
     });
 }
 
-function saveForm(formName, postURL, targetDiv) {
+function saveForm(formName, targetURL, targetDiv) {
     if (targetDiv === undefined) targetDiv = 'message';
     //compile a data model
     let data = getFormData(formName);
 
-    postURL(postURL, data, targetDiv);
+    postUrl(targetURL, data, targetDiv);
 }
 
 function showMessage(message) {

@@ -104,7 +104,7 @@ function tina4_autoloader($class)
  * @param $class
  */
 function autoLoadFolders($documentRoot, $location, $class) {
-    $subFolders = scandir($documentRoot.$location);
+    $subFolders = scandir($documentRoot.DIRECTORY_SEPARATOR.$location);
     foreach ($subFolders as $id => $file) {
         if (is_dir(realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR.$file)) && $file !== "." && $file !== "..") {
             $fileName = realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR. $file .DIRECTORY_SEPARATOR . "{$class}.php");
