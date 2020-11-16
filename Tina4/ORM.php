@@ -545,12 +545,15 @@ class ORM implements \JsonSerializable
             if (empty($fieldValue) && $fieldValue !== 0) {
                 continue;
             }
+
             if ($fieldName === "form_token") {
                 continue;
             } //form token is reserved
-            if (in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+
+            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
                 continue;
             }
+
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
@@ -632,7 +635,7 @@ class ORM implements \JsonSerializable
             if ($fieldName == "form_token") {
                 continue;
             } //form token is reserved
-            if (in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
                 continue;
             }
 

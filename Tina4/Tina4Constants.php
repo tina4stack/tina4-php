@@ -104,14 +104,17 @@ function tina4_autoloader($class)
  * @param $class
  */
 function autoLoadFolders($documentRoot, $location, $class) {
-    $subFolders = scandir($documentRoot.DIRECTORY_SEPARATOR.$location);
-    foreach ($subFolders as $id => $file) {
-        if (is_dir(realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR.$file)) && $file !== "." && $file !== "..") {
-            $fileName = realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR. $file .DIRECTORY_SEPARATOR . "{$class}.php");
-            if (file_exists($fileName)) {
-                require_once $fileName;
-            } else {
-                autoLoadFolders($documentRoot, $location . DIRECTORY_SEPARATOR . $file, $class);
+    if (is_dir($documentRoot.DIRECTORY_SEPARATOR.$location))
+    {
+        $subFolders = scandir($documentRoot . DIRECTORY_SEPARATOR . $location);
+        foreach ($subFolders as $id => $file) {
+            if (is_dir(realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $file)) && $file !== "." && $file !== "..") {
+                $fileName = realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $file . DIRECTORY_SEPARATOR . "{$class}.php");
+                if (file_exists($fileName)) {
+                    require_once $fileName;
+                } else {
+                    autoLoadFolders($documentRoot, $location . DIRECTORY_SEPARATOR . $file, $class);
+                }
             }
         }
     }
