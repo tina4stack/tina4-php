@@ -7,6 +7,6 @@
 -->
 
    * [Getting Started](/)
-   * [Recommendations](recommendations.md)
    * [Installation](installation.md)
+   * [Recommendations](recommendations.md)
    * [How do I?](howdoi.md)

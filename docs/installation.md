@@ -9,7 +9,6 @@
 # Installation
 
 To make the magic of Tina4 possible, there are various tools you need to install first. Below you will find a list of the tools you need and how to install them.
-Soon you will be ready to do some serious magic. 
 
 # Required
 
@@ -23,31 +22,54 @@ Soon you will be ready to do some serious magic.
 You must have a code editor or tool which you will use to develop your website and use to debug. 
 There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS. Follow these instructions to install an IDE tool on your system.
 
-* Step 1 > Choose your weapon : [PHPStorm](https://www.jetbrains.com/phpstorm/download) OR [Visual Studio Code](https://code.visualstudio.com/download)
+##### Step 1 
 
-* Step 2  > Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files
+We recommend using one these IDE tools. Choose your weapon :
 
-* Step 3 > After the download is complete, run the installation file and follow the prompts
+[PHPStorm](https://www.jetbrains.com/phpstorm/download) OR [Visual Studio Code](https://code.visualstudio.com/download)
 
-The installation window will inform you once the installation is complete.
+##### Step 2 
+
+Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files
+![alt text](../assets/images/idetools.png)
+
+##### Step 3 
+ 
+After the download is complete, run the installation file and follow the prompts carefully. The installation window will inform you once the installation is complete.
 
 *PLEASE NOTE:* If you want to install the IDE tools via command line, the commands will be available on the download page. 
 
 ## Install PHP 
+
 You need to have PHP7.1 or greater installed on the command line.Follow these instructions to install PHP on your system. 
 
-* Step 1 > Navigate to the [PHP](https://www.php.net/downloads.php) website and download the current stable version for your Operating System 
+##### Step 1  
 
-* Step 2 > Unpack the zip file or content into a directory on your system
+Head to the PHP page and download the current stable version for your Operating System. 
+
+Here's the link : [PHP](https://www.php.net/downloads.php)
+
+![alt text](../assets/images/phppage.png)
+
+##### Step 2 
+
+Unpack/Extract the zip file or content into a file named "php" on the main drive on your system. 
 
         eg. C:/php
         
-* Step 3 > Configure "php.ini" file: 
+##### Step 3 
+
+Once the files have been extracted, you will need to go into the folder and edit the configuration settings file. 
+
+Configure "php.ini" file: 
  
         Go to the folder where you extracted PHP. 
         Delete file named "php.ini". 
         Rename file named "php.ini-development" to "php.ini".
         Open php.ini file by opening it with Notepad or IDE tool 
+        
+![alt text](../assets/images/config1.png)
+
             Find ';extension_dir = "ext"' and remove the semicolon infront of the word extension
             Find ";extension=curl" and remove the semicolon infront of the word extension
             Find ";extension=fileinfo" and remove the semicolon infront of the word extension
@@ -63,21 +85,36 @@ You need to have PHP7.1 or greater installed on the command line.Follow these in
             Find ";extension=xmlrpc" and ...
             Find ";extension=xsl" and ...
         Press Ctrl+S or save changes you just made to "php.ini" file. 
+        
+![alt text](../assets/images/config2.png)
 
-* Step 4 > Change path environment variable.
+##### Step 4 
+
+After you have made changes to the configuration file, you must add the PHP folder in your systems environment variable table.
+
+Add path environment variable:
     
         Open Control Panel
         Go to System
         Go to Advanced system settings
+        
+![alt text](../assets/images/enviro1.png)
+
         Go to Environment variable 
         Look for "Path" in the "Variable" column and click Edit.
+       
+![alt text](../assets/images/enviro2.png)        
+        
         Click on Browse, locate the PHP folder you uxtracted. 
         Click OK and then click Ok again to close the "Edit environment variable" window.
+        
+![alt text](../assets/images/enviro3.png)   
 
-* Step 5 > Complete Installation.
+##### Step 5 
+ 
+Complete the installation by restarting your system so that changes may take effect. After this you can confirm if the installation successful by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. The PHP version and details will appear in the terminal.    
 
-       To ensure your changes take effect you may restart your device. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. 
-       The PHP version and details will appear in the terminal.    
+![alt text](../assets/images/confirm.png)  
 
 ## Install Xdebug
 
