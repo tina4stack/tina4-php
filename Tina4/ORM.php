@@ -406,8 +406,10 @@ class ORM implements \JsonSerializable
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
             }
 
-            $error = $this->DBA->exec($sqlStatement);
-
+            $params = [];
+            $params[] = $sqlStatement["sql"];
+            $params = array_merge($params, $sqlStatement["fieldValues"]);
+            $error = call_user_func_array([$this->DBA, "exec"],  $params);
 
             if (empty($error->getError()["errorCode"])) {
                 $this->DBA->commit();
@@ -428,6 +430,8 @@ class ORM implements \JsonSerializable
                         }
 
                 }
+
+
 
                 $tableData = $this->getTableData();
                 $primaryCheck = $this->getPrimaryCheck($tableData);
@@ -532,6 +536,7 @@ class ORM implements \JsonSerializable
         $tableName = $this->getTableName($tableName);
         $insertColumns = [];
         $insertValues = [];
+        $fieldValues = [];
         $returningStatement = "";
 
         foreach ($this->hasOne() as $id => $hasOne) {
@@ -565,16 +570,15 @@ class ORM implements \JsonSerializable
             }
 
             if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $insertValues[] = $fieldValue;
+                $insertValues[] = "?";
+                $fieldValues[] = $fieldValue;
             } else {
-                $fieldValue = str_replace("'", "''", $fieldValue);
-
-
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $insertValues[] = "'{$fieldValue}'";
+                $insertValues[] = "?";
+                $fieldValues[] = $fieldValue;
             }
         }
 
@@ -586,7 +590,8 @@ class ORM implements \JsonSerializable
             $newId = $maxResult[0]->newId;
             $newId++;
             $this->{$this->primaryKey} = $newId;
-            $insertValues[] = $newId;
+            $insertValues[] = "?";
+            $fieldValues[] = $fieldValue;
         }
 
         if (!empty($this->DBA) && !$keyInFieldList) {
@@ -597,9 +602,8 @@ class ORM implements \JsonSerializable
             }
         }
 
-
         DebugLog::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
-        return "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}";
+        return ["sql" => "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
     /**
@@ -621,7 +625,7 @@ class ORM implements \JsonSerializable
      */
     public function generateUpdateSQL($tableData, $filter, $tableName = "")
     {
-
+        $fieldValues = [];
         $tableName = $this->getTableName($tableName);
         $updateValues = [];
 
@@ -643,21 +647,22 @@ class ORM implements \JsonSerializable
             if (is_null($fieldValue)) {
                 $fieldValue = "null";
             }
-            if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $updateValues[] = "{$fieldName} = {$fieldValue}";
-            } else {
-                $fieldValue = str_replace("'", "''", $fieldValue);
 
+            if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
+                $updateValues[] = "{$fieldName} = ?";
+                $fieldValues[] = $fieldValue;
+            } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $updateValues[] = "{$fieldName} = '{$fieldValue}'";
+                $updateValues[] = "{$fieldName} = ?";
+                $fieldValues[] = $fieldValue;
             }
         }
 
         DebugLog::message("update {$tableName} set " . join(",", $updateValues) . " where {$filter}");
-        return "update {$tableName} set " . join(",", $updateValues) . " where {$filter}";
+        return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }
 

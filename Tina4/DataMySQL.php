@@ -52,12 +52,14 @@ class DataMySQL implements DataBase
         $tranId = $params["tranId"];
         $params = $params["params"];
 
+
         if (stripos($params[0], "call") !== false) {
             return $this->fetch($params[0]);
         } else {
             $preparedQuery = mysqli_prepare($this->dbh, $params[0]);
 
             if (!empty($preparedQuery)) {
+
                 unset($params[0]);
                 if (!empty($params)) {
                     $paramTypes = "";
@@ -68,10 +70,10 @@ class DataMySQL implements DataBase
                             if (is_integer($param)) {
                                 $paramTypes .= "i";
                             } else
-                                if (is_string($param)) {
-                                    $paramTypes .= "s";
-                                } else {
+                                if ($this->isBinary($param)) {
                                     $paramTypes .= "b";
+                                } else {
+                                    $paramTypes .= "s";
                                 }
                     }
 
