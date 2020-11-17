@@ -4,9 +4,6 @@ namespace Tina4;
 
 class Module
 {
-
-    public static $nameSpace = "module";
-
     public static function getModuleFolder() {
         $backtrace = debug_backtrace();
         if (isset($backtrace[1])) {
@@ -17,27 +14,17 @@ class Module
     }
 
     /**
-     * Sets the name space for the module
-     * @param $name
-     */
-    public static function setNameSpace($name) {
-        self::$nameSpace = $name;
-    }
-
-    /**
      * Adds a module
      * @param string $name
      * @param string $version
-     * @param string $namespace
+     * @param string $nameSpace
      * @param Config $config
      */
-    public static function addModule($name="Tina4Module",$version="1.0.0", $namespace="", $config=null) {
+    public static function addModule($name="Tina4Module",$version="1.0.0", $nameSpace="", $config=null) {
         $moduleFolder = self::getModuleFolder();
 
-        if (empty($namespace)) {
-            self::setNameSpace($name);
-        } else {
-            self::setNameSpace($namespace);
+        if (empty($nameSpace)) {
+            $nameSpace = $name;
         }
 
         global $_TINA4_MODULES;
@@ -45,23 +32,24 @@ class Module
             $_TINA4_MODULES = [];
         }
 
+        $baseName = basename($moduleFolder);
 
-        $_TINA4_MODULES[basename($moduleFolder)]["name"] = $name;
-        $_TINA4_MODULES[basename($moduleFolder)]["version"] = $version;
-        $_TINA4_MODULES[basename($moduleFolder)]["baseDir"] = $moduleFolder;
-        $_TINA4_MODULES[basename($moduleFolder)]["config"] = $config;
-        $_TINA4_MODULES[basename($moduleFolder)]["templatePath"] = [];
-        $_TINA4_MODULES[basename($moduleFolder)]["includePath"] = [];
-        $_TINA4_MODULES[basename($moduleFolder)]["routePath"] = [];
-        $_TINA4_MODULES[basename($moduleFolder)]["migrationPath"] = [];
+        $_TINA4_MODULES[$baseName]["name"] = $name;
+        $_TINA4_MODULES[$baseName]["version"] = $version;
+        $_TINA4_MODULES[$baseName]["nameSpace"] = $nameSpace;
+        $_TINA4_MODULES[$baseName]["baseDir"] = $moduleFolder;
+        $_TINA4_MODULES[$baseName]["config"] = $config;
+        $_TINA4_MODULES[$baseName]["templatePath"] = [];
+        $_TINA4_MODULES[$baseName]["includePath"] = [];
+        $_TINA4_MODULES[$baseName]["routePath"] = [];
+        $_TINA4_MODULES[$baseName]["migrationPath"] = [];
 
-        self::addRoutePath($moduleFolder.DIRECTORY_SEPARATOR."api");
-        self::addRoutePath($moduleFolder.DIRECTORY_SEPARATOR."routes");
-        self::addIncludePath($moduleFolder.DIRECTORY_SEPARATOR."app");
-        self::addIncludePath($moduleFolder.DIRECTORY_SEPARATOR."objects");
-        self::addTemplatePath($moduleFolder.DIRECTORY_SEPARATOR."templates");
-        self::addMigrationPath($moduleFolder.DIRECTORY_SEPARATOR."migrations");
-
+        self::addRoutePath($moduleFolder.DIRECTORY_SEPARATOR."api", $baseName);
+        self::addRoutePath($moduleFolder.DIRECTORY_SEPARATOR."routes", $baseName);
+        self::addIncludePath($moduleFolder.DIRECTORY_SEPARATOR."app", $baseName);
+        self::addIncludePath($moduleFolder.DIRECTORY_SEPARATOR."objects", $baseName);
+        self::addTemplatePath($moduleFolder.DIRECTORY_SEPARATOR."templates", $baseName);
+        self::addMigrationPath($moduleFolder.DIRECTORY_SEPARATOR."migrations", $baseName);
 
     }
 
@@ -70,44 +58,47 @@ class Module
      * @param $pathType
      * @param $path
      */
-    public static function addPath($pathType, $path) {
+    public static function addPath($pathType, $path, $baseName) {
         global $_TINA4_MODULES;
-        $moduleFolder = self::getModuleFolder();
         if (file_exists($path)) {
-            $_TINA4_MODULES[basename($moduleFolder)][$pathType][] = $path;
+            $_TINA4_MODULES[$baseName][$pathType][] = $path;
         }
     }
 
     /**
      * Add Route Path
      * @param $path
+     * @param $baseName
      */
-    public static function addRoutePath($path) {
-        self::addPath("routePath", $path);
+    public static function addRoutePath($path, $baseName) {
+        self::addPath("routePath", $path, $baseName);
     }
 
     /**
      * Add Include Path
      * @param $path
+     * @param $baseName
      */
-    public static function addIncludePath($path) {
-        self::addPath("includePath", $path);
+    public static function addIncludePath($path, $baseName) {
+        self::addPath("includePath", $path, $baseName);
     }
 
     /**
      * Add Template Path
      * @param $path
+     * @param $baseName
      */
-    public static function addTemplatePath($path) {
-        self::addPath("templatePath", $path);
+    public static function addTemplatePath($path,$baseName) {
+        self::addPath("templatePath", $path,$baseName);
     }
 
     /**
      * Add Migration Path
      * @param $path
+     * @param $baseName
      */
-    public static function addMigrationPath($path) {
-        self::addPath("migrationPath", $path);
+    public static function addMigrationPath($path, $baseName) {
+        self::addPath("migrationPath", $path, $baseName);
     }
 
     /**
@@ -139,9 +130,10 @@ class Module
         if (empty($_TINA4_MODULES)) {
             return [];
         }  else {
+
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["templatePath"] as $routePath) {
-                    $routes[] = ["path" => $routePath, "nameSpace" => self::$nameSpace];
+                    $routes[] = ["path" => $routePath, "nameSpace" => $module["nameSpace"]];
                 }
             }
         }
@@ -196,10 +188,10 @@ class Module
         }  else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
 
-                    if (!empty($module["config"])) {
-                        $configs[] = $module["config"];
-                    }
-               
+                if (!empty($module["config"])) {
+                    $configs[] = $module["config"];
+                }
+
             }
         }
         return $configs;
