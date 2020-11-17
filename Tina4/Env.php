@@ -38,11 +38,10 @@ class Env
             $fileName = $vendorDir . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".env";
         }
 
-
-
         if (!empty($environment)) {
-            $fileName .= $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR.".{$environment}";
+            $fileName .= ".{$environment}";
         }
+
         if (file_exists($fileName)) {
             DebugLog::message("Parsing {$fileName}");
 
