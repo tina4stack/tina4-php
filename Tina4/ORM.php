@@ -550,7 +550,7 @@ class ORM implements \JsonSerializable
                 continue;
             } //form token is reserved
 
-            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
                 continue;
             }
 
@@ -635,7 +635,8 @@ class ORM implements \JsonSerializable
             if ($fieldName == "form_token") {
                 continue;
             } //form token is reserved
-            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+
+            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
                 continue;
             }
 

@@ -43,6 +43,7 @@ class DataSQLite3 implements DataBase
 
         $sql = $params[0];
 
+
         $preparedQuery = $this->dbh->prepare($sql);
 
         $error = $this->error();
@@ -51,19 +52,24 @@ class DataSQLite3 implements DataBase
             unset($params[0]);
 
             foreach ($params as $pid => $param) {
-                $param = $this->dbh->escapeString($param);
+
+
                 if (is_numeric($param)) {
-                    @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_FLOAT);
+                    $preparedQuery->bindValue("{$pid}", $param, SQLITE3_FLOAT);
                 } else
-                    if (is_integer($param)) {
-                        @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_INTEGER);
+                    if (is_int($param)) {
+                        $preparedQuery->bindValue("{$pid}", $param, SQLITE3_INTEGER);
                     } else
-                        if (is_string($param)) {
-                            @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
+                        if ($this->isBinary($param)) {
+                            $preparedQuery->bindValue("{$pid}", $param, SQLITE3_BLOB);
                         } else {
-                            @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_BLOB);
+                            $param = $this->dbh->escapeString($param);
+                            $preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
                         }
             }
+
+
+
             $preparedQuery->execute();
             $preparedQuery->close();
 
@@ -103,6 +109,7 @@ class DataSQLite3 implements DataBase
      */
     public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
     {
+
         $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
 
         $sql = $sql . " limit {$offSet},{$noOfRecords}";

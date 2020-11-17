@@ -59,25 +59,6 @@ class DataRecord implements JsonSerializable
         }
     }
 
-
-
-    /**
-     * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
-     * @param $string
-     * @return bool
-     */
-    public function isBinary($string)
-    {
-        $isBinary = false;
-        $string = str_ireplace("\t", "", $string);
-        $string = str_ireplace("\n", "", $string);
-        $string = str_ireplace("\r", "", $string);
-        if (is_string($string) && ctype_print($string) === false) {
-            $isBinary = true;
-        }
-        return $isBinary;
-    }
-
     /**
      * Converts array to object
      * @param bool $original Whether to get the result as original field names
