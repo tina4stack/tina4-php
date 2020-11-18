@@ -117,7 +117,10 @@ class Tina4Php
             if (!empty($config) && $config->getAuthentication() !== false) {
                 $auth = $config->getAuthentication();
             } else {
+                $config = new \Tina4\Config();
                 $auth = new \Tina4\Auth($this->documentRoot);
+                $config->setAuthentication($auth);
+                $this->config = $config;
             }
         }
 
@@ -334,7 +337,7 @@ class Tina4Php
             $twig->addGlobal('baseUrl', $subFolder);
             $twig->addGlobal('baseURL', $subFolder);
             $twig->addGlobal('uniqId', uniqid('', true));
-            $twig->addGlobal('formToken', $auth->getSessionToken());
+            $twig->addGlobal('formToken', $auth->getToken());
 
             if (isset($_COOKIE) && !empty($_COOKIE)) {
                 $twig->addGlobal('cookie', $_COOKIE);

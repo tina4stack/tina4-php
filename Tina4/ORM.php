@@ -330,8 +330,6 @@ class ORM implements \JsonSerializable
                 if (key_exists($primaryTableField, $tableData)) {
                     $primaryFieldFilter[] = str_replace("= ''", "is null", "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
                 } else {
-                    error_log($primaryTableField . print_r($this->fieldMapping, 1));
-
                     $primaryFieldFilter[] = "{$primaryTableField} is null";
                 }
             }
