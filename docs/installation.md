@@ -30,8 +30,11 @@ We recommend using one these IDE tools. Choose your weapon :
 
 ##### Step 2 
 
-Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files
-![alt text](../assets/images/idetools.png)
+Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files.
+
+<div align="center" alt="IDE Tools">
+    <img src="images/idetools.png">
+</div>
 
 ##### Step 3 
  
@@ -49,7 +52,9 @@ Head to the PHP page and download the current stable version for your Operating 
 
 Here's the link : [PHP](https://www.php.net/downloads.php)
 
-![alt text](../assets/images/phppage.png)
+<div align="center" alt="PHP Website">
+    <img src="images/phppage.png">
+</div>
 
 ##### Step 2 
 
@@ -68,7 +73,9 @@ Configure "php.ini" file:
         Rename file named "php.ini-development" to "php.ini".
         Open php.ini file by opening it with Notepad or IDE tool 
         
-![alt text](../assets/images/config1.png)
+<div align="center" alt="Configure php.ini file 1">
+    <img src="images/config1.png">
+</div>
 
             Find ';extension_dir = "ext"' and remove the semicolon infront of the word extension
             Find ";extension=curl" and remove the semicolon infront of the word extension
@@ -86,7 +93,9 @@ Configure "php.ini" file:
             Find ";extension=xsl" and ...
         Press Ctrl+S or save changes you just made to "php.ini" file. 
         
-![alt text](../assets/images/config2.png)
+<div align="center" alt="Configure php.ini file 2">
+    <img src="images/config2.png">
+</div>
 
 ##### Step 4 
 
@@ -98,47 +107,81 @@ Add path environment variable:
         Go to System
         Go to Advanced system settings
         
-![alt text](../assets/images/enviro1.png)
+<div align="center" alt="Add Path Environment Variable 1">
+    <img src="images/enviro1.png">
+</div>
 
         Go to Environment variable 
         Look for "Path" in the "Variable" column and click Edit.
        
-![alt text](../assets/images/enviro2.png)        
+<div align="center" alt="Add Path Environment Variable 2">
+    <img src="images/enviro2.png">
+</div>
         
         Click on Browse, locate the PHP folder you uxtracted. 
         Click OK and then click Ok again to close the "Edit environment variable" window.
         
-![alt text](../assets/images/enviro3.png)   
+<div align="center" alt="Add Path Environment Variable 3">
+    <img src="images/enviro3.png">
+</div>
 
 ##### Step 5 
  
 Complete the installation by restarting your system so that changes may take effect. After this you can confirm if the installation successful by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. The PHP version and details will appear in the terminal.    
 
-![alt text](../assets/images/confirm.png)  
+<div align="center" alt="Successful Installation Confirmation">
+    <img src="images/confirm.png">
+</div>
 
 ## Install Xdebug
 
 Follow these instructions to install Xdebug on your system.
 
-* Step 1 > Navigate to the [Xdebug](https://xdebug.org/download) website
+##### Step 1 
+ 
+Head to the Xdebug page and download the corresponding version for PHP on your Operating System. For example, in this case the PHP version used is VC15 x64bit Thread Safe 7.4.1.
             
-    Download the correct version for your  Operating System (e.g. Windows 10 32bit or 64bit, Mac or Linux). Download the installer or content. 
+Here's the link: [Xdebug](https://xdebug.org/download)
+
+<div align="center" alt="Xdebug Website">
+    <img src="images/xdebug.png">
+</div>
     
-* Step 2 > After the download is complete, copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
+##### Step 2 
+
+After the download is complete, extract/unpack or copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
     
     It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
 
-* Step 3 > Configure "php.ini" file:
+<div align="center" alt="Installing Xdebug">
+    <img src="images/xdebug1.png">
+</div>
+
+##### Step 3 
+
+Once the file have been extracted, you will need to edit the configuration settings file. 
+
+Configure "php.ini" file:
 
         Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
-        Add the following line "zend_extension="E:\php\ext\php_xdebug.dll" in the extensions directory list (HINT: its above Module Settings) . 
+        Add the following line "zend_extension="C:\php\ext\php_xdebug.dll" in the extensions directory list (HINT: its above Module Settings) . 
             *Please ensure that the "php_xdebug.dll" file location is correct* 
         Add the following line "xdebug.remote_enable = 1" in the extensions directory list.
         Add the following line "xdebug.remote_autostart = 1 " in the extensions directory list.
         Press Ctrl+S or save changes you just made to "php.ini" file.
-           
-To ensure your changes take effect you may restart your device or IDE tool.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
+
+<div align="center" alt="Configure php.ini file for Xdebug">
+    <img src="images/xdebug2.png">
+</div>
+
+##### Step 3 
+ 
+Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
 This will display all modules loaded in your PHP. At the bottom of the list you should see the "Zend Modules" heading and "Xdebug" will be listed underneath. 
+
+<div align="center" alt="Confirm Successful Xdebug Installation">
+    <img src="images/xdebug3.png">
+</div>
             
 ## Install Composer
 
@@ -146,67 +189,127 @@ Follow these instructions to install Composer on your system.
 
 #### For Windows
 
-* Step 1 > Download the latest stable version of [Composer](https://getcomposer.org/Composer-Setup.exe)
+##### Step 1 
+ 
+Head to the Composer page and download the current stable version for your Operating System.
+
+Here's the link : [Composer](https://getcomposer.org/Composer-Setup.exe)
+
+<div align="center" alt="Download Composer">
+    <img src="images/composer.png">
+</div>
      
-* Step 3 > After the download is complete, run the installation file and follow the prompts
+##### Step 2 
+ 
+After the download is complete, run the installation file and follow the prompts carefully. The installation window will inform you once the installation is complete.
 
-The installation window will inform you once the installation is complete. 
+##### Step 3
 
-To ensure your changes take effect you may restart your device or IDE tool. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "composer -V" and pushing Enter. 
+Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "composer -V" and pushing Enter. The Composer version and details will appear in the terminal.
 
-The Composer version and details will appear in the terminal.
+<div align="center" alt="Confirm Successful Composer Installation">
+    <img src="images/composer1.png">
+</div>
 
 *PLEASE NOTE:* If you want to install Composer via command line, the commands will be available on the download page.
 
 #### For Linux/Unix/macOS
 
-* Step 1 > Download the latest stable version of [Composer](https://getcomposer.org/installer)
+##### Step 1 
+ 
+Download the latest stable version by clicking this link: [Composer](https://getcomposer.org/installer)
 
-* Step 2 > There are two install options for Composer namely: Locally (as part of your project) and Globally (system wide executable). 
-Go to the [Composer installer](https://getcomposer.org/installer) page to view instructions on how to install Composer for your OS
+##### Step 2 
 
-To ensure your changes take effect you may restart your device or IDE tool. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "composer -V" and pushing Enter. 
+There are two install options for Composer namely: Locally (as part of your project) and Globally (system wide executable). You can choose to install in Locally as it is needed to run Tina4, but you can install it globally to use Composer in other projects. 
 
-The Composer version and details will appear in the terminal.
+Go to the [Composer installer](https://getcomposer.org/doc/00-intro.md#installation-linux-unix-macos) page to view instructions on how to install Composer for your OS.
+
+<div align="center" alt="Composer Installation Information">
+    <img src="images/composer2.png">
+</div>
+
+##### Step 3
+
+Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "composer -V" and pushing Enter. The Composer version and details will appear in the terminal.
 
 ## Install OpenSSL
 
 Follow these instructions to install OpenSSL on your system. 
 
-##### For Windows
+#### For Windows
 
-* Step 1 > Navigate to [Shining Light Productions](https://slproweb.com/products/Win32OpenSSL.html) 
+##### Step 1 
 
-* Step 2 > Download version v1.1.1 Light. Download the correct version for your Operating System (e.g. Windows 10 32bit or 64bit)
-     
-* Step 3 > After the download is complete, run the installation file and follow the prompts. The installation window will inform you once the installation is complete
+Head to the Shining Light Productions page and download the current stable version for your Operating System. In this case we are using a x64bit Windows. 
 
-* Step 4 > Change path environment variable
+Here's the link : [Shining Light Productions](https://slproweb.com/products/Win32OpenSSL.html) 
+
+<div align="center" alt="Installation OpenSSL">
+    <img src="images/openssl.png">
+</div>
+  
+##### Step 2 
+
+After the download is complete, run the installation file and follow the prompts carefully. The installation window will inform you once the installation is complete. 
+
+##### Step 3 
+ 
+After you have installed OpenSSL, you must add the OpenSSL bin folder in your systems environment variable table.
+
+Add path environment variable:
     
         Open Control Panel
         Go to System
         Go to Advanced system settings
+        
+<div align="center" alt="Add Path Environment Variable 1">
+    <img src="images/enviro1.png">
+</div>        
+
         Go to Environment variable 
         Look for "Path" in the "Variable" column and click Edit.
+        
+<div align="center" alt="Add Path Environment Variable 2">
+    <img src="images/enviro2.png">
+</div>
+
         Click on Browse, locate the "bin" folder directory where you installed OpenSSL (e.g. C:\Program Files\OpenSSL-Win64\bin). 
         Click OK and then click Ok again to close the "Edit environment variable" window.  
 
-To ensure your changes take effect you may restart your device or IDE tool. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "openssl version" and pushing Enter. 
-This will display the OpenSSL version if installed correctly. If you receive an error, the installation was unsuccessful. In this case, uninstall OpenSSL and follow the steps again.
+<div align="center" alt="Add Path Environment Variable 3">
+    <img src="images/openssl1.png">
+</div> 
 
-##### For Linux/Unix/macOS
+##### Step 4       
 
-* Step 1 > Navigate to the [OpenSSL](https://www.openssl.org/source/) website
+Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "openssl version" and pushing Enter. This will display the OpenSSL version if installed correctly. If you receive an error, the installation was unsuccessful. In this case, uninstall OpenSSL and follow the steps again.
 
-* Step 2 > Download version v1.1.1 Light
+<div align="center" alt="Confirm Successful OpenSSL Installation">
+    <img src="images/openssl2.png">
+</div>
+ 
+#### For Linux/Unix/macOS
 
-* Step 3 > Run the installer and follow the instructions in the links below to complete the installation process:
+##### Step 1 
+ 
+Head to the OpenSSL website and download the Light v1.1.1 version.
 
-    For Mac:
-    Visit [franz.com](https://franz.com/support/openssl-mac.lhtml) || [stackoverflow.com](https://stackoverflow.com/questions/15185661/update-openssl-on-os-x-with-homebrew)
-    
-    For Unix:
-    Visit [cloudwafer.com](https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/) || [howtoforge.com](https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/)
+Here's the link: [OpenSSL](https://www.openssl.org/source/)
+
+<div align="center" alt="OpenSSL Website">
+    <img src="images/openssl3.png">
+</div>
+
+##### Step 2 
+ 
+Run the installer and follow the instructions in the links below to complete the installation process:
+
+For Mac:
+Visit [franz.com](https://franz.com/support/openssl-mac.lhtml) || [stackoverflow.com](https://stackoverflow.com/questions/15185661/update-openssl-on-os-x-with-homebrew)
+
+For Unix:
+Visit [cloudwafer.com](https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/) || [howtoforge.com](https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/)
 
  
 ## Install Tina4
