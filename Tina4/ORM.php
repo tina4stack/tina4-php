@@ -684,9 +684,11 @@ class ORM implements \JsonSerializable
                 $this->{$ormField} = $fieldValue;
             } else
             if (property_exists($this, $ormField)){
-                 if  ((empty($this->{$ormField}) && $this->{$ormField} !== "0")) {
+                if (property_exists($this, $ormField)){
+                    if  ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
                         $this->{$ormField} = $fieldValue;
-                 }
+                    }
+                }
             }
         }
 
