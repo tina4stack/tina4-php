@@ -71,13 +71,20 @@ class DataMySQL implements DataBase
                                 $paramTypes .= "i";
                             } else
                                 if ($this->isBinary($param)) {
-                                    $paramTypes .= "b";
+                                    $paramTypes .= "s"; //Should be b but does not work as expected
                                 } else {
                                     $paramTypes .= "s";
                                 }
                     }
 
+
+
+
+
+
                     $params = array_merge([$preparedQuery, $paramTypes], $params);
+
+                    print_r ($params);
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
 
                     call_user_func_array("mysqli_stmt_bind_param", $this->refValues($params));
@@ -91,6 +98,8 @@ class DataMySQL implements DataBase
 
             }
 
+
+            print_r ($this->error());
             return $this->error();
         }
     }
@@ -313,7 +322,7 @@ class DataMySQL implements DataBase
 
     public function getDefaultDatabaseDateFormat()
     {
-       return "Y-m-d";
+        return "Y-m-d";
     }
 
     public function getDefaultDatabasePort()

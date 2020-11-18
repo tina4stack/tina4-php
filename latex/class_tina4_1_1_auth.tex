@@ -1,0 +1,162 @@
+\hypertarget{class_tina4_1_1_auth}{}\doxysection{Tina4\textbackslash{}Auth Class Reference}
+\label{class_tina4_1_1_auth}\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+Inheritance diagram for Tina4\textbackslash{}Auth\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=3.000000cm]{class_tina4_1_1_auth}
+\end{center}
+\end{figure}
+\doxysubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_ab3fbdd72dccce80d88847f1c246d531a}{\+\_\+\+\_\+construct}} (\$document\+Root=\char`\"{}\char`\"{}, \$last\+Path=\char`\"{}/\char`\"{})
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_a47b146f6ebd38b2753d1451e61beb511}{init\+Session}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_ae1bd2725ea123d8ae7a3f5e9046bb9da}{generate\+Secure\+Keys}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_a201fe5fae10307fda291a81332fe0821}{token\+Exists}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_a4cb7a5a22a26730a4ad4e20e3cc27609}{valid\+Token}} (\$token, \$public\+Key=\char`\"{}\char`\"{}, \$encryption=J\+W\+T\+::\+A\+L\+G\+O\+R\+I\+T\+H\+M\+\_\+\+R\+S256)
+\item 
+\mbox{\Hypertarget{class_tina4_1_1_auth_a52e31af4c8e5e8824a760031fba8d3d6}\label{class_tina4_1_1_auth_a52e31af4c8e5e8824a760031fba8d3d6}} 
+{\bfseries get\+Session\+Token} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_a51e519216d9911da4b85c28e2051cbc1}{validate\+Auth}} (\$request, \$last\+Path=null)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_a57019b206eef94fe30998bc19ca08a76}{clear\+Tokens}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_ae3dd30f3393886cd83eaabd3dc6c3923}{get\+Token}} (\$pay\+Load=\mbox{[}$\,$\mbox{]}, \$private\+Key=\char`\"{}\char`\"{}, \$encryption=J\+W\+T\+::\+A\+L\+G\+O\+R\+I\+T\+H\+M\+\_\+\+R\+S256)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_auth_a1fc8046ef2c1bdf1177971b5fa3bb24c}{get\+Pay\+Load}} (\$token, \$public\+Key=\char`\"{}\char`\"{}, \$encryption=J\+W\+T\+::\+A\+L\+G\+O\+R\+I\+T\+H\+M\+\_\+\+R\+S256)
+\end{DoxyCompactItemize}
+\doxysubsection*{Additional Inherited Members}
+
+
+\doxysubsection{Constructor \& Destructor Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_auth_ab3fbdd72dccce80d88847f1c246d531a}\label{class_tina4_1_1_auth_ab3fbdd72dccce80d88847f1c246d531a}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!\_\_construct@{\_\_construct}}
+\index{\_\_construct@{\_\_construct}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{\_\_construct()}{\_\_construct()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::\+\_\+\+\_\+construct (\begin{DoxyParamCaption}\item[{}]{\$document\+Root = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$last\+Path = {\ttfamily \char`\"{}/\char`\"{}} }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_auth}{Auth}} constructor. 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$document\+Root} & \\
+\hline
+\end{DoxyParams}
+
+\begin{DoxyExceptions}{Exceptions}
+{\em } & \\
+\hline
+\end{DoxyExceptions}
+
+
+\doxysubsection{Member Function Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_auth_a57019b206eef94fe30998bc19ca08a76}\label{class_tina4_1_1_auth_a57019b206eef94fe30998bc19ca08a76}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!clearTokens@{clearTokens}}
+\index{clearTokens@{clearTokens}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{clearTokens()}{clearTokens()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::clear\+Tokens (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Clears the session auth tokens \mbox{\Hypertarget{class_tina4_1_1_auth_ae1bd2725ea123d8ae7a3f5e9046bb9da}\label{class_tina4_1_1_auth_ae1bd2725ea123d8ae7a3f5e9046bb9da}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!generateSecureKeys@{generateSecureKeys}}
+\index{generateSecureKeys@{generateSecureKeys}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{generateSecureKeys()}{generateSecureKeys()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::generate\+Secure\+Keys (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Creates a secrets folder and generates keys for the application \begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_auth_a1fc8046ef2c1bdf1177971b5fa3bb24c}\label{class_tina4_1_1_auth_a1fc8046ef2c1bdf1177971b5fa3bb24c}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!getPayLoad@{getPayLoad}}
+\index{getPayLoad@{getPayLoad}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{getPayLoad()}{getPayLoad()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::get\+Pay\+Load (\begin{DoxyParamCaption}\item[{}]{\$token,  }\item[{}]{\$public\+Key = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$encryption = {\ttfamily JWT\+:\+:ALGORITHM\+\_\+RS256} }\end{DoxyParamCaption})}
+
+Gets the payload from token 
+\begin{DoxyParams}[1]{Parameters}
+ & {\em \$token} & \\
+\hline
+string & {\em \$public\+Key} & \\
+\hline
+string & {\em \$encryption} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+array$\vert$false 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_auth_ae3dd30f3393886cd83eaabd3dc6c3923}\label{class_tina4_1_1_auth_ae3dd30f3393886cd83eaabd3dc6c3923}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!getToken@{getToken}}
+\index{getToken@{getToken}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{getToken()}{getToken()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::get\+Token (\begin{DoxyParamCaption}\item[{}]{\$pay\+Load = {\ttfamily \mbox{[}\mbox{]}},  }\item[{}]{\$private\+Key = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$encryption = {\ttfamily JWT\+:\+:ALGORITHM\+\_\+RS256} }\end{DoxyParamCaption})}
+
+Gets an auth token for validating against secure U\+R\+LS for the session 
+\begin{DoxyParams}[1]{Parameters}
+array & {\em \$pay\+Load} & \\
+\hline
+string & {\em \$private\+Key} & \\
+\hline
+string & {\em \$encryption} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+string 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_auth_a47b146f6ebd38b2753d1451e61beb511}\label{class_tina4_1_1_auth_a47b146f6ebd38b2753d1451e61beb511}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!initSession@{initSession}}
+\index{initSession@{initSession}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{initSession()}{initSession()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::init\+Session (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Starts a php session \mbox{\Hypertarget{class_tina4_1_1_auth_a201fe5fae10307fda291a81332fe0821}\label{class_tina4_1_1_auth_a201fe5fae10307fda291a81332fe0821}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!tokenExists@{tokenExists}}
+\index{tokenExists@{tokenExists}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{tokenExists()}{tokenExists()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::token\+Exists (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Checks for \$\+\_\+\+S\+E\+S\+S\+I\+ON\mbox{[}\char`\"{}tokens\char`\"{}\mbox{]} \mbox{\Hypertarget{class_tina4_1_1_auth_a51e519216d9911da4b85c28e2051cbc1}\label{class_tina4_1_1_auth_a51e519216d9911da4b85c28e2051cbc1}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!validateAuth@{validateAuth}}
+\index{validateAuth@{validateAuth}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{validateAuth()}{validateAuth()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::validate\+Auth (\begin{DoxyParamCaption}\item[{}]{\$request,  }\item[{}]{\$last\+Path = {\ttfamily null} }\end{DoxyParamCaption})}
+
+Validate the request 
+\begin{DoxyParams}[1]{Parameters}
+ & {\em \$request} & \\
+\hline
+string & {\em \$last\+Path} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+string 
+\end{DoxyReturn}
+
+\begin{DoxyExceptions}{Exceptions}
+{\em } & \\
+\hline
+\end{DoxyExceptions}
+\mbox{\Hypertarget{class_tina4_1_1_auth_a4cb7a5a22a26730a4ad4e20e3cc27609}\label{class_tina4_1_1_auth_a4cb7a5a22a26730a4ad4e20e3cc27609}} 
+\index{Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}!validToken@{validToken}}
+\index{validToken@{validToken}!Tina4\textbackslash{}Auth@{Tina4\textbackslash{}Auth}}
+\doxysubsubsection{\texorpdfstring{validToken()}{validToken()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Auth\+::valid\+Token (\begin{DoxyParamCaption}\item[{}]{\$token,  }\item[{}]{\$public\+Key = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$encryption = {\ttfamily JWT\+:\+:ALGORITHM\+\_\+RS256} }\end{DoxyParamCaption})}
+
+Checks if an auth token in the header is valid against the session 
+\begin{DoxyParams}[1]{Parameters}
+ & {\em \$token} & \\
+\hline
+string & {\em \$public\+Key} & \\
+\hline
+string & {\em \$encryption} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Tina4/Auth.\+php\end{DoxyCompactItemize}

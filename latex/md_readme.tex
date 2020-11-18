@@ -1,0 +1,68 @@
+\mbox{\hyperlink{namespace_tina4}{Tina4}} is a light-\/weight routing and twig based templating system which allows you to write websites and A\+PI applications very quickly.
+
+The premise of the project is to make you the developer and P\+HP, the heroes!
+
+{\bfseries{Features}}
+
+
+\begin{DoxyItemize}
+\item Auto templating
+\item Auto inclusions \& project structure
+\item Annotations for quick Swagger documentation \& security
+\item Simple O\+RM
+\item Object Orientated H\+T\+ML
+\item Service Runner
+\item Modular Programming
+\end{DoxyItemize}\hypertarget{md_readme_autotoc_md55}{}\doxysubsection{Installing}\label{md_readme_autotoc_md55}
+
+\begin{DoxyItemize}
+\item Install P\+H\+P7.\+1 $>$ make sure the php\+\_\+fileinfo extension and mbstring extension are enabled.
+\item Install composer
+\item Create a project folder where you want to work
+\item In your project folder terminal / console 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{composer require andrevanzuydam/tina4php}
+\end{DoxyCode}
+
+\item Create an index.\+php file in your project folder and add this code 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{<?php}
+\DoxyCodeLine{ require \textcolor{stringliteral}{"{}./vendor/autoload.php"{}}; }
+\DoxyCodeLine{ echo new \(\backslash\)Tina4\(\backslash\)Tina4Php();}
+\end{DoxyCode}
+
+\item Spin up a web server with P\+HP in your terminal in the project folder 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{php -\/S localhost:8080 index.php}
+\end{DoxyCode}
+
+\item Hit up \href{http://localhost:8080}{\texttt{ http\+://localhost\+:8080}} in your browser, you should see the 404 error
+\end{DoxyItemize}\hypertarget{md_readme_autotoc_md56}{}\doxysubsection{Quick Reference}\label{md_readme_autotoc_md56}
+The folder layout is as follows and can be overridden by defining P\+HP constants for {\ttfamily T\+I\+N\+A4\+\_\+\+T\+E\+M\+P\+L\+A\+T\+E\+\_\+\+L\+O\+C\+A\+T\+I\+O\+NS}, {\ttfamily T\+I\+N\+A4\+\_\+\+R\+O\+U\+T\+E\+\_\+\+L\+O\+C\+A\+T\+I\+O\+NS} \& {\ttfamily T\+I\+N\+A4\+\_\+\+I\+N\+C\+L\+U\+D\+E\+\_\+\+L\+O\+C\+A\+T\+I\+O\+NS}\+:
+
+
+\begin{DoxyItemize}
+\item src
+\begin{DoxyItemize}
+\item api (routing)
+\item app (helpers, P\+HP classes)
+\item assets (system twig files, images, css, js)
+\item objects (O\+RM objects -\/ extend \textbackslash{}\+Tina4\textbackslash{}\+O\+RM)
+\item routes (app routing)
+\item services (service processes -\/ extend \textbackslash{}\+Tina4\textbackslash{}\+Process)
+\item templates (app twig files)
+\end{DoxyItemize}
+\end{DoxyItemize}\hypertarget{md_readme_autotoc_md57}{}\doxysubsection{.\+Env Configuration}\label{md_readme_autotoc_md57}
+\mbox{\hyperlink{namespace_tina4}{Tina4}} uses a .env file to setup project constants, a .env will be created for you when the system runs for the first time. If you specify an environment variable on your OS called E\+N\+V\+I\+R\+O\+N\+M\+E\+NT then .env.\+E\+N\+V\+I\+R\+O\+N\+M\+E\+NT will be loaded instead.
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{[Section]           <-\/-\/ Group section}
+\DoxyCodeLine{MY\_VAR=Test         <-\/-\/ Example declaration, no quotes required or escaping, quotes will be treated as part of the variable}
+\DoxyCodeLine{\# A commment        <-\/-\/ This is a comment}
+\DoxyCodeLine{[Another Section]}
+\DoxyCodeLine{VERSION=1.0.0}
+\end{DoxyCode}
+
+
+Do not include your .env files with your project if they contain sensitive information like password, instead create an example of how it should look. 

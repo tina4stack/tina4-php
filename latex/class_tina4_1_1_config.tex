@@ -1,0 +1,102 @@
+\hypertarget{class_tina4_1_1_config}{}\doxysection{Tina4\textbackslash{}Config Class Reference}
+\label{class_tina4_1_1_config}\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_a4720da9d18121db17f0fc88dbd7afd93}{add\+Twig\+Filter}} (\$filter\+Name, \$function)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_a5350c27fd5b8c7cc990cbfdfb9cb7c72}{add\+Twig\+Global}} (\$global\+Name, \$function)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_a0371f0ed11c1ced9e76b2cd3a19b064e}{set\+Auth}} (\mbox{\hyperlink{class_tina4_1_1_auth}{Auth}} \$auth)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_aaa2fc401980b8930182761b23ffe8599}{set\+Authentication}} (\mbox{\hyperlink{class_tina4_1_1_auth}{Auth}} \$auth)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_a33413ce21f0862eb24bc939a3932889a}{get\+Twig\+Filters}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_a67d9635364d258ecb7ee230c5d35c3de}{get\+Twig\+Globals}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_config_a07493a06bdf7a4a01c87f59a9f2abf88}{get\+Authentication}} ()
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_config_a4720da9d18121db17f0fc88dbd7afd93}\label{class_tina4_1_1_config_a4720da9d18121db17f0fc88dbd7afd93}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!addTwigFilter@{addTwigFilter}}
+\index{addTwigFilter@{addTwigFilter}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{addTwigFilter()}{addTwigFilter()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::add\+Twig\+Filter (\begin{DoxyParamCaption}\item[{}]{\$filter\+Name,  }\item[{}]{\$function }\end{DoxyParamCaption})}
+
+Adds a twig filter for use in your templates 
+\begin{DoxyParams}{Parameters}
+{\em \$filter\+Name} & string Name of the filter \\
+\hline
+{\em \$function} & null Anonymous function which takes parameters based on the name of the twig filter \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{class_tina4_1_1_config_a5350c27fd5b8c7cc990cbfdfb9cb7c72}\label{class_tina4_1_1_config_a5350c27fd5b8c7cc990cbfdfb9cb7c72}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!addTwigGlobal@{addTwigGlobal}}
+\index{addTwigGlobal@{addTwigGlobal}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{addTwigGlobal()}{addTwigGlobal()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::add\+Twig\+Global (\begin{DoxyParamCaption}\item[{}]{\$global\+Name,  }\item[{}]{\$function }\end{DoxyParamCaption})}
+
+Adds a twig global function 
+\begin{DoxyParams}{Parameters}
+{\em \$global\+Name} & \\
+\hline
+{\em \$function} & \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{class_tina4_1_1_config_a07493a06bdf7a4a01c87f59a9f2abf88}\label{class_tina4_1_1_config_a07493a06bdf7a4a01c87f59a9f2abf88}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!getAuthentication@{getAuthentication}}
+\index{getAuthentication@{getAuthentication}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{getAuthentication()}{getAuthentication()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::get\+Authentication (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Gets the auth variable \begin{DoxyReturn}{Returns}
+false$\vert$null 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_config_a33413ce21f0862eb24bc939a3932889a}\label{class_tina4_1_1_config_a33413ce21f0862eb24bc939a3932889a}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!getTwigFilters@{getTwigFilters}}
+\index{getTwigFilters@{getTwigFilters}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{getTwigFilters()}{getTwigFilters()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::get\+Twig\+Filters (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Gets all the twig filters \begin{DoxyReturn}{Returns}
+array 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_config_a67d9635364d258ecb7ee230c5d35c3de}\label{class_tina4_1_1_config_a67d9635364d258ecb7ee230c5d35c3de}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!getTwigGlobals@{getTwigGlobals}}
+\index{getTwigGlobals@{getTwigGlobals}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{getTwigGlobals()}{getTwigGlobals()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::get\+Twig\+Globals (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Gets all the twig globals \begin{DoxyReturn}{Returns}
+array 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_config_a0371f0ed11c1ced9e76b2cd3a19b064e}\label{class_tina4_1_1_config_a0371f0ed11c1ced9e76b2cd3a19b064e}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!setAuth@{setAuth}}
+\index{setAuth@{setAuth}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{setAuth()}{setAuth()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::set\+Auth (\begin{DoxyParamCaption}\item[{\mbox{\hyperlink{class_tina4_1_1_auth}{Auth}}}]{\$auth }\end{DoxyParamCaption})}
+
+Sets an auth parameter 
+\begin{DoxyParams}{Parameters}
+{\em \$auth} & \mbox{\hyperlink{class_tina4_1_1_auth}{Auth}} \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{class_tina4_1_1_config_aaa2fc401980b8930182761b23ffe8599}\label{class_tina4_1_1_config_aaa2fc401980b8930182761b23ffe8599}} 
+\index{Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}!setAuthentication@{setAuthentication}}
+\index{setAuthentication@{setAuthentication}!Tina4\textbackslash{}Config@{Tina4\textbackslash{}Config}}
+\doxysubsubsection{\texorpdfstring{setAuthentication()}{setAuthentication()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Config\+::set\+Authentication (\begin{DoxyParamCaption}\item[{\mbox{\hyperlink{class_tina4_1_1_auth}{Auth}}}]{\$auth }\end{DoxyParamCaption})}
+
+Sets an auth parameter -\/ alias of set\+Auth 
+\begin{DoxyParams}{Parameters}
+{\em \$auth} & \mbox{\hyperlink{class_tina4_1_1_auth}{Auth}} \\
+\hline
+\end{DoxyParams}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Tina4/Config.\+php\end{DoxyCompactItemize}
