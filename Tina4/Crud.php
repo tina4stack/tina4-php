@@ -258,7 +258,14 @@ class Crud
                     foreach ($splitValue as $singleValue) {
                         //Check that the values aren't whitespaces
                         if (!empty($singleValue)) {
-                            $filter[] = " like '%" . strtoupper($singleValue) . "%'";
+                            $filterValue = " like '%" . strtoupper($singleValue) . "%'";
+                            //Check if $filer is already an array
+                            if (!is_array($filter)) {
+                                $filter[] = $filterValue;
+                                //Check if filter value is already in $filer array
+                            } else if (!in_array($filterValue, $filter)) {
+                                $filter[] = $filterValue;
+                            }
                         }
                     }
                 }
