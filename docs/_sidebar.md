@@ -6,7 +6,7 @@
 // Contact : andre@codeinfinity.co.za
 -->
 
-   * [Getting Started](/)
+   * [Tina4 - This is Not Another Framework](/)
    * [Installation](installation.md)
    * [Recommendations](recommendations.md)
    * [How do I?](howdoi.md)

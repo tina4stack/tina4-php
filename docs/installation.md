@@ -8,9 +8,9 @@
 
 # Installation
 
-To make the magic of Tina4 possible, there are various tools you need to install first. Below you will find a list of the tools you need and how to install them.
-
 # Required
+
+To make the magic of Tina4 possible, there are various tools you need to install first. Below you will find a list of the tools you need and how to install them.
 
 * IDE development tool
 * PHP 7.1 or greater
@@ -131,56 +131,6 @@ Complete the installation by restarting your system so that changes may take eff
 
 <div align="center" alt="Successful Installation Confirmation">
     <img src="images/confirm.png">
-</div>
-
-## Install Xdebug
-
-Follow these instructions to install Xdebug on your system.
-
-##### Step 1 
- 
-Head to the Xdebug page and download the corresponding version for PHP on your Operating System. For example, in this case the PHP version used is VC15 x64bit Thread Safe 7.4.1.
-            
-Here's the link: [Xdebug](https://xdebug.org/download)
-
-<div align="center" alt="Xdebug Website">
-    <img src="images/xdebug.png">
-</div>
-    
-##### Step 2 
-
-After the download is complete, extract/unpack or copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
-    
-    It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
-
-<div align="center" alt="Installing Xdebug">
-    <img src="images/xdebug1.png">
-</div>
-
-##### Step 3 
-
-Once the file have been extracted, you will need to edit the configuration settings file. 
-
-Configure "php.ini" file:
-
-        Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
-        Add the following line "zend_extension="C:\php\ext\php_xdebug.dll" in the extensions directory list (HINT: its above Module Settings) . 
-            *Please ensure that the "php_xdebug.dll" file location is correct* 
-        Add the following line "xdebug.remote_enable = 1" in the extensions directory list.
-        Add the following line "xdebug.remote_autostart = 1 " in the extensions directory list.
-        Press Ctrl+S or save changes you just made to "php.ini" file.
-
-<div align="center" alt="Configure php.ini file for Xdebug">
-    <img src="images/xdebug2.png">
-</div>
-
-##### Step 3 
- 
-Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
-This will display all modules loaded in your PHP. At the bottom of the list you should see the "Zend Modules" heading and "Xdebug" will be listed underneath. 
-
-<div align="center" alt="Confirm Successful Xdebug Installation">
-    <img src="images/xdebug3.png">
 </div>
             
 ## Install Composer
@@ -313,31 +263,106 @@ Visit [cloudwafer.com](https://cloudwafer.com/blog/installing-openssl-on-ubuntu-
 
  
 ## Install Tina4
+
 Once the prerequisites have been installed you can create a project folder and proceed to run the Tina4 installation.
 
-Running this in your IDE terminal or command line then install Tina4 will start installing and create all the dependencies between your libraries and components.
+##### Step 1
 
-##### If you have project folder
+First you will need a folder in which Tina4 will be installed. In this example the folder is named tina4-php. Make your project directory by running this command in your terminal:
 
-* Step 1 > Ensure your command terminal is pointed to the right directory by running this command in your terminal:
+      mkdir your_project_folder
+      
+<div align="center" alt="Create Directory">
+    <img src="images/directory2.png">
+</div>
+
+##### Step 2
+
+Once your project folder has been created, you will need to direct the command line to go into the fodler you just created. In this example the folder is named "tina4-php". For more information on how to navigate directories with command line, please visit How To Geek by clicking this link: [How To Geek](https://www.howtogeek.com/659411/how-to-change-directories-in-command-prompt-on-windows-10/)Ensure your command terminal is pointed to the right directory by running this command in your terminal:
     
       cd your_project_folder
+      
+<div align="center" alt="CMD Directory">
+    <img src="images/directory.png">
+</div>
 
-* Step 2 > Run "composer require andrevanzuydam/tina4php" in your command terminal
+##### Step 3 
 
-##### If you dont have project folder
+Once you've created the project folder and went into it via the command line, you will need to create an "index.php" file which has the Tina4 methods and functions in it. Run the following command in your command terminal to create the required "index.php" file and contents:
 
-* Step 1 > Make your project directory by running this command in your terminal:
+###### For Windows 
 
-      mkdir tina4example
+    echo ^<?php require_once "vendor/autoload.php"; echo new \Tina4\Tina4Php(); ^ > index.php
 
-* Step 2 > Ensure your command terminal is pointed to the right directory by running this command in your terminal:
-       
-       cd your_project_folder
+<div align="center" alt="Create index file for Windows">
+    <img src="images/indexfile.png">
+</div>
 
-* Step 3 > Run "composer require andrevanzuydam/tina4php" in your command terminal
+###### For Linux & Mac 
 
+    echo '<?php require "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
+    
+<div align="center" alt="Create index file for Linux & Mac">
+    <img src="images/indexfile1.png">
+</div>
 
-aaaaaaaaaand Voila! Tina4 is installed and now you have everything you need to start bringing your ideas to life. 
+A PHP file will be created in the project folder you made and will look like this... 
 
-![alt text](../icons/ms-icon-310x310.png)
+<div align="center" alt="Created index file">
+    <img src="images/indexfile2.png">
+</div>
+
+##### Step 4
+
+Great, now that the "index.php" file has been created, we will install all the Tina4 libraries and dependencies in the project folder. Run "composer require andrevanzuydam/tina4php" in your IDE terminal or command line then Tina4 will start installing and create all the dependencies between your libraries and components. The terminal will inform you once the installation is complete. 
+
+<div align="center" alt="Composer Command">
+    <img src="images/directory1.png">
+</div>
+
+Your project folder will now look like this... 
+
+<div align="center" alt="Folder">
+    <img src="images/folder.png">
+</div>
+
+##### Step 5
+
+Almost there... Now you must create an ".env" file in your project folder. This file will be used to setup constants in your project needed for Tina4. Run "echo .>.env" in your IDE terminal or command line.
+
+    echo .>.env
+    
+<div align="center" alt="Env Command">
+    <img src="images/envfile.png">
+</div> 
+
+Your project folder will now look like this... 
+
+<div align="center" alt="Folder">
+    <img src="images/folder1.png">
+</div>
+
+##### Step 6
+
+Now that we created and installed everything we need to run Tina4, we can test to check if it was successful. Spin up a webserver by running "php -S localhost:7145 index.php" in your IDE terminal or command line. Once you ran the command, go to your browser and type "localhost:7145" in your URL address bar and hit enter (or click the address in the terminal). 
+ 
+    php -S localhost:7145 index.php
+    
+<div align="center" alt="Spin up WebServer">
+    <img src="images/webserver.png">
+</div>
+
+If the Tina4 404 error page loads, that means everything is working perfectly...
+
+<div align="center" alt="Error">
+    <img src="images/tinaerror.png">
+</div>
+
+aaaaaaaaaand Voila! Tina4 is now installed and you have everything you need to start bringing your ideas to life.   
+
+Continue to [recommendations](recommendations.md) or [how do I?](howdoi.md)
+
+<div align="center" alt="Tina4">
+    <img src="images/ms-icon-310x310.png">
+</div>
+

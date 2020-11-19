@@ -8,7 +8,8 @@
 
 # Recommendations
 
-## Introduction
+## What to consider ?
+
 If you already have a good work flow up and running then you can skip this bit, 
 however if you do not have an IDE which can do step by step debugging then I'd pause for a while and consider some of 
 the thoughts here.
@@ -26,20 +27,63 @@ Two popular IDEs which support PHP debugging are:
 * [Visual Studio Code](https://code.visualstudio.com/download)
 * [PHPStorm](https://www.jetbrains.com/phpstorm/download)
 
+The most popular PHP debugging extension is [Xdebug](https://xdebug.org/docs/install) and we recommend that you get this installed as soon as you have your PHP up 
+and running.
+
+## Install Xdebug
+
+Follow these instructions to install Xdebug on your system.
+
+##### Step 1 
+ 
+Head to the Xdebug page and download the corresponding version for PHP on your Operating System. For example, in this case the PHP version used is VC15 x64bit Thread Safe 7.4.1.
+            
+Here's the link: [Xdebug](https://xdebug.org/download)
+
+<div align="center" alt="Xdebug Website">
+    <img src="images/xdebug.png">
+</div>
+    
+##### Step 2 
+
+After the download is complete, extract/unpack or copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
+    
+    It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
+
+<div align="center" alt="Installing Xdebug">
+    <img src="images/xdebug1.png">
+</div>
+
+##### Step 3 
+
+Once the file have been extracted, you will need to enable remote debugging by editing the configuration settings file. 
+
+Configure "php.ini" file:
+
+        Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
+            *Please ensure that the "php_xdebug.dll" file location is correct* 
+        Add the following in the extensions directory list (HINT: its above Module Settings):
+            [XDebug]
+            zend_extension="C:\php\ext\php_xdebug.dll
+            xdebug.remote_enable = 1
+            xdebug.remote_autostart = 1
+        Press Ctrl+S or save changes you just made to "php.ini" file.
+
+<div align="center" alt="Configure php.ini file for Xdebug">
+    <img src="images/xdebug2.png">
+</div>
+
+##### Step 3 
+ 
+Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
+This will display all modules loaded in your PHP. At the bottom of the list you should see the "Zend Modules" heading and "Xdebug" will be listed underneath. 
+
+<div align="center" alt="Confirm Successful Xdebug Installation">
+    <img src="images/xdebug3.png">
+</div>
+
 ## Debugging
 
-The most popular PHP debugging extension is [Xdebug](https://xdebug.org/docs/install) and we recommend that you get this installed as soon as you have your PHP up 
-and running, there is a lot of documentation out there that will get you up and running quickly.
-
-See [How Do I - Install Xdebug](../docs/howdoi.md/#Install Xdebug)
-
-Most important is to enable remote debugging in your php.ini file 
-
-```sh
-[XDebug]
-xdebug.remote_enable = 1
-xdebug.remote_autostart = 1
-```
 The default port that debugging is enabled on for xdebug is 9000 and because we are not really remote there are some recommended ways to run Tina4 from
 the commandline to make debugging work.
 
