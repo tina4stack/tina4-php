@@ -175,21 +175,20 @@ class ORM implements \JsonSerializable
 
             if (isset($fieldMap[$name])) {
                 return $fieldMap[$name];
-            } else {
-
-                if (!$camelCase) {
-                    return $name;
-                } else {
-                    return $this->camelCase($name);
-                }
             }
-        } else {
+
             if (!$camelCase) {
                 return $name;
-            } else {
-                return $this->camelCase($name);
             }
+
+            return $this->camelCase($name);
         }
+
+        if (!$camelCase) {
+            return $name;
+        }
+
+        return $this->camelCase($name);
     }
 
     /**
@@ -458,6 +457,10 @@ class ORM implements \JsonSerializable
      */
     public function checkDBConnection($tableName = "")
     {
+        if (empty($tableName)) {
+            $tableName = $this->getTableName();
+        }
+
         if (empty($this->DBA)) {
             global $DBA;
             $this->DBA = $DBA;
@@ -466,6 +469,7 @@ class ORM implements \JsonSerializable
         if (empty($this->DBA)) {
             return false;
         } else {
+
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
                 if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
@@ -475,11 +479,13 @@ class ORM implements \JsonSerializable
                 $sql = $this->generateCreateSQL($this->getTableData(), $tableName);
 
                 //Make a migration for it
-                $migrate = (new Migration());
-                $migrate->createMigration("Create table {$tableName}", $sql);
+                //$migrate = (new Migration());
+                //$migrate->createMigration("Create table {$tableName}", $sql);
 
-                $this->DBA->exec($sql);
+                //$this->DBA->exec($sql);
+                return false;
             }
+
             return true;
         }
     }
@@ -906,9 +912,12 @@ class ORM implements \JsonSerializable
      */
     public function select($fields = "*", $limit = 10, $offset = 0)
     {
-        $tableName = $this->getTableName($this->tableName);
-
-        return (new SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName);
+        if ($this->checkDBConnection()) {
+            $tableName = $this->getTableName($this->tableName);
+            return (new SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName);
+        } else {
+            return null;
+        }
     }
 
     /**

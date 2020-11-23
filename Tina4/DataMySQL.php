@@ -234,11 +234,15 @@ class DataMySQL implements DataBase
      */
     public function tableExists($tableName)
     {
-        $exists = $this->fetch("SELECT * 
+        if (!empty($tableName)) {
+            $exists = $this->fetch("SELECT * 
                                     FROM information_schema.tables
                                     WHERE table_schema = '{$this->databaseName}' 
                                         AND table_name = '{$tableName}'", 1);
-        return !empty($exists->records());
+            return !empty($exists->records());
+        } else {
+            return false;
+        }
     }
 
     /**

@@ -64,7 +64,7 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
  * Autoloader
  * @param $class
  */
-function tina4_autoloader($class)
+function tina4_auto_loader($class)
 {
     if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
         if (defined("TINA4_INCLUDE_LOCATIONS")) {
@@ -123,7 +123,23 @@ function autoLoadFolders($documentRoot, $location, $class) {
     }
 }
 
-spl_autoload_register('tina4_autoloader');
+function tina4_error_handler ($errno,$errstr,$errfile,$errline)
+{
+    echo "<pre>";
+    echo $errno." ".$errstr." ".$errfile." ".$errline;
+    $debugTrace = debug_backtrace();
+    foreach ($debugTrace as $id => $trace) {
+        if ($id !== 0) {
+            echo $trace["file"] . " line:" . $trace["line"] . "\n";
+        }
+    }
+    echo "</pre>";
+    return true;
+}
+
+
+set_error_handler('tina4_error_handler');
+spl_autoload_register('tina4_auto_loader');
 
 /**
  * @param null $config

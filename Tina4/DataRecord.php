@@ -64,7 +64,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Whether to get the result as original field names
      * @return object
      */
-    function asObject($original = false)
+    public function asObject($original = false)
     {
         if ($original) {
             return $this->original;
@@ -79,13 +79,24 @@ class DataRecord implements JsonSerializable
     public function transformObject()
     {
         $object = (object)[];
-        foreach ($this->original as $column => $value) {
-            $columnName = $this->getObjectName($column);
-            $object->{$column} = $value; // to be added in
-            $object->{$columnName} = $value;
-        }
+        if (!empty($this->original)) {
+            foreach ($this->original as $column => $value) {
+                $columnName = $this->getObjectName($column);
+                $object->{$column} = $value; // to be added in
+                $object->{$columnName} = $value;
+            }
 
+        }
         return $object;
+    }
+
+    /**
+     * Cast the object to an array
+     * @return array
+     */
+    public function asArray()
+    {
+        return (array)$this->transformObject();
     }
 
     /**

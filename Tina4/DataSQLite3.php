@@ -94,9 +94,12 @@ class DataSQLite3 implements DataBase
      */
     public function tableExists($tableName)
     {
-        $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
-
-        return !empty($exists->records());
+        if (!empty($tableName)) {
+            $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
+            return !empty($exists->records);
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -177,7 +180,7 @@ class DataSQLite3 implements DataBase
     public function startTransaction()
     {
         //No transactions for sqlite
-        return true;
+        return "Resource id #0";
     }
 
     /**
