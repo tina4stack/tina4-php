@@ -123,18 +123,22 @@ function autoLoadFolders($documentRoot, $location, $class) {
     }
 }
 
-function tina4_error_handler ($errno,$errstr,$errfile,$errline)
+function tina4_error_handler ($errorNo,$errorString,$errorFile,$errorLine)
 {
-    echo "<pre>";
-    echo $errno." ".$errstr." ".$errfile." ".$errline;
-    $debugTrace = debug_backtrace();
-    foreach ($debugTrace as $id => $trace) {
-        if ($id !== 0) {
-            echo $trace["file"] . " line:" . $trace["line"] . "\n";
+    if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
+        echo "<pre>";
+        echo "<b>Error No:</b> (".$errorNo . ") " . $errorString . "\n<b>File:</b>" . $errorFile . "(" . $errorLine.")\n";
+        $debugTrace = debug_backtrace();
+        foreach ($debugTrace as $id => $trace) {
+            if ($id !== 0) {
+                echo "<b>File:</b>".$trace["file"] . " line: " . $trace["line"] . "\n";
+            }
         }
+        echo "</pre>";
+        return true;
+    } else {
+        return false;
     }
-    echo "</pre>";
-    return true;
 }
 
 
