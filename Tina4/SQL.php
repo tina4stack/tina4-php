@@ -217,7 +217,7 @@ class SQL implements \JsonSerializable
         $columnNames = [];
         foreach($fields as $id => $field) {
             $columnName = $field;
-            $field = str_replace([".", "as", " "], "^", $field);
+            $field = str_replace([".", " as", " "], "^", $field);
             if (strpos($field, "^") !== false) {
                 $explodedField = explode("^", $field);
                 $columnName = array_pop($explodedField);
@@ -265,8 +265,8 @@ class SQL implements \JsonSerializable
                         //Only return what was requested
                         if (!empty($this->fields) && !in_array("*", $this->getColumnNames($this->fields))) {
                             foreach ($newRecord as $key => $value) {
-                                if (in_array($key, $newRecord->protectedFields)) continue;
-                                if (!in_array($this->ORM->getFieldName($key), $this->getColumnNames($this->fields)) && strpos($key, " as") === false && strpos($key, ".") === false ) {
+                                if (in_array($key, $newRecord->protectedFields, true)) continue;
+                                if (!in_array($this->ORM->getFieldName($key), $this->getColumnNames($this->fields), true) && strpos($key, " as") === false && strpos($key, ".") === false ) {
                                     unset($newRecord->{$key});
                                 }
                             }
@@ -298,7 +298,7 @@ class SQL implements \JsonSerializable
     /**
      * @return string
      */
-    function generateSQLStatement()
+    public function generateSQLStatement()
     {
         //see if we have some foreign key references
         if (!empty($this->hasOne)) {
@@ -340,6 +340,7 @@ class SQL implements \JsonSerializable
         }
 
         \Tina4\DebugLog::message("SQL:".$sql);
+        error_log ($sql);
         return $sql;
     }
 

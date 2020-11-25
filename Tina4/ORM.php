@@ -708,7 +708,7 @@ class ORM implements \JsonSerializable
      * Returns back a list of field names on the ORM
      * @return array
      */
-    function getFieldNames()
+    public function getFieldNames()
     {
         $fields = [];
         foreach ($this as $fieldName => $value) {
@@ -724,7 +724,7 @@ class ORM implements \JsonSerializable
      * Get back an object
      * @return object
      */
-    function asObject()
+    public function asObject()
     {
         return (object)$this->jsonSerialize();
     }
@@ -741,7 +741,7 @@ class ORM implements \JsonSerializable
      * Gets back the object data from the ORM object without the additional protected bits
      * @return array
      */
-    function getObjectData()
+    public function getObjectData()
     {
         //See if we have exclude fields for parsing
         if (!empty($this->excludeFields) && is_string($this->excludeFields)) {
@@ -766,7 +766,7 @@ class ORM implements \JsonSerializable
      * @return object
      * @throws Exception Error on failure
      */
-    function delete($filter = "", $tableName = "", $fieldMapping = "")
+    public function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
         $tableName = $this->getTableName($tableName);
         if (!$this->checkDBConnection($tableName)) return false;
@@ -916,7 +916,7 @@ class ORM implements \JsonSerializable
             $tableName = $this->getTableName($this->tableName);
             return (new SQL($this))->select($fields, $limit, $offset, $this->hasOne())->from($tableName);
         } else {
-            return null;
+            return $this;
         }
     }
 
