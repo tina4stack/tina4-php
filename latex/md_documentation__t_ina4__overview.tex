@@ -1,0 +1,69 @@
+The purpose of this document is to outline what \mbox{\hyperlink{namespace_tina4}{Tina4}} capabilities exist, and what is available for use in projects. As this is a working document, parts of this may be old or incomplete. Each section shows the release version at which the documentation was correct.
+
+\DoxyHorRuler{0}
+\hypertarget{md_documentation__t_ina4__overview_autotoc_md52}{}\doxysubsubsection{Class O\+R\+M (v0.\+0.\+60)}\label{md_documentation__t_ina4__overview_autotoc_md52}
+This class {\ttfamily implements Json\+Serializable}, which allows it to redirect the P\+HP {\ttfamily json\+\_\+encode()} to it\textquotesingle{}s own {\ttfamily json\+Serialize()}
+
+{\bfseries{Object creation\+:}} The creation of the O\+RM object is handled by two functions together.
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{```function create(\$request, \$fromDB, \$tableName, \$fieldMapping, \$primaryKey, \$tableFilter, \$DBA)``` does all the creation work. It populates the object with the ```\$request``` variable, and can handle an array, object or JSON decodable string. If the ```\$request``` is directly from the database, and ```\$fromDB``` is true, then it will get the property names from the table field names, provided the ```\$propertyName``` is ```property\_name``` in the database table.}
+\DoxyCodeLine{}
+\DoxyCodeLine{}
+\DoxyCodeLine{}
+\DoxyCodeLine{function getFieldName(params): Gets the required field name from the database table.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function getObjectName(params): Gets the correct object name.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function generateInsertSQL(params): Generates an insert SQL given the table data and table Name.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function generateUpdateSQL(params): Generates an update SQL given the table data and table Name with an update filter.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function generateDeleteSQL(params): Generates a delete SQL given the table name and delete filter.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function getTableData(params): Gets the information to generate a REST friendly object containing all the table data.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function getRecords(params): Gets records from a table}
+\DoxyCodeLine{}
+\DoxyCodeLine{function checkDBConnection(): Checks if there is a valid database connection.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function getPrimaryCheck(params): Helper function to get the filter for the primary key.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function getTableName(params): Works out the table name from the class name.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function save(params): Saves the object data into the database, selecting if it should use an Insert or Update method, depending on the check if the record already exists in the database.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function load(params): Loads a record from the database into the object}
+\DoxyCodeLine{}
+\DoxyCodeLine{function delete(params): Deletes a record from the database}
+\DoxyCodeLine{}
+\DoxyCodeLine{function find(params): An alias for load.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function \_\_toString(): returns a JSON string of the table structure}
+\DoxyCodeLine{}
+\DoxyCodeLine{function jsonSerialize(): makes a neat Json response. Seemingly empty function still.}
+\DoxyCodeLine{}
+\DoxyCodeLine{function select(params): Selects a set of data records from the Database. }
+\DoxyCodeLine{}
+\DoxyCodeLine{function hasMany(): Empty function to be used for foreign key relationships}
+\DoxyCodeLine{}
+\DoxyCodeLine{function hasOne(): Empty function to be used for foreign key relationships}
+\DoxyCodeLine{}
+\DoxyCodeLine{function belongsTo(): Empty function to be used for foreign key relationships}
+\DoxyCodeLine{}
+\DoxyCodeLine{function generateCRUD(params): Possibly generates a CRUD template for Tina4}
+\DoxyCodeLine{}
+\DoxyCodeLine{-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/-\/}
+\DoxyCodeLine{}
+\DoxyCodeLine{\#\#\#\# Class Response (v0.0.60)}
+\DoxyCodeLine{}
+\DoxyCodeLine{The class consists of a single function, which returns an HTTP response. If ```\$content``` is empty it will return ```TEXT\_HTML```. Alternatively it will return an ```APPLICATION\_JSON``` or ```APPLICATION\_XML``` response.}
+\end{DoxyCode}
+
+
+function \+\_\+\+\_\+invoke(\$content, \$http\+Code, \$content\+Type) {\ttfamily  }\$content\+Type{\ttfamily , if empty, will try to get it from the}\$\+\_\+\+S\+E\+R\+V\+ER{\ttfamily variable, if set, alternatively it will set it to}T\+E\+X\+T\+\_\+\+H\+T\+M\+L\`{}\`{}\`{}.
+
+{\ttfamily \$http\+Code} will default to {\ttfamily 200, H\+T\+T\+P\+\_\+\+OK} if not set.
+
+{\ttfamily \$content} can be anything. If it is {\ttfamily A\+P\+P\+L\+I\+C\+A\+T\+I\+O\+N\+\_\+\+X\+ML}, it is returned as received. However the {\ttfamily \$content} of any other {\ttfamily \$content\+Type} will be returned in J\+S\+ON, and the {\ttfamily \$content\+Type} will be set to {\ttfamily A\+P\+P\+L\+I\+C\+A\+T\+I\+O\+N\+\_\+\+J\+S\+ON}. 

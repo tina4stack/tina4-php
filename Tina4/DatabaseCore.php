@@ -46,7 +46,14 @@ trait DataBaseCore
      */
     public $fetchLimit = 100;
 
+    /**
+     * @var xcache
+     */
     public $cache;
+
+    /**
+     * @var
+     */
     public $transaction;
 
     /**
@@ -67,7 +74,7 @@ trait DataBaseCore
         $this->username = $username;
         $this->password = $password;
 
-        if (strpos($database, ":") !== false) {
+        if (strpos($database, ":") !== false && strpos($database, "memory") === false ) {
             $database = explode(":", $database, 2);
             $this->hostName = $database[0];
             $this->databaseName = $database[1];
@@ -93,7 +100,7 @@ trait DataBaseCore
      * @param $params
      * @return array
      */
-    function parseParams($params) {
+    public function parseParams($params) {
         $tranId = "";
         $newParams = [];
         for ($i = 0, $iMax = count($params); $i < $iMax; $i++) {
@@ -107,6 +114,13 @@ trait DataBaseCore
         return ["params" => $newParams, "tranId" => $tranId];
     }
 
-
+    /**
+     * Returns back only the first element of a result which can then be used as is or serialized to array or object
+     * @param $sql
+     * @return mixed
+     */
+    public function fetchOne($sql) {
+       return $this->fetch($sql)->records[0];
+    }
 
 }

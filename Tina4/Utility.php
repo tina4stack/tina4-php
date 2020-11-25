@@ -11,6 +11,9 @@ trait Utility
      * @return bool
      */
     public function isDate($dateString, $databaseFormat) {
+
+        if (is_array($dateString) || is_object($dateString)) return false;
+
         if (substr($dateString,-1,1) == "Z") {
             $dateParts = explode ("T", $dateString);
         } else {
@@ -28,6 +31,9 @@ trait Utility
      * @return string
      */
     public function formatDate($dateString, $databaseFormat, $outputFormat) {
+        //Hacky fix for weird dates?
+        $dateString = str_replace(".000000", "", $dateString);
+
         if (!empty($dateString)) {
             if (substr($dateString, -1, 1) == "Z") {
                 $delimiter = "T";
@@ -57,5 +63,22 @@ trait Utility
         } else {
             return null;
         }
+    }
+
+    /**
+     * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
+     * @param $string
+     * @return bool
+     */
+    public function isBinary($string)
+    {
+        $isBinary = false;
+        $string = str_ireplace("\t", "", $string);
+        $string = str_ireplace("\n", "", $string);
+        $string = str_ireplace("\r", "", $string);
+        if (is_string($string) && ctype_print($string) === false) {
+            $isBinary = true;
+        }
+        return $isBinary;
     }
 }

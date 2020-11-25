@@ -1,0 +1,38 @@
+\hypertarget{md_docs_recommendations_autotoc_md34}{}\doxysection{Introduction}\label{md_docs_recommendations_autotoc_md34}
+If you already have a good work flow up and running then you can skip this bit, however if you do not have an I\+DE which can do step by step debugging then I\textquotesingle{}d pause for a while and consider some of the thoughts here.
+
+I\textquotesingle{}m not sure if you ever find yourself writing a whole bunch of echo statements in your code to \char`\"{}see\char`\"{} what\textquotesingle{}s happening. If you are taking a long time to get to the bottom of a problem you probably should be making use of a debugger in your editor. If your editor doesn\textquotesingle{}t support debugging then you should probably consider using one that does.\hypertarget{md_docs_recommendations_autotoc_md35}{}\doxysection{I\+D\+E vs Text Editor}\label{md_docs_recommendations_autotoc_md35}
+An I\+DE is an editor which allows you to do debugging and version control and code refinement due to good hints and code completion. A text editor is just that, something to edit text and it doesn\textquotesingle{}t give any guidance as to whether one is making mistakes.
+
+Two popular I\+D\+Es which support P\+HP debugging are\+:
+
+
+\begin{DoxyItemize}
+\item Visual Studio Code
+\item P\+H\+P\+Storm
+\end{DoxyItemize}\hypertarget{md_docs_recommendations_autotoc_md36}{}\doxysection{Debugging}\label{md_docs_recommendations_autotoc_md36}
+The most popular P\+HP debugging extension is \href{https://xdebug.org/docs/install}{\texttt{ Xdebug}} and we recommend that you get this installed as soon as you have your P\+HP up and running, there is a lot of documentation out there that will get you up and running quickly.
+
+Most important is to enable remote debugging in your php.\+ini file
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{[XDebug]}
+\DoxyCodeLine{xdebug.remote\_enable = 1}
+\DoxyCodeLine{xdebug.remote\_autostart = 1}
+\end{DoxyCode}
+
+
+The default port that debugging is enabled on for xdebug is 9000 and because we are not really remote there are some recommended ways to run \mbox{\hyperlink{namespace_tina4}{Tina4}} from the commandline to make debugging work.
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{XDEBUG\_CONFIG="{}remote\_host=127.0.0.1"{} php -\/S localhost:7145 index.php}
+\end{DoxyCode}
+
+
+On windows you can put the following in the built in P\+HP web server environment variables 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{XDEBUG\_CONFIG="{}remote\_host=127.0.0.1"{}}
+\end{DoxyCode}
+ 

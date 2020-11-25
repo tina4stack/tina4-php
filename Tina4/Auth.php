@@ -32,9 +32,7 @@ class Auth extends Data
     function __construct($documentRoot = "", $lastPath = "/")
     {
         parent::__construct();
-        self::initSession();
-
-        $_SESSION["tina4:lastPath"] = $lastPath;
+        $this->initSession();
 
         $this->documentRoot = $documentRoot;
 
@@ -62,7 +60,8 @@ class Auth extends Data
     public function initSession()
     {
         //make sure the session is started
-        if (session_status() == PHP_SESSION_NONE) {
+        if (session_status() === PHP_SESSION_NONE && !$this->configured ) {
+            $this->configured = true;
             session_start();
         }
     }
@@ -109,7 +108,7 @@ class Auth extends Data
     public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         DebugLog::message("Validating token");
-        self::initSession();
+        $this->initSession();
 
         if (!empty($publicKey)) {
             $this->publicKey = $publicKey;
@@ -163,7 +162,7 @@ class Auth extends Data
      */
     function validateAuth($request, $lastPath = null)
     {
-        self::initSession();
+        $this->initSession();
 
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
             $lastPath = $_SESSION["tina4:lastPath"];
@@ -179,7 +178,7 @@ class Auth extends Data
      */
     function clearTokens()
     {
-        self::initSession();
+        $this->initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
             unset($_SESSION["tina4:authToken"]);
         }
@@ -194,7 +193,7 @@ class Auth extends Data
      */
     public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
-        self::initSession();
+        $this->initSession();
 
         if (!empty($privateKey)) {
             $this->privateKey = $privateKey;
@@ -210,10 +209,14 @@ class Auth extends Data
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 
-        $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
-        $tokenString = $tokenEncoded->__toString();
-        $_SESSION["tina4:authToken"] = $tokenString;
-        session_write_close();
+        if (!empty($this->privateKey)) {
+
+            $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
+            $tokenString = $tokenEncoded->__toString();
+            $_SESSION["tina4:authToken"] = $tokenString;
+        } else {
+            $tokenString = "secrets folder is empty of tokens";
+        }
         return $tokenString;
     }
 

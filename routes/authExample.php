@@ -23,3 +23,14 @@
     return $response (["test" => $test, "token" => $auth->getToken(["data" => ["name" => "test"], "sub" => "1234567890", "iss" => "https://tina4php.com"])], HTTP_OK);
 });
 
+
+/**
+ * @tags Testing API
+ * @description Test
+ *
+ */
+\Tina4\Get::add("/test/philip", function (\Tina4\Response $response) {
+    $html = \Tina4\renderTemplate("example.twig", ["publicKey" => str_replace("\r", "", str_replace("\n", "", file_get_contents("./secrets/public.pub")))]);
+
+    return $response ($html, HTTP_OK);
+});

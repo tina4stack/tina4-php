@@ -32,7 +32,7 @@ class Routing
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
-    private $pathMatchExpression = "/([a-zA-Z0-9\\ \\! \\-\\}\\{\\.\\_]*)\\//";
+    private $pathMatchExpression = "/([a-zA-Z0-9\\%\\ \\! \\-\\}\\{\\.\\_]*)\\//";
 
     /**
      * Routing constructor.
@@ -73,19 +73,20 @@ class Routing
         global $arrRoutes;
 
         if (!$suppressed) {
-            if (in_array("*", TINA4_ALLOW_ORIGINS) || (key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
-                if (key_exists("HTTP_ORIGIN", $_SERVER)) {
-                    header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
-                } else {
-                    header ( 'Access-Control-Allow-Origin: ' . join(",", TINA4_ALLOW_ORIGINS));
-                }
-                header('Vary: Origin');
-                header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
-                header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-                header('Access-Control-Allow-Credentials: true');
-            }
-
             if ($method === "OPTIONS") {
+                if (in_array("*", TINA4_ALLOW_ORIGINS) || (key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
+                    if (key_exists("HTTP_ORIGIN", $_SERVER)) {
+                        header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
+                    } else {
+                        header ( 'Access-Control-Allow-Origin: ' . join(",", TINA4_ALLOW_ORIGINS));
+                    }
+                    header('Vary: Origin');
+                    header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
+                    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+                    header('Access-Control-Allow-Credentials: true');
+                }
+
+
                 http_response_code(200);
                 $this->content = "";
                 return true;
@@ -124,6 +125,11 @@ class Routing
         } else {
             //Check the template locations
             foreach (TINA4_TEMPLATE_LOCATIONS_INTERNAL as $tid => $templateLocation) {
+                if (is_array($templateLocation)) {
+                    if (isset($templateLocation["path"])) {
+                        $templateLocation = $templateLocation["path"];
+                    }
+                }
                 DebugLog::message($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
                 if (file_exists($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
                     $this->returnStatic($root . DIRECTORY_SEPARATOR . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);
@@ -149,14 +155,14 @@ class Routing
                 if (file_exists($route)) {
                     $this->includeDirectory($route);
                 }
-                    else
-                if (file_exists(getcwd() . "/" . $route)) {
-                    $this->includeDirectory(getcwd() . "/" . $route);
-                } else {
-                    if (TINA4_DEBUG) {
-                        DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+                else
+                    if (file_exists(getcwd() . "/" . $route)) {
+                        $this->includeDirectory(getcwd() . "/" . $route);
+                    } else {
+                        if (TINA4_DEBUG) {
+                            DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+                        }
                     }
-                }
             }
         }
 
@@ -185,9 +191,9 @@ class Routing
                         //call closure with & without params
                         $result = call_user_func_array($route["function"], $params);
                     } else
-                        {
-                            $this->forbidden();
-                        }
+                    {
+                        $this->forbidden();
+                    }
 
                     $matched = true;
                     break;
@@ -453,7 +459,7 @@ class Routing
             $matching = true;
             foreach ($matchesPath[1] as $rid => $matchPath) {
                 if (!empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
-                    $variables[] = $matchPath;
+                    $variables[] = urldecode($matchPath);
                 } else
                     if (!empty($matchesRoute[1][$rid])) {
 

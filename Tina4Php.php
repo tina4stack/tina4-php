@@ -59,6 +59,7 @@ class Tina4Php
         DebugLog::message("Beginning of Tina4PHP Initialization");
 
 
+
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
@@ -102,6 +103,10 @@ class Tina4Php
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
         }
 
+        if (strpos($this->documentRoot, ".php") !== false) {
+            $this->documentRoot = dirname($this->documentRoot)."/";
+        }
+
         if (file_exists("Tina4Php.php")) {
             $this->documentRoot = realpath(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
         }
@@ -112,7 +117,10 @@ class Tina4Php
             if (!empty($config) && $config->getAuthentication() !== false) {
                 $auth = $config->getAuthentication();
             } else {
+                $config = new \Tina4\Config();
                 $auth = new \Tina4\Auth($this->documentRoot);
+                $config->setAuthentication($auth);
+                $this->config = $config;
             }
         }
 
@@ -217,6 +225,11 @@ class Tina4Php
         //migration routes
         \Tina4\Route::get("/migrate|/migrations|/migration", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $result = (new \Tina4\Migration())->doMigration();
+            $migrationFolders = (new \Tina4\Module())->getMigrationFolders();
+            foreach ($migrationFolders as $id => $migrationFolder) {
+                $result .= (new \Tina4\Migration($migrationFolder))->doMigration();
+            }
+
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
 
@@ -276,10 +289,7 @@ class Tina4Php
 
         //Twig initialization
         if (empty($twig)) {
-
-
             $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
-
 
             \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
 
@@ -288,16 +298,32 @@ class Tina4Php
             }
 
             foreach ($twigPaths as $tid => $twigPath) {
-                if (!file_exists(str_replace(DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath))) {
-                    if (!file_exists($twigPath)) {
-                        unset($twigPaths[$tid]);
+
+                if (!is_array($twigPath)) {
+                    if (!file_exists(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath))) {
+                        if (!file_exists($twigPath)) {
+                            unset($twigPaths[$tid]);
+                        }
                     }
                 }
             }
 
             $twigLoader = new \Twig\Loader\FilesystemLoader();
+
+
             foreach ($twigPaths as $twigPath) {
-                $twigLoader->addPath($twigPath, '__main__');
+                if (is_array($twigPath)) {
+                    if (isset($twigPath["nameSpace"])) {
+                        $twigLoader->addPath($twigPath["path"], $twigPath["nameSpace"]);
+                        $twigLoader->addPath($twigPath["path"], "__main__");
+                    }
+                }
+                  else
+                if (file_exists($twigPath)) {
+                    $twigLoader->addPath($twigPath, '__main__');
+                } else {
+                    $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath), '__main__');
+                }
             }
 
             $twig = new \Twig\Environment($twigLoader, ["debug" => true, "cache" => "./cache"]);
@@ -310,8 +336,8 @@ class Tina4Php
             $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
             $twig->addGlobal('baseUrl', $subFolder);
             $twig->addGlobal('baseURL', $subFolder);
-            $twig->addGlobal('uniqid', uniqid('', true));
-            $twig->addGlobal('formToken', $auth->getSessionToken());
+            $twig->addGlobal('uniqId', uniqid('', true));
+            $twig->addGlobal('formToken', $auth->getToken());
 
             if (isset($_COOKIE) && !empty($_COOKIE)) {
                 $twig->addGlobal('cookie', $_COOKIE);
@@ -325,19 +351,16 @@ class Tina4Php
                 $twig->addGlobal('request', $_REQUEST);
             }
 
-            if (!empty($config) && !empty($config->getTwigGlobals())) {
-                foreach ($config->getTwigGlobals() as $name => $method) {
-                    $twig->addGlobal($name, $method);
+            //Check the configs for each module
+            $configs = (new Module())->getModuleConfigs();
+            foreach ($configs as $moduleId => $configMethod) {
+                if (empty($config)) {
+                    $config = new \Tina4\Config();
                 }
+                $configMethod ($config);
             }
 
-            if (!empty($config) && !empty($config->getTwigFilters())) {
-
-                foreach ($config->getTwigFilters() as $name => $method) {
-                    $filter = new \Twig\TwigFilter($name, $method);
-                    $twig->addFilter($filter);
-                }
-            }
+            $this->addTwigMethods($config, $twig);
 
             //Add form Token
             $filter = new \Twig\TwigFilter("formToken", function ($payload) use ($auth) {
@@ -355,7 +378,7 @@ class Tina4Php
                     if (substr($dateString,-1,1) == "Z") {
                         return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"),0, -1);
                     } else {
-                        return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d\T");
+                        return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d");
                     }
                 } else {
                     return $dateString;
@@ -505,6 +528,29 @@ class Tina4Php
         }
 
         return $string;
+    }
+
+    /**
+     * @param Config $config
+     * @param \Twig\Environment $twig
+     * @return \Twig\TwigFilter
+     */
+    public function addTwigMethods(Config $config, \Twig\Environment $twig)
+    {
+        if (!empty($config) && !empty($config->getTwigGlobals())) {
+            foreach ($config->getTwigGlobals() as $name => $method) {
+                $twig->addGlobal($name, $method);
+            }
+        }
+
+        if (!empty($config) && !empty($config->getTwigFilters())) {
+            foreach ($config->getTwigFilters() as $name => $method) {
+                $filter = new \Twig\TwigFilter($name, $method);
+                $twig->addFilter($filter);
+            }
+        }
+
+        return true;
     }
 }
 

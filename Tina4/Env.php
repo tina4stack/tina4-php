@@ -30,12 +30,18 @@ class Env
      */
     function readParams($environment)
     {
-        $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
-        $vendorDir = dirname(dirname($reflection->getFileName()));
-        $fileName = $vendorDir . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".env";
+        $fileName = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR.".env";
+
+        if (!file_exists($fileName)) {
+            $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
+            $vendorDir = dirname(dirname($reflection->getFileName()));
+            $fileName = $vendorDir . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".env";
+        }
+
         if (!empty($environment)) {
             $fileName .= ".{$environment}";
         }
+
         if (file_exists($fileName)) {
             DebugLog::message("Parsing {$fileName}");
 

@@ -75,7 +75,7 @@ class Migration extends Data
     {
         $result = "";
         echo "<pre>";
-        if (!file_exists($this->migrationPath)) die("{$this->migrationPath} not found!");
+        if (!file_exists($this->migrationPath)) return;
         $dirHandle = opendir($this->migrationPath);
         $error = false;
         set_time_limit(0);
@@ -152,11 +152,10 @@ class Migration extends Data
                 $error = false;
                 foreach ($content as $cid => $sql) {
                     if (!empty(trim($sql))) {
+
+
+
                         $success = $this->DBA->exec($sql, $transId);
-
-
-
-
                         if ($success->getError()["errorMessage"] !== "" && $success->getError()["errorMessage"] !== "not an error" && $success->getError()["errorMessage"] !== false) {
                             $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:" . $success->getError()["errorMessage"] . "\n";
                             $error = true;

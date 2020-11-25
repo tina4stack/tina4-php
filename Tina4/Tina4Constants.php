@@ -3,6 +3,9 @@
 use Tina4\HTMLElement;
 use Tina4\Module;
 
+//Set sessions to be off
+ini_set("session.auto_start", false);
+
 if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
 //CSFR
 if (!defined("TINA4_SECURE")) define("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
@@ -61,7 +64,7 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
  * Autoloader
  * @param $class
  */
-function tina4_autoloader($class)
+function tina4_auto_loader($class)
 {
     if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
         if (defined("TINA4_INCLUDE_LOCATIONS")) {
@@ -86,15 +89,61 @@ function tina4_autoloader($class)
                 require_once $location.DIRECTORY_SEPARATOR."{$class}.php";
                 break;
             } else
-            if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
-                break;
+                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                    break;
+                }
+                else {
+                    autoLoadFolders($_SERVER["DOCUMENT_ROOT"],$location,$class);
+                }
+        }
+    }
+}
+
+/**
+ * Recursive include
+ * @param $documentRoot
+ * @param $location
+ * @param $class
+ */
+function autoLoadFolders($documentRoot, $location, $class) {
+    if (is_dir($documentRoot.DIRECTORY_SEPARATOR.$location))
+    {
+        $subFolders = scandir($documentRoot . DIRECTORY_SEPARATOR . $location);
+        foreach ($subFolders as $id => $file) {
+            if (is_dir(realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $file)) && $file !== "." && $file !== "..") {
+                $fileName = realpath($documentRoot . DIRECTORY_SEPARATOR . $location . DIRECTORY_SEPARATOR . $file . DIRECTORY_SEPARATOR . "{$class}.php");
+                if (file_exists($fileName)) {
+                    require_once $fileName;
+                } else {
+                    autoLoadFolders($documentRoot, $location . DIRECTORY_SEPARATOR . $file, $class);
+                }
             }
         }
     }
 }
 
-spl_autoload_register('tina4_autoloader');
+function tina4_error_handler ($errorNo,$errorString,$errorFile,$errorLine)
+{
+    if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
+        echo "<pre>";
+        echo "<b>Error No:</b> (".$errorNo . ") " . $errorString . "\n<b>File:</b>" . $errorFile . "(" . $errorLine.")\n";
+        $debugTrace = debug_backtrace();
+        foreach ($debugTrace as $id => $trace) {
+            if ($id !== 0) {
+                echo "<b>File:</b>".$trace["file"] . " line: " . $trace["line"] . "\n";
+            }
+        }
+        echo "</pre>";
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+set_error_handler('tina4_error_handler');
+spl_autoload_register('tina4_auto_loader');
 
 /**
  * @param null $config

@@ -89,12 +89,13 @@ function processCreateORMfromDB($step, $input, $handle)
                 $className = ucwords($record->getObjectName($data["table"]));
 
                 $fields = [];
+                $fieldMapping = [];
                 $primaryKey = "";
                 foreach ($data["fields"] as $fid => $field) {
                     if ($fid == 0 || $field["pk"] == "PRI") {
                         $primaryKey = $field["field"];
                     }
-
+                    $fieldMapping [] = '"'.$record->getObjectName($field["field"]) .'" => "'.$field["field"].'"';
                     $fields[] = "\tpublic \$" . $record->getObjectName($field["field"]) . ";";
                 }
 
@@ -103,6 +104,7 @@ class [CLASS_NAME] extends \Tina4\ORM
 {
     public $tableName="[TABLE_NAME]";
     public $primaryKey="[PRIMARY_KEY]"; //set for primary key
+    public $fieldMapping = [[FIELD_MAPPING]];
     //public $softDelete=true; //uncomment for soft deletes in crud
     
 [FIELDS]
@@ -119,6 +121,7 @@ class [CLASS_NAME] extends \Tina4\ORM
                     $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
                     $definition = str_replace("[CLASS_NAME]", $className, $definition);
                     $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
+                    $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
                     file_put_contents($fileName, $definition);
                 }
             }

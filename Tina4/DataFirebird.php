@@ -91,12 +91,12 @@ class DataFirebird implements DataBase
             $sql = substr($sql, 0, $posSelect) . $limit . substr($sql, $posSelect);   //select first 10 skip 10 from table
         }
 
-        $recordCursor = @ibase_query($this->dbh, $sql);
+        $recordCursor = ibase_query($this->dbh, $sql);
 
         $records = null;
         $record = null;
 
-        while ($record = @ibase_fetch_assoc($recordCursor)) {
+        while ($record = ibase_fetch_assoc($recordCursor)) {
             foreach ($record as $key => $value) {
                 if (substr($value, 0, 2) === "0x") {
                     //Get the blob information
@@ -192,7 +192,7 @@ class DataFirebird implements DataBase
     public function autoCommit($onState = false)
     {
         //Firebird has commit off by default
-        return true;
+        return false;
     }
 
     /**
@@ -212,11 +212,15 @@ class DataFirebird implements DataBase
      */
     public function tableExists($tableName) : bool
     {
-        // table name must be in upper case
-        $tableName = strtoupper($tableName);
-        $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+        if (!empty($tableName)) {
+            // table name must be in upper case
+            $tableName = strtoupper($tableName);
+            $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
 
-        return !empty($exists->records());
+            return !empty($exists->records());
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -334,13 +338,31 @@ class DataFirebird implements DataBase
         return $database;
     }
 
+    /**
+     * Gets the default database date format
+     * @return mixed|string
+     */
     public function getDefaultDatabaseDateFormat()
     {
         return "m/d/Y";
     }
 
+    /**
+     * Gets the default database port
+     * @return int|mixed
+     */
     public function getDefaultDatabasePort()
     {
         return 3050;
+    }
+
+    /**
+     * Specific to firebird generators
+     * @param $generatorName
+     * @param int $increment
+     * @return mixed
+     */
+    public function getGeneratorId($generatorName, $increment=1) {
+        return ibase_gen_id (strtoupper($generatorName), $increment, $this->dbh);
     }
 }
