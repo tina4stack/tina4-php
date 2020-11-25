@@ -183,6 +183,11 @@ class Tina4Php
             copy($this->webRoot . "/.htaccess", $this->documentRoot . "/.htaccess");
         }
 
+        //Add the icon file for making it look pretty
+        if (!file_exists($this->documentRoot . "/favicon.ico") && !file_exists("engine.php")) {
+            copy($this->webRoot . "/favicon.ico", $this->documentRoot . "/favicon.ico");
+        }
+
         /**
          * Built in routes
          */
