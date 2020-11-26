@@ -5,9 +5,7 @@
 // Copyright (C)
 // Contact : andre@codeinfinity.co.za
 -->
-
 # Recommendations
-
 ## What to consider ?
 
 If you already have a good work flow up and running then you can skip this bit, 
@@ -34,7 +32,7 @@ and running.
 
 Follow these instructions to install Xdebug on your system.
 
-##### Step 1 
+### Step 1 - Download & Install
  
 Head to the Xdebug page and download the corresponding version for PHP on your Operating System. For example, in this case the PHP version used is VC15 x64bit Thread Safe 7.4.1.
             
@@ -43,8 +41,6 @@ Here's the link: [Xdebug](https://xdebug.org/download)
 <div align="center" alt="Xdebug Website">
     <img src="images/xdebug.png">
 </div>
-    
-##### Step 2 
 
 After the download is complete, extract/unpack or copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
     
@@ -54,7 +50,7 @@ After the download is complete, extract/unpack or copy the file into the "ext" f
     <img src="images/xdebug1.png">
 </div>
 
-##### Step 3 
+### Step 2 - Configure php.ini 
 
 Once the file have been extracted, you will need to enable remote debugging by editing the configuration settings file. 
 
@@ -73,7 +69,7 @@ Configure "php.ini" file:
     <img src="images/xdebug2.png">
 </div>
 
-##### Step 3 
+### Step 3 - Confirm Installation
  
 Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "php -m" and pushing Enter. 
 This will display all modules loaded in your PHP. At the bottom of the list you should see the "Zend Modules" heading and "Xdebug" will be listed underneath. 
@@ -95,3 +91,4 @@ On windows you can put the following in the built in PHP web server environment 
 XDEBUG_CONFIG="remote_host=127.0.0.1"
 ```
 
+Continue to [install php](/installation/install-php.md) or go back to [install tina4](/installation/install-tina4.md).

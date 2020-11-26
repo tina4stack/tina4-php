@@ -6,7 +6,14 @@
 // Contact : andre@codeinfinity.co.za
 -->
 
-   * [Tina4 - This is Not Another Framework](/)
-   * [Installation](installation.md)
-   * [Recommendations](recommendations.md)
-   * [How do I?](howdoi.md)
+* [Tina4 - This is Not Another Framework](/ "Tina4 - This is Not Another Framework")
+* [Install Tina4](/installation/install-tina4.md "Install Tina4") 
+* [Recommendations](/recommendations/ "Recommendations")
+*Tutorials 
+** [Install PHP](/installation/install-php.md "Prerequisites - Install PHP")
+** [Install Composer](/installation/install-composer.md "Prerequisites - Install Composer")
+** [Install OpenSSL](/installation/install-openssl.md "Prerequisites - Install OpenSSL")
+** [Install IDE Tool](/installation/install-ide.md "Prerequisites - Install IDE Tool")
+** [How to make a webpage - landing page ](/tutorials/websitemd "Prerequisites - Install IDE Tool")
+* [How do I?](/tutorials/howdoi.md)
+  

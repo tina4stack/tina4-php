@@ -23,13 +23,13 @@ Tina uses the following methods to make development quicker:
 
 These are the tools you need for Tina4
 
-* IDE development tool : Tool used when writing code, debugging or version control Eg. PHPStorm; Visual Studio Code
+* [PHP 7.1 or greater](installation/install-php.md) : Open source general-purpose scripting language used in software/web development
 
-* PHP 7.1 or greater : Open source general-purpose scripting language used in software/web development
+* [Composer](installation/install-composer.md) : Package manager used to manage dependence between your libraries and PHP software/website 
 
-* Composer : PHP package manager used to manage dependence between your libraries and PHP software/website 
+* [OpenSSL](installation/install-openssl.md) : A toolkit used for Security Layer protocols between a computer network and Internet servers
 
-* OpenSSL : A toolkit used for Security Layer protocols between a computer network and Internet servers
+* [IDE development tool](installation/install-ide.md) : Tool used when writing code, debugging or version control Eg. PHPStorm; Visual Studio Code
 
 ## Who should use Tina4 ?
 
@@ -39,4 +39,4 @@ These are the tools you need for Tina4
 * Bloggers
 * Content Creators
 
-Continue to [installation](installation.md) or [recommendations](recommendations.md)  
+Continue to [install tina4](installation/install-tina4.md) or [recommendations](recommendations.md).
