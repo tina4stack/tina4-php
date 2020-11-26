@@ -14,6 +14,6 @@
 ** [Install Composer](/installation/install-composer.md "Prerequisites - Install Composer")
 ** [Install OpenSSL](/installation/install-openssl.md "Prerequisites - Install OpenSSL")
 ** [Install IDE Tool](/installation/install-ide.md "Prerequisites - Install IDE Tool")
-** [How to make a webpage - landing page ](/tutorials/websitemd "Prerequisites - Install IDE Tool")
+** [How to make a webpage - landing page ](/tutorials/website.md "Prerequisites - Install IDE Tool")
 * [How do I?](/tutorials/howdoi.md)
   

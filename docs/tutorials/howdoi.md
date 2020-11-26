@@ -8,8 +8,11 @@
 
 # How do I?
 
-This is a quick reference for doing things in the Tina4 environment which will hopefully make your journey easier.
-If you come up with something cool that you want to add here, please contribute.
+This is a guide for doing things in the Tina4 environment which will hopefully make your journey easier.
+
+## Create a basic landing page
+
+
 
 ## Connect to a database
 
@@ -342,3 +345,6 @@ If you want Tina to get the Users time and date information correct this is how
 <label for="startDate">Start Date</label>
 <input class="form-control" type="datetime-local" name="startDate" placeholder="Start Date" value="{{ data.startDate | dateValue}}">
 ```
+
+
+Go back to [how to make a webpage - landing page ](/tutorials/website.md) or return to [Tina4 - This is Not Another Framework](/).

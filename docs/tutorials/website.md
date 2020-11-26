@@ -1,21 +1,29 @@
+<!--
+// Tina4 : This Is Not Another Framework
+// Created with : PHPStorm
+// User : andrevanzuydam
+// Copyright (C)
+// Contact : andre@codeinfinity.co.za
+-->
 # How to make a webpage - landing page 
+
 ## Introduction
 
 A website is made up of web pages, which is a collection of information and relevant content which is displayed to a user on a web browser. Tina4 uses Twig template engine as it is fast, flexible and secure.
 
 Go to the [Twig documentation](https://twig.symfony.com/doc/3.x/) page if you would like to familiarize yourself with Twig. It is important to note that when developing, it is recommended to break down your project into small components. This is done for flexibility for any changes required in future. 
 
-After you have installed Tina4, the configuration for Twig is passed by the Tina4php function running on the index file. All your web pages must be stored in the src/templates directory.
+After you have installed [Tina4](/installation/install-tina4.md), the configuration for Twig is passed by the Tina4php function running on the index file. All your web pages must be stored in the src/templates directory.
 
 <div align="center" alt="Web page location">
     <img src="images/website.png">
 </div>
 
-As an example we will be making a basic landing page with a header, body and footer. 
+As an example we will be making a basic landing page with a header, body and footer.
 
 For further information on factors to consider when designing your site, please look at [Fit Small Business](https://fitsmallbusiness.com/how-to-create-a-landing-page/) or [Blogspot](https://blog.hubspot.com/marketing/how-to-create-a-landing-page), alternatively you can research many design ideas ad concepts for your page. 
 
-Follow the instructions below to get your web page - landing page started...  
+Follow the instructions below to create a web page - landing page ...  
 
 ### Step 1 - Create index file 
 
@@ -68,7 +76,7 @@ Your index.twig file must have the basic HTML elements of a page as below:
 ```
 ### Step 2 - Create templates
 
-Now that we have our index.twig template, we can create more templates which will be the content for our page. Our page will have a header, body and footer.  
+Next, we will create more templates which will be the content for our page. Our page will have a header, body and footer.  
 
 #### Create header 
 
@@ -87,30 +95,102 @@ Your header.twig file must include all the content which you want in the heading
 
 #### Create body 
 
-In the src / templates directory, create another twig file which will be the header of your page. You can name the twig file "body".
+In the src / templates directory, create another twig file which will be the body of your page. You can name the twig file "body".
 
 Your body.twig file must include all the content which you want in the body section:
 
 ```html
 <div class=row">
-    <div class="col-5 mx-auto">
-        <div class="row">
-                <div class="col-6">
+    <div class="container">
+            <div class="row">
+                <div class="col-sm-12 col-lg-6">
                     <h1>I made this with Tina4</h1>
                 </div>
-                <div class="col-6">
-                    <h2>Its really easy</h2>
+                <div class="col-sm-12 col-lg-6">
+                    <h3>Its really easy</h3>
                     <p>Cant believe it!!!</p>
                 </div>
+            </div>
+    </div>
+</div>
+<div class="row">
+    <div class="container" >
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-7">
+                <h2 class="bg-dark text-white">About Us</h2>
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc vulputate faucibus tortor non sollicitudin. Cras ornare felis at sapien eleifend cursus. Sed ullamcorper placerat ex ullamcorper bibendum. Donec vitae metus non metus pulvinar porttitor id nec lacus. Quisque condimentum tortor nunc, id viverra nisl gravida sed. Praesent laoreet elementum placerat. Praesent elementum nunc quis efficitur porttitor. Cras mollis mattis ligula. Aliquam commodo enim arcu, ut sagittis dui finibus non. Maecenas ut arcu mauris.</p>
+            </div>
+            <div class="col-sm-12 col-lg-5">
+                    <div class="bg-dark text-white mb-4">
+                        <h4>Our products include:</h4>
+                    </div>
+                    <div class="col-lg-12 col-sm-6 p-0">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">Bacon</li>
+                            <li class="list-group-item">Eggs</li>
+                            <li class="list-group-item">Mushrooms</li>
+                            <li class="list-group-item">Toast</li>
+                            <li class="list-group-item">Coffee</li>
+                        </ul>
+                    </div>
+            </div>
         </div>
+    </div>
 </div>
 ```
 
 #### Create footer
 
-In the src / templates directory, create another twig file which will be the header of your page. You can name the twig file "footer".
+In the src / templates directory, create another twig file which will be the footer of your page. You can name the twig file "footer".
 
+Your footer.twig file must include all the content which you want in the footer section:
+
+```html
+<div class="row">
+    <div class="col bg-dark text-white fixed-bottom">
+        <p class="foot">Copyright ©
+            <script>document.write(new Date().getFullYear())</script>  <!-- gets current year -->
+            Your Site. All Rights Reserved
+        </p>
+    </div>
+</div>
+```
 ### Step 3 - Include templates in index
+
+You will need to include your twig templates in your index.twig file. Use the include statement to render content of your template. 
+
+In the body section of our index file, we have a container where we will include Twig templates such as the header, body and footer:
+
+```html
+<body>
+    <div class="container-fluid pt-6 text-center">
+        {% include 'head.twig' %}
+        {% include 'form.twig' %}
+        {% include 'footer.twig' %}
+    </div>
+</body>
+```
+
+### Step 4 - Check out your page
+
+We created our index file, Twig templates and linked them together. We can now check to see how the page looks by spinning up a web server.
+
+Spin up a webserver by running "php -S localhost:7145 index.php" in your IDE terminal or command line.
+
+```php
+php -S localhost:7145 index.php
+```  
+<div align="center" alt="Spin up WebServer">
+    <img src="images/webserver.png">
+</div>
+
+Once you ran the command, go to your browser and type "localhost:7145" in your URL address bar and hit enter (or click the address in the terminal). 
+
+You should see your website appear in the browser:
+
+<div align="center" alt="Create Page">
+    <img src="images/website1.png">
+</div>
 
 ## Conclusion
 

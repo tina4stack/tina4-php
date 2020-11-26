@@ -42,7 +42,7 @@ Download the latest stable version by clicking this link: [Composer](https://get
 
 There are two install options for Composer namely: Locally (as part of your project) and Globally (system wide executable). You can choose to install in Locally as it is needed to run Tina4, but you can install it globally to use Composer in other projects. 
 
-Go to the [Composer installer](../../index.phpcomposer.org/doc/00-intro.md#installation-linux-unix-macos) page to view instructions on how to install Composer for your OS.
+Go to the [Composer installer](https://getcomposer.org/doc/00-intro.md#installation-linux-unix-macos) page to view instructions on how to install Composer for your OS.
 
 <div align="center" alt="Composer Installation Information">
     <img src="images/composer2.png">

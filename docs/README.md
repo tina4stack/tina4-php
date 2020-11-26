@@ -5,6 +5,7 @@
 // Copyright (C)
 // Contact : andre@codeinfinity.co.za
 -->
+# Tina4 - This is Not Another Framework
 ## Getting Started
 
 Tina4 is a light weight routing and templating system which allows you to write websites and API applications very quickly.

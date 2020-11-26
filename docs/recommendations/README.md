@@ -44,7 +44,9 @@ Here's the link: [Xdebug](https://xdebug.org/download)
 
 After the download is complete, extract/unpack or copy the file into the "ext" folder found in your PHP directory. (e.g. C:/php/ext) 
     
-    It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
+```
+It is recommended you rename the file (eg. "php_xdebug-2.9.6-7.4-vc15-x86_64.dll" ) to "php_xdebug.dll".
+```
 
 <div align="center" alt="Installing Xdebug">
     <img src="images/xdebug1.png">
@@ -56,14 +58,16 @@ Once the file have been extracted, you will need to enable remote debugging by e
 
 Configure "php.ini" file:
 
-        Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
-            *Please ensure that the "php_xdebug.dll" file location is correct* 
-        Add the following in the extensions directory list (HINT: its above Module Settings):
-            [XDebug]
-            zend_extension="C:\php\ext\php_xdebug.dll
-            xdebug.remote_enable = 1
-            xdebug.remote_autostart = 1
-        Press Ctrl+S or save changes you just made to "php.ini" file.
+```
+Go to your PHP folder and open "php.ini" with Notepad or your IDE tool. 
+    *Please ensure that the "php_xdebug.dll" file location is correct* 
+Add the following in the extensions directory list (HINT: its above Module Settings):
+    [XDebug]
+    zend_extension="C:\php\ext\php_xdebug.dll
+    xdebug.remote_enable = 1
+    xdebug.remote_autostart = 1
+Press Ctrl+S or save changes you just made to "php.ini" file.
+```
 
 <div align="center" alt="Configure php.ini file for Xdebug">
     <img src="images/xdebug2.png">
@@ -83,11 +87,11 @@ This will display all modules loaded in your PHP. At the bottom of the list you 
 The default port that debugging is enabled on for xdebug is 9000 and because we are not really remote there are some recommended ways to run Tina4 from
 the commandline to make debugging work.
 
-```sh
+```php
 XDEBUG_CONFIG="remote_host=127.0.0.1" php -S localhost:7145 index.php
 ```
 On windows you can put the following in the built in PHP web server environment variables
-```sh
+```shell script
 XDEBUG_CONFIG="remote_host=127.0.0.1"
 ```
 

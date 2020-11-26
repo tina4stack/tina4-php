@@ -19,18 +19,20 @@
 
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/themes/vue.css"/>
 
-
   <style>
-
     .sidebar {
       padding-top: 0 !important;
     }
-
+    .sidebar img {
+      padding: 20px;
+    }
   </style>
 
 </head>
 <body>
+
 <div id="app"></div>
+
 <script>
   window.$docsify = {
     logo: './images/logo.png',
@@ -42,10 +44,8 @@
     name: 'Tina4',
     repo: 'https://github.com/andrevanzuydam/tina4-php'
   }
-  hook.beforeEach(function(content) {
-    return content.replace(/..\/..\/img/g, "img");
-  })
 </script>
+
 <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
 
 </body>

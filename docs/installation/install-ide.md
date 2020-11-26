@@ -6,6 +6,7 @@
 // Contact : andre@codeinfinity.co.za
 -->
 # Install IDE tool
+
 ## Introduction
 You must have a code editor or tool which you will use to develop your website and use to debug. 
 There are various IDE tools you can use to write code for your software or website,such as PHPStorm or Visual Studio Code. Depending on your Operating Software, you will need to install the correct installer or files for your OS. Follow these instructions to install an IDE tool on your system.
@@ -14,7 +15,7 @@ There are various IDE tools you can use to write code for your software or websi
 
 We recommend using one these IDE tools. Choose your weapon :
 
-[PHPStorm](../../index.php.jetbrains.com/phpstorm/download) OR [Visual Studio Code](../../index.phpe.visualstudio.com/download)
+[PHPStorm](https://www.jetbrains.com/phpstorm/download) OR [Visual Studio Code](https://code.visualstudio.com/download)
 
 Choose the correct installation for your Operating System (eg. Windows, Mac or Linux) and download the installer or installation files.
 

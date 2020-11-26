@@ -6,6 +6,7 @@
 // Contact : andre@codeinfinity.co.za
 -->
 # Install Tina4
+
 ## Introduction
 
 Please follow the steps below to get Tina4 on your system. Make sure you have the prerequisites installed ([php](install-php.md), [composer](install-composer.md), [openssl](install-openssl.md) & [ide tool](install-ide.md)). Soon you will be able to bring your ideas to life. 
@@ -14,15 +15,21 @@ Please follow the steps below to get Tina4 on your system. Make sure you have th
 
 First you will need a folder in which Tina4 will be installed. In this example the folder is named tina4-php. Make your project directory by running this command in your terminal:
 
-      mkdir your_project_folder
-      
+```shell script
+mkdir your_project_folder
+```
+   
 <div align="center" alt="Create Directory">
     <img src="images/directory2.png">
 </div>
 
-Once your project folder has been created, you will need to direct the command line to go into the fodler you just created. In this example the folder is named "tina4-php". For more information on how to navigate directories with command line, please visit How To Geek by clicking this link: [How To Geek](https://www.howtogeek.com/659411/how-to-change-directories-in-command-prompt-on-windows-10/)Ensure your command terminal is pointed to the right directory by running this command in your terminal:
+Once your project folder has been created, you will need to direct the command line to go into the folder you just created. In this example the folder is named "tina4-php".
+For more information on how to navigate directories with command line, please visit How To Geek by clicking this link: [How To Geek](https://www.howtogeek.com/659411/how-to-change-directories-in-command-prompt-on-windows-10/).
+Ensure your command terminal is pointed to the right directory by running this command in your terminal:
     
-      cd your_project_folder
+```shell script
+cd your_project_folder
+```
       
 <div align="center" alt="CMD Directory">
     <img src="images/directory.png">
@@ -34,7 +41,9 @@ Once you've created the project folder and went into it via the command line, yo
 
 ###### For Windows 
 
-    echo ^<?php require_once "vendor/autoload.php"; echo new \Tina4\Tina4Php(); ^ > index.php
+```php
+echo ^<?php require_once "vendor/autoload.php"; echo new \Tina4\Tina4Php(); ^ > index.php
+```
 
 <div align="center" alt="Create index file for Windows">
     <img src="images/indexfile.png">
@@ -42,7 +51,9 @@ Once you've created the project folder and went into it via the command line, yo
 
 ###### For Linux & Mac 
 
-    echo '<?php require "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
+```php
+echo '<?php require "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
+```
     
 <div align="center" alt="Create index file for Linux & Mac">
     <img src="images/indexfile1.png">
@@ -72,7 +83,9 @@ Your project folder will now look like this...
 
 Almost there... Now you must create an ".env" file in your project folder. This file will be used to setup constants in your project needed for Tina4. Run "echo .>.env" in your IDE terminal or command line.
 
-    echo .>.env
+```php
+echo .>.env
+```
     
 <div align="center" alt="Env Command">
     <img src="images/envfile.png">
@@ -86,13 +99,17 @@ Your project folder will now look like this...
 
 ##### Step 5 - Confirm installation
 
-Now that we created and installed everything we need to run Tina4, we can test to check if it was successful. Spin up a webserver by running "php -S localhost:7145 index.php" in your IDE terminal or command line. Once you ran the command, go to your browser and type "localhost:7145" in your URL address bar and hit enter (or click the address in the terminal). 
- 
-    php -S localhost:7145 index.php
-    
+Now that we created and installed everything we need to run Tina4, we can test to check if it was successful. Spin up a webserver by running "php -S localhost:7145 index.php" in your IDE terminal or command line.
+
+```php
+php -S localhost:7145 index.php
+```
+
 <div align="center" alt="Spin up WebServer">
     <img src="images/webserver.png">
 </div>
+
+Once you ran the command, go to your browser and type "localhost:7145" in your URL address bar and hit enter (or click the address in the terminal). 
 
 If the Tina4 404 error page loads, that means everything is working perfectly...
 

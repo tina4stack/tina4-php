@@ -6,6 +6,7 @@
 // Contact : andre@codeinfinity.co.za
 -->
 # Install PHP
+
 ## Introduction
 
 PHP is an Open Source general-purpose scripting language used in software/web development. You need to have PHP7.1 or greater installed on the command line. Follow these instructions to install PHP on your system. 
@@ -24,36 +25,44 @@ Here's the link : [PHP](https://www.php.net/downloads.php)
 
 Unpack/Extract the zip file or content into a file named "php" on the main drive on your system. 
 
-        eg. C:/php
+```
+eg. C:/php
+```
 
 Once the files have been extracted, you will need to go into the folder and edit the configuration settings file. 
 
 Configure "php.ini" file: 
- 
-        Go to the folder where you extracted PHP. 
-        Delete file named "php.ini". 
-        Rename file named "php.ini-development" to "php.ini".
-        Open php.ini file by opening it with Notepad or IDE tool 
-        
+
+```
+Go to the folder where you extracted PHP. 
+Delete file named "php.ini". 
+Rename file named "php.ini-development" to "php.ini".
+Open php.ini file by opening it with Notepad or IDE tool 
+```
+
 <div align="center" alt="Configure php.ini file 1">
     <img src="images/config1.png">
 </div>
 
-            Find ';extension_dir = "ext"' and remove the semicolon infront of the word extension
-            Find ";extension=curl" and remove the semicolon infront of the word extension
-            Find ";extension=fileinfo" and remove the semicolon infront of the word extension
-            Find ";extension=gd2" and ...
-            Find ";extension=intl" and ...
-            Find ";extension=mbstring" and ...
-            Find ";extension=openssl" and ...
-            Find ";extension=pdo_mysql" and ...
-            Find ";extension=shmop" and ...
-            Find ";extension=soap" and ...
-            Find ";extension=sqlite3" and ...
-            Find ";extension=tidy" and ...
-            Find ";extension=xmlrpc" and ...
-            Find ";extension=xsl" and ...
-        Press Ctrl+S or save changes you just made to "php.ini" file. 
+```
+Find the following extensions and remove the semicolon infront of the word extension:
+    ;extension_dir = "ext"
+    ;extension=curl
+    ;extension=fileinfo
+    ;extension=gd2
+    ;extension=intl
+    ;extension=mbstring
+    ;extension=openssl
+    ;extension=pdo_mysql
+    ;extension=shmop
+    ;extension=soap
+    ;extension=sqlite3
+    ;extension=tidy
+    ;extension=xmlrpc
+    ;extension=xsl
+Press Ctrl+S or save changes you just made to "php.ini" file.
+```
+ 
         
 <div align="center" alt="Configure php.ini file 2">
     <img src="images/config2.png">
@@ -65,23 +74,29 @@ After you have made changes to the configuration file, you must add the PHP fold
 
 Add path environment variable:
     
-        Open Control Panel
-        Go to System
-        Go to Advanced system settings
+```
+Open Control Panel
+Go to System
+Go to Advanced system settings
+```    
         
 <div align="center" alt="Add Path Environment Variable 1">
     <img src="images/enviro1.png">
 </div>
 
-        Go to Environment variable 
-        Look for "Path" in the "Variable" column and click Edit.
+```
+Go to Environment variable 
+Look for "Path" in the "Variable" column and click Edit.
+```
        
 <div align="center" alt="Add Path Environment Variable 2">
     <img src="images/enviro2.png">
 </div>
         
-        Click on Browse, locate the PHP folder you uxtracted. 
-        Click OK and then click Ok again to close the "Edit environment variable" window.
+```
+Click on Browse, locate the PHP folder you uxtracted. 
+Click OK and then click Ok again to close the "Edit environment variable" window.
+```
         
 <div align="center" alt="Add Path Environment Variable 3">
     <img src="images/enviro3.png">

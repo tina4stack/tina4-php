@@ -6,6 +6,7 @@
 // Contact : andre@codeinfinity.co.za
 -->
 # Install OpenSSL
+
 ## Introduction
  
 A toolkit used for Security Layer protocols between a computer network and Internet servers. Follow these instructions to install OpenSSL on your system. 
@@ -30,23 +31,29 @@ After you have installed OpenSSL, you must add the OpenSSL bin folder in your sy
 
 Add path environment variable:
  
-     Open Control Panel
-     Go to System
-     Go to Advanced system settings
+``` 
+Open Control Panel
+Go to System
+Go to Advanced system settings
+```
      
 <div align="center" alt="Add Path Environment Variable 1">
  <img src="images/enviro1.png">
 </div>        
 
-     Go to Environment variable 
-     Look for "Path" in the "Variable" column and click Edit.
+``` 
+Go to Environment variable 
+Look for "Path" in the "Variable" column and click Edit.
+```
      
 <div align="center" alt="Add Path Environment Variable 2">
  <img src="images/enviro2.png">
 </div>
 
-     Click on Browse, locate the "bin" folder directory where you installed OpenSSL (e.g. C:\Program Files\OpenSSL-Win64\bin). 
-     Click OK and then click Ok again to close the "Edit environment variable" window.  
+``` 
+Click on Browse, locate the "bin" folder directory where you installed OpenSSL (e.g. C:\Program Files\OpenSSL-Win64\bin). 
+Click OK and then click Ok again to close the "Edit environment variable" window. 
+```
 
 <div align="center" alt="Add Path Environment Variable 3">
  <img src="images/openssl1.png">
@@ -66,7 +73,7 @@ Complete the installation by restarting your system so that changes may take eff
 
 Head to the OpenSSL website and download the Light v1.1.1 version.
 
-Here's the link: [OpenSSL](../../index.php.openssl.org/source/)
+Here's the link: [OpenSSL](https://www.openssl.org/source/)
 
 <div align="center" alt="OpenSSL Website">
  <img src="images/openssl3.png">
@@ -75,10 +82,10 @@ Here's the link: [OpenSSL](../../index.php.openssl.org/source/)
 Run the installer and follow the instructions in the links below to complete the installation process:
 
 For Mac:
-Visit [franz.com](../../index.phpnz.com/support/openssl-mac.lhtml) || [stackoverflow.com](../../index.phpckoverflow.com/questions/15185661/update-openssl-on-os-x-with-homebrew)
+Visit [franz.com](https://franz.com/support/openssl-mac.lhtml) || [stackoverflow.com](https://stackoverflow.com/questions/15185661/update-openssl-on-os-x-with-homebrew)
 
 For Unix:
-Visit [cloudwafer.com](../../index.phpudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/) || [howtoforge.com](../../index.php.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/)
+Visit [cloudwafer.com](https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/) || [howtoforge.com](https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/)
 
 #### Step 3 - Confirm installation        
 
