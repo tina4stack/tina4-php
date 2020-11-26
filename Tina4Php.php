@@ -117,7 +117,9 @@ class Tina4Php
             if (!empty($config) && $config->getAuthentication() !== false) {
                 $auth = $config->getAuthentication();
             } else {
-                $config = new \Tina4\Config();
+                if (empty($config)) {
+                    $config = new \Tina4\Config();
+                }
                 $auth = new \Tina4\Auth($this->documentRoot);
                 $config->setAuthentication($auth);
                 $this->config = $config;
@@ -542,6 +544,8 @@ class Tina4Php
      */
     public function addTwigMethods(Config $config, \Twig\Environment $twig)
     {
+
+
         if (!empty($config) && !empty($config->getTwigGlobals())) {
             foreach ($config->getTwigGlobals() as $name => $method) {
                 $twig->addGlobal($name, $method);
