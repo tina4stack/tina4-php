@@ -1,9 +1,9 @@
 <!--
-// Tina4 : This Is Not Another Framework
+// Tina4 : This Is Not A Framework
 // Created with : PHPStorm
 // User : andrevanzuydam
 // Copyright (C)
-// Contact : andre@codeinfinity.co.za
+// Contact : andrevanzuydam@gmail.com
 -->
 
 # How do I?
@@ -347,4 +347,4 @@ If you want Tina to get the Users time and date information correct this is how
 ```
 
 
-Go back to [how to make a webpage - landing page ](/tutorials/website.md) or return to [Tina4 - This is Not Another Framework](/).
+Go back to [how to make a webpage - landing page ](/tutorials/website.md) or return to [Tina4 - This is Not A Framework](/).
