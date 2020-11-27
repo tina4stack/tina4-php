@@ -1,11 +1,11 @@
 <!--
-// Tina4 : This Is Not Another Framework
+// Tina4 : This Is Not A Framework
 // Created with : PHPStorm
 // User : andrevanzuydam
 // Copyright (C)
-// Contact : andre@codeinfinity.co.za
+// Contact : andrevanzuydam@gmail.com
 -->
-# Tina4 - This is Not Another Framework
+# Tina4 - This is Not A Framework
 ## Getting Started
 
 Tina4 is a light weight routing and templating system which allows you to write websites and API applications very quickly.

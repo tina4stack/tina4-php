@@ -3,10 +3,10 @@
 // Created with : PHPStorm
 // User : andrevanzuydam
 // Copyright (C)
-// Contact : andre@codeinfinity.co.za
+// Contact : andrevanzuydam@gmail.com
 -->
 
-* [Tina4 - This is Not Another Framework](/ "Tina4 - This is Not Another Framework")
+* [Tina4 - This is Not A Framework](/ "Tina4 - This is Not A Framework")
 * [Install Tina4](/installation/install-tina4.md "Install Tina4") 
 * [Recommendations](/recommendations/ "Recommendations")
 *Tutorials 

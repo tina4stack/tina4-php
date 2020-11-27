@@ -1,9 +1,9 @@
 <!--
-// Tina4 : This Is Not Another Framework
+// Tina4 : This Is Not A Framework
 // Created with : PHPStorm
 // User : andrevanzuydam
 // Copyright (C)
-// Contact : andre@codeinfinity.co.za
+// Contact : andrevanzuydam@gmail.com
 -->
 # Install Composer
 ## Introduction
