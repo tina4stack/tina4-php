@@ -1,42 +1,43 @@
-# Getting Started
-## What's Tina about ?
+<!--
+// Tina4 : This Is Not A Framework
+// Created with : PHPStorm
+// User : andrevanzuydam
+// Copyright (C)
+// Contact : andrevanzuydam@gmail.com
+-->
+# Tina4 - This is Not A Framework
+## Getting Started
 
-Tina uses the following methods to make development quicker
+Tina4 is a light weight routing and templating system which allows you to write websites and API applications very quickly.
+This is not another framework. Keep things simple and efficient. Tina4 is perfect if you want to build a website, run a CMS, create APIs or if you want to learn a structured PHP framework.
+
+## How Tina can help you?
+
+Tina uses the following methods to make development quicker:
 
 * PHP built in web server
 * Twig Templating
 * Annotated Routes for Swagger UI
 * Simple code layout and structure
 
-## Requires
-* PHP 7.1 > See [installing PHP 7.4](installing-php.md)
-* Composer
+## What Tina4 requires ?
+
+These are the tools you need for Tina4
+
+* [PHP 7.1 or greater](installation/install-php.md) : Open source general-purpose scripting language used in software/web development
+
+* [Composer](installation/install-composer.md) : Package manager used to manage dependence between your libraries and PHP software/website 
+
+* [OpenSSL](installation/install-openssl.md) : A toolkit used for Security Layer protocols between a computer network and Internet servers
+
+* [IDE development tool](installation/install-ide.md) : Tool used when writing code, debugging or version control Eg. PHPStorm; Visual Studio Code
 
 ## Who should use Tina4 ?
 
-* Anyone who wants to build a website quickly using the Twig template engine
+* Anyone who wants to build a website quickly
 * React or Angular developers who want a way to create quick APIs in PHP
 * Old School PHP devs who don't want to learn a frame work but want some structure
+* Bloggers
+* Content Creators
 
-## I want to get straight to it!
-
-You can do this if your composer and PHP are already available to you on your command line or terminal:
-
-```sh
-mkdir tina4example
-cd tina4example
-echo '<?php require "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
-composer require andrevanzuydam/tina4php 
-php -S localhost:7145 index.php 
-```
-
-Browse to http://localhost:7145 in your favourite browser
-
-## What did I just do?
-
-* I created a tina4example folder
-* I made and index.php with the bare minimum for Tina4 to run
-* I installed the composer dependencies for tina4php
-* I started up the inbuilt web server
-
-Continue to [recommendations](recommendations.md) or [installation](installation.md)
+Continue to [install tina4](installation/install-tina4.md) or [recommendations](recommendations.md).
