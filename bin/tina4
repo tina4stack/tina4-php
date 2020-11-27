@@ -1,23 +1,15 @@
 #!/usr/bin/env php
 <?php
-/*
- * Tina4 : This Is Not Another Framework
- * Created with : PHPStorm
- * User : andrevanzuydam
- * Copyright (C)
- * Contact : andre@codeinfinity.co.za
-*/
-
 global $rootPath;
 $rootPath = str_replace("\n", "", `cd`);
 $rootPath = str_replace("\r", "", $rootPath);
 
 $binFile = str_replace("/tina4", "", $argv[0]);
-$rootPath = str_replace($binFile, "", $rootPath).DIRECTORY_SEPARATOR;
+$rootPath = str_replace($binFile, "", $rootPath) . DIRECTORY_SEPARATOR;
 global $settings;
 $settings = [];
 define("TINA4_SUPPRESS", 1);
-if (file_exists("index.php")){
+if (file_exists("index.php")) {
     include "index.php";
 }
 
@@ -28,17 +20,16 @@ $menu = [];
  * @param $handle
  * @return false|string
  */
-function readLn($handle) {
-    $input = substr(fgets($handle), 0, -1);
-    return $input;
+function readLn($handle)
+{
+    $line = fgets($handle);
+    $line = str_replace("\n", "", $line);
+    $line = str_replace("\r", "", $line);
+    return $line;
 }
 
-/**
- * Function to draw menu and options
- * @param
- * @return Menu|string
- */
-function drawMenu () {
+function drawMenu()
+{
     echo "===========================================================\n";
     echo "Menu\n";
     echo "===========================================================\n";
@@ -49,12 +40,8 @@ function drawMenu () {
     echo "Choose a menu option, type exit to quit:";
 }
 
-/**
- * Function to create database mapping and gives user various required action responses
- * @param $step, $input, $handle
- * @return $step
- */
-function processCreateORMfromDB($step, $input, $handle) {
+function processCreateORMfromDB($step, $input, $handle)
+{
     global $settings;
     global $rootPath;
     if ($step == 1 && !empty($input)) {
@@ -78,9 +65,9 @@ function processCreateORMfromDB($step, $input, $handle) {
             foreach ($database as $table => $fields) {
                 $no++;
                 if ($no == $settings["tableIndex"] || $settings["tableIndex"] == "all") {
-                    echo str_repeat("=", 40)."\n";
+                    echo str_repeat("=", 40) . "\n";
                     echo "Table: {$table}\n";
-                    echo str_repeat("=", 40)."\n";
+                    echo str_repeat("=", 40) . "\n";
                     foreach ($fields as $id => $field) {
                         echo "{$field["field"]}\n";
                     }
@@ -89,7 +76,7 @@ function processCreateORMfromDB($step, $input, $handle) {
             }
 
             if ($settings["tableIndex"] == "all") {
-                $settings["database"]  = $database;
+                $settings["database"] = $database;
                 echo "You want to convert all the tables in the database ?\n";
             }
 
@@ -102,29 +89,31 @@ function processCreateORMfromDB($step, $input, $handle) {
                 $className = ucwords($record->getObjectName($data["table"]));
 
                 $fields = [];
+                $fieldMapping = [];
                 $primaryKey = "";
-                foreach ($data["fields"] as $id => $field) {
-                    if ($id == 0 || $field["pk"] == "PRI") {
+                foreach ($data["fields"] as $fid => $field) {
+                    if ($fid == 0 || $field["pk"] == "PRI") {
                         $primaryKey = $field["field"];
                     }
-
+                    $fieldMapping [] = '"'.$record->getObjectName($field["field"]) .'" => "'.$field["field"].'"';
                     $fields[] = "\tpublic \$" . $record->getObjectName($field["field"]) . ";";
                 }
 
                 $definition = '<?php
-                                class [CLASS_NAME] extends \Tina4\ORM
-                               {
-                                    public $tableName="[TABLE_NAME]";
-                                    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
-                                    //public $softDelete=true; //uncomment for soft deletes in crud
-                                    
-                                    [FIELDS]
-                               }';
+class [CLASS_NAME] extends \Tina4\ORM
+{
+    public $tableName="[TABLE_NAME]";
+    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
+    public $fieldMapping = [[FIELD_MAPPING]];
+    //public $softDelete=true; //uncomment for soft deletes in crud
+    
+[FIELDS]
+}';
 
                 if (file_exists("Tina4Php.php")) {
-                    $fileName = "{$rootPath}".DIRECTORY_SEPARATOR."objects".DIRECTORY_SEPARATOR. $className . ".php";
+                    $fileName = "{$rootPath}" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
                 } else {
-                    $fileName = "{$rootPath}src".DIRECTORY_SEPARATOR."objects".DIRECTORY_SEPARATOR. $className . ".php";
+                    $fileName = "{$rootPath}src" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
                 }
                 echo "Creating object in {$fileName} {$className}\n";
                 if (!file_exists($fileName)) {
@@ -132,6 +121,7 @@ function processCreateORMfromDB($step, $input, $handle) {
                     $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
                     $definition = str_replace("[CLASS_NAME]", $className, $definition);
                     $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
+                    $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
                     file_put_contents($fileName, $definition);
                 }
             }
@@ -143,6 +133,10 @@ function processCreateORMfromDB($step, $input, $handle) {
         default:
             $step = 1;
             global $DBA;
+
+            if (empty($DBA)) {
+               die("First setup a database connection!");
+            }
             if (empty($settings["database"])) {
                 $database = $DBA->getDatabase();
                 $settings["database"] = $database;
@@ -165,12 +159,8 @@ function processCreateORMfromDB($step, $input, $handle) {
     return $step;
 }
 
-/**
- * Function to connect to database and gives user DB type options
- * @param $step, $input, $handle
- * @return $step
- */
-function processCreateConnection($step, $input, $handle) {
+function processCreateConnection($step, $input, $handle)
+{
     global $settings;
 
     if ($step == 1 && !empty($input)) {
@@ -249,13 +239,13 @@ function processCreateConnection($step, $input, $handle) {
             $findDBA = '/^\$DBA(.*)/m';
             preg_match($findDBA, $indexContent, $matches, PREG_OFFSET_CAPTURE);
 
-            if (!empty ($matches) ) {
+            if (!empty ($matches)) {
                 $indexContent = str_replace($matches[0], $settings["configString"], $indexContent);
                 $settings["newIndex"] = $indexContent;
                 echo "We are going to replace an existing connection in index.php for {$settings["databasePath"]} ?\n";
                 echo "y/n:";
             } else {
-                $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;'."\n".$settings["configString"]."\n".'echo new \Tina4\Tina4Php(', $indexContent);
+                $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;' . "\n" . $settings["configString"] . "\n" . 'echo new \Tina4\Tina4Php(', $indexContent);
                 $settings["newIndex"] = $indexContent;
                 echo "We are going to add a connection in index.php for {$settings["databasePath"]} ?\n";
                 echo "y/n:";
@@ -265,7 +255,7 @@ function processCreateConnection($step, $input, $handle) {
         case 6:
             $step = 0;
             if ($input == "y") {
-                print_r ($settings);
+                file_put_contents("./index.php", $settings);
             } else {
                 echo "You will be returned back to the menu, hit Enter!";
             }
@@ -276,32 +266,32 @@ function processCreateConnection($step, $input, $handle) {
             echo "- 1. SQLite\n";
             echo "- 2. MYSQL\n";
             echo "- 3. Firebird\n";
-            echo "Choose database option:";
+            echo "Choose database option or hit enter to be returned to the main menu:";
             break;
     }
 
     return $step;
 }
 
-/**
- * Function for menu handler with users DB connection & DB mapping
- * @param $handle
- */
-function handleMenu($handle) {
+function handleMenu($handle)
+{
     $menu = "start";
     $step = 0;
     $input = null;
-    while ($menu !== "exit") {
+
+
+
+    while ($menu != "exit") {
 
         switch ($menu) {
             case 1:
-                $step =  processCreateConnection($step, $input, $handle);
+                $step = processCreateConnection($step, $input, $handle);
                 if ($step != 0) {
                     $input = readLn($handle);
                 }
                 break;
             case 2:
-                $step =  processCreateORMfromDB($step, $input, $handle);
+                $step = processCreateORMfromDB($step, $input, $handle);
                 if ($step != 0) {
                     $input = readLn($handle);
                 }
@@ -311,6 +301,7 @@ function handleMenu($handle) {
 
                 break;
         }
+
         if (empty($input)) {
             $menu = readLn($handle);
         }
@@ -320,5 +311,5 @@ function handleMenu($handle) {
 }
 
 
-$handle = fopen ("php://stdin","r");
+$handle = fopen("php://stdin", "r");
 handleMenu($handle);

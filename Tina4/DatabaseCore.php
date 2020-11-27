@@ -19,7 +19,7 @@ trait DataBaseCore
     /**
      * @var integer $port Port number of database
      */
-    //public $port; //Declare in the implementation
+    public $port; //Declare in the implementation
 
     /**
      * @var string $hostName Name of host
@@ -46,7 +46,14 @@ trait DataBaseCore
      */
     public $fetchLimit = 100;
 
+    /**
+     * @var xcache
+     */
     public $cache;
+
+    /**
+     * @var
+     */
     public $transaction;
 
     /**
@@ -56,7 +63,7 @@ trait DataBaseCore
      * @param string $password Database user password
      * @param string $dateFormat Format of date
      */
-    public function __construct($database, $username = "", $password = "", $dateFormat = "yyyy-mm-dd")
+    public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d")
     {
         global $cache;
         
@@ -67,7 +74,7 @@ trait DataBaseCore
         $this->username = $username;
         $this->password = $password;
 
-        if (strpos($database, ":") !== false) {
+        if (strpos($database, ":") !== false && strpos($database, "memory") === false ) {
             $database = explode(":", $database, 2);
             $this->hostName = $database[0];
             $this->databaseName = $database[1];
@@ -76,6 +83,8 @@ trait DataBaseCore
                 $port = explode("/", $this->hostName);
                 $this->hostName = $port[0];
                 $this->port = $port[1];
+            } else {
+                $this->port = $this->getDefaultDatabasePort();
             }
         } else {
             $this->hostName = "";
@@ -85,4 +94,33 @@ trait DataBaseCore
         $this->open();
 
     }
+
+    /**
+     * Parses the params into params & sql, checks for SQL injection
+     * @param $params
+     * @return array
+     */
+    public function parseParams($params) {
+        $tranId = "";
+        $newParams = [];
+        for ($i = 0, $iMax = count($params); $i < $iMax; $i++) {
+            if (strpos($params[$i] . "", "Resource id #") !== false) {
+                $tranId = $params[$i];
+            } else {
+                $newParams[] = $params[$i];
+            }
+        }
+
+        return ["params" => $newParams, "tranId" => $tranId];
+    }
+
+    /**
+     * Returns back only the first element of a result which can then be used as is or serialized to array or object
+     * @param $sql
+     * @return mixed
+     */
+    public function fetchOne($sql) {
+       return $this->fetch($sql)->records[0];
+    }
+
 }

@@ -15,11 +15,7 @@ namespace Tina4;
 class DataMySQL implements DataBase
 {
     use DataBaseCore;
-
-    /**
-     * @var integer Port number used by MySQL
-     */
-    public $port = 3306;
+    use Utility;
 
     /**
      * Opens database connection
@@ -52,7 +48,10 @@ class DataMySQL implements DataBase
      */
     public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
+
 
         if (stripos($params[0], "call") !== false) {
             return $this->fetch($params[0]);
@@ -60,6 +59,7 @@ class DataMySQL implements DataBase
             $preparedQuery = mysqli_prepare($this->dbh, $params[0]);
 
             if (!empty($preparedQuery)) {
+
                 unset($params[0]);
                 if (!empty($params)) {
                     $paramTypes = "";
@@ -70,14 +70,21 @@ class DataMySQL implements DataBase
                             if (is_integer($param)) {
                                 $paramTypes .= "i";
                             } else
-                                if (is_string($param)) {
-                                    $paramTypes .= "s";
+                                if ($this->isBinary($param)) {
+                                    $paramTypes .= "s"; //Should be b but does not work as expected
                                 } else {
-                                    $paramTypes .= "b";
+                                    $paramTypes .= "s";
                                 }
                     }
 
+
+
+
+
+
                     $params = array_merge([$preparedQuery, $paramTypes], $params);
+
+
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
 
                     call_user_func_array("mysqli_stmt_bind_param", $this->refValues($params));
@@ -90,6 +97,8 @@ class DataMySQL implements DataBase
                 }
 
             }
+
+
 
             return $this->error();
         }
@@ -126,7 +135,7 @@ class DataMySQL implements DataBase
                 while ($record = mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
-                        $records[] = (new DataRecord($record, $fieldMapping));
+                        $records[] = (new DataRecord($record, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
                     }
                 }
 
@@ -195,13 +204,14 @@ class DataMySQL implements DataBase
      * @param $arr
      * @return array
      */
-    function refValues($arr)
+    public function refValues($arr)
     {
         if (strnatcmp(phpversion(), '5.3') >= 0) //Reference is required for PHP 5.3+
         {
             $refs = array();
-            foreach ($arr as $key => $value)
+            foreach ($arr as $key => $value) {
                 $refs[$key] = &$arr[$key];
+            }
             return $refs;
         }
         return $arr;
@@ -224,11 +234,15 @@ class DataMySQL implements DataBase
      */
     public function tableExists($tableName)
     {
-        $exists = $this->fetch("SELECT * 
+        if (!empty($tableName)) {
+            $exists = $this->fetch("SELECT * 
                                     FROM information_schema.tables
                                     WHERE table_schema = '{$this->databaseName}' 
                                         AND table_name = '{$tableName}'", 1);
-        return !empty($exists->records());
+            return !empty($exists->records());
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -257,7 +271,9 @@ class DataMySQL implements DataBase
      */
     public function startTransaction()
     {
+        $this->dbh->autocommit(false);
         return mysqli_begin_transaction($this->dbh);
+        return "Resource id #0";
     }
 
     /**
@@ -289,7 +305,7 @@ class DataMySQL implements DataBase
                                     AND TABLE_NAME = '{$record->tableName}'
                          ORDER BY ORDINAL_POSITION";
 
-            $tableInfo = $this->fetch($sqlInfo)->asObject();
+            $tableInfo = $this->fetch($sqlInfo, 10000)->asObject();
 
 
             //Go through the tables and extract their column information
@@ -308,4 +324,13 @@ class DataMySQL implements DataBase
         return $database;
     }
 
+    public function getDefaultDatabaseDateFormat()
+    {
+        return "Y-m-d";
+    }
+
+    public function getDefaultDatabasePort()
+    {
+        return 3306;
+    }
 }

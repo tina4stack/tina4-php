@@ -17,6 +17,8 @@ use JsonSerializable;
  */
 class DataRecord implements JsonSerializable
 {
+    use Utility;
+
     private $original;
     private $fieldMapping;
 
@@ -24,13 +26,14 @@ class DataRecord implements JsonSerializable
      * DataRecord constructor Converts array to object
      * @param array $record Array of records
      * @param array $fieldMapping Array of field mapping
+     * @param string $databaseFormat Input format use the PHP date format conventions
+     * @param string $outputFormat Output date format - use the PHP date format conventions
      */
-    function __construct($record = null, $fieldMapping = [])
+    public function __construct($record = null, $fieldMapping = [], $databaseFormat="Y-m-d", $outputFormat="Y-m-d")
     {
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
-
         if (!empty($record)) {
             $this->original = (object)$record;
             foreach ($record as $column => $value) {
@@ -38,26 +41,22 @@ class DataRecord implements JsonSerializable
                     $value = \base64_encode($value);
                     $this->original->{$column} = $value;
                 }
+
+                if ($this->isDate($value, $databaseFormat)) {
+
+
+                    $value = $this->formatDate($value, $databaseFormat, $outputFormat);
+
+
+                    $this->original->{$column} = $value;
+                }
+                
+                
                 $this->{$column} = $value;
             }
-        }
-    }
 
-    /**
-     * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
-     * @param $string
-     * @return bool
-     */
-    public function isBinary($string)
-    {
-        $isBinary = false;
-        $string = str_ireplace("\t", "", $string);
-        $string = str_ireplace("\n", "", $string);
-        $string = str_ireplace("\r", "", $string);
-        if (is_string($string) && ctype_print($string) === false) {
-            $isBinary = true;
+
         }
-        return $isBinary;
     }
 
     /**
@@ -65,7 +64,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Whether to get the result as original field names
      * @return object
      */
-    function asObject($original = false)
+    public function asObject($original = false)
     {
         if ($original) {
             return $this->original;
@@ -77,15 +76,27 @@ class DataRecord implements JsonSerializable
     /**
      * Transform to a camel case result
      */
-    function transformObject()
+    public function transformObject()
     {
         $object = (object)[];
-        foreach ($this->original as $column => $value) {
-            $columnName = $this->getObjectName($column);
-            $object->$columnName = $value;
-        }
+        if (!empty($this->original)) {
+            foreach ($this->original as $column => $value) {
+                $columnName = $this->getObjectName($column);
+                $object->{$column} = $value; // to be added in
+                $object->{$columnName} = $value;
+            }
 
+        }
         return $object;
+    }
+
+    /**
+     * Cast the object to an array
+     * @return array
+     */
+    public function asArray()
+    {
+        return (array)$this->transformObject();
     }
 
     /**
@@ -94,7 +105,7 @@ class DataRecord implements JsonSerializable
      * @param array $fieldMapping Field mapping to map fields
      * @return string Proper object name
      */
-    function getObjectName($name, $fieldMapping = [])
+    public function getObjectName($name, $fieldMapping = [])
     {
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
@@ -107,7 +118,7 @@ class DataRecord implements JsonSerializable
             $fieldName = "";
             if (strpos($name, "_") !== false) {
                 $name = strtolower($name);
-                for ($i = 0; $i < strlen($name); $i++) {
+                for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
                     if ($name[$i] === "_") {
                         $i++;
                         $fieldName .= strtoupper($name[$i]);
@@ -120,7 +131,7 @@ class DataRecord implements JsonSerializable
                 if (strtoupper($name) === $name || strtolower($name) === $name) {
                     return strtolower($name);
                 }
-                for ($i = 0; $i < strlen($name); $i++) {
+                for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
                     if ($name[$i] !== strtolower($name[$i])) {
                         $fieldName .= "_" . strtolower($name[$i]);
                     } else {
@@ -143,7 +154,7 @@ class DataRecord implements JsonSerializable
     /**
      * @return false|string
      */
-    function __toString()
+    public function __toString()
     {
         return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
@@ -153,7 +164,7 @@ class DataRecord implements JsonSerializable
      * @param $name
      * @return false
      */
-    function byName($name)
+    public function byName($name)
     {
         $columnName = strtoupper($name);
         if (!empty($this->original) && !empty($this->$columnName)) {

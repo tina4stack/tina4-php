@@ -37,6 +37,7 @@ class Swagger implements \JsonSerializable
 
 
             $addParams = [];
+            $security = [];
             $example = (object)[];
             foreach ($annotations[0] as $aid => $annotation) {
                 preg_match_all('/^(@[a-zA-Z]*)([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
@@ -64,20 +65,21 @@ class Swagger implements \JsonSerializable
                                     $tags[$tid] = str_replace("\n", "", $tag);
                                 }
                             } else
-                                if ($matches[1] === "@queryParams") {
+                                if ($matches[1] === "@queryParams" || $matches[1] === "@params") {
                                     $queryParams = explode(",", $matches[2]);
                                 } else
                                     if ($matches[1] === "@example") {
-
-
                                         eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\" . $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "asArray")) { $example = (object)$example->asArray(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
-
                                     } else
                                         if ($matches[1] === "@secure") {
-                                            $addParams[] = (object)["name" => "Authorization", "in" => "header", "required" => false];
+                                            $security[] = (object)["bearerAuth" => []];
                                         }
 
                 }
+            }
+
+            if ($summary === "None" && $description !== "None") {
+                $summary = $description;
             }
 
 
@@ -115,96 +117,41 @@ class Swagger implements \JsonSerializable
             if ($description !== "None") {
                 if ($method === "any") {
                     $paths->{$route["routePath"]} = (object)[
-                        "get" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => $params,
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
+                        "get" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
+                            "200" => (object)["description" => "Success"],
+                            "400" => (object)["description" => "Failed"]
 
-                            ]
+                        ]),
+                        "delete" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
+                            "200" => (object)["description" => "Success"],
+                            "400" => (object)["description" => "Failed"]
 
-                        ],
-                        "delete" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => $params,
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
+                        ]),
+                        "put" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                            "200" => (object)["description" => "Success"],
+                            "400" => (object)["description" => "Failed"]
 
-                            ]
+                        ]),
+                        "post" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                            "200" => (object)["description" => "Success"],
+                            "400" => (object)["description" => "Failed"]
 
-                        ],
-                        "put" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "consumes" => "application/json",
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]),
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]
-
-                        ],
-                        "post" => (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "consumes" => "application/json",
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]),
-                            "responses" => (object)[
-                                "200" => (object)["description" => "Success"],
-                                "400" => (object)["description" => "Failed"]
-
-                            ]
-
-                        ]
-
+                        ])
                     ];
                 } else {
-
-
-                    if ($method === "post" || $method === "patch") {
-                        $params = array_merge($params, [(object)["name" => "request", "in" => "body", "schema" => (object)["type" => "object", "example" => $example]]]);
-                    }
                     if (!empty($paths->{$route["routePath"]})) {
-                        $paths->{$route["routePath"]}->{$method} = (object)[
-                            "tags" => $tags,
-                            "summary" => $summary,
-                            "description" => $description,
-                            "produces" => ["application/json", "html/text"],
-                            "parameters" => $params,
-                            "responses" => (object)[
+                        $paths->{$route["routePath"]}->{$method} = $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                            "200" => (object)["description" => "Success"],
+                            "400" => (object)["description" => "Failed"]
+
+                        ] );
+                    } else {
+                        $paths->{$route["routePath"]} = (object)[
+                            "{$method}" =>  $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
 
-                            ]];
-                    } else {
-                        $paths->{$route["routePath"]} = (object)[
-                            "{$method}" => (object)[
-                                "tags" => $tags,
-                                "summary" => $summary,
-                                "description" => $description,
-                                "produces" => ["application/json", "html/text"],
-                                "parameters" => $params,
-                                "responses" => (object)[
-                                    "200" => (object)["description" => "Success"],
-                                    "400" => (object)["description" => "Failed"]
-
-                                ]
-
-                            ]
-                        ];
+                            ] )];
                     }
                 }
 
@@ -219,7 +166,7 @@ class Swagger implements \JsonSerializable
                 "description" => $description,
                 "version" => $version
             ],
-            "security" => ["ApiKeyAuth" => "", "Oauth2" => ["read", "write"]],
+            "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],
             "basePath" => '/',
             "paths" => $paths
 
@@ -227,7 +174,35 @@ class Swagger implements \JsonSerializable
 
     }
 
-    function __toString()
+    public function getSwaggerEntry($tags, $summary,$description, $produces, $security, $params, $example, $responses) {
+        $entry = (object)[
+                "tags" => $tags,
+                "summary" => $summary,
+                "description" => $description,
+                "produces" => $produces,
+                "parameters" => $params,
+                "requestBody" => (object)[
+                      "description" => "Example Object",
+                      "required" => true,
+                      "content" => [
+                        "application/json"=> [
+                          "schema" => ["type" => "object", "example" => $example]
+                        ]
+                      ]
+                ],
+                "security" => $security,
+                "responses" => $responses
+        ];
+
+        //Get rid of request body if the example is empty
+        if (empty((array)$example)) {
+            unset($entry->requestBody);
+        }
+
+        return $entry;
+    }
+
+    public function __toString()
     {
         header("Content-Type: application/json");
         return json_encode($this->swagger, JSON_UNESCAPED_SLASHES);

@@ -32,11 +32,14 @@ class Auth extends Data
     function __construct($documentRoot = "", $lastPath = "/")
     {
         parent::__construct();
-        self::initSession();
-
-        $_SESSION["tina4:lastPath"] = $lastPath;
+        $this->initSession();
 
         $this->documentRoot = $documentRoot;
+
+        //Check security
+        if (!file_exists($this->documentRoot . "secrets")) {
+            $this->generateSecureKeys();
+        }
 
         //Load secrets
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
@@ -44,6 +47,10 @@ class Auth extends Data
         }
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
+        }
+
+        if (get_called_class() === "Tina4\Auth") {
+            $this->getToken("default");
         }
     }
 
@@ -53,7 +60,8 @@ class Auth extends Data
     public function initSession()
     {
         //make sure the session is started
-        if (session_status() == PHP_SESSION_NONE) {
+        if (session_status() === PHP_SESSION_NONE && !$this->configured ) {
+            $this->configured = true;
             session_start();
         }
     }
@@ -62,14 +70,16 @@ class Auth extends Data
      * Creates a secrets folder and generates keys for the application
      * @return bool
      */
-    function generateSecureKeys()
+    public function generateSecureKeys()
     {
         DebugLog::message("Generating Auth keys");
         if (file_exists($this->documentRoot . "secrets")) {
             DebugLog::message("Secrets folder exists already, please remove");
             return false;
         }
-        mkdir($this->documentRoot . "secrets");
+        if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
+            throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+        }
         `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
@@ -98,7 +108,7 @@ class Auth extends Data
     public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         DebugLog::message("Validating token");
-        self::initSession();
+        $this->initSession();
 
         if (!empty($publicKey)) {
             $this->publicKey = $publicKey;
@@ -152,7 +162,7 @@ class Auth extends Data
      */
     function validateAuth($request, $lastPath = null)
     {
-        self::initSession();
+        $this->initSession();
 
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
             $lastPath = $_SESSION["tina4:lastPath"];
@@ -168,7 +178,7 @@ class Auth extends Data
      */
     function clearTokens()
     {
-        self::initSession();
+        $this->initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
             unset($_SESSION["tina4:authToken"]);
         }
@@ -183,7 +193,7 @@ class Auth extends Data
      */
     public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
-        self::initSession();
+        $this->initSession();
 
         if (!empty($privateKey)) {
             $this->privateKey = $privateKey;
@@ -199,10 +209,14 @@ class Auth extends Data
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 
-        $tokenEncoded = $tokenDecoded->encode($this->privateKey, JWT::ALGORITHM_RS256);
-        $tokenString = $tokenEncoded->__toString();
-        $_SESSION["tina4:authToken"] = $tokenString;
-        session_write_close();
+        if (!empty($this->privateKey)) {
+
+            $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
+            $tokenString = $tokenEncoded->__toString();
+            $_SESSION["tina4:authToken"] = $tokenString;
+        } else {
+            $tokenString = "secrets folder is empty of tokens";
+        }
         return $tokenString;
     }
 
@@ -213,7 +227,7 @@ class Auth extends Data
      * @param string $encryption
      * @return array|false
      */
-    function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         DebugLog::message("Getting token payload");
 

@@ -1,0 +1,225 @@
+\hypertarget{class_tina4_1_1_routing}{}\doxysection{Tina4\textbackslash{}Routing Class Reference}
+\label{class_tina4_1_1_routing}\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_a956ed30a3e14d25349337c8f210d694e}{\+\_\+\+\_\+construct}} (\$root=\char`\"{}\char`\"{}, \$sub\+Folder=\char`\"{}\char`\"{}, \$url\+To\+Parse=\char`\"{}\char`\"{}, \$method=\char`\"{}\char`\"{}, \mbox{\hyperlink{class_tina4_1_1_config}{Config}} \$config=null, \$suppressed=false)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_a014f3f5f8977efed5a5cb7146c4db754}{clean\+U\+RL}} (\$url)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_aec0892c29445c14c0903bc3223a8a507}{return\+Static}} (\$file\+Name)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_abb60d8a2404b5bb64956cdf205060a50}{range\+Download}} (\$file)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_a49e75a1751aa3b33618ffffb3d8f02d6}{include\+Directory}} (\$dir\+Name)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_a7f77b14a8800271034744674ab1ef852}{match\+Path}} (\$path, \$route\+Path)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_ad0f311ebbfe0228c237edd380f839c7d}{get\+Params}} (\$response, \$inline\+To\+Request=false)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_a28e810db54c127f0db2998ee890313ec}{forbidden}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_aa9fdc396121af0558cfc5a7c89a01e82}{\+\_\+\+\_\+to\+String}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_ac4356fe2fd0e261e20342d42af0b5f3f}{get\+Class\+Annotations}} (\$class)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_routing_a9186e07a9365d6baac64427d75f9a8ba}{get\+Swagger}} (\$title=\char`\"{}Tina4\char`\"{}, \$description=\char`\"{}Swagger Documentation\char`\"{}, \$version=\char`\"{}1.\+0.\+0\char`\"{})
+\end{DoxyCompactItemize}
+\doxysubsection*{Static Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+static \mbox{\hyperlink{class_tina4_1_1_routing_aebbb7efdf9d66c8ac7e60a5e9ae7bfb8}{recurse\+Copy}} (\$src, \$dst)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Constructor \& Destructor Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_routing_a956ed30a3e14d25349337c8f210d694e}\label{class_tina4_1_1_routing_a956ed30a3e14d25349337c8f210d694e}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!\_\_construct@{\_\_construct}}
+\index{\_\_construct@{\_\_construct}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{\_\_construct()}{\_\_construct()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::\+\_\+\+\_\+construct (\begin{DoxyParamCaption}\item[{}]{\$root = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$sub\+Folder = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$url\+To\+Parse = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$method = {\ttfamily \char`\"{}\char`\"{}},  }\item[{\mbox{\hyperlink{class_tina4_1_1_config}{Config}}}]{\$config = {\ttfamily null},  }\item[{}]{\$suppressed = {\ttfamily false} }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_routing}{Routing}} constructor. 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$root} & Where the document root is located \\
+\hline
+string & {\em \$sub\+Folder} & Subfolder where the project sits \\
+\hline
+string & {\em \$url\+To\+Parse} & U\+RL being parsed \\
+\hline
+string & {\em \$method} & Type of method e.\+g. A\+NY, P\+O\+ST, D\+E\+L\+E\+TE, etc \\
+\hline
+\mbox{\hyperlink{class_tina4_1_1_config}{Config}} | null & {\em \$config} & \mbox{\hyperlink{class_tina4_1_1_config}{Config}} containing configs from the initialization \\
+\hline
+bool & {\em \$suppressed} & Don\textquotesingle{}t output headers \\
+\hline
+\end{DoxyParams}
+
+\begin{DoxyExceptions}{Exceptions}
+{\em } & \\
+\hline
+\end{DoxyExceptions}
+\mbox{\hyperlink{class_tina4_1_1_response}{Response}} method 
+\begin{DoxyParams}[1]{Parameters}
+ & {\em \$content} & \\
+\hline
+int & {\em \$code} & \\
+\hline
+null & {\em \$content\+Type} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+false$\vert$string
+\end{DoxyReturn}
+
+
+\doxysubsection{Member Function Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_routing_aa9fdc396121af0558cfc5a7c89a01e82}\label{class_tina4_1_1_routing_aa9fdc396121af0558cfc5a7c89a01e82}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!\_\_toString@{\_\_toString}}
+\index{\_\_toString@{\_\_toString}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{\_\_toString()}{\_\_toString()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::\+\_\+\+\_\+to\+String (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Convert the output to a string value \begin{DoxyReturn}{Returns}
+false$\vert$mixed$\vert$string$\vert$null 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_routing_a014f3f5f8977efed5a5cb7146c4db754}\label{class_tina4_1_1_routing_a014f3f5f8977efed5a5cb7146c4db754}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!cleanURL@{cleanURL}}
+\index{cleanURL@{cleanURL}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{cleanURL()}{cleanURL()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::clean\+U\+RL (\begin{DoxyParamCaption}\item[{}]{\$url }\end{DoxyParamCaption})}
+
+Clean U\+RL by splitting string at \char`\"{}?\char`\"{} to get actual U\+RL 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$url} & U\+RL to be cleaned that may contain \char`\"{}?\char`\"{} \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+mixed Part of the U\+RL before the \char`\"{}?\char`\"{} if it existed 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_routing_a28e810db54c127f0db2998ee890313ec}\label{class_tina4_1_1_routing_a28e810db54c127f0db2998ee890313ec}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!forbidden@{forbidden}}
+\index{forbidden@{forbidden}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{forbidden()}{forbidden()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::forbidden (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Throws a forbidden message \mbox{\Hypertarget{class_tina4_1_1_routing_ac4356fe2fd0e261e20342d42af0b5f3f}\label{class_tina4_1_1_routing_ac4356fe2fd0e261e20342d42af0b5f3f}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!getClassAnnotations@{getClassAnnotations}}
+\index{getClassAnnotations@{getClassAnnotations}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{getClassAnnotations()}{getClassAnnotations()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::get\+Class\+Annotations (\begin{DoxyParamCaption}\item[{}]{\$class }\end{DoxyParamCaption})}
+
+Returns the annotations for a class 
+\begin{DoxyParams}{Parameters}
+{\em \$class} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+false$\vert$mixed 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_routing_ad0f311ebbfe0228c237edd380f839c7d}\label{class_tina4_1_1_routing_ad0f311ebbfe0228c237edd380f839c7d}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!getParams@{getParams}}
+\index{getParams@{getParams}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{getParams()}{getParams()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::get\+Params (\begin{DoxyParamCaption}\item[{}]{\$response,  }\item[{}]{\$inline\+To\+Request = {\ttfamily false} }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_get}{Get}} the params 
+\begin{DoxyParams}[1]{Parameters}
+ & {\em \$response} & \\
+\hline
+false & {\em \$inline\+To\+Request} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+array 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_routing_a9186e07a9365d6baac64427d75f9a8ba}\label{class_tina4_1_1_routing_a9186e07a9365d6baac64427d75f9a8ba}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!getSwagger@{getSwagger}}
+\index{getSwagger@{getSwagger}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{getSwagger()}{getSwagger()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::get\+Swagger (\begin{DoxyParamCaption}\item[{}]{\$title = {\ttfamily \char`\"{}Tina4\char`\"{}},  }\item[{}]{\$description = {\ttfamily \char`\"{}Swagger~Documentation\char`\"{}},  }\item[{}]{\$version = {\ttfamily \char`\"{}1.0.0\char`\"{}} }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_swagger}{Swagger}} 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$title} & \\
+\hline
+string & {\em \$description} & \\
+\hline
+string & {\em \$version} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+false$\vert$string 
+\end{DoxyReturn}
+
+\begin{DoxyExceptions}{Exceptions}
+{\em } & \\
+\hline
+\end{DoxyExceptions}
+\mbox{\Hypertarget{class_tina4_1_1_routing_a49e75a1751aa3b33618ffffb3d8f02d6}\label{class_tina4_1_1_routing_a49e75a1751aa3b33618ffffb3d8f02d6}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!includeDirectory@{includeDirectory}}
+\index{includeDirectory@{includeDirectory}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{includeDirectory()}{includeDirectory()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::include\+Directory (\begin{DoxyParamCaption}\item[{}]{\$dir\+Name }\end{DoxyParamCaption})}
+
+Recursively includes directories 
+\begin{DoxyParams}{Parameters}
+{\em \$dir\+Name} & \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{class_tina4_1_1_routing_a7f77b14a8800271034744674ab1ef852}\label{class_tina4_1_1_routing_a7f77b14a8800271034744674ab1ef852}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!matchPath@{matchPath}}
+\index{matchPath@{matchPath}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{matchPath()}{matchPath()}}
+{\footnotesize\ttfamily string Used to check if path matches route path in Tina4\textbackslash{}\+Routing\+::match\+Path (\begin{DoxyParamCaption}\item[{}]{\$path,  }\item[{}]{\$route\+Path }\end{DoxyParamCaption})}
+
+Check if path matches route path 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$path} & U\+RL to parse \\
+\hline
+string & {\em \$route\+Path} & \mbox{\hyperlink{class_tina4_1_1_route}{Route}} path \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool Whether or not they match 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_routing_abb60d8a2404b5bb64956cdf205060a50}\label{class_tina4_1_1_routing_abb60d8a2404b5bb64956cdf205060a50}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!rangeDownload@{rangeDownload}}
+\index{rangeDownload@{rangeDownload}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{rangeDownload()}{rangeDownload()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::range\+Download (\begin{DoxyParamCaption}\item[{}]{\$file }\end{DoxyParamCaption})}
+
+Method to download / stream files 
+\begin{DoxyParams}{Parameters}
+{\em \$file} & \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{class_tina4_1_1_routing_aebbb7efdf9d66c8ac7e60a5e9ae7bfb8}\label{class_tina4_1_1_routing_aebbb7efdf9d66c8ac7e60a5e9ae7bfb8}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!recurseCopy@{recurseCopy}}
+\index{recurseCopy@{recurseCopy}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{recurseCopy()}{recurseCopy()}}
+{\footnotesize\ttfamily static Tina4\textbackslash{}\+Routing\+::recurse\+Copy (\begin{DoxyParamCaption}\item[{}]{\$src,  }\item[{}]{\$dst }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+Recursively copy the files 
+\begin{DoxyParams}{Parameters}
+{\em \$src} & \\
+\hline
+{\em \$dst} & \\
+\hline
+\end{DoxyParams}
+\mbox{\Hypertarget{class_tina4_1_1_routing_aec0892c29445c14c0903bc3223a8a507}\label{class_tina4_1_1_routing_aec0892c29445c14c0903bc3223a8a507}} 
+\index{Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}!returnStatic@{returnStatic}}
+\index{returnStatic@{returnStatic}!Tina4\textbackslash{}Routing@{Tina4\textbackslash{}Routing}}
+\doxysubsubsection{\texorpdfstring{returnStatic()}{returnStatic()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Routing\+::return\+Static (\begin{DoxyParamCaption}\item[{}]{\$file\+Name }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_get}{Get}} static files 
+\begin{DoxyParams}{Parameters}
+{\em \$file\+Name} & \\
+\hline
+\end{DoxyParams}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Tina4/Routing.\+php\end{DoxyCompactItemize}

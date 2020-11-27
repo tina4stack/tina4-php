@@ -11,6 +11,7 @@ namespace Tina4;
 class DataSQLite3 implements DataBase
 {
     use DataBaseCore;
+    use Utility;
 
     /**
      * Open an SQLite3 connection
@@ -36,9 +37,12 @@ class DataSQLite3 implements DataBase
      */
     public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         $sql = $params[0];
+
 
         $preparedQuery = $this->dbh->prepare($sql);
 
@@ -48,19 +52,24 @@ class DataSQLite3 implements DataBase
             unset($params[0]);
 
             foreach ($params as $pid => $param) {
-                $param = $this->dbh->escapeString($param);
+
+
                 if (is_numeric($param)) {
-                    @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_FLOAT);
+                    $preparedQuery->bindValue("{$pid}", $param, SQLITE3_FLOAT);
                 } else
-                    if (is_integer($param)) {
-                        @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_INTEGER);
+                    if (is_int($param)) {
+                        $preparedQuery->bindValue("{$pid}", $param, SQLITE3_INTEGER);
                     } else
-                        if (is_string($param)) {
-                            @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
+                        if ($this->isBinary($param)) {
+                            $preparedQuery->bindValue("{$pid}", $param, SQLITE3_BLOB);
                         } else {
-                            @$preparedQuery->bindValue("{$pid}", $param, SQLITE3_BLOB);
+                            $param = $this->dbh->escapeString($param);
+                            $preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
                         }
             }
+
+
+
             $preparedQuery->execute();
             $preparedQuery->close();
 
@@ -85,9 +94,12 @@ class DataSQLite3 implements DataBase
      */
     public function tableExists($tableName)
     {
-        $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
-
-        return !empty($exists->records());
+        if (!empty($tableName)) {
+            $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
+            return !empty($exists->records);
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -100,6 +112,7 @@ class DataSQLite3 implements DataBase
      */
     public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
     {
+
         $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
 
         $sql = $sql . " limit {$offSet},{$noOfRecords}";
@@ -109,7 +122,7 @@ class DataSQLite3 implements DataBase
         if (!empty($recordCursor)) {
             while ($recordArray = $recordCursor->fetchArray(SQLITE3_ASSOC)) {
                 if (!empty($recordArray)) {
-                    $records[] = (new DataRecord($recordArray, $fieldMapping));
+                    $records[] = (new DataRecord($recordArray, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
                 }
             }
         }
@@ -167,7 +180,7 @@ class DataSQLite3 implements DataBase
     public function startTransaction()
     {
         //No transactions for sqlite
-        return true;
+        return "Resource id #0";
     }
 
     /**
@@ -209,4 +222,13 @@ class DataSQLite3 implements DataBase
         return $database;
     }
 
+    public function getDefaultDatabaseDateFormat()
+    {
+       return "Y-m-d";
+    }
+
+    public function getDefaultDatabasePort()
+    {
+       return null;
+    }
 }

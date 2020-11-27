@@ -155,7 +155,7 @@ class SQL implements \JsonSerializable
     {
         $result = [];
         foreach ($fields as $id => $field) {
-            if (!empty($ORM)) {
+            if (!empty($this->ORM)) {
                 $result[] = $this->ORM->getFieldName($field);
             } else {
                 $result[] = $field;
@@ -207,6 +207,26 @@ class SQL implements \JsonSerializable
         return $this->jsonSerialize();
     }
 
+
+    /**
+     * Cleans up column names for JsonSerializable
+     * @param $fields
+     * @return array
+     */
+    public function getColumnNames($fields) {
+        $columnNames = [];
+        foreach($fields as $id => $field) {
+            $columnName = $field;
+            $field = str_replace([".", " as", " "], "^", $field);
+            if (strpos($field, "^") !== false) {
+                $explodedField = explode("^", $field);
+                $columnName = array_pop($explodedField);
+            }
+            $columnNames[] = $columnName;
+        }
+        return $columnNames;
+    }
+
     /**
      * Makes a neat JSON response
      */
@@ -214,6 +234,7 @@ class SQL implements \JsonSerializable
     {
         //run the query
         $sqlStatement = $this->generateSQLStatement();
+
         if (!empty($this->DBA)) {
             $result = $this->DBA->fetch($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
@@ -231,28 +252,31 @@ class SQL implements \JsonSerializable
                         $newRecord->mapFromRecord($record, true);
 
 
+
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
+
                                 if (property_exists($newRecord, $excludeField)) {
                                     unset($newRecord->{$excludeField});
                                 }
                             }
                         }
 
-                        //Apply a filter to the record
-                        if (!empty($this->filterMethod)) {
-                            foreach ($this->filterMethod as $fid => $filterMethod) {
-                                call_user_func($filterMethod, $newRecord);
+                        //Only return what was requested
+                        if (!empty($this->fields) && !in_array("*", $this->getColumnNames($this->fields))) {
+                            foreach ($newRecord as $key => $value) {
+                                if (in_array($key, $newRecord->protectedFields, true)) continue;
+                                if (!in_array($this->ORM->getFieldName($key), $this->getColumnNames($this->fields), true) && strpos($key, " as") === false && strpos($key, ".") === false ) {
+                                    unset($newRecord->{$key});
+                                }
                             }
                         }
 
-                        //Only return what was requested
-                        if (!empty($this->fields) && $this->fields[0] !== "*") {
-                            foreach ($newRecord as $key => $value) {
-                                if (in_array($key, $newRecord->protectedFields)) continue;
-                                if (!in_array($key, $this->fields) ) {
-                                    unset($newRecord->{$key});
-                                }
+                        //Apply a filter to the record
+                        if (!empty($this->filterMethod)) {
+
+                            foreach ($this->filterMethod as $fid => $filterMethod) {
+                                call_user_func($filterMethod, $newRecord);
                             }
                         }
 
@@ -266,10 +290,15 @@ class SQL implements \JsonSerializable
             $records = ["error" => "No database connection or ORM specified"];
         }
 
+
+
         return $records;
     }
 
-    function generateSQLStatement()
+    /**
+     * @return string
+     */
+    public function generateSQLStatement()
     {
         //see if we have some foreign key references
         if (!empty($this->hasOne)) {
@@ -310,7 +339,8 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
-
+        \Tina4\DebugLog::message("SQL:".$sql);
+        error_log ($sql);
         return $sql;
     }
 
@@ -324,15 +354,15 @@ class SQL implements \JsonSerializable
         if (isset($records["error"]) && !empty($records["error"])) return $records;
         $result = [];
         foreach ($records as $id => $record) {
-
             if (get_parent_class($record) === "Tina4\ORM") {
                 $result[] = $record->asArray();
             }
-              else {
-                  $result[] = (array)$record;
-              }
+            else {
+                $result[] = (array)$record;
+            }
 
         }
+
         return $result;
     }
 
@@ -349,6 +379,4 @@ class SQL implements \JsonSerializable
         }
         return (new DataResult($records, null, $this->noOfRecords, $this->offset, $this->error));
     }
-
-
 }

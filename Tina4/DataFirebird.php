@@ -11,8 +11,7 @@ namespace Tina4;
 class DataFirebird implements DataBase
 {
     use DataBaseCore;
-
-    public $port = 3050;
+    use Utility;
 
     /**
      * Open a Firebird database connection
@@ -24,6 +23,10 @@ class DataFirebird implements DataBase
         if (!function_exists("ibase_pconnect")) {
             throw new \Exception("Firebird extension for PHP needs to be installed");
         }
+
+        //Set the returning format to something we can expect to transform
+        ini_set( "ibase.dateformat", str_replace("Y", "%Y",  str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat() ) ) ) );
+        ini_set( "ibase.timestampformat", str_replace("Y", "%Y",  str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat() ) ) ) . " %H:%M:%S" );
 
         if ($persistent) {
             $this->dbh = ibase_pconnect($this->hostName . "/" . $this->port . ":" . $this->databaseName, $this->username, $this->password);
@@ -46,15 +49,22 @@ class DataFirebird implements DataBase
      */
     public function exec()
     {
-        $params = func_get_args();
+        $params = $this->parseParams(func_get_args());
+        $tranId = $params["tranId"];
+        $params = $params["params"];
 
         if (stripos($params[0], "returning") !== false) {
             return $this->fetch($params[0]);
         } else {
-            $preparedQuery = @ibase_prepare($params[0]);
+            if (!empty($tranId)) {
+                $preparedQuery = ibase_prepare($this->dbh, $tranId, $params[0]);
+            } else {
+                $preparedQuery = ibase_prepare($this->dbh, $params[0]);
+            }
+
             if (!empty($preparedQuery)) {
                 $params[0] = $preparedQuery;
-                @call_user_func_array("ibase_execute", $params);
+                call_user_func_array("ibase_execute", $params);
             }
 
             return $this->error();
@@ -81,12 +91,12 @@ class DataFirebird implements DataBase
             $sql = substr($sql, 0, $posSelect) . $limit . substr($sql, $posSelect);   //select first 10 skip 10 from table
         }
 
-        $recordCursor = @ibase_query($this->dbh, $sql);
+        $recordCursor = ibase_query($this->dbh, $sql);
 
         $records = null;
         $record = null;
 
-        while ($record = @ibase_fetch_assoc($recordCursor)) {
+        while ($record = ibase_fetch_assoc($recordCursor)) {
             foreach ($record as $key => $value) {
                 if (substr($value, 0, 2) === "0x") {
                     //Get the blob information
@@ -99,7 +109,7 @@ class DataFirebird implements DataBase
                     $record[$key] = $content;
                 }
             }
-            $records[] = (new DataRecord($record, $fieldMapping));
+            $records[] = (new DataRecord($record, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
         }
 
         if (is_array($records) && count($records) > 1) {
@@ -168,9 +178,9 @@ class DataFirebird implements DataBase
     public function rollback($transactionId = null)
     {
         if (!empty($transactionId)) {
-            return @ibase_rollback($transactionId);
+            return ibase_rollback($transactionId);
         } else {
-            return @ibase_rollback($this->dbh);
+            return ibase_rollback($this->dbh);
         }
     }
 
@@ -182,7 +192,7 @@ class DataFirebird implements DataBase
     public function autoCommit($onState = false)
     {
         //Firebird has commit off by default
-        return true;
+        return false;
     }
 
     /**
@@ -191,7 +201,8 @@ class DataFirebird implements DataBase
      */
     public function startTransaction()
     {
-        return ibase_trans(IBASE_COMMITTED, $this->dbh);
+        
+        return ibase_trans(IBASE_COMMITTED + IBASE_NOWAIT, $this->dbh);
     }
 
     /**
@@ -199,22 +210,26 @@ class DataFirebird implements DataBase
      * @param $tableName
      * @return bool
      */
-    public function tableExists($tableName)
+    public function tableExists($tableName) : bool
     {
-        // table name must be in upper case
-        $tableName = strtoupper($tableName);
-        $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+        if (!empty($tableName)) {
+            // table name must be in upper case
+            $tableName = strtoupper($tableName);
+            $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
 
-        return !empty($exists->records());
+            return !empty($exists->records());
+        } else {
+            return false;
+        }
     }
 
     /**
      * Get the last id
-     * @return bool
+     * @return int
      */
     public function getLastId()
     {
-        return false;
+        return null;
     }
 
     /**
@@ -309,10 +324,10 @@ class DataFirebird implements DataBase
                 $database[trim($record->tableName)][$tid]["length"] = trim($tRecord->fieldLength);
                 $database[trim($record->tableName)][$tid]["precision"] = trim($tRecord->fieldPrecision);
                 $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->fieldDefaultValue);
-                if (!empty($trecord->fieldNotNullContraint)) {
+                if (!empty($tRecord->fieldNotNullContraint)) {
                     $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->fieldNotNullContraint);
                 }
-                if (!empty($PK[$trecord->fieldName])) {
+                if (!empty($PK[$tRecord->fieldName])) {
                     $database[trim($record->tableName)][$tid]["pk"] = trim($PK[$tRecord->fieldName]["CONSTRAINT_TYPE"]);
                 } else {
                     $database[trim($record->tableName)][$tid]["pk"] = "";
@@ -323,4 +338,31 @@ class DataFirebird implements DataBase
         return $database;
     }
 
+    /**
+     * Gets the default database date format
+     * @return mixed|string
+     */
+    public function getDefaultDatabaseDateFormat()
+    {
+        return "m/d/Y";
+    }
+
+    /**
+     * Gets the default database port
+     * @return int|mixed
+     */
+    public function getDefaultDatabasePort()
+    {
+        return 3050;
+    }
+
+    /**
+     * Specific to firebird generators
+     * @param $generatorName
+     * @param int $increment
+     * @return mixed
+     */
+    public function getGeneratorId($generatorName, $increment=1) {
+        return ibase_gen_id (strtoupper($generatorName), $increment, $this->dbh);
+    }
 }
