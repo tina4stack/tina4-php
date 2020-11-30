@@ -5,7 +5,7 @@
 // Copyright (C)
 // Contact : andrevanzuydam@gmail.com
 -->
-# How to make a webpage - landing page
+# Create a webpage - landing page
 
 ## Introduction
 
@@ -122,4 +122,4 @@ You should see your website appear in the browser:
 
 You have just created a landing page for your website using Tina4. Please feel free to reach out to the developers if you have any questions or suggestions. 
 
-Continue to [how to make a custom webpage - landing page](/tutorials/customwebsite.md) or go back to  [install ide tool](/installation/install-ide.md).
+Continue to [create a custom webpage - landing page](/tutorials/customwebsite.md) or go back to  [install ide tool](/installation/install-ide.md).
