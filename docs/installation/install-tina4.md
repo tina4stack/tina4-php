@@ -37,7 +37,9 @@ cd your_project_folder
 
 ##### Step 2 - Create index.php file 
 
-Once you've created the project folder and went into it via the command line, you will need to create an "index.php" file which has the Tina4 methods and functions in it. Run the following command in your command terminal to create the required "index.php" file and contents:
+Once you've created the project folder and went into it via the command line, you will need to create an "index.php" file which has the Tina4 methods and functions in it. You can create the file manually or whichever way is easiest for you.  
+
+Run the following command in your command terminal to create the required "index.php" file and contents:
 
 ###### For Windows 
 
@@ -52,7 +54,7 @@ echo ^<?php require_once "vendor/autoload.php"; echo new \Tina4\Tina4Php(); ^ > 
 ###### For Linux & Mac 
 
 ```php
-echo '<?php require "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
+echo '<?php require_once "vendor/autoload.php"; echo new \Tina4\Tina4Php();' > index.php
 ```
     
 <div align="center" alt="Create index file for Linux & Mac">
@@ -79,25 +81,8 @@ Your project folder will now look like this...
     <img src="images/folder.png">
 </div>
 
-##### Step 4 - Create .env file
 
-Almost there... Now you must create an ".env" file in your project folder. This file will be used to setup constants in your project needed for Tina4. Run "echo .>.env" in your IDE terminal or command line.
-
-```php
-echo .>.env
-```
-    
-<div align="center" alt="Env Command">
-    <img src="images/envfile.png">
-</div> 
-
-Your project folder will now look like this... 
-
-<div align="center" alt="Folder">
-    <img src="images/folder1.png">
-</div>
-
-##### Step 5 - Confirm installation
+##### Step 4 - Confirm installation
 
 Now that we created and installed everything we need to run Tina4, we can test to check if it was successful. Spin up a webserver by running "php -S localhost:7145 index.php" in your IDE terminal or command line.
 

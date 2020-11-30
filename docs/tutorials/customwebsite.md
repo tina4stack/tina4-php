@@ -5,11 +5,11 @@
 // Copyright (C)
 // Contact : andrevanzuydam@gmail.com
 -->
-# How to make a custom webpage - landing page
+# Create a custom webpage - landing page
 
 ## Introduction
 
-Follow these intructions if you would like to create a custom webpage - landing page.
+Follow these instructions if you would like to create a custom webpage - landing page.
 
 Go to the [Twig documentation](https://twig.symfony.com/doc/3.x/) page if you would like to familiarize yourself with Twig. It is important to note that when developing, it is recommended to break down your project into small components. This is done for flexibility for any changes required in future. 
 
@@ -196,4 +196,4 @@ You should see your website appear in the browser:
 
 You have just created a landing page for your website using Tina4. Please feel free to reach out to the developers if you have any questions or suggestions. 
 
-Continue to [how do i](/tutorials/howdoi.md) or go back to [how to make a webpage - landing page](/tutorials/website.md).
+Continue to [create an API](/tutorials/createapi.md) or go back to [create a webpage - landing page](/tutorials/website.md).
