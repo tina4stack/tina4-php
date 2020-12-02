@@ -340,7 +340,6 @@ class SQL implements \JsonSerializable
         }
 
         \Tina4\DebugLog::message("SQL:".$sql);
-        error_log ($sql);
         return $sql;
     }
 

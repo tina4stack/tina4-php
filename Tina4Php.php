@@ -404,7 +404,7 @@ class Tina4Php
      * @param string $relativePath
      * @return string
      */
-    public function iterateDirectory($path, $relativePath = "")
+    public function iterateDirectory($path, $relativePath = ""): string
     {
         if (empty($relativePath)) $relativePath = $path;
         $files = scandir($path);
@@ -559,6 +559,13 @@ class Tina4Php
             }
         }
 
+        if (!empty($config) && !empty($config->getTwigFunctions())) {
+            foreach ($config->getTwigFunctions() as $name => $method) {
+                $function = new \Twig\TwigFunction($name, $method);
+                $twig->addFunction($function);
+            }
+        }
+
         return true;
     }
 }
@@ -626,7 +633,7 @@ function renderTemplate($fileNameString, $data = [])
  * @param integer $statusCode Code of status
  * @example examples\exampleTina4PHPRedirect.php
  */
-function redirect($url, $statusCode = 303)
+function redirect(string $url, $statusCode = 303)
 {
     //Define URL to test from parsed string
     $testURL = parse_url($url);
