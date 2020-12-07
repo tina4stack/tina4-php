@@ -14,7 +14,7 @@ class Messenger
      * Messenger constructor.
      * @param MessengerSettings|null $settings
      */
-    function __construct(MessengerSettings $settings = null)
+    public function __construct(MessengerSettings $settings = null)
     {
         if (!empty($settings)) {
             $this->settings = $settings;
@@ -37,11 +37,11 @@ class Messenger
      * @param $bcc array
      * @return Boolean true, false
      */
-    function sendEmail($recipients, $subject, $message, $fromName, $fromAddress, $attachments = null, $bcc = null)
+    public function sendEmail($recipients, $subject, $message, $fromName, $fromAddress, $attachments = null, $bcc = null)
     {
         //define the headers we want passed. Note that they are separated with \r\n
-        $boundary_rel = md5(uniqid(time()));
-        $boundary_alt = md5(uniqid(time()));
+        $boundary_rel = md5(uniqid(time(), true));
+        $boundary_alt = md5(uniqid(time(), true));
         $eol = PHP_EOL;
         $headers = "MIME-Version: 1.0{$eol}From:{$fromName}<{$fromAddress}>{$eol}Reply-To:{$fromAddress}{$eol}";
         $headers .= "Content-Type: multipart/related; boundary={$boundary_rel}{$eol}";
@@ -171,7 +171,7 @@ class Messenger
      * @param $boundary_alt
      * @return string
      */
-    function prepareHtmlMail($html, $eol, $boundary_rel, $boundary_alt)
+    public function prepareHtmlMail($html, $eol, $boundary_rel, $boundary_alt)
     {
         preg_match_all('~<img.*?src=.([\/.a-z0-9:;,+=_-]+).*?>~si', $html, $matches);
 
@@ -239,7 +239,7 @@ class Messenger
      * @param string $message Message to be sent
      * @param string $countryPrefix Prefix to determine country of origin
      */
-    function sendText($mobileNo, $message = "", $countryPrefix = "01")
+    public function sendText($mobileNo, $message = "", $countryPrefix = "01")
     {
         $this->sendSMS($mobileNo, $message, $countryPrefix);
     }
@@ -269,7 +269,7 @@ class Messenger
      * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
      * @return string
      */
-    function formatMobile($cellphone, $countryPrefix = "27")
+    public function formatMobile($cellphone, $countryPrefix = "27")
     {
         $ilen = strlen($cellphone);
         $tmpCel = '';

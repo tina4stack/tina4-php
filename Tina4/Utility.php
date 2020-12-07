@@ -72,13 +72,37 @@ trait Utility
      */
     public function isBinary($string)
     {
+        //immediately return back binary if we can get an image size
+        if (is_array(getimagesizefromstring($string))) return true;
         $isBinary = false;
         $string = str_ireplace("\t", "", $string);
         $string = str_ireplace("\n", "", $string);
         $string = str_ireplace("\r", "", $string);
-        if (is_string($string) && ctype_print($string) === false) {
+        if (is_string($string) && ctype_print($string) === false && strspn ( $string , '01') === strlen($string)) {
             $isBinary = true;
         }
         return $isBinary;
+    }
+
+    /**
+     * Return a camel cased version of the name
+     * @param $name
+     * @return string
+     */
+    public function camelCase($name)
+    {
+        $fieldName = "";
+        $name = strtolower($name);
+        for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
+            if ($name[$i] === "_") {
+                $i++;
+                if ($i < strlen($name)) {
+                    $fieldName .= strtoupper($name[$i]);
+                }
+            } else {
+                $fieldName .= $name[$i];
+            }
+        }
+        return $fieldName;
     }
 }

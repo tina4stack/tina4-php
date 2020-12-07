@@ -192,28 +192,6 @@ class ORM implements \JsonSerializable
     }
 
     /**
-     * Return a camel cased version of the name
-     * @param $name
-     * @return string
-     */
-    public function camelCase($name)
-    {
-        $fieldName = "";
-        $name = strtolower($name);
-        for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
-            if ($name[$i] === "_") {
-                $i++;
-                if ($i < strlen($name)) {
-                    $fieldName .= strtoupper($name[$i]);
-                }
-            } else {
-                $fieldName .= $name[$i];
-            }
-        }
-        return $fieldName;
-    }
-
-    /**
      * Saves a file into the database
      * @param $fieldName
      * @param $fileInputName
@@ -535,9 +513,8 @@ class ORM implements \JsonSerializable
      * @return string Generated insert query
      * @throws Exception Error on failure
      */
-    public function generateInsertSQL($tableData, $tableName = "")
+    public function generateInsertSQL($tableData, $tableName)
     {
-        $tableName = $this->getTableName($tableName);
         $insertColumns = [];
         $insertValues = [];
         $fieldValues = [];
@@ -627,10 +604,9 @@ class ORM implements \JsonSerializable
      * @param string $tableName Name of the table
      * @return string Generated update query
      */
-    public function generateUpdateSQL($tableData, $filter, $tableName = "")
+    public function generateUpdateSQL($tableData, $filter, $tableName)
     {
         $fieldValues = [];
-        $tableName = $this->getTableName($tableName);
         $updateValues = [];
 
         foreach ($this->hasOne() as $id => $hasOne) {
