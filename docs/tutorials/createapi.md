@@ -5,7 +5,7 @@
 // Copyright (C)
 // Contact : andrevanzuydam@gmail.com
 -->
-# Create an API
+# Create a REST API
 
 ## Introduction
 
@@ -13,15 +13,22 @@ Follow the steps below if you need to create an API end point to define the inte
 
 *Please Note* : After installing Tina4, you may delete the test.php file located inside the api folder. 
 
+The REST end point is easily added, with an anonymous method to handle the request, the anonymous method should have the response variable.
+The request exposes more information which comes from the browser, in the case of parameters passed to it. You should always return the ```$response``` object!;
+
 ### Step 1 - Create API file & subdirectories
    
-All your API's must be stored in the api directory. For this example we will make a list of cars. 
+All your API's must be stored in the api directory. For this example we will make the files and subdirectories for "cars" and "characters". 
 
-Create a directory inside the api folder and name it "cars". Now create a php file inside the "cars" subdirectory (eg. name the file cars).
+Create 2 directories inside the api folder and name it "cars" and "characters". Now create php files inside those subdirectories (eg. name the file cars and the other characters).
 
 ### Step 2 - Define routes
 
-Now that the API file has been created, we must define Routes. In the cars.php file you created inside the cars subdirectory, add the following to the script:
+Now that the API files has been created, we must define our Routes. There are various methods which can be used.  
+
+#### Get method
+
+In the cars.php file you created inside the cars subdirectory, add the following to the script:
 
 ```php
 <?php
@@ -33,11 +40,43 @@ Now that the API file has been created, we must define Routes. In the cars.php f
 return $response ($cars, HTTP_OK, APPLICATION_JSON);
 });
 ```
+
+#### Post Method
+
+```php
+<?php
+
+\Tina4\Post::add("/api/characters", function (\Tina4\Response $response) {
+    $characters = ["Clancy Gilroy", "Peter Griffin", "Broden Kelly"];
+return $response ($characters, HTTP_OK, APPLICATION_JSON);
+});
+```
+
+#### Other Methods
+
+```php
+<?php
+
+
+//Other methods you can test
+\Tina4\Post::add(...);
+
+\Tina4\Patch::add(...);
+
+\Tina4\Put::add(...);
+
+\Tina4\Delete::add(...);
+
+//You guessed it - It takes every method - GET, POST, DELETE, PUT, PATCH, OPTIONS
+\Tina4\Any::add(...);
+```
+
 Ensure that the paths are correct: 
 
 <div align="center" alt="API Routes">
     <img src="images/api.png">
 </div>
+
 
 ### Step 3 - Annotate API
 
@@ -109,4 +148,4 @@ Please checkout the Tina4 Basic API video tutorial:
 
 <iframe width="100%" height="600px" src="https://www.youtube.com/embed/LP5hVFh2lDQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-Continue to [how do i](/tutorials/howdoi.md) or go back to [create a custom webpage - landing page](/tutorials/customwebsite.md).
+Continue to [secure API](/tutorials/secureapi.md) or go back to [create a custom webpage - landing page](/tutorials/customwebsite.md).
