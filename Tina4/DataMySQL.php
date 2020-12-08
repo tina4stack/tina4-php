@@ -52,7 +52,6 @@ class DataMySQL implements DataBase
         $tranId = $params["tranId"];
         $params = $params["params"];
 
-
         if (stripos($params[0], "call") !== false) {
             return $this->fetch($params[0]);
         } else {
@@ -64,26 +63,22 @@ class DataMySQL implements DataBase
                 if (!empty($params)) {
                     $paramTypes = "";
                     foreach ($params as $pid => $param) {
+                        if ($this->isBinary($param)) {
+                            $paramTypes .= "s"; //Should be b but does not work as expected
+                        } else
+                            if (is_int($param)) {
+                                $paramTypes .= "i";
+                            }
+                              else
                         if (is_numeric($param)) {
                             $paramTypes .= "d";
                         } else
-                            if (is_integer($param)) {
-                                $paramTypes .= "i";
-                            } else
-                                if ($this->isBinary($param)) {
-                                    $paramTypes .= "s"; //Should be b but does not work as expected
-                                } else {
-                                    $paramTypes .= "s";
-                                }
+                        {
+                            $paramTypes .= "s";
+                        }
                     }
 
-
-
-
-
-
                     $params = array_merge([$preparedQuery, $paramTypes], $params);
-
 
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
 
@@ -97,9 +92,6 @@ class DataMySQL implements DataBase
                 }
 
             }
-
-
-
             return $this->error();
         }
     }
@@ -214,6 +206,7 @@ class DataMySQL implements DataBase
             }
             return $refs;
         }
+
         return $arr;
     }
 

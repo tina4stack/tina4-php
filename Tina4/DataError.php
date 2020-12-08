@@ -48,8 +48,26 @@ class DataError
     /**
      * @return array Containing The code and message of the error
      */
-    function getError()
+    public function getError()
     {
         return ["errorCode" => $this->errorCode, "errorMessage" => $this->errorMessage];
+    }
+
+    /**
+     * Gets the last error code
+     * @return string
+     */
+    public function getErrorCode()
+    {
+        return $this->errorCode;
+    }
+
+    /**
+     * Gets the last error message
+     * @return string
+     */
+    public function getErrorMessage()
+    {
+        return $this->errorMessage;
     }
 }

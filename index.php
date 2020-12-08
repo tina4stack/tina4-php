@@ -20,6 +20,9 @@ class_alias("\Tina4\ORM", "Tina4Object");
 //define ("TINA4_GIT_ENABLED", true);
 global $DBA;
 
+//$DBA = new \Tina4\DataMySQL(DATABASE_HOST . "/" . DATABASE_PORT . ":". DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, "d/m/Y");
+
+
 //$DBA = (new \Tina4\DataFirebird(FIREBIRD_DATABASE,FIREBIRD_USERNAME,FIREBIRD_PASSWORD));
 //$DBA =  new \Tina4\DataSQLite3("auth.db");
 //For mysql - docker-compose up in the relevant docker folder before running
@@ -38,6 +41,20 @@ $config = new \Tina4\Config();
 
 //exec("ls -l", $output);
 
+//$DBA->exec("delete from test_save");
+
+//$testSave = new TestSave();
+
+//print_r ($testSave->asArray());
+
+//$testSave->save();
+
+//print_r ($testSave->asArray());
+
+//$testSave->age = "a";
+//$testSave->email = "testingme@test.com";
+//$testSave->ageDefault = 12;
+//$testSave->date = 'xcxxnxnxnx';
 
 echo new \Tina4\Tina4Php($config);
 //WARNING NO CODE BELOW LINE 45 WILL BE RUN

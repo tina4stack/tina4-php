@@ -196,83 +196,86 @@ class Tina4Php
 
         $tina4PHP = $this;
 
-        /**
-         * @secure
-         */
-        \Tina4\Route::get("/code", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            return $response (\Tina4\renderTemplate("code.twig", $request->asArray()), HTTP_OK, TEXT_HTML);
-        });
+        if (defined ("TINA4_DEBUG") && TINA4_DEBUG) {
 
-        /**
-         * @secure
-         */
-        \Tina4\Route::post("/code/files/tree", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            //Read dir
-            $html = $this->iterateDirectory($tina4PHP->documentRoot);
+            /**
+             * @secure
+             */
+            \Tina4\Route::get("/code", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+                return $response (\Tina4\renderTemplate("code.twig", $request->asArray()), HTTP_OK, TEXT_HTML);
+            });
 
-            return $response ($html, HTTP_OK, TEXT_HTML);
-        });
+            /**
+             * @secure
+             */
+            \Tina4\Route::post("/code/files/tree", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+                //Read dir
+                $html = $this->iterateDirectory($tina4PHP->documentRoot);
 
-        /**
-         * @secure
-         */
-        \Tina4\Route::post("/code/files/{action}", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            $action = $request->inlineParams[0];
-            if ($action == "load") {
-                return $response (file_get_contents($tina4PHP->documentRoot . "/" . $request->params["fileName"]), HTTP_OK, TEXT_HTML);
-            } else
-                if ($action == "save") {
-                    $this->gitInit(true, $request->params["commitMessage"], true);
-                    file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/" . $request->params["fileName"], $request->params["fileContent"]);
-                    return $response ("Ok!", HTTP_OK, TEXT_HTML);
+                return $response ($html, HTTP_OK, TEXT_HTML);
+            });
+
+            /**
+             * @secure
+             */
+            \Tina4\Route::post("/code/files/{action}", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+                $action = $request->inlineParams[0];
+                if ($action == "load") {
+                    return $response (file_get_contents($tina4PHP->documentRoot . "/" . $request->params["fileName"]), HTTP_OK, TEXT_HTML);
+                } else
+                    if ($action == "save") {
+                        $this->gitInit(true, $request->params["commitMessage"], true);
+                        file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/" . $request->params["fileName"], $request->params["fileContent"]);
+                        return $response ("Ok!", HTTP_OK, TEXT_HTML);
+                    }
+                return $response("");
+            });
+
+            //migration routes
+            \Tina4\Route::get("/migrate|/migrations|/migration", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+                $result = (new \Tina4\Migration())->doMigration();
+                $migrationFolders = (new \Tina4\Module())->getMigrationFolders();
+                foreach ($migrationFolders as $id => $migrationFolder) {
+                    $result .= (new \Tina4\Migration($migrationFolder))->doMigration();
                 }
-            return $response("");
-        });
 
-        //migration routes
-        \Tina4\Route::get("/migrate|/migrations|/migration", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            $result = (new \Tina4\Migration())->doMigration();
-            $migrationFolders = (new \Tina4\Module())->getMigrationFolders();
-            foreach ($migrationFolders as $id => $migrationFolder) {
-                $result .= (new \Tina4\Migration($migrationFolder))->doMigration();
-            }
+                return $response ($result, HTTP_OK, TEXT_HTML);
+            });
 
-            return $response ($result, HTTP_OK, TEXT_HTML);
-        });
+            \Tina4\Route::get("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+                //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
 
-        \Tina4\Route::get("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
-
-            $html = _html(
-                _body(_style(
-                    "body { font-family: Arial; border: 1px solid black; padding: 20px; }
+                $html = _html(
+                    _body(_style(
+                        "body { font-family: Arial; border: 1px solid black; padding: 20px; }
                         label{ display:block; margin-top: 5px; } 
                         input, textarea { width: 100%; font-size: 14px; } 
                         button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }
                         "),
-                    _form(["class" => "form", "method" => "post"],
-                        _label("Migration Description"),
-                        _input(["type" => "text", "name" => "description"]),
-                        _label("SQL Statement"),
-                        _textarea(["rows" => "20",
-                            "name" => "sql"]),
-                        _br(),
-                        _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
-                        _button("Create Migration")
+                        _form(["class" => "form", "method" => "post"],
+                            _label("Migration Description"),
+                            _input(["type" => "text", "name" => "description"]),
+                            _label("SQL Statement"),
+                            _textarea(["rows" => "20",
+                                "name" => "sql"]),
+                            _br(),
+                            _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
+                            _button("Create Migration")
+                        )
                     )
-                )
-            );
-            return $response ($html, HTTP_OK, TEXT_HTML);
-        });
+                );
+                return $response ($html, HTTP_OK, TEXT_HTML);
+            });
 
-        \Tina4\Route::post("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
-            $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
-            return $response ($result, HTTP_OK, TEXT_HTML);
-        });
+            \Tina4\Route::post("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+                $result = (new \Tina4\Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
+                return $response ($result, HTTP_OK, TEXT_HTML);
+            });
 
-        /**
-         * End of routes
-         */
+            /**
+             * End of routes
+             */
+        }
 
         if (defined("TINA4_GIT_ENABLED") && TINA4_GIT_ENABLED) {
             $this->gitInit(TINA4_GIT_ENABLED, (defined("TINA4_GIT_MESSAGE")) ? TINA4_GIT_MESSAGE : "");

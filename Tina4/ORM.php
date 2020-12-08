@@ -278,7 +278,7 @@ class ORM implements \JsonSerializable
         }
 
         foreach ($this as $fieldName => $value) {
-            if (!in_array($fieldName, $this->protectedFields)) {
+            if (!in_array($fieldName, $this->protectedFields, true)) {
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
                 }
@@ -354,10 +354,13 @@ class ORM implements \JsonSerializable
         }
 
         $tableName = $this->getTableName($tableName);
-        $this->checkDBConnection($tableName);
+        if (!$this->checkDBConnection($tableName))  {
+            throw new \Exception("No database connection");
+        }
 
 
-        $tableData = $this->getTableData($fieldMapping, true);
+        $tableData = $this->getTableData($fieldMapping, false);
+
 
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
@@ -368,13 +371,11 @@ class ORM implements \JsonSerializable
             DebugLog::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
         }
 
-        $exists = json_decode($this->DBA->fetch($sqlCheck, 1) . "");
-
+        $exists = $this->DBA->fetch($sqlCheck, 1);
 
         $getLastId = false;
-        if ($exists->recordsTotal == 0 || $exists->error == "") {
-            if (empty($exists->data)) { //insert
-                //echo "Primary Key {$this->{$this->primaryKey}}";
+        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None") {
+            if ($exists->noOfRecords === 0) { //insert
                 $getLastId = ("{$this->{$this->primaryKey}}" === "");
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
@@ -384,14 +385,17 @@ class ORM implements \JsonSerializable
             $params = [];
             $params[] = $sqlStatement["sql"];
             $params = array_merge($params, $sqlStatement["fieldValues"]);
+
             $error = call_user_func_array([$this->DBA, "exec"],  $params);
 
-            if (empty($error->getError()["errorCode"])) {
+            if (empty($error->getErrorMessage())) {
                 $this->DBA->commit();
 
                 //get last id
                 if ($getLastId) {
+
                     $lastId = $this->DBA->getLastId();
+
                     if (!empty($lastId)) {
                         $this->{$this->primaryKey} = $lastId;
                     } else
@@ -406,16 +410,14 @@ class ORM implements \JsonSerializable
 
                 }
 
-
-
                 $tableData = $this->getTableData();
                 $primaryCheck = $this->getPrimaryCheck($tableData);
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
-                $fetchData = $this->DBA->fetch($sqlFetch, 1, 0, $fieldMapping)->asArray();
+                $fetchData = $this->DBA->fetchOne($sqlFetch, 1, 0, $fieldMapping)->asArray();
 
-                $this->mapFromRecord($fetchData[0], true);
+                $this->mapFromRecord($fetchData, false);
 
                 return $this->asObject();
             } else {
@@ -444,7 +446,10 @@ class ORM implements \JsonSerializable
             $this->DBA = $DBA;
         }
 
+
+
         if (empty($this->DBA)) {
+
             return false;
         } else {
 
