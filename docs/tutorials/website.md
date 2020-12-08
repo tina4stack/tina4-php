@@ -49,14 +49,14 @@ Please note that there are different ways you can create this file, but the main
 
 Next, we will extend "index.twig" to "base.twig". This is done by adding the following line to "index.twig": 
 
-```html
+```twig
 {% extends 'base.twig' %}
 ```
 ### Step 2 - Add title, icon & description
 
 Now that "index.twig" is extended to "base.twig", you can set your page title, web icon and description. Below is an example of this information set in "index.twig":
 
-```html
+```twig
 {% set title = 'My Test Site' %} 
 {% set image = 'images/logo.png' %} 
 {% set description = 'Tina4 helped me create this' %} 
@@ -66,7 +66,7 @@ Now that "index.twig" is extended to "base.twig", you can set your page title, w
 
 We will now add the page content. Below is an example of content inserted into "index.twig":
 
-```html
+```twig
 {% block navigation  %}
     <nav>
         <a href="Hello">Hello World</a>
@@ -81,9 +81,9 @@ We will now add the page content. Below is an example of content inserted into "
 {% endblock %}
 
 {% block footer  %}
-    <footer class="fixed bottom">
+    <footer>
         <div class="col bg-dark text-white fixed-bottom text-center">
-            <p class="foot">Copyright ©
+            <p>Copyright ©
                 <script>document.write(new Date().getFullYear())</script>  <!-- gets current year -->
                 My Test Site. All Rights Reserved
             </p>
@@ -91,11 +91,6 @@ We will now add the page content. Below is an example of content inserted into "
     </footer>
 {% endblock %}
 ```
-Your index.twig file will look like this:
-
-<div align="center" alt="index.twig file">
-  <img src="images/website2.png">
-</div>
 
 ### Step 4 - Check out your page
 

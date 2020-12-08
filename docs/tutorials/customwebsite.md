@@ -196,4 +196,4 @@ You should see your website appear in the browser:
 
 You have just created a landing page for your website using Tina4. Please feel free to reach out to the developers if you have any questions or suggestions. 
 
-Continue to [create an API](/tutorials/createapi.md) or go back to [create a webpage - landing page](/tutorials/website.md).
+Continue to [create a contact form](/tutorials/contactform.md) or go back to [create a webpage - landing page](/tutorials/website.md).

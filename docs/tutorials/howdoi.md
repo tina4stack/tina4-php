@@ -190,38 +190,9 @@ public $fieldMapping = [
     "name" => "NAME"];
 
 ```
-## Annotate my REST for swagger
 
-Its good to explain how one component is dependant on another.
-
-### Example:
-
-```php
-<?php
-
-/**
- * @description A swagger annotation
- * @param $fields
- * 
- */
-
-```
 ## Secure a REST end point
 
-As easy as adding @secure in your annotation
-
-### Example:
-
-```php
-<?php
-
-/**
- * @description A swagger annotation
- * @param $fields
- * @secure
- */
-
-```
 
 ## Add a filter to process records when they are extracted from the database
 

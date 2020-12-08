@@ -87,7 +87,7 @@ Visit [franz.com](https://franz.com/support/openssl-mac.lhtml) || [stackoverflow
 For Unix:
 Visit [cloudwafer.com](https://cloudwafer.com/blog/installing-openssl-on-ubuntu-16-04-18-04/) || [howtoforge.com](https://www.howtoforge.com/tutorial/how-to-install-openssl-from-source-on-linux/)
 
-#### Step 3 - Confirm installation        
+#### Step 2 - Confirm installation        
 
 Complete the installation by restarting your system so that changes may take effect.After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in "openssl version" and pushing Enter. This will display the OpenSSL version if installed correctly. If you receive an error, the installation was unsuccessful. In this case, uninstall OpenSSL and follow the steps again.
 

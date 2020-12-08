@@ -16,6 +16,9 @@
 ** [Install IDE Tool](/installation/install-ide.md "Prerequisites - Install IDE Tool")
 ** [Create a webpage - landing page](/tutorials/website.md "How to make a webpage - landing page")
 ** [Create a custom webpage - landing page](/tutorials/customwebsite.md "How to make a custom webpage - landing page")
-** [Create an API](/tutorials/createapi.md "How to make an API")
+** [Create Environment Variables/Constants](/tutorials/envconst.md "How to create Environment Variables/Constants")
+** [Create a contact form](/tutorials/contactform.md "Create a contact form")
+** [Create a REST API](/tutorials/createapi.md "Create a REST API")
+** [Secure API](/tutorials/secureapi.md "Secure API")
 * [How do I?](/tutorials/howdoi.md)
   
