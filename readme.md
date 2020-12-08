@@ -62,3 +62,6 @@ VERSION=1.0.0
 ```
 Do not include your .env files with your project if they contain sensitive information like password, instead create an example of how it should look.
 
+### Change Log
+
+2020-12-08 Fixes for MySQL & ORM saving
