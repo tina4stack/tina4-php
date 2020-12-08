@@ -65,3 +65,4 @@ Do not include your .env files with your project if they contain sensitive infor
 ### Change Log
 
 2020-12-08 Fixes for MySQL & ORM saving
+2020-12-08 Fixes for isBinary under Utilities
