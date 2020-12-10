@@ -11,7 +11,7 @@ class Caller
      * @param array $variables
      * @return string
      */
-    function call($inputClass, $method = "", $variables=[])
+    public function call($inputClass, $method = "", $variables=[])
     {
         eval ('$class = new ' . $inputClass . '();');
         if (!is_array($variables)) {

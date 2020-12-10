@@ -130,8 +130,10 @@ function tina4_error_handler ($errorNo,$errorString,$errorFile,$errorLine)
         echo "<b>Error No:</b> (".$errorNo . ") " . $errorString . "\n<b>File:</b>" . $errorFile . "(" . $errorLine.")\n";
         $debugTrace = debug_backtrace();
         foreach ($debugTrace as $id => $trace) {
-            if ($id !== 0) {
-                echo "<b>File:</b>".$trace["file"] . " line: " . $trace["line"] . "\n";
+            if (isset($trace["file"])) {
+                if ($id !== 0) {
+                    echo "<b>File:</b>" . $trace["file"] . " line: " . $trace["line"] . "\n";
+                }
             }
         }
         echo "</pre>";

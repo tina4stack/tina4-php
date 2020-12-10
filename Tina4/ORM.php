@@ -577,7 +577,7 @@ class ORM implements \JsonSerializable
             $newId++;
             $this->{$this->primaryKey} = $newId;
             $insertValues[] = "?";
-            $fieldValues[] = $fieldValue;
+            $fieldValues[] = $newId;
         }
 
         if (!empty($this->DBA) && !$keyInFieldList) {
