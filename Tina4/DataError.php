@@ -22,7 +22,7 @@ class DataError
      * @param string $errorCode Code of error
      * @param string $errorMessage Message of error
      */
-    function __construct($errorCode = "", $errorMessage = "")
+    public function __construct($errorCode = "", $errorMessage = "")
     {
 
         $this->errorCode = $errorCode;
@@ -32,7 +32,7 @@ class DataError
     /**
      * @return string Contains the code and message of the error as a single string
      */
-    function getErrorText()
+    public function getErrorText()
     {
         return $this->errorCode . " " . $this->errorMessage;
     }
@@ -40,7 +40,7 @@ class DataError
     /**
      * @return false|string
      */
-    function __toString()
+    public function __toString()
     {
         return json_encode($this->getError());
     }
@@ -48,7 +48,7 @@ class DataError
     /**
      * @return array Containing The code and message of the error
      */
-    public function getError()
+    public function getError(): array
     {
         return ["errorCode" => $this->errorCode, "errorMessage" => $this->errorMessage];
     }
@@ -57,7 +57,7 @@ class DataError
      * Gets the last error code
      * @return string
      */
-    public function getErrorCode()
+    public function getErrorCode(): string
     {
         return $this->errorCode;
     }
@@ -66,7 +66,7 @@ class DataError
      * Gets the last error message
      * @return string
      */
-    public function getErrorMessage()
+    public function getErrorMessage(): string
     {
         return $this->errorMessage;
     }

@@ -28,16 +28,16 @@ class Messenger
      *
      * The sendMail function takes on a number of params and sends and email to a receipient.
      *
-     * @param $recipients array This can be a String or Array, the Array should be ; delimited ["name" => "Test", "email" => "email@email.com"]
+     * @param mixed $recipients array This can be a String or Array, the String should be ; delimited email@test.com;emai2@test2.com or  ["name" => "Test", "email" => "email@email.com"]
      * @param $subject string The subject for the email
-     * @param $message array/string The message to send to the Receipient - can be ["template" => "twigFile", "data" => Array or Object]
+     * @param mixed $message array/string The message to send to the Receipient - can be ["template" => "twigFile", "data" => Array or Object]
      * @param $fromName string The name of the person sending the message
      * @param $fromAddress string The address of the person sending the message
      * @param $attachments array An Array of file paths to be attached in the form array ["name" => "File Description", "path" => "/path/to/file" ]
      * @param $bcc array
      * @return Boolean true, false
      */
-    public function sendEmail($recipients, $subject, $message, $fromName, $fromAddress, $attachments = null, $bcc = null)
+    public function sendEmail(mixed $recipients, string $subject, mixed $message, string $fromName, string $fromAddress, $attachments = null, $bcc = null)
     {
         //define the headers we want passed. Note that they are separated with \r\n
         $boundary_rel = md5(uniqid(time(), true));

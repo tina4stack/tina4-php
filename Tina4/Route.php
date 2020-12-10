@@ -24,6 +24,11 @@ class Route
      */
     public static $method;
 
+    /**
+     * Get route
+     * @param $routePath
+     * @param $function
+     */
     public static function get($routePath, $function)
     {
         self::$method = TINA4_GET;
@@ -39,8 +44,8 @@ class Route
      *
      * @param string $routePath A valid html route
      * @param \Closure $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
+     * @param bool $inlineParamsToRequest
      * @example "api/tests.php"
-     *
      */
     public static function add($routePath, $function, $inlineParamsToRequest = false)
     {
@@ -49,38 +54,64 @@ class Route
         //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
         $routePath .= "|";
         $routes = explode("|", $routePath);
-        foreach ($routes as $rid => $routePath) {
-            if ($routePath !== "") {
-                if (substr($routePath, 0, 1) !== "/") $routePath = "/" . $routePath;
-                $arrRoutes[] = ["routePath" => $routePath, "method" => static::$method, "function" => $function, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
+
+        foreach ($routes as $rid => $routePathLoop) {
+            if ($routePathLoop !== "") {
+                if ($routePathLoop[0] !== "/") $routePathLoop = "/" . $routePathLoop;
+                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $function, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
             }
         }
     }
 
+    /**
+     * PUT route
+     * @param $routePath
+     * @param $function
+     */
     public static function put($routePath, $function)
     {
         self::$method = TINA4_PUT;
         self::add($routePath, $function, true);
     }
 
+    /**
+     * POST route
+     * @param $routePath
+     * @param $function
+     */
     public static function post($routePath, $function)
     {
         self::$method = TINA4_POST;
         self::add($routePath, $function, true);
     }
 
+    /**
+     * PATCH route
+     * @param $routePath
+     * @param $function
+     */
     public static function patch($routePath, $function)
     {
         self::$method = TINA4_PATCH;
         self::add($routePath, $function, true);
     }
 
+    /**
+     * DELETE route
+     * @param $routePath
+     * @param $function
+     */
     public static function delete($routePath, $function)
     {
         self::$method = TINA4_DELETE;
         self::add($routePath, $function, true);
     }
 
+    /**
+     * ANY route - All methods
+     * @param $routePath
+     * @param $function
+     */
     public static function any($routePath, $function)
     {
         self::$method = TINA4_ANY;

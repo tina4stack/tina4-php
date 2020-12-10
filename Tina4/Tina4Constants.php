@@ -54,8 +54,11 @@ if (!defined("DATA_TYPE_NUMERIC")) define("DATA_TYPE_NUMERIC", 1);
 if (!defined("DATA_TYPE_BINARY")) define("DATA_TYPE_BINARY", 2);
 if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
 if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
-if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", 1);
+if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", true);
 if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
+
+if (!defined("TINA4_TOKEN_MINUTES")) define ("TINA4_TOKEN_MINUTES", 5);  //token set to expire in 5 minutes
+
 
 //Initialize the ENV
 (new \Tina4\Env());
@@ -79,7 +82,7 @@ function tina4_auto_loader($class)
     $class = explode("\\", $class);
     $class = $class[count($class) - 1];
 
-    $fileName = "{$root}" . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
+    $fileName = (string)($root) . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
 
     if (file_exists($fileName)) {
         require_once $fileName;

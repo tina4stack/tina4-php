@@ -19,17 +19,33 @@ use Nowakowskir\JWT\TokenEncoded;
  */
 class Auth extends Data
 {
+    /**
+     * The path where the website is served from
+     * @var string
+     */
     private $documentRoot;
+    /**
+     * Is the authentication configured, so it only runs once in a page load
+     * @var bool
+     */
     private $configured = false;
+    /**
+     * Private key read from the secrets folder
+     * @var false|string
+     */
     private $privateKey;
+    /**
+     * Public key read from the secrets folder
+     * @var false|string
+     */
     private $publicKey;
 
     /**
-     * Auth constructor.
+     * The auth constructor looks for a secrets folder and tries to generate keys for the site
      * @param string $documentRoot
      * @throws \Exception
      */
-    function __construct($documentRoot = "", $lastPath = "/")
+    public function __construct($documentRoot = "")
     {
         parent::__construct();
         $this->initSession();
@@ -49,7 +65,7 @@ class Auth extends Data
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         }
 
-        if (get_called_class() === "Tina4\Auth") {
+        if (static::class === "Tina4\Auth") {
             $this->getToken("default");
         }
     }
@@ -89,7 +105,7 @@ class Auth extends Data
     /**
      * Checks for $_SESSION["tokens"]
      */
-    function tokenExists()
+    public function tokenExists()
     {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;
@@ -114,7 +130,10 @@ class Auth extends Data
             $this->publicKey = $publicKey;
         }
 
-        if (empty($this->publicKey)) return false;
+        if (empty($this->publicKey))
+        {
+            return false;
+        }
 
         $token = trim(str_replace("Bearer ", "", $token));
 
@@ -131,7 +150,13 @@ class Auth extends Data
 
         try {
             $tokenEncoded->validate($this->publicKey, $encryption);
-            return true;
+            $payLoad = $this->getPayLoad($token);
+
+            if (time() > $payLoad["expires"]) {
+                return false;
+            } else {
+                return true;
+            }
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
             DebugLog::message("Validating {$token} failed!");
@@ -143,7 +168,11 @@ class Auth extends Data
         }
     }
 
-    function getSessionToken()
+    /**
+     * Gets a session token
+     * @return false|mixed
+     */
+    public function getSessionToken()
     {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return $_SESSION["tina4:authToken"];
@@ -160,7 +189,7 @@ class Auth extends Data
      * @return string
      * @throws \Exception
      */
-    function validateAuth($request, $lastPath = null)
+    public function validateAuth($request, $lastPath = null)
     {
         $this->initSession();
 
@@ -176,7 +205,7 @@ class Auth extends Data
     /**
      * Clears the session auth tokens
      */
-    function clearTokens()
+    public function clearTokens()
     {
         $this->initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
@@ -206,6 +235,8 @@ class Auth extends Data
                 $payLoad = ["value" => $payLoad];
             }
         }
+
+        $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES*60;
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 

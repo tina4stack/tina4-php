@@ -10,9 +10,11 @@ class Caller
      * @param string $method
      * @param array $variables
      * @return string
+     * @throws \Exception
      */
     public function call($inputClass, $method = "", $variables=[])
     {
+        $class = null;
         eval ('$class = new ' . $inputClass . '();');
         if (!is_array($variables)) {
             $params[] = $variables;

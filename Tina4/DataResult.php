@@ -147,9 +147,9 @@ class DataResult implements JsonSerializable
 
     /**
      * Converts array of records to array of objects
-     * @return false|string
+     * @return string
      */
-    function __toString()
+    public function __toString(): string
     {
         $results = [];
 

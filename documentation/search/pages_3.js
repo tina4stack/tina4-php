@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['installation_402',['Installation',['../md_docs_installation.html',1,'']]]
+  ['project_20licenses_425',['Project Licenses',['../md_licenses.html',1,'']]]
 ];

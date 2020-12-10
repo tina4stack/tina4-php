@@ -14,7 +14,7 @@ class HTMLElement
      * HTMLElement constructor.
      * @param mixed ...$elements
      */
-    function __construct(...$elements)
+    public function __construct(...$elements)
     {
         //elements can be attributes or body parts
         foreach ($elements as $id => $element) {

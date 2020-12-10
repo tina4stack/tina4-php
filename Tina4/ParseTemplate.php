@@ -35,7 +35,7 @@ class ParseTemplate
      * @param string $subFolder
      * @throws \Exception Error on failure
      */
-    function __construct($root, $fileName, $definedVariables = "", $subFolder = "")
+    public function __construct($root, $fileName, $definedVariables = "", $subFolder = "")
     {
 
         $fileName = preg_replace('#/+#', '/', $fileName);
@@ -62,7 +62,7 @@ class ParseTemplate
      * @return false|mixed|string
      * @throws \Exception Error on failure
      */
-    function parseFile($fileName)
+    public function parseFile($fileName)
     {
         //Trim off the first char if /
         if ($fileName[0] === "/") {
@@ -137,7 +137,7 @@ class ParseTemplate
      * @return mixed
      * @throws \Exception Error on failure
      */
-    function parseSnippets($content)
+    public function parseSnippets($content)
     {
         preg_match_all($this->includeRegEx, $content, $matchIncludes);
 
@@ -154,7 +154,7 @@ class ParseTemplate
      * @return mixed
      * @throws \Exception Error on failure
      */
-    function parseCalls($content)
+    public function parseCalls($content)
     {
         preg_match_all($this->objectRegEx, $content, $matchIncludes);
         foreach ($matchIncludes[0] as $mid => $matchInclude) {
@@ -169,7 +169,7 @@ class ParseTemplate
      * @return mixed|string
      * @throws \Exception Error on failure
      */
-    function callMethod($object, $method)
+    public function callMethod($object, $method)
     {
         $parts = $this->parseParams($method);
 
@@ -210,7 +210,7 @@ class ParseTemplate
      * @param string $params Parameters to be parsed
      * @return array Multidimensional array containing methods and their respective array of parameters
      */
-    function parseParams($params)
+    public function parseParams($params)
     {
         $paramArray = [];
         $method = explode("?", $params, 2);
@@ -239,7 +239,7 @@ class ParseTemplate
      * @param $content
      * @return mixed
      */
-    function parseVariables($content)
+    public function parseVariables($content)
     {
         foreach ($this->evals as $id => $eval) {
             try {
@@ -283,7 +283,7 @@ class ParseTemplate
     /**
      * @return string
      */
-    function __toString()
+    public function __toString() : string
     {
         http_response_code($this->responseCode);
         return (string)$this->content;

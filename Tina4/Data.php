@@ -11,7 +11,7 @@ class Data
     /**
      * Data constructor
      */
-    function __construct()
+    public function __construct()
     {
         $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
         $vendorDir = dirname(dirname($reflection->getFileName()));

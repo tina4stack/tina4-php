@@ -75,10 +75,10 @@ class Routing
         if (!$suppressed) {
             if ($method === "OPTIONS") {
                 if (in_array("*", TINA4_ALLOW_ORIGINS) || (key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
-                    if (key_exists("HTTP_ORIGIN", $_SERVER)) {
+                    if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
                         header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
                     } else {
-                        header ( 'Access-Control-Allow-Origin: ' . join(",", TINA4_ALLOW_ORIGINS));
+                        header ( 'Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
                     }
                     header('Vary: Origin');
                     header('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
@@ -89,7 +89,7 @@ class Routing
 
                 http_response_code(200);
                 $this->content = "";
-                return true;
+                die();
             }
         }
 
@@ -169,9 +169,7 @@ class Routing
         //determine what should be outputted and if the route is found
         $matched = false;
 
-        if (TINA4_DEBUG) {
-            DebugLog::message($arrRoutes, TINA4_DEBUG_LEVEL);
-        }
+
 
         $result = null;
         //iterate through the routes

@@ -152,9 +152,9 @@ class DataRecord implements JsonSerializable
     }
 
     /**
-     * @return false|string
+     * @return string
      */
-    public function __toString()
+    public function __toString(): string
     {
         return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

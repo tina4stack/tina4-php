@@ -1,7 +1,11 @@
 <?php
 
 namespace Tina4;
-
+/**
+ * Class MessengerSettings
+ * This is the settings and configuration for sending messages from Tina4
+ * @package Tina4
+ */
 class MessengerSettings
 {
     public $bulkSMSUsername = "";
@@ -19,7 +23,7 @@ class MessengerSettings
      * MessengerSettings constructor.
      * @param false $usePHPMailer
      */
-    function __construct($usePHPMailer = false)
+    public function __construct($usePHPMailer = false)
     {
         $this->usePHPMailer = $usePHPMailer;
     }

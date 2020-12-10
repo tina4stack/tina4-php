@@ -60,7 +60,7 @@ class DataField
      * @param integer $decimals Number of decimals
      * @param integer $alignment Whether the data is aligned left (0) or right (1)
      */
-    function __construct($index, $fieldName, $fieldAlias, $dataType, $size = 0, $decimals = 0, $alignment = DATA_ALIGN_LEFT)
+    public function __construct(int $index, string $fieldName, string $fieldAlias, string $dataType, $size = 0, $decimals = 0, $alignment = DATA_ALIGN_LEFT)
     {
         $this->index = $index;
         $this->fieldName = $fieldName;
@@ -73,12 +73,12 @@ class DataField
 
     /**
      * Gets the field name
-     * @param string $case
+     * @param string $upperCase
      * @return string
      */
-    function getFieldName($case = "")
+    public function getFieldName($upperCase=false)
     {
-        if ($case = DATA_CASE_UPPER) {
+        if ($upperCase = DATA_CASE_UPPER) {
             return strtoupper($this->fieldName);
         } else {
             return $this->fieldName;
@@ -87,12 +87,12 @@ class DataField
 
     /**
      * Gets the field alias
-     * @param string $case
+     * @param string $upperCase
      * @return string
      */
-    function getFieldAlias($case = "")
+    public function getFieldAlias($upperCase = false)
     {
-        if ($case = DATA_CASE_UPPER) {
+        if ($upperCase = DATA_CASE_UPPER) {
             return strtoupper($this->fieldAlias);
         } else {
             return $this->fieldAlias;

@@ -9,9 +9,9 @@ class Event
     /**
      * Adds and event with it's description
      * @param string $eventName
-     * @param string $params
+     * @param array $params
      */
-    public static function trigger($eventName, $params=null)
+    public static function trigger(string $eventName, array $params=[])
     {
         global $TINA4_EVENTS;
         global $TINA4_EVENTS_DETAIL;

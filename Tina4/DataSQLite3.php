@@ -196,6 +196,7 @@ class DataSQLite3 implements DataBase
 
     function getDatabase()
     {
+        /** @noinspection SqlResolve */
         $sqlTables = "select name as table_name
                       from sqlite_master
                      where type='table'

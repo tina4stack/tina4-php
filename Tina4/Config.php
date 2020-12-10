@@ -93,8 +93,8 @@ class Config
     {
         if (!empty($this->authMechanism)) {
             return $this->authMechanism;
-        } else {
-            return false;
         }
+
+        return false;
     }
 }

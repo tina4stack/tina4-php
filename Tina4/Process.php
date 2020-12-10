@@ -11,7 +11,7 @@ class Process
      * @param $name
      * @param $function
      */
-    function __construct($name="")
+    public function __construct($name="")
     {
         $this->name = $name;
     }
@@ -20,14 +20,16 @@ class Process
      * Can run
      * @return bool
      */
-    function canRun() {
+    public function canRun() : bool
+    {
         return true;
     }
 
     /**
      * The script that runs things
      */
-    function run () {
+    public function run ()
+    {
         echo "You should overwrite this!";
     }
 }

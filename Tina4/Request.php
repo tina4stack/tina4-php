@@ -14,15 +14,18 @@ class Request
     public $server = null;
     public $session = null;
 
-    function __construct($rawRequest)
+    public function __construct($rawRequest)
     {
+        DebugLog::message($rawRequest);
         $this->data = (object)[];
         if (!empty($_REQUEST)) {
             $this->params = $_REQUEST;
         }
+
         if (!empty($_SERVER)) {
             $this->server = $_SERVER;
         }
+
         if (!empty($_SESSION)) {
             $this->session = $_SESSION;
         }
@@ -40,20 +43,19 @@ class Request
      * Returns the data object that was created from the request
      * @return mixed|null
      */
-    function __invoke()
+    public function __invoke()
     {
         return $this->data;
     }
 
-    function __toString()
+    public function __toString(): string
     {
         return json_encode($this->data);
     }
 
-    function asArray()
+    public function asArray()
     {
-
-        return (array)json_decode(json_encode($this->data));
+        return (array)json_decode(json_encode($this->data), true);
     }
 
 }

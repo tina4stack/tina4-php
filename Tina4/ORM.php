@@ -446,10 +446,7 @@ class ORM implements \JsonSerializable
             $this->DBA = $DBA;
         }
 
-
-
         if (empty($this->DBA)) {
-
             return false;
         } else {
 
@@ -868,9 +865,9 @@ class ORM implements \JsonSerializable
 
     /**
      * Returns back a JSON string of the table structure
-     * @return false|string
+     * @return string
      */
-    function __toString()
+    public function __toString() : string
     {
         return json_encode($this->jsonSerialize());
     }

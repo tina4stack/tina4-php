@@ -56,13 +56,7 @@ $config = new \Tina4\Config();
 //$testSave->ageDefault = 12;
 //$testSave->date = 'xcxxnxnxnx';
 
-$val = "000F333536333037303432343431303133";
 
 
-
-echo hex2bin($val);
-
-
-
-//echo new \Tina4\Tina4Php($config);
+echo new \Tina4\Tina4Php($config);
 //WARNING NO CODE BELOW LINE 45 WILL BE RUN
