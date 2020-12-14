@@ -72,9 +72,11 @@ trait Utility
      */
     public function isBinary($string)
     {
+
+
         //immediately return back binary if we can get an image size
-        if (is_numeric($string) || empty($string) || $string === null) return false;
-        if (is_array(@getimagesizefromstring($string))) return true;
+        if (is_numeric($string) || empty($string) || $string === null || $string === "") return false;
+        if (is_string($string) && strlen($string) > 50 && @is_array(@getimagesizefromstring($string))) return true;
         $isBinary = false;
         $string = str_ireplace("\t", "", $string);
         $string = str_ireplace("\n", "", $string);

@@ -70,7 +70,7 @@ class DataMySQL implements DataBase
                                 $paramTypes .= "i";
                             }
                               else
-                        if (is_numeric($param)) {
+                        if ($param !== '' && $param[0] !== "0" && is_numeric($param)) {
                             $paramTypes .= "d";
                         } else
                         {

@@ -445,7 +445,7 @@ class Routing
      */
     public function matchPath($path, $routePath)
     {
-        DebugLog::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
+
         if ($routePath !== "/") {
             $routePath .= "/";
         }
@@ -476,10 +476,12 @@ class Routing
         }
 
         if ($matching) {
+            DebugLog::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
             $this->params = $variables;
             DebugLog::message("Found match {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         } else {
-            DebugLog::message("No match for {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
+            //No match found
+            //DebugLog::message("No match for {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         }
         return $matching;
     }

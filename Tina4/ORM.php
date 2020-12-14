@@ -242,7 +242,7 @@ class ORM implements \JsonSerializable
      * @param bool $ignoreMapping Ignore the field mapping
      * @return string Required field name from database
      */
-    public function getFieldName($name, $fieldMapping = [], $ignoreMapping = false)
+    public function getFieldName(string $name, $fieldMapping = [], $ignoreMapping = false)
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
             return strtolower($fieldMapping[$name]);
@@ -266,7 +266,7 @@ class ORM implements \JsonSerializable
      * @param boolean $fromDB flags it so the result is ready to go back to the database
      * @return array Contains all table data
      */
-    public function getTableData($fieldMapping = [], $fromDB = false)
+    public function getTableData($fieldMapping = [], $fromDB = false): array
     {
         $tableData = [];
         if (!empty($this->fieldMapping) && empty($fieldMapping) && $fromDB) {
@@ -296,7 +296,7 @@ class ORM implements \JsonSerializable
      * @param array $tableData Array of table data
      * @return string e.g. "id = ''"
      */
-    public function getPrimaryCheck($tableData)
+    public function getPrimaryCheck($tableData): string
     {
         $primaryFields = explode(",", $this->primaryKey);
         $primaryFieldFilter = [];
@@ -321,7 +321,7 @@ class ORM implements \JsonSerializable
      * @param $content
      * @return bool
      */
-    public function saveBlob($fieldName, $content)
+    public function saveBlob($fieldName, $content): bool
     {
         $tableName = $this->getTableName();
         $tableData = $this->getTableData();
@@ -615,6 +615,7 @@ class ORM implements \JsonSerializable
             unset($tableData[$foreignField]);
         }
 
+        DebugLog::message("Table Data" .print_r ($tableData,1));
 
         foreach ($tableData as $fieldName => $fieldValue) {
             if ($fieldName == "form_token")
@@ -636,7 +637,7 @@ class ORM implements \JsonSerializable
                 continue;
             }
 
-            if ((is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
+            if (($fieldValue !== '' && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
                 $updateValues[] = "{$fieldName} = ?";
                 $fieldValues[] = $fieldValue;
             } else {
@@ -649,7 +650,9 @@ class ORM implements \JsonSerializable
             }
         }
 
+
         DebugLog::message("update {$tableName} set " . join(",", $updateValues) . " where {$filter}");
+        DebugLog::message("Field Values\n".print_r($fieldValues,1));
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }

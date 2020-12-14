@@ -336,7 +336,7 @@ class Tina4Php
                 }
             }
 
-            $twig = new \Twig\Environment($twigLoader, ["debug" => true, "cache" => "./cache"]);
+            $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => "./cache"]);
             $twig->addExtension(new \Twig\Extension\DebugExtension());
             $twig->addGlobal('Tina4', new \Tina4\Caller());
 
