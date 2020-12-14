@@ -385,7 +385,6 @@ class ORM implements \JsonSerializable
             $params = [];
             $params[] = $sqlStatement["sql"];
             $params = array_merge($params, $sqlStatement["fieldValues"]);
-
             $error = call_user_func_array([$this->DBA, "exec"],  $params);
 
             if (empty($error->getErrorMessage())) {
@@ -604,9 +603,9 @@ class ORM implements \JsonSerializable
      * @param array $tableData Array of table data
      * @param string $filter The criteria of what you are searching for to update e.g. "id = 2"
      * @param string $tableName Name of the table
-     * @return string Generated update query
+     * @return array Generated update query
      */
-    public function generateUpdateSQL($tableData, $filter, $tableName)
+    public function generateUpdateSQL($tableData, $filter, $tableName) : array
     {
         $fieldValues = [];
         $updateValues = [];
@@ -618,19 +617,26 @@ class ORM implements \JsonSerializable
 
 
         foreach ($tableData as $fieldName => $fieldValue) {
-            if ($fieldName == "form_token") {
+            if ($fieldName == "form_token")
+            {
                 continue;
             } //form token is reserved
+
+            if (strpos($this->primaryKey, $fieldName) !== false)
+            {
+                continue;
+            }
 
             if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
                 continue;
             }
 
             if (is_null($fieldValue)) {
-                $fieldValue = "null";
+                $updateValues[] = "{$fieldName} = null";
+                continue;
             }
 
-            if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
+            if ((is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
                 $updateValues[] = "{$fieldName} = ?";
                 $fieldValues[] = $fieldValue;
             } else {
@@ -653,7 +659,7 @@ class ORM implements \JsonSerializable
      * @param $record
      * @param bool $overRide Overrides existing entries
      */
-    function mapFromRecord($record, $overRide = false)
+    public function mapFromRecord($record, $overRide = false)
     {
         $databaseFields = [];
         foreach ($record as $fieldName => $fieldValue) {
