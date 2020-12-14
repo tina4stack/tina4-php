@@ -63,6 +63,8 @@ VERSION=1.0.0
 Do not include your .env files with your project if they contain sensitive information like password, instead create an example of how it should look.
 
 ### Change Log
+```
 2020-12-14 Fixes for MySQL not handling saving of nulls in bind_params
 2020-12-08 Fixes for MySQL & ORM saving
 2020-12-08 Fixes for isBinary under Utilities
+```
