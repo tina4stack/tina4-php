@@ -74,7 +74,6 @@ class Migration extends Data
     public function doMigration()
     {
         $result = "";
-        echo "<pre>";
         if (!file_exists($this->migrationPath)) return;
         $dirHandle = opendir($this->migrationPath);
         $error = false;

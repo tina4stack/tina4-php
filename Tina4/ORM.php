@@ -373,10 +373,12 @@ class ORM implements \JsonSerializable
 
         $exists = $this->DBA->fetch($sqlCheck, 1);
 
+
+
         $getLastId = false;
-        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None") {
+        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available") {
             if ($exists->noOfRecords === 0) { //insert
-                $getLastId = ("{$this->{$this->primaryKey}}" === "");
+                $getLastId = ((string)($this->{$this->primaryKey}) === "");
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
@@ -387,7 +389,9 @@ class ORM implements \JsonSerializable
             $params = array_merge($params, $sqlStatement["fieldValues"]);
             $error = call_user_func_array([$this->DBA, "exec"],  $params);
 
-            if (empty($error->getErrorMessage())) {
+
+
+            if (empty($error->getErrorMessage()) || $error->getErrorMessage() === "not an error") {
                 $this->DBA->commit();
 
                 //get last id
