@@ -78,13 +78,12 @@ class DataMySQL implements DataBase
                         }
                     }
 
-                    $params = array_merge([$paramTypes], $params);
-                    call_user_func_array([$preparedQuery, "bind_param"], $this->refValues($params));
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
 
-                    mysqli_stmt_execute($preparedQuery);
-                    mysqli_stmt_affected_rows($preparedQuery);
-                    mysqli_stmt_close($preparedQuery);
+                    \mysqli_stmt_bind_param($preparedQuery, $paramTypes, ...$params);
+                    \mysqli_stmt_execute($preparedQuery);
+                    \mysqli_stmt_affected_rows($preparedQuery);
+                    \mysqli_stmt_close($preparedQuery);
                 } else {
                     $params[0] = $preparedQuery;
                     call_user_func_array("mysqli_execute", $params);
