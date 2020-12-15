@@ -9,6 +9,7 @@ namespace Tina4;
  */
 class Crud
 {
+    use Utility;
     //Common inputs, firstName,lastName,email,mobileNo,address1,address2,cityTown,postalCode,Country
 
     /*

@@ -37,7 +37,7 @@ class Messenger
      * @param $bcc array
      * @return Boolean true, false
      */
-    public function sendEmail(mixed $recipients, string $subject, mixed $message, string $fromName, string $fromAddress, $attachments = null, $bcc = null)
+    public function sendEmail($recipients, string $subject, $message, string $fromName, string $fromAddress, $attachments = null, $bcc = null)
     {
         //define the headers we want passed. Note that they are separated with \r\n
         $boundary_rel = md5(uniqid(time(), true));
@@ -71,7 +71,6 @@ class Messenger
                 mkdir($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool", 0755, true);
             }
             file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml", $headers . $message);
-
 
             if (!$this->settings->usePHPMailer) {
                 DebugLog::message("Sending email using PHP mail");

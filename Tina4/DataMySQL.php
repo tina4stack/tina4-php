@@ -48,9 +48,13 @@ class DataMySQL implements DataBase
      */
     public function exec()
     {
+       
         $params = $this->parseParams(func_get_args());
         $tranId = $params["tranId"];
         $params = $params["params"];
+
+
+
 
         if (stripos($params[0], "call") !== false) {
             return $this->fetch($params[0]);
@@ -79,6 +83,8 @@ class DataMySQL implements DataBase
                     }
 
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
+                
+
 
                     \mysqli_stmt_bind_param($preparedQuery, $paramTypes, ...$params);
                     \mysqli_stmt_execute($preparedQuery);
@@ -93,7 +99,6 @@ class DataMySQL implements DataBase
             return $this->error();
         }
     }
-
     /**
      * Fetches records from database
      * @param string $sql SQL Query
@@ -263,7 +268,7 @@ class DataMySQL implements DataBase
     public function startTransaction()
     {
         $this->dbh->autocommit(false);
-        return mysqli_begin_transaction($this->dbh);
+        mysqli_begin_transaction($this->dbh);
         return "Resource id #0";
     }
 

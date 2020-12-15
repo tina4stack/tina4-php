@@ -50,6 +50,21 @@ class Route
     public static function add($routePath, $function, $inlineParamsToRequest = false)
     {
         global $arrRoutes;
+
+        if (TINA4_DEBUG) {
+            $debug = debug_backtrace();
+            foreach ($debug as $fid => $file) {
+                if (isset($file["file"])) {
+                    if (strpos($file["file"], "Tina4") === false) {
+                        $debugFile[] = ["file" => $file["file"], "line" => $file["line"]];
+                    }
+                }
+            }
+        } else {
+            $debugFile = [];
+        }
+
+
         $originalRoute = $routePath;
         //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
         $routePath .= "|";
@@ -58,7 +73,7 @@ class Route
         foreach ($routes as $rid => $routePathLoop) {
             if ($routePathLoop !== "") {
                 if ($routePathLoop[0] !== "/") $routePathLoop = "/" . $routePathLoop;
-                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $function, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
+                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $function, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest, "fileInfo" => $debugFile];
             }
         }
     }

@@ -33,12 +33,12 @@ class Auth extends Data
      * Private key read from the secrets folder
      * @var false|string
      */
-    private $privateKey;
+    protected $privateKey;
     /**
      * Public key read from the secrets folder
      * @var false|string
      */
-    private $publicKey;
+    protected $publicKey;
 
     /**
      * The auth constructor looks for a secrets folder and tries to generate keys for the site

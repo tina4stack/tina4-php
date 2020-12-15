@@ -9,6 +9,7 @@
 namespace Tina4;
 
 use Exception;
+use Symfony\Component\Debug\Debug;
 
 /**
  * Class ORM
@@ -373,8 +374,6 @@ class ORM implements \JsonSerializable
 
         $exists = $this->DBA->fetch($sqlCheck, 1);
 
-
-
         $getLastId = false;
         if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available") {
             if ($exists->noOfRecords === 0) { //insert
@@ -424,10 +423,12 @@ class ORM implements \JsonSerializable
 
                 return $this->asObject();
             } else {
-                throw new Exception(print_r($error->getError(), 1));
+                $this->getDebugBackTrace();
+                throw new Exception("Error:\n".print_r($error->getError(), 1));
             }
         } else {
-            throw new Exception(print_r($exists->error, 1));
+            $this->getDebugBackTrace();
+            throw new Exception("Error:\n".print_r($exists->error, 1));
         }
     }
 
@@ -619,7 +620,7 @@ class ORM implements \JsonSerializable
             unset($tableData[$foreignField]);
         }
 
-        DebugLog::message("Table Data" .print_r ($tableData,1));
+        DebugLog::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
 
         foreach ($tableData as $fieldName => $fieldValue) {
             if ($fieldName == "form_token")
@@ -641,7 +642,8 @@ class ORM implements \JsonSerializable
                 continue;
             }
 
-            if (($fieldValue !== '' && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
+
+            if ((strlen($fieldValue) > 1  && isset($fieldValue[0]) && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
                 $updateValues[] = "{$fieldName} = ?";
                 $fieldValues[] = $fieldValue;
             } else {
@@ -655,8 +657,8 @@ class ORM implements \JsonSerializable
         }
 
 
-        DebugLog::message("update {$tableName} set " . join(",", $updateValues) . " where {$filter}");
-        DebugLog::message("Field Values\n".print_r($fieldValues,1));
+        DebugLog::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_SCREEN);
+        DebugLog::message("Field Values:\n".print_r($fieldValues,1), DEBUG_SCREEN);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }

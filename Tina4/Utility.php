@@ -72,8 +72,6 @@ trait Utility
      */
     public function isBinary($string)
     {
-
-
         //immediately return back binary if we can get an image size
         if (is_numeric($string) || empty($string) || $string === null || $string === "") return false;
         if (is_string($string) && strlen($string) > 50 && @is_array(@getimagesizefromstring($string))) return true;
@@ -107,5 +105,26 @@ trait Utility
             }
         }
         return $fieldName;
+    }
+
+
+    public function getDebugBackTrace() {
+        global $arrRoutes;
+
+        $routing = new \Tina4\Routing("", "", "", "", null, true);
+
+        $urlToParse = $_SERVER["REQUEST_URI"];
+        if ($urlToParse !== "/") {
+            $urlToParse .= "/";
+            $urlToParse = str_replace("//", "/", $urlToParse);
+        }
+
+        $debug = debug_backtrace();
+        foreach ($arrRoutes as $routId => $route) {
+            if ($routing->matchPath($urlToParse, $route["routePath"])) {
+                DebugLog::handleError("Trace", "", $route["fileInfo"][0]["file"], $route["fileInfo"][0]["line"]);
+                break;
+            }
+        }
     }
 }

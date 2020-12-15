@@ -57,7 +57,7 @@ if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
 if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", true);
 if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 
-if (!defined("TINA4_TOKEN_MINUTES")) define ("TINA4_TOKEN_MINUTES", 5);  //token set to expire in 5 minutes
+if (!defined("TINA4_TOKEN_MINUTES")) define ("TINA4_TOKEN_MINUTES", 10);  //token set to expire in 5 minutes
 
 
 //Initialize the ENV
@@ -126,27 +126,23 @@ function autoLoadFolders($documentRoot, $location, $class) {
     }
 }
 
-function tina4_error_handler ($errorNo,$errorString,$errorFile,$errorLine)
+function tina4_error_handler ($errorNo="",$errorString="",$errorFile="",$errorLine="")
 {
-    if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-        echo "<pre>";
-        echo "<b>Error No:</b> (".$errorNo . ") " . $errorString . "\n<b>File:</b>" . $errorFile . "(" . $errorLine.")\n";
-        $debugTrace = debug_backtrace();
-        foreach ($debugTrace as $id => $trace) {
-            if (isset($trace["file"])) {
-                if ($id !== 0) {
-                    echo "<b>File:</b>" . $trace["file"] . " line: " . $trace["line"] . "\n";
-                }
-            }
-        }
-        echo "</pre>";
-        return true;
+    if (method_exists($errorNo, "getMessage")) {
+        $errorString = $errorNo->getMessage();
+        $errorFile = $errorNo->getFile();
+        $errorLine = $errorNo->getLine();
+        $errorNo = "Exception";
+        \Tina4\DebugLog::handleError($errorNo, $errorString, $errorFile, $errorLine);
+        \Tina4\DebugLog::$errorHappened = true;
+        echo \Tina4\DebugLog::render();
     } else {
-        return false;
+        \Tina4\DebugLog::$errorHappened = true;
+        return \Tina4\DebugLog::handleError($errorNo, $errorString, $errorFile, $errorLine);
     }
 }
 
-
+set_exception_handler('tina4_error_handler');
 set_error_handler('tina4_error_handler');
 spl_autoload_register('tina4_auto_loader');
 
