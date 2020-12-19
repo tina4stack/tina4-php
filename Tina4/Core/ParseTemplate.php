@@ -104,7 +104,6 @@ class ParseTemplate
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
-
                 $content = renderTemplate($realFileName, $_SESSION["renderData"]);
             } else {
                 $content = file_get_contents($realFileName);
@@ -114,11 +113,11 @@ class ParseTemplate
             }
         } else {
             Debug::message("Returning File not found {$fileName}", TINA4_DEBUG_LEVEL);
-            $this->responseCode = 404;
+            $this->responseCode = HTTP_NOT_FOUND;
             if (!defined("TINA4_APP")) {
                 //What happens when this is under a web server sub folder ?
                 if (file_exists("./assets/images/404.jpg")) {
-                    $content = "<img src=\"/assets/images/404.jpg\">";
+                    $content = "<img src=\"./assets/images/404.jpg\">";
                 } else {
                     $content = "<img src=\"/{$this->subFolder}/src/assets/images/404.jpg\">";
                 }

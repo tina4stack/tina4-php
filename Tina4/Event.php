@@ -11,7 +11,7 @@ class Event
      * @param string $eventName
      * @param array $params
      */
-    public static function trigger(string $eventName, array $params=[])
+    public static function trigger(string $eventName, array $params=[]): void
     {
         global $TINA4_EVENTS;
         global $TINA4_EVENTS_DETAIL;
@@ -26,17 +26,27 @@ class Event
     }
 
     /**
-     * Method to handle on an event
+     * Method to handle on an event, this is what will be triggered when the event is fired
      * @param $eventName
      * @param $method
      */
-    public static function addTrigger($eventName, $method)
+    public static function onTrigger($eventName, $method): void
     {
         global $TINA4_EVENTS;
         global $TINA4_EVENTS_DETAIL;
         $debugTrace = debug_backtrace();
         $TINA4_EVENTS_DETAIL[$eventName]["handler"][] = ["debug" => $debugTrace[0]];
         $TINA4_EVENTS[$eventName][] = $method;
+    }
+
+    /**
+     * Alias for onTrigger
+     * @param $eventName
+     * @param $method
+     */
+    public static function addTrigger ($eventName, $method): void
+    {
+        self::onTrigger($eventName, $method);
     }
 
     /**

@@ -14,14 +14,17 @@
   "autoload": {
     "classmap": [
       "Tina4",
+      "Tina4/Api",
+      "Tina4/Core",
       "Tina4/Database",
       "Tina4/Messaging",
       "Tina4/ORM",
-      "Tina4/Routing"
+      "Tina4/Routing",
+      "Tina4/Security"
     ],
     "files": [
       "Tina4/Tina4Constants.php",
-      "Tina4/HTMLElement.php"
+      "Tina4/Core/HTMLElement.php"
     ],
     "psr-4": {
       "Tina4\\": "Tina4/"

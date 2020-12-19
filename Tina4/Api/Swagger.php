@@ -2,7 +2,7 @@
 
 namespace Tina4;
 /**
- * @todo This is a work in progress
+ * @todo This is a work in progress and may contain many gaps
  * Class Swagger
  * @package Tina4
  */
@@ -11,7 +11,7 @@ class Swagger implements \JsonSerializable
     public $root;
     public $swagger = [];
 
-    function __construct($root = null, $title = "Open API", $description = "API Documentation", $version = "1.0.0")
+    public function __construct($root = null, $title = "Open API", $description = "API Documentation", $version = "1.0.0")
     {
         global $arrRoutes;
         if (empty($this->root)) {
@@ -41,7 +41,6 @@ class Swagger implements \JsonSerializable
             $example = (object)[];
             foreach ($annotations[0] as $aid => $annotation) {
                 preg_match_all('/^(@[a-zA-Z]*)([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
-
                 if (count($matches) > 0) {
                     $matches = $matches[0];
                 } else {

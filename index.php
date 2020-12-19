@@ -8,7 +8,7 @@
 
 require "vendor/autoload.php";
 require "Tina4Php.php";
-require "Tina4/Config.php";
+require "Tina4/Core/Config.php";
 
 define("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
 define("TINA4_ROUTE_LOCATIONS", ["api", "routes"]);
@@ -59,4 +59,51 @@ $config = new \Tina4\Config();
 
 
 echo new \Tina4\Tina4Php($config);
-//WARNING NO CODE BELOW LINE 45 WILL BE RUN
+//WARNING NO CODE BELOW THIS LINE WILL BE RUN
+
+/**
+ * @param $a
+ * @param $b
+ * @return int
+ * @tests
+ *   assert (5,5) === 10, "5 + 5 is not 10"
+ *   assert (6,6) === 12, "6 + 6 is not 12"
+ */
+function aplusb($a,$b) {
+    return $a + $b;
+}
+
+
+/**
+ * @param $a
+ * @tests
+ *   assert ([1,2,3]) === [1,2,3], "Array is not equal"
+ *   assert 1 !== 2, "1 is not equal to 2"
+ * @return mixed
+ */
+function retarr($a) {
+    return $a;
+}
+
+class TestClass {
+
+    public $test=5;
+    /**
+     * @param $a
+     * @return int
+     * @tests
+     *   assert (3) === 9, "3 squared"
+     *   assert (4) === 16, "4 squared"
+     *   assert (5) === 25, "5 squared"
+     *   assert test == 5, "value of test"
+     */
+    function a3($a) {
+        return $a * $a;
+    }
+}
+
+
+
+//echo (new \Tina4\Test())->run();
+
+

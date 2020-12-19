@@ -52,7 +52,6 @@ class Debug
 
         if ($debugType === DEBUG_ALL || $debugType === DEBUG_CONSOLE) {
             if (empty($fileName)) {
-         
                 error_log("\e[1;34;10m{$message}\e[0m");
             } else {
                 file_put_contents($fileName, date("Y-m-d") . ": " . $message . "\n", FILE_APPEND);

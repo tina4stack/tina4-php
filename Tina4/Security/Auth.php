@@ -72,8 +72,11 @@ class Auth extends Data
 
     /**
      * Starts a php session
+     * @tests
+     *   assert session_status() !== PHP_SESSION_NONE, "Init Session is broken"
+     *   assert $this->configured === true, "Auth state of configured must be true"
      */
-    public function initSession()
+    public function initSession(): void
     {
         //make sure the session is started
         if (session_status() === PHP_SESSION_NONE && !$this->configured ) {

@@ -169,14 +169,19 @@ function _doctype (...$elements) {
  * HTML TAG comment
  * @param $elements
  * @return HTMLElement
+ * @tests
+ *   assert ("hello") == '<!--hello-->', "Comment test"
  */
-function comment (...$elements) {
+function _comment (...$elements) {
     return new HTMLElement(":!--", $elements);
 }
 /**
  * HTML TAG _a
  * @param $elements
  * @return HTMLElement
+ * @tests
+ *   assert ("home")."" == "<a>home</a>", "Anchor Test"
+ *   assert (["href" => "#"],"home")."" == '<a href="#">home</a>', "Anchor Test Href"
  */
 function _a (...$elements) {
     return new HTMLElement(":a", $elements);

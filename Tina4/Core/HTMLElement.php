@@ -27,14 +27,14 @@ class HTMLElement
                     $this->tag = substr($element, 1);
                 }
         }
-        return $this;
+        //return $this;
     }
 
     /**
      * Sort the elements
      * @param $element
      */
-    function sortElements($element)
+    public function sortElements($element): void
     {
         foreach ($element as $pId => $param) {
             if (is_array($param)) {
@@ -65,7 +65,7 @@ class HTMLElement
      * Outputs the html
      * @return string
      */
-    function __toString()
+    public function __toString(): string
     {
         //Check what type of tag
         if ($this->tag === "document") {
@@ -78,7 +78,7 @@ class HTMLElement
               else
             if ($this->tag[0] === "!") {
                 if (strpos($this->tag, "!--") !== false) {
-                    return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
+                    return "<$this->tag{$this->getAttributes()}{$this->getElements()}".substr($this->tag,1).">";
                 } else {
                     return "<$this->tag{$this->getAttributes()}>";
                 }
@@ -91,7 +91,7 @@ class HTMLElement
 
     }
 
-    function getElements()
+    public function getElements(): string
     {
         $html = "";
         foreach ($this->elements as $id => $element) {
@@ -100,7 +100,7 @@ class HTMLElement
         return $html;
     }
 
-    function getAttributes()
+    public function getAttributes(): string
     {
         $html = "";
         foreach ($this->attributes as $id => $attribute) {

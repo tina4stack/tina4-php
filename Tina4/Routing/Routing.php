@@ -509,7 +509,7 @@ class Routing
     public function forbidden()
     {
         if (file_exists("./assets/images/403.jpg")) {
-            $content = ">";
+            $content = "<img alt=\"403 Forbidden\" src=\"./assets/images/403.jpg\"";
         } else {
             $content = "<img alt=\"403 Forbidden\" src=\"/{$this->subFolder}src/assets/images/403.jpg\">";
         }
