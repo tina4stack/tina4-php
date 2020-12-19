@@ -10,6 +10,6 @@ var searchData=
   ['datareference_198',['DataReference',['../class_tina4_1_1_data_reference.html',1,'Tina4']]],
   ['dataresult_199',['DataResult',['../class_tina4_1_1_data_result.html',1,'Tina4']]],
   ['datasqlite3_200',['DataSQLite3',['../class_tina4_1_1_data_s_q_lite3.html',1,'Tina4']]],
-  ['debuglog_201',['DebugLog',['../class_tina4_1_1_debug_log.html',1,'Tina4']]],
+  ['debuglog_201',['Debug',['../class_tina4_1_1_debug_log.html',1,'Tina4']]],
   ['delete_202',['Delete',['../class_tina4_1_1_delete.html',1,'Tina4']]]
 ];

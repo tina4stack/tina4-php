@@ -6,7 +6,8 @@
  */
 class TestService extends \Tina4\Process {
 
-    function run () {
+    public function run (): void
+    {
 
         echo memory_get_usage()."\n";
         //fetch queue ?
@@ -17,7 +18,7 @@ class TestService extends \Tina4\Process {
        //
     }
 
-    function canRun()
+    public function canRun(): bool
     {
        //if it is this time - return true
         return true;

@@ -88,9 +88,9 @@ class Auth extends Data
      */
     public function generateSecureKeys()
     {
-        DebugLog::message("Generating Auth keys");
+        Debug::message("Generating Auth keys");
         if (file_exists($this->documentRoot . "secrets")) {
-            DebugLog::message("Secrets folder exists already, please remove");
+            Debug::message("Secrets folder exists already, please remove");
             return false;
         }
         if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
@@ -123,7 +123,7 @@ class Auth extends Data
      */
     public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
-        DebugLog::message("Validating token");
+        Debug::message("Validating token");
         $this->initSession();
 
         if (!empty($publicKey)) {
@@ -144,7 +144,7 @@ class Auth extends Data
         try {
             $tokenEncoded = new TokenEncoded($token);
         } catch (\Exception $e) {
-            DebugLog::message("Encoded token input failed! " . $e->getMessage());
+            Debug::message("Encoded token input failed! " . $e->getMessage());
             return false;
         }
 
@@ -159,11 +159,11 @@ class Auth extends Data
             }
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
-            DebugLog::message("Validating {$token} failed!");
+            Debug::message("Validating {$token} failed!");
             return false;
         } catch (\Exception $e) {
             // Handle other validation exceptions
-            DebugLog::message("Validating {$token} failed! " . $e->getMessage());
+            Debug::message("Validating {$token} failed! " . $e->getMessage());
             return false;
         }
     }
@@ -260,7 +260,7 @@ class Auth extends Data
      */
     public function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
-        DebugLog::message("Getting token payload");
+        Debug::message("Getting token payload");
 
         if (!empty($publicKey)) {
             $this->publicKey = $publicKey;
@@ -269,7 +269,7 @@ class Auth extends Data
         try {
             $tokenEncoded = new TokenEncoded($token);
         } catch (\Exception $e) {
-            DebugLog::message("Encoded token input failed! " . $e->getMessage());
+            Debug::message("Encoded token input failed! " . $e->getMessage());
             return false;
         }
 
@@ -277,11 +277,11 @@ class Auth extends Data
             $tokenEncoded->validate($this->publicKey, $encryption);
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
-            DebugLog::message("Validating {$token} failed!");
+            Debug::message("Validating {$token} failed!");
             return false;
         } catch (\Exception $e) {
             // Handle other validation exceptions
-            DebugLog::message("Validating {$token} failed! " . $e->getMessage());
+            Debug::message("Validating {$token} failed! " . $e->getMessage());
             return false;
         }
 

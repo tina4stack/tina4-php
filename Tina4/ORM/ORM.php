@@ -8,8 +8,6 @@
 
 namespace Tina4;
 
-use Exception;
-use Symfony\Component\Debug\Debug;
 
 /**
  * Class ORM
@@ -198,7 +196,7 @@ class ORM implements \JsonSerializable
      * @param $fileInputName
      * @return bool
      */
-    public function saveFile($fieldName, $fileInputName)
+    public function saveFile($fieldName, $fileInputName): bool
     {
         $tableName = $this->getTableName();
         $tableData = $this->getTableData();
@@ -369,7 +367,7 @@ class ORM implements \JsonSerializable
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-            DebugLog::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
+            Debug::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
         }
 
         $exists = $this->DBA->fetch($sqlCheck, 1);
@@ -457,7 +455,7 @@ class ORM implements \JsonSerializable
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
                 if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-                    DebugLog::message("TINA4: We need to make a table for " . $tableName, TINA4_DEBUG_LEVEL);
+                    Debug::message("TINA4: We need to make a table for " . $tableName, TINA4_DEBUG_LEVEL);
                 }
 
                 $sql = $this->generateCreateSQL($this->getTableData(), $tableName);
@@ -589,7 +587,7 @@ class ORM implements \JsonSerializable
             }
         }
 
-        DebugLog::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
+        Debug::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
         return ["sql" => "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
@@ -620,7 +618,7 @@ class ORM implements \JsonSerializable
             unset($tableData[$foreignField]);
         }
 
-        DebugLog::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
+        Debug::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
 
         foreach ($tableData as $fieldName => $fieldValue) {
             if ($fieldName == "form_token")
@@ -657,8 +655,8 @@ class ORM implements \JsonSerializable
         }
 
 
-        DebugLog::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_SCREEN);
-        DebugLog::message("Field Values:\n".print_r($fieldValues,1), DEBUG_SCREEN);
+        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_SCREEN);
+        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_SCREEN);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }

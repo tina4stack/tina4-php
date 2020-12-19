@@ -41,7 +41,7 @@ class ParseTemplate
         $fileName = preg_replace('#/+#', '/', $fileName);
 
         if (TINA4_DEBUG) {
-            DebugLog::message("TINA4 Filename: " . $fileName, TINA4_DEBUG_LEVEL);
+            Debug::message("TINA4 Filename: " . $fileName, TINA4_DEBUG_LEVEL);
         }
         if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
@@ -97,7 +97,7 @@ class ParseTemplate
 
         $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
 
-        DebugLog::message("Looking for file " . $realFileName, TINA4_DEBUG_LEVEL);
+        Debug::message("Looking for file " . $realFileName, TINA4_DEBUG_LEVEL);
         if (file_exists($realFileName)) {
             //Render a twig file if the extension is twig
             if ($ext === "twig") {
@@ -113,7 +113,7 @@ class ParseTemplate
                 $content = $this->parseVariables($content);
             }
         } else {
-            DebugLog::message("Returning File not found {$fileName}", TINA4_DEBUG_LEVEL);
+            Debug::message("Returning File not found {$fileName}", TINA4_DEBUG_LEVEL);
             $this->responseCode = 404;
             if (!defined("TINA4_APP")) {
                 //What happens when this is under a web server sub folder ?
@@ -169,7 +169,7 @@ class ParseTemplate
      * @return mixed|string
      * @throws \Exception Error on failure
      */
-    public function callMethod($object, $method)
+    public function callMethod($object, $method): ?string
     {
         $parts = $this->parseParams($method);
 
@@ -210,7 +210,7 @@ class ParseTemplate
      * @param string $params Parameters to be parsed
      * @return array Multidimensional array containing methods and their respective array of parameters
      */
-    public function parseParams($params)
+    public function parseParams($params): array
     {
         $paramArray = [];
         $method = explode("?", $params, 2);
@@ -246,7 +246,7 @@ class ParseTemplate
                 eval($eval);
             } catch (\ParseError $error) {
                 if (TINA4_DEBUG) {
-                    DebugLog::message("TINA4: Parse Error for " . $eval, TINA4_DEBUG_LEVEL);
+                    Debug::message("TINA4: Parse Error for " . $eval, TINA4_DEBUG_LEVEL);
                 }
             }
         }

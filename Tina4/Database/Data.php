@@ -26,7 +26,7 @@ class Data
                 }
                 if ($dbName[0] == "_" || $dbName === "cache" || $dbName == "auth") continue;
                 if (is_object($GLOBAL) && in_array(get_class($GLOBAL) , TINA4_DATABASE_TYPES) ) {
-                    DebugLog::message("Adding {$dbName}");
+                    Debug::message("Adding {$dbName}");
                     $this->{$dbName} = $GLOBAL;
                 }
             }

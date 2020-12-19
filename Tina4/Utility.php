@@ -122,7 +122,7 @@ trait Utility
         $debug = debug_backtrace();
         foreach ($arrRoutes as $routId => $route) {
             if ($routing->matchPath($urlToParse, $route["routePath"])) {
-                DebugLog::handleError("Trace", "", $route["fileInfo"][0]["file"], $route["fileInfo"][0]["line"]);
+                Debug::handleError("Trace", "", $route["fileInfo"][0]["file"], $route["fileInfo"][0]["line"]);
                 break;
             }
         }

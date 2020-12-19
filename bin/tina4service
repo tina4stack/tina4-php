@@ -21,8 +21,8 @@ if (file_exists($stopFileName)) {
     unlink($stopFileName);
 }
 
-\Tina4\DebugLog::message("Running from folder {$rootPath}");
-\Tina4\DebugLog::message("Running Tina4 service");
+\Tina4\Debug::message("Running from folder {$rootPath}");
+\Tina4\Debug::message("Running Tina4 service");
 
 //Garbage collection
 gc_enable();
@@ -50,7 +50,7 @@ while (TRUE && !file_exists($stopFileName)) {
                 if (get_class($process) !== "__PHP_Incomplete_Class") {
                     //How to know we are not on server?
                     if (TINA4_DEBUG) {
-                        \Tina4\DebugLog::message("Running {$process->name}");
+                        \Tina4\Debug::message("Running {$process->name}");
 
 
 
@@ -85,15 +85,15 @@ while (TRUE && !file_exists($stopFileName)) {
 
                     gc_collect_cycles();
                 } else {
-                    \Tina4\DebugLog::message("Could not load registered process, make sure it is in one of the TINA4_INCLUDE_LOCATIONS");
+                    \Tina4\Debug::message("Could not load registered process, make sure it is in one of the TINA4_INCLUDE_LOCATIONS");
                 }
             } catch (Exception $exception) {
-                \Tina4\DebugLog::message("Could not run ".$exception->getMessage());
+                \Tina4\Debug::message("Could not run ".$exception->getMessage());
             }
 
         }
     } else {
-        \Tina4\DebugLog::message("Nothing found to run");
+        \Tina4\Debug::message("Nothing found to run");
     }
     sleep($service->getSleepTime());
     //clean up

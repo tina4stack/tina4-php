@@ -2,7 +2,9 @@
 
 namespace Tina4;
 
-class DebugLog
+use Twig\Error\LoaderError;
+
+class Debug
 {
 
     public static $errorHappened = false;
@@ -14,7 +16,7 @@ class DebugLog
      * @param int $debugType
      * @param null $fileName
      */
-    static function message($message, $debugType = 9004, $fileName = null)
+    public static function message($message, $debugType = 9004, $fileName = null): void
     {
 
         if (!defined("TINA4_DEBUG") || $debugType === DEBUG_NONE || TINA4_DEBUG === false) {
@@ -58,10 +60,17 @@ class DebugLog
         }
     }
 
-
-    static function handleError($errorNo,$errorString,$errorFile,$errorLine) {
-
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
+    /**
+     * @param $errorNo
+     * @param $errorString
+     * @param $errorFile
+     * @param $errorLine
+     * @return bool|null
+     */
+    public static function handleError($errorNo, $errorString, $errorFile, $errorLine): ?bool
+    {
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG)
+        {
             $error = [];
             $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $errorFile, "line" => $errorLine, "message" => $errorNo." ".$errorString];
 
@@ -78,15 +87,14 @@ class DebugLog
             } else {
                 self::$errorLog = $error;
             }
-
             return true;
-
         } else {
             return false;
         }
     }
 
-    static function render() {
+    public static function render(): string
+    {
         $template = '<style>
     .debugLog {
         position:relative;
@@ -101,16 +109,18 @@ class DebugLog
 <h5>Debug Log:</h5> 
 <pre>
 {% for error in errors %}
-{{error.time}}:  {{ error.file }} ({{error.line}}) {{error.message}}
+{{error.time}}: {{error.message}} in {{ error.file }} ({{error.line}}) 
 {%endfor%}
 </pre>
 </div>';
 
-        if (count(self::$errorLog) > 0 && self::$errorHappened)
+        if (self::$errorHappened)
         {
-            return \Tina4\renderTemplate($template, ["errors" => self::$errorLog]);
+            try {
+                return renderTemplate($template, ["errors" => self::$errorLog]);
+            } catch (LoaderError $e) {
+            }
         }
-
-
+        return "";
     }
 }

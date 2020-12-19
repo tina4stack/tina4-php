@@ -45,9 +45,10 @@ class Route
      * @param string $routePath A valid html route
      * @param \Closure $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      * @param bool $inlineParamsToRequest
+     * @param bool $secure
      * @example "api/tests.php"
      */
-    public static function add($routePath, $function, $inlineParamsToRequest = false)
+    public static function add($routePath, $function, $inlineParamsToRequest = false, $secure=false)
     {
         global $arrRoutes;
 
@@ -63,7 +64,6 @@ class Route
         } else {
             $debugFile = [];
         }
-
 
         $originalRoute = $routePath;
         //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
@@ -83,7 +83,7 @@ class Route
      * @param $routePath
      * @param $function
      */
-    public static function put($routePath, $function)
+    public static function put($routePath, $function): void
     {
         self::$method = TINA4_PUT;
         self::add($routePath, $function, true);
@@ -94,7 +94,7 @@ class Route
      * @param $routePath
      * @param $function
      */
-    public static function post($routePath, $function)
+    public static function post($routePath, $function): void
     {
         self::$method = TINA4_POST;
         self::add($routePath, $function, true);
@@ -105,7 +105,7 @@ class Route
      * @param $routePath
      * @param $function
      */
-    public static function patch($routePath, $function)
+    public static function patch($routePath, $function): void
     {
         self::$method = TINA4_PATCH;
         self::add($routePath, $function, true);
@@ -116,7 +116,7 @@ class Route
      * @param $routePath
      * @param $function
      */
-    public static function delete($routePath, $function)
+    public static function delete($routePath, $function): void
     {
         self::$method = TINA4_DELETE;
         self::add($routePath, $function, true);
@@ -127,7 +127,7 @@ class Route
      * @param $routePath
      * @param $function
      */
-    public static function any($routePath, $function)
+    public static function any($routePath, $function): void
     {
         self::$method = TINA4_ANY;
         self::add($routePath, $function, true);

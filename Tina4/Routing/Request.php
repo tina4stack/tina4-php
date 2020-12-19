@@ -16,7 +16,7 @@ class Request
 
     public function __construct($rawRequest)
     {
-        DebugLog::message($rawRequest);
+        Debug::message($rawRequest);
         $this->data = (object)[];
         if (!empty($_REQUEST)) {
             $this->params = $_REQUEST;

@@ -56,7 +56,7 @@ class Tina4Php
      */
     function __construct(\Tina4\Config $config = null)
     {
-        DebugLog::message("Beginning of Tina4PHP Initialization");
+        Debug::message("Beginning of Tina4PHP Initialization");
 
 
 
@@ -66,7 +66,7 @@ class Tina4Php
         }
 
         if (defined("TINA4_SUPPRESS")) {
-            DebugLog::message("Check if Tina4 is being suppressed");
+            Debug::message("Check if Tina4 is being suppressed");
             $this->suppress = TINA4_SUPPRESS;
         }
 
@@ -80,7 +80,7 @@ class Tina4Php
             define("TINA4_DEBUG", false);
         } else {
             if (TINA4_DEBUG) {
-                \Tina4\DebugLog::message("
+                \Tina4\Debug::message("
   ___________   _____   __ __     ____  __________  __  ________
  /_  __/  _/ | / /   | / // /    / __ \/ ____/ __ )/ / / / ____/
   / /  / //  |/ / /| |/ // /_   / / / / __/ / __  / / / / / __
@@ -131,12 +131,12 @@ class Tina4Php
             $auth->generateSecureKeys();
         }
 
-        \Tina4\DebugLog::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
+        \Tina4\Debug::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
 
         //root of tina4
         $this->webRoot = realpath(__DIR__);
 
-        \Tina4\DebugLog::message("TINA4: web path " . $this->webRoot);
+        \Tina4\Debug::message("TINA4: web path " . $this->webRoot);
 
         if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")){
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
@@ -303,10 +303,10 @@ class Tina4Php
         if (empty($twig)) {
             $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
 
-            \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
+            \Tina4\Debug::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
 
             if (TINA4_DEBUG) {
-                \Tina4\DebugLog::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1), TINA4_DEBUG_LEVEL);
+                \Tina4\Debug::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1), TINA4_DEBUG_LEVEL);
             }
 
             foreach ($twigPaths as $tid => $twigPath) {
@@ -400,7 +400,7 @@ class Tina4Php
             $twig->addFilter($filter);
         }
 
-        DebugLog::message("End of Tina4PHP Initialization");
+        Debug::message("End of Tina4PHP Initialization");
     }
 
     /**
@@ -511,7 +511,7 @@ class Tina4Php
     {
         //No processing, we simply want the include to work
         if ($this->suppress) {
-            DebugLog::message("Tina4 in suppressed mode");
+            Debug::message("Tina4 in suppressed mode");
             //Need to include the include locations here
             if (defined ("TINA4_ROUTE_LOCATIONS")) {
                 //include routes in routes folder
@@ -605,7 +605,15 @@ function renderTemplate($fileNameString, $data = [])
     $fileName = str_replace($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR, "", $fileNameString);
     try {
         global $twig;
-        $internalTwig = clone $twig;
+
+        if (!empty($twig))
+        {
+            $internalTwig = clone $twig;
+        } else {
+            $twigLoader = new \Twig\Loader\FilesystemLoader();
+            $internalTwig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG]);
+            $internalTwig->addExtension(new \Twig\Extension\DebugExtension());
+        }
 
         if ($internalTwig->getLoader()->exists($fileNameString)) {
             return $internalTwig->render($fileName, $data);
@@ -623,8 +631,7 @@ function renderTemplate($fileNameString, $data = [])
                         $fileName = ".".DIRECTORY_SEPARATOR."cache".DIRECTORY_SEPARATOR."template" . md5($fileNameString).".twig";
                         file_put_contents($fileName, $fileNameString);
                     }
-                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] ."cache");
-                    //$internalTwig->setLoader(new \Twig\Loader\ArrayLoader(["template" . md5($fileNameString) => $fileNameString]));
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR."cache");
                     return $internalTwig->render("template" . md5($fileNameString).".twig", $data);
                 }
     } catch (\Exception $exception) {

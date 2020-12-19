@@ -20,6 +20,7 @@ class_alias("\Tina4\ORM", "Tina4Object");
 //define ("TINA4_GIT_ENABLED", true);
 global $DBA;
 
+
 //$DBA = new \Tina4\DataMySQL(DATABASE_HOST . "/" . DATABASE_PORT . ":". DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, "d/m/Y");
 
 

@@ -67,7 +67,7 @@ class Routing
         }
 
         if (TINA4_DEBUG) {
-            DebugLog::message("TINA4: URL to parse " . $urlToParse, TINA4_DEBUG_LEVEL);
+            Debug::message("TINA4: URL to parse " . $urlToParse, TINA4_DEBUG_LEVEL);
         }
 
         global $arrRoutes;
@@ -130,7 +130,7 @@ class Routing
                             $templateLocation = $templateLocation["path"];
                         }
                     }
-                    DebugLog::message($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
+                    Debug::message($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
                     if (file_exists($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
                         $this->returnStatic($root . DIRECTORY_SEPARATOR . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);
                     }
@@ -146,9 +146,9 @@ class Routing
             $this->content = "";
             $this->method = $method;
 
-            DebugLog::message("Root: {$root}", TINA4_DEBUG_LEVEL);
-            DebugLog::message("URL: {$urlToParse}", TINA4_DEBUG_LEVEL);
-            DebugLog::message("Method: {$method}", TINA4_DEBUG_LEVEL);
+            Debug::message("Root: {$root}", TINA4_DEBUG_LEVEL);
+            Debug::message("URL: {$urlToParse}", TINA4_DEBUG_LEVEL);
+            Debug::message("Method: {$method}", TINA4_DEBUG_LEVEL);
 
             if (defined("TINA4_ROUTE_LOCATIONS_INTERNAL")) {
                 //include routes in routes folder
@@ -160,7 +160,7 @@ class Routing
                             $this->includeDirectory(getcwd() . "/" . $route);
                         } else {
                             if (TINA4_DEBUG) {
-                                DebugLog::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
+                                Debug::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
                             }
                         }
                 }
@@ -216,11 +216,8 @@ class Routing
                     //check for an empty result
                     if (empty($result) && !is_array($result) && !is_object($result)) {
                         $result = "";
-                    } else {
-                        if (!is_string($result)) {
-                            $result = json_encode($result);
-                        }
-                        //After this point the JsonSerializable should take care of complex objects
+                    } else if (!is_string($result)) {
+                        $result = json_encode($result);
                     }
 
                     $matched = true;
@@ -245,7 +242,7 @@ class Routing
                         }
                     }
 
-                    DebugLog::message("TINA4: Variables\n" . join("\n", $variables), TINA4_DEBUG_LEVEL);
+                    Debug::message("TINA4: Variables\n" . join("\n", $variables), TINA4_DEBUG_LEVEL);
                 }
 
 
@@ -477,9 +474,9 @@ class Routing
         }
 
         if ($matching) {
-            DebugLog::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
+            Debug::message("Matching {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
             $this->params = $variables;
-            DebugLog::message("Found match {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
+            Debug::message("Found match {$path} with {$routePath}", TINA4_DEBUG_LEVEL);
         }
 
         return $matching;
@@ -509,10 +506,10 @@ class Routing
     /**
      * Throws a forbidden message
      */
-    function forbidden()
+    public function forbidden()
     {
         if (file_exists("./assets/images/403.jpg")) {
-            $content = "<img alt=\"403 Forbidden\" src=\"/assets/images/403.jpg\">";
+            $content = ">";
         } else {
             $content = "<img alt=\"403 Forbidden\" src=\"/{$this->subFolder}src/assets/images/403.jpg\">";
         }
@@ -526,12 +523,12 @@ class Routing
      * @param $src
      * @param $dst
      */
-    static function recurseCopy($src, $dst)
+    public static function recurseCopy($src, $dst)
     {
         if (file_exists($src)) {
             $dir = opendir($src);
-            if (!file_exists($dst)) {
-                mkdir($dst, $mode = 0755, true);
+            if (!file_exists($dst) && !mkdir($dst, $mode = 0755, true) && !is_dir($dst)) {
+                throw new \RuntimeException(sprintf('Directory "%s" was not created', $dst));
             }
             while (false !== ($file = readdir($dir))) {
                 if (($file != '.') && ($file != '..')) {
@@ -551,10 +548,10 @@ class Routing
      * Convert the output to a string value
      * @return false|mixed|string|null
      */
-    function __toString()
+    public function __toString()
     {
         if (TINA4_DEBUG) {
-            $debugInfo = \Tina4\DebugLog::render();
+            $debugInfo = \Tina4\Debug::render();
         } else {
             $debugInfo = "";
         }
@@ -566,7 +563,7 @@ class Routing
      * @param $class
      * @return false|mixed
      */
-    function getClassAnnotations($class)
+    public function getClassAnnotations($class)
     {
         try {
             $r = new \ReflectionClass($class);
@@ -574,9 +571,9 @@ class Routing
             preg_match_all('#@(.*?)\n#s', $doc, $annotations);
             return $annotations[1];
         } catch (\ReflectionException $e) {
-            DebugLog::message("Could not get annotations for {$class}");
+            Debug::message("Could not get annotations for {$class}");
         }
-        return false;
+        return [];
     }
 
     /**
@@ -585,9 +582,8 @@ class Routing
      * @param string $description
      * @param string $version
      * @return false|string
-     * @throws \ReflectionException
      */
-    function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
+    public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
         return (new Swagger($this->root, $title, $description, $version))->jsonSerialize();
     }

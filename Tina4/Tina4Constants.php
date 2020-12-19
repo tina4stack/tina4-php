@@ -128,45 +128,30 @@ function autoLoadFolders($documentRoot, $location, $class) {
 
 function tina4_error_handler ($errorNo="",$errorString="",$errorFile="",$errorLine="")
 {
-    if (method_exists($errorNo, "getMessage")) {
+    if (is_object($errorNo) && method_exists($errorNo, "getMessage")) {
         $errorString = $errorNo->getMessage();
         $errorFile = $errorNo->getFile();
         $errorLine = $errorNo->getLine();
-        $errorNo = "Exception";
-        \Tina4\DebugLog::handleError($errorNo, $errorString, $errorFile, $errorLine);
-        \Tina4\DebugLog::$errorHappened = true;
-        echo \Tina4\DebugLog::render();
+        $errorNo = "";
+
+
+        \Tina4\Debug::handleError($errorNo, $errorString, $errorFile, $errorLine);
+        \Tina4\Debug::$errorHappened = true;
+        echo \Tina4\Debug::render();
     } else {
-        \Tina4\DebugLog::$errorHappened = true;
-        return \Tina4\DebugLog::handleError($errorNo, $errorString, $errorFile, $errorLine);
+        \Tina4\Debug::$errorHappened = true;
+        return \Tina4\Debug::handleError($errorNo, $errorString, $errorFile, $errorLine);
     }
 }
 
-set_exception_handler('tina4_error_handler');
-set_error_handler('tina4_error_handler');
-spl_autoload_register('tina4_auto_loader');
-
-/**
- * @param null $config
- * @return bool
- * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverNotFoundException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException
- * @throws \ReflectionException
- * @throws \Twig\Error\LoaderError
- */
-function runTina4($config = null)
+//We only want to fiddle with the defaults if we are developing
+if (defined("TINA4_DEBUG") && TINA4_DEBUG)
 {
-    try {
-        echo new Tina4Php($config);
-    } catch(\Exception $exception) {
-        die("Tina4 caused an exception ".$exception->getMessage());
-    }
-    return true;
+    set_exception_handler('tina4_error_handler');
+    set_error_handler('tina4_error_handler');
 }
 
+spl_autoload_register('tina4_auto_loader');
 
 function _shape (...$elements) {
     return new HTMLElement(":", $elements);

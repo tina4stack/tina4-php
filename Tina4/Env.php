@@ -43,7 +43,7 @@ class Env
         }
 
         if (file_exists($fileName)) {
-            DebugLog::message("Parsing {$fileName}");
+            Debug::message("Parsing {$fileName}");
 
             $fileContents = file_get_contents($fileName);
             if (strpos($fileContents, "\r")) {
@@ -61,7 +61,7 @@ class Env
                         $variables = explode("=", $line, 2);
                         if (isset($variables[0]) && isset($variables[1])) {
                             if (!defined(trim($variables[0]))) {
-                                DebugLog::message("Defining {$variables[0]} = $variables[1]");
+                                Debug::message("Defining {$variables[0]} = $variables[1]");
                                 //echo 'return (defined("'.$variables[1].'") ? '.$variables[1].' : "'.$variables[1].'");';
                                 if (defined($variables[1])) {
                                     define(trim($variables[0]), eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
@@ -78,7 +78,7 @@ class Env
                     }
             }
         } else {
-            DebugLog::message("Created an ENV file for you {$fileName}");
+            Debug::message("Created an ENV file for you {$fileName}");
             file_put_contents($fileName, "[Example Env File]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=DEBUG_CONSOLE");
 
         }

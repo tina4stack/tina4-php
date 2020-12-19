@@ -73,7 +73,7 @@ class Messenger
             file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml", $headers . $message);
 
             if (!$this->settings->usePHPMailer) {
-                DebugLog::message("Sending email using PHP mail");
+                Debug::message("Sending email using PHP mail");
                 $message = $this->prepareHtmlMail($message, $eol, "--" . $boundary_rel, "--" . $boundary_alt);
 
                 if (!empty($this->settings->smtpPort)) {
@@ -146,7 +146,7 @@ class Messenger
 
                     } catch (\Exception $e) {
                         $mailSent = false;
-                        DebugLog::message("Messenger Error:" . $e->getMessage());
+                        Debug::message("Messenger Error:" . $e->getMessage());
                     }
                 }
             }
@@ -155,9 +155,9 @@ class Messenger
         }
 
         if ($mailSent) {
-            DebugLog::message("Message sending successful");
+            Debug::message("Message sending successful");
         } else {
-            DebugLog::message("Message sending failed");
+            Debug::message("Message sending failed");
         }
 
         return $mailSent ? true : false;
