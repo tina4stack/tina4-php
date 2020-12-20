@@ -9,6 +9,7 @@ The premise of the project is to make you the developer and PHP, the heroes!
 - Auto templating
 - Auto inclusions & project structure
 - Annotations for quick Swagger documentation & security
+- Annotations for tests, write unit tests as you code  
 - Simple ORM
 - Object Orientated HTML
 - Service Runner
@@ -64,6 +65,7 @@ Do not include your .env files with your project if they contain sensitive infor
 
 ### Change Log
 ```
+2020-12-19 Added Annotations for Unit Testing
 2020-12-14 Fixes for MySQL not handling saving of nulls in bind_params
 2020-12-08 Fixes for MySQL & ORM saving
 2020-12-08 Fixes for isBinary under Utilities

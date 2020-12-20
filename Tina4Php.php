@@ -54,23 +54,13 @@ class Tina4Php
      * @throws \ReflectionException
      * @throws \Twig\Error\LoaderError
      */
-    function __construct(\Tina4\Config $config = null)
+    public function __construct(\Tina4\Config $config = null)
     {
-        Debug::message("Beginning of Tina4PHP Initialization");
-
-
-
         global $DBA;
         if (!empty($DBA)) {
             $this->DBA = $DBA;
         }
 
-        if (defined("TINA4_SUPPRESS")) {
-            Debug::message("Check if Tina4 is being suppressed");
-            $this->suppress = TINA4_SUPPRESS;
-        }
-
-        $this->config = $config;
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
             define("TINA4_DEBUG_LEVEL", DEBUG_NONE);
@@ -78,21 +68,20 @@ class Tina4Php
 
         if (!defined("TINA4_DEBUG")) {
             define("TINA4_DEBUG", false);
-        } else {
-            if (TINA4_DEBUG) {
-                \Tina4\Debug::message("
-  ___________   _____   __ __     ____  __________  __  ________
- /_  __/  _/ | / /   | / // /    / __ \/ ____/ __ )/ / / / ____/
-  / /  / //  |/ / /| |/ // /_   / / / / __/ / __  / / / / / __
- / / _/ // /|  / ___ /__  __/  / /_/ / /___/ /_/ / /_/ / /_/ /
-/_/ /___/_/ |_/_/  |_| /_/    /_____/_____/_____/\____/\____/
-============================================================
-", TINA4_DEBUG_LEVEL);
-            }
+        } else if (TINA4_DEBUG) {
+            \Tina4\Debug::message("DEBUG ACTIVE", TINA4_DEBUG_LEVEL);
+        }
+
+        Debug::message("Setting config", TINA4_DEBUG_LEVEL);
+        $this->config = $config;
+
+
+        if (defined("TINA4_SUPPRESS")) {
+            Debug::message("Check if Tina4 is being suppressed");
+            $this->suppress = TINA4_SUPPRESS;
         }
 
         $debugBackTrace = debug_backtrace();
-
         $callerFile = $debugBackTrace[0]["file"]; //calling file /.../.../index.php
         $callerDir = str_replace("index.php", "", $callerFile);
 
@@ -114,7 +103,7 @@ class Tina4Php
         global $auth;
 
         if (empty($auth)) {
-            if (!empty($config) && $config->getAuthentication() !== false) {
+            if (!empty($config) && $config->getAuthentication() !== null) {
                 $auth = $config->getAuthentication();
             } else {
                 if (empty($config)) {
@@ -196,17 +185,17 @@ class Tina4Php
 
         $tina4PHP = $this;
 
-        //migration routes
+        //Migration routes
         \Tina4\Route::get("/migrate|/migrations|/migration", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
             $result = (new \Tina4\Migration())->doMigration();
             $migrationFolders = (new \Tina4\Module())->getMigrationFolders();
             foreach ($migrationFolders as $id => $migrationFolder) {
                 $result .= (new \Tina4\Migration($migrationFolder))->doMigration();
             }
-
             return $response ($result, HTTP_OK, TEXT_HTML);
         });
 
+        //Some routes only are available with debugging
         if (defined ("TINA4_DEBUG") && TINA4_DEBUG) {
 
             /**
@@ -345,7 +334,9 @@ class Tina4Php
 
 
             $subFolder = $this->getSubFolder();
-            $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
+            if (isset($_SERVER["HTTP_HOST"])) {
+                $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
+            }
             $twig->addGlobal('baseUrl', $subFolder);
             $twig->addGlobal('baseURL', $subFolder);
             $twig->addGlobal('uniqId', uniqid('', true));
@@ -507,7 +498,7 @@ class Tina4Php
      * @return string Route URL
      * @throws \ReflectionException
      */
-    function __toString()
+    public function __toString(): string
     {
         //No processing, we simply want the include to work
         if ($this->suppress) {
@@ -549,8 +540,6 @@ class Tina4Php
      */
     public function addTwigMethods(Config $config, \Twig\Environment $twig)
     {
-
-
         if (!empty($config) && !empty($config->getTwigGlobals())) {
             foreach ($config->getTwigGlobals() as $name => $method) {
                 $twig->addGlobal($name, $method);
@@ -600,7 +589,7 @@ function stringReplaceFirst($search, $replace, $content)
  * @return string
  * @throws \Twig\Error\LoaderError
  */
-function renderTemplate($fileNameString, $data = [])
+function renderTemplate($fileNameString, $data = []): string
 {
     $fileName = str_replace($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR, "", $fileNameString);
     try {

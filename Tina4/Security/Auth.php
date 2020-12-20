@@ -28,7 +28,7 @@ class Auth extends Data
      * Is the authentication configured, so it only runs once in a page load
      * @var bool
      */
-    private $configured = false;
+    public $configured = false;
     /**
      * Private key read from the secrets folder
      * @var false|string
@@ -74,7 +74,7 @@ class Auth extends Data
      * Starts a php session
      * @tests
      *   assert session_status() !== PHP_SESSION_NONE, "Init Session is broken"
-     *   assert $this->configured === true, "Auth state of configured must be true"
+     *   assert () && $this->configured === true, "Auth state of configured must be true"
      */
     public function initSession(): void
     {

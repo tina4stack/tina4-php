@@ -1,315 +1,175 @@
 #!/usr/bin/env php
 <?php
+require_once "vendor/autoload.php";
 global $rootPath;
-$rootPath = str_replace("\n", "", `cd`);
-$rootPath = str_replace("\r", "", $rootPath);
-
-$binFile = str_replace("/tina4", "", $argv[0]);
-$rootPath = str_replace($binFile, "", $rootPath) . DIRECTORY_SEPARATOR;
-global $settings;
-$settings = [];
-define("TINA4_SUPPRESS", 1);
-if (file_exists("index.php")) {
-    include "index.php";
+list($rootPath) = get_included_files();
+$rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4", "", $rootPath);
+define("TINA4_SUPPRESS", true);
+if (file_exists($rootPath.DIRECTORY_SEPARATOR."index.php")) {
+    include $rootPath.DIRECTORY_SEPARATOR."index.php";
 }
 
-$menu = [];
+function writeline($output): void
+{
+    echo $output."\n";
+}
+
+function write($output):void
+{
+    echo $output;
+}
+
+
+$menus[] = ["id" => 1, "name" => "Run Tests", "menuCode" => static function($index, $input) {
+    (new \Tina4\Test())->run();
+
+    readline();
+    return ["index" => 0, "prompt" => ""];
+}];
+
+
+$menus[] = ["id" => 2, "name" => "Initialize project", "menuCode" => static function($index, $input) {
+    global $rootPath;
+    if ($input === "0") { //Menu Option 0 - Exit
+        return ["index" => 0, "prompt" => ""];
+    }
+    switch ($index) {
+        case 1:
+              if ($input === "" || strtolower($input) === "y") {
+                  if (!file_exists($rootPath.DIRECTORY_SEPARATOR."index.php")) {
+                      $nextIndex = 0;
+                      $prompt = "";
+                      $indexContent = '<?php'.PHP_EOL.'require_once "./vendor/autoload.php";'.PHP_EOL.'$config = new \Tina4\Config();'.PHP_EOL.'echo new \Tina4\Tina4Php($config);';
+                      file_put_contents($rootPath.DIRECTORY_SEPARATOR."index.php", $indexContent);
+                  } else {
+                      $nextIndex = 0;
+                      $prompt = "";
+                      write("index.php file already exists, please make a backup of it or remove it to try again");
+                      readline();
+                  }
+              } else {
+                  $nextIndex = 0;
+                  $prompt = "";
+                  write("index.php not created");
+                  readline();
+              }
+            break;
+        default:
+                $nextIndex = 1;
+                $prompt = "Create {$rootPath}index.php?\nIf you already have an index.php, it will not be overwritten! (Y/n):";
+            break;
+    }
+    return ["index" => $nextIndex, "prompt" => $prompt];
+}];
+
+$menus[] = ["id" => 3, "name" => "Create database connection", "menuCode" => static function ($index, $input) {
+
+    if ($input === "0") { //Menu Option 0 - Exit
+        return ["index" => 0, "prompt" => ""];
+    }
+
+    if ($index === 1 && $input === "2") {
+        $index = 2; //MySQL
+    }
+
+    if ($index === 1 && $input === "3") {
+        $index = 3; //Firebird
+    }
+
+    switch ($index) {
+        case 1: //Sqlite
+            $nextIndex = 11;
+            $prompt = "Path and name of database (Example: /home/test.db) :";
+            break;
+        case 11:
+            $nextIndex = 12;
+            $prompt = "Create database {$input["input"]} (Y/n) ?";
+            break;
+        case 2: //MySQL
+            $nextIndex = 21;
+            $prompt = "Hostname (Example: 127.0.0.1) :";
+            break;
+        case 3: //Firebird
+            $nextIndex = 31;
+            $prompt = "Hostname (Example: 127.0.0.1) :";
+            break;
+        default:
+            $nextIndex = 1;
+            $prompt = "Choose database type:\n";
+            $prompt .= "1. Sqlite3 \n";
+            $prompt .= "2. MySQL \n";
+            $prompt .= "3. Firebird \n";
+            $prompt .= "0. Exit \n";
+            $prompt .= "Choose:";
+            break;
+    }
+    return ["index" => $nextIndex, "prompt" => $prompt];
+}];
 
 /**
- * Reads input from the commandline
- * @param $handle
- * @return false|string
+ * Menus are created and have a function "menuCode" which takes on the following inputs ($index, $input)
+ * The index is handled in a switch statement to parse the input, the menuCode function always should return
+ * ["index" => , "prompt" => ], if you want it to end you need to return ["index" => 0, "prompt" => ""];
+
+$menus[] = ["id" => 2, "name" => "Do something", "menuCode" => function($index, $input) {
+    return ["index" => 0, "prompt" => ""];
+}];
+*/
+
+/**
+ * Draws a menu based on the array above for display to the user
+ * @param $menus
  */
-function readLn($handle)
+function drawMenu($menus)
 {
-    $line = fgets($handle);
-    $line = str_replace("\n", "", $line);
-    $line = str_replace("\r", "", $line);
-    return $line;
-}
-
-function drawMenu()
-{
-    echo "===========================================================\n";
-    echo "Menu\n";
-    echo "===========================================================\n";
-    echo "1. Setup database connection\n";
-    echo "2. Create ORM models from database \n";
-    echo "3. Create a new CRUD router to update a database table \n";
-    echo "4. New basic website template \n";
-    echo "Choose a menu option, type exit to quit:";
-}
-
-function processCreateORMfromDB($step, $input, $handle)
-{
-    global $settings;
     global $rootPath;
-    if ($step == 1 && !empty($input)) {
-        $settings["tableIndex"] = $input;
-    }
+    $menuId = 0;
+    $input = "";
+    $index = 0;
 
-    if ($step == 2 && !empty($input)) {
-        if ($input == "n") {
-            $step = 0;
+    while ($input !== "quit") {
+        write ( "\e[H\e[J"); //clear screen
+        writeline ( str_repeat("=", 100) );
+        writeline ( "TINA4 - MENU ({$rootPath})");
+        writeline ( str_repeat("=", 100) );
+
+        if ($menuId !== 0) {
+            $found = false;
+            foreach ($menus as $mid => $menu) {
+                if ($menuId === $menu["id"]) {
+                    $prompt = call_user_func($menu["menuCode"], $index, $input);
+                    $index = $prompt["index"];
+                    if ($index === 0) {
+                        $menuId = 0;
+                    } else {
+                        $input = readline($prompt["prompt"]);
+                        $found = true;
+                    }
+                }
+            }
+            if (!$found) $menuId = 0;
         } else {
-            $step = 2;
+            foreach ($menus as $id => $menu) {
+                writeline (($menu["id"]).".) ".$menu["name"]);
+            }
+            $input = readline("Choose menu option or type \"quit\" to Exit:");
+            $menuId = (int)$input;
         }
     }
-
-    switch ($step) {
-        case 1:
-            $step = 2;
-            global $DBA;
-            $database = $settings["database"];
-            $no = 0;
-            foreach ($database as $table => $fields) {
-                $no++;
-                if ($no == $settings["tableIndex"] || $settings["tableIndex"] == "all") {
-                    echo str_repeat("=", 40) . "\n";
-                    echo "Table: {$table}\n";
-                    echo str_repeat("=", 40) . "\n";
-                    foreach ($fields as $id => $field) {
-                        echo "{$field["field"]}\n";
-                    }
-                    $settings["tableData"][] = ["table" => $table, "fields" => $fields];
-                }
-            }
-
-            if ($settings["tableIndex"] == "all") {
-                $settings["database"] = $database;
-                echo "You want to convert all the tables in the database ?\n";
-            }
-
-            echo "Is this correct ? (y/n):";
-            break;
-        case 2:
-            $step = 3;
-            $record = new \Tina4\DataRecord();
-            foreach ($settings["tableData"] as $id => $data) {
-                $className = ucwords($record->getObjectName($data["table"]));
-
-                $fields = [];
-                $fieldMapping = [];
-                $primaryKey = "";
-                foreach ($data["fields"] as $fid => $field) {
-                    if ($fid == 0 || $field["pk"] == "PRI") {
-                        $primaryKey = $field["field"];
-                    }
-                    $fieldMapping [] = '"'.$record->getObjectName($field["field"]) .'" => "'.$field["field"].'"';
-                    $fields[] = "\tpublic \$" . $record->getObjectName($field["field"]) . ";";
-                }
-
-                $definition = '<?php
-class [CLASS_NAME] extends \Tina4\ORM
-{
-    public $tableName="[TABLE_NAME]";
-    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
-    public $fieldMapping = [[FIELD_MAPPING]];
-    //public $softDelete=true; //uncomment for soft deletes in crud
-    
-[FIELDS]
-}';
-
-                if (file_exists("Tina4Php.php")) {
-                    $fileName = "{$rootPath}" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
-                } else {
-                    $fileName = "{$rootPath}src" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
-                }
-                echo "Creating object in {$fileName} {$className}\n";
-                if (!file_exists($fileName)) {
-                    $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);
-                    $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
-                    $definition = str_replace("[CLASS_NAME]", $className, $definition);
-                    $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
-                    $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
-                    file_put_contents($fileName, $definition);
-                }
-            }
-            echo "Done!\n";
-            break;
-        case 3:
-            $step = 0;
-            break;
-        default:
-            $step = 1;
-            global $DBA;
-
-            if (empty($DBA)) {
-               die("First setup a database connection!");
-            }
-            if (empty($settings["database"])) {
-                $database = $DBA->getDatabase();
-                $settings["database"] = $database;
-            } else {
-                $database = $settings["database"];
-            }
-
-            $no = 0;
-            foreach ($database as $table => $fields) {
-                $no++;
-                echo "{$no}.) {$table}\n";
-            }
-            echo "Type 'all' to convert all the tables, no existing objects will be over written\n";
-            echo "Choose table:";
-
-            break;
-
-    }
-
-    return $step;
-}
-
-function processCreateConnection($step, $input, $handle)
-{
-    global $settings;
-
-    if ($step == 1 && !empty($input)) {
-        $settings["dbType"] = $input;
-        //If SQLite go past the host name
-        if ($settings["dbType"] == 1) {
-            $settings["hostName"] = "";
-            $step = 2;
-        }
-    } else
-        if ($step == 2 && !empty($input)) {
-            $settings["hostName"] = $input;
-        } else
-            if ($step == 3 && !empty($input)) {
-                $settings["databasePath"] = $input;
-                if ($settings["dbType"] == 1) {
-                    $settings["username"] = "";
-                    $settings["password"] = "";
-                    $step = 5;
-                }
-            } else
-                if ($step == 4 && !empty($input)) {
-                    $settings["username"] = $input;
-                } else
-                    if ($step == 5 && !empty($input)) {
-                        $settings["password"] = $input;
-                    }
-
-    switch ($step) {
-        //host name
-        case 1:
-            $step = 2;
-            echo "Hostname?\n";
-            echo ":";
-            break;
-        //database path
-        case 2:
-            $step = 3;
-            echo "Database Name or Path?\n";
-            echo ":";
-            break;
-        //user name
-        case 3:
-            $step = 4;
-            echo "Username?\n";
-            echo ":";
-            break;
-        //password
-        case 4:
-            $step = 5;
-            echo "Password?\n";
-            echo ":";
-            break;
-        case 5:
-            $step = 6;
-            switch ($settings["dbType"]) {
-                case 1:
-                    $settings["configString"] = '$DBA = new \Tina4\DataSQLite3("[databasePath]");';
-                    break;
-                case 2:
-                    $settings["configString"] = '$DBA = new \Tina4\DataMySQL("[hostName]:[databasePath]", "[username]", "[password]");';
-                    break;
-                case 3:
-                    $settings["configString"] = '$DBA = new \Tina4\DataFirebird("[hostName]:[databasePath]", "[username]", "[password]");';
-                    break;
-            }
-
-            $settings["configString"] = str_replace('[databasePath]', $settings["databasePath"], $settings["configString"]);
-            $settings["configString"] = str_replace('[hostName]', $settings["hostName"], $settings["configString"]);
-            $settings["configString"] = str_replace('[username]', $settings["username"], $settings["configString"]);
-            $settings["configString"] = str_replace('[password]', $settings["password"], $settings["configString"]);
-
-            $indexContent = file_get_contents("./index.php");
-
-            //existing record
-            $findDBA = '/^\$DBA(.*)/m';
-            preg_match($findDBA, $indexContent, $matches, PREG_OFFSET_CAPTURE);
-
-            if (!empty ($matches)) {
-                $indexContent = str_replace($matches[0], $settings["configString"], $indexContent);
-                $settings["newIndex"] = $indexContent;
-                echo "We are going to replace an existing connection in index.php for {$settings["databasePath"]} ?\n";
-                echo "y/n:";
-            } else {
-                $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;' . "\n" . $settings["configString"] . "\n" . 'echo new \Tina4\Tina4Php(', $indexContent);
-                $settings["newIndex"] = $indexContent;
-                echo "We are going to add a connection in index.php for {$settings["databasePath"]} ?\n";
-                echo "y/n:";
-            }
-
-            break;
-        case 6:
-            $step = 0;
-            if ($input == "y") {
-                file_put_contents("./index.php", $settings);
-            } else {
-                echo "You will be returned back to the menu, hit Enter!";
-            }
-            break;
-        default:
-            $step = 1;
-            echo "Type of database ?\n";
-            echo "- 1. SQLite\n";
-            echo "- 2. MYSQL\n";
-            echo "- 3. Firebird\n";
-            echo "Choose database option or hit enter to be returned to the main menu:";
-            break;
-    }
-
-    return $step;
-}
-
-function handleMenu($handle)
-{
-    $menu = "start";
-    $step = 0;
-    $input = null;
-
-
-
-    while ($menu != "exit") {
-
-        switch ($menu) {
-            case 1:
-                $step = processCreateConnection($step, $input, $handle);
-                if ($step != 0) {
-                    $input = readLn($handle);
-                }
-                break;
-            case 2:
-                $step = processCreateORMfromDB($step, $input, $handle);
-                if ($step != 0) {
-                    $input = readLn($handle);
-                }
-                break;
-            default:
-                drawMenu();
-
-                break;
-        }
-
-        if (empty($input)) {
-            $menu = readLn($handle);
-        }
-
-    }
-
 }
 
 
-$handle = fopen("php://stdin", "r");
-handleMenu($handle);
+drawMenu($menus);
+
+//End of the console app, say something nice!
+echo "\e[H\e[J"; //clear screen
+$comments[] = "Have a great day!";
+$comments[] = "Keep up the good work!";
+$comments[] = "You are a star!";
+$comments[] = "Nothing is impossible!";
+$comments[] = "Keep learning!";
+
+$complimentary = $comments[rand(0, 4)];
+echo "Thank you for using Tina4 - {$complimentary}\n";
+
+

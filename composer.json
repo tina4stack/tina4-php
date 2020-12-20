@@ -13,6 +13,7 @@
   },
   "autoload": {
     "classmap": [
+      "Tina4Php.php",
       "Tina4",
       "Tina4/Api",
       "Tina4/Core",

@@ -18,7 +18,6 @@ class Debug
      */
     public static function message($message, $debugType = 9004, $fileName = null): void
     {
-
         if (!defined("TINA4_DEBUG") || $debugType === DEBUG_NONE || TINA4_DEBUG === false) {
             return;
         }
@@ -43,7 +42,7 @@ class Debug
         }
 
         if (is_array($message) || is_object($message)) {
-            $message = print_r($message, 1);
+            $message = str_replace( PHP_EOL, "", print_r($message, 1));
         }
 
         if (strlen($message) > 1000) {

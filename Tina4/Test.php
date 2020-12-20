@@ -52,9 +52,9 @@ class Test
                 if ($condition[0] === "(") {
                     $condition = '$testClass->' . $method . $condition;
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->'.$method.$actualExpression.', true));');
-                } else if (strpos($condition[0], '$') === false) {
-                    $condition = '$testClass->' . $condition;
-                    eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->'.$actualExpression.', true));');
+                } else if (strpos($condition[0], '$') !== false) {
+                    $condition = '$testClass->' . str_replace('$', '', $condition);
+                    eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->'.str_replace('$', '',$actualExpression).', true));');
                 } else {
                     $condition = $condition;
                     $actualResult = $actualExpression;
@@ -157,7 +157,7 @@ class Test
         }
 
         echo str_repeat("=", 80) . PHP_EOL;
-        echo $this->colorGreen . "END OF TESTS" . PHP_EOL;
+        echo $this->colorGreen . "END OF TESTS".$this->colorReset . PHP_EOL;
 
         //Output the results
 
