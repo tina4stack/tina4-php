@@ -1,7 +1,15 @@
 <?php
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Trait Utility
+ * A bunch of useful methods used across different classes in the library
+ * @package Tina4
+ */
 trait Utility
 {
     /**
@@ -15,7 +23,7 @@ trait Utility
             $pathInfo = pathinfo($file);
             if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
-                require $fileNameRoute;
+                require_once $fileNameRoute;
             } else {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
                 if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
@@ -32,16 +40,17 @@ trait Utility
      * @param $databaseFormat
      * @return bool
      */
-    public function isDate($dateString, $databaseFormat) {
+    public function isDate($dateString, $databaseFormat)
+    {
 
         if (is_array($dateString) || is_object($dateString)) return false;
 
-        if (substr($dateString,-1,1) == "Z") {
-            $dateParts = explode ("T", $dateString);
+        if (substr($dateString, -1, 1) == "Z") {
+            $dateParts = explode("T", $dateString);
         } else {
-            $dateParts = explode (" ", $dateString);
+            $dateParts = explode(" ", $dateString);
         }
-        $d = \DateTime::createFromFormat($databaseFormat,$dateParts[0]);
+        $d = \DateTime::createFromFormat($databaseFormat, $dateParts[0]);
         return $d && $d->format($databaseFormat) === $dateParts[0];
     }
 
@@ -52,7 +61,8 @@ trait Utility
      * @param $outputFormat
      * @return string
      */
-    public function formatDate($dateString, $databaseFormat, $outputFormat) {
+    public function formatDate($dateString, $databaseFormat, $outputFormat)
+    {
         //Hacky fix for weird dates?
         $dateString = str_replace(".000000", "", $dateString);
 
@@ -67,7 +77,7 @@ trait Utility
                     return null;
                 }
             } else {
-                if (strpos($dateString,":") !== false) {
+                if (strpos($dateString, ":") !== false) {
                     $databaseFormat .= " H:i:s";
                     if (strpos($outputFormat, "T")) {
                         $outputFormat .= "H:i:s";
@@ -101,7 +111,7 @@ trait Utility
         $string = str_ireplace("\t", "", $string);
         $string = str_ireplace("\n", "", $string);
         $string = str_ireplace("\r", "", $string);
-        if (is_string($string) && ctype_print($string) === false && strspn ( $string , '01') === strlen($string)) {
+        if (is_string($string) && ctype_print($string) === false && strspn($string, '01') === strlen($string)) {
             $isBinary = true;
         }
         return $isBinary;
@@ -130,7 +140,8 @@ trait Utility
     }
 
 
-    public function getDebugBackTrace() {
+    public function getDebugBackTrace()
+    {
         global $arrRoutes;
 
         $routing = new \Tina4\Routing("", "", "", "", null, true);

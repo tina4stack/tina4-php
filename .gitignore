@@ -17,3 +17,4 @@ tests/tests/acceptance/
 tests/tests/functional/
 /.env
 /migrations/
+/.env.test

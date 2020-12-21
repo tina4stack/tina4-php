@@ -2,8 +2,13 @@
 
 namespace Tina4;
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * @todo This is a work in progress and may contain many gaps
  * Class Swagger
+ * Attempts to document in OpenAPI format and return a JSON file
  * @package Tina4
  */
 class Swagger implements \JsonSerializable
@@ -143,14 +148,14 @@ class Swagger implements \JsonSerializable
                             "200" => (object)["description" => "Success"],
                             "400" => (object)["description" => "Failed"]
 
-                        ] );
+                        ]);
                     } else {
                         $paths->{$route["routePath"]} = (object)[
-                            "{$method}" =>  $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                            "{$method}" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
 
-                            ] )];
+                            ])];
                     }
                 }
 
@@ -173,24 +178,25 @@ class Swagger implements \JsonSerializable
 
     }
 
-    public function getSwaggerEntry($tags, $summary,$description, $produces, $security, $params, $example, $responses) {
+    public function getSwaggerEntry($tags, $summary, $description, $produces, $security, $params, $example, $responses)
+    {
         $entry = (object)[
-                "tags" => $tags,
-                "summary" => $summary,
-                "description" => $description,
-                "produces" => $produces,
-                "parameters" => $params,
-                "requestBody" => (object)[
-                      "description" => "Example Object",
-                      "required" => true,
-                      "content" => [
-                        "application/json"=> [
-                          "schema" => ["type" => "object", "example" => $example]
-                        ]
-                      ]
-                ],
-                "security" => $security,
-                "responses" => $responses
+            "tags" => $tags,
+            "summary" => $summary,
+            "description" => $description,
+            "produces" => $produces,
+            "parameters" => $params,
+            "requestBody" => (object)[
+                "description" => "Example Object",
+                "required" => true,
+                "content" => [
+                    "application/json" => [
+                        "schema" => ["type" => "object", "example" => $example]
+                    ]
+                ]
+            ],
+            "security" => $security,
+            "responses" => $responses
         ];
 
         //Get rid of request body if the example is empty

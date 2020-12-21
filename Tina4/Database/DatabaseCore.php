@@ -1,6 +1,11 @@
 <?php
+
 namespace Tina4;
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Trait DataBaseCore Instantiates all common database methods
  * @package Tina4
  */
@@ -66,7 +71,7 @@ trait DataBaseCore
     public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d")
     {
         global $cache;
-        
+
         if (!empty($cache)) {
             $this->cache = $cache;
         }
@@ -74,7 +79,7 @@ trait DataBaseCore
         $this->username = $username;
         $this->password = $password;
 
-        if (strpos($database, ":") !== false && strpos($database, "memory") === false ) {
+        if (strpos($database, ":") !== false && strpos($database, "memory") === false) {
             $database = explode(":", $database, 2);
             $this->hostName = $database[0];
             $this->databaseName = $database[1];
@@ -100,7 +105,8 @@ trait DataBaseCore
      * @param $params
      * @return array
      */
-    public function parseParams($params) {
+    public function parseParams($params)
+    {
         $tranId = "";
         $newParams = [];
         for ($i = 0, $iMax = count($params); $i < $iMax; $i++) {
@@ -119,8 +125,9 @@ trait DataBaseCore
      * @param $sql
      * @return mixed
      */
-    public function fetchOne($sql) {
-       return $this->fetch($sql)->records[0];
+    public function fetchOne($sql)
+    {
+        return $this->fetch($sql)->records[0];
     }
 
 }

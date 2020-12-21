@@ -1,14 +1,11 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/03/27
- * Time: 10:36 PM
- */
 
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class DataError Used to get and return an error
  * @package Tina4
  */
@@ -40,7 +37,7 @@ class DataError
     /**
      * @return false|string
      */
-    public function __toString()
+    public function __toString(): string
     {
         return json_encode($this->getError());
     }

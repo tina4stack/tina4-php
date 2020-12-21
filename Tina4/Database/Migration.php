@@ -2,6 +2,10 @@
 
 namespace Tina4;
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Description of Tina4 Migration
  * There are some "rules" that Tina4 prescribes for the migrations and it would be in your best interests to follow them.
  * 1.) File formats are in the following format:
@@ -11,7 +15,6 @@ namespace Tina4;
  *     A create table statement would be in its own file.
  * 3.) Stored procedures, triggers and views should be in their own files, they are run as individual statements and are commited so, delimter is not needed on the end of these.
  *     You do not need to change the delimiter either before running these statements.
- *
  */
 class Migration extends Data
 {
@@ -44,8 +47,7 @@ class Migration extends Data
         $this->delim = $delim;
         $this->migrationPath = $migrationPath;
 
-        if ($this->DBA === null)
-        {
+        if ($this->DBA === null) {
             die("Please make sure you have a global \$DBA connection in your index.php");
         }
         //Turn off auto commits so we can roll back
@@ -151,7 +153,6 @@ class Migration extends Data
                 $error = false;
                 foreach ($content as $cid => $sql) {
                     if (!empty(trim($sql))) {
-
 
 
                         $success = $this->DBA->exec($sql, $transId);

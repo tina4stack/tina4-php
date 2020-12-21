@@ -1,7 +1,15 @@
 <?php
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Caller
+ * Used in conjunction with Twig to call PHP classes and methods in the project
+ * @package Tina4
+ */
 class Caller
 {
     /**
@@ -13,7 +21,7 @@ class Caller
      * @return string
      * @throws \Exception
      */
-    public function call($inputClass, $method = "", $variables=[])
+    public function call($inputClass, $method = "", $variables = [])
     {
         $class = null;
         eval ('$class = new ' . $inputClass . '();');

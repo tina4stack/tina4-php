@@ -1,18 +1,16 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/03/01
- * Time: 04:30 PM
- * Note: A result from the data is a collection of records which can be in an OBJECT form or Key Value form
- */
 
 namespace Tina4;
 
 use JsonSerializable;
 
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class DataResult Result of query
+ *
  * @package Tina4
  */
 class DataResult implements JsonSerializable
@@ -50,7 +48,7 @@ class DataResult implements JsonSerializable
      * @param integer $offSet Which row to start recording
      * @param DataError $error Database error
      */
-    function __construct($records, $fields, $noOfRecords, $offSet = 0, DataError $error = null)
+    public function __construct($records, $fields, $noOfRecords, $offSet = 0, DataError $error = null)
     {
         $this->records = $records;
         $this->fields = $fields;
@@ -64,7 +62,7 @@ class DataResult implements JsonSerializable
      * @param $id
      * @return mixed
      */
-    function record($id)
+    public function record($id)
     {
         if (!empty($this->records)) {
             return $this->records[$id];
@@ -77,7 +75,7 @@ class DataResult implements JsonSerializable
      * Gets back the number of records that were not filtered out by the pagination
      * @return int
      */
-    function getNoOfRecords()
+    public function getNoOfRecords(): int
     {
         return $this->noOfRecords;
     }
@@ -86,7 +84,7 @@ class DataResult implements JsonSerializable
      * Returns the fields and their types
      * @return mixed
      */
-    function fields()
+    public function fields(): array
     {
         return $this->fields;
     }
@@ -107,7 +105,7 @@ class DataResult implements JsonSerializable
      * @return array|null
      * @example examples\exampleDataResultRecords.php
      */
-    function records($original = false)
+    public function records($original = false)
     {
         $results = [];
         if (!empty($this->records)) {
@@ -195,7 +193,7 @@ class DataResult implements JsonSerializable
      * Gets the error from the result if the query failed
      * @return mixed
      */
-    function getError()
+    public function getError()
     {
         if (!empty($this->error)) {
             return $this->error->getError();

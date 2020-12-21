@@ -1,9 +1,15 @@
 <?php
 
-
 namespace Tina4;
-
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class DataReference
+ * Data references are supposed to help link / join tables together to the ORM
+ * @package Tina4
+ */
 class DataReference
 {
     private $fieldName;

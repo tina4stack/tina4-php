@@ -1,9 +1,15 @@
 <?php
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class HTMLElement
+ * A way to code HTML5 elements using only PHP
+ */
 const HTML_ELEMENTS = [":!DOCTYPE", ":!--", ":a", ":abbr", ":acronym", ":address", ":applet", ":area", ":article", ":aside", ":audio", ":b", ":base", ":basefont", ":bb", ":bdo", ":big", ":blockquote", ":body", ":br/", ":button", ":canvas", ":caption", ":center", ":cite", ":code", ":col", ":colgroup", ":command", ":datagrid", ":datalist", ":dd", ":del", ":details", ":dfn", ":dialog", ":dir", ":div", ":dl", ":dt", ":em", ":embed", ":eventsource", ":fieldset", ":figcaption", ":figure", ":font", ":footer", ":form", ":frame", ":frameset", ":h1", ":head", ":header", ":hgroup", ":hr/", ":html", ":i", ":iframe", ":img/", ":input", ":ins", ":isindex", ":kbd", ":keygen", ":label", ":legend", ":li", ":link", ":map", ":mark", ":menu", ":meta/", ":meter", ":nav", ":noframes", ":noscript", ":object", ":ol", ":optgroup", ":option", ":output", ":p", ":param", ":pre", ":progress", ":q", ":rp", ":rt", ":ruby", ":s", ":samp", ":script", ":section", ":select", ":small", ":source", ":span", ":strike", ":strong", ":style", ":sub", ":sup", ":table", ":tbody", ":td", ":textarea", ":tfoot", ":th", ":thead", ":time", ":title", ":tr", ":track", ":tt", ":u", ":ul", ":var", ":video", ":wbr"];
-
 class HTMLElement
 {
     private $tag = "";
@@ -74,20 +80,19 @@ class HTMLElement
 
             if ($this->tag === "") {
                 return "{$this->getElements()}";
-            }
-              else
-            if ($this->tag[0] === "!") {
-                if (strpos($this->tag, "!--") !== false) {
-                    return "<$this->tag{$this->getAttributes()}{$this->getElements()}".substr($this->tag,1).">";
-                } else {
-                    return "<$this->tag{$this->getAttributes()}>";
-                }
             } else
-                if ($this->tag[strlen($this->tag) - 1] === "/") {
-                    return "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
-                } else {
-                    return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
-                }
+                if ($this->tag[0] === "!") {
+                    if (strpos($this->tag, "!--") !== false) {
+                        return "<$this->tag{$this->getAttributes()}{$this->getElements()}" . substr($this->tag, 1) . ">";
+                    } else {
+                        return "<$this->tag{$this->getAttributes()}>";
+                    }
+                } else
+                    if ($this->tag[strlen($this->tag) - 1] === "/") {
+                        return "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
+                    } else {
+                        return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
+                    }
 
     }
 
@@ -128,30 +133,30 @@ class HTMLElement
 }
 
 /**$elements = "";
-//Dynamic code for creating HTML Elements
-foreach (HTML_ELEMENTS as $id => $ELEMENT) {
-if ($ELEMENT === ":!--") {
-$variableName = "comment";
-} else {
-$variableName = "_" . strtolower(str_replace("!", "", str_replace("-", "", str_replace("/", "", substr($ELEMENT, 1)))));
-}
-
-eval ('
-function ' . $variableName . ' (...$elements) {
-return new HTMLElement("' . $ELEMENT . '", $elements);
-}');
-
-$elements .= '
-/**
+ * //Dynamic code for creating HTML Elements
+ * foreach (HTML_ELEMENTS as $id => $ELEMENT) {
+ * if ($ELEMENT === ":!--") {
+ * $variableName = "comment";
+ * } else {
+ * $variableName = "_" . strtolower(str_replace("!", "", str_replace("-", "", str_replace("/", "", substr($ELEMENT, 1)))));
+ * }
+ *
+ * eval ('
+ * function ' . $variableName . ' (...$elements) {
+ * return new HTMLElement("' . $ELEMENT . '", $elements);
+ * }');
+ *
+ * $elements .= '
+ * /**
  * HTML TAG '.$variableName.'
  * @param $elements
  * @return HTMLElement
  */
 /**function ' . $variableName . ' (...$elements) {
-return new HTMLElement("' . $ELEMENT . '", $elements);
-}';
-}
-
-echo $elements;
+ * return new HTMLElement("' . $ELEMENT . '", $elements);
+ * }';
+ * }
+ *
+ * echo $elements;
  **/
 

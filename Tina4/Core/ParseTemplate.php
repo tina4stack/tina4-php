@@ -1,15 +1,13 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/02/09
- * Time: 03:04 PM
- */
 
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class ParseTemplate
+ * A very simple template engine with limited functionality
  * @package Tina4
  */
 class ParseTemplate
@@ -282,7 +280,7 @@ class ParseTemplate
     /**
      * @return string
      */
-    public function __toString() : string
+    public function __toString(): string
     {
         http_response_code($this->responseCode);
         return (string)$this->content;

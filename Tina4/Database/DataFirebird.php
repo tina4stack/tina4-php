@@ -1,13 +1,15 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 5/19/2016
- * Time: 11:19 AM
- */
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class DataFirebird
+ * The implementation for the firebird database engine
+ * @package Tina4
+ */
 class DataFirebird implements DataBase
 {
     use DataBaseCore;
@@ -25,8 +27,8 @@ class DataFirebird implements DataBase
         }
 
         //Set the returning format to something we can expect to transform
-        ini_set( "ibase.dateformat", str_replace("Y", "%Y",  str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat() ) ) ) );
-        ini_set( "ibase.timestampformat", str_replace("Y", "%Y",  str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat() ) ) ) . " %H:%M:%S" );
+        ini_set("ibase.dateformat", str_replace("Y", "%Y", str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat()))));
+        ini_set("ibase.timestampformat", str_replace("Y", "%Y", str_replace("d", "%d", str_replace("m", "%m", $this->getDefaultDatabaseDateFormat()))) . " %H:%M:%S");
 
         if ($persistent) {
             $this->dbh = ibase_pconnect($this->hostName . "/" . $this->port . ":" . $this->databaseName, $this->username, $this->password);
@@ -201,7 +203,7 @@ class DataFirebird implements DataBase
      */
     public function startTransaction()
     {
-        
+
         return ibase_trans(IBASE_COMMITTED + IBASE_NOWAIT, $this->dbh);
     }
 
@@ -210,7 +212,7 @@ class DataFirebird implements DataBase
      * @param $tableName
      * @return bool
      */
-    public function tableExists($tableName) : bool
+    public function tableExists($tableName): bool
     {
         if (!empty($tableName)) {
             // table name must be in upper case
@@ -362,7 +364,8 @@ class DataFirebird implements DataBase
      * @param int $increment
      * @return mixed
      */
-    public function getGeneratorId($generatorName, $increment=1) {
-        return ibase_gen_id (strtoupper($generatorName), $increment, $this->dbh);
+    public function getGeneratorId($generatorName, $increment = 1)
+    {
+        return ibase_gen_id(strtoupper($generatorName), $increment, $this->dbh);
     }
 }

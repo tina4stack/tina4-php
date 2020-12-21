@@ -1,18 +1,16 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/03/01
- * Time: 04:35 PM
- * Notes: A record is a single part of the result set
- */
 
 namespace Tina4;
 
 use JsonSerializable;
 
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class DataRecord
+ * A single data record
  * @package Tina4
  */
 class DataRecord implements JsonSerializable
@@ -29,7 +27,7 @@ class DataRecord implements JsonSerializable
      * @param string $databaseFormat Input format use the PHP date format conventions
      * @param string $outputFormat Output date format - use the PHP date format conventions
      */
-    public function __construct($record = null, $fieldMapping = [], $databaseFormat="Y-m-d", $outputFormat="Y-m-d")
+    public function __construct($record = null, $fieldMapping = [], $databaseFormat = "Y-m-d", $outputFormat = "Y-m-d")
     {
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
@@ -50,8 +48,8 @@ class DataRecord implements JsonSerializable
 
                     $this->original->{$column} = $value;
                 }
-                
-                
+
+
                 $this->{$column} = $value;
             }
 

@@ -1,13 +1,15 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 5/19/2016
- * Time: 12:09 PM
- */
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Messenger
+ * Useful for sending emails, requires a MessengerSettings class
+ * @package Tina4
+ */
 class Messenger
 {
     /**
@@ -36,6 +38,7 @@ class Messenger
      * @param $attachments array An Array of file paths to be attached in the form array ["name" => "File Description", "path" => "/path/to/file" ]
      * @param $bcc array
      * @return Boolean true, false
+     * @throws \Twig\Error\LoaderError
      */
     public function sendEmail($recipients, string $subject, $message, string $fromName, string $fromAddress, $attachments = null, $bcc = null)
     {
@@ -52,7 +55,7 @@ class Messenger
             if (file_exists($this->settings->templatePath . "/" . $message["template"])) {
                 $message = renderTemplate($this->settings->templatePath . "/" . $message["template"], $message["data"]);
             } else {
-                $message = renderTemplate( $message["template"], $message["data"]);
+                $message = renderTemplate($message["template"], $message["data"]);
             }
         }
 

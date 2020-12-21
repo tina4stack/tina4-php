@@ -1,15 +1,11 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/03/27
- * Time: 11:29 PM
- * Notes: Make an array of these for a result set from a data query
- */
 
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class DataField
  * @package Tina4
  */
@@ -76,9 +72,9 @@ class DataField
      * @param string $upperCase
      * @return string
      */
-    public function getFieldName($upperCase=false)
+    public function getFieldName($upperCase = false)
     {
-        if ($upperCase = DATA_CASE_UPPER) {
+        if ($upperCase === DATA_CASE_UPPER) {
             return strtoupper($this->fieldName);
         } else {
             return $this->fieldName;
@@ -92,7 +88,7 @@ class DataField
      */
     public function getFieldAlias($upperCase = false)
     {
-        if ($upperCase = DATA_CASE_UPPER) {
+        if ($upperCase === DATA_CASE_UPPER) {
             return strtoupper($this->fieldAlias);
         } else {
             return $this->fieldAlias;

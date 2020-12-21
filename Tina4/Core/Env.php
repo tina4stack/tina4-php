@@ -1,8 +1,15 @@
 <?php
 
 namespace Tina4;
-
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Env
+ * Reads a .env file or .env.{environment} file for settings that should not be committed up with the repository
+ * @package Tina4
+ */
 class Env
 {
     private $environment = "";
@@ -11,7 +18,7 @@ class Env
      * Env constructor.
      * @param string $forceEnvironment
      */
-    function __construct($forceEnvironment = "")
+    public function __construct($forceEnvironment = "")
     {
         if (!empty(getenv("ENVIRONMENT"))) {
             $this->environment = getenv("ENVIRONMENT");
@@ -27,10 +34,13 @@ class Env
     /**
      * The readEnvParams reads the environment variables from the .env.{ENVIRONMENT} file
      * @param $environment
+     * @tests
+     *   assert ("test") === null,"Parsing the environment"
+     *   assert file_exists(".env.test") === true,"File does not exist .env.test"
      */
-    function readParams($environment)
+    public function readParams($environment): void
     {
-        $fileName = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR.".env";
+        $fileName = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . ".env";
 
         if (!file_exists($fileName)) {
             $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
@@ -66,7 +76,7 @@ class Env
                                 if (defined($variables[1])) {
                                     define(trim($variables[0]), eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
                                 } else {
-                                    if (strpos($variables[1], '"') !== false || strpos($variables[1], '[') !== false ) {
+                                    if (strpos($variables[1], '"') !== false || strpos($variables[1], '[') !== false) {
                                         $variable = eval('return ' . $variables[1] . ';');
                                     } else {
                                         $variable = $variables[1];

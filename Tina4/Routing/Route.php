@@ -1,19 +1,11 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/02/15
- * Time: 03:23 PM
- */
-
-/**
- * Class Route
- * The main router class which handles the routes that are registered with it
- */
 
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class Route Determines what occurs when a route is called
  * @package Tina4
  */
@@ -48,7 +40,7 @@ class Route
      * @param bool $secure
      * @example "api/tests.php"
      */
-    public static function add($routePath, $function, $inlineParamsToRequest = false, $secure=false)
+    public static function add($routePath, $function, $inlineParamsToRequest = false, $secure = false)
     {
         global $arrRoutes;
 

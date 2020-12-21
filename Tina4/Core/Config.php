@@ -1,7 +1,15 @@
 <?php
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Config
+ * A container for settings passed to the Tina4 library, used currently for custom Auth, Twig filters, functions & globals
+ * @package Tina4
+ */
 class Config
 {
     protected $twigFilters = [];
@@ -24,7 +32,7 @@ class Config
      * @param $functionName string Name of the filter
      * @param $function null Anonymous function which takes parameters based on the name of the twig filter
      */
-    public function addTwigFunction($functionName, $function):void
+    public function addTwigFunction($functionName, $function): void
     {
         $this->twigFunctions[$functionName] = $function;
     }

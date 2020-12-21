@@ -4,11 +4,20 @@ namespace Tina4;
 
 use Twig\Error\LoaderError;
 
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Debug
+ * Used to assist in debugging
+ * @package Tina4
+ */
 class Debug
 {
 
     public static $errorHappened = false;
-    private static $errorLog=[];
+    private static $errorLog = [];
 
     /**
      * Create a debug message
@@ -32,7 +41,7 @@ class Debug
             }
         }
 
-        if ($debugType === DEBUG_SCREEN ) {
+        if ($debugType === DEBUG_SCREEN) {
             if (!empty(self::$errorLog)) {
                 self::$errorLog = array_merge(self::$errorLog, $error);
             } else {
@@ -41,7 +50,7 @@ class Debug
         }
 
         if (is_array($message) || is_object($message)) {
-            $message = str_replace( PHP_EOL, "", print_r($message, 1));
+            $message = str_replace(PHP_EOL, "", print_r($message, 1));
         }
 
         if (strlen($message) > 1000) {
@@ -66,15 +75,14 @@ class Debug
      */
     public static function handleError($errorNo, $errorString, $errorFile, $errorLine): ?bool
     {
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG)
-        {
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             $error = [];
-            $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $errorFile, "line" => $errorLine, "message" => $errorNo." ".$errorString];
+            $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $errorFile, "line" => $errorLine, "message" => $errorNo . " " . $errorString];
 
             $debugTrace = debug_backtrace();
             foreach ($debugTrace as $id => $trace) {
                 if ($id !== 0 && isset($trace["file"]) && strpos($trace["file"], "Tina4") === false) {
-                    $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $trace["file"], "line" => $trace["line"], "message" => $errorNo." ".$errorString];
+                    $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $trace["file"], "line" => $trace["line"], "message" => $errorNo . " " . $errorString];
                 }
 
             }
@@ -111,8 +119,7 @@ class Debug
 </pre>
 </div>';
 
-        if (self::$errorHappened)
-        {
+        if (self::$errorHappened) {
             try {
                 return renderTemplate($template, ["errors" => self::$errorLog]);
             } catch (LoaderError $e) {

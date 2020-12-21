@@ -1,9 +1,11 @@
 <?php
 
-
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class Annotation
  * This class facilitates finding annotations across a Tina4 project
  * @package Tina4\Core
@@ -14,12 +16,14 @@ class Annotation
      * Gets all the user defined functions
      * @return array
      */
-    public function getFunctions() {
+    public function getFunctions()
+    {
         return get_defined_functions()["user"];
     }
 
 
-    public function getClasses() {
+    public function getClasses()
+    {
         return get_declared_classes();
     }
 
@@ -28,7 +32,7 @@ class Annotation
      * @param string $annotationName
      * @return array
      */
-    public function parseAnnotations ($docComment, $annotationName=""):array
+    public function parseAnnotations($docComment, $annotationName = ""): array
     {
         //clean *
         $docComment = preg_replace('/^.[\n\*|\r\n\*]|^(.*)\*/m', "", $docComment);
@@ -49,10 +53,17 @@ class Annotation
         return $annotations;
     }
 
-    public function get($annotationName=""): array
+    /**
+     * Gets all the annotations from the code based on a filter
+     * @param string $annotationName
+     * @return array
+     * @throws \ReflectionException
+     */
+    public function get($annotationName = ""): array
     {
         $functions = $this->getFunctions();
         $classes = $this->getClasses();
+
         $annotations = [];
 
         //Get annotations for each function

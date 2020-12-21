@@ -2,6 +2,10 @@
 
 namespace Tina4;
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class MessengerSettings
  * This is the settings and configuration for sending messages from Tina4
  * @package Tina4

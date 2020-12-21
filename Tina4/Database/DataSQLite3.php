@@ -1,13 +1,15 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/03/27
- * Time: 09:53 PM
- */
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class DataSQLite3
+ * The SQLite3 functionality
+ * @package Tina4
+ */
 class DataSQLite3 implements DataBase
 {
     use DataBaseCore;
@@ -67,7 +69,6 @@ class DataSQLite3 implements DataBase
                             $preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
                         }
             }
-
 
 
             $preparedQuery->execute();
@@ -225,11 +226,11 @@ class DataSQLite3 implements DataBase
 
     public function getDefaultDatabaseDateFormat()
     {
-       return "Y-m-d";
+        return "Y-m-d";
     }
 
     public function getDefaultDatabasePort()
     {
-       return null;
+        return null;
     }
 }

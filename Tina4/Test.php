@@ -1,9 +1,15 @@
 <?php
 
-
 namespace Tina4;
 
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Test
+ * @package Tina4
+ */
 class Test
 {
     use Utility;
@@ -19,6 +25,14 @@ class Test
 
     public $score;
 
+    /**
+     * Asserts something to see if it's true and then prints a message if it isn't
+     * @param $condition
+     * @param string $message
+     * @param string $conditionText
+     * @param string $actualResult
+     * @return string
+     */
     public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
     {
         $result = false;
@@ -34,6 +48,14 @@ class Test
         }
     }
 
+    /**
+     * Run a test based on what was annotated
+     * @param $testNo
+     * @param $test
+     * @param $method
+     * @param null $testClass
+     * @return string
+     */
     public function runTest($testNo, $test, $method, $testClass = null)
     {
         preg_match_all('/^(assert)(.*),(.*)$/m', $test, $testParts, PREG_SET_ORDER);
@@ -82,6 +104,11 @@ class Test
         }
     }
 
+    /**
+     * Parse annotations that have been found with the @tests prefix
+     * @param $annotations
+     * @param $onlyShowFailed
+     */
     public function parseAnnotations($annotations, $onlyShowFailed): void
     {
         $testResult = "";
@@ -130,6 +157,11 @@ class Test
 
     }
 
+    /**
+     * Run all the tests
+     * @param bool $onlyShowFailed
+     * @throws \ReflectionException
+     */
     public function run($onlyShowFailed = true): void
     {
         //Autoload all the include paths for testing in the system

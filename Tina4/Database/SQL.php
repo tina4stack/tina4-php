@@ -1,7 +1,15 @@
 <?php
 
 namespace Tina4;
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class SQL
+ * A way to encapsulate standard SQL into an object form
+ * @package Tina4
+ */
 class SQL implements \JsonSerializable
 {
     public $DBA;
@@ -213,9 +221,10 @@ class SQL implements \JsonSerializable
      * @param $fields
      * @return array
      */
-    public function getColumnNames($fields) {
+    public function getColumnNames($fields)
+    {
         $columnNames = [];
-        foreach($fields as $id => $field) {
+        foreach ($fields as $id => $field) {
             $columnName = $field;
             $field = str_replace([".", " as", " "], "^", $field);
             if (strpos($field, "^") !== false) {
@@ -252,7 +261,6 @@ class SQL implements \JsonSerializable
                         $newRecord->mapFromRecord($record, true);
 
 
-
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
 
@@ -266,7 +274,7 @@ class SQL implements \JsonSerializable
                         if (!empty($this->fields) && !in_array("*", $this->getColumnNames($this->fields))) {
                             foreach ($newRecord as $key => $value) {
                                 if (in_array($key, $newRecord->protectedFields, true)) continue;
-                                if (!in_array($this->ORM->getFieldName($key), $this->getColumnNames($this->fields), true) && strpos($key, " as") === false && strpos($key, ".") === false ) {
+                                if (!in_array($this->ORM->getFieldName($key), $this->getColumnNames($this->fields), true) && strpos($key, " as") === false && strpos($key, ".") === false) {
                                     unset($newRecord->{$key});
                                 }
                             }
@@ -289,7 +297,6 @@ class SQL implements \JsonSerializable
         } else {
             $records = ["error" => "No database connection or ORM specified"];
         }
-
 
 
         return $records;
@@ -339,7 +346,7 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
-        \Tina4\Debug::message("SQL:".$sql);
+        \Tina4\Debug::message("SQL:" . $sql);
         return $sql;
     }
 
@@ -355,8 +362,7 @@ class SQL implements \JsonSerializable
         foreach ($records as $id => $record) {
             if (get_parent_class($record) === "Tina4\ORM") {
                 $result[] = $record->asArray();
-            }
-            else {
+            } else {
                 $result[] = (array)$record;
             }
 

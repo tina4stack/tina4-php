@@ -1,17 +1,11 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Andre van Zuydam
- * Date: 2016/02/09
- * Time: 02:02 PM
- * Purpose: Determine routing responses and data outputs based on the URL sent from the system
- * You are welcome to read and modify this code but it should not be broken, if you find something to improve it, send me an email with the patch
- * andrevanzuydam@gmail.com
- */
 
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class Routing
  * @package Tina4
  */
@@ -418,7 +412,6 @@ class Routing
         fclose($fp);
 
     }
-
 
 
     /**

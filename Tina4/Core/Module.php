@@ -1,10 +1,19 @@
 <?php
+
 namespace Tina4;
-
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Class Module
+ * The back bone of extending and incorporating Tina4 libraries together
+ * @package Tina4
+ */
 class Module
 {
-    public static function getModuleFolder() {
+    public static function getModuleFolder()
+    {
         $backtrace = debug_backtrace();
         if (isset($backtrace[1])) {
             return dirname($backtrace[1]['file']);
@@ -20,7 +29,8 @@ class Module
      * @param string $nameSpace
      * @param Config $config
      */
-    public static function addModule($name="Tina4Module",$version="1.0.0", $nameSpace="", $config=null) {
+    public static function addModule($name = "Tina4Module", $version = "1.0.0", $nameSpace = "", $config = null)
+    {
         $moduleFolder = self::getModuleFolder();
 
         if (empty($nameSpace)) {
@@ -44,12 +54,12 @@ class Module
         $_TINA4_MODULES[$baseName]["routePath"] = [];
         $_TINA4_MODULES[$baseName]["migrationPath"] = [];
 
-        self::addRoutePath($moduleFolder.DIRECTORY_SEPARATOR."api", $baseName);
-        self::addRoutePath($moduleFolder.DIRECTORY_SEPARATOR."routes", $baseName);
-        self::addIncludePath($moduleFolder.DIRECTORY_SEPARATOR."app", $baseName);
-        self::addIncludePath($moduleFolder.DIRECTORY_SEPARATOR."objects", $baseName);
-        self::addTemplatePath($moduleFolder.DIRECTORY_SEPARATOR."templates", $baseName);
-        self::addMigrationPath($moduleFolder.DIRECTORY_SEPARATOR."migrations", $baseName);
+        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "api", $baseName);
+        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "routes", $baseName);
+        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "app", $baseName);
+        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "objects", $baseName);
+        self::addTemplatePath($moduleFolder . DIRECTORY_SEPARATOR . "templates", $baseName);
+        self::addMigrationPath($moduleFolder . DIRECTORY_SEPARATOR . "migrations", $baseName);
 
     }
 
@@ -58,7 +68,8 @@ class Module
      * @param $pathType
      * @param $path
      */
-    public static function addPath($pathType, $path, $baseName) {
+    public static function addPath($pathType, $path, $baseName)
+    {
         global $_TINA4_MODULES;
         if (file_exists($path)) {
             $_TINA4_MODULES[$baseName][$pathType][] = $path;
@@ -70,7 +81,8 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addRoutePath($path, $baseName) {
+    public static function addRoutePath($path, $baseName)
+    {
         self::addPath("routePath", $path, $baseName);
     }
 
@@ -79,7 +91,8 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addIncludePath($path, $baseName) {
+    public static function addIncludePath($path, $baseName)
+    {
         self::addPath("includePath", $path, $baseName);
     }
 
@@ -88,8 +101,9 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addTemplatePath($path,$baseName) {
-        self::addPath("templatePath", $path,$baseName);
+    public static function addTemplatePath($path, $baseName)
+    {
+        self::addPath("templatePath", $path, $baseName);
     }
 
     /**
@@ -97,7 +111,8 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addMigrationPath($path, $baseName) {
+    public static function addMigrationPath($path, $baseName)
+    {
         self::addPath("migrationPath", $path, $baseName);
     }
 
@@ -105,7 +120,8 @@ class Module
      * Gets the Route Folders
      * @return array
      */
-    public static function getRouteFolders() {
+    public static function getRouteFolders()
+    {
         global $_TINA4_MODULES;
         $routes = [];
         if (empty($_TINA4_MODULES)) {
@@ -124,12 +140,13 @@ class Module
      * Gets the Template Folders
      * @return array
      */
-    public static function getTemplateFolders() {
+    public static function getTemplateFolders()
+    {
         global $_TINA4_MODULES;
         $routes = [];
         if (empty($_TINA4_MODULES)) {
             return [];
-        }  else {
+        } else {
 
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["templatePath"] as $routePath) {
@@ -146,12 +163,13 @@ class Module
      * Gets the Include Folders
      * @return array
      */
-    public static function getIncludeFolders() {
+    public static function getIncludeFolders()
+    {
         global $_TINA4_MODULES;
         $routes = [];
         if (empty($_TINA4_MODULES)) {
             return [];
-        }  else {
+        } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["includePath"] as $routePath) {
                     $routes[] = $routePath;
@@ -165,12 +183,13 @@ class Module
      * Gets the Migration Folders
      * @return array
      */
-    public static function getMigrationFolders() {
+    public static function getMigrationFolders()
+    {
         global $_TINA4_MODULES;
         $routes = [];
         if (empty($_TINA4_MODULES)) {
             return [];
-        }  else {
+        } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["migrationPath"] as $routePath) {
                     $routes[] = $routePath;
@@ -180,12 +199,13 @@ class Module
         return $routes;
     }
 
-    public static function getModuleConfigs() {
+    public static function getModuleConfigs()
+    {
         global $_TINA4_MODULES;
         $configs = [];
         if (empty($_TINA4_MODULES)) {
             return [];
-        }  else {
+        } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
 
                 if (!empty($module["config"])) {

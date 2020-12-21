@@ -1,14 +1,11 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: andrevanzuydam
- * Date: 2019-06-18
- * Time: 22:10
- */
 
 namespace Tina4;
-
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class DataMySQL Instantiates database functions
  * @package Tina4
  */
@@ -48,12 +45,10 @@ class DataMySQL implements DataBase
      */
     public function exec()
     {
-       
+
         $params = $this->parseParams(func_get_args());
         $tranId = $params["tranId"];
         $params = $params["params"];
-
-
 
 
         if (stripos($params[0], "call") !== false) {
@@ -72,14 +67,12 @@ class DataMySQL implements DataBase
                         } else
                             if (is_int($param)) {
                                 $paramTypes .= "i";
-                            }
-                              else
-                        if ($param !== '' && $param[0] !== "0" && is_numeric($param)) {
-                            $paramTypes .= "d";
-                        } else
-                        {
-                            $paramTypes .= "s";
-                        }
+                            } else
+                                if ($param !== '' && $param[0] !== "0" && is_numeric($param)) {
+                                    $paramTypes .= "d";
+                                } else {
+                                    $paramTypes .= "s";
+                                }
                     }
 
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
@@ -97,6 +90,7 @@ class DataMySQL implements DataBase
             return $this->error();
         }
     }
+
     /**
      * Fetches records from database
      * @param string $sql SQL Query

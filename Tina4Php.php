@@ -1,10 +1,4 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: andrevanzuydam
- * Date: 2019-07-28
- * Time: 10:34
- */
 
 namespace Tina4;
 
@@ -12,6 +6,10 @@ use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 
 /**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ *
  * Class Tina4Php Main class used to set constants
  * @package Tina4
  */
@@ -86,7 +84,7 @@ class Tina4Php extends \Tina4\Data
         }
 
         if (strpos($this->documentRoot, ".php") !== false) {
-            $this->documentRoot = dirname($this->documentRoot)."/";
+            $this->documentRoot = dirname($this->documentRoot) . "/";
         }
 
         if (file_exists("Tina4Php.php")) {
@@ -120,9 +118,9 @@ class Tina4Php extends \Tina4\Data
 
         \Tina4\Debug::message("TINA4: web path " . $this->webRoot);
 
-        if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")){
+        if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
-                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS , Module::getTemplateFolders()));
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS, Module::getTemplateFolders()));
             } else {
                 define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src/templates", "src/assets", "src/templates/snippets"], Module::getTemplateFolders()));
             }
@@ -130,7 +128,7 @@ class Tina4Php extends \Tina4\Data
 
         if (!defined("TINA4_ROUTE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_ROUTE_LOCATIONS")) {
-                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS , Module::getTemplateFolders()));
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS, Module::getTemplateFolders()));
             } else {
                 define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src/api", "src/routes"], Module::getRouteFolders()));
             }
@@ -138,7 +136,7 @@ class Tina4Php extends \Tina4\Data
 
         if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_INCLUDE_LOCATIONS")) {
-                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getTemplateFolders()));
             } else {
                 define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
             }
@@ -157,8 +155,8 @@ class Tina4Php extends \Tina4\Data
         $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services"];
 
         foreach ($foldersToCopy as $id => $folder) {
-            if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."{$folder}") && !file_exists("Tina4Php.php")) {
-                \Tina4\Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR."{$folder}", $this->documentRoot . DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."{$folder}");
+            if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}") && !file_exists("Tina4Php.php")) {
+                \Tina4\Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR . "{$folder}", $this->documentRoot . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}");
             }
         }
 
@@ -189,7 +187,7 @@ class Tina4Php extends \Tina4\Data
         });
 
         //Some routes only are available with debugging
-        if (defined ("TINA4_DEBUG") && TINA4_DEBUG) {
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
 
             /**
              * @secure
@@ -223,7 +221,6 @@ class Tina4Php extends \Tina4\Data
                     }
                 return $response("");
             });
-
 
 
             \Tina4\Route::get("/migrate/create|/migrations/create|/migration/create", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
@@ -287,7 +284,7 @@ class Tina4Php extends \Tina4\Data
 
 
             if (TINA4_DEBUG) {
-                \Tina4\Debug::message("TINA4: Twig Paths - " . str_replace( "\n", "", print_r($twigPaths, 1)), TINA4_DEBUG_LEVEL);
+                \Tina4\Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_DEBUG_LEVEL);
             }
 
             foreach ($twigPaths as $tid => $twigPath) {
@@ -310,19 +307,17 @@ class Tina4Php extends \Tina4\Data
                         $twigLoader->addPath($twigPath["path"], $twigPath["nameSpace"]);
                         $twigLoader->addPath($twigPath["path"], "__main__");
                     }
-                }
-                  else
-                if (file_exists($twigPath)) {
-                    $twigLoader->addPath($twigPath, '__main__');
-                } else {
-                    $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath), '__main__');
-                }
+                } else
+                    if (file_exists($twigPath)) {
+                        $twigLoader->addPath($twigPath, '__main__');
+                    } else {
+                        $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $this->documentRoot . DIRECTORY_SEPARATOR . $twigPath), '__main__');
+                    }
             }
 
             $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => "./cache"]);
             $twig->addExtension(new \Twig\Extension\DebugExtension());
             $twig->addGlobal('Tina4', new \Tina4\Caller());
-
 
 
             $subFolder = $this->getSubFolder();
@@ -367,11 +362,11 @@ class Tina4Php extends \Tina4\Data
             });
             $twig->addFilter($filter);
 
-            $filter = new \Twig\TwigFilter("dateValue", function($dateString) {
+            $filter = new \Twig\TwigFilter("dateValue", function ($dateString) {
                 global $DBA;
                 if (!empty($DBA)) {
-                    if (substr($dateString,-1,1) == "Z") {
-                        return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"),0, -1);
+                    if (substr($dateString, -1, 1) == "Z") {
+                        return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"), 0, -1);
                     } else {
                         return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d");
                     }
@@ -496,7 +491,7 @@ class Tina4Php extends \Tina4\Data
         if ($this->suppress) {
             Debug::message("Tina4 in suppressed mode");
             //Need to include the include locations here
-            if (defined ("TINA4_ROUTE_LOCATIONS")) {
+            if (defined("TINA4_ROUTE_LOCATIONS")) {
                 //include routes in routes folder
                 $routing = new \Tina4\Routing($this->documentRoot, $this->getSubFolder(), "/", "NONE", $this->config, true);
             }
@@ -587,8 +582,7 @@ function renderTemplate($fileNameString, $data = []): string
     try {
         global $twig;
 
-        if (!empty($twig))
-        {
+        if (!empty($twig)) {
             $internalTwig = clone $twig;
         } else {
             $twigLoader = new \Twig\Loader\FilesystemLoader();
@@ -609,11 +603,11 @@ function renderTemplate($fileNameString, $data = []): string
                     return $internalTwig->render($renderFile, $data);
                 } else {
                     if (!is_file($fileNameString)) {
-                        $fileName = ".".DIRECTORY_SEPARATOR."cache".DIRECTORY_SEPARATOR."template" . md5($fileNameString).".twig";
+                        $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
                         file_put_contents($fileName, $fileNameString);
                     }
-                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR."cache");
-                    return $internalTwig->render("template" . md5($fileNameString).".twig", $data);
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "cache");
+                    return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
                 }
     } catch (\Exception $exception) {
         return $exception->getMessage();
