@@ -60,7 +60,7 @@ if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
 if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", true);
 if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 
-if (!defined("TINA4_TOKEN_MINUTES")) define ("TINA4_TOKEN_MINUTES", 10);  //token set to expire in 5 minutes
+if (!defined("TINA4_TOKEN_MINUTES")) define ("TINA4_TOKEN_MINUTES", 10);  //token set to expire in 10 minutes
 
 
 //Initialize the ENV
