@@ -105,7 +105,7 @@ class Test
     }
 
     /**
-     * Parse annotations that have been found with the @tests prefix
+     * Parse annotations that have been found with the @ tests prefix
      * @param $annotations
      * @param $onlyShowFailed
      */
@@ -168,7 +168,6 @@ class Test
         foreach (TINA4_INCLUDE_LOCATIONS as $id => $directory) {
             $this->includeDirectory($directory);
         }
-
         foreach (TINA4_ROUTE_LOCATIONS as $id => $directory) {
             $this->includeDirectory($directory);
         }
@@ -179,6 +178,7 @@ class Test
         echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;
         echo str_repeat("=", 80) . PHP_EOL;
         //Run the tests
+
         foreach ($tests as $id => $test) {
             $this->parseAnnotations($test, $onlyShowFailed);
         }

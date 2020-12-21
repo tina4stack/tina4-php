@@ -1,6 +1,6 @@
 #!/usr/bin/env php
 <?php
-require_once "vendor/autoload.php";
+require_once "./vendor/autoload.php";
 global $rootPath;
 list($rootPath) = get_included_files();
 $rootPath = str_replace("bin" . DIRECTORY_SEPARATOR . "tina4", "", $rootPath);
@@ -198,8 +198,6 @@ if (count($argv) === 1) {
                 call_user_func($option["function"], 0, "", $option["command"]);
             }
         }
-
-
     }
 }
 

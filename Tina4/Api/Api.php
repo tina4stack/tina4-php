@@ -9,7 +9,7 @@ namespace Tina4;
  * Class API
  * This is supposed to make it easier to consume REST API interfaces with little code
  */
-class API
+class Api
 {
     public $baseURL;
     public $authHeader;
@@ -35,6 +35,8 @@ class API
      * @param null $body
      * @param string $contentType
      * @return array|mixed
+     * @tests
+     *   assert 1 === 1, "Testing"
      */
     public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*")
     {
