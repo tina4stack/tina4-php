@@ -3,6 +3,7 @@
 /**
  * Example of a get route - access http://localhost:8080/hello-world
  * Assuming you have run php -S localhost:8080 index.php
+ * @secure
  */
 \Tina4\Get::add("/hello-world", function(\Tina4\Response $response){
 

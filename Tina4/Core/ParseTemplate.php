@@ -114,10 +114,10 @@ class ParseTemplate
             $this->responseCode = HTTP_NOT_FOUND;
             if (!defined("TINA4_APP")) {
                 //What happens when this is under a web server sub folder ?
-                if (file_exists("./assets/images/404.jpg")) {
-                    $content = "<img src=\"./assets/images/404.jpg\">";
+                if (file_exists("./assets/images/404.png")) {
+                    $content = "<img src=\"./assets/images/404.png\">";
                 } else {
-                    $content = "<img src=\"/{$this->subFolder}/src/assets/images/404.jpg\">";
+                    $content = "<img src=\"/{$this->subFolder}/src/assets/images/404.png\">";
                 }
                 $content = preg_replace('#/+#', '/', $content);
             } else {

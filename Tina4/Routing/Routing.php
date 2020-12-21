@@ -487,10 +487,10 @@ class Routing
      */
     public function forbidden(): void
     {
-        if (file_exists("./assets/images/403.jpg")) {
-            $content = "<img alt=\"403 Forbidden\" src=\"./assets/images/403.jpg\"";
+        if (file_exists("./assets/images/403.png")) {
+            $content = "<img alt=\"403 Forbidden\" src=\"./assets/images/403.png\">";
         } else {
-            $content = "<img alt=\"403 Forbidden\" src=\"/{$this->subFolder}src/assets/images/403.jpg\">";
+            $content = "<img alt=\"403 Forbidden\" src=\"/{$this->subFolder}src/assets/images/403.png\">";
         }
         http_response_code(HTTP_FORBIDDEN);
         echo $content;
