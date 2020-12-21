@@ -1,9 +1,10 @@
 <?php
 /**
- * Created by PhpStorm.
- * User: andrevanzuydam
- * Date: 2019-03-24
- * Time: 23:36
+* Tina4 : This Is Not A Framework
+* Created with : PHPStorm
+* User : andrevanzuydam
+* Copyright (C)
+* Contact : andrevanzuydam@gmail.com
  */
 
 //A swagger endpoint for annotating your API end points

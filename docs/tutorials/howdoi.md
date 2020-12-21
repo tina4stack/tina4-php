@@ -1,9 +1,9 @@
 <!--
-// Tina4 : This Is Not Another Framework
+// Tina4 : This Is Not A Framework
 // Created with : PHPStorm
 // User : andrevanzuydam
 // Copyright (C)
-// Contact : andre@codeinfinity.co.za
+// Contact : andrevanzuydam@gmail.com
 -->
 
 # How do I?
@@ -190,38 +190,9 @@ public $fieldMapping = [
     "name" => "NAME"];
 
 ```
-## Annotate my REST for swagger
 
-Its good to explain how one component is dependant on another.
-
-### Example:
-
-```php
-<?php
-
-/**
- * @description A swagger annotation
- * @param $fields
- * 
- */
-
-```
 ## Secure a REST end point
 
-As easy as adding @secure in your annotation
-
-### Example:
-
-```php
-<?php
-
-/**
- * @description A swagger annotation
- * @param $fields
- * @secure
- */
-
-```
 
 ## Add a filter to process records when they are extracted from the database
 
@@ -347,4 +318,4 @@ If you want Tina to get the Users time and date information correct this is how
 ```
 
 
-Go back to [how to make a webpage - landing page ](/tutorials/website.md) or return to [Tina4 - This is Not Another Framework](/).
+Go back to [how to make a webpage - landing page ](/tutorials/website.md) or return to [Tina4 - This is Not A Framework](/).

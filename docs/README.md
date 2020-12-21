@@ -49,4 +49,6 @@ These are the tools you need for Tina4
 * Bloggers
 * Content Creators
 
+<iframe width="100%" height="600px" src="https://www.youtube.com/embed/9NDpHVlYIOo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 Continue to [install tina4](installation/install-tina4.md) or [recommendations](recommendations.md).
