@@ -17,6 +17,8 @@ namespace Tina4;
  */
 class Routing
 {
+    use Utility;
+
     protected $auth;
     protected $params;
     protected $content;
@@ -61,9 +63,13 @@ class Routing
 
         if (!empty($subFolder)) {
             $this->subFolder = $subFolder . "/";
-            if (!defined("TINA4_BASE_URL")) define("TINA4_BASE_URL", $subFolder);
+            if (!defined("TINA4_BASE_URL")) {
+                define("TINA4_BASE_URL", $subFolder);
+            }
         } else {
-            if (!defined("TINA4_BASE_URL")) define("TINA4_BASE_URL", "");
+            if (!defined("TINA4_BASE_URL")) {
+                define("TINA4_BASE_URL", "");
+            }
         }
 
         if (TINA4_DEBUG) {
@@ -413,27 +419,7 @@ class Routing
 
     }
 
-    /**
-     * Recursively includes directories
-     * @param $dirName
-     */
-    public function includeDirectory($dirName)
-    {
-        $d = dir($dirName);
-        while (($file = $d->read()) !== false) {
-            $pathInfo = pathinfo($file);
-            if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
-                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
-                require $fileNameRoute;
-            } else {
-                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
-                if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
-                    $this->includeDirectory($fileNameRoute);
-                }
-            }
-        }
-        $d->close();
-    }
+
 
     /**
      * Check if path matches route path
@@ -441,7 +427,7 @@ class Routing
      * @param string $routePath Route path
      * @return bool Whether or not they match
      */
-    public function matchPath($path, $routePath)
+    public function matchPath($path, $routePath): bool
     {
 
         if ($routePath !== "/") {
@@ -488,7 +474,7 @@ class Routing
      * @param false $inlineToRequest
      * @return array
      */
-    public function getParams($response, $inlineToRequest = false)
+    public function getParams($response, $inlineToRequest = false): array
     {
         $request = new Request(file_get_contents("php://input"));
 
@@ -506,7 +492,7 @@ class Routing
     /**
      * Throws a forbidden message
      */
-    public function forbidden()
+    public function forbidden(): void
     {
         if (file_exists("./assets/images/403.jpg")) {
             $content = "<img alt=\"403 Forbidden\" src=\"./assets/images/403.jpg\"";
@@ -523,7 +509,7 @@ class Routing
      * @param $src
      * @param $dst
      */
-    public static function recurseCopy($src, $dst)
+    public static function recurseCopy($src, $dst): void
     {
         if (file_exists($src)) {
             $dir = opendir($src);

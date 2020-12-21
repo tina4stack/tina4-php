@@ -16,6 +16,8 @@ use Nowakowskir\JWT\TokenEncoded;
 /**
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
+ * @tests
+ *   assert session_status() !== PHP_SESSION_NONE, "Session should be active"
  */
 class Auth extends Data
 {
@@ -44,6 +46,8 @@ class Auth extends Data
      * The auth constructor looks for a secrets folder and tries to generate keys for the site
      * @param string $documentRoot
      * @throws \Exception
+     * @tests
+     *   assert $configured === true, "Auth state of configured must be true"
      */
     public function __construct($documentRoot = "")
     {
@@ -73,21 +77,26 @@ class Auth extends Data
     /**
      * Starts a php session
      * @tests
-     *   assert session_status() !== PHP_SESSION_NONE, "Init Session is broken"
-     *   assert () && $this->configured === true, "Auth state of configured must be true"
+     *   assert session_status() !== PHP_SESSION_NONE, "Session should be active by now"
      */
     public function initSession(): void
     {
         //make sure the session is started
-        if (session_status() === PHP_SESSION_NONE && !$this->configured ) {
+        if (!$this->configured && session_status() === PHP_SESSION_NONE) {
             $this->configured = true;
             session_start();
+        } else {
+            $this->configured = true;
         }
     }
 
     /**
      * Creates a secrets folder and generates keys for the application
      * @return bool
+     * @tests
+     *   assert file_exists("./secrets/private.key") === true,"private.key does not exist - openssl installed ?"
+     *   assert file_exists("./secrets/private.key.pub") === true,"private.key.pub does not exist - openssl installed ?"
+     *   assert file_exists("./secrets/public.pub") === true,"public.pub does not exist - openssl installed ?"
      */
     public function generateSecureKeys()
     {

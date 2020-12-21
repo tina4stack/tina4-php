@@ -33,7 +33,6 @@ class Debug
         }
 
         if ($debugType === DEBUG_SCREEN ) {
-
             if (!empty(self::$errorLog)) {
                 self::$errorLog = array_merge(self::$errorLog, $error);
             } else {

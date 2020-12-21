@@ -5,6 +5,28 @@ namespace Tina4;
 trait Utility
 {
     /**
+     * Recursively includes directories
+     * @param $dirName
+     */
+    public function includeDirectory($dirName): void
+    {
+        $d = dir($dirName);
+        while (($file = $d->read()) !== false) {
+            $pathInfo = pathinfo($file);
+            if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
+                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+                require $fileNameRoute;
+            } else {
+                $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+                if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
+                    $this->includeDirectory($fileNameRoute);
+                }
+            }
+        }
+        $d->close();
+    }
+
+    /**
      * Makes sure the field is a date field and formats the data accordingly
      * @param $dateString
      * @param $databaseFormat

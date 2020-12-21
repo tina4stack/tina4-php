@@ -189,6 +189,8 @@ function _a (...$elements) {
  * HTML TAG _abbr
  * @param $elements
  * @return HTMLElement
+ * @tests
+ *   assert ("test")."" === "<abbr>test</abbr>","Abbr tag is not working"
  */
 function _abbr (...$elements) {
     return new HTMLElement(":abbr", $elements);

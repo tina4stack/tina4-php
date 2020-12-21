@@ -15,12 +15,9 @@ use Phpfastcache\Config\ConfigurationOption;
  * Class Tina4Php Main class used to set constants
  * @package Tina4
  */
-class Tina4Php
+class Tina4Php extends \Tina4\Data
 {
-    /**
-     * @var resource Database connection
-     */
-    private $DBA;
+    use Utility;
 
     /**
      * @var resource PHP object / array
@@ -56,10 +53,7 @@ class Tina4Php
      */
     public function __construct(\Tina4\Config $config = null)
     {
-        global $DBA;
-        if (!empty($DBA)) {
-            $this->DBA = $DBA;
-        }
+        parent::__construct();
 
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
@@ -69,12 +63,11 @@ class Tina4Php
         if (!defined("TINA4_DEBUG")) {
             define("TINA4_DEBUG", false);
         } else if (TINA4_DEBUG) {
-            \Tina4\Debug::message("DEBUG ACTIVE", TINA4_DEBUG_LEVEL);
+            \Tina4\Debug::message("TINA4: DEBUG ACTIVE - Turn off in .env", TINA4_DEBUG_LEVEL);
         }
 
-        Debug::message("Setting config", TINA4_DEBUG_LEVEL);
+        Debug::message("TINA4: Setting config", TINA4_DEBUG_LEVEL);
         $this->config = $config;
-
 
         if (defined("TINA4_SUPPRESS")) {
             Debug::message("Check if Tina4 is being suppressed");
@@ -292,10 +285,9 @@ class Tina4Php
         if (empty($twig)) {
             $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
 
-            \Tina4\Debug::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1));
 
             if (TINA4_DEBUG) {
-                \Tina4\Debug::message("TINA4: Twig Paths\n" . print_r($twigPaths, 1), TINA4_DEBUG_LEVEL);
+                \Tina4\Debug::message("TINA4: Twig Paths - " . str_replace( "\n", "", print_r($twigPaths, 1)), TINA4_DEBUG_LEVEL);
             }
 
             foreach ($twigPaths as $tid => $twigPath) {

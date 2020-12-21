@@ -31,9 +31,9 @@ class Annotation
     public function parseAnnotations ($docComment, $annotationName=""):array
     {
         //clean *
-        $docComment = preg_replace('/^.[\n\*]|^(.*)\*/m', "", $docComment);
+        $docComment = preg_replace('/^.[\n\*|\r\n\*]|^(.*)\*/m', "", $docComment);
         $annotations = [];
-        preg_match_all('/@([^\n|\t]+)/m', $docComment, $comments, PREG_OFFSET_CAPTURE, 0);
+        preg_match_all('/@([^\n|\r\n|\t]+)/m', $docComment, $comments, PREG_OFFSET_CAPTURE, 0);
 
         foreach ($comments[1] as $id => $comment) {
             $name = explode(" ", $comment[0]);
