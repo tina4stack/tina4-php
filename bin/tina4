@@ -1,12 +1,26 @@
 #!/usr/bin/env php
 <?php
-require_once "./vendor/autoload.php";
+
 global $rootPath;
-list($rootPath) = get_included_files();
-$rootPath = str_replace("bin" . DIRECTORY_SEPARATOR . "tina4", "", $rootPath);
+
+
+foreach (get_included_files() as $id => $file) {
+   if (strpos($file, "vendor".DIRECTORY_SEPARATOR."autoload.php")) {
+       $rootPath = str_ireplace("vendor".DIRECTORY_SEPARATOR."autoload.php", "", $file);
+       break;
+   }
+}
+
+if (empty($rootPath)) {
+    $rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4", "", __FILE__);
+}
+
+require_once "{$rootPath}vendor/autoload.php";
 define("TINA4_SUPPRESS", true);
-if (file_exists($rootPath . DIRECTORY_SEPARATOR . "index.php")) {
-    include $rootPath . DIRECTORY_SEPARATOR . "index.php";
+
+
+if (file_exists($rootPath  . "index.php")) {
+    include $rootPath  . "index.php";
 }
 
 function writeline($output): void
@@ -21,17 +35,18 @@ function write($output): void
 
 
 $menus[] = ["id" => 1, "name" => "tests", "description" => "Run Tests", "commandLine" => ["options" => ["run", "verbose"]], "menuCode" => static function ($index, $input, $options) {
+    global $rootPath;
+
     if (!empty($options)) {
         if ($options === "tests:verbose") {
-            (new \Tina4\Test())->run(false);
+            (new \Tina4\Test($rootPath))->run(false);
         } else {
-            (new \Tina4\Test())->run();
+            (new \Tina4\Test($rootPath))->run();
         }
     } else {
-        (new \Tina4\Test())->run();
+        (new \Tina4\Test($rootPath))->run();
         readline();
     }
-
     return ["index" => 0, "prompt" => ""];
 }];
 
@@ -170,7 +185,7 @@ if (count($argv) === 1) {
     drawMenu($menus);
     echo "\e[H\e[J"; //clear screen
 } else {
-    write("\e[H\e[J");
+    //write("\e[H\e[J");
     $options = [];
     $options[] = ["command" => "help", "description" => "Gets the help menu"];
     foreach ($menus as $mid => $menu) {

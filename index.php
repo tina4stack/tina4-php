@@ -39,5 +39,7 @@ $config = new \Tina4\Config();
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
 
+
+
 echo new \Tina4\Tina4Php($config);
 //WARNING NO CODE BELOW THIS LINE WILL BE RUN

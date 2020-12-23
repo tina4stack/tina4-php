@@ -73,10 +73,12 @@ class Migration extends Data
      *
      * DO NOT USE COMMIT STATEMENTS IN YOUR MIGRATIONS , RATHER BREAK THINGS UP INTO SMALLER LOGICAL PIECES
      */
-    public function doMigration()
+    public function doMigration(): string
     {
         $result = "";
-        if (!file_exists($this->migrationPath)) return;
+        if (!file_exists($this->migrationPath)) {
+            return "Migration path {$this->migrationPath} does not exist";
+        }
         $dirHandle = opendir($this->migrationPath);
         $error = false;
         set_time_limit(0);

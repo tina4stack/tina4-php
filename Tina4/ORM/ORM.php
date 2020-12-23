@@ -162,8 +162,11 @@ class ORM implements \JsonSerializable
      * @param string $name Improper object name
      * @param boolean $camelCase Return the name as camel case
      * @return string Proper object name
+     * @tests
+     *   assert ("test_name", true) === "testName", "Camel case is broken"
+     *   assert ("test_name", false) === "test_name", "Camel case is broken"
      */
-    public function getObjectName($name, $camelCase = false)
+    public function getObjectName($name, $camelCase = false): string
     {
         if (isset($this->fieldMapping) && !empty($this->fieldMapping)) {
             $fieldMap = array_change_key_case(array_flip($this->fieldMapping), CASE_LOWER);

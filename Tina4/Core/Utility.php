@@ -21,12 +21,15 @@ trait Utility
         $d = dir($dirName);
         while (($file = $d->read()) !== false) {
             $pathInfo = pathinfo($file);
+
             if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
+
                 require_once $fileNameRoute;
             } else {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
-                if (is_dir($fileNameRoute) && $file !== "." && $file !== "..") {
+
+                if (is_dir($fileNameRoute) && ($file !== ".") && ($file !== "..")) {
                     $this->includeDirectory($fileNameRoute);
                 }
             }
@@ -42,10 +45,11 @@ trait Utility
      */
     public function isDate($dateString, $databaseFormat)
     {
-
-        if (is_array($dateString) || is_object($dateString)) return false;
-
-        if (substr($dateString, -1, 1) == "Z") {
+        if (is_array($dateString) || is_object($dateString)) {
+            return false;
+        }
+        if (substr($dateString, -1, 1) == "Z")
+        {
             $dateParts = explode("T", $dateString);
         } else {
             $dateParts = explode(" ", $dateString);

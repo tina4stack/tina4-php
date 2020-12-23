@@ -8,7 +8,7 @@ namespace Tina4;
  *
  * Class Annotation
  * This class facilitates finding annotations across a Tina4 project
- * @package Tina4\Core
+ * @package Tina4
  */
 class Annotation
 {
@@ -22,8 +22,24 @@ class Annotation
     }
 
 
+    /**
+     * Gets all the classes in the system
+     * @return array
+     */
     public function getClasses()
     {
+        $classes = get_declared_classes();
+        $autoloaderClassName = "";
+        foreach ( $classes as $className) {
+            if (strpos($className, 'ComposerAutoloaderInit') === 0) {
+                $autoloaderClassName = $className;
+                break;
+            }
+        }
+        $classLoader = $autoloaderClassName::getLoader();
+        foreach ($classLoader->getClassMap() as $path) {
+            require_once $path;
+        }
         return get_declared_classes();
     }
 
@@ -62,7 +78,9 @@ class Annotation
     public function get($annotationName = ""): array
     {
         $functions = $this->getFunctions();
+        asort($functions);
         $classes = $this->getClasses();
+        asort($classes);
 
         $annotations = [];
 
@@ -72,12 +90,15 @@ class Annotation
             $docComment = $reflection->getDocComment();
             $annotation = $this->parseAnnotations($docComment, $annotationName);
             if (!empty($annotation)) {
-                $annotations[] = ["type" => "function", "method" => $function, "annotations" => $annotation];
+                $annotations[] = ["type" => "function", "method" => $function, "params" => $reflection->getParameters(), "annotations" => $annotation];
             }
         }
 
+
+
         //Get annotations for each class and class method
         foreach ($classes as $cid => $class) {
+
             $reflection = new \ReflectionClass($class);
             $docComment = $reflection->getDocComment();
 
@@ -89,13 +110,17 @@ class Annotation
             $methods = get_class_methods($class);
             foreach ($methods as $mid => $method) {
                 $docComment = $reflection->getMethod($method)->getDocComment();
+                $isStatic =  $reflection->getMethod($method)->isStatic();
                 $annotation = $this->parseAnnotations($docComment, $annotationName);
+
                 if (!empty($annotation)) {
-                    $annotations[] = ["type" => "classMethod", "class" => $class, "method" => $method, "annotations" => $annotation];
+                    $annotations[] = ["type" => "classMethod", "class" => $class, "method" => $method, "params" => $reflection->getMethod($method)->getParameters(), "isStatic" => $isStatic, "annotations" => $annotation];
                 }
             }
 
         }
+
+
 
         return $annotations;
     }

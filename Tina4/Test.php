@@ -25,6 +25,13 @@ class Test
 
     public $score;
 
+    public $rootPath;
+
+    public function __construct ($rootPath)
+    {
+        $this->rootPath = $rootPath;
+    }
+
     /**
      * Asserts something to see if it's true and then prints a message if it isn't
      * @param $condition
@@ -56,7 +63,7 @@ class Test
      * @param null $testClass
      * @return string
      */
-    public function runTest($testNo, $test, $method, $testClass = null)
+    public function runTest($testNo, $test, $method, $testClass = null, $isStatic=false)
     {
         preg_match_all('/^(assert)(.*),(.*)$/m', $test, $testParts, PREG_SET_ORDER);
         if (empty($testParts)) return "";
@@ -73,10 +80,19 @@ class Test
                 $condition = trim($testParts[0][2]);
 
                 if ($condition[0] === "(") {
-                    $condition = '$testClass->' . $method . $condition;
+                    if ($isStatic) {
+                        $condition = '$testClass::' . $method . $condition;
+                    } else {
+                        $condition = '$testClass->' . $method . $condition;
+                    }
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', true));');
                 } else if (strpos($condition[0], '$') !== false) {
-                    $condition = '$testClass->' . str_replace('$', '', $condition);
+                    if ($isStatic)
+                    {
+                        $condition = '$testClass::' . str_replace('$', '', $condition);
+                    } else {
+                        $condition = '$testClass->' . str_replace('$', '', $condition);
+                    }
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', true));');
                 } else {
                     $condition = $condition;
@@ -122,7 +138,16 @@ class Test
             $testResult .= $this->colorCyan . "Testing Class {$annotations["class"]}->" . $annotations["method"] . $this->colorReset . PHP_EOL;
             if ($this->lastClass !== $annotations["class"]) {
                 $this->lastClass = $annotations["class"];
-                eval('$this->testClass = new ' . $annotations["class"] . '();');
+                unset($this->testClass);
+
+
+                $params = [];
+                foreach ($annotations["params"] as $id => $inParam) {
+                    $params[] = '$'.$inParam->name;
+                    eval('$'.$inParam->name.' = null;');
+                }
+
+                eval('$this->testClass = new ' . $annotations["class"] . '('.implode(",", $params).');');
             }
         }
 
@@ -132,7 +157,7 @@ class Test
             if ($annotations["type"] === "function") {
                 $message = $this->runTest($testCount, $test, $annotations["method"]);
             } else {
-                $message = $this->runTest($testCount, $test, $annotations["method"], $this->testClass);
+                $message = $this->runTest($testCount, $test, $annotations["method"], $this->testClass, $annotations["isStatic"]);
             }
             if (empty($message)) $testCount--;
             if ($onlyShowFailed && strpos($message, "Failed") !== false) {
@@ -142,6 +167,9 @@ class Test
                 $testResult .= $message;
             }
         }
+
+
+
         if ($testCount !== 0) {
             if ($testCount - $testFailed !== $testCount) {
                 $testResult .= $this->colorOrange . "Tests: Passed " . ($testCount - $testFailed) . " of {$testCount} " . round(($testCount - $testFailed) / $testCount * 100.00, 2) . "%" . $this->colorReset . PHP_EOL;
@@ -165,16 +193,20 @@ class Test
     public function run($onlyShowFailed = true): void
     {
         //Autoload all the include paths for testing in the system
-        foreach (TINA4_INCLUDE_LOCATIONS as $id => $directory) {
-            $this->includeDirectory($directory);
+        foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $id => $directory) {
+            $this->includeDirectory($this->rootPath.$directory);
         }
-        foreach (TINA4_ROUTE_LOCATIONS as $id => $directory) {
-            $this->includeDirectory($directory);
+
+        foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $id => $directory) {
+            $this->includeDirectory($this->rootPath.$directory);
         }
+
         //Find all the functions and classes with annotated methods
         //Look for test annotations
         $annotation = new Annotation();
         $tests = $annotation->get("tests");
+
+
         echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;
         echo str_repeat("=", 80) . PHP_EOL;
         //Run the tests

@@ -53,6 +53,7 @@ class Tina4Php extends \Tina4\Data
     {
         parent::__construct();
 
+
         //define constants
         if (!defined("TINA4_DEBUG_LEVEL")) {
             define("TINA4_DEBUG_LEVEL", DEBUG_NONE);
@@ -122,7 +123,7 @@ class Tina4Php extends \Tina4\Data
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
                 define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src/templates", "src/assets", "src/templates/snippets"], Module::getTemplateFolders()));
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge([$this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."templates", $this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."assets", $this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."templates".DIRECTORY_SEPARATOR."snippets"], Module::getTemplateFolders()));
             }
         }
 
@@ -130,7 +131,7 @@ class Tina4Php extends \Tina4\Data
             if (defined("TINA4_ROUTE_LOCATIONS")) {
                 define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src/api", "src/routes"], Module::getRouteFolders()));
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge([$this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."api", $this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."routes"], Module::getRouteFolders()));
             }
         }
 
@@ -138,13 +139,14 @@ class Tina4Php extends \Tina4\Data
             if (defined("TINA4_INCLUDE_LOCATIONS")) {
                 define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge([$this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."app", $this->webRoot."src".DIRECTORY_SEPARATOR."objects", $this->webRoot.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR."services"], Module::getIncludeFolders()));
             }
         }
 
         if (!defined("TINA4_ALLOW_ORIGINS")) {
             define("TINA4_ALLOW_ORIGINS", ["*"]);
         }
+
 
         /**
          * Global array to store the routes that are declared during runtime
@@ -268,8 +270,9 @@ class Tina4Php extends \Tina4\Data
             //Setup caching options
             $TINA4_CACHE_CONFIG =
                 new ConfigurationOption([
-                    "path" => $this->documentRoot . "/cache"
+                    "path" => $this->documentRoot ."cache"
                 ]);
+
 
             CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
 
@@ -315,7 +318,7 @@ class Tina4Php extends \Tina4\Data
                     }
             }
 
-            $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => "./cache"]);
+            $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => $this->webRoot.DIRECTORY_SEPARATOR."cache"]);
             $twig->addExtension(new \Twig\Extension\DebugExtension());
             $twig->addGlobal('Tina4', new \Tina4\Caller());
 

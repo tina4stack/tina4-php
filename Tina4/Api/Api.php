@@ -6,8 +6,9 @@ namespace Tina4;
  * Copy-right 2007 - current Tina4 (Andre van Zuydam)
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Class API
+ * Class Api
  * This is supposed to make it easier to consume REST API interfaces with little code
+ * @package Tina4
  */
 class Api
 {
@@ -19,8 +20,7 @@ class Api
      * @param $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
      * @tests
-     *   assert ("https://localhost:8080/") === false,"Could not initialize API"
-     *   assert 1 == 1, "One is equal to one"
+     *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer ".API_KEY) === null,"Could not initialize API"
      */
     public function __construct($baseURL, $authHeader = "")
     {
@@ -36,7 +36,8 @@ class Api
      * @param string $contentType
      * @return array|mixed
      * @tests
-     *   assert 1 === 1, "Testing"
+     *   assert ("/book")->docs[0]->name === "The Fellowship Of The Ring", "API Get request"
+     *   assert ("/book")->docs[1]->name !== "The Fellowship Of The Ring", "API Get request"
      */
     public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*")
     {
@@ -54,11 +55,12 @@ class Api
             }
 
             $curlRequest = curl_init($this->baseURL . $restService);
-            curl_setopt($curlRequest, CURLOPT_VERBOSE, TINA4_DEBUG);
+
             curl_setopt($curlRequest, CURLOPT_CUSTOMREQUEST, $requestType);
             curl_setopt($curlRequest, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($curlRequest, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($curlRequest, CURLOPT_FOLLOWLOCATION, 1);
+
             if (!empty($body)) {
                 curl_setopt($curlRequest, CURLOPT_POSTFIELDS, $body);
             }
@@ -73,7 +75,7 @@ class Api
             }
         } catch (Exception $error) {
             error_log("An exception occurred " . $error->getMessage());
+            return ["error" => $error->getMessage()];
         }
     }
-
 }

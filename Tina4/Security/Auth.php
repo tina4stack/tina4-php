@@ -15,7 +15,8 @@ use Nowakowskir\JWT\TokenEncoded;
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
  * @tests
- *   assert session_status() !== PHP_SESSION_NONE, "Session should be active"
+ *   assert session_status() !== PHP_SESSION_NONE, "Session should not be active"
+ *   assert $configured === true, "Configured is supposed to be true"
  */
 class Auth extends Data
 {
@@ -45,7 +46,9 @@ class Auth extends Data
      * @param string $documentRoot
      * @throws \Exception
      * @tests
-     *   assert $configured === true, "Auth state of configured must be true"
+     *   assert $configured !== true, "Auth state of configured must be true"
+     *   assert 1 === 2, "One does not equal 2"
+     *
      */
     public function __construct($documentRoot = "")
     {
