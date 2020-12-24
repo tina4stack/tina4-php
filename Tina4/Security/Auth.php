@@ -107,7 +107,7 @@ class Auth extends Data
         if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
             throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
-        `ssh-keygen -t rsa -b 4096 -m PEM -f secrets/private.key -q -N ""`;
+        `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
         return true;
@@ -131,6 +131,9 @@ class Auth extends Data
      * @param string $publicKey
      * @param string $encryption
      * @return bool
+     * @tests
+     *   assert $this->getToken() !== "", "Token must not be blank"
+     *   assert ($this->getToken()) === true,"The token is not valid"
      */
     public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
@@ -160,10 +163,14 @@ class Auth extends Data
 
         try {
             $tokenEncoded->validate($this->publicKey, $encryption);
-            $payLoad = $this->getPayLoad($token);
+            $payLoad = $this->getPayLoad($token, true);
 
-            if (time() > $payLoad["expires"]) {
-                return false;
+            if (isset($payLoad["expires"])) {
+                if (time() > $payLoad["expires"]) {
+                    return false;
+                } else {
+                    return true;
+                }
             } else {
                 return true;
             }
@@ -182,12 +189,12 @@ class Auth extends Data
      * Gets a session token
      * @return false|mixed
      */
-    public function getSessionToken()
+    public function getSessionToken(): string
     {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return $_SESSION["tina4:authToken"];
         } else {
-            return false;
+            return "";
         }
 
     }
@@ -229,6 +236,8 @@ class Auth extends Data
      * @param string $privateKey
      * @param string $encryption
      * @return string
+     * @tests
+     *   assert $this->getPayload($this->getToken(["name" => "tina4"])) === ["name" => "tina4"],"Return back the token"
      */
     public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
@@ -268,7 +277,7 @@ class Auth extends Data
      * @param string $encryption
      * @return array|false
      */
-    public function getPayLoad($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function getPayLoad($token, $returnExpires=false, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         Debug::message("Getting token payload");
 
@@ -297,6 +306,14 @@ class Auth extends Data
 
         $tokenDecoded = $tokenEncoded->decode();
 
-        return $tokenDecoded->getPayload();
+        if ($returnExpires) {
+            return $tokenDecoded->getPayload();
+        } else {
+                $payLoad = $tokenDecoded->getPayload();
+                if (isset($payLoad["expires"])){
+                    unset($payLoad["expires"]);
+                }
+                return $payLoad;
+            }
     }
 }

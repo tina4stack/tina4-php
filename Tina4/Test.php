@@ -71,7 +71,7 @@ class Test
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
         } else {
-            preg_match_all('/(^.*[\W\w])(\ \=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
+            preg_match_all('/(^.*[\W\w])(\ \=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
 
             $actualExpression = trim($parts[0][1]);
             $actualResult = "-";
@@ -84,8 +84,11 @@ class Test
                     {
                         $condition =  str_replace('$this::', '$testClass::', $condition);
                         $condition =  str_replace('self::', '$testClass::', $condition);
+                        $actualExpression = str_replace('$this::', '$testClass::', $actualExpression);
+                        $actualExpression = str_replace('self::', '$testClass::', $actualExpression);
                     } else {
                         $condition =  str_replace('$this->', '$testClass->', $condition);
+                        $actualExpression = str_replace('$this->', '$testClass->', $actualExpression);
                     }
                 }
 
@@ -95,8 +98,9 @@ class Test
                     } else {
                         $condition = '$testClass->' . $method . $condition;
                     }
+
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', true));');
-                } else if ($condition[0] === '$') {
+                } else if ($condition[0] === '$' && strpos($condition,'$testClass') === false) {
                     if ($isStatic)
                     {
                         $condition = '$testClass::' . str_replace('$', '', $condition);
@@ -109,7 +113,7 @@ class Test
 
                     //Condition does not have form x === y or x !== y
                     if (!empty($actualExpression)) {
-                        eval('$actualResult = ' . $actualExpression . ';');
+                        eval('$actualResult = str_replace(PHP_EOL, "", print_r(' . $actualExpression . ',1));');
                     }
                 }
 
