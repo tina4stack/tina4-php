@@ -47,6 +47,9 @@
                 "git-client",
                 "php-git"
             ],
+            "support": {
+                "source": "https://github.com/coyl/git/tree/master"
+            },
             "time": "2017-09-12T08:37:07+00:00"
         },
         {
@@ -92,6 +95,10 @@
                 "machine learning",
                 "nlp"
             ],
+            "support": {
+                "issues": "https://github.com/angeloskath/php-nlp-tools/issues",
+                "source": "https://github.com/angeloskath/php-nlp-tools/tree/master"
+            },
             "time": "2016-11-03T15:34:42+00:00"
         },
         {
@@ -132,6 +139,10 @@
                 }
             ],
             "homepage": "https://github.com/nowakowskir/php-jwt",
+            "support": {
+                "issues": "https://github.com/nowakowskir/php-jwt/issues",
+                "source": "https://github.com/nowakowskir/php-jwt/tree/1.1.1"
+            },
             "time": "2019-07-13T22:40:03+00:00"
         },
         {
@@ -193,6 +204,10 @@
                 "serialization",
                 "serialize"
             ],
+            "support": {
+                "issues": "https://github.com/opis/closure/issues",
+                "source": "https://github.com/opis/closure/tree/3.6.1"
+            },
             "time": "2020-11-07T02:01:34+00:00"
         },
         {
@@ -293,6 +308,10 @@
                 "zend memory cache",
                 "zend server"
             ],
+            "support": {
+                "issues": "https://github.com/PHPSocialNetwork/phpfastcache/issues",
+                "source": "https://github.com/PHPSocialNetwork/phpfastcache/tree/7.1.1"
+            },
             "funding": [
                 {
                     "url": "https://github.com/geolim4",
@@ -349,6 +368,9 @@
                 "psr",
                 "psr-6"
             ],
+            "support": {
+                "source": "https://github.com/php-fig/cache/tree/master"
+            },
             "time": "2016-08-06T20:24:11+00:00"
         },
         {
@@ -397,6 +419,9 @@
                 "psr-16",
                 "simple-cache"
             ],
+            "support": {
+                "source": "https://github.com/php-fig/simple-cache/tree/master"
+            },
             "time": "2017-10-23T01:57:42+00:00"
         },
         {
@@ -459,6 +484,9 @@
                 "polyfill",
                 "portable"
             ],
+            "support": {
+                "source": "https://github.com/symfony/polyfill-ctype/tree/v1.20.0"
+            },
             "funding": [
                 {
                     "url": "https://symfony.com/sponsor",
@@ -537,6 +565,10 @@
             "keywords": [
                 "templating"
             ],
+            "support": {
+                "issues": "https://github.com/twigphp/Twig/issues",
+                "source": "https://github.com/twigphp/Twig/tree/v1.44.1"
+            },
             "funding": [
                 {
                     "url": "https://github.com/fabpot",
@@ -560,5 +592,5 @@
         "ext-json": "*"
     },
     "platform-dev": [],
-    "plugin-api-version": "1.1.0"
+    "plugin-api-version": "2.0.0"
 }

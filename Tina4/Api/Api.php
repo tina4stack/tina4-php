@@ -38,6 +38,7 @@ class Api
      * @tests
      *   assert ("/book")->docs[0]->name === "The Fellowship Of The Ring", "API Get request"
      *   assert ("/book")->docs[1]->name !== "The Fellowship Of The Ring", "API Get request"
+     *   assert is_string($this->baseURL) === true, "This is not a string"
      */
     public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*")
     {

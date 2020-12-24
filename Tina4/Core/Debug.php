@@ -100,7 +100,7 @@ class Debug
 
     public static function render(): string
     {
-        $template = '<style>
+        $htmlTemplate = '<style>
     .debugLog {
         position:relative;
         left:0px;
@@ -119,9 +119,19 @@ class Debug
 </pre>
 </div>';
 
+        $consoleTemplate = 'DEBUG / ERROR:
+{% for error in errors %}
+{{error.time}}: {{error.message | raw}} in {{ error.file }} ({{error.line}}) 
+{%endfor%}';
+
         if (self::$errorHappened) {
             try {
-                return renderTemplate($template, ["errors" => self::$errorLog]);
+
+                if (!defined("TINA4_SUPPRESS")) {
+                    return renderTemplate($htmlTemplate, ["errors" => self::$errorLog]);
+                } else {
+                    return renderTemplate($consoleTemplate, ["errors" => self::$errorLog]);
+                }
             } catch (LoaderError $e) {
             }
         }

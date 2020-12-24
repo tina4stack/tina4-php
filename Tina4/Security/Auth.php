@@ -46,9 +46,7 @@ class Auth extends Data
      * @param string $documentRoot
      * @throws \Exception
      * @tests
-     *   assert $configured !== true, "Auth state of configured must be true"
-     *   assert 1 === 2, "One does not equal 2"
-     *
+     *   assert $configured === true, "Auth state of configured must be true"
      */
     public function __construct($documentRoot = "")
     {

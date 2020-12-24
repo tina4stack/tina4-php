@@ -79,6 +79,16 @@ class Test
             if (!empty($testClass)) {
                 $condition = trim($testParts[0][2]);
 
+                if (\strpos($condition, '$this') !== false || strpos($condition, 'self::') !== false) {
+                    if ($isStatic)
+                    {
+                        $condition =  str_replace('$this::', '$testClass::', $condition);
+                        $condition =  str_replace('self::', '$testClass::', $condition);
+                    } else {
+                        $condition =  str_replace('$this->', '$testClass->', $condition);
+                    }
+                }
+
                 if ($condition[0] === "(") {
                     if ($isStatic) {
                         $condition = '$testClass::' . $method . $condition;
@@ -86,7 +96,7 @@ class Test
                         $condition = '$testClass->' . $method . $condition;
                     }
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', true));');
-                } else if (strpos($condition[0], '$') !== false) {
+                } else if ($condition[0] === '$') {
                     if ($isStatic)
                     {
                         $condition = '$testClass::' . str_replace('$', '', $condition);
