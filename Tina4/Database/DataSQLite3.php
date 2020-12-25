@@ -54,19 +54,17 @@ class DataSQLite3 implements DataBase
             unset($params[0]);
 
             foreach ($params as $pid => $param) {
-
-
                 if (is_numeric($param)) {
-                    $preparedQuery->bindValue("{$pid}", $param, SQLITE3_FLOAT);
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_FLOAT);
                 } else
                     if (is_int($param)) {
-                        $preparedQuery->bindValue("{$pid}", $param, SQLITE3_INTEGER);
+                        $preparedQuery->bindValue((string)($pid), $param, SQLITE3_INTEGER);
                     } else
                         if ($this->isBinary($param)) {
-                            $preparedQuery->bindValue("{$pid}", $param, SQLITE3_BLOB);
+                            $preparedQuery->bindValue((string)($pid), $param, SQLITE3_BLOB);
                         } else {
                             $param = $this->dbh->escapeString($param);
-                            $preparedQuery->bindValue("{$pid}", $param, SQLITE3_TEXT);
+                            $preparedQuery->bindValue((string)($pid), $param, SQLITE3_TEXT);
                         }
             }
 

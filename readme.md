@@ -17,6 +17,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 ### Installing ###
 
+*PHP 8.0 is not a stable candidate yet, for example some database functionlity is not completely supported*
+
 - Install PHP7.1 > make sure the php_fileinfo extension and mbstring extension are enabled.
 - Install composer
 - Create a project folder where you want to work
@@ -65,6 +67,7 @@ Do not include your .env files with your project if they contain sensitive infor
 
 ### Change Log
 ```
+2020-12-25 Added named param binding for SQLite3
 2020-12-19 Added Annotations for Unit Testing
 2020-12-14 Fixes for MySQL not handling saving of nulls in bind_params
 2020-12-08 Fixes for MySQL & ORM saving
