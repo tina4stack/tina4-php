@@ -130,4 +130,14 @@ trait DataBaseCore
         return $this->fetch($sql)->records[0];
     }
 
+    /**
+     * @param $fieldName
+     * @param $fieldIndex
+     * @return string
+     */
+    public function getQueryParam($fieldName,$fieldIndex): string
+    {
+        return "?";
+    }
+
 }

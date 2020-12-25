@@ -103,7 +103,7 @@ class ORM implements \JsonSerializable
     public function create($request = null, $fromDB = false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null)
     {
         if (!empty($request) && !is_object($request) && !is_array($request) && !json_decode($request)) {
-            throw new Exception("Input is not an array or object");
+            throw new \Exception("Input is not an array or object");
         }
 
         if (!empty($tableName)) {
@@ -421,11 +421,11 @@ class ORM implements \JsonSerializable
                 return $this->asObject();
             } else {
                 $this->getDebugBackTrace();
-                throw new Exception("Error:\n".print_r($error->getError(), 1));
+                throw new \Exception("Error:\n".print_r($error->getError(), 1));
             }
         } else {
             $this->getDebugBackTrace();
-            throw new Exception("Error:\n".print_r($exists->error, 1));
+            throw new \Exception("Error:\n".print_r($exists->error, 1));
         }
     }
 
@@ -530,6 +530,7 @@ class ORM implements \JsonSerializable
 
 
         $keyInFieldList = false;
+        $fieldIndex = 0;
         foreach ($tableData as $fieldName => $fieldValue) {
             if (empty($fieldValue) && $fieldValue !== 0) {
                 continue;
@@ -539,10 +540,11 @@ class ORM implements \JsonSerializable
                 continue;
             } //form token is reserved
 
+
             if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
                 continue;
             }
-
+            $fieldIndex++;
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
@@ -561,7 +563,7 @@ class ORM implements \JsonSerializable
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $insertValues[] = "?";
+                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
                 $fieldValues[] = $fieldValue;
             }
         }
@@ -574,7 +576,8 @@ class ORM implements \JsonSerializable
             $newId = $maxResult[0]->newId;
             $newId++;
             $this->{$this->primaryKey} = $newId;
-            $insertValues[] = "?";
+            $fieldIndex++;
+            $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($this->primaryKey), $fieldIndex);
             $fieldValues[] = $newId;
         }
 
@@ -619,6 +622,7 @@ class ORM implements \JsonSerializable
 
         Debug::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
 
+        $fieldIndex = 0;
         foreach ($tableData as $fieldName => $fieldValue) {
             if ($fieldName == "form_token")
             {
@@ -639,23 +643,23 @@ class ORM implements \JsonSerializable
                 continue;
             }
 
-
+            $fieldIndex++;
             if ((strlen($fieldValue) > 1  && isset($fieldValue[0]) && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $updateValues[] = "{$fieldName} = ?";
+                $updateValues[] = "{$fieldName} = ".$this->DBA->getQueryParam($fieldName, $fieldIndex);
                 $fieldValues[] = $fieldValue;
             } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $updateValues[] = "{$fieldName} = ?";
+                $updateValues[] = "{$fieldName} = ".$this->DBA->getQueryParam($fieldName, $fieldIndex);
                 $fieldValues[] = $fieldValue;
             }
         }
 
 
-        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_SCREEN);
-        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_SCREEN);
+        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_CONSOLE);
+        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_CONSOLE);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }

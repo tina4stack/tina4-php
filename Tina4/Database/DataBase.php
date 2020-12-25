@@ -101,4 +101,13 @@ interface DataBase
      * @return mixed
      */
     public function getDefaultDatabasePort();
+
+    /**
+     * Returns back the correct param type convention for parameterised queries
+     * Default is normally ?
+     * @param $fieldName
+     * @param $fieldIndex
+     * @return mixed
+     */
+    public function getQueryParam($fieldName,$fieldIndex): string;
 }

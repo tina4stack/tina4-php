@@ -74,8 +74,8 @@ class Api
             } else {
                 return json_decode($curlResult, false);
             }
-        } catch (Exception $error) {
-            error_log("An exception occurred " . $error->getMessage());
+        } catch (\Exception $error) {
+            \error_log("An exception occurred " . $error->getMessage());
             return ["error" => $error->getMessage()];
         }
     }

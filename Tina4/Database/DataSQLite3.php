@@ -233,4 +233,14 @@ class DataSQLite3 implements DataBase
     {
         return null;
     }
+
+    /**
+     * @param $fieldName
+     * @param $fieldIndex
+     * @return string
+     */
+    public function getQueryParam($fieldName,$fieldIndex): string
+    {
+        return ":$fieldIndex";
+    }
 }
