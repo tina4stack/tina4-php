@@ -1,7 +1,7 @@
 <?php
 namespace Tina4;
 
-require_once "Tina4Php.php";
+
 
 use Twig\Error\LoaderError;
 
