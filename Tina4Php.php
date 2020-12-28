@@ -112,6 +112,9 @@ class Tina4Php extends \Tina4\Data
         }
 
         \Tina4\Debug::message("TINA4: document root " . $this->documentRoot, TINA4_DEBUG_LEVEL);
+        if (empty($_SERVER["DOCUMENT_ROOT"])) {
+            $_SERVER["DOCUMENT_ROOT"] = $this->documentRoot;
+        }
 
         //root of tina4
         $this->webRoot = realpath(__DIR__);
@@ -122,7 +125,7 @@ class Tina4Php extends \Tina4\Data
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
                 define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src/templates", "src/assets", "src/templates/snippets"], Module::getTemplateFolders()));
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."templates", "src".DIRECTORY_SEPARATOR."assets", "src".DIRECTORY_SEPARATOR."templates".DIRECTORY_SEPARATOR."snippets"], Module::getTemplateFolders()));
             }
         }
 
@@ -130,7 +133,7 @@ class Tina4Php extends \Tina4\Data
             if (defined("TINA4_ROUTE_LOCATIONS")) {
                 define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src/api", "src/routes"], Module::getRouteFolders()));
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."api", "src".DIRECTORY_SEPARATOR."routes"], Module::getRouteFolders()));
             }
         }
 
@@ -138,7 +141,7 @@ class Tina4Php extends \Tina4\Data
             if (defined("TINA4_INCLUDE_LOCATIONS")) {
                 define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."app", "src".DIRECTORY_SEPARATOR."objects", "src".DIRECTORY_SEPARATOR."services"], Module::getIncludeFolders()));
             }
         }
 

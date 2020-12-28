@@ -55,7 +55,7 @@ class DataMySQL implements DataBase
             return $this->fetch($params[0]);
         } else {
             $preparedQuery = $this->dbh->prepare($params[0]);
-
+            $executeError = $this->error();
             if (!empty($preparedQuery)) {
 
                 unset($params[0]);
@@ -79,15 +79,19 @@ class DataMySQL implements DataBase
 
                     \mysqli_stmt_bind_param($preparedQuery, $paramTypes, ...$params);
                     \mysqli_stmt_execute($preparedQuery);
+                    $executeError = $this->error(); //We need the error here!
                     \mysqli_stmt_affected_rows($preparedQuery);
                     \mysqli_stmt_close($preparedQuery);
-                } else {
+
+
+                } else { //Execute a statement without params
                     $params[0] = $preparedQuery;
                     call_user_func_array("mysqli_execute", $params);
+                    $executeError = $this->error(); //We need the error here!
                 }
 
             }
-            return $this->error();
+            return $executeError;
         }
     }
 
@@ -184,25 +188,6 @@ class DataMySQL implements DataBase
         $errorMessage = mysqli_error($this->dbh);
 
         return (new DataError($errorNo, $errorMessage));
-    }
-
-    /**
-     * Helper to make ref values for exec injection
-     * @param $arr
-     * @return array
-     */
-    public function refValues($arr)
-    {
-        if (strnatcmp(phpversion(), '5.3') >= 0) //Reference is required for PHP 5.3+
-        {
-            $refs = array();
-            foreach ($arr as $key => $value) {
-                $refs[$key] = &$arr[$key];
-            }
-            return $refs;
-        }
-
-        return $arr;
     }
 
     /**

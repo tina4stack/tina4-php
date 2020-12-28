@@ -76,7 +76,7 @@ function tina4_auto_loader($class)
         if (defined("TINA4_INCLUDE_LOCATIONS")) {
             define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
         } else {
-            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."app", "src".DIRECTORY_SEPARATOR."objects", "src".DIRECTORY_SEPARATOR."services"], Module::getIncludeFolders()));
         }
     }
 
@@ -90,13 +90,15 @@ function tina4_auto_loader($class)
     if (file_exists($fileName)) {
         require_once $fileName;
     } else if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
+
         foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $lid => $location) {
+
             if (file_exists($location.DIRECTORY_SEPARATOR."{$class}.php")) {
                 require_once $location.DIRECTORY_SEPARATOR."{$class}.php";
                 break;
             } else
-                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                if (file_exists($_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
                     break;
                 }
                 else {
@@ -136,7 +138,6 @@ function tina4_error_handler ($errorNo="",$errorString="",$errorFile="",$errorLi
         $errorFile = $errorNo->getFile();
         $errorLine = $errorNo->getLine();
         $errorNo = "";
-
 
         \Tina4\Debug::handleError($errorNo, $errorString, $errorFile, $errorLine);
         \Tina4\Debug::$errorHappened = true;

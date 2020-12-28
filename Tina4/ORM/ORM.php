@@ -133,11 +133,16 @@ class ORM implements \JsonSerializable
             }
         }
 
-
         if ($request) {
             if (!is_array($request) && !is_object($request) && json_decode((string)$request)) {
                 $request = json_decode((string)$request);
+
                 foreach ($request as $key => $value) {
+                    if (!property_exists($this, $key)) //Add to virtual and excluded fields anything that isn't in the object
+                    {
+                        $this->virtualFields[] = $key;
+                        $this->excludeFields[] = $key;
+                    }
                     $this->{$key} = $value;
                 }
             } else {
@@ -150,6 +155,7 @@ class ORM implements \JsonSerializable
                         $this->{$key} = $value;
                     } else {
                         $this->{$key} = $value;
+                        $this->excludeFields[] = $key;
                         $this->virtualFields[] = $key;
                     }
                 }
@@ -383,9 +389,7 @@ class ORM implements \JsonSerializable
             $params = [];
             $params[] = $sqlStatement["sql"];
             $params = array_merge($params, $sqlStatement["fieldValues"]);
-            $error = call_user_func_array([$this->DBA, "exec"],  $params);
-
-
+            $error = call_user_func([$this->DBA, "exec"],  ...$params);
 
             if (empty($error->getErrorMessage()) || $error->getErrorMessage() === "not an error") {
                 $this->DBA->commit();
@@ -414,11 +418,15 @@ class ORM implements \JsonSerializable
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
 
-                $fetchData = $this->DBA->fetchOne($sqlFetch, 1, 0, $fieldMapping)->asArray();
+                $fetchData = $this->DBA->fetchOne($sqlFetch, 1, 0, $fieldMapping);
 
-                $this->mapFromRecord($fetchData, false);
+                if (!empty($fetchData)) {
+                    $this->mapFromRecord($fetchData->asArray(), false);
 
-                return $this->asObject();
+                    return $this->asObject();
+                } else {
+                    return null;
+                }
             } else {
                 $this->getDebugBackTrace();
                 throw new \Exception("Error:\n".print_r($error->getError(), 1));
@@ -453,11 +461,13 @@ class ORM implements \JsonSerializable
 
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
-                if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-                    Debug::message("TINA4: We need to make a table for " . $tableName, TINA4_DEBUG_LEVEL);
-                }
 
-                $sql = $this->generateCreateSQL($this->getTableData(), $tableName);
+
+                $sqlCreate = $this->generateCreateSQL($this->getTableData(), $tableName);
+
+                if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
+                    Debug::message("TINA4: We need to make a table for " . $tableName."\n".$sqlCreate, TINA4_DEBUG_LEVEL);
+                }
 
                 //Make a migration for it
                 //$migrate = (new Migration());
@@ -487,6 +497,7 @@ class ORM implements \JsonSerializable
 
         foreach ($tableData as $fieldName => $fieldValue) {
             //@todo fix
+            if (!property_exists($className, $this->getObjectName($fieldName, true))) continue;
             $property = new \ReflectionProperty($className, $this->getObjectName($fieldName, true));
 
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);

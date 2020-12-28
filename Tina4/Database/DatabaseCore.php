@@ -127,7 +127,13 @@ trait DataBaseCore
      */
     public function fetchOne($sql)
     {
-        return $this->fetch($sql)->records[0];
+        $records = $this->fetch($sql)->records;
+        if (is_array($records) && count($records) > 0)
+        {
+            return $records[0];
+        } else {
+            return null;
+        }
     }
 
     /**

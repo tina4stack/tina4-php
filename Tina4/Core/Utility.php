@@ -150,13 +150,22 @@ trait Utility
 
         $routing = new \Tina4\Routing("", "", "", "", null, true);
 
-        $urlToParse = $_SERVER["REQUEST_URI"];
-        if ($urlToParse !== "/") {
-            $urlToParse .= "/";
-            $urlToParse = str_replace("//", "/", $urlToParse);
+        if (isset($_SERVER["REQUEST_URI"])) {
+            $urlToParse = $_SERVER["REQUEST_URI"];
+            if ($urlToParse !== "/") {
+                $urlToParse .= "/";
+                $urlToParse = str_replace("//", "/", $urlToParse);
+            }
+        } else {
+            $urlToParse = "/";
         }
 
         $debug = debug_backtrace();
+        foreach ($debug as $id => $debugInfo) {
+            if (strpos($debugInfo["file"], "Tina4") === false) {
+                Debug::handleError("Trace", "", $debugInfo["file"], $debugInfo["line"]);
+            }
+        }
         foreach ($arrRoutes as $routId => $route) {
             if ($routing->matchPath($urlToParse, $route["routePath"])) {
                 Debug::handleError("Trace", "", $route["fileInfo"][0]["file"], $route["fileInfo"][0]["line"]);

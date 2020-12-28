@@ -1,6 +1,7 @@
 <?php
-
 namespace Tina4;
+
+require_once "Tina4Php.php";
 
 use Twig\Error\LoaderError;
 
@@ -77,12 +78,12 @@ class Debug
     {
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             $error = [];
-            $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $errorFile, "line" => $errorLine, "message" => $errorNo . " " . $errorString];
+            $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $errorFile, "line" => $errorLine, "message" => trim($errorNo . " " . $errorString)];
 
             $debugTrace = debug_backtrace();
             foreach ($debugTrace as $id => $trace) {
                 if ($id !== 0 && isset($trace["file"]) && strpos($trace["file"], "Tina4") === false) {
-                    $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $trace["file"], "line" => $trace["line"], "message" => $errorNo . " " . $errorString];
+                    $error[] = ["time" => date("Y-m-d H:i:s"), "file" => $trace["file"], "line" => $trace["line"], "message" => trim($errorNo . " " . $errorString)];
                 }
 
             }
@@ -124,8 +125,14 @@ class Debug
 {{error.time}}: {{error.message | raw}} in {{ error.file }} ({{error.line}}) 
 {%endfor%}';
 
+
         if (self::$errorHappened) {
             try {
+
+                if (is_array(self::$errorLog))
+                {
+                    self::$errorLog = array_unique(self::$errorLog, SORT_REGULAR);
+                }
 
                 if (!defined("TINA4_SUPPRESS")) {
                     return renderTemplate($htmlTemplate, ["errors" => self::$errorLog]);
