@@ -629,7 +629,7 @@ class ORM implements \JsonSerializable
                 continue;
             } //form token is reserved
 
-            if (strpos($this->primaryKey, $fieldName) !== false)
+            if ($this->primaryKey === $fieldName)
             {
                 continue;
             }
