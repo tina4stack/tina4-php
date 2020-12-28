@@ -9,7 +9,17 @@
 ## Getting Started
 
 Tina4 is a lightweight routing and templating system which allows you to write websites and API applications very quickly.
-This is not another framework. Keep things simple and efficient. Tina4 is perfect if you want to build a website, run a CMS, create APIs or if you want to learn a structured PHP framework.
+This is not another framework. Tina4 is perfect if you want to build a website, run a CMS, create APIs or if you want a bit of structure without the constraints of a framework.
+
+
+**Beta Testing**
+
+[Join our Slack Channel to participate and receive all the latest builds](https://docs.google.com/forms/d/e/1FAIpQLSdrapVxI-19DapgKKuhtlLyPc99SLg8Re2Lpn3PS_K0M2Rc7w/viewform)
+
+**News**
+
+*December 28, 2020* - Happy new year everyone! We are getting close to a release point, there are still a number of bugs to be fixed though and things to be documented. PHP 8.0 is not in a good place for database use from what we've tested.
+
 
 ## Beginners
 
