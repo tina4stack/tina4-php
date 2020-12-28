@@ -318,10 +318,15 @@ class Tina4Php extends \Tina4\Data
                     }
             }
 
-            $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => "./cache"]);
-            $twig->addExtension(new \Twig\Extension\DebugExtension());
-            $twig->addGlobal('Tina4', new \Tina4\Caller());
+            if (TINA4_DEBUG)
+            {
+                $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG,"cache" => "./cache"]);
+                $twig->addExtension(new \Twig\Extension\DebugExtension());
+            } else {
+                $twig = new \Twig\Environment($twigLoader, ["cache" => "./cache"]);
+            }
 
+            $twig->addGlobal('Tina4', new \Tina4\Caller());
 
             $subFolder = $this->getSubFolder();
             if (isset($_SERVER["HTTP_HOST"])) {

@@ -4,6 +4,14 @@ Tina4 is a light-weight routing and twig based templating system which allows yo
 
 The premise of the project is to make you the developer and PHP, the heroes!
 
+**Beta Testing**
+
+[Join our Slack Channel to participate and receive all the latest builds](https://docs.google.com/forms/d/e/1FAIpQLSdrapVxI-19DapgKKuhtlLyPc99SLg8Re2Lpn3PS_K0M2Rc7w/viewform)
+
+**News**
+
+*December 28, 2020* - We are getting close to a release point, there are still a number of bugs to be fixed though and things to be documented. PHP 8.0 is not in a good place for database use from what we've tested.
+
 **Features**
 
 - Auto templating
@@ -67,6 +75,7 @@ Do not include your .env files with your project if they contain sensitive infor
 
 ### Change Log
 ```
+2020-12-28 MySQL fixes on error debugging
 2020-12-25 Added named param binding for SQLite3
 2020-12-19 Added Annotations for Unit Testing
 2020-12-14 Fixes for MySQL not handling saving of nulls in bind_params

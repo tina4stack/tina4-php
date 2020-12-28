@@ -1,8 +1,6 @@
 <?php
 namespace Tina4;
 
-
-
 use Twig\Error\LoaderError;
 
 /**
