@@ -34,12 +34,28 @@ The premise of the project is to make you the developer and PHP, the heroes!
 ```bash
 composer require andrevanzuydam/tina4php
 ```
-- Create an index.php file in your project folder and add this code
-```php
-<?php
- require "./vendor/autoload.php"; 
- echo new \Tina4\Tina4Php();
-``` 
+- Windows
+```bash
+php vendor\andrevanzuydam\tina4php\bin\tina4
+```
+- Mac/Linux
+```bash
+vendor/andrevanzuydam/tina4php/bin/tina4
+```
+
+```bash
+====================================================================================================
+TINA4 - MENU 
+====================================================================================================
+1.) Create index.php
+2.) Run Tests
+3.) Create database connection
+Choose menu option or type "quit" to Exit:
+```
+
+- Choose option 1 and press Enter, then type quit to exit, press Enter.
+
+
 - Spin up a web server with PHP in your terminal in the project folder
 ```bash
 php -S localhost:8080 index.php

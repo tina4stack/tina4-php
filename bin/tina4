@@ -1,18 +1,17 @@
 #!/usr/bin/env php
 <?php
-
+$replacePath = $argv[0]; //used to figure out where we're running
 global $rootPath;
 
-
 foreach (get_included_files() as $id => $file) {
-   if (strpos($file, "vendor".DIRECTORY_SEPARATOR."autoload.php")) {
-       $rootPath = str_ireplace("vendor".DIRECTORY_SEPARATOR."autoload.php", "", $file);
-       break;
-   }
+    if (strpos($file, "vendor".DIRECTORY_SEPARATOR."autoload.php")) {
+        $rootPath = str_ireplace("vendor".DIRECTORY_SEPARATOR."autoload.php", "", $file);
+        break;
+    }
 }
 
 if (empty($rootPath)) {
-    $rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4", "", __FILE__);
+    $rootPath = str_replace($replacePath, "", __FILE__);
 }
 
 require_once "{$rootPath}vendor/autoload.php";
@@ -34,24 +33,10 @@ function write($output): void
 }
 
 
-$menus[] = ["id" => 1, "name" => "tests", "description" => "Run Tests", "commandLine" => ["options" => ["run", "verbose"]], "menuCode" => static function ($index, $input, $options) {
-    global $rootPath;
-
-    if (!empty($options)) {
-        if ($options === "tests:verbose") {
-            (new \Tina4\Test($rootPath))->run(false);
-        } else {
-            (new \Tina4\Test($rootPath))->run();
-        }
-    } else {
-        (new \Tina4\Test($rootPath))->run();
-        readline();
-    }
-    return ["index" => 0, "prompt" => ""];
-}];
 
 
-$menus[] = ["id" => 2, "name" => "initialize", "description" => "Initialize project", "menuCode" => static function ($index, $input) {
+
+$menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "menuCode" => static function ($index, $input) {
     global $rootPath;
     if ($input === "0") { //Menu Option 0 - Exit
         return ["index" => 0, "prompt" => ""];
@@ -83,6 +68,23 @@ $menus[] = ["id" => 2, "name" => "initialize", "description" => "Initialize proj
             break;
     }
     return ["index" => $nextIndex, "prompt" => $prompt];
+}];
+
+
+$menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "commandLine" => ["options" => ["run", "verbose"]], "menuCode" => static function ($index, $input, $options) {
+    global $rootPath;
+
+    if (!empty($options)) {
+        if ($options === "tests:verbose") {
+            (new \Tina4\Test($rootPath))->run(false);
+        } else {
+            (new \Tina4\Test($rootPath))->run();
+        }
+    } else {
+        (new \Tina4\Test($rootPath))->run();
+        readline();
+    }
+    return ["index" => 0, "prompt" => ""];
 }];
 
 $menus[] = ["id" => 3, "name" => "database", "description" => "Create database connection", "menuCode" => static function ($index, $input) {
