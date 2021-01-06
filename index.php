@@ -13,6 +13,7 @@ require "Tina4/Core/Config.php";
 define("TINA4_TEMPLATE_LOCATIONS", ["templates", "assets", "templates/snippets"]);
 define("TINA4_ROUTE_LOCATIONS", ["api", "routes"]);
 define("TINA4_INCLUDE_LOCATIONS", ["app", "objects", "services"]);
+define("TINA4_SCSS_LOCATIONS", ["scss"]);
 
 //Add an alias to ORM for legacy code
 class_alias("\Tina4\ORM", "Tina4Object");

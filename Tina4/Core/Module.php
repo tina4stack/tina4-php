@@ -117,6 +117,17 @@ class Module
     }
 
     /**
+     * Add SCSS Path
+     * @param $path
+     * @param $baseName
+     */
+    public static function addSCSSPath($path, $baseName)
+    {
+        self::addPath("scssPath", $path, $baseName);
+    }
+
+
+    /**
      * Gets the Route Folders
      * @return array
      */
@@ -192,6 +203,26 @@ class Module
         } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["migrationPath"] as $routePath) {
+                    $routes[] = $routePath;
+                }
+            }
+        }
+        return $routes;
+    }
+
+    /**
+     * Gets the Include Folders
+     * @return array
+     */
+    public static function getSCSSFolders()
+    {
+        global $_TINA4_MODULES;
+        $routes = [];
+        if (empty($_TINA4_MODULES)) {
+            return [];
+        } else {
+            foreach ($_TINA4_MODULES as $moduleName => $module) {
+                foreach ($module["scssPath"] as $routePath) {
                     $routes[] = $routePath;
                 }
             }

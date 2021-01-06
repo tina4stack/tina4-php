@@ -206,13 +206,23 @@ class Test
      */
     public function run($onlyShowFailed = true): void
     {
+
+
         //Autoload all the include paths for testing in the system
         foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $id => $directory) {
-            $this->includeDirectory($this->rootPath.$directory);
+            if (file_exists($directory)) {
+                $this->includeDirectory($directory);
+            } else {
+                $this->includeDirectory($this->rootPath . $directory);
+            }
         }
 
         foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $id => $directory) {
-            $this->includeDirectory($this->rootPath.$directory);
+            if (file_exists($directory)) {
+                $this->includeDirectory($directory);
+            } else {
+                $this->includeDirectory($this->rootPath . $directory);
+            }
         }
 
         //Find all the functions and classes with annotated methods

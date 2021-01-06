@@ -192,4 +192,29 @@ trait Utility
             unlink( $target );
         }
     }
+
+    /**
+     * Gets all the files from a folder
+     * @param $target
+     * @param string $filter
+     * @return array
+     */
+    public function getFiles($target, $filter="*"): array
+    {
+        $result = [];
+        if(is_dir($target)){
+            $files = glob( $target . '/{,.}*[!.]',GLOB_MARK|GLOB_BRACE); //GLOB_MARK adds a slash to directories returned
+            foreach( $files as $file ){
+                $result = array_merge($result, $this->getFiles( $file , $filter));
+            }
+        } elseif(is_file($target)) {
+            if ($filter === "*")
+            {
+                $result[] = realpath($target);
+            } else if ( strpos($target, $filter) !== false ){
+                $result[] = realpath($target);
+            }
+        }
+        return $result;
+    }
 }

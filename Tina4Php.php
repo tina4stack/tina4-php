@@ -4,6 +4,7 @@ namespace Tina4;
 
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
+use ScssPhp\ScssPhp\Compiler;
 
 /**
  * Tina4 - This is not a 4ramework.
@@ -131,7 +132,7 @@ class Tina4Php extends \Tina4\Data
 
         if (!defined("TINA4_ROUTE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_ROUTE_LOCATIONS")) {
-                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS, Module::getTemplateFolders()));
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS, Module::getRouteFolders()));
             } else {
                 define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."api", "src".DIRECTORY_SEPARATOR."routes"], Module::getRouteFolders()));
             }
@@ -139,9 +140,17 @@ class Tina4Php extends \Tina4\Data
 
         if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_INCLUDE_LOCATIONS")) {
-                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getTemplateFolders()));
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getIncludeFolders()));
             } else {
                 define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."app", "src".DIRECTORY_SEPARATOR."objects", "src".DIRECTORY_SEPARATOR."services"], Module::getIncludeFolders()));
+            }
+        }
+
+        if (!defined("TINA4_SCSS_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_SCSS_LOCATIONS")) {
+                define("TINA4_SCSS_LOCATIONS_INTERNAL", array_merge(TINA4_SCSS_LOCATIONS, Module::getSCSSFolders()));
+            } else {
+                define("TINA4_SCSS_LOCATIONS", array_merge(["src".DIRECTORY_SEPARATOR."scss"], Module::getSCSSFolders()));
             }
         }
 
@@ -169,7 +178,7 @@ class Tina4Php extends \Tina4\Data
         }
 
         //Copy the bin folder if the vendor one has changed
-        if ($this->webRoot.DIRECTORY_SEPARATOR === $this->documentRoot) {
+        if ($this->webRoot.DIRECTORY_SEPARATOR !== $this->documentRoot) {
             $tina4Checksum = md5(file_get_contents($this->webRoot.DIRECTORY_SEPARATOR."bin".DIRECTORY_SEPARATOR."tina4"));
             $destChecksum = "";
             if (file_exists($this->documentRoot."bin".DIRECTORY_SEPARATOR."tina4"))
@@ -305,7 +314,6 @@ class Tina4Php extends \Tina4\Data
         if (empty($twig)) {
             $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
 
-
             if (TINA4_DEBUG) {
                 \Tina4\Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_DEBUG_LEVEL);
             }
@@ -406,6 +414,22 @@ class Tina4Php extends \Tina4\Data
             });
 
             $twig->addFilter($filter);
+        }
+
+        //Test for SCSS and existing default.css, only compile if it does not exist
+        if (!file_exists($this->documentRoot."src".DIRECTORY_SEPARATOR."assets".DIRECTORY_SEPARATOR."css".DIRECTORY_SEPARATOR."default.css"))
+        {
+            $scssContent = "";
+            foreach (TINA4_SCSS_LOCATIONS as $lId => $scssLocation) {
+                $scssFiles = $this->getFiles($scssLocation, ".scss");
+                foreach ($scssFiles as $fId => $file)
+                {
+                    $scssContent .= file_get_contents($file);
+                }
+            }
+            $scss = new \ScssPhp\ScssPhp\Compiler();
+            $scssDefault = $scss->compile($scssContent);
+            file_put_contents($this->documentRoot."src".DIRECTORY_SEPARATOR."assets".DIRECTORY_SEPARATOR."css".DIRECTORY_SEPARATOR."default.css", $scssDefault);
         }
 
         Debug::message("End of Tina4PHP Initialization");

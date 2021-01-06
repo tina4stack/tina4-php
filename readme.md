@@ -36,7 +36,7 @@ composer require andrevanzuydam/tina4php
 ```
 - Windows
 ```bash
-php vendor\andrevanzuydam\tina4php\bin\tina4
+php vendor\bin\tina4
 ```
 - Mac/Linux
 ```bash
@@ -72,8 +72,10 @@ The folder layout is as follows and can be overridden by defining PHP constants 
      * assets (system twig files, images, css, js)
      * objects (ORM objects - extend \Tina4\ORM)
      * routes (app routing)
+     * scss - style sheet templates  
      * services (service processes - extend \Tina4\Process)
      * templates (app twig files)
+     
      
 ### .Env Configuration
 

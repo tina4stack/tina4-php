@@ -19,3 +19,4 @@ tests/tests/functional/
 /migrations/
 /.env.test
 test.php
+/assets/css/default.css
