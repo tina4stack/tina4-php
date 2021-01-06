@@ -173,4 +173,23 @@ trait Utility
             }
         }
     }
+
+    /**
+     * Deletes all folders and sub folders
+     * Credit to https://paulund.co.uk/php-delete-directory-and-files-in-directory
+     * @param $target
+     */
+    public function deleteFiles($target): void
+    {
+        if(is_dir($target)){
+            $files = glob( $target . '/{,.}*[!.]',GLOB_MARK|GLOB_BRACE); //GLOB_MARK adds a slash to directories returned
+            foreach( $files as $file ){
+                $this->deleteFiles( $file );
+            }
+
+            rmdir( $target );
+        } elseif(is_file($target)) {
+            unlink( $target );
+        }
+    }
 }

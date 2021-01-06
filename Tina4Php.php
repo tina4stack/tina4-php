@@ -164,8 +164,23 @@ class Tina4Php extends \Tina4\Data
         }
 
         //Add the .htaccess file for redirecting things
-        if (!file_exists($this->documentRoot . "/.htaccess") && !file_exists("engine.php")) {
-            copy($this->webRoot . "/.htaccess", $this->documentRoot . "/.htaccess");
+        if (!file_exists($this->documentRoot . DIRECTORY_SEPARATOR.".htaccess") && !file_exists("engine.php")) {
+            copy($this->webRoot . DIRECTORY_SEPARATOR.".htaccess", $this->documentRoot . DIRECTORY_SEPARATOR.".htaccess");
+        }
+
+        //Copy the bin folder if the vendor one has changed
+        if ($this->webRoot.DIRECTORY_SEPARATOR === $this->documentRoot) {
+            $tina4Checksum = md5(file_get_contents($this->webRoot.DIRECTORY_SEPARATOR."bin".DIRECTORY_SEPARATOR."tina4"));
+            $destChecksum = "";
+            if (file_exists($this->documentRoot."bin".DIRECTORY_SEPARATOR."tina4"))
+            {
+                $destChecksum = md5(file_get_contents($this->documentRoot."bin".DIRECTORY_SEPARATOR."tina4"));
+            }
+
+            if ($tina4Checksum !== $destChecksum)
+            {
+                \Tina4\Routing::recurseCopy($this->webRoot.DIRECTORY_SEPARATOR."bin", $this->documentRoot ."bin");
+            }
         }
 
         //Add the icon file for making it look pretty
@@ -187,6 +202,11 @@ class Tina4Php extends \Tina4\Data
                 $result .= (new \Tina4\Migration($migrationFolder))->doMigration();
             }
             return $response ($result, HTTP_OK, TEXT_HTML);
+        });
+
+        \Tina4\Route::get("/cache/clear", function (\Tina4\Response $response, \Tina4\Request $request) use ($tina4PHP) {
+            $tina4PHP->deleteFiles($tina4PHP->documentRoot."cache");
+            return $response("OK");
         });
 
         //Some routes only are available with debugging
@@ -271,7 +291,7 @@ class Tina4Php extends \Tina4\Data
             //Setup caching options
             $TINA4_CACHE_CONFIG =
                 new ConfigurationOption([
-                    "path" => $this->documentRoot . "/cache"
+                    "path" => $this->documentRoot . "cache"
                 ]);
 
             CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
@@ -325,6 +345,8 @@ class Tina4Php extends \Tina4\Data
             } else {
                 $twig = new \Twig\Environment($twigLoader, ["cache" => "./cache"]);
             }
+
+
 
             $twig->addGlobal('Tina4', new \Tina4\Caller());
 

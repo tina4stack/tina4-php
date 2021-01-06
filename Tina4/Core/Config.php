@@ -12,10 +12,14 @@ namespace Tina4;
  */
 class Config
 {
+
+
     protected $twigFilters = [];
     protected $twigFunctions = [];
     protected $twigGlobals = [];
     protected $authMechanism = null;
+
+
 
     /**
      * Adds a twig filter for use in your templates
@@ -104,4 +108,6 @@ class Config
         }
         return null;
     }
+
+
 }
