@@ -11,7 +11,8 @@ foreach (get_included_files() as $id => $file) {
 }
 
 if (empty($rootPath)) {
-    $rootPath = str_replace($replacePath, "", __FILE__);
+    $rootPath = str_replace("vendor/andrevanzuydam/tina4php/bin/tina4", "", __FILE__);
+    $rootPath = str_replace("bin/tina4", "", $rootPath);
 }
 
 require_once "{$rootPath}vendor/autoload.php";
