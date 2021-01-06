@@ -104,7 +104,7 @@ class Annotation
 
             $annotation = $this->parseAnnotations($docComment, $annotationName);
             if (!empty($annotation)) {
-                $annotations[] = ["type" => "class", "class" => $class, "annotations" => $annotation];
+                $annotations[] = ["type" => "class", "class" => $class, "annotations" => $annotation, "method" => null, "params" => [], "isStatic" => null, "annotations" => []];
             }
 
             $methods = get_class_methods($class);

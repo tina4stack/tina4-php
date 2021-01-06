@@ -154,7 +154,6 @@ class Test
                 $this->lastClass = $annotations["class"];
                 unset($this->testClass);
 
-
                 $params = [];
                 foreach ($annotations["params"] as $id => $inParam) {
                     $params[] = '$'.$inParam->name;
