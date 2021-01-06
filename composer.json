@@ -28,6 +28,7 @@
       "Tina4/Tina4Constants.php",
       "Tina4/Core/HTMLElement.php"
     ],
+    "bin": ["bin/tina4"],
     "psr-4": {
       "Tina4\\": ["Tina4/","Tina4/Api","Tina4/Core","Tina4/Database","Tina4/Messaging","Tina4/ORM","Tina4/Routing","Tina4/Security"]
     }

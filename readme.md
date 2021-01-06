@@ -40,7 +40,7 @@ php vendor\andrevanzuydam\tina4php\bin\tina4
 ```
 - Mac/Linux
 ```bash
-vendor/andrevanzuydam/tina4php/bin/tina4
+vendor/bin/tina4
 ```
 
 ```bash
