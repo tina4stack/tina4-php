@@ -164,7 +164,7 @@ class Tina4Php extends \Tina4\Data
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services"];
+        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services", "scss"];
 
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}") && !file_exists("Tina4Php.php")) {
@@ -417,7 +417,7 @@ class Tina4Php extends \Tina4\Data
         }
 
         //Test for SCSS and existing default.css, only compile if it does not exist
-        if (!file_exists($this->documentRoot."src".DIRECTORY_SEPARATOR."assets".DIRECTORY_SEPARATOR."css".DIRECTORY_SEPARATOR."default.css"))
+        if (TINA4_DEBUG || !file_exists($this->documentRoot."src".DIRECTORY_SEPARATOR."assets".DIRECTORY_SEPARATOR."css".DIRECTORY_SEPARATOR."default.css"))
         {
             $scssContent = "";
             foreach (TINA4_SCSS_LOCATIONS as $lId => $scssLocation) {
@@ -429,7 +429,9 @@ class Tina4Php extends \Tina4\Data
             }
             $scss = new \ScssPhp\ScssPhp\Compiler();
             $scssDefault = $scss->compile($scssContent);
-            file_put_contents($this->documentRoot."src".DIRECTORY_SEPARATOR."assets".DIRECTORY_SEPARATOR."css".DIRECTORY_SEPARATOR."default.css", $scssDefault);
+            if (file_exists($this->documentRoot."src".DIRECTORY_SEPARATOR."assets")) {
+                file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "assets" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css", $scssDefault);
+            }
         }
 
         Debug::message("End of Tina4PHP Initialization");
@@ -524,13 +526,14 @@ class Tina4Php extends \Tina4\Data
         $scriptName = $_SERVER["SCRIPT_FILENAME"];
 
 
-        //str_replace($documentRoot, "", $scriptName);
+        //echo str_replace($documentRoot, "", $scriptName);
         $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
 
         if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
             $subFolder = null;
 
         }
+
         return $subFolder;
     }
 
