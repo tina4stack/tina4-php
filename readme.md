@@ -93,6 +93,7 @@ Do not include your .env files with your project if they contain sensitive infor
 
 ### Change Log
 ```
+2021-01-10 SCSS building added
 2020-12-28 MySQL fixes on error debugging
 2020-12-25 Added named param binding for SQLite3
 2020-12-19 Added Annotations for Unit Testing
