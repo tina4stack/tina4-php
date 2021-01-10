@@ -664,7 +664,7 @@ function renderTemplate($fileNameString, $data = []): string
                         file_put_contents($fileName, $fileNameString);
                     }
 
-                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . "cache");
+                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR. "cache");
                     return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
                 }
     } catch (\Exception $exception) {
