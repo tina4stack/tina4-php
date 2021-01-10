@@ -105,8 +105,8 @@ class Routing
 
             $urlToParse = $this->cleanURL($urlToParse);
 
-
-            if (!empty($this->subFolder)) {
+            //Fix for subfolders and static files
+            if (!empty($this->subFolder) && (strpos($urlToParse, ".twig") !== false || strpos($urlToParse, ".php") !== false) ) {
                 $urlToParse = str_replace($this->subFolder, "/", $urlToParse);
             }
 
