@@ -11,9 +11,10 @@ foreach (get_included_files() as $id => $file) {
 }
 
 if (empty($rootPath)) {
-    $rootPath = str_replace("vendor/andrevanzuydam/tina4php/bin/tina4", "", __FILE__);
-    $rootPath = str_replace("bin/tina4", "", $rootPath);
+    $rootPath = str_replace("vendor".DIRECTORY_SEPARATOR."andrevanzuydam".DIRECTORY_SEPARATOR."tina4php".DIRECTORY_SEPARATOR."bin".DIRECTORY_SEPARATOR."tina4", "", __FILE__);
+    $rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4", "", $rootPath);
 }
+
 
 require_once "{$rootPath}vendor/autoload.php";
 define("TINA4_SUPPRESS", true);
