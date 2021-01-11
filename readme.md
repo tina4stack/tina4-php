@@ -36,7 +36,7 @@ composer require andrevanzuydam/tina4php
 ```
 - Windows
 ```bash
-php vendor\bin\tina4
+vendor\bin\tina4
 ```
 - Mac/Linux
 ```bash
