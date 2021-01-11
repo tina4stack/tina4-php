@@ -25,6 +25,7 @@ class Example
      *
      * @tests
      *   assert () === "The Fellowship Of The Ring", "API request"
+     *   assert () !== "The Fellowship Of The Ring", "Testing again"
      *
      */
     public function testAPI() {

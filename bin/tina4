@@ -15,7 +15,6 @@ if (empty($rootPath)) {
     $rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4", "", $rootPath);
 }
 
-
 require_once "{$rootPath}vendor/autoload.php";
 define("TINA4_SUPPRESS", true);
 
