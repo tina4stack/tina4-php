@@ -63,7 +63,6 @@ class DataSQLite3 implements DataBase
                         if ($this->isBinary($param)) {
                             $preparedQuery->bindValue((string)($pid), $param, SQLITE3_BLOB);
                         } else {
-                            $param = $this->dbh->escapeString($param);
                             $preparedQuery->bindValue((string)($pid), $param, SQLITE3_TEXT);
                         }
             }

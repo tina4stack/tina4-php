@@ -378,7 +378,8 @@ class ORM implements \JsonSerializable
         $exists = $this->DBA->fetch($sqlCheck, 1);
 
         $getLastId = false;
-        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available") {
+        //@todo this next piece needs to standardize the errors from the different database sources - perhaps with a getNoneError on the database abstraction
+        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available"  || $exists->error->getErrorMessage() === "unknown error") {
             if ($exists->noOfRecords === 0) { //insert
                 $getLastId = ((string)($this->{$this->primaryKey}) === "");
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
