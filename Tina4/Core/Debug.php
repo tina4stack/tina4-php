@@ -120,7 +120,7 @@ class Debug
 
         $consoleTemplate = 'DEBUG / ERROR:
 {% for error in errors %}
-{{error.time}}: {{error.message | raw}} in {{ error.file }} ({{error.line}}) 
+{{error.time}}: {{error.message | verbatim}} in {{ error.file }} ({{error.line}}) 
 {%endfor%}';
 
 
