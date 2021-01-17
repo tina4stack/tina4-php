@@ -164,16 +164,17 @@ class Tina4Php extends \Tina4\Data
         global $arrRoutes;
         $arrRoutes = [];
 
-        $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services", "scss"];
-
-        foreach ($foldersToCopy as $id => $folder) {
-            if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}") && !file_exists("Tina4Php.php")) {
-                \Tina4\Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR . "{$folder}", $this->documentRoot . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}");
-            }
-        }
-
-        //Add the .htaccess file for redirecting things
+        //Add the .htaccess file for redirecting things & copy the default src structure
         if (!file_exists($this->documentRoot . DIRECTORY_SEPARATOR.".htaccess") && !file_exists("engine.php")) {
+            if (!file_exists($this->documentRoot . DIRECTORY_SEPARATOR."src")) {
+                $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services", "scss"];
+                foreach ($foldersToCopy as $id => $folder) {
+                    if (!file_exists(realpath($this->documentRoot) . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}") && !file_exists("Tina4Php.php")) {
+                        \Tina4\Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR . "{$folder}", $this->documentRoot . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "{$folder}");
+                    }
+                }
+            }
+
             copy($this->webRoot . DIRECTORY_SEPARATOR.".htaccess", $this->documentRoot . DIRECTORY_SEPARATOR.".htaccess");
         }
 
@@ -430,6 +431,12 @@ class Tina4Php extends \Tina4\Data
             $scss = new \ScssPhp\ScssPhp\Compiler();
             $scssDefault = $scss->compile($scssContent);
             if (file_exists($this->documentRoot."src".DIRECTORY_SEPARATOR."assets")) {
+                if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "assets" . DIRECTORY_SEPARATOR . "css"))
+                {
+                    if (!mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "assets" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
+                        throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                    }
+                }
                 file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "assets" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css", $scssDefault);
             }
         }
