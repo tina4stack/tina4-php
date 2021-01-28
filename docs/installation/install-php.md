@@ -5,7 +5,7 @@
 // Copyright (C)
 // Contact : andrevanzuydam@gmail.com
 -->
-# Install PHP
+# Install PHP on Windows
 
 ## Introduction
 
@@ -13,7 +13,7 @@ PHP is an Open Source general-purpose scripting language used in software/web de
 
 ### Step 1  - Download PHP
 
-Head to the PHP page and download the current stable version for your Operating System. 
+Head to the PHP page and download the current stable Zip version for your Operating System. 
 
 Here's the link : [PHP](https://www.php.net/downloads.php)
 
