@@ -380,6 +380,10 @@ class Tina4Php extends \Tina4\Data
                 $twig->addGlobal('request', $_REQUEST);
             }
 
+            if (isset($_SERVER) && !empty($_SERVER)) {
+                $twig->addGlobal('server', $_SERVER);
+            }
+
             //Check the configs for each module
             $configs = (new Module())->getModuleConfigs();
             foreach ($configs as $moduleId => $configMethod) {
