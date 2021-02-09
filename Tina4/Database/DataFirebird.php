@@ -114,7 +114,7 @@ class DataFirebird implements DataBase
             $records[] = (new DataRecord($record, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
         }
 
-        if (is_array($records) && count($records) > 1) {
+        if (is_array($records) && count($records) > 0) {
             if (stripos($sql, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL)";
 
@@ -122,12 +122,11 @@ class DataFirebird implements DataBase
 
                 $resultCount = ibase_fetch_assoc($recordCount);
 
-
             } else {
-                $resultCount = null;
+                $resultCount["COUNT_RECORDS"] = 1; //used for insert into or update
             }
         } else {
-            $resultCount["COUNT_RECORDS"] = 1;
+            $resultCount["COUNT_RECORDS"] = 0;
         }
 
         //populate the fields
