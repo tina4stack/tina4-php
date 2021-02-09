@@ -247,20 +247,24 @@ class Auth extends Data
             $this->privateKey = $privateKey;
         }
 
-        if (!is_array($payLoad) && !empty($payLoad)) {
+        if (!empty($payLoad)) {
             if (is_object($payLoad)) {
                 $payLoad = (array)$payLoad;
-            } else {
+            } elseif (!is_array($payLoad)) {
                 $payLoad = ["value" => $payLoad];
             }
-        }
 
-        $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
+            if (!isset($payLoad["expires"])) { //take care of expires if the user forgets to set it
+                $payLoad["expires"] =  time() + TINA4_TOKEN_MINUTES * 60;
+            }
+
+        } else {
+            $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
+        }
 
         $tokenDecoded = new TokenDecoded([], $payLoad);
 
         if (!empty($this->privateKey)) {
-
             $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
             $tokenString = $tokenEncoded->__toString();
             $_SESSION["tina4:authToken"] = $tokenString;
