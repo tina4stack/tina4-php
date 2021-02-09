@@ -214,7 +214,7 @@ class Migration extends Data
                     throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
                 }
             }
-            $fileName = $this->migrationPath . DIRECTORY_SEPARATOR . date("Ymdhis") . " " . $description . ".sql";
+            $fileName = $this->migrationPath . DIRECTORY_SEPARATOR . date("YmdHis") . " " . $description . ".sql";
             file_put_contents($fileName, $content);
             return "Migration created {$fileName}";
         } else {
