@@ -93,7 +93,7 @@ class DataFirebird implements DataBase
             //inject in the limits for the select - in Firebird select first x skip y
             $limit = " first {$noOfRecords} skip {$offSet} ";
 
-            $posSelect = stripos($sql, "select") + strlen("select");
+            $posSelect = stripos($initialSQL, "select") + strlen("select");
 
             $sql = substr($initialSQL, 0, $posSelect) . $limit . substr($initialSQL, $posSelect);   //select first 10 skip 10 from table
         }
@@ -124,7 +124,7 @@ class DataFirebird implements DataBase
         }
 
         if (is_array($records) && count($records) > 0) {
-            if (stripos($sql, "returning") === false) {
+            if (stripos($initialSQL, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL)";
 
                 $recordCount = ibase_query($this->dbh, $sqlCount);
