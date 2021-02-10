@@ -390,8 +390,13 @@ class ORM implements \JsonSerializable
             $params = [];
             $params[] = $sqlStatement["sql"];
             $params = array_merge($params, $sqlStatement["fieldValues"]);
-            $error = call_user_func([$this->DBA, "exec"],  ...$params);
-
+            // Return can be a DataResult or a DataError. We need to pickup the difference
+            $returning = call_user_func([$this->DBA, "exec"],  ...$params);
+            if (get_class($returning) == "DataError"){
+                $error = $returning;
+            } else {
+                $error = $returning->error;
+            }
             if (empty($error->getErrorMessage()) || $error->getErrorMessage() === "not an error") {
                 $this->DBA->commit();
 
@@ -403,12 +408,12 @@ class ORM implements \JsonSerializable
                     if (!empty($lastId)) {
                         $this->{$this->primaryKey} = $lastId;
                     } else
-                        if (method_exists($error, "records") && !empty($error->records())) {
-                            $record = $error->asObject()[0];
+                        if (method_exists($returning, "records") && !empty($returning->records())) {
+                            $record = $returning->asObject()[0];
 
                             $primaryFieldName = ($this->getObjectName($this->primaryKey));
                             if (isset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
-                                $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines
+                                $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines (Firebird works)
                             }
                         }
 
