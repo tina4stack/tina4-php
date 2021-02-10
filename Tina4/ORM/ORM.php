@@ -568,7 +568,7 @@ class ORM implements \JsonSerializable
             }
 
             if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $insertValues[] = "?";
+                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
                 $fieldValues[] = $fieldValue;
             } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
@@ -601,7 +601,8 @@ class ORM implements \JsonSerializable
             }
         }
 
-        Debug::message("insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
+        Debug::message("SQL:\ninsert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
+        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_CONSOLE);
         return ["sql" => "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
