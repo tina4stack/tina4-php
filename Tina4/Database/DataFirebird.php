@@ -56,7 +56,7 @@ class DataFirebird implements DataBase
         $params = $params["params"];
 
         if (stripos($params[0], "returning") !== false) {
-            return $this->fetch($params[0]);
+            return $this->fetch($params);
         } else {
             if (!empty($tranId)) {
                 $preparedQuery = ibase_prepare($this->dbh, $tranId, $params[0]);
@@ -83,17 +83,26 @@ class DataFirebird implements DataBase
      */
     public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
     {
-        $initialSQL = $sql;
-        if (stripos($sql, "returning") === false) {
+        if (is_array($sql)) {
+            $initialSQL = $sql[0];
+            $params = array_merge([$this->dbh], $sql);
+        } else {
+            $initialSQL = $sql;
+        }
+        if (stripos($initialSQL, "returning") === false) {
             //inject in the limits for the select - in Firebird select first x skip y
             $limit = " first {$noOfRecords} skip {$offSet} ";
 
             $posSelect = stripos($sql, "select") + strlen("select");
 
-            $sql = substr($sql, 0, $posSelect) . $limit . substr($sql, $posSelect);   //select first 10 skip 10 from table
+            $sql = substr($initialSQL, 0, $posSelect) . $limit . substr($initialSQL, $posSelect);   //select first 10 skip 10 from table
         }
 
-        $recordCursor = ibase_query($this->dbh, $sql);
+        if (is_array($sql)) {
+            $recordCursor = call_user_func("ibase_query",  ...$params);
+        } else {
+            $recordCursor = ibase_query($this->dbh, $sql);
+        }
 
         $records = null;
         $record = null;
