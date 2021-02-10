@@ -225,7 +225,7 @@ class DataFirebird implements DataBase
         if (!empty($tableName)) {
             // table name must be in upper case
             $tableName = strtoupper($tableName);
-            $exists = $this->fetch("SELECT 1 FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
+            $exists = $this->fetch("SELECT 1 AS CONSTANT FROM RDB\$RELATIONS WHERE RDB\$RELATION_NAME = '{$tableName}'");
 
             return !empty($exists->records());
         } else {
