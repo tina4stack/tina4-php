@@ -100,17 +100,31 @@ class Debug
     public static function render(): string
     {
         $htmlTemplate = '<style>
+    h5 {
+        background: lightblue;
+        margin: 0px;
+        padding: 5px;
+        color: darkorchid;
+        
+    }
+
     .debugLog {
+        font-family: Helvetica;
         position:relative;
         left:0px;
         width: 100%;
         background: white;
-        padding: 10px;
-        border: 2px solid red;
+        padding: 0px;
+        border: 2px solid deepskyblue;
+        margin: 0px;
     }
+    .debugLog pre {
+        padding-left: 5px;
+    }
+    
 </style>
 <div class="debugLog">
-<h5>Debug Log:</h5> 
+<h5>Error Log - You will see this message because .env contains <b style="color:darkblue">TINA4_DEBUG=true</b>, please make sure this setting is off in production</h5> 
 <pre>
 {% for error in errors %}
 {{error.time}}: {{error.message}} in {{ error.file }} ({{error.line}}) 
