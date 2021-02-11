@@ -392,7 +392,7 @@ class ORM implements \JsonSerializable
             $params = array_merge($params, $sqlStatement["fieldValues"]);
             // Return can be a DataResult or a DataError. We need to pickup the difference
             $returning = call_user_func([$this->DBA, "exec"],  ...$params);
-            if (get_class($returning) == "DataError"){
+            if (get_class($returning) == "Tina4\DataError"){
                 $error = $returning;
             } else {
                 $error = $returning->error;
