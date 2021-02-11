@@ -26,6 +26,7 @@
       "Tina4/Security"
     ],
     "files": [
+      "Tina4/Tina4Functions.php",
       "Tina4/Tina4Constants.php",
       "Tina4/Core/HTMLElement.php"
     ],

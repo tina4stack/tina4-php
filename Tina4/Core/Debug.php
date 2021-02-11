@@ -147,9 +147,9 @@ class Debug
                 }
 
                 if (!defined("TINA4_SUPPRESS")) {
-                    return renderTemplate($htmlTemplate, ["errors" => self::$errorLog]);
+                   return renderTemplate($htmlTemplate, ["errors" => self::$errorLog]);
                 } else {
-                    return renderTemplate($consoleTemplate, ["errors" => self::$errorLog]);
+                   return renderTemplate($consoleTemplate, ["errors" => self::$errorLog]);
                 }
             } catch (LoaderError $e) {
             }
