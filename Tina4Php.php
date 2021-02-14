@@ -349,7 +349,7 @@ class Tina4Php extends \Tina4\Data
 
             if (TINA4_DEBUG)
             {
-                $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG,"cache" => "./cache"]);
+                $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG,"cache" => false]);
                 $twig->addExtension(new \Twig\Extension\DebugExtension());
             } else {
                 $twig = new \Twig\Environment($twigLoader, ["cache" => "./cache"]);
