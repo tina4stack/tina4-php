@@ -16,7 +16,7 @@ class Swagger implements \JsonSerializable
     public $root;
     public $swagger = [];
 
-    public function __construct($root = null, $title = "Open API", $description = "API Documentation", $version = "1.0.0")
+    public function __construct($root = null, $title = "Open API", $apiDescription = "API Documentation", $version = "1.0.0")
     {
         global $arrRoutes;
         if (empty($this->root)) {
@@ -29,7 +29,12 @@ class Swagger implements \JsonSerializable
             $method = strtolower($route["method"]);
             //echo $method;
 
-            $reflection = new \ReflectionFunction($route["function"]);
+            if (!empty($route["class"])) {
+                $reflectionClass =  new \ReflectionClass($route["class"]);
+                $reflection = $reflectionClass->getMethod($route["function"]);
+            } else {
+                $reflection = new \ReflectionFunction($route["function"]);
+            }
 
             $doc = $reflection->getDocComment();
             preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
@@ -45,7 +50,7 @@ class Swagger implements \JsonSerializable
             $security = [];
             $example = (object)[];
             foreach ($annotations[0] as $aid => $annotation) {
-                preg_match_all('/^(@[a-zA-Z]*)([\w\s,]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
+                preg_match_all('/^(@[a-zA-Z]*)([\w\s,\W]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
                 if (count($matches) > 0) {
                     $matches = $matches[0];
                 } else {
@@ -167,7 +172,7 @@ class Swagger implements \JsonSerializable
             "host" => $_SERVER["HTTP_HOST"],
             "info" => [
                 "title" => $title,
-                "description" => $description,
+                "description" => $apiDescription,
                 "version" => $version
             ],
             "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],

@@ -175,19 +175,26 @@ class Routing
                 $result = "";
                 if ($this->matchPath($urlToParse, $route["routePath"]) && ($route["method"] === $this->method || $route["method"] == TINA4_ANY)) {
                     //Look to see if we are a secure route
-                    $reflection = new \ReflectionFunction($route["function"]);
+
+
+                    if (!empty($route["class"])) {
+                        $reflectionClass =  new \ReflectionClass($route["class"]);
+                        $reflection = $reflectionClass->getMethod($route["function"]);
+                    } else {
+                        $reflection = new \ReflectionFunction($route["function"]);
+                    }
                     $doc = $reflection->getDocComment();
                     preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
                     $params = $this->getParams($response, $route["inlineParamsToRequest"]);
 
-                    if (in_array("secure", $annotations[1])) {
+                    if (in_array("secure", $annotations[1], true)) {
                         $headers = getallheaders();
 
                         if (isset($headers["Authorization"]) && $this->auth->validToken($headers["Authorization"])) {
                             //call closure with & without params
                             $this->auth = null; //clear the auth
-                            $result = call_user_func_array($route["function"], $params);
+                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
                         } else {
                             $this->forbidden();
                         }
@@ -195,18 +202,18 @@ class Routing
                         $matched = true;
                         break;
                     } else {
-                        if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE])) {
+                        if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
                             //Check for the formToken request variable
                             if (!$this->auth->validToken($_REQUEST["formToken"])) {
                                 $this->forbidden();
                             } else {
                                 $this->auth = null; //clear the auth
-                                $result = call_user_func_array($route["function"], $params);
+                                $result = $this->getRouteResult($route["class"], $route["function"], $params);
                             }
                         } else {
                             if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE])) {
                                 $this->auth = null; //clear the auth
-                                $result = call_user_func_array($route["function"], $params);
+                                $result = $this->getRouteResult($route["class"], $route["function"], $params);
                             } else {
                                 $this->forbidden();
                             }
@@ -269,7 +276,7 @@ class Routing
      * Get static files
      * @param $fileName
      */
-    function returnStatic($fileName)
+    public function returnStatic($fileName): void
     {
         $fileName = preg_replace('#/+#', '/', $fileName);
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
@@ -317,7 +324,7 @@ class Routing
      * Method to download / stream files
      * @param $file
      */
-    function rangeDownload($file)
+    public function rangeDownload($file)
     {
 
         $fp = @fopen($file, 'rb');
@@ -565,6 +572,29 @@ class Routing
     public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
         return (new Swagger($this->root, $title, $description, $version))->jsonSerialize();
+    }
+
+    /**
+     * @param $class
+     * @param $method
+     * @param $params
+     * @return false|mixed
+     */
+    public function getRouteResult ($class, $method, $params)
+    {
+        if (!empty($class)) {
+            $methodCheck = new \ReflectionMethod($class, $method);
+
+            if ($methodCheck->isStatic()) {
+                return call_user_func_array([$class, $method], $params);
+            } else {
+                $classInstance = new \ReflectionClass($class);
+                $class = $classInstance->newInstance();
+                return call_user_func_array([$class, $method], $params);
+            }
+        } else {
+            return call_user_func_array($method, $params);
+        }
     }
 
 }

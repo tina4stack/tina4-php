@@ -2,6 +2,8 @@
 <?php
 $replacePath = $argv[0]; //used to figure out where we're running
 global $rootPath;
+global $session; //store things here you want to reuse
+$session = [];
 
 foreach (get_included_files() as $id => $file) {
     if (strpos($file, "vendor".DIRECTORY_SEPARATOR."autoload.php")) {
@@ -32,10 +34,6 @@ function write($output): void
 {
     echo $output;
 }
-
-
-
-
 
 $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "menuCode" => static function ($index, $input) {
     global $rootPath;
@@ -132,12 +130,124 @@ $menus[] = ["id" => 3, "name" => "database", "description" => "Create database c
     return ["index" => $nextIndex, "prompt" => $prompt];
 }];
 
+$menus[] = ["id" => 4, "name" => "orm", "description" => "Create orm objects", "menuCode" => static function ($index, $input) {
+
+    global $DBA;
+    global $session;
+    global $rootPath;
+
+    if ($input === "0") {
+        return ["index" => 0, "prompt" => ""];
+    }
+
+    if (empty($DBA)) {
+        $nextIndex = 1;
+        $prompt = "Please setup a global \$DBA variable and assign a database connection";
+    } else {
+
+        if (empty($session["database"])) {
+            $database = $DBA->getDatabase();
+            $session["database"] = $database;
+        } else {
+            $database = $session["database"];
+        }
+
+        switch ($index) {
+            case 1:
+                $nextIndex = 2;
+                $no = 0;
+                foreach ($database as $table => $fields) {
+                    $no++;
+                    if ($no == $input || $input == "all") {
+                        echo str_repeat("=", 40) . "\n";
+                        echo "Table: {$table}\n";
+                        echo str_repeat("=", 40) . "\n";
+                        foreach ($fields as $id => $field) {
+                            echo "{$field["field"]}\n";
+                        }
+                        $session["tableData"][] = ["table" => $table, "fields" => $fields];
+                    }
+                }
+
+                if ($input == "all") {
+                    writeline("You want to convert all the tables in the database ? ");
+                }
+
+                $prompt = "Is this correct ? (y/n):";
+            break;
+            case 2:
+                $nextIndex = -1;
+
+                if ($input === "y") {
+                    $record = new \Tina4\DataRecord();
+                    foreach ($session["tableData"] as $id => $data) {
+                        $className = ucwords($record->getObjectName($data["table"]));
+
+                        $fields = [];
+                        $fieldMapping = [];
+                        $primaryKey = "";
+                        foreach ($data["fields"] as $fid => $field) {
+                            if ($fid == 0 || $field["pk"] == "PRI") {
+                                $primaryKey = $field["field"];
+                            }
+                            $fieldMapping [] = '"' . $record->getObjectName($field["field"]) . '" => "' . $field["field"] . '"';
+                            $fields[] = "\tpublic \$" . $record->getObjectName($field["field"]) . ";";
+                        }
+
+                        $definition = '<?php
+class [CLASS_NAME] extends \Tina4\ORM
+{
+    public $tableName="[TABLE_NAME]";
+    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
+    public $fieldMapping = [[FIELD_MAPPING]];
+    //public $softDelete=true; //uncomment for soft deletes in crud
+    
+[FIELDS]
+}';
+
+                        if (file_exists("Tina4Php.php")) {
+                            $fileName = $rootPath  . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
+                        } else {
+                            $fileName = $rootPath  . "src" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
+                        }
+                        echo "Creating object in {$fileName} {$className}\n";
+                        if (!file_exists($fileName)) {
+                            $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);
+                            $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
+                            $definition = str_replace("[CLASS_NAME]", $className, $definition);
+                            $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
+                            $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
+                            file_put_contents($fileName, $definition);
+                        }
+                    }
+                    $prompt = "Done, press Enter to conitnue!";
+                } else {
+                    $prompt = "Press Enter to continue, no object created";
+                }
+                $session["tableData"] = null;
+            break;
+            default:
+                $nextIndex = 1;
+                $no = 0;
+                foreach ($database as $table => $fields) {
+                    $no++;
+                    writeline( "{$no}.) {$table}");
+                }
+                writeline( "0.) Exit" );
+                writeline( "Type 'all' to convert all the tables, no existing objects will be over written" );
+
+                $prompt = "Choose table:";
+            break;
+        }
+    }
+    return ["index" => $nextIndex, "prompt" => $prompt];
+}];
 /**
  * Menus are created and have a function "menuCode" which takes on the following inputs ($index, $input, $options)
  * The index is handled in a switch statement to parse the input, the menuCode function always should return
  * ["index" => , "prompt" => ], if you want it to end you need to return ["index" => 0, "prompt" => ""];
  *
- * $menus[] = ["id" => 2, "name" => "Do something", "menuCode" => function($index, $input, $options) {
+ * $menus[] = ["id" => 2, "name" => "Do something", "menuCode" => static function($index, $input, $options) {
  * return ["index" => 0, "prompt" => ""];
  * }];
  */

@@ -33,4 +33,25 @@ class Example
 
        return $api->sendRequest("/book")->docs[0]->name;
     }
+
+
+    /**
+     * @param \Tina4\Response $response
+     * @return array|false|string
+     * @description Hello Normal -> see Example.php route
+     */
+    public function route (\Tina4\Response $response) {
+        return $response ("OK!");
+    }
+
+    /**
+     * @param \Tina4\Response $response
+     * @return array|false|string
+     * @description Hello Static -> see Example.php routeStatic
+     */
+    public static function routeStatic (\Tina4\Response $response) {
+        return $response ("Static OK!");
+    }
+
+
 }
