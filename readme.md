@@ -10,6 +10,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*February 15, 2021* - Routing in large projects seems to be really messy and finding stuff is a pain.  To this end you can now direct your routing to class methods, they still behave the same as the anonymous methods but now make more sense for grouping functionality. Also added back in, the ability to generate ORM objects directly from your database using the command line tool.
+
 *December 28, 2020* - We are getting close to a release point, there are still a number of bugs to be fixed though and things to be documented. PHP 8.0 is not in a good place for database use from what we've tested.
 
 **Features**
@@ -27,8 +29,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 *PHP 8.0 is not a stable candidate yet, for example some database functionlity is not completely supported*
 
-- Install PHP7.1 > make sure the php_fileinfo extension and mbstring extension are enabled.
-- Install composer
+- Install PHP7.1 > make sure the following extensions are enabled php_fileinfo, mbstring, curl.
+- Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly  
 - Create a project folder where you want to work
 - In your project folder terminal / console
 ```bash
@@ -143,7 +145,8 @@ class Example
 
 ### Change Log
 ```
-2021-02-15 Routes can now be directed to Class methods, ORM generation available in tina4
+2021-02-15 New! Routes can now be directed to Class methods, ORM generation available in tina4
+2021-02-13 Fixes for Firebird database engine released
 2021-01-10 SCSS building added
 2020-12-28 MySQL fixes on error debugging
 2020-12-25 Added named param binding for SQLite3
