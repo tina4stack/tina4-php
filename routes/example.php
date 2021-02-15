@@ -22,7 +22,7 @@
  * Example of route calling class , method
  * Note the swagger annotations will go in the class
  */
-\Tina4\Get::add("/test/class", ["Example", "route"]);
+\Tina4\Get::add("/test/class/{id}", ["Example", "route"]);
 
 /**
  * Example of route calling class , static method

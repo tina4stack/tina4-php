@@ -351,8 +351,10 @@ class Tina4Php extends \Tina4\Data
             {
                 $twig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG,"cache" => false]);
                 $twig->addExtension(new \Twig\Extension\DebugExtension());
+                $twig->addExtension(new \Twig\Extensions\I18nExtension());
             } else {
                 $twig = new \Twig\Environment($twigLoader, ["cache" => "./cache"]);
+                $twig->addExtension(new \Twig\Extensions\I18nExtension());
             }
 
 

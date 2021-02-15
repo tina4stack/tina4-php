@@ -40,8 +40,8 @@ class Example
      * @return array|false|string
      * @description Hello Normal -> see Example.php route
      */
-    public function route (\Tina4\Response $response) {
-        return $response ("OK!");
+    public function route ($id, \Tina4\Response $response) {
+        return $response ("OK! {$id}");
     }
 
     /**
