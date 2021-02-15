@@ -50,6 +50,7 @@ TINA4 - MENU
 1.) Create index.php
 2.) Run Tests
 3.) Create database connection
+4.) Create orm objects
 Choose menu option or type "quit" to Exit:
 ```
 
