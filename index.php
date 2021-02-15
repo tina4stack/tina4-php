@@ -21,7 +21,6 @@ class_alias("\Tina4\ORM", "Tina4Object");
 //define ("TINA4_GIT_ENABLED", true);
 global $DBA;
 
-
 //$DBA = new \Tina4\DataMySQL(DATABASE_HOST . "/" . DATABASE_PORT . ":". DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, "d/m/Y");
 //$DBA = (new \Tina4\DataFirebird(FIREBIRD_DATABASE,FIREBIRD_USERNAME,FIREBIRD_PASSWORD));
 //$DBA =  new \Tina4\DataSQLite3("auth.db");
@@ -42,7 +41,6 @@ $config = new \Tina4\Config();
 //});
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
-
 
 echo new \Tina4\Tina4Php($config);
 //WARNING NO CODE BELOW THIS LINE WILL BE RUN

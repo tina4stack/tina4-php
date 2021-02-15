@@ -20,3 +20,5 @@ tests/tests/functional/
 /.env.test
 test.php
 /assets/css/default.css
+/messages.mo
+/messages.po

@@ -17,8 +17,9 @@ function renderTemplate($fileNameString, $data = []): string
             $internalTwig = clone $twig;
         } else {
             $twigLoader = new \Twig\Loader\FilesystemLoader();
-            $internalTwig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG]);
+            $internalTwig = new \Twig\Environment($twigLoader, ["debug" => TINA4_DEBUG, "auto_reload" => true]);
             $internalTwig->addExtension(new \Twig\Extension\DebugExtension());
+            $internalTwig->addExtension(new \Twig\Extensions\I18nExtension());
         }
 
         if ($internalTwig->getLoader()->exists($fileNameString)) {
