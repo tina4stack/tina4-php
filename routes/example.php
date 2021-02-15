@@ -15,7 +15,6 @@
  * Assuming you have run php -S localhost:8080 index.php
  */
 \Tina4\Get::add("/hello-world/{name}", function($name, \Tina4\Response $response){
-
     return $response ("Hello World {$name}!");
 });
 

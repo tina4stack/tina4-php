@@ -91,8 +91,58 @@ VERSION=1.0.0
 ```
 Do not include your .env files with your project if they contain sensitive information like password, instead create an example of how it should look.
 
+### Example of Routing
+
+Creating API end points and routers in Tina4 is simple as indicated below.  If you are adding swagger annotations, simply hitup the /swagger end point to see the OpenApi rendering.
+
+```php
+/**
+* @description Swagger Description
+* @tags Example,Route
+*/
+\Tina4\Get::add("/hello-world", function(\Tina4\Response $response){
+    return $response ("Hello World!");
+});
+```
+
+Routes can also be mapped to class methods, static methods are preferred for routing, but you can mix and match for example if you want to keep all functionality neatly together.
+
+```php
+/**
+ * Example of route calling class , method
+ * Note the swagger annotations will go in the class
+ */
+\Tina4\Get::add("/test/class", ["Example", "route"]);
+
+```
+
+Example.php
+```php
+
+class Example
+{
+    public function someThing() {
+        return "Yes!";
+    }
+    
+    /**
+     * @param \Tina4\Response $response
+     * @return array|false|string
+     * @description Hello Normal -> see Example.php route
+     */
+    public function route (\Tina4\Response $response) {
+        return $response ("OK!");
+    }
+
+}
+
+```
+
+
+
 ### Change Log
 ```
+2021-02-15 Routes can now be directed to Class methods, ORM generation available in tina4
 2021-01-10 SCSS building added
 2020-12-28 MySQL fixes on error debugging
 2020-12-25 Added named param binding for SQLite3
