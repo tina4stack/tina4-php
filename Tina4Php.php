@@ -260,6 +260,16 @@ class Tina4Php extends \Tina4\Data
                 //  $html = '<html><body><style> body { font-family: Arial;  border: 1px solid black; padding:20px } label{ display:block; margin-top: 5px; } input, textarea { width: 100%; font-size: 14px; } button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }</style><form class="form" method="post"><label>Migration Description</label><input type="text" name="description"><label>SQL Statement</label><textarea rows="20" name="sql"></textarea><br><button>Create Migration</button></form></body></html>';
 
                 $html = _html(
+                    _title("Tina4 Migrations"),
+                    _head('<script
+  src="https://code.jquery.com/jquery-3.5.1.min.js"
+  integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="
+  crossorigin="anonymous"></script>
+                           <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" integrity="sha512-GZ1RIgZaSc8rnco/8CXfRdCpDxRCphenIiZ2ztLy3XQfCbQUSCuk8IudvNHxkRA3oUg6q0qejgN/qqyG1duv5Q==" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-twig.min.js" integrity="sha512-ZtTfixyUItifC8wzQ1PwinttMP5W02H6zYeC/cAU+YPCA88vcrIUMI+fCk27yWN5k92zm32PWjpKYPYR/npZzg==" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.js" integrity="sha512-S4i/WUGRs22+8rjUVu4kBjfNuBNp8GVsgcK2lbaFdws4q6TF3Nd00LxqnHhuxS9iVDfNcUh0h6OxFUMP5DBD+g==" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-sqlserver.min.js" integrity="sha512-TkNvDZzCp+GGiwfXNAOxt6JDzuELz8qquDcZrUzPXuKRvOcUA6kSZu2/uPhKbbjqeJIjoevYn10yrt8TS+qUXQ==" crossorigin="anonymous"></script>
+                    '),
                     _body(_style(
                         "body { font-family: Arial; border: 1px solid black; padding: 20px; }
                         label{ display:block; margin-top: 5px; } 
@@ -270,8 +280,18 @@ class Tina4Php extends \Tina4\Data
                             _label("Migration Description"),
                             _input(["type" => "text", "name" => "description"]),
                             _label("SQL Statement"),
-                            _textarea(["rows" => "20",
-                                "name" => "sql"]),
+                            _textarea(["id" => "sql",
+                                "name" => "sql", "style" => "display:none"]),
+                            _div(["id" => "sqlContent", "style" => "height: 500px"]),
+                            _script(' window.editorACE = ace.edit("sqlContent");
+                                    window.editorACE.getSession().setUseWorker(false);
+                                    window.editorACE.setTheme("ace/theme/sqlserver");
+                                    window.editorACE.getSession().setMode("ace/mode/twig");
+                    
+                                    window.editorACE.getSession().on(\'change\', function() {
+                                        $(\'#sql\').val(window.editorACE.getSession().getValue());
+                    
+                                    });'),
                             _br(),
                             _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
                             _button("Create Migration")
