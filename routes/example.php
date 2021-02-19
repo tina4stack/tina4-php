@@ -4,9 +4,13 @@
  * Example of a get route - access http://localhost:8080/hello-world
  * Assuming you have run php -S localhost:8080 index.php
  * @description Testing swagger annotations -> see example.php under routes
+ *
  */
 \Tina4\Get::add("/hello-world", function(\Tina4\Response $response){
-    return $response ("Hello World!");
+
+    $test = (object)["test" => "hello"];
+
+    return $response ($test);
 });
 
 

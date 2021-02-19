@@ -970,11 +970,12 @@ class ORM implements \JsonSerializable
             $backtrace = debug_backtrace();
             $path = $backtrace[1]["args"][0];
 
-            $path = str_replace(getcwd() . DIRECTORY_SEPARATOR . "src", "", $path);
+            $path = str_replace(getcwd(),  "", $path);
+            $path = str_replace(DIRECTORY_SEPARATOR . "src", "", $path);
+
             $path = str_replace(".php", "", $path);
             $path = str_replace(DIRECTORY_SEPARATOR, "/", $path);
         }
-
 
         $backTrace = debug_backtrace()[0];
         $fileName = ($backTrace["file"]);
@@ -1067,7 +1068,9 @@ EOT;
             $tableFields[] = ["fieldName" => $columnName, "fieldLabel" => $this->getTableColumnName($columnName)];
         }
 
-        $componentPath = getcwd() . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
+
+        $componentPath = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR."src". DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
+
 
         if (!file_exists($componentPath)) {
             mkdir($componentPath, 0755, true);

@@ -11,7 +11,7 @@
         {% for tableField in tableFields %}
             <div class="form-group col-md-6">
                 <label for="{{ tableField.fieldName }}">{{ tableField.fieldLabel }}</label>
-                <input class="form-control" type="text" name="{{ tableField.fieldName }}" placeholder="{{ tableField.fieldLabel }}" value="{% raw %}{{{% endraw %} data.{{ tableField.fieldName}} {% raw %}}}{% endraw %}">
+                <input class="form-control" type="text" name="{{ tableField.fieldName }}" placeholder="{{ tableField.fieldLabel }}" value="{% verbatim %}{{{% endverbatim %} data.{{ tableField.fieldName}} {% verbatim %}}}{% endverbatim %}">
             </div>
         {% endfor %}
     </div>

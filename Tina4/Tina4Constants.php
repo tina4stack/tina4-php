@@ -91,6 +91,7 @@ function stringReplaceFirst($search, $replace, $content)
  */
 function tina4_auto_loader($class)
 {
+
     if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
         if (defined("TINA4_INCLUDE_LOCATIONS")) {
             define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
@@ -99,25 +100,25 @@ function tina4_auto_loader($class)
         }
     }
 
+
     $root = __DIR__;
 
     $class = explode("\\", $class);
     $class = $class[count($class) - 1];
 
-    $fileName = (string)($root) . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
 
-    if (file_exists($fileName)) {
-        require_once $fileName;
-    } else if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
+    $found = false;
+    if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
 
         foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $lid => $location) {
-
             if (file_exists($location.DIRECTORY_SEPARATOR."{$class}.php")) {
                 require_once $location.DIRECTORY_SEPARATOR."{$class}.php";
+                $found = true;
                 break;
             } else
                 if (file_exists($_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
                     require_once $_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                    $found = true;
                     break;
                 }
                 else {
@@ -125,6 +126,15 @@ function tina4_auto_loader($class)
                 }
         }
     }
+
+    if (!$found) {
+        $fileName = (string)($root) . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
+
+        if (file_exists($fileName)) {
+            require_once $fileName;
+        }
+    }
+
 }
 
 /**
