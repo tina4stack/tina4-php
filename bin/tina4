@@ -86,7 +86,44 @@ $menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "command
     return ["index" => 0, "prompt" => ""];
 }];
 
+
+//Helper functions for menu 3
+function createDatabaseConnection($databaseType, $databaseName, $databaseHost="", $username="", $password="") {
+    $settings = [];
+    switch ($databaseType) {
+        case "sqlite3":
+            $settings["configString"] = '$DBA = new \Tina4\DataSQLite3("[databasePath]");';
+            break;
+        case "mysql":
+            $settings["configString"] = '$DBA = new \Tina4\DataMySQL("[hostName]/3306:[databasePath]", "[username]", "[password]");';
+            break;
+        case "firebird":
+            $settings["configString"] = '$DBA = new \Tina4\DataFirebird("[hostName]/3050:[databasePath]", "[username]", "[password]");';
+            break;
+    }
+
+    $settings["configString"] = str_replace('[databasePath]', $databaseName, $settings["configString"]);
+    $settings["configString"] = str_replace('[hostName]', $databaseHost, $settings["configString"]);
+    $settings["configString"] = str_replace('[username]', $username, $settings["configString"]);
+    $settings["configString"] = str_replace('[password]', $password, $settings["configString"]);
+
+    $indexContent = file_get_contents("./index.php");
+
+    //existing record
+    $findDBA = '/^\$DBA(.*)/m';
+    preg_match($findDBA, $indexContent, $matches, PREG_OFFSET_CAPTURE);
+
+    if (!empty ($matches)) {
+        $indexContent = str_replace($matches[0], $settings["configString"], $indexContent);
+    } else {
+        $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;' . "\n" . $settings["configString"] . "\n" . 'echo new \Tina4\Tina4Php(', $indexContent);
+    }
+
+    return $indexContent;
+}
+
 $menus[] = ["id" => 3, "name" => "database", "description" => "Create database connection", "menuCode" => static function ($index, $input) {
+    global $settings;
 
     if ($input === "0") { //Menu Option 0 - Exit
         return ["index" => 0, "prompt" => ""];
@@ -103,19 +140,62 @@ $menus[] = ["id" => 3, "name" => "database", "description" => "Create database c
     switch ($index) {
         case 1: //Sqlite
             $nextIndex = 11;
+            $settings["databaseType"] = "sqlite3";
+            $settings["databaseHost"] = "";
+            $settings["databaseUsername"] = "";
             $prompt = "Path and name of database (Example: /home/test.db) :";
             break;
         case 11:
+            if ($settings["databaseType"] === "sqlite3") {
+                $settings["databasePath"] = $input;
+            } else {
+                $settings["databasePassword"] = $input;
+            }
+
             $nextIndex = 12;
-            $prompt = "Create database {$input["input"]} (Y/n) ?";
+            $prompt = "Add database configuration to the index.php {$input["input"]} (Y/n) ?";
+            break;
+        case 12:
+            $indexContent = createDatabaseConnection($settings["databaseType"], $settings["databasePath"], $settings["databaseHost"], $settings["databaseUsername"], $settings["databasePassword"]);
+            if ($input === "y") {
+                file_put_contents("./index.php", $indexContent);
+            } else {
+                writeline($indexContent);
+            }
+            $nextIndex = 0;
             break;
         case 2: //MySQL
             $nextIndex = 21;
+            $settings["databaseType"] = "mysql";
             $prompt = "Hostname (Example: 127.0.0.1) :";
             break;
         case 3: //Firebird
-            $nextIndex = 31;
+            $nextIndex = 21;
+            $settings["databaseType"] = "firebird";
             $prompt = "Hostname (Example: 127.0.0.1) :";
+            break;
+        case 21:
+            $nextIndex = 22;
+            $settings["databaseHost"] = $input;
+            switch ($settings["databaseType"]) {
+                case "mysql":
+                    $example = "test_db";
+                    break;
+                case "firebird":
+                    $example = "/home/firebird/TEST.FDB";
+                    break;
+            }
+            $prompt = "Database Name (Example: {$example}') :";
+            break;
+        case 22:
+            $settings["databasePath"] = $input;
+            $nextIndex = 23;
+            $prompt = "Username (Example: admin) :";
+            break;
+        case 23:
+            $settings["databaseUsername"] = $input;
+            $nextIndex = 11;
+            $prompt = "Password (Example: admin) :";
             break;
         default:
             $nextIndex = 1;
