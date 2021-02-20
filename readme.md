@@ -154,6 +154,20 @@ Linux & Mac
 vendor/bin/tina4 tests:run
 ```
 
+Writing unit tests is easy and can be done as an annotation in your code comments
+
+```php
+
+/**
+ * Some function to add numbers
+ * @tests
+ *   assert (1,1) === 2, "1 + 1 = 2"
+ */
+function add ($a,$b) {
+    return $a+$b;
+}
+
+```
 
 
 ### Change Log
