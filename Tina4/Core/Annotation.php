@@ -51,7 +51,10 @@ class Annotation
     public function parseAnnotations($docComment, $annotationName = ""): array
     {
         //clean *
-        $docComment = preg_replace('/^.[\n\*|\r\n\*]|^(.*)\*/m', "", $docComment);
+        $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);
+
+
+
         $annotations = [];
         preg_match_all('/@([^\n|\r\n|\t]+)/m', $docComment, $comments, PREG_OFFSET_CAPTURE, 0);
 
@@ -66,6 +69,9 @@ class Annotation
                 $annotations[$name[0]] = trim(substr($docComment, $comment[1] + strlen($name[0]), $toPos - strlen($name[0])));
             }
         }
+
+
+
         return $annotations;
     }
 
@@ -102,9 +108,11 @@ class Annotation
             $reflection = new \ReflectionClass($class);
             $docComment = $reflection->getDocComment();
 
+
             $annotation = $this->parseAnnotations($docComment, $annotationName);
+
             if (!empty($annotation)) {
-                $annotations[] = ["type" => "class", "class" => $class, "annotations" => $annotation, "method" => null, "params" => [], "isStatic" => null, "annotations" => []];
+                $annotations[] = ["type" => "class", "class" => $class, "annotations" => $annotation, "method" => null, "params" => [], "isStatic" => null];
             }
 
             $methods = get_class_methods($class);

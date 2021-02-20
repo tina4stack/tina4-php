@@ -141,10 +141,24 @@ class Example
 
 ```
 
+### Run tests from the command line
+
+Give this a try and see what happens
+
+Windows
+```commandline
+vendor\bin\tina4 tests:run
+```
+Linux & Mac
+```bash
+vendor/bin/tina4 tests:run
+```
+
 
 
 ### Change Log
 ```
+2021-02-21 Added ability to configure database connections via vendor/tina4/bin
 2021-02-15 New! Routes can now be directed to Class methods, ORM generation available in tina4
 2021-02-13 Fixes for Firebird database engine released
 2021-01-10 SCSS building added

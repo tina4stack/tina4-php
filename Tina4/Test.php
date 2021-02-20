@@ -39,6 +39,8 @@ class Test
      * @param string $conditionText
      * @param string $actualResult
      * @return string
+     * @tests
+     *   assert (1 === 1) === "\e[32;1mPassed ()\e[0m", "Test is positive"
      */
     public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
     {
@@ -49,7 +51,7 @@ class Test
             $result = $condition;
         }
         if ($result === true) {
-            return $this->colorGreen . "Passed (" . $conditionText . ") " . $this->colorReset;
+            return $this->colorGreen . "Passed (" . $conditionText . ")" . $this->colorReset;
         } else {
             return $this->colorRed . "Failed (" . $conditionText . ") " . $message . ", " . $this->colorOrange . "Actual: {$actualResult}" . $this->colorReset;
         }
@@ -61,6 +63,7 @@ class Test
      * @param $test
      * @param $method
      * @param null $testClass
+     * @param bool $isStatic
      * @return string
      */
     public function runTest($testNo, $test, $method, $testClass = null, $isStatic=false)
@@ -141,6 +144,8 @@ class Test
      */
     public function parseAnnotations($annotations, $onlyShowFailed): void
     {
+
+
         $testResult = "";
         $tests = explode(PHP_EOL, $annotations["annotations"]["tests"]);
         $testCount = 0;
@@ -165,6 +170,7 @@ class Test
         }
 
         foreach ($tests as $tid => $test) {
+
             $test = trim($test);
             $testCount++;
             if ($annotations["type"] === "function") {
@@ -180,8 +186,6 @@ class Test
                 $testResult .= $message;
             }
         }
-
-
 
         if ($testCount !== 0) {
             if ($testCount - $testFailed !== $testCount) {
@@ -228,7 +232,6 @@ class Test
         //Look for test annotations
         $annotation = new Annotation();
         $tests = $annotation->get("tests");
-
 
         echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;
         echo str_repeat("=", 80) . PHP_EOL;
