@@ -53,6 +53,8 @@ class ParseTemplate
         $this->definedVariables = $definedVariables;
 
         $this->subFolder = $subFolder;
+
+
     }
 
     /**
@@ -238,6 +240,7 @@ class ParseTemplate
      */
     public function parseVariables($content)
     {
+
         foreach ($this->evals as $id => $eval) {
             try {
                 eval($eval);
@@ -253,6 +256,9 @@ class ParseTemplate
         } else {
             $this->definedVariables = get_defined_vars();
         }
+
+        $this->definedVariables["baseUrl"] = $this->subFolder;
+        $this->definedVariables["baseURL"] = $this->subFolder;
 
         if (!empty($this->definedVariables)) {
             foreach ($this->definedVariables as $varName => $value) {

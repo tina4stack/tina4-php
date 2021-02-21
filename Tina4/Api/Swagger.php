@@ -14,18 +14,34 @@ namespace Tina4;
 class Swagger implements \JsonSerializable
 {
     public $root;
+    public $subFolder;
     public $swagger = [];
 
-    public function __construct($root = null, $title = "Open API", $apiDescription = "API Documentation", $version = "1.0.0")
+    /**
+     * Swagger constructor.
+     * @param null $root
+     * @param string $title
+     * @param string $apiDescription
+     * @param string $version
+     * @param string $subFolder - for when the swagger is running under a sub folder
+     * @throws \ReflectionException
+     */
+    public function __construct($root = null, $title = "Open API", $apiDescription = "API Documentation", $version = "1.0.0", $subFolder="/")
     {
+
         global $arrRoutes;
         if (empty($this->root)) {
             $this->root = $_SERVER["DOCUMENT_ROOT"];
         }
 
+        $this->subFolder = $subFolder;
+
         $paths = (object)[];
 
         foreach ($arrRoutes as $arId => $route) {
+
+            $route["routePath"] = $this->subFolder.$route["routePath"];
+
             $method = strtolower($route["method"]);
             //echo $method;
 
@@ -176,7 +192,7 @@ class Swagger implements \JsonSerializable
                 "version" => $version
             ],
             "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],
-            "basePath" => '/',
+            "basePath" => $this->subFolder,
             "paths" => $paths
 
         ];

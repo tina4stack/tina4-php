@@ -47,6 +47,10 @@ class Routing
             $_SERVER["DOCUMENT_ROOT"] = $root;
         }
 
+        if (empty($subFolder)) {
+            $subFolder = $this->getSubFolder();
+        }
+
         $this->root = $root;
 
         if (!empty($config) && !empty($config->getAuthentication())) {
@@ -106,7 +110,7 @@ class Routing
             $urlToParse = $this->cleanURL($urlToParse);
 
             //Fix for subfolders and static files
-            if (!empty($this->subFolder) && (strpos($urlToParse, ".twig") !== false || strpos($urlToParse, ".php") !== false) ) {
+            if (!empty($this->subFolder) && (strpos($urlToParse, ".twig") === false || strpos($urlToParse, ".php") === false) ) {
                 $urlToParse = str_replace($this->subFolder, "/", $urlToParse);
             }
 
@@ -571,7 +575,7 @@ class Routing
      */
     public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
-        return (new Swagger($this->root, $title, $description, $version))->jsonSerialize();
+        return (new Swagger($this->root, $title, $description, $version, $this->subFolder))->jsonSerialize();
     }
 
     /**
