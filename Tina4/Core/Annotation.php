@@ -53,8 +53,6 @@ class Annotation
         //clean *
         $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);
 
-
-
         $annotations = [];
         preg_match_all('/@([^\n|\r\n|\t]+)/m', $docComment, $comments, PREG_OFFSET_CAPTURE, 0);
 
@@ -69,8 +67,6 @@ class Annotation
                 $annotations[$name[0]] = trim(substr($docComment, $comment[1] + strlen($name[0]), $toPos - strlen($name[0])));
             }
         }
-
-
 
         return $annotations;
     }
@@ -100,15 +96,10 @@ class Annotation
             }
         }
 
-
-
         //Get annotations for each class and class method
         foreach ($classes as $cid => $class) {
-
             $reflection = new \ReflectionClass($class);
             $docComment = $reflection->getDocComment();
-
-
             $annotation = $this->parseAnnotations($docComment, $annotationName);
 
             if (!empty($annotation)) {
@@ -127,8 +118,6 @@ class Annotation
             }
 
         }
-
-
 
         return $annotations;
     }
