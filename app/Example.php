@@ -2,16 +2,15 @@
 /**
  * Class Example
  * This example class demonstrates some basic Tina4 concepts
- */
-
-/**
  * Class Example
  * @tests
- *  assert $this->add2numbers(1,1) === 2, "Adding 2 numbers"
+ *   assert $this->add2numbers(1,1) === 2, "Adding 2 numbers"
+ *   assert $this->name === "Tina", "This name should be Tina"
  */
 class Example
 {
 
+    public $name = "Tina";
     /**
      * @param $a
      * @param $b
