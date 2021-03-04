@@ -40,7 +40,7 @@ class Swagger implements \JsonSerializable
 
         foreach ($arrRoutes as $arId => $route) {
 
-            $route["routePath"] = $this->subFolder.$route["routePath"];
+            $route["routePath"] = str_replace("//", "/", $this->subFolder.$route["routePath"]);
 
             $method = strtolower($route["method"]);
             //echo $method;
