@@ -68,6 +68,16 @@ class ORM implements \JsonSerializable
     public $genPrimaryKey = false;
 
     /**
+     * @var array $hasOne
+     */
+    public $hasOne = [];
+
+    /**
+     * @var array $hasMany
+     */
+    public $hasMany = [];
+
+    /**
      * @var string[] Fields that do not need to be returned in the resulting ORM object serialization
      */
     public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
@@ -540,12 +550,6 @@ class ORM implements \JsonSerializable
         $fieldValues = [];
         $returningStatement = "";
 
-        foreach ($this->hasOne() as $id => $hasOne) {
-            $foreignField = $this->getObjectName($hasOne->getFieldName());
-            unset($tableData[$foreignField]);
-        }
-
-
         $keyInFieldList = false;
         $fieldIndex = 0;
         foreach ($tableData as $fieldName => $fieldValue) {
@@ -611,15 +615,7 @@ class ORM implements \JsonSerializable
         return ["sql" => "insert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
-    /**
-     * Implements a relationship in the following form:
-     * ["TableName" => ["foreignKey" => "primaryKey"], "TableName" => ["foreignKey" => "primaryKey"], ...]
-     * @return array
-     */
-    public function hasOne()
-    {
-        return [];
-    }
+
 
     /**
      * Generates an update statement
@@ -632,11 +628,6 @@ class ORM implements \JsonSerializable
     {
         $fieldValues = [];
         $updateValues = [];
-
-        foreach ($this->hasOne() as $id => $hasOne) {
-            $foreignField = $this->getObjectName($hasOne->getFieldName());
-            unset($tableData[$foreignField]);
-        }
 
         Debug::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
 
@@ -934,7 +925,20 @@ class ORM implements \JsonSerializable
 
     /**
      * Implements a relationship in the following form:
-     * ["TableName" => ["foreignKey" => "primaryKey"], "TableName" => ["foreignKey" => "primaryKey"], ...]
+     * The link field is tied directly to whatever is indicated as the primary key in the external table
+     * [["linkField" => "ORM Object"], ["linkField" => "ORM Object"], .....]
+     * @return array
+     */
+    public function hasOne()
+    {
+        return $this->hasOne;
+    }
+
+    /**
+     * Implements a relationship in the following form:
+     * The link field is tied directly to whatever is indicated as the primary key
+     * [["ORM OBJECT" => "linkField"], ["ORM OBJECT" => "linkField"], .... ]
+     * //Creates a variable on the ORM object of the same name as the ORM Object which is an array / result set of that object
      * @return array
      */
     public function hasMany()
@@ -942,15 +946,6 @@ class ORM implements \JsonSerializable
         return [];
     }
 
-    /**
-     * Implements a relationship in the following form:
-     * ["TableName" => ["foreignKey" => "primaryKey"], "TableName" => ["foreignKey" => "primaryKey"], ...]
-     * @return array
-     */
-    public function belongsTo()
-    {
-        return [];
-    }
 
     /**
      * Generates CRUD

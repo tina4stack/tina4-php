@@ -129,6 +129,8 @@ const popupCenter = ({url, title, w, h}) => {
     if (window.focus) newWindow.focus();
     return newWindow;
 }
+
+
 /*
  * bootstrap-tagsinput v0.6.1 by Tim Schlechter
  *

@@ -474,9 +474,10 @@ class Tina4Php extends \Tina4\Data
      * Iterate the directory
      * @param $path
      * @param string $relativePath
+     * @param string $event On click
      * @return string
      */
-    public function iterateDirectory($path, $relativePath = ""): string
+    public static function iterateDirectory($path, $relativePath = "", $event="onclick=\"window.alert('implement event on iterateDirectory');\""): string
     {
         if (empty($relativePath)) $relativePath = $path;
         $files = scandir($path);
@@ -489,12 +490,12 @@ class Tina4Php extends \Tina4\Data
             if ($fileName[0] == "." || $fileName == "cache" || $fileName == "vendor") continue;
             if (is_dir($path . "/" . $fileName) && $fileName != "." && $fileName != "..") {
                 $html = '<li data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/folder-invoices.png"}\'>' . $fileName;
-                $html .= $this->iterateDirectory($path . "/" . $fileName, $relativePath);
+                $html .= self::iterateDirectory($path . "/" . $fileName, $relativePath, $event);
                 $html .= "</li>";
                 $dirItems[] = $html;
 
             } else {
-                $fileItems[] = '<li ondblclick="loadFile(\'' . str_replace($relativePath . "/", "", $path . "/" . $fileName) . '\', editor)" data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/file.png"}\'>' . $fileName . '</li>';
+                $fileItems[] = '<li '.$event.' file-data="'.str_replace("./", "/", $path . "/" . $fileName).'" data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/file.png"}\'>' . $fileName . '</li>';
             }
 
         }
