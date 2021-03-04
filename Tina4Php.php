@@ -490,7 +490,7 @@ class Tina4Php extends \Tina4\Data
             if ($fileName[0] == "." || $fileName == "cache" || $fileName == "vendor") continue;
             if (is_dir($path . "/" . $fileName) && $fileName != "." && $fileName != "..") {
                 $html = '<li data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/folder-invoices.png"}\'>' . $fileName;
-                $html .= self::iterateDirectory($path . "/" . $fileName, $relativePath);
+                $html .= self::iterateDirectory($path . "/" . $fileName, $relativePath, $event);
                 $html .= "</li>";
                 $dirItems[] = $html;
 
