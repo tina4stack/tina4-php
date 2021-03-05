@@ -20,6 +20,9 @@ class_alias("\Tina4\ORM", "Tina4Object");
 
 $config = new \Tina4\Config();
 
+global $DBA;
+$DBA = new \Tina4\DataSQLite3("test.db");
+
 //Use this if you are running a hosted app
 //define("TINA4_APP", "/templates/index.html");
 

@@ -202,11 +202,12 @@ class Migration extends Data
 
     /**
      *
-     * @param $description
-     * @param $content
+     * @param string $description
+     * @param string $content
+     * @param bool $noDateStamp
      * @return string
      */
-    public function createMigration($description, $content)
+    public function createMigration($description, $content, $noDateStamp=false): string
     {
         if (!empty($description) && !empty($content)) {
             if (!file_exists($this->migrationPath)) {
@@ -214,9 +215,22 @@ class Migration extends Data
                     throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
                 }
             }
-            $fileName = $this->migrationPath . DIRECTORY_SEPARATOR . date("YmdHis") . " " . $description . ".sql";
-            file_put_contents($fileName, $content);
-            return "Migration created {$fileName}";
+
+            $description = str_replace(" ", "_", $description);
+
+            if ($noDateStamp) {
+                $fileName = $this->migrationPath . DIRECTORY_SEPARATOR . $description . ".sql";
+            } else {
+                $fileName = $this->migrationPath . DIRECTORY_SEPARATOR . date("YmdHis") . "_" . $description . ".sql";
+            }
+
+            if (!file_exists($fileName)) {
+                file_put_contents($fileName, $content);
+                return "Migration created {$fileName}";
+            } else {
+                return "Migration exists already in {$fileName}";
+            }
+
         } else {
             return "Failed to create a migration, needs description & content";
         }
