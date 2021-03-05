@@ -69,9 +69,10 @@ class SQL implements \JsonSerializable
      * @param int $limit
      * @param int $offset
      * @param array $hasOne
+     * @param array $hasMany
      * @return $this
      */
-    public function select($fields = "*", $limit = 10, $offset = 0, $hasOne = [])
+    public function select($fields = "*", $limit = 10, $offset = 0, $hasOne = [], $hasMany = [])
     {
         if (is_array($fields)) {
             $this->fields[] = $fields;
@@ -100,7 +101,7 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    function and($filter)
+    public function and($filter)
     {
         //@todo parse filter
         if (trim($filter) !== "") {
@@ -115,7 +116,7 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    function or($filter)
+    public function or($filter)
     {
         //@todo parse filter
         $this->filter[] = ["or", $filter];
@@ -210,7 +211,7 @@ class SQL implements \JsonSerializable
      * Gets an array of objects
      * @return array|mixed
      */
-    public function asObject()
+    public function asObject(): array
     {
         return $this->jsonSerialize();
     }
@@ -305,14 +306,8 @@ class SQL implements \JsonSerializable
     /**
      * @return string
      */
-    public function generateSQLStatement()
+    public function generateSQLStatement(): string
     {
-        //see if we have some foreign key references
-        if (!empty($this->hasOne)) {
-            foreach ($this->hasOne as $foreignKey) {
-                $this->fields[] = $foreignKey->getDisplayFieldQuery();
-            }
-        }
 
         $sql = "select\t" . join(",\n\t", $this->fields) . "\nfrom\t{$this->tableName} t\n";
         if (!empty($this->join) && is_array($this->join)) {
@@ -323,11 +318,6 @@ class SQL implements \JsonSerializable
 
         if (!empty($this->filter) && is_array($this->filter)) {
             foreach ($this->filter as $filter) {
-                if (!empty($this->hasOne)) {
-                    foreach ($this->hasOne as $foreignKey) {
-                        $filter[1] = str_replace($foreignKey->getFieldName(), $foreignKey->getSubSelect(), $filter[1]);
-                    }
-                }
                 $sql .= "" . $filter[0] . "\t" . $filter[1] . "\n";
             }
         }
@@ -354,7 +344,7 @@ class SQL implements \JsonSerializable
      * Gets the result as a generic array without the extra object information
      * @return array
      */
-    public function asArray()
+    public function asArray(): array
     {
         $records = $this->jsonSerialize();
         if (isset($records["error"]) && !empty($records["error"])) return $records;

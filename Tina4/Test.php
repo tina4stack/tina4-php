@@ -68,8 +68,11 @@ class Test
      */
     public function runTest($testNo, $test, $method, $testClass = null, $isStatic=false)
     {
+
         preg_match_all('/^(assert)(.*),(.*)$/m', $test, $testParts, PREG_SET_ORDER);
         if (empty($testParts)) return "";
+
+
 
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
@@ -81,6 +84,20 @@ class Test
 
             if (!empty($testClass)) {
                 $condition = trim($testParts[0][2]);
+
+                //check for enclosing method before the ()
+                preg_match_all('/(.*)\(\)/m', $condition, $methods, PREG_SET_ORDER);
+
+                $enclosingMethod = "";
+                if (isset($methods[0][1])) {
+                    $enclosingMethod = $methods[0][1];
+                    if (in_array($enclosingMethod, ["is_array", "is_object", "is_bool", "is_double", "is_float", "is_integer", "is_null", "is_string", "is_int", "is_numeric", "is_long", "is_callable", "is_countable", "is_iterable", "is_scalar", "is_real", "is_resource"])) {
+                        $condition = str_replace($enclosingMethod, "", $condition);
+                        $actualExpression = str_replace($enclosingMethod, "", $actualExpression);
+                    } else {
+                        $enclosingMethod = "";
+                    }
+                }
 
                 if (\strpos($condition, '$this') !== false || strpos($condition, 'self::') !== false) {
                     if ($isStatic)
@@ -95,11 +112,20 @@ class Test
                     }
                 }
 
+                //Check if starts with bracket then we are calling the method
                 if ($condition[0] === "(") {
+
                     if ($isStatic) {
-                        $condition = '$testClass::' . $method . $condition;
+                        $condition = '$testClass::' . $method . $condition; //("test") === true
                     } else {
                         $condition = '$testClass->' . $method . $condition;
+                    }
+
+                    //add the enclosing method
+                    if (!empty($enclosingMethod)) {
+                        $condition = $enclosingMethod."(".$condition;
+                        $condition = str_replace(" !=", ") !=", $condition);
+                        $condition = str_replace(" ==", ") ==", $condition);
                     }
 
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', true));');
@@ -110,17 +136,20 @@ class Test
                     } else {
                         $condition = '$testClass->' . str_replace('$', '', $condition);
                     }
-                    eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', true));');
+                    @eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', true));');
                 } else {
-                    $condition = $condition;
 
                     //Condition does not have form x === y or x !== y
                     if (!empty($actualExpression)) {
-                        eval('$actualResult = str_replace(PHP_EOL, "", print_r(' . $actualExpression . ',1));');
+                        @eval('$actualResult = str_replace(PHP_EOL, "", print_r(' . $actualExpression . ',1));');
                     }
                 }
 
-                @eval('$condition = (' . $condition . ');');
+                try {
+                    @eval('$condition = (' . $condition . ');');
+                } catch (\Exception $exception) {
+                    echo $condition;
+                }
 
             } else {
                 $condition = trim($testParts[0][2]);
@@ -144,12 +173,11 @@ class Test
      */
     public function parseAnnotations($annotations, $onlyShowFailed): void
     {
-
-
         $testResult = "";
-        $tests = explode(PHP_EOL, $annotations["annotations"]["tests"]);
+        $tests = explode(PHP_EOL, $annotations["annotations"]["tests"][0]);
         $testCount = 0;
         $testFailed = 0;
+
 
         if ($annotations["type"] === "function") {
             $testResult .= $this->colorCyan . "Testing Function " . $annotations["method"] . $this->colorReset . PHP_EOL;

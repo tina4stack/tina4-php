@@ -33,3 +33,5 @@
  * Note the swagger annotations will go in the class
  */
 \Tina4\Get::add("/test/class/static", ["Example", "routeStatic"]);
+
+\Tina4\Get::add("/test/orm", ["Example", "testORM"]);

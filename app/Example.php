@@ -62,4 +62,31 @@ class Example
         return $response ("Static OK!");
     }
 
+    public static function testORM (\Tina4\Response $response) {
+
+        /**$customer = (new Customer());
+       $customer->id = 1;
+       $customer->name = "Test";
+       $customer->save();
+
+       $address = (new Address());
+       $address->address = "1 Street";
+       $address->customerId = 1;
+       $address->save();**/
+
+       $customer = (new Customer());
+       $customer->load("id = 1");
+
+       echo "<pre>";
+       print_r ($customer->asArray());
+
+       $address = new Address();
+       $address->load("id = 2");
+
+       print_r ($address->asObject());
+       $address->address = "New Street Address";
+       $address->save();
+       return $response("OK!");
+    }
+
 }
