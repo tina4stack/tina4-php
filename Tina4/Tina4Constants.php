@@ -1,12 +1,15 @@
 <?php
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 use Tina4\HTMLElement;
 use Tina4\Module;
 
 //Set sessions to be off
 ini_set("session.auto_start", false);
 
-if (!defined("TINA4_SUPPRESS")) define("TINA4_SUPPRESS", false);
 //CSFR
 if (!defined("TINA4_SECURE")) define("TINA4_SECURE", true); //turn off on localhost for development, defaults to secure on webserver
 
@@ -54,11 +57,33 @@ if (!defined("DATA_TYPE_NUMERIC")) define("DATA_TYPE_NUMERIC", 1);
 if (!defined("DATA_TYPE_BINARY")) define("DATA_TYPE_BINARY", 2);
 if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
 if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
-if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", 1);
+if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", true);
 if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 
 //Initialize the ENV
 (new \Tina4\Env());
+
+if (!defined("TINA4_TOKEN_MINUTES")) define ("TINA4_TOKEN_MINUTES", 10);  //token set to expire in 10 minutes
+
+
+
+/**
+ * Allows replacement of only the first occurrence
+ * @param string $search What you want to search for
+ * @param string $replace What you want to replace it with
+ * @param string $content What you are searching in
+ * @return string|string[]|null
+ */
+function stringReplaceFirst($search, $replace, $content)
+{
+    $search = '/' . preg_quote($search, '/') . '/';
+
+    return preg_replace($search, $replace, $content, 1);
+}
+
+/**
+ * Helper functions below used by the whole system
+ */
 
 /**
  * Autoloader
@@ -66,31 +91,34 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
  */
 function tina4_auto_loader($class)
 {
+
     if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
         if (defined("TINA4_INCLUDE_LOCATIONS")) {
             define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS , Module::getTemplateFolders()));
         } else {
-            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src/app", "src/objects", "src/services"], Module::getIncludeFolders()));
+            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src".DIRECTORY_SEPARATOR."app", "src".DIRECTORY_SEPARATOR."objects", "src".DIRECTORY_SEPARATOR."services"], Module::getIncludeFolders()));
         }
     }
+
 
     $root = __DIR__;
 
     $class = explode("\\", $class);
     $class = $class[count($class) - 1];
 
-    $fileName = "{$root}" . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
 
-    if (file_exists($fileName)) {
-        require_once $fileName;
-    } else if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
+    $found = false;
+    if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
+
         foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $lid => $location) {
             if (file_exists($location.DIRECTORY_SEPARATOR."{$class}.php")) {
                 require_once $location.DIRECTORY_SEPARATOR."{$class}.php";
+                $found = true;
                 break;
             } else
-                if (file_exists($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                    require_once $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                if (file_exists($_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once $_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                    $found = true;
                     break;
                 }
                 else {
@@ -98,6 +126,15 @@ function tina4_auto_loader($class)
                 }
         }
     }
+
+    if (!$found) {
+        $fileName = (string)($root) . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
+
+        if (file_exists($fileName)) {
+            require_once $fileName;
+        }
+    }
+
 }
 
 /**
@@ -123,49 +160,31 @@ function autoLoadFolders($documentRoot, $location, $class) {
     }
 }
 
-function tina4_error_handler ($errorNo,$errorString,$errorFile,$errorLine)
+function tina4_error_handler ($errorNo="",$errorString="",$errorFile="",$errorLine="")
 {
-    if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-        echo "<pre>";
-        echo "<b>Error No:</b> (".$errorNo . ") " . $errorString . "\n<b>File:</b>" . $errorFile . "(" . $errorLine.")\n";
-        $debugTrace = debug_backtrace();
-        foreach ($debugTrace as $id => $trace) {
-            if ($id !== 0) {
-                echo "<b>File:</b>".$trace["file"] . " line: " . $trace["line"] . "\n";
-            }
-        }
-        echo "</pre>";
-        return true;
+    if (is_object($errorNo) && method_exists($errorNo, "getMessage")) {
+        $errorString = $errorNo->getMessage();
+        $errorFile = $errorNo->getFile();
+        $errorLine = $errorNo->getLine();
+        $errorNo = "";
+
+        \Tina4\Debug::handleError($errorNo, $errorString, $errorFile, $errorLine);
+        \Tina4\Debug::$errorHappened = true;
+        echo \Tina4\Debug::render();
     } else {
-        return false;
+        \Tina4\Debug::$errorHappened = true;
+        return \Tina4\Debug::handleError($errorNo, $errorString, $errorFile, $errorLine);
     }
 }
 
-
-set_error_handler('tina4_error_handler');
-spl_autoload_register('tina4_auto_loader');
-
-/**
- * @param null $config
- * @return bool
- * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverCheckException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheDriverNotFoundException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
- * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException
- * @throws \ReflectionException
- * @throws \Twig\Error\LoaderError
- */
-function runTina4($config = null)
+//We only want to fiddle with the defaults if we are developing
+if (defined("TINA4_DEBUG") && TINA4_DEBUG)
 {
-    try {
-        echo new Tina4Php($config);
-    } catch(\Exception $exception) {
-        die("Tina4 caused an exception ".$exception->getMessage());
-    }
-    return true;
+    set_exception_handler('tina4_error_handler');
+    set_error_handler('tina4_error_handler');
 }
 
+spl_autoload_register('tina4_auto_loader');
 
 function _shape (...$elements) {
     return new HTMLElement(":", $elements);
@@ -183,14 +202,19 @@ function _doctype (...$elements) {
  * HTML TAG comment
  * @param $elements
  * @return HTMLElement
+ * @tests
+ *   assert ("hello") == '<!--hello-->', "Comment test"
  */
-function comment (...$elements) {
+function _comment (...$elements) {
     return new HTMLElement(":!--", $elements);
 }
 /**
  * HTML TAG _a
  * @param $elements
  * @return HTMLElement
+ * @tests
+ *   assert ("home")."" == "<a>home</a>", "Anchor Test"
+ *   assert (["href" => "#"],"home")."" == '<a href="#">home</a>', "Anchor Test Href"
  */
 function _a (...$elements) {
     return new HTMLElement(":a", $elements);
@@ -199,6 +223,8 @@ function _a (...$elements) {
  * HTML TAG _abbr
  * @param $elements
  * @return HTMLElement
+ * @tests
+ *   assert ("test")."" === "<abbr>test</abbr>","Abbr tag is not working"
  */
 function _abbr (...$elements) {
     return new HTMLElement(":abbr", $elements);

@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.8.20"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>My Project: Tina4\DataFirebird Class Reference</title>
+<title>Tina4 - This is not a framework: Tina4\DataFirebird Class Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -20,8 +20,9 @@
 <table cellspacing="0" cellpadding="0">
  <tbody>
  <tr style="height: 56px;">
+  <td id="projectlogo"><img alt="Logo" src="Tina4.png"/></td>
   <td id="projectalign" style="padding-left: 0.5em;">
-   <div id="projectname">My Project
+   <div id="projectname">Tina4 - This is not a framework
    </div>
   </td>
  </tr>
@@ -112,6 +113,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a00c07486a65dc0ec5d3791a40735c66a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a38540547360842c24d0524d1d741c226"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_data_firebird.html#a38540547360842c24d0524d1d741c226">getDefaultDatabasePort</a> ()</td></tr>
 <tr class="separator:a38540547360842c24d0524d1d741c226"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ace9f105c18f54b22428dc0a17aa3e9d4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_data_firebird.html#ace9f105c18f54b22428dc0a17aa3e9d4">getGeneratorId</a> ($generatorName, $increment=1)</td></tr>
+<tr class="separator:ace9f105c18f54b22428dc0a17aa3e9d4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_interface_tina4_1_1_data_base"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_interface_tina4_1_1_data_base')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="interface_tina4_1_1_data_base.html">Tina4\DataBase</a></td></tr>
 <tr class="memitem:a19da4eecfbe02e0938106f889c8234c5 inherit pub_methods_interface_tina4_1_1_data_base"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="interface_tina4_1_1_data_base.html#a19da4eecfbe02e0938106f889c8234c5">__construct</a> ($database, $username=&quot;&quot;, $password=&quot;&quot;, $dateFormat=&quot;Y-m-d&quot;)</td></tr>
 <tr class="separator:a19da4eecfbe02e0938106f889c8234c5 inherit pub_methods_interface_tina4_1_1_data_base"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -315,7 +318,7 @@ Public Member Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Returns default date format </p><dl class="section return"><dt>Returns</dt><dd>mixed </dd></dl>
+<p>Gets the default database date format </p><dl class="section return"><dt>Returns</dt><dd>mixed|string </dd></dl>
 
 <p>Implements <a class="el" href="interface_tina4_1_1_data_base.html#abf258049a6cbe1db7d8117ab76e1bf77">Tina4\DataBase</a>.</p>
 
@@ -335,9 +338,45 @@ Public Member Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Returns the default database port </p><dl class="section return"><dt>Returns</dt><dd>mixed </dd></dl>
+<p>Gets the default database port </p><dl class="section return"><dt>Returns</dt><dd>int|mixed </dd></dl>
 
 <p>Implements <a class="el" href="interface_tina4_1_1_data_base.html#a32026b304d7480f16a9283876b8aec0e">Tina4\DataBase</a>.</p>
+
+</div>
+</div>
+<a id="ace9f105c18f54b22428dc0a17aa3e9d4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ace9f105c18f54b22428dc0a17aa3e9d4">&#9670;&nbsp;</a></span>getGeneratorId()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">Tina4\DataFirebird::getGeneratorId </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>$generatorName</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>$increment</em> = <code>1</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Specific to firebird generators </p><dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramtype"></td><td class="paramname">$generatorName</td><td></td></tr>
+    <tr><td class="paramtype">int</td><td class="paramname">$increment</td><td></td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>mixed </dd></dl>
 
 </div>
 </div>

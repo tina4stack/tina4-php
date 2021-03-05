@@ -1,8 +1,10 @@
 var searchData=
 [
-  ['env_61',['Env',['../class_tina4_1_1_env.html',1,'Tina4']]],
-  ['error_62',['error',['../interface_tina4_1_1_data_base.html#a7fdec13feccb3d322555b06612d16faf',1,'Tina4\DataBase\error()'],['../class_tina4_1_1_data_firebird.html#af3694b77c5f56601e52cbf47b4659af5',1,'Tina4\DataFirebird\error()'],['../class_tina4_1_1_data_my_s_q_l.html#a5a1bdcf871ade3348d1ab25496776b7a',1,'Tina4\DataMySQL\error()'],['../class_tina4_1_1_data_s_q_lite3.html#a08fdc296d14ce798bda18454de01392a',1,'Tina4\DataSQLite3\error()']]],
-  ['event_63',['Event',['../class_tina4_1_1_event.html',1,'Tina4']]],
-  ['exclude_64',['exclude',['../class_tina4_1_1_o_r_m.html#a4db41eab90309e456cae42a0539b55e3',1,'Tina4\ORM\exclude()'],['../class_tina4_1_1_s_q_l.html#a94c4d38accb332e0228d75ea43528137',1,'Tina4\SQL\exclude()']]],
-  ['exec_65',['exec',['../interface_tina4_1_1_data_base.html#a53f42c7aa9c2695a678c4df040cbedda',1,'Tina4\DataBase\exec()'],['../class_tina4_1_1_data_firebird.html#a29e155206ac3fe04e567b9fa029a9ef9',1,'Tina4\DataFirebird\exec()'],['../class_tina4_1_1_data_my_s_q_l.html#af38336fab8e89a4712369bcddd5633e8',1,'Tina4\DataMySQL\exec()'],['../class_tina4_1_1_data_s_q_lite3.html#a325dcb09aecc65c3914673cf09af23c6',1,'Tina4\DataSQLite3\exec()']]]
+  ['fetch_58',['fetch',['../class_tina4_1_1_data_firebird.html#a109c2219cb93c807cfe2a0293237555e',1,'Tina4\DataFirebird\fetch()'],['../class_tina4_1_1_data_my_s_q_l.html#aa33fa37a72f5c9deff15ba3e85967f71',1,'Tina4\DataMySQL\fetch()'],['../class_tina4_1_1_data_s_q_lite3.html#a301db05c3365e81fe92a74804f9453bd',1,'Tina4\DataSQLite3\fetch()']]],
+  ['fetchone_59',['fetchOne',['../namespace_tina4.html#aa03c37313982cbe956153228fd927a44',1,'Tina4']]],
+  ['fields_60',['fields',['../class_tina4_1_1_data_result.html#ae27a7fd894da22360d6c9366c0790483',1,'Tina4::DataResult']]],
+  ['filter_61',['filter',['../class_tina4_1_1_s_q_l.html#ac2d87e1c614aa88a6e886b40b40a2c4c',1,'Tina4::SQL']]],
+  ['find_62',['find',['../class_tina4_1_1_o_r_m.html#ad3021e86fe8bfc01fce9532dd60eccbc',1,'Tina4::ORM']]],
+  ['forbidden_63',['forbidden',['../class_tina4_1_1_routing.html#a28e810db54c127f0db2998ee890313ec',1,'Tina4::Routing']]],
+  ['formatmobile_64',['formatMobile',['../class_tina4_1_1_messenger.html#ab950452443a6bb23d8d42f10517d8d37',1,'Tina4::Messenger']]]
 ];

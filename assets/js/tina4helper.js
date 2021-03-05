@@ -1,27 +1,20 @@
 function getFormData(formName) {
     var data = new FormData();
-    console.log('Getting form data for ' + formName);
-    $("#" + formName + " select, #" + formName + " input, #" + formName + " textarea").each(function (key, element) {
+    $("#"+formName+" select, #"+formName+" input, #"+formName+" textarea").each(function(key, element){
         if (element.name) {
             if (element.type == 'file') {
+                console.log ('Adding File', element.name);
                 let fileData = element.files[0];
                 if (fileData !== undefined) {
-                    data.append(element.name, fileData, fileData.name);
+                    data.append (element.name, fileData, fileData.name);
                 }
-            } else if (element.type == 'checkbox') {
-                if (element.checked) {
-                    data.append(element.name, element.value)
-                } else {
-                    data.append(element.name, 0)
+            } else
+            if (element.type == 'checkbox' || element.type == 'radio' ) {
+                if (element.checked) { data.append(element.name, element.value) } else { if (element.type !== 'radio') { data.append(element.name, 0) } };
+            } else {
+                if (element.value === '') {
+                    element.value = null;
                 }
-            } else if (element.type == 'radio') {
-                if (element.checked) {
-                    data.append(element.name, element.value)
-                } else {
-                    data.append(element.name, 0)
-                }
-            }
-              else {
                 data.append(element.name, element.value);
             }
         }
@@ -109,6 +102,32 @@ function getCookie(name) {
         if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
     }
     return null;
+}
+
+//https://stackoverflow.com/questions/4068373/center-a-popup-window-on-screen
+const popupCenter = ({url, title, w, h}) => {
+    // Fixes dual-screen position                             Most browsers      Firefox
+    const dualScreenLeft = window.screenLeft !==  undefined ? window.screenLeft : window.screenX;
+    const dualScreenTop = window.screenTop !==  undefined   ? window.screenTop  : window.screenY;
+
+    const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+    const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+
+    const systemZoom = width / window.screen.availWidth;
+    const left = (width - w) / 2 / systemZoom + dualScreenLeft
+    const top = (height - h) / 2 / systemZoom + dualScreenTop
+    const newWindow = window.open(url, title,
+        `
+      directories=no,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=no,
+      width=${w / systemZoom}, 
+      height=${h / systemZoom}, 
+      top=${top}, 
+      left=${left}
+      `
+    )
+
+    if (window.focus) newWindow.focus();
+    return newWindow;
 }
 
 

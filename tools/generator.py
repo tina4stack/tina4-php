@@ -29,5 +29,5 @@ while i < len(functions):
     file.write('$'+functions[i].replace('/', '').replace('!', '')+' = function(...$elements) {\n  return new \Tina4\HTMLElement(":' + functions[i].replace('/', '').replace('!', '') + '", $elements);\n};')
     i += 1
 
-file.close();
-read.close();
+file.close()
+read.close()

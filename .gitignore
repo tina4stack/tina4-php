@@ -17,3 +17,9 @@ tests/tests/acceptance/
 tests/tests/functional/
 /.env
 /migrations/
+/.env.test
+test.php
+/assets/css/default.css
+/messages.mo
+/messages.po
+/src/

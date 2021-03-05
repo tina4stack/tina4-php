@@ -1,11 +1,5 @@
 var searchData=
 [
-  ['mapfromrecord_130',['mapFromRecord',['../class_tina4_1_1_o_r_m.html#ad98f18bf366deb658b91940d6ddd3d27',1,'Tina4::ORM']]],
-  ['matchpath_131',['matchPath',['../class_tina4_1_1_routing.html#a7f77b14a8800271034744674ab1ef852',1,'Tina4::Routing']]],
-  ['message_132',['message',['../class_tina4_1_1_debug_log.html#a0f245eb0bcd77913c093831a98f61a1a',1,'Tina4::DebugLog']]],
-  ['messenger_133',['Messenger',['../class_tina4_1_1_messenger.html',1,'Tina4']]],
-  ['messengersettings_134',['MessengerSettings',['../class_tina4_1_1_messenger_settings.html',1,'Tina4']]],
-  ['migration_135',['Migration',['../class_tina4_1_1_migration.html',1,'Tina4']]],
-  ['module_136',['Module',['../class_tina4_1_1_module.html',1,'Tina4']]],
-  ['myauth_137',['MyAuth',['../class_my_auth.html',1,'']]]
+  ['open_129',['open',['../class_tina4_1_1_data_firebird.html#afe53a186b0723f53523956950db9f5b3',1,'Tina4\DataFirebird\open()'],['../class_tina4_1_1_data_my_s_q_l.html#ad30b784eb76d20ccb5e39f78742453a5',1,'Tina4\DataMySQL\open()'],['../class_tina4_1_1_data_s_q_lite3.html#ab1e7304011d7826be5bae154ad0c7192',1,'Tina4\DataSQLite3\open()']]],
+  ['orm_130',['ORM',['../class_tina4_1_1_o_r_m.html',1,'Tina4']]]
 ];

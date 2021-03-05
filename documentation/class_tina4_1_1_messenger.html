@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.8.20"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>My Project: Tina4\Messenger Class Reference</title>
+<title>Tina4 - This is not a framework: Tina4\Messenger Class Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -20,8 +20,9 @@
 <table cellspacing="0" cellpadding="0">
  <tbody>
  <tr style="height: 56px;">
+  <td id="projectlogo"><img alt="Logo" src="Tina4.png"/></td>
   <td id="projectalign" style="padding-left: 0.5em;">
-   <div id="projectname">My Project
+   <div id="projectname">Tina4 - This is not a framework
    </div>
   </td>
  </tr>
@@ -77,8 +78,8 @@ $(function() {
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a4a8f1ec498d5a36e030b0497edd229a5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_messenger.html#a4a8f1ec498d5a36e030b0497edd229a5">__construct</a> (<a class="el" href="class_tina4_1_1_messenger_settings.html">MessengerSettings</a> $settings=null)</td></tr>
 <tr class="separator:a4a8f1ec498d5a36e030b0497edd229a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a720d45d970972ad51e9097f3a98fdf86"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_messenger.html#a720d45d970972ad51e9097f3a98fdf86">sendEmail</a> ($recipients, $subject, $message, $fromName, $fromAddress, $attachments=null, $bcc=null)</td></tr>
-<tr class="separator:a720d45d970972ad51e9097f3a98fdf86"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abc43111c322f8ca2cabd552b402b04a5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_messenger.html#abc43111c322f8ca2cabd552b402b04a5">sendEmail</a> (mixed $recipients, string $subject, mixed $message, string $fromName, string $fromAddress, $attachments=null, $bcc=null)</td></tr>
+<tr class="separator:abc43111c322f8ca2cabd552b402b04a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab948c4d8b84fab42684e2a7648f1d937"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_messenger.html#ab948c4d8b84fab42684e2a7648f1d937">prepareHtmlMail</a> ($html, $eol, $boundary_rel, $boundary_alt)</td></tr>
 <tr class="separator:ab948c4d8b84fab42684e2a7648f1d937"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a5fb016141a45a29f584f40ab18cde274"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_tina4_1_1_messenger.html#a5fb016141a45a29f584f40ab18cde274">sendText</a> ($mobileNo, $message=&quot;&quot;, $countryPrefix=&quot;01&quot;)</td></tr>
@@ -200,8 +201,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a720d45d970972ad51e9097f3a98fdf86"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a720d45d970972ad51e9097f3a98fdf86">&#9670;&nbsp;</a></span>sendEmail()</h2>
+<a id="abc43111c322f8ca2cabd552b402b04a5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abc43111c322f8ca2cabd552b402b04a5">&#9670;&nbsp;</a></span>sendEmail()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -209,31 +210,31 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">Tina4\Messenger::sendEmail </td>
           <td>(</td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">mixed&#160;</td>
           <td class="paramname"><em>$recipients</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">string&#160;</td>
           <td class="paramname"><em>$subject</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">mixed&#160;</td>
           <td class="paramname"><em>$message</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">string&#160;</td>
           <td class="paramname"><em>$fromName</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">string&#160;</td>
           <td class="paramname"><em>$fromAddress</em>, </td>
         </tr>
         <tr>
@@ -259,13 +260,13 @@ Public Member Functions</h2></td></tr>
 <p>The sendMail function takes on a number of params and sends and email to a receipient.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">$recipients</td><td>array This can be a String or Array, the Array should be ; delimited ["name" =&gt; "Test", "email" =&gt; "email@email.com"] </td></tr>
-    <tr><td class="paramname">$subject</td><td>string The subject for the email </td></tr>
-    <tr><td class="paramname">$message</td><td>array/string The message to send to the Receipient - can be ["template" =&gt; "twigFile", "data" =&gt; Array or Object] </td></tr>
-    <tr><td class="paramname">$fromName</td><td>string The name of the person sending the message </td></tr>
-    <tr><td class="paramname">$fromAddress</td><td>string The address of the person sending the message </td></tr>
-    <tr><td class="paramname">$attachments</td><td>array An Array of file paths to be attached in the form array ["name" =&gt; "File Description", "path" =&gt; "/path/to/file" ] </td></tr>
-    <tr><td class="paramname">$bcc</td><td>array </td></tr>
+    <tr><td class="paramtype">mixed</td><td class="paramname">$recipients</td><td>array This can be a String or Array, the String should be ; delimited <a href="#" onclick="location.href='mai'+'lto:'+'ema'+'il'+'@te'+'st'+'.co'+'m'; return false;">email<span style="display: none;">.nosp@m.</span>@tes<span style="display: none;">.nosp@m.</span>t.com</a>;<a href="#" onclick="location.href='mai'+'lto:'+'ema'+'i2'+'@te'+'st'+'2.c'+'om'; return false;">emai2<span style="display: none;">.nosp@m.</span>@tes<span style="display: none;">.nosp@m.</span>t2.co<span style="display: none;">.nosp@m.</span>m</a> or ["name" =&gt; "Test", "email" =&gt; "email@email.com"] </td></tr>
+    <tr><td class="paramtype"></td><td class="paramname">$subject</td><td>string The subject for the email </td></tr>
+    <tr><td class="paramtype">mixed</td><td class="paramname">$message</td><td>array/string The message to send to the Receipient - can be ["template" =&gt; "twigFile", "data" =&gt; Array or Object] </td></tr>
+    <tr><td class="paramtype"></td><td class="paramname">$fromName</td><td>string The name of the person sending the message </td></tr>
+    <tr><td class="paramtype"></td><td class="paramname">$fromAddress</td><td>string The address of the person sending the message </td></tr>
+    <tr><td class="paramtype"></td><td class="paramname">$attachments</td><td>array An Array of file paths to be attached in the form array ["name" =&gt; "File Description", "path" =&gt; "/path/to/file" ] </td></tr>
+    <tr><td class="paramtype"></td><td class="paramname">$bcc</td><td>array </td></tr>
   </table>
   </dd>
 </dl>

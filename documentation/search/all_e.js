@@ -1,15 +1,19 @@
 var searchData=
 [
-  ['project_20licenses_140',['Project Licenses',['../md_licenses.html',1,'']]],
-  ['parsecalls_141',['parseCalls',['../class_tina4_1_1_parse_template.html#a2b275091267066548d084325d04308fb',1,'Tina4::ParseTemplate']]],
-  ['parsefile_142',['parseFile',['../class_tina4_1_1_parse_template.html#ae39c07c33132cb3ab471fd96d3b2f552',1,'Tina4::ParseTemplate']]],
-  ['parseparams_143',['parseParams',['../class_tina4_1_1_parse_template.html#afe79ac056f11bdb548107f09c73bbda3',1,'Tina4\ParseTemplate\parseParams()'],['../namespace_tina4.html#a6fd8d6254dc81b701ca59d0a9c52c218',1,'Tina4\parseParams()']]],
-  ['parsesnippets_144',['parseSnippets',['../class_tina4_1_1_parse_template.html#a4a97ab5c5e85c4ec5cd188fa48d30290',1,'Tina4::ParseTemplate']]],
-  ['parsetemplate_145',['ParseTemplate',['../class_tina4_1_1_parse_template.html',1,'Tina4']]],
-  ['parsevariables_146',['parseVariables',['../class_tina4_1_1_parse_template.html#a0b5214bf6a27dd914df6c7deb837d0d1',1,'Tina4::ParseTemplate']]],
-  ['patch_147',['Patch',['../class_tina4_1_1_patch.html',1,'Tina4']]],
-  ['post_148',['Post',['../class_tina4_1_1_post.html',1,'Tina4']]],
-  ['preparehtmlmail_149',['prepareHtmlMail',['../class_tina4_1_1_messenger.html#ab948c4d8b84fab42684e2a7648f1d937',1,'Tina4::Messenger']]],
-  ['process_150',['Process',['../class_tina4_1_1_process.html',1,'Tina4']]],
-  ['put_151',['Put',['../class_tina4_1_1_put.html',1,'Tina4']]]
+  ['readme_143',['readme',['../md_app_readme.html',1,'']]],
+  ['readme_144',['readme',['../md_objects_readme.html',1,'']]],
+  ['rangedownload_145',['rangeDownload',['../class_tina4_1_1_routing.html#abb60d8a2404b5bb64956cdf205060a50',1,'Tina4::Routing']]],
+  ['readparams_146',['readParams',['../class_tina4_1_1_env.html#a0acfb36325fa0c0fcc5b1bee76107337',1,'Tina4::Env']]],
+  ['record_147',['record',['../class_tina4_1_1_data_result.html#a865c519fe8ec92231387acd3fdd58b28',1,'Tina4::DataResult']]],
+  ['recursecopy_148',['recurseCopy',['../class_tina4_1_1_routing.html#aebbb7efdf9d66c8ac7e60a5e9ae7bfb8',1,'Tina4::Routing']]],
+  ['refvalues_149',['refValues',['../class_tina4_1_1_data_my_s_q_l.html#a9c58cae999e9c6820f5dd88953c65174',1,'Tina4::DataMySQL']]],
+  ['removeprocess_150',['removeProcess',['../class_tina4_1_1_service.html#a7e2e4118521f4e8bbd20d129e81ce8b2',1,'Tina4::Service']]],
+  ['rendertemplate_151',['renderTemplate',['../namespace_tina4.html#ae6ce5975a361c7bfd596d9f88d94ca6a',1,'Tina4']]],
+  ['request_152',['Request',['../class_tina4_1_1_request.html',1,'Tina4']]],
+  ['response_153',['Response',['../class_tina4_1_1_response.html',1,'Tina4']]],
+  ['returnstatic_154',['returnStatic',['../class_tina4_1_1_routing.html#aec0892c29445c14c0903bc3223a8a507',1,'Tina4::Routing']]],
+  ['rollback_155',['rollback',['../interface_tina4_1_1_data_base.html#a4f4616f254d437523f0e7bd371375650',1,'Tina4\DataBase\rollback()'],['../class_tina4_1_1_data_firebird.html#a1a634e9f3c58f4f3a48aea6d326cc64e',1,'Tina4\DataFirebird\rollback()'],['../class_tina4_1_1_data_my_s_q_l.html#aee48143bc52909654e9d8e99cc60722c',1,'Tina4\DataMySQL\rollback()'],['../class_tina4_1_1_data_s_q_lite3.html#a66af4e7508b0ecb9f6c72e39eb64af71',1,'Tina4\DataSQLite3\rollback()']]],
+  ['route_156',['Route',['../class_tina4_1_1_route.html',1,'Tina4\Route'],['../class_tina4_1_1_crud.html#aa866ff10fc457a45c60f72723051af77',1,'Tina4\Crud\route()']]],
+  ['routing_157',['Routing',['../class_tina4_1_1_routing.html',1,'Tina4']]],
+  ['run_158',['run',['../class_tina4_1_1_process.html#a4f263524b26e9553178d1b6539191106',1,'Tina4::Process']]]
 ];
