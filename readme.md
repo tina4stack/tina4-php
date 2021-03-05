@@ -141,6 +141,71 @@ class Example
 
 ```
 
+### Example of a database connection to SQLite3
+
+You can add lines like this by using the tina4 tool or by pasting the example below into your index.php file.
+
+```php
+
+global $DBA;
+$DBA = new \Tina4\DataSQLite3("test.db");
+  
+```
+
+### Example of ORM Objects in relationship
+
+```php
+class Address extends \Tina4\ORM
+{
+    public $id;
+    public $address;
+    public $customerId;
+
+    //Link up customerId => Customer object
+    public $hasOne = [["Customer" => "customerId"]];
+}
+
+class Customer extends \Tina4\ORM
+{
+    public $primaryKey = "id";
+    public $id;
+    public $name;
+
+    //Primary key id maps to customerId on Address table
+    public $hasMany = [["Address" => "customerId"]];
+}
+
+
+````
+
+And some code using the above objects
+
+```php
+
+$customer = (new Customer());
+$customer->id = 1;
+$customer->name = "Test";
+$customer->save();
+
+$address = (new Address());
+$address->address = "1 Street";
+$address->customerId = 1;
+$address->save();
+
+$customer = (new Customer());
+$customer->addresses[0]->address = "Another Address";
+$customer->addresses[0]->address->save(); //Save the address
+$customer->load("id = 1");
+
+$address = new Address();
+$address->load("id = 1");
+$address->address = "New Street Address";
+$address->customer->name = "New Name for customer"
+$address->customer->save(); //save the customer
+$address->save();
+
+```
+
 ### Run tests from the command line
 
 Give this a try and see what happens
@@ -172,6 +237,7 @@ function add ($a,$b) {
 
 ### Change Log
 ```
+2021-03-05 Added foreign table support to ORM, minor fixes and improvements to testing & annotations, auto migrations on objects
 2021-02-21 Added ability to configure database connections via vendor/tina4/bin
 2021-02-15 New! Routes can now be directed to Class methods, ORM generation available in tina4
 2021-02-13 Fixes for Firebird database engine released
