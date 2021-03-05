@@ -13,12 +13,14 @@
     "scssphp/scssphp": "^1.4",
     "twig/extensions": "^1.5"
   },
-  "bin": ["bin/tina4"],
+  "bin": ["bin/tina4","bin/tina4service"],
   "scripts": {
     "tina4": "tina4",
+    "tina4service": "tina4service",
     "test" : "@tina4 tests:run",
     "initialize": "@tina4 initialize:run",
     "start" : "php -S localhost:7145 index.php",
+    "start-service": "@tina4service",
     "post-install-cmd": [
         "@tina4 initialize:run"
     ]
