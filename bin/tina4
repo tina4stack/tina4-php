@@ -35,10 +35,17 @@ function write($output): void
     echo $output;
 }
 
-$menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "menuCode" => static function ($index, $input) {
+$menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "commandLine" => ["options" => ["run"]], "menuCode" => static function ($index, $input, $options) {
     global $rootPath;
     if ($input === "0") { //Menu Option 0 - Exit
         return ["index" => 0, "prompt" => ""];
+    }
+
+    if (!empty($options)) {
+        if ($options === "initialize:run") {
+            $index = 1;
+            $input = "y";
+        }
     }
     switch ($index) {
         case 1:

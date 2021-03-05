@@ -14,6 +14,15 @@
     "twig/extensions": "^1.5"
   },
   "bin": ["bin/tina4"],
+  "scripts": {
+    "tina4": "tina4",
+    "test" : "@tina4 tests:run",
+    "initialize": "@tina4 initialize:run",
+    "start" : "php -S localhost:7145 index.php",
+    "post-install-cmd": [
+        "@tina4 initialize:run"
+    ]
+  },
   "autoload": {
     "classmap": [
       "Tina4Php.php",
@@ -32,7 +41,8 @@
       "Tina4/Core/HTMLElement.php"
     ],
     "psr-4": {
-      "Tina4\\": ["Tina4/","Tina4/Api","Tina4/Core","Tina4/Database","Tina4/Messaging","Tina4/ORM","Tina4/Routing","Tina4/Security"]
+      "Tina4\\": ["Tina4/","Tina4/Api","Tina4/Core","Tina4/Database","Tina4/Messaging","Tina4/ORM","Tina4/Routing","Tina4/Security"],
+      "": ["src/app/","src/objects/"]
     }
   }
 }

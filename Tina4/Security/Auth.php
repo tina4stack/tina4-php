@@ -110,6 +110,9 @@ class Auth extends Data
         `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
+        if (!file_exists($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore")) {
+            file_put_contents($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore", "*");
+        }
         return true;
     }
 
