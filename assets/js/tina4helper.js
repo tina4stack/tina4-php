@@ -1,16 +1,27 @@
 function getFormData(formName) {
     var data = new FormData();
-    $("#"+formName+" select, #"+formName+" input, #"+formName+" textarea").each(function(key, element){
+    $("#" + formName + " select, #" + formName + " input, #" + formName + " textarea").each(function (key, element) {
         if (element.name) {
             if (element.type == 'file') {
-                console.log ('Adding File', element.name);
-                let fileData = element.files[0];
-                if (fileData !== undefined) {
-                    data.append (element.name, fileData, fileData.name);
+                console.log('Adding File', element.name);
+                for (i = 0; i < element.files.length; i++) {
+                    let fileData = element.files[i];
+                    let elementName = element.name;
+                    if (fileData !== undefined) {
+                        if (element.files.length > 1 && !elementName.includes('[')) {
+                            elementName = elementName + '[]';
+                        }
+                        data.append(elementName, fileData, fileData.name);
+                    }
                 }
-            } else
-            if (element.type == 'checkbox' || element.type == 'radio' ) {
-                if (element.checked) { data.append(element.name, element.value) } else { if (element.type !== 'radio') { data.append(element.name, 0) } };
+            } else if (element.type == 'checkbox' || element.type == 'radio') {
+                if (element.checked) {
+                    data.append(element.name, element.value)
+                } else {
+                    if (element.type !== 'radio') {
+                        data.append(element.name, 0)
+                    }
+                }
             } else {
                 if (element.value === '') {
                     element.value = null;
