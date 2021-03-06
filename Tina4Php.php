@@ -194,7 +194,7 @@ class Tina4Php extends \Tina4\Data
         }
 
         //Add the icon file for making it look pretty
-        if (!file_exists($this->documentRoot . "/favicon.ico") && !file_exists("engine.php")) {
+        if (!file_exists($this->documentRoot . "/favicon.ico")) {
             copy($this->webRoot . "/favicon.ico", $this->documentRoot . "/favicon.ico");
         }
 
@@ -382,6 +382,8 @@ class Tina4Php extends \Tina4\Data
             $twig->addGlobal('Tina4', new \Tina4\Caller());
 
             $subFolder = $this->getSubFolder();
+
+
             if (isset($_SERVER["HTTP_HOST"])) {
                 $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
             }

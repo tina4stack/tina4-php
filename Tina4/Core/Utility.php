@@ -223,18 +223,21 @@ trait Utility
      */
     public function getSubFolder()
     {
+        return ""; //@todo FIX
         //Evaluate DOCUMENT_ROOT &&
         $documentRoot = "";
         if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
             $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
-        } else
-            if (isset($_SERVER["DOCUMENT_ROOT"])) {
-                $documentRoot = $_SERVER["DOCUMENT_ROOT"];
-            }
+        }
+            else
+        if (isset($_SERVER["DOCUMENT_ROOT"])) {
+            $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+        }
+
         $scriptName = $_SERVER["SCRIPT_FILENAME"];
 
 
-        //echo str_replace($documentRoot, "", $scriptName);
+        //echo str_replace($documentRoot, "", $scriptName)."<br>";
         $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
 
         if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
