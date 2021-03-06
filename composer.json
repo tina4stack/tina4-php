@@ -21,7 +21,7 @@
     "initialize": "@tina4 initialize:run",
     "start" : "php -S localhost:7145 index.php",
     "start-service": "@tina4service",
-    "post-install-cmd": [
+    "post-package-install": [
         "@tina4 initialize:run"
     ]
   },
