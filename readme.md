@@ -39,35 +39,13 @@ The premise of the project is to make you the developer and PHP, the heroes!
 composer require andrevanzuydam/tina4php
 ```
 
-## FOR THE MOMENT YOU NEED TO ADD SCRIPTS TO YOUR COMPOSER WHILE WE AUTOMATE THIS FUNCTIONALITY
+#### Begin your Tina4 project using
 ```bash
-{
-  "require": {
-      "andrevanzuydam/tina4php": "0.1.88"
-  },
-  "scripts": {
-    "tina4": "tina4",
-    "tina4service": "tina4service",
-    "test" : "@tina4 tests:run",
-    "initialize": "@tina4 initialize:run",
-    "start" : "php -S localhost:7145 index.php",
-    "start-service": "@tina4service",
-    "post-install-cmd": [
-        "@tina4 initialize:run"
-    ]
-  }
-}
-```
-
-
-
-#### If the post install script does not run you can call initialize to create and index.php
-```bash
-composer initialize
+composer exec tina4 initialize:run
 ```
 #### Spin up a web server with PHP in your terminal in the project folder
 ```bash
-composer start
+  composer start
 ```
 Hit up http://localhost:7145 in your browser, you should see the 404 error
 
