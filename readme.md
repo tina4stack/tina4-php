@@ -34,7 +34,6 @@ The premise of the project is to make you the developer and PHP, the heroes!
 - Create a project folder where you want to work
 - In your project folder terminal / console
 
-
 ```bash
 composer require andrevanzuydam/tina4php
 ```
