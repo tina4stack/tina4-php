@@ -165,7 +165,7 @@ class Tina4Php extends \Tina4\Data
         $arrRoutes = [];
 
         //Add the .htaccess file for redirecting things & copy the default src structure
-        if (!file_exists($this->documentRoot . DIRECTORY_SEPARATOR.".htaccess") && !file_exists("engine.php")) {
+        if (!file_exists($this->documentRoot . DIRECTORY_SEPARATOR.".htaccess") && !file_exists($this->documentRoot . DIRECTORY_SEPARATOR."src")) {
             if (!file_exists($this->documentRoot . DIRECTORY_SEPARATOR."src")) {
                 $foldersToCopy = ["assets", "app", "api", "routes", "templates", "objects", "services", "scss"];
                 foreach ($foldersToCopy as $id => $folder) {
