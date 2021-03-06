@@ -223,7 +223,9 @@ trait Utility
      */
     public function getSubFolder()
     {
-        return ""; //@todo FIX
+        if (defined("TINA4_SUB_FOLDER")) {
+            return TINA4_SUB_FOLDER;
+        }
         //Evaluate DOCUMENT_ROOT &&
         $documentRoot = "";
         if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
@@ -235,16 +237,18 @@ trait Utility
         }
 
         $scriptName = $_SERVER["SCRIPT_FILENAME"];
-
-
         //echo str_replace($documentRoot, "", $scriptName)."<br>";
         $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
 
-        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
+        if ($subFolder === DIRECTORY_SEPARATOR
+            || $subFolder === "."
+            || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"])
+                    && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"]
+                    && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
             $subFolder = null;
-
         }
 
+        define("TINA4_SUB_FOLDER", $subFolder);
         return $subFolder;
     }
 }

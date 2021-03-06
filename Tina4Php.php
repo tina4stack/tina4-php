@@ -383,10 +383,10 @@ class Tina4Php extends \Tina4\Data
 
             $subFolder = $this->getSubFolder();
 
-
             if (isset($_SERVER["HTTP_HOST"])) {
                 $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
             }
+
             $twig->addGlobal('baseUrl', $subFolder);
             $twig->addGlobal('baseURL', $subFolder);
             $twig->addGlobal('uniqId', uniqid('', true));

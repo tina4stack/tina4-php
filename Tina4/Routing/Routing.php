@@ -123,6 +123,8 @@ class Routing
 
             //Clean up twig extensions
             $fileName = str_replace(".twig", "", $fileName);
+
+
             // if requested file isn't a php file
             if (file_exists($root . $urlToParse) && $urlToParse !== "/" && !is_dir($root . $urlToParse)) {
                 $this->returnStatic($root . $urlToParse);
@@ -134,9 +136,9 @@ class Routing
                             $templateLocation = $templateLocation["path"];
                         }
                     }
-                    Debug::message($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
-                    if (file_exists($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
-                        $this->returnStatic($root . DIRECTORY_SEPARATOR . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);
+                    Debug::message($root  . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
+                    if (file_exists($root  . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
+                        $this->returnStatic($root . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);
                     }
                 }
             }
