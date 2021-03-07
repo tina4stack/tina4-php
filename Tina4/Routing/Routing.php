@@ -53,10 +53,10 @@ class Routing
 
         $this->root = $root;
 
-        if (!empty($config) && !empty($config->getAuthentication())) {
+        if ($config !== null && $config->getAuthentication() !== null) {
             $this->auth = $config->getAuthentication();
         } else {
-            $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"], $urlToParse);
+            $this->auth = new Auth($_SERVER["DOCUMENT_ROOT"]);
         }
 
         if (!empty($subFolder)) {
@@ -64,10 +64,8 @@ class Routing
             if (!defined("TINA4_BASE_URL")) {
                 define("TINA4_BASE_URL", $subFolder);
             }
-        } else {
-            if (!defined("TINA4_BASE_URL")) {
-                define("TINA4_BASE_URL", "");
-            }
+        } else if (!defined("TINA4_BASE_URL")) {
+            define("TINA4_BASE_URL", "");
         }
 
         if (TINA4_DEBUG) {
@@ -78,7 +76,7 @@ class Routing
 
         if (!$suppressed) {
             if ($method === "OPTIONS") {
-                if (in_array("*", TINA4_ALLOW_ORIGINS) || (key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
+                if (in_array("*", TINA4_ALLOW_ORIGINS) || (array_key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
                     if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
                         header('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
                     } else {
@@ -109,7 +107,7 @@ class Routing
 
             $urlToParse = $this->cleanURL($urlToParse);
 
-            //Fix for subfolders and static files
+            //Fix for sub folders and static files
             if (!empty($this->subFolder) && (strpos($urlToParse, ".twig") === false || strpos($urlToParse, ".php") === false) ) {
                 $urlToParse = str_replace($this->subFolder, "/", $urlToParse);
             }
@@ -126,15 +124,13 @@ class Routing
 
 
             // if requested file isn't a php file
-            if (file_exists($root . $urlToParse) && $urlToParse !== "/" && !is_dir($root . $urlToParse)) {
+            if ($urlToParse !== "/" && file_exists($root . $urlToParse) &&  !is_dir($root . $urlToParse)) {
                 $this->returnStatic($root . $urlToParse);
             } else {
                 //Check the template locations
                 foreach (TINA4_TEMPLATE_LOCATIONS_INTERNAL as $tid => $templateLocation) {
-                    if (is_array($templateLocation)) {
-                        if (isset($templateLocation["path"])) {
-                            $templateLocation = $templateLocation["path"];
-                        }
+                    if (is_array($templateLocation) && isset($templateLocation["path"])) {
+                        $templateLocation = $templateLocation["path"];
                     }
                     Debug::message($root  . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
                     if (file_exists($root  . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
@@ -164,10 +160,8 @@ class Routing
                     } else
                         if (file_exists(getcwd() . "/" . $route)) {
                             $this->includeDirectory(getcwd() . "/" . $route);
-                        } else {
-                            if (TINA4_DEBUG) {
-                                Debug::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
-                            }
+                        } else if (TINA4_DEBUG) {
+                            Debug::message("TINA4: " . getcwd() . "/" . $route . " not found!", TINA4_DEBUG_LEVEL);
                         }
                 }
             }
@@ -179,7 +173,7 @@ class Routing
             //iterate through the routes
             foreach ($arrRoutes as $rid => $route) {
                 $result = "";
-                if ($this->matchPath($urlToParse, $route["routePath"]) && ($route["method"] === $this->method || $route["method"] == TINA4_ANY)) {
+                if ($this->matchPath($urlToParse, $route["routePath"]) && ($route["method"] === $this->method || $route["method"] === TINA4_ANY)) {
                     //Look to see if we are a secure route
 
 
@@ -207,23 +201,21 @@ class Routing
 
                         $matched = true;
                         break;
-                    } else {
-                        if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
-                            //Check for the formToken request variable
-                            if (!$this->auth->validToken($_REQUEST["formToken"])) {
-                                $this->forbidden();
-                            } else {
-                                $this->auth = null; //clear the auth
-                                $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                            }
+                    }
+
+                    if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        //Check for the formToken request variable
+                        if (!$this->auth->validToken($_REQUEST["formToken"])) {
+                            $this->forbidden();
                         } else {
-                            if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE])) {
-                                $this->auth = null; //clear the auth
-                                $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                            } else {
-                                $this->forbidden();
-                            }
+                            $this->auth = null; //clear the auth
+                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
                         }
+                    } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        $this->auth = null; //clear the auth
+                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                    } else {
+                        $this->forbidden();
                     }
 
                     //check for an empty result
@@ -255,7 +247,7 @@ class Routing
                         }
                     }
 
-                    Debug::message("TINA4: Variables\n" . join("\n", $variables), TINA4_DEBUG_LEVEL);
+                    Debug::message("TINA4: Variables\n" . implode("\n", $variables), TINA4_DEBUG_LEVEL);
                 }
 
 
@@ -272,7 +264,7 @@ class Routing
      * @param string $url URL to be cleaned that may contain "?"
      * @return mixed Part of the URL before the "?" if it existed
      */
-    public function cleanURL($url)
+    public function cleanURL(string $url):string
     {
         $url = explode("?", $url, 2);
         return $url[0];
@@ -314,15 +306,15 @@ class Routing
         if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
             $this->rangeDownload($fileName);
             exit;
-        } else {
-            header('Content-Type: ' . $mimeType);
-            header('Cache-Control: max-age=' . (60 * 60) . ', public');
-            header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
-
-            $fh = fopen($fileName, 'r');
-            fpassthru($fh);
-            fclose($fh);
         }
+
+        header('Content-Type: ' . $mimeType);
+        header('Cache-Control: max-age=' . (60 * 60) . ', public');
+        header('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
+        $fh = fopen($fileName, 'rb');
+        fpassthru($fh);
+        fclose($fh);
         exit; //we are done here, file will be delivered
     }
 
@@ -330,7 +322,7 @@ class Routing
      * Method to download / stream files
      * @param $file
      */
-    public function rangeDownload($file)
+    public function rangeDownload($file): void
     {
 
         $fp = @fopen($file, 'rb');
@@ -342,12 +334,12 @@ class Routing
         // Now that we've gotten so far without errors we send the accept range header
         /* At the moment we only support single ranges.
          * Multiple ranges requires some more work to ensure it works correctly
-         * and comply with the spesifications: http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
+         * and comply with the specifications: http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
          *
-         * Multirange support annouces itself with:
+         * Multi-range support announces itself with:
          * header('Accept-Ranges: bytes');
          *
-         * Multirange content must be sent with multipart/byteranges mediatype,
+         * Multi-range content must be sent with multipart/byteranges mediatype,
          * (mediatype = mimetype)
          * as well as a boundry header to indicate the various chunks of data.
          */
@@ -357,10 +349,9 @@ class Routing
         // http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
         if (isset($_SERVER['HTTP_RANGE'])) {
 
-            $c_start = $start;
             $c_end = $end;
             // Extract the range string
-            list(, $range) = explode('=', $_SERVER['HTTP_RANGE'], 2);
+            [, $range] = explode('=', $_SERVER['HTTP_RANGE'], 2);
             // Make sure the client hasn't sent us a multibyte range
             if (strpos($range, ',') !== false) {
 
@@ -375,7 +366,7 @@ class Routing
             // If the range starts with an '-' we start from the beginning
             // If not, we forward the file pointer
             // And make sure to get the end byte if specified
-            if ($range == '-') {
+            if ($range === '-') {
                 // The n-number of the last bytes is requested
                 $c_start = $size - substr($range, 1);
             } else {
@@ -433,7 +424,7 @@ class Routing
      * @param string $routePath Route path
      * @return bool Whether or not they match
      */
-    public function matchPath($path, $routePath): bool
+    public function matchPath(string $path, string $routePath): bool
     {
 
         if ($routePath !== "/") {
@@ -443,7 +434,7 @@ class Routing
         preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
 
         $variables = [];
-        if (count($matchesPath[1]) == count($matchesRoute[1])) {
+        if (count($matchesPath[1]) === count($matchesRoute[1])) {
             $matching = true;
             foreach ($matchesPath[1] as $rid => $matchPath) {
                 if (!empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
@@ -523,7 +514,7 @@ class Routing
                 throw new \RuntimeException(sprintf('Directory "%s" was not created', $dst));
             }
             while (false !== ($file = readdir($dir))) {
-                if (($file != '.') && ($file != '..')) {
+                if (($file !== '.') && ($file !== '..')) {
                     if (is_dir($src . '/' . $file)) {
                         self::recurseCopy($src . '/' . $file, $dst . '/' . $file);
                     } else {
@@ -543,29 +534,11 @@ class Routing
     public function __toString()
     {
         if (TINA4_DEBUG) {
-            $debugInfo = \Tina4\Debug::render();
+            $debugInfo = Debug::render();
         } else {
             $debugInfo = "";
         }
         return $this->content . $debugInfo;
-    }
-
-    /**
-     * Returns the annotations for a class
-     * @param $class
-     * @return false|mixed
-     */
-    public function getClassAnnotations($class)
-    {
-        try {
-            $r = new \ReflectionClass($class);
-            $doc = $r->getDocComment();
-            preg_match_all('#@(.*?)\n#s', $doc, $annotations);
-            return $annotations[1];
-        } catch (\ReflectionException $e) {
-            Debug::message("Could not get annotations for {$class}");
-        }
-        return [];
     }
 
     /**
@@ -574,6 +547,7 @@ class Routing
      * @param string $description
      * @param string $version
      * @return false|string
+     * @throws \ReflectionException
      */
     public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
     {
@@ -585,22 +559,23 @@ class Routing
      * @param $method
      * @param $params
      * @return false|mixed
+     * @throws \ReflectionException
      */
-    public function getRouteResult ($class, $method, $params)
+    public function getRouteResult ($class, $method, $params): string
     {
         if (!empty($class)) {
             $methodCheck = new \ReflectionMethod($class, $method);
 
             if ($methodCheck->isStatic()) {
                 return call_user_func_array([$class, $method], $params);
-            } else {
-                $classInstance = new \ReflectionClass($class);
-                $class = $classInstance->newInstance();
-                return call_user_func_array([$class, $method], $params);
             }
-        } else {
-            return call_user_func_array($method, $params);
+
+            $classInstance = new \ReflectionClass($class);
+            $class = $classInstance->newInstance();
+            return call_user_func_array([$class, $method], $params);
         }
+
+        return call_user_func_array($method, $params);
     }
 
 }
