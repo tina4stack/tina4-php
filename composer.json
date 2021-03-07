@@ -11,7 +11,8 @@
     "nlp-tools/nlp-tools": "^0.1.3",
     "opis/closure": "^3.6",
     "scssphp/scssphp": "^1.4",
-    "twig/extensions": "^1.5"
+    "twig/extensions": "^1.5",
+    "ext-curl": "*"
   },
   "bin": ["bin/tina4","bin/tina4service"],
   "scripts": {

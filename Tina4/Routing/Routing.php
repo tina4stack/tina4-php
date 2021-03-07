@@ -43,6 +43,7 @@ class Routing
      */
     public function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null, $suppressed = false)
     {
+
         if (!empty($root)) {
             $_SERVER["DOCUMENT_ROOT"] = $root;
         }
@@ -126,19 +127,18 @@ class Routing
             // if requested file isn't a php file
             if ($urlToParse !== "/" && file_exists($root . $urlToParse) &&  !is_dir($root . $urlToParse)) {
                 $this->returnStatic($root . $urlToParse);
-            } else {
-                //Check the template locations
+            } else if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL"))
+            {
                 foreach (TINA4_TEMPLATE_LOCATIONS_INTERNAL as $tid => $templateLocation) {
                     if (is_array($templateLocation) && isset($templateLocation["path"])) {
                         $templateLocation = $templateLocation["path"];
                     }
-                    Debug::message($root  . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
-                    if (file_exists($root  . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
+                    Debug::message($root . $templateLocation . $urlToParse, TINA4_DEBUG_LEVEL);
+                    if (file_exists($root . $templateLocation . $urlToParse) && !is_dir($root . DIRECTORY_SEPARATOR . $templateLocation . $urlToParse)) {
                         $this->returnStatic($root . $templateLocation . DIRECTORY_SEPARATOR . $urlToParse);
                     }
                 }
             }
-
 
             if ($urlToParse !== "/") {
                 $urlToParse .= "/";
@@ -175,8 +175,6 @@ class Routing
                 $result = "";
                 if ($this->matchPath($urlToParse, $route["routePath"]) && ($route["method"] === $this->method || $route["method"] === TINA4_ANY)) {
                     //Look to see if we are a secure route
-
-
                     if (!empty($route["class"])) {
                         $reflectionClass =  new \ReflectionClass($route["class"]);
                         $reflection = $reflectionClass->getMethod($route["function"]);
@@ -213,6 +211,7 @@ class Routing
                         }
                     } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
                         $this->auth = null; //clear the auth
+
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
                     } else {
                         $this->forbidden();
@@ -229,6 +228,7 @@ class Routing
                     break;
                 }
             }
+
 
             //result was empty we can parse for templates
             if (!$matched) {
@@ -257,6 +257,7 @@ class Routing
             }
         }
 
+
     }
 
     /**
@@ -276,6 +277,10 @@ class Routing
      */
     public function returnStatic($fileName): void
     {
+        if (is_dir($fileName))
+        {
+            exit;
+        }
         $fileName = preg_replace('#/+#', '/', $fileName);
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         switch ($ext) {
@@ -549,9 +554,9 @@ class Routing
      * @return false|string
      * @throws \ReflectionException
      */
-    public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0")
+    public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0"): string
     {
-        return (new Swagger($this->root, $title, $description, $version, $this->subFolder))->jsonSerialize();
+        return  (new Swagger($this->root, $title, $description, $version, $this->subFolder));
     }
 
     /**
@@ -561,8 +566,9 @@ class Routing
      * @return false|mixed
      * @throws \ReflectionException
      */
-    public function getRouteResult ($class, $method, $params): string
+    public function getRouteResult ($class, $method, $params) : string
     {
+
         if (!empty($class)) {
             $methodCheck = new \ReflectionMethod($class, $method);
 
@@ -575,7 +581,8 @@ class Routing
             return call_user_func_array([$class, $method], $params);
         }
 
-        return call_user_func_array($method, $params);
+
+        return  call_user_func_array($method, $params);
     }
 
 }

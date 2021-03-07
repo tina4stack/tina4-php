@@ -358,10 +358,17 @@ class Tina4Php extends Data
                 return $response ($result, HTTP_OK, TEXT_HTML);
             });
 
-            /**
-             * End of routes
-             */
         }
+
+        \Tina4\Route::get('/swagger/json.json', function (\Tina4\Response $response) use ($tina4PHP) {
+            if (!defined("SWAGGER_TITLE"))
+            {
+                define("SWAGGER_TITLE", "Default Swagger");
+                define("SWAGGER_DESCRIPTION", "Please declare in your .env values for SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION");
+                define("SWAGGER_VERSION", "1.0.0.");
+            }
+            return $response ((new \Tina4\Routing($tina4PHP->webRoot, $tina4PHP->getSubFolder(), $urlToParse = "", $method = "",  null, true))->getSwagger(SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION));
+        });
     }
 
     /**
