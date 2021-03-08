@@ -44,7 +44,7 @@ composer exec tina4 initialize:run
 ```
 #### Spin up a web server with PHP in your terminal in the project folder
 ```bash
-  composer start
+composer start
 ```
 Hit up http://localhost:7145 in your browser, you should see the 404 error
 
@@ -136,7 +136,6 @@ class Example
     }
 
 }
-
 ```
 
 ### Example of a database connection to SQLite3
@@ -208,13 +207,8 @@ $address->save();
 
 Give this a try and see what happens
 
-Windows
 ```commandline
-vendor\bin\tina4 tests:run
-```
-Linux & Mac
-```bash
-vendor/bin/tina4 tests:run
+composer test
 ```
 
 Writing unit tests is easy and can be done as an annotation in your code comments
@@ -225,6 +219,7 @@ Writing unit tests is easy and can be done as an annotation in your code comment
  * Some function to add numbers
  * @tests
  *   assert (1,1) === 2, "1 + 1 = 2"
+ *   assert is_integer(1,1) === true, "This should be an integer"
  */
 function add ($a,$b) {
     return $a+$b;

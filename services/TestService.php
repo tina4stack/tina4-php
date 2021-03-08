@@ -12,7 +12,7 @@ class TestService extends \Tina4\Process {
         echo memory_get_usage()."\n";
         //fetch queue ?
 
-        echo "OK!\n";
+        echo "OK! AA ADD STUFF\n";
         echo "No memory leaks!";
        // echo "Well except for when the program changes!";
        //
