@@ -45,9 +45,12 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
                     "start" => "php -S localhost:7145 index.php",
                     "start-service" => "@tina4service"];
         $psr4 = ["" => ["src/app/","src/objects/"]];
+        $config = ["process-timeout" => 0];
+
         if (!isset($composer["scripts"])) {
             $composer["scripts"] = $scripts;
             $composer["psr4"] = $psr4;
+            $composer["config"] = $config;
         }
         file_put_contents($composerFile, json_encode($composer, JSON_PRETTY_PRINT));
     }
