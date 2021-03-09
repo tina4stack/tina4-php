@@ -30,10 +30,10 @@ class Example
      *
      * @tests
      *   assert () === "The Fellowship Of The Ring", "API request"
-     *   assert () !== "The Fellowship Of The Ring", "Testing again to fail"
+     *   assert is_string() === true, "Testing again to fail"
      */
     public function testAPI() {
-       $api = new \Tina4\Api("https://the-one-api.dev/v2", "Authorization: Bearer ".API_KEY);
+       $api = new \Tina4\Api("https://the-one-api.dev/v2", "Authorization: Bearer 12345");
 
        return $api->sendRequest("/book")->docs[0]->name;
     }

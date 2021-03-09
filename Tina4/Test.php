@@ -86,9 +86,10 @@ class Test
                 $condition = trim($testParts[0][2]);
 
                 //check for enclosing method before the ()
-                preg_match_all('/(.*)\(\)/m', $condition, $methods, PREG_SET_ORDER);
+                preg_match_all('/(.*)\((.*)\)/m', $condition, $methods, PREG_SET_ORDER);
 
                 $enclosingMethod = "";
+
                 if (isset($methods[0][1])) {
                     $enclosingMethod = $methods[0][1];
                     if (in_array($enclosingMethod, ["is_array", "is_object", "is_bool", "is_double", "is_float", "is_integer", "is_null", "is_string", "is_int", "is_numeric", "is_long", "is_callable", "is_countable", "is_iterable", "is_scalar", "is_real", "is_resource"])) {
@@ -128,7 +129,7 @@ class Test
                         $condition = str_replace(" ==", ") ==", $condition);
                     }
 
-                    eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', true));');
+                    eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', 1));');
                 } else if ($condition[0] === '$' && strpos($condition,'$testClass') === false) {
                     if ($isStatic)
                     {
@@ -136,7 +137,8 @@ class Test
                     } else {
                         $condition = '$testClass->' . str_replace('$', '', $condition);
                     }
-                    @eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', true));');
+                    eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', 1));');
+
                 } else {
 
                     //Condition does not have form x === y or x !== y
@@ -237,8 +239,6 @@ class Test
      */
     public function run($onlyShowFailed = true): void
     {
-
-
         //Autoload all the include paths for testing in the system
         foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $id => $directory) {
             if (file_exists($directory)) {

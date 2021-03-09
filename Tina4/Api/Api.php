@@ -20,7 +20,7 @@ class Api
      * @param $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
      * @tests
-     *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer ".API_KEY) === null,"Could not initialize API"
+     *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
      */
     public function __construct($baseURL, $authHeader = "")
     {
@@ -38,7 +38,7 @@ class Api
      * @tests
      *   assert ("/book")->docs[0]->name === "The Fellowship Of The Ring", "API Get request"
      *   assert ("/book")->docs[1]->name !== "The Fellowship Of The Ring", "API Get request"
-     *   assert is_string($this->baseURL) === true, "This is not a string"
+     *   assert is_object("/book") === true, "This is not an object"
      */
     public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*")
     {
