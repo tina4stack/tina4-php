@@ -1161,8 +1161,8 @@ EOT;
         $componentPath = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR."src". DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
 
 
-        if (!file_exists($componentPath)) {
-            mkdir($componentPath, 0755, true);
+        if (!file_exists($componentPath) && !mkdir($componentPath, 0755, true) && !is_dir($componentPath)) {
+            throw new \RuntimeException(sprintf('Directory "%s" was not created', $componentPath));
         }
 
         $gridFilePath = $componentPath . DIRECTORY_SEPARATOR . "grid.twig";
@@ -1200,7 +1200,7 @@ EOT;
     function getTableColumnName($name)
     {
         $fieldName = "";
-        for ($i = 0; $i < strlen($name); $i++) {
+        for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
             if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name) - 1 && (!\ctype_upper($name[$i - 1]) || !\ctype_upper($name[$i + 1]))) {
                 $fieldName .= " " . $name[$i];
             } else {
