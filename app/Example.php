@@ -18,10 +18,10 @@ class Example
      * @tests
      *   assert (1,1) === 2, "1 + 1 = 2"
      *   assert (1,2) !== 4, "1 + 2 <> 4"
-     *   assert (1,3) === 5, "Fail on purpose"
+     *   assert is_integer(1,3) === true, "This should be an integer"
      */
     public function add2Numbers($a, $b) {
-        return $a + $b;
+        return (int)($a + $b);
     }
 
 

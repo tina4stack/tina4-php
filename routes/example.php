@@ -33,3 +33,13 @@
  * Note the swagger annotations will go in the class
  */
 \Tina4\Get::add("/test/class/static", ["Example", "routeStatic"]);
+
+
+\Tina4\Get::add("/test/service", function(\Tina4\Response $response){
+
+    $process = new TestService();
+
+    (new \Tina4\Service())->addProcess($process);
+
+    return $response ("OK");
+});

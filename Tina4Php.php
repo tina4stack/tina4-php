@@ -277,43 +277,7 @@ class Tina4Php extends Data
 
         //Some routes only are available with debugging
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-
-            /**
-             * @secure
-             */
-            Route::get("/code", function (Response $response, Request $request)  {
-                return $response (renderTemplate("code.twig", $request->asArray()), HTTP_OK, TEXT_HTML);
-            });
-
-            /**
-             * @secure
-             */
-            Route::post("/code/files/tree", function (Response $response) use ($tina4PHP) {
-                //Read dir
-                $html = $this->iterateDirectory($tina4PHP->documentRoot);
-
-                return $response ($html, HTTP_OK, TEXT_HTML);
-            });
-
-            /**
-             * @secure
-             */
-            Route::post("/code/files/{action}", function (Response $response, Request $request) use ($tina4PHP) {
-                $action = $request->inlineParams[0];
-                if ($action === "load") {
-                    return $response (file_get_contents($tina4PHP->documentRoot . "/" . $request->params["fileName"]), HTTP_OK, TEXT_HTML);
-                }
-
-                if ($action === "save") {
-                    $this->initGit(true, $request->params["commitMessage"], true);
-                    file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/" . $request->params["fileName"], $request->params["fileContent"]);
-                    return $response ("Ok!", HTTP_OK, TEXT_HTML);
-                }
-                return $response("");
-            });
-
-
-            Route::get("/migrate/create|/migrations/create|/migration/create", function (Response $response) {
+           Route::get("/migrate/create|/migrations/create|/migration/create", function (Response $response) {
                 $html = _html(
                     _title("Tina4 Migrations"),
                     _head('<script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
