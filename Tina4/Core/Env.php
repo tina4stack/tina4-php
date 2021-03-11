@@ -44,7 +44,7 @@ class Env
 
         if (!file_exists($fileName)) {
             $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
-            $vendorDir = dirname($reflection->getFileName());
+            $vendorDir = dirname(dirname($reflection->getFileName()));
             $fileName = $vendorDir . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".env";
         }
 
