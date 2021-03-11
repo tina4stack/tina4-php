@@ -23,6 +23,9 @@
     "start" : "php -S localhost:7145 index.php",
     "start-service": "@tina4service"
   },
+  "config": {
+    "process-timeout": 0
+  },
   "autoload": {
     "classmap": [
       "Tina4Php.php",
@@ -42,9 +45,6 @@
     ],
     "psr-4": {
       "Tina4\\": ["Tina4/","Tina4/Api","Tina4/Core","Tina4/Database","Tina4/Messaging","Tina4/ORM","Tina4/Routing","Tina4/Security"]
-    },
-    "config": {
-      "process-timeout": 0
     }
   }
 }
