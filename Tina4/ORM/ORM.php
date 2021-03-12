@@ -953,11 +953,14 @@ class ORM implements \JsonSerializable
         foreach ($this->hasMany() as $id => $item) {
             foreach ($item as $className => $foreignKey) {
                 $class = new $className;
-                $foreignKey = $this->getFieldName($foreignKey);
-                $records = $class->select("*", $this->hasManyLimit)->where ("{$foreignKey} = '{$this->{$this->primaryKey}}'");
-                $className = $this->pluralize($className);
-                $this->readOnlyFields[] = $className;
-                $this->{$className} = $records->asObject();
+
+                if ($class->checkDBConnection()) {
+                    $foreignKey = $this->getFieldName($foreignKey);
+                    $records = $class->select("*", $this->hasManyLimit)->where("{$foreignKey} = '{$this->{$this->primaryKey}}'");
+                    $className = $this->pluralize($className);
+                    $this->readOnlyFields[] = $className;
+                    $this->{$className} = $records->asObject();
+                }
             }
         }
     }
@@ -1158,8 +1161,8 @@ EOT;
         $componentPath = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR."src". DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
 
 
-        if (!file_exists($componentPath)) {
-            mkdir($componentPath, 0755, true);
+        if (!file_exists($componentPath) && !mkdir($componentPath, 0755, true) && !is_dir($componentPath)) {
+            throw new \RuntimeException(sprintf('Directory "%s" was not created', $componentPath));
         }
 
         $gridFilePath = $componentPath . DIRECTORY_SEPARATOR . "grid.twig";
@@ -1167,12 +1170,12 @@ EOT;
         $formFilePath = $componentPath . DIRECTORY_SEPARATOR . "form.twig";
 
         //create the grid
-        $gridHtml = renderTemplate("components/grid.twig", ["gridTitle" => $className, "gridId" => $this->camelCase($className), "primaryKey" => $this->primaryKey, "tableColumns" => $tableColumns, "tableColumnMappings" => $tableColumnMappings, "apiPath" => $path, "baseUrl" => TINA4_BASE_URL]);
+        $gridHtml = renderTemplate("@__main__/components/grid.twig", ["gridTitle" => $className, "gridId" => $this->camelCase($className), "primaryKey" => $this->primaryKey, "tableColumns" => $tableColumns, "tableColumnMappings" => $tableColumnMappings, "apiPath" => $path, "baseUrl" => TINA4_BASE_URL]);
 
         file_put_contents($gridFilePath, $gridHtml);
 
         //create the form
-        $formHtml = renderTemplate("components/form.twig", ["formId" => $this->camelCase($className), "primaryKey" => $this->primaryKey, "tableFields" => $tableFields, "baseUrl" => TINA4_BASE_URL]);
+        $formHtml = renderTemplate("@__main__/components/form.twig", ["formId" => $this->camelCase($className), "primaryKey" => $this->primaryKey, "tableFields" => $tableFields, "baseUrl" => TINA4_BASE_URL]);
 
         $formHtml = str_replace("&quot;", '"', $formHtml);
         file_put_contents($formFilePath, $formHtml);
@@ -1197,7 +1200,7 @@ EOT;
     function getTableColumnName($name)
     {
         $fieldName = "";
-        for ($i = 0; $i < strlen($name); $i++) {
+        for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
             if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name) - 1 && (!\ctype_upper($name[$i - 1]) || !\ctype_upper($name[$i + 1]))) {
                 $fieldName .= " " . $name[$i];
             } else {

@@ -35,10 +35,38 @@ function write($output): void
     echo $output;
 }
 
-$menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "menuCode" => static function ($index, $input) {
+$menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "commandLine" => ["options" => ["run"]], "menuCode" => static function ($index, $input, $options) {
+    function configureComposerJson($composerFile) {
+        $composer = json_decode(file_get_contents($composerFile), true);
+        $scripts = ["tina4" => "tina4",
+                    "tina4service" => "tina4service",
+                    "test" => "@tina4 tests:run",
+                    "initialize" => "@tina4 initialize:run",
+                    "start" => "php -S localhost:7145 index.php",
+                    "start-service" => "@tina4service"];
+        $psr4 = ["" => ["src/app/","src/objects/"]];
+        $config = ["process-timeout" => 0];
+
+        if (!isset($composer["scripts"])) {
+            $composer["scripts"] = $scripts;
+            $composer["psr4"] = $psr4;
+            $composer["config"] = $config;
+        }
+        file_put_contents($composerFile, json_encode($composer, JSON_PRETTY_PRINT));
+    }
+
     global $rootPath;
     if ($input === "0") { //Menu Option 0 - Exit
         return ["index" => 0, "prompt" => ""];
+    }
+
+    if (!empty($options)) {
+        if ($options === "initialize:run") {
+            $index = 1;
+            $input = "y";
+
+            configureComposerJson($rootPath."composer.json");
+        }
     }
     switch ($index) {
         case 1:

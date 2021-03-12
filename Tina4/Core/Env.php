@@ -65,11 +65,11 @@ class Env
                 if (empty($line)) {
                     //Ignore blanks
                 } else
-                    if (($line[0] == "[" && $line[strlen($line) - 1] == "]") || ($line[0] == "#")) {
+                    if (($line[0] === "[" && $line[strlen($line) - 1] === "]") || ($line[0] === "#")) {
                         //Ignore [Sections] && Comments #
                     } else {
                         $variables = explode("=", $line, 2);
-                        if (isset($variables[0]) && isset($variables[1])) {
+                        if (isset($variables[0], $variables[1])) {
                             if (!defined(trim($variables[0]))) {
                                 Debug::message("Defining {$variables[0]} = $variables[1]");
                                 //echo 'return (defined("'.$variables[1].'") ? '.$variables[1].' : "'.$variables[1].'");';
@@ -89,7 +89,7 @@ class Env
             }
         } else {
             Debug::message("Created an ENV file for you {$fileName}");
-            file_put_contents($fileName, "[Example Env File]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=DEBUG_CONSOLE");
+            file_put_contents($fileName, "[Project Settings]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=DEBUG_CONSOLE\n[Open API]\nSWAGGER_TITLE=Tina4 Project\nSWAGGER_DESCRIPTION=Edit your .env file to change this description\nSWAGGER_VERSION=1.0.0");
 
         }
     }

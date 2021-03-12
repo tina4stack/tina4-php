@@ -19,7 +19,7 @@ class Response
      * @return false|string
      * @example examples\exampleRouteGetAdd.php For simple response
      */
-    function __invoke($content, $httpCode = 200, $contentType = null)
+    public function __invoke($content, $httpCode = 200, $contentType = null)
     {
         if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"])) {
             $contentType = $_SERVER["CONTENT_TYPE"];
@@ -74,7 +74,7 @@ class Response
      * @param string $node_name
      * @return string
      */
-    public static function generateValidXmlFromArray($array, $node_block = 'nodes', $node_name = 'node')
+    public static function generateValidXmlFromArray($array, $node_block = 'nodes', $node_name = 'node'): string
     {
         $xml = '<?xml version="1.0" encoding="UTF-8" ?>';
 
@@ -91,7 +91,7 @@ class Response
      * @param $node_name
      * @return string
      */
-    private static function generateXmlFromArray($array, $node_name)
+    private static function generateXmlFromArray($array, $node_name): string
     {
         $xml = '';
 

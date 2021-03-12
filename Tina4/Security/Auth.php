@@ -56,6 +56,7 @@ class Auth extends Data
         $this->documentRoot = $documentRoot;
 
         //Check security
+
         if (!file_exists($this->documentRoot . "secrets")) {
             $this->generateSecureKeys();
         }
@@ -63,9 +64,14 @@ class Auth extends Data
         //Load secrets
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
+        } else {
+            die("OpenSSL is probably not installed or secrets/private.key is missing, please run this on your project root : <pre>ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N \"\"</pre>");
         }
+
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
             $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
+        } else {
+            die("OpenSSL is probably not installed or secrets/public.pub is missing, please run this on your project root : <pre>openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub</pre>");
         }
 
         if (static::class === "Tina4\Auth") {
@@ -99,7 +105,7 @@ class Auth extends Data
      */
     public function generateSecureKeys()
     {
-        Debug::message("Generating Auth keys");
+        Debug::message("Generating Auth keys - {$this->documentRoot}secrets");
         if (file_exists($this->documentRoot . "secrets")) {
             Debug::message("Secrets folder exists already, please remove");
             return false;
@@ -110,6 +116,9 @@ class Auth extends Data
         `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
+        if (!file_exists($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore")) {
+            file_put_contents($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore", "*");
+        }
         return true;
     }
 

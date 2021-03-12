@@ -29,7 +29,7 @@ trait Utility
             } else {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
 
-                if (is_dir($fileNameRoute) && ($file !== ".") && ($file !== "..")) {
+                if (($file !== ".") && ($file !== "..") && is_dir($fileNameRoute)) {
                     $this->includeDirectory($fileNameRoute);
                 }
             }
@@ -43,12 +43,12 @@ trait Utility
      * @param $databaseFormat
      * @return bool
      */
-    public function isDate($dateString, $databaseFormat)
+    public function isDate($dateString, $databaseFormat): bool
     {
         if (is_array($dateString) || is_object($dateString)) {
             return false;
         }
-        if (substr($dateString, -1, 1) == "Z")
+        if (substr($dateString, -1, 1) === "Z")
         {
             $dateParts = explode("T", $dateString);
         } else {
@@ -65,37 +65,37 @@ trait Utility
      * @param $outputFormat
      * @return string
      */
-    public function formatDate($dateString, $databaseFormat, $outputFormat)
+    public function formatDate($dateString, $databaseFormat, $outputFormat): ?string
     {
         //Hacky fix for weird dates?
         $dateString = str_replace(".000000", "", $dateString);
 
         if (!empty($dateString)) {
-            if (substr($dateString, -1, 1) == "Z") {
+            if (substr($dateString, -1, 1) === "Z") {
                 $delimiter = "T";
                 $dateParts = explode($delimiter, $dateString);
                 $d = \DateTime::createFromFormat($databaseFormat, $dateParts[0]);
                 if ($d) {
                     return $d->format($outputFormat) . $delimiter . $dateParts[1];
-                } else {
-                    return null;
                 }
-            } else {
-                if (strpos($dateString, ":") !== false) {
-                    $databaseFormat .= " H:i:s";
-                    if (strpos($outputFormat, "T")) {
-                        $outputFormat .= "H:i:s";
-                    } else {
-                        $outputFormat .= " H:i:s";
-                    }
-                }
-                $d = \DateTime::createFromFormat($databaseFormat, $dateString);
-                if ($d) {
-                    return $d->format($outputFormat);
+
+                return null;
+            }
+
+            if (strpos($dateString, ":") !== false) {
+                $databaseFormat .= " H:i:s";
+                if (strpos($outputFormat, "T")) {
+                    $outputFormat .= "H:i:s";
                 } else {
-                    return null;
+                    $outputFormat .= " H:i:s";
                 }
             }
+            $d = \DateTime::createFromFormat($databaseFormat, $dateString);
+            if ($d) {
+                return $d->format($outputFormat);
+            }
+
+            return null;
         } else {
             return null;
         }
@@ -106,11 +106,15 @@ trait Utility
      * @param $string
      * @return bool
      */
-    public function isBinary($string)
+    public function isBinary($string): bool
     {
         //immediately return back binary if we can get an image size
-        if (is_numeric($string) || empty($string) || $string === null || $string === "") return false;
-        if (is_string($string) && strlen($string) > 50 && @is_array(@getimagesizefromstring($string))) return true;
+        if (is_numeric($string) || empty($string)) {
+            return false;
+        }
+        if (is_string($string) && strlen($string) > 50 && @is_array(@getimagesizefromstring($string))) {
+            return true;
+        }
         $isBinary = false;
         $string = str_ireplace("\t", "", $string);
         $string = str_ireplace("\n", "", $string);
@@ -126,7 +130,7 @@ trait Utility
      * @param $name
      * @return string
      */
-    public function camelCase($name)
+    public function camelCase($name): string
     {
         $fieldName = "";
         $name = strtolower($name);
@@ -144,11 +148,11 @@ trait Utility
     }
 
 
-    public function getDebugBackTrace()
+    public function getDebugBackTrace(): void
     {
         global $arrRoutes;
 
-        $routing = new \Tina4\Routing("", "", "", "", null, true);
+        $routing = new Routing("", "", "", "", null, true);
 
         if (isset($_SERVER["REQUEST_URI"])) {
             $urlToParse = $_SERVER["REQUEST_URI"];
@@ -221,27 +225,73 @@ trait Utility
     /**
      * Logic to determine the subfolder - result must be /folder/
      */
-    public function getSubFolder()
+    public function getSubFolder(): ?string
     {
+        if (defined("TINA4_SUB_FOLDER")) {
+            return TINA4_SUB_FOLDER;
+        }
         //Evaluate DOCUMENT_ROOT &&
         $documentRoot = "";
         if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
             $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
-        } else
-            if (isset($_SERVER["DOCUMENT_ROOT"])) {
-                $documentRoot = $_SERVER["DOCUMENT_ROOT"];
-            }
+        }
+            else
+        if (isset($_SERVER["DOCUMENT_ROOT"])) {
+            $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+        }
+
         $scriptName = $_SERVER["SCRIPT_FILENAME"];
-
-
-        //echo str_replace($documentRoot, "", $scriptName);
+        //echo str_replace($documentRoot, "", $scriptName)."<br>";
         $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
 
-        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === "." || (isset($_SERVER["SCRIPT_NAME"]) && isset($_SERVER["REQUEST_URI"]) && (str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"]))) {
+        if ($subFolder === DIRECTORY_SEPARATOR
+            || $subFolder === "."
+            || (isset($_SERVER["SCRIPT_NAME"], $_SERVER["REQUEST_URI"]) && str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
             $subFolder = null;
+        }
+
+        define("TINA4_SUB_FOLDER", $subFolder);
+        return $subFolder;
+    }
+
+    /**
+     * Iterate the directory
+     * @param $path
+     * @param string $relativePath
+     * @param string $event On click
+     * @return string
+     */
+    public static function iterateDirectory($path, $relativePath = "", $event="onclick=\"window.alert('implement event on iterateDirectory');\""): string
+    {
+        if (empty($relativePath)) {
+            $relativePath = $path;
+        }
+        $files = scandir($path);
+        asort($files);
+
+        $dirItems = [];
+        $fileItems = [];
+
+        foreach ($files as $id => $fileName) {
+            if ($fileName[0] === "." || $fileName === "cache" || $fileName === "vendor") {
+                continue;
+            }
+            if ($fileName !== "." && $fileName !== ".." && is_dir($path . "/" . $fileName)) {
+                $html = '<li data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/folder-invoices.png"}\'>' . $fileName;
+                $html .= self::iterateDirectory($path . "/" . $fileName, $relativePath, $event);
+                $html .= "</li>";
+                $dirItems[] = $html;
+
+            } else {
+                $fileItems[] = '<li '.$event.' file-data="'.str_replace("./", "/", $path . "/" . $fileName).'" data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/file.png"}\'>' . $fileName . '</li>';
+            }
 
         }
 
-        return $subFolder;
+        $html = "<ul>";
+        $html .= implode("", $dirItems);
+        $html .= implode("", $fileItems);
+        $html .= "</ul>";
+        return $html;
     }
 }

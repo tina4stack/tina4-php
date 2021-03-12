@@ -30,6 +30,8 @@ class Swagger implements \JsonSerializable
     {
 
         global $arrRoutes;
+
+
         if (empty($this->root)) {
             $this->root = $_SERVER["DOCUMENT_ROOT"];
         }
@@ -37,6 +39,8 @@ class Swagger implements \JsonSerializable
         $this->subFolder = $subFolder;
 
         $paths = (object)[];
+
+
 
         foreach ($arrRoutes as $arId => $route) {
 
@@ -54,6 +58,8 @@ class Swagger implements \JsonSerializable
 
             $doc = $reflection->getDocComment();
             preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
+
+
 
 
             $summary = "None";
@@ -197,6 +203,8 @@ class Swagger implements \JsonSerializable
 
         ];
 
+
+
     }
 
     public function getSwaggerEntry($tags, $summary, $description, $produces, $security, $params, $example, $responses)
@@ -228,7 +236,7 @@ class Swagger implements \JsonSerializable
         return $entry;
     }
 
-    public function __toString()
+    public function __toString(): string
     {
         header("Content-Type: application/json");
         return json_encode($this->swagger, JSON_UNESCAPED_SLASHES);

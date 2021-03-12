@@ -33,43 +33,41 @@ The premise of the project is to make you the developer and PHP, the heroes!
 - Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly  
 - Create a project folder where you want to work
 - In your project folder terminal / console
+
 ```bash
 composer require andrevanzuydam/tina4php
 ```
-- Windows
-```bash
-vendor\bin\tina4
-```
-- Mac/Linux
-```bash
-vendor/bin/tina4
-```
 
+#### Begin your Tina4 project using
 ```bash
-====================================================================================================
-TINA4 - MENU 
-====================================================================================================
-1.) Create index.php
-2.) Run Tests
-3.) Create database connection
-4.) Create orm objects
-Choose menu option or type "quit" to Exit:
+composer exec tina4 initialize:run
+```
+#### Spin up a web server with PHP in your terminal in the project folder
+```bash
+composer start
+```
+Hit up http://localhost:7145 in your browser, you should see the 404 error
+
+#### Run tests
+```bash
+composer test
 ```
 
-- Choose option 1 and press Enter, then type quit to exit, press Enter.
-
-
-- Spin up a web server with PHP in your terminal in the project folder
+#### Start service
 ```bash
-php -S localhost:8080 index.php
+composer start-service
 ```
-- Hit up http://localhost:8080 in your browser, you should see the 404 error
+
+#### Tina4 menu
+```bash
+composer tina4
+```
 
 ### Quick Reference ###
 
 The folder layout is as follows and can be overridden by defining PHP constants for ```TINA4_TEMPLATE_LOCATIONS```, ```TINA4_ROUTE_LOCATIONS``` & ```TINA4_INCLUDE_LOCATIONS```:
 
-  * src
+* src
      * api (routing)
      * app (helpers, PHP classes)
      * assets (system twig files, images, css, js)
@@ -80,7 +78,7 @@ The folder layout is as follows and can be overridden by defining PHP constants 
      * templates (app twig files)
      
      
-### .Env Configuration
+#### .Env Configuration
 
 Tina4 uses a .env file to setup project constants, a .env will be created for you when the system runs for the first time.
 If you specify an environment variable on your OS called ENVIRONMENT then .env.ENVIRONMENT will be loaded instead.
@@ -138,7 +136,6 @@ class Example
     }
 
 }
-
 ```
 
 ### Example of a database connection to SQLite3
@@ -210,13 +207,8 @@ $address->save();
 
 Give this a try and see what happens
 
-Windows
 ```commandline
-vendor\bin\tina4 tests:run
-```
-Linux & Mac
-```bash
-vendor/bin/tina4 tests:run
+composer test
 ```
 
 Writing unit tests is easy and can be done as an annotation in your code comments
@@ -227,6 +219,7 @@ Writing unit tests is easy and can be done as an annotation in your code comment
  * Some function to add numbers
  * @tests
  *   assert (1,1) === 2, "1 + 1 = 2"
+ *   assert is_integer(1,1) === true, "This should be an integer"
  */
 function add ($a,$b) {
     return $a+$b;

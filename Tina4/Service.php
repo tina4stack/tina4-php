@@ -20,7 +20,8 @@ class Service extends Data
     function __construct()
     {
         parent::__construct();
-        $this->servicePath = $this->rootFolder.DIRECTORY_SEPARATOR."cache".DIRECTORY_SEPARATOR."services";
+        $this->servicePath = $_SERVER["DOCUMENT_ROOT"]."cache".DIRECTORY_SEPARATOR."services";
+
     }
 
     /**
