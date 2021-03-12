@@ -102,15 +102,29 @@ class Migration extends Data
         foreach ($fileArray as $fid => $entry) {
             $fileParts = explode(".", $entry);
             $fileParts = explode(" ", $fileParts[0]);
-            $sqlCheck = "select * from tina4_migration where migration_id = '{$fileParts[0]}'";
+            //Get first 14 characters (length of migration id column)
+            $migrationId = substr($fileParts[0], 0, 14);
+            unset($fileParts[0]);
+            /*  Check that first 14 characters do not contain '_' (word separator)
+             *  If so, only get first part for id
+             */
+            if (strpos($migrationId, "_") !== false) {
+                $migrationText = explode("_", $migrationId);
+                $migrationId = $migrationText[0];
+                unset($migrationText[0]);
+                $migrationText = implode(" ", $migrationText) . implode(" ", $fileParts);
+            } else {
+                $migrationText = implode(" ", $fileParts);
+            }
+
+            $sqlCheck = "select * from tina4_migration where migration_id = '{$migrationId}'";
             $record = $this->DBA->fetch($sqlCheck)->AsObject();
             if (!empty($record)) {
                 $record = $record[0];
             }
 
-            $migrationId = $fileParts[0];
-            unset($fileParts[0]);
-            $description = implode(" ", $fileParts);
+            //Re-attach left over migration text just in case of there being a '_' seperator
+            $description = trim(str_replace("_", " ", $migrationText));
 
             $content = file_get_contents($this->migrationPath . "/" . $entry);
 
@@ -207,7 +221,7 @@ class Migration extends Data
      * @param bool $noDateStamp
      * @return string
      */
-    public function createMigration($description, $content, $noDateStamp=false): string
+    public function createMigration($description, $content, $noDateStamp = false): string
     {
         if (!empty($description) && !empty($content)) {
             if (!file_exists($this->migrationPath)) {
