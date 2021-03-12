@@ -443,8 +443,10 @@ $comments[] = "Keep up the good work!";
 $comments[] = "You are a star!";
 $comments[] = "Nothing is impossible!";
 $comments[] = "Keep learning!";
+$comments[] = "Live long and prosper!";
+$comments[] = "Life is lemons, make lemonade!";
 
-$complimentary = $comments[rand(0, 4)];
+$complimentary = $comments[rand(0, count($comments)-1)];
 writeline("");
 echo "Thank you for using Tina4 - {$complimentary}\n";
 
