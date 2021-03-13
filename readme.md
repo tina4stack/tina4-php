@@ -45,8 +45,14 @@ composer exec tina4 initialize:run
 #### Spin up a web server with PHP in your terminal in the project folder
 ```bash
 composer start
-```
+````
 Hit up http://localhost:7145 in your browser, you should see the 404 error
+
+If you want to run the webservice on a specific port
+
+```
+composer start 8080
+```
 
 #### Run tests
 ```bash

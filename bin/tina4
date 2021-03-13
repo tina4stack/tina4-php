@@ -42,17 +42,17 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
                     "tina4service" => "tina4service",
                     "test" => "@tina4 tests:run",
                     "initialize" => "@tina4 initialize:run",
-                    "start" => "php -S localhost:7145 index.php",
+                    "start" => "@tina4 webservice:run",
                     "start-service" => "@tina4service"];
-        $psr4 = ["" => ["src/app/","src/objects/"]];
+        $psr4 = ["" => ["./src", "src/app/","src/objects/"]];
         $config = ["process-timeout" => 0];
 
         if (!isset($composer["scripts"])) {
             $composer["scripts"] = $scripts;
-            $composer["psr4"] = $psr4;
+            $composer["autoload"] = ["psr4" => $psr4];
             $composer["config"] = $config;
         }
-        file_put_contents($composerFile, json_encode($composer, JSON_PRETTY_PRINT));
+        file_put_contents($composerFile, str_replace("\/", "/", json_encode($composer, JSON_PRETTY_PRINT)));
     }
 
     global $rootPath;
@@ -350,6 +350,12 @@ class [CLASS_NAME] extends \Tina4\ORM
     }
     return ["index" => $nextIndex, "prompt" => $prompt];
 }];
+
+$menus[] = ["id" => 5, "name" => "webservice", "show" => false, "description" => "Runs webservice", "commandLine" => ["options" => ["run"]], "menuCode" => static function ($index, $input) use ($argv) {
+    $port = $argv[2] ?? "7145";
+    `php -S localhost:{$port} index.php`;
+}];
+
 /**
  * Menus are created and have a function "menuCode" which takes on the following inputs ($index, $input, $options)
  * The index is handled in a switch statement to parse the input, the menuCode function always should return
@@ -359,6 +365,9 @@ class [CLASS_NAME] extends \Tina4\ORM
  * return ["index" => 0, "prompt" => ""];
  * }];
  */
+
+
+
 
 /**
  * Draws a menu based on the array above for display to the user
@@ -391,10 +400,20 @@ function drawMenu($menus)
                     }
                 }
             }
-            if (!$found) $menuId = 0;
+            if (!$found) {
+                $menuId = 0;
+            }
         } else {
             foreach ($menus as $id => $menu) {
-                writeline(($menu["id"]) . ".) " . $menu["description"]);
+                if ($menu["show"] === null)
+                {
+                    $menu["show"] = true;
+                }
+                if ($menu["show"])
+                {
+                    writeline(($menu["id"]) . ".) " . $menu["description"]);
+                }
+
             }
             $input = readline("Choose menu option or type \"quit\" to Exit:");
             $menuId = (int)$input;
