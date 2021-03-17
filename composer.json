@@ -20,7 +20,7 @@
     "tina4service": "tina4service",
     "test" : "@tina4 tests:run",
     "initialize": "@tina4 initialize:run",
-    "start" : "php -S localhost:7145 index.php",
+    "start" : "@tina4 webservice:run",
     "start-service": "@tina4service"
   },
   "config": {
