@@ -48,7 +48,7 @@ class Auth extends Data
      * @tests
      *   assert $configured === true, "Auth state of configured must be true"
      */
-    public function __construct($documentRoot = "")
+    public function __construct($documentRoot = "./")
     {
         parent::__construct();
         $this->initSession();
@@ -62,6 +62,7 @@ class Auth extends Data
         }
 
         //Load secrets
+
 
         if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "private.key");
@@ -111,14 +112,14 @@ class Auth extends Data
             Debug::message("Secrets folder exists already, please remove");
             return false;
         }
-        if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
+        if (!mkdir($concurrentDirectory = $this->documentRoot.DIRECTORY_SEPARATOR. "secrets") && !is_dir($concurrentDirectory)) {
             throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
         `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
-        if (!file_exists($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore")) {
-            file_put_contents($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore", "*");
+        if (!file_exists($this->documentRoot .DIRECTORY_SEPARATOR. "secrets".DIRECTORY_SEPARATOR.".gitignore")) {
+            file_put_contents($this->documentRoot.DIRECTORY_SEPARATOR . "secrets".DIRECTORY_SEPARATOR.".gitignore", "*");
         }
         return true;
     }
