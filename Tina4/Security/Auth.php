@@ -62,14 +62,15 @@ class Auth extends Data
         }
 
         //Load secrets
-        if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
-            $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
+
+        if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
+            $this->privateKey = file_get_contents($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "private.key");
         } else {
             die("OpenSSL is probably not installed or secrets/private.key is missing, please run this on your project root : <pre>ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N \"\"</pre>");
         }
 
-        if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
-            $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
+        if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
+            $this->publicKey = file_get_contents($this->documentRoot.DIRECTORY_SEPARATOR . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         } else {
             die("OpenSSL is probably not installed or secrets/public.pub is missing, please run this on your project root : <pre>openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub</pre>");
         }

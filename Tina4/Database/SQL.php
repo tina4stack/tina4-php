@@ -25,6 +25,7 @@ class SQL implements \JsonSerializable
     public $limit;
     public $offset;
     public $hasOne;
+    public $hasMany;
     public $noOfRecords;
     public $error;
     public $lastSQL;
@@ -53,7 +54,7 @@ class SQL implements \JsonSerializable
      * Excludes fields from the result set
      * @param $fields
      */
-    function exclude($fields)
+    public function exclude($fields)
     {
         if (is_array($fields)) {
             $this->excludeFields[] = $fields;
@@ -82,6 +83,7 @@ class SQL implements \JsonSerializable
         $this->limit = $limit;
         $this->offset = $offset;
         $this->hasOne = $hasOne;
+        $this->hasMany = $hasMany;
         return $this;
     }
 
@@ -304,6 +306,7 @@ class SQL implements \JsonSerializable
     }
 
     /**
+     * Generates and SQL Statement
      * @return string
      */
     public function generateSQLStatement(): string

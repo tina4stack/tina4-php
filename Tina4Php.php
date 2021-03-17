@@ -237,6 +237,11 @@ class Tina4Php extends Data
             $cache = CacheManager::getInstance("files");
         }
 
+        if ($this->DBA !== null) {
+            //run local migrations - safe - check debug log for errors
+            (new \Tina4\Migration(__DIR__ . "/migrations"))->doMigration();
+        }
+
         //Check the configs for each module
         $configs = (new Module())::getModuleConfigs();
         foreach ($configs as $moduleId => $configMethod) {

@@ -146,4 +146,18 @@ trait DataBaseCore
         return "?";
     }
 
+    /**
+     *
+     * @param string $fields
+     * @param int $limit
+     * @param int $offset
+     * @param array $hasOne
+     * @param array $hasMany
+     * @return SQL
+     */
+    public function select ($fields = "*", $limit = 10, $offset = 0, $hasOne = [], $hasMany = [])
+    {
+        return (new SQL())->select($fields, $limit, $offset, $hasOne, $hasMany);
+    }
+
 }
