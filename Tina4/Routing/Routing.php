@@ -563,21 +563,34 @@ class Routing
      */
     public function getRouteResult ($class, $method, $params) : string
     {
-
         if (!empty($class)) {
             $methodCheck = new \ReflectionMethod($class, $method);
 
             if ($methodCheck->isStatic()) {
-                return call_user_func_array([$class, $method], $params);
+                $result = call_user_func_array([$class, $method], $params);
+                if (is_string($result)) {
+                    return $result;
+                } else {
+                    return "";
+                }
             }
 
             $classInstance = new \ReflectionClass($class);
             $class = $classInstance->newInstance();
-            return call_user_func_array([$class, $method], $params);
+            $result = call_user_func_array([$class, $method], $params);
+            if (is_string($result)) {
+                return $result;
+            } else {
+                return "";
+            }
         }
 
-
-        return  call_user_func_array($method, $params);
+        $result =  call_user_func_array($method, $params);
+        if (is_string($result)) {
+            return $result;
+        } else {
+            return "";
+        }
     }
 
 }
