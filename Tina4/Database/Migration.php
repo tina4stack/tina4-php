@@ -104,6 +104,8 @@ class Migration extends Data
             $fileParts = explode(" ", $fileParts[0]);
             //Get first 14 characters (length of migration id column)
             $migrationId = substr($fileParts[0], 0, 14);
+            //Get the rest of the string
+            $leftOverFileParts = substr($fileParts[0], 14, strlen($fileParts[0]));
             unset($fileParts[0]);
             /*  Check that first 14 characters do not contain '_' (word separator)
              *  If so, only get first part for id
@@ -112,9 +114,9 @@ class Migration extends Data
                 $migrationText = explode("_", $migrationId);
                 $migrationId = $migrationText[0];
                 unset($migrationText[0]);
-                $migrationText = implode(" ", $migrationText) . implode(" ", $fileParts);
+                $migrationText = implode(" ", $migrationText) . $leftOverFileParts . implode(" ", $fileParts);
             } else {
-                $migrationText = implode(" ", $fileParts);
+                $migrationText = $leftOverFileParts . implode(" ", $fileParts);
             }
 
             $sqlCheck = "select * from tina4_migration where migration_id = '{$migrationId}'";
