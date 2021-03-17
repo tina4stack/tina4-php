@@ -43,11 +43,6 @@ class Routing
      */
     public function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null, $suppressed = false)
     {
-
-        if (!empty($root)) {
-            $_SERVER["DOCUMENT_ROOT"] = $root;
-        }
-
         if (empty($subFolder)) {
             $subFolder = $this->getSubFolder();
         }
