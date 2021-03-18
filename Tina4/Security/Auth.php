@@ -57,7 +57,7 @@ class Auth extends Data
 
         //Check security
 
-        if (!file_exists($this->documentRoot . "secrets")) {
+        if (!file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets")) {
             $this->generateSecureKeys();
         }
 
@@ -106,10 +106,11 @@ class Auth extends Data
     public function generateSecureKeys()
     {
         Debug::message("Generating Auth keys - {$this->documentRoot}secrets");
-        if (file_exists($this->documentRoot . "secrets")) {
+        if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets")) {
             Debug::message("Secrets folder exists already, please remove");
             return false;
         }
+
         if (!mkdir($concurrentDirectory = $this->documentRoot.DIRECTORY_SEPARATOR. "secrets") && !is_dir($concurrentDirectory)) {
             throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }

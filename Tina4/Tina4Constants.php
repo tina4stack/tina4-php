@@ -90,6 +90,9 @@ function stringReplaceFirst($search, $replace, $content)
  */
 function tina4_auto_loader($class)
 {
+    if (!defined("TINA4_DOCUMENT_ROOT")) {
+        define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"]);
+    }
 
     if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
         if (defined("TINA4_INCLUDE_LOCATIONS")) {
@@ -115,8 +118,8 @@ function tina4_auto_loader($class)
                 $found = true;
                 break;
             } else
-                if (file_exists(TINA4_DOCUMENT_ROOT  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                    require_once TINA4_DOCUMENT_ROOT  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                if (file_exists(TINA4_DOCUMENT_ROOT.DIRECTORY_SEPARATOR. "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once TINA4_DOCUMENT_ROOT.DIRECTORY_SEPARATOR. "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
                     $found = true;
                     break;
                 }
