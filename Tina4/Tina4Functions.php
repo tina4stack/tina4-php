@@ -43,7 +43,7 @@ function renderTemplate($fileNameString, $data = []): string
                         file_put_contents($fileName, $fileNameString);
                     }
 
-                    $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
+                    $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT .DIRECTORY_SEPARATOR. "cache");
                     return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
                 }
     } catch (\Exception $exception) {
