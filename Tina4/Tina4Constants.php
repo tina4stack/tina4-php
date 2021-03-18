@@ -115,13 +115,13 @@ function tina4_auto_loader($class)
                 $found = true;
                 break;
             } else
-                if (file_exists($_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                    require_once $_SERVER["DOCUMENT_ROOT"]  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                if (file_exists(TINA4_DOCUMENT_ROOT  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once TINA4_DOCUMENT_ROOT  . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
                     $found = true;
                     break;
                 }
                 else {
-                    autoLoadFolders($_SERVER["DOCUMENT_ROOT"],$location,$class);
+                    autoLoadFolders(TINA4_DOCUMENT_ROOT,$location,$class);
                 }
         }
     }
