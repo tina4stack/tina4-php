@@ -809,6 +809,7 @@ class ORM implements \JsonSerializable
         $error = $this->DBA->exec($sqlStatement);
 
         if (empty($error->getError()["errorCode"])) {
+            $this->DBA->commit();
             return (object)["success" => true];
         } else {
             return (object)$error->getError();

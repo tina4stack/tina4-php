@@ -141,6 +141,7 @@ class Tina4Php extends Data
         //root of tina4
         $this->webRoot = realpath(__DIR__);
 
+
         Debug::message("TINA4: web path " . $this->webRoot);
 
         if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
@@ -203,12 +204,12 @@ class Tina4Php extends Data
         if ($this->webRoot . DIRECTORY_SEPARATOR !== $this->documentRoot) {
             $tina4Checksum = md5(file_get_contents($this->webRoot . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4"));
             $destChecksum = "";
-            if (file_exists($this->documentRoot . "bin" . DIRECTORY_SEPARATOR . "tina4")) {
-                $destChecksum = md5(file_get_contents($this->documentRoot . "bin" . DIRECTORY_SEPARATOR . "tina4"));
+            if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4")) {
+                $destChecksum = md5(file_get_contents($this->documentRoot.DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4"));
             }
 
             if ($tina4Checksum !== $destChecksum) {
-                Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR . "bin", $this->documentRoot . "bin");
+                Routing::recurseCopy($this->webRoot . DIRECTORY_SEPARATOR . "bin", $this->documentRoot.DIRECTORY_SEPARATOR . "bin");
             }
         }
 
@@ -230,7 +231,7 @@ class Tina4Php extends Data
             //Setup caching options
             $TINA4_CACHE_CONFIG =
                 new ConfigurationOption([
-                    "path" => $this->documentRoot . "cache"
+                    "path" => $this->documentRoot.DIRECTORY_SEPARATOR. "cache"
                 ]);
 
             CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
@@ -368,6 +369,7 @@ class Tina4Php extends Data
             $subFolder = $this->getSubFolder();
             $twigLoader = new FilesystemLoader();
 
+
             foreach ($twigPaths as $twigPath) {
 
                 if (is_array($twigPath)) {
@@ -376,6 +378,7 @@ class Tina4Php extends Data
                         $twigLoader->addPath($twigPath["path"], "__main__");
                     }
                 } else
+
                     if (file_exists($subFolder.$twigPath)) {
                         $twigLoader->addPath($subFolder.$twigPath, '__main__');
                     } else {
@@ -393,6 +396,8 @@ class Tina4Php extends Data
             }
 
             $twig->addGlobal('Tina4', new Caller());
+
+
 
             if (isset($_SERVER["HTTP_HOST"])) {
                 $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
