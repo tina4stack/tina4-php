@@ -98,8 +98,9 @@ class Tina4Php extends Data
         $callerDir = str_replace("index.php", "", $callerFile);
 
         //root of the website
-        if (defined("TINA4_DOCUMENT_ROOT") && empty(TINA4_DOCUMENT_ROOT)) {
+        if (!defined("TINA4_DOCUMENT_ROOT")) {
             $this->documentRoot = $callerDir;
+            define("TINA4_DOCUMENT_ROOT", $callerDir);
         } else {
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
         }

@@ -41,7 +41,6 @@ if (!defined("TINA4_ANY")) define("TINA4_ANY", "ANY");
 if (!defined("TINA4_PUT")) define("TINA4_PUT", "PUT");
 if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
 if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
-if (!defined("TINA4_DOCUMENT_ROOT")) define("TINA4_DOCUMENT_ROOT", null);
 
 
 if (!defined("TEXT_HTML")) define("TEXT_HTML", "text/html");

@@ -62,8 +62,6 @@ class Auth extends Data
         }
 
         //Load secrets
-
-
         if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot.DIRECTORY_SEPARATOR. "secrets" . DIRECTORY_SEPARATOR . "private.key");
         } else {
