@@ -230,26 +230,25 @@ trait Utility
         if (defined("TINA4_SUB_FOLDER")) {
             return TINA4_SUB_FOLDER;
         }
-        //Evaluate DOCUMENT_ROOT &&
-        $documentRoot = "";
-        if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
-            $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
-        }
-            else
-        if (isset($_SERVER["DOCUMENT_ROOT"])) {
-            $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+
+        if (TINA4_DOCUMENT_ROOT !== null) {
+            $documentRoot = TINA4_DOCUMENT_ROOT;
+        } else {
+            $documentRoot = "";
+            if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
+                $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
+            } else
+                if (isset($_SERVER["DOCUMENT_ROOT"])) {
+                    $documentRoot = $_SERVER["DOCUMENT_ROOT"];
+                }
         }
 
-        $scriptName = $_SERVER["SCRIPT_FILENAME"];
-        //echo str_replace($documentRoot, "", $scriptName)."<br>";
-        $subFolder = dirname(str_replace($documentRoot, "", $scriptName));
+        $subFolder = (str_replace($_SERVER["DOCUMENT_ROOT"], "", $documentRoot));
 
-        if ($subFolder === DIRECTORY_SEPARATOR
-            || $subFolder === "."
-            || (isset($_SERVER["SCRIPT_NAME"], $_SERVER["REQUEST_URI"]) && str_replace($documentRoot, "", $scriptName) === $_SERVER["SCRIPT_NAME"] && $_SERVER["SCRIPT_NAME"] === $_SERVER["REQUEST_URI"])) {
+        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === ".")
+        {
             $subFolder = null;
         }
-
         define("TINA4_SUB_FOLDER", $subFolder);
         return $subFolder;
     }

@@ -43,10 +43,12 @@ class Routing
      */
     public function __construct($root = "", $subFolder = "", $urlToParse = "", $method = "", Config $config = null, $suppressed = false)
     {
+
         if (empty($subFolder)) {
             $subFolder = $this->getSubFolder();
         }
 
+        $this->subFolder = $subFolder;
         $this->root = $root;
 
         if ($config !== null && $config->getAuthentication() !== null) {
@@ -56,7 +58,6 @@ class Routing
         }
 
         if (!empty($subFolder)) {
-            $this->subFolder = $subFolder . "/";
             if (!defined("TINA4_BASE_URL")) {
                 define("TINA4_BASE_URL", $subFolder);
             }
@@ -494,7 +495,7 @@ class Routing
         if (file_exists("./assets/images/403.png")) {
             $content = "<img alt=\"403 Forbidden\" src=\"./assets/images/403.png\">";
         } else {
-            $content = "<img alt=\"403 Forbidden\" src=\"/{$this->subFolder}src/assets/images/403.png\">";
+            $content = "<img alt=\"403 Forbidden\" src=\"{$this->subFolder}src/assets/images/403.png\">";
         }
         http_response_code(HTTP_FORBIDDEN);
         echo $content;

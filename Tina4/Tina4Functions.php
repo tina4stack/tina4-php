@@ -9,7 +9,11 @@ namespace Tina4;
  */
 function renderTemplate($fileNameString, $data = []): string
 {
-    $fileName = str_replace($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR, "", $fileNameString);
+    if (!defined("TINA4_DOCUMENT_ROOT")) {
+        define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"]);
+    }
+
+    $fileName = str_replace(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR, "", $fileNameString);
     try {
         global $twig;
 
@@ -31,7 +35,7 @@ function renderTemplate($fileNameString, $data = []): string
                 if (is_file($fileNameString)) {
                     $renderFile = basename($fileNameString);
                     $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . $newPath);
+                    $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . $newPath);
                     return $internalTwig->render($renderFile, $data);
                 } else {
                     if (!is_file($fileNameString)) {
@@ -39,7 +43,7 @@ function renderTemplate($fileNameString, $data = []): string
                         file_put_contents($fileName, $fileNameString);
                     }
 
-                    $internalTwig->getLoader()->addPath($_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR. "cache");
+                    $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
                     return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
                 }
     } catch (\Exception $exception) {
