@@ -13,6 +13,62 @@ class Tina4Php extends Data
     public function __construct(?\Tina4\Config $config = null)
     {
         parent::__construct();
+        //Get all the include folders
+        if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_TEMPLATE_LOCATIONS")) {
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS, \Tina4\Module::getTemplateFolders()));
+            } else {
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src" . DIRECTORY_SEPARATOR . "templates", "src" . DIRECTORY_SEPARATOR . "public", "src" . DIRECTORY_SEPARATOR . "assets", "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "snippets"], \Tina4\Module::getTemplateFolders()));
+            }
+        }
+
+        if (!defined("TINA4_ROUTE_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_ROUTE_LOCATIONS")) {
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(TINA4_ROUTE_LOCATIONS, \Tina4\Module::getRouteFolders()));
+            } else {
+                define("TINA4_ROUTE_LOCATIONS_INTERNAL", array_merge(["src" . DIRECTORY_SEPARATOR . "api", "src" . DIRECTORY_SEPARATOR . "routes"], \Tina4\Module::getRouteFolders()));
+            }
+        }
+
+        if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
+
+            if (defined("TINA4_INCLUDE_LOCATIONS")) {
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, \Tina4\Module::getIncludeFolders()));
+            } else {
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src" . DIRECTORY_SEPARATOR . "app", "src" . DIRECTORY_SEPARATOR . "objects", "src" . DIRECTORY_SEPARATOR . "orm", "src" . DIRECTORY_SEPARATOR . "services"], \Tina4\Module::getIncludeFolders()));
+            }
+        }
+
+        if (!defined("TINA4_SCSS_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_SCSS_LOCATIONS")) {
+                define("TINA4_SCSS_LOCATIONS_INTERNAL", array_merge(TINA4_SCSS_LOCATIONS, \Tina4\Module::getSCSSFolders()));
+            } else {
+                define("TINA4_SCSS_LOCATIONS", array_merge(["src" . DIRECTORY_SEPARATOR . "scss"], \Tina4\Module::getSCSSFolders()));
+            }
+        }
+
+        foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $includeId => $includeLocation)
+        {
+            if (!file_exists($includeLocation)) //Modules have absolute paths
+            {
+                $includeLocation = TINA4_DOCUMENT_ROOT.$includeLocation;
+            }
+            if (file_exists($includeLocation)) {
+                \Tina4\Utility::includeDirectory($includeLocation);
+            }
+        }
+
+        foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $includeId => $includeLocation)
+        {
+            if (!file_exists($includeLocation)) //Modules have absolute paths
+            {
+                $includeLocation = TINA4_DOCUMENT_ROOT.$includeLocation;
+            }
+            if (file_exists($includeLocation)) {
+                \Tina4\Utility::includeDirectory($includeLocation);
+            }
+        }
+
         //Check the configs for each module
         $configs = (new Module())::getModuleConfigs();
         foreach ($configs as $moduleId => $configMethod) {
