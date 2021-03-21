@@ -28,12 +28,12 @@ class DataResult implements JsonSerializable
     /**
      * @var integer Number of records
      */
-    public integer $noOfRecords;
+    public int $noOfRecords;
 
     /**
      * @var integer Data row offset
      */
-    public integer $offSet;
+    public int $offSet;
 
     /**
      * @var DataError Database error
