@@ -669,7 +669,7 @@ class ORM implements \JsonSerializable
         }
 
 
-        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_CONSOLE);
+        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", TINA4_LOG_DEBUG);
         Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
