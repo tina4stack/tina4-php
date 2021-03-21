@@ -60,7 +60,7 @@ class Module
         self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "app", $baseName);
         self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "orm", $baseName);
         self::addTemplatePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "templates", $baseName);
-        self::addMigrationPath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "migrations", $baseName);
+        self::addMigrationPath($moduleFolder . DIRECTORY_SEPARATOR . "migrations", $baseName);
         self::addSCSSPath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "scss", $baseName);
 
     }
