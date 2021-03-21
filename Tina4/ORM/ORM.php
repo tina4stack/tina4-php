@@ -1089,11 +1089,11 @@ class ORM implements \JsonSerializable
              
             if ($action == "form") {
                 $title = "Add [OBJECT]";
-                $savePath =  TINA4_BASE_URL . "[PATH]";
+                $savePath =  TINA4_SUB_FOLDER . "[PATH]";
                 $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", []);
             } else {
                 $title = "Edit [OBJECT]";
-                $savePath =  TINA4_BASE_URL . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
+                $savePath =  TINA4_SUB_FOLDER . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
                 $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", ["data" => $[OBJECT_NAME]]);
             }
 

@@ -253,6 +253,7 @@ trait Utility
             $subFolder = "";
         }
 
+        define ("TINA4_BASE_URL", $subFolder);
         define("TINA4_SUB_FOLDER", $subFolder);
         return $subFolder;
     }
