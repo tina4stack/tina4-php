@@ -352,6 +352,12 @@ trait Utility
             $twig->addGlobal('baseUrl', TINA4_SUB_FOLDER);
             $twig->addGlobal('baseURL', TINA4_SUB_FOLDER);
             $twig->addGlobal('uniqId', uniqid('', true));
+
+            if ($config === null)
+            {
+                $config = new Config();
+            }
+
             $auth = $config->getAuthentication();
             if ($auth === null)
             {
