@@ -44,10 +44,12 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
                     "initialize" => "@tina4 initialize:run",
                     "start" => "@tina4 webservice:run",
                     "start-service" => "@tina4service"];
-        $psr4 = ["" => ["src/", "src/app/","src/orm/","/src/routes"]];
+        $classMap = ["src/*", "src/app/*", "src/orm/*", "src/routes/*"];
+        $psr4 = ["\\" => ["src/", "src/app/","src/orm/","/src/routes"]];
         $config = ["process-timeout" => 0];
         if (!isset($composer["scripts"])) {
             $composer["scripts"] = $scripts;
+            $composer["classmap"] = $classMap;
             $composer["autoload"] = ["psr-4" => $psr4];
             $composer["config"] = $config;
         }

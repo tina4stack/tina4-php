@@ -43,8 +43,6 @@ class Auth extends Data
 
     /**
      * The auth constructor looks for a secrets folder and tries to generate keys for the site
-     * @param string $documentRoot
-     * @throws \Exception
      * @tests
      *   assert $configured === true, "Auth state of configured must be true"
      */
@@ -125,7 +123,7 @@ class Auth extends Data
     /**
      * Checks for $_SESSION["tokens"]
      */
-    public function tokenExists()
+    public function tokenExists(): bool
     {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;

@@ -7,7 +7,12 @@
             "Tina4/Functions.php",
             "Tina4/Initialize.php"
         ],
+        "classmap": [
+            "Tina4/*",
+            "src/*"
+        ],
         "psr-4": {
+            "\\": ["src", "src/app", "src/orm", "src/routes"],
             "Tina4\\": [
                 "Tina4/",
                 "Tina4/Api/",
@@ -17,7 +22,7 @@
                 "Tina4/ORM/",
                 "Tina4/Routing/",
                 "Tina4/Security/",
-                "Tina4/Service"
+                "Tina4/Service/"
             ]
         }
     },
