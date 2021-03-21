@@ -55,7 +55,6 @@ class Module
         $_TINA4_MODULES[$baseName]["migrationPath"] = [];
         $_TINA4_MODULES[$baseName]["scssPath"] = [];
 
-        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "api", $baseName);
         self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "routes", $baseName);
         self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "app", $baseName);
         self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "orm", $baseName);
