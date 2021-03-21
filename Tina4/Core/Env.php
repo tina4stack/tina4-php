@@ -42,10 +42,6 @@ class Env extends Data
     {
         $fileName =   $this->documentRoot . ".env";
 
-        if (!file_exists($fileName)) {
-            $fileName = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR.".env";
-        }
-
         if (!empty($environment)) {
             $fileName .= ".{$environment}";
         }

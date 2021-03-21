@@ -223,7 +223,7 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUME
         $foldersToCopy = ["src/public", "src/app", "src/routes", "templates", "src/orm", "src/services", "src/scss"];
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(TINA4_DOCUMENT_ROOT  . $folder)) {
-                Routing::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                \Tina4\Utility::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
             }
         }
     }
