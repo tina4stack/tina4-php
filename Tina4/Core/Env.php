@@ -47,7 +47,7 @@ class Env extends Data
         }
 
         if (file_exists($fileName)) {
-            Debug::message("Parsing {$fileName}");
+            Debug::message("Parsing {$fileName}", TINA4_LOG_DEBUG);
             $fileContents = file_get_contents($fileName);
             if (strpos($fileContents, "\r")) {
                 $fileContents = explode("\r\n", $fileContents);
@@ -82,7 +82,7 @@ class Env extends Data
             }
         } else {
             Debug::message("Created an ENV file for you {$fileName}");
-            file_put_contents($fileName, "[Project Settings]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=[TINA4_LOG_DEBUG]\n[Open API]\nSWAGGER_TITLE=Tina4 Project\nSWAGGER_DESCRIPTION=Edit your .env file to change this description\nSWAGGER_VERSION=1.0.0");
+            file_put_contents($fileName, "[Project Settings]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=[TINA4_LOG_ALL]\n[Open API]\nSWAGGER_TITLE=Tina4 Project\nSWAGGER_DESCRIPTION=Edit your .env file to change this description\nSWAGGER_VERSION=1.0.0");
 
         }
     }

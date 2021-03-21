@@ -44,9 +44,8 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
                     "initialize" => "@tina4 initialize:run",
                     "start" => "@tina4 webservice:run",
                     "start-service" => "@tina4service"];
-        $psr4 = ["" => ["./src", "src/app/","src/objects/"]];
+        $psr4 = ["" => ["src/", "src/app/","src/orm/"]];
         $config = ["process-timeout" => 0];
-
         if (!isset($composer["scripts"])) {
             $composer["scripts"] = $scripts;
             $composer["autoload"] = ["psr4" => $psr4];

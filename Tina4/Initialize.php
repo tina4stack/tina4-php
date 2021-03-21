@@ -13,6 +13,7 @@ define("TINA4_LOG_WARNING","warning");
 define("TINA4_LOG_NOTICE","notice");
 define("TINA4_LOG_INFO","info");
 define("TINA4_LOG_DEBUG","debug");
+define("TINA4_LOG_ALL","all");
 
 //TINA4 CONSTANTS
 if (!defined("TINA4_DATABASE_TYPES")) define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"]);

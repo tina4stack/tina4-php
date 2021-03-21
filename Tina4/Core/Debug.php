@@ -99,12 +99,12 @@ class Debug implements \Psr\Log\LoggerInterface
                 $color = $this->colorCyan;
         }
 
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-            if (in_array(LogLevel::CRITICAL, self::$logLevel, true)  || in_array(LogLevel::ERROR, self::$logLevel, true) || in_array(LogLevel::DEBUG, self::$logLevel, true) || in_array($level, self::$logLevel, true)) {
-                $output = $color . strtoupper($level) . $this->colorReset . ":" . $message;
-                error_log($output);
-            }
+        $debugLevel = implode("", self::$logLevel);
+        if (strpos($debugLevel, "all") !== false || strpos($debugLevel, $level) !== false) {
+            $output = $color . strtoupper($level) . $this->colorReset . ":" . $message;
+            error_log($output);
         }
+
     }
 
     public static function message ($message, $level=LogLevel::INFO)
