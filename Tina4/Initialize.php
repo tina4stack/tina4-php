@@ -191,7 +191,7 @@ $arrRoutes = [];
 //Add the .htaccess file for redirecting things & copy the default src structure
 if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUMENT_ROOT . "src")) {
     if (!file_exists(TINA4_DOCUMENT_ROOT . "src")) {
-        $foldersToCopy = ["src/public", "src/app", "src/routes", "templates", "src/orm", "src/services", "src/scss"];
+        $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(TINA4_DOCUMENT_ROOT  . $folder)) {
                 \Tina4\Utility::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
@@ -218,8 +218,6 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
 if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
     copy(TINA4_PROJECT_ROOT . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
 }
-
-
 
 //Initialize the Cache
 global $cache;
