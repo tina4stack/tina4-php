@@ -120,8 +120,12 @@ class Debug implements \Psr\Log\LoggerInterface
 
     public static function exceptionHandler($exception=null)
     {
-        self::message($exception->getMessage()."\n[".$exception->getFile().":".$exception->getLine()."]", TINA4_LOG_CRITICAL );
         $trace = $exception->getTrace()[0];
+        if (isset($trace["file"])) {
+            self::message("Backtrace:" . "\n[" . $trace["file"] . ":" . $trace["line"] . "]", TINA4_LOG_CRITICAL);
+        }
+        self::message($exception->getMessage()."\n[".$exception->getFile().":".$exception->getLine()."]", TINA4_LOG_CRITICAL );
+
         if (TINA4_DEBUG)
         {
             if (isset($trace["file"])) {
