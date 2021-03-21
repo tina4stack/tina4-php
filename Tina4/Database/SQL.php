@@ -339,7 +339,7 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
-        \Tina4\Debug::message("SQL:" . $sql);
+        \Tina4\Debug::message("SQL:" . $sql, TINA4_LOG_DEBUG);
         return $sql;
     }
 
@@ -368,7 +368,7 @@ class SQL implements \JsonSerializable
      * Gets the records as a result
      * @return mixed
      */
-    public function asResult()
+    public function asResult(): ?object
     {
         $records = $this->jsonSerialize();
         //error_log (print_r ($this->error,1));

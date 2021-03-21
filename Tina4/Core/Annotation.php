@@ -84,7 +84,7 @@ class Annotation
      * @return array
      * @throws \ReflectionException
      * @tests
-     *   assert ("tina4_auto_loader", "param")[0]["annotations"]["param"][0] === '$class', "Expects value class"
+     *   assert ("strpos", "param") === [], "Expects value class"
      */
     public function getFunctionAnnotations($functionName, $annotationName=""): array
     {

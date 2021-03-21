@@ -31,7 +31,6 @@ class Swagger implements \JsonSerializable
 
         global $arrRoutes;
 
-
         if (empty($this->root)) {
             $this->root = $_SERVER["DOCUMENT_ROOT"];
         }
@@ -39,8 +38,6 @@ class Swagger implements \JsonSerializable
         $this->subFolder = $subFolder;
 
         $paths = (object)[];
-
-
 
         foreach ($arrRoutes as $arId => $route) {
 

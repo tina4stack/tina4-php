@@ -14,7 +14,7 @@ class Route implements RouteCore
     /**
      * @var string Type of method e.g. ANY, POST, DELETE, etc
      */
-    public static $method;
+    public static string $method;
 
     /**
      * Get route
@@ -70,12 +70,9 @@ class Route implements RouteCore
                 $class = null;
                 $method = $function;
 
-                if (is_array($function))
-                {
-                    if (class_exists($function[0]) && method_exists($function[0], $function[1])) {
-                       $class = $function[0];
-                       $method = $function[1];
-                    }
+                if (is_array($function) && class_exists($function[0]) && method_exists($function[0], $function[1])) {
+                   $class = $function[0];
+                   $method = $function[1];
                 }
 
                 $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest, "fileInfo" => $debugFile];

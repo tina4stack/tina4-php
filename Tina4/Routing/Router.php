@@ -1,0 +1,441 @@
+<?php
+
+
+namespace Tina4;
+
+
+class Router extends Data
+{
+
+    /**
+     * @var string Used to check if path matches route path in matchPath()
+     */
+    protected string $pathMatchExpression = "/([a-zA-Z0-9\\%\\ \\! \\-\\}\\{\\.\\_]*)\\//";
+    private array $params;
+    /**
+     * @var Config|null
+     */
+    private ?Config $config;
+
+    /**
+     * Resolves to a route that is registered in code and returns the result from that code
+     * @param string|null $method
+     * @param string|null $url
+     * @param Config|null $config
+     * @return RouterResponse
+     * @throws \Twig\Error\LoaderError
+     */
+    public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
+    {
+        $this->config = $config;
+        if ($url === ""){
+            return null;
+        }
+
+        $url = $this->cleanURL($url);
+        Debug::message("{$method} - {$url}", TINA4_LOG_DEBUG);
+        //Clean the URL
+
+        $content = "Page not found";
+        $responseCode = HTTP_NOT_FOUND;
+        $headers = ["Content-Type: ".TEXT_HTML];
+
+        //FIRST OPTIONS
+        if ($routerResponse = $this->handleOptionsMethod($method)) {
+            Debug::message("OPTIONS - ".$url, TINA4_LOG_DEBUG);
+            return $routerResponse;
+        }
+
+        //SECOND STATIC FILES - ONLY GET
+        if ($method === TINA4_GET) {
+            $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
+            if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
+                Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
+                return $routerResponse;
+            }
+        }
+
+        //THIRD ROUTING
+        if ($routerResponse = $this->handleRoutes($method, $url))
+        {
+            return $routerResponse;
+        }
+
+
+        //LAST RESORT -> GO LOOKING IN TEMPLATES FOR FILE BY THE NAME
+        if ($url === "/")
+        {
+            $url .= "index";
+        }
+
+        //GO THROUGH ALL THE TEMPLATE INCLUDE LOCATIONS AND SEE IF WE CAN FIND SOMETHING
+        Debug::message("URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
+        $parseFile = new ParseTemplate($url);
+        $content = $parseFile->content;
+        $responseCode = $parseFile->httpCode;
+        $headers = ["Context-Type: ".TEXT_HTML];
+        return new RouterResponse($content, $responseCode, $headers);
+    }
+
+    /**
+     * Get static files
+     * @param $fileName
+     * @return false|RouterResponse
+     * @throws \Twig\Error\LoaderError
+     */
+    public function returnStatic($fileName)
+    {
+        if (is_dir($fileName))
+        {
+            return false;
+        }
+        $fileName = preg_replace('#/+#', '/', $fileName);
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        switch ($ext) {
+            case "png":
+            case "jpeg":
+            case "ico":
+            case "jpg":
+                $mimeType = "image/{$ext}";
+                break;
+            case "svg":
+                $mimeType = "image/svg+xml";
+                break;
+            case "css":
+                $mimeType = "text/css";
+                break;
+            case "pdf":
+                $mimeType = "application/pdf";
+                break;
+            case "js":
+                $mimeType = "application/javascript";
+                break;
+            case "mp4":
+                $mimeType = "video/mp4";
+                break;
+            default:
+                $mimeType = "text/html";
+                break;
+        }
+
+        if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
+            return $this->rangeDownload($fileName);
+        }
+
+        $headers[] = ('Content-Type: ' . $mimeType);
+        $headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
+        $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
+        if ($ext !== "twig") {
+            $content = file_get_contents($fileName);
+        } else {
+            $content = renderTemplate($fileName);
+        }
+        return new RouterResponse($content , HTTP_OK, $headers);
+    }
+
+    /**
+     * Clean URL by splitting string at "?" to get actual URL
+     * @param string $url URL to be cleaned that may contain "?"
+     * @return mixed Part of the URL before the "?" if it existed
+     */
+    public function cleanURL(string $url): string
+    {
+        $url = explode("?", $url, 2);
+        return str_replace("//", "/", $url[0]);
+    }
+
+    /**
+     * Handles an options request
+     * @param string $method
+     * @return false|RouterResponse
+     */
+    public function handleOptionsMethod(string $method): ?RouterResponse
+    {
+        if ($method !== "OPTIONS")
+        {
+            return null;
+        }
+
+        $headers = [];
+        if (in_array("*", TINA4_ALLOW_ORIGINS) || (array_key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
+            if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
+                $headers[] = ('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
+            } else {
+                $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
+            }
+            $headers[] = ('Vary: Origin');
+            $headers[] = ('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
+            $headers[] = ('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+            $headers[] = ('Access-Control-Allow-Credentials: true');
+            $httpCode = HTTP_OK;
+        } else {
+            $httpCode = HTTP_METHOD_NOT_ALLOWED;
+        }
+
+        return new RouterResponse("", $httpCode, $headers);
+    }
+
+    public function handleRoutes ($method, $url): ?RouterResponse
+    {
+        Debug::message("Looking in routes for {$method} - {$url}", TINA4_LOG_DEBUG);
+        global $arrRoutes;
+        $response = new Response();
+        $headers = [];
+        //iterate through the routes
+
+        foreach ($arrRoutes as $rid => $route) {
+            $result = "";
+            Debug::message("Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
+            if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
+                //Look to see if we are a secure route
+                if (!empty($route["class"])) {
+                    $reflectionClass =  new \ReflectionClass($route["class"]);
+                    $reflection = $reflectionClass->getMethod($route["function"]);
+                } else {
+                    $reflection = new \ReflectionFunction($route["function"]);
+                }
+
+                $doc = $reflection->getDocComment();
+                preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
+
+                $params = $this->getParams($response, $route["inlineParamsToRequest"]);
+
+                if (in_array("secure", $annotations[1], true)) {
+                    $headers = getallheaders();
+
+                    if (isset($headers["Authorization"]) && $this->config->getAuthentication()->validToken($headers["Authorization"])) {
+                        //call closure with & without params
+                        $this->config->setAuthentication( null); //clear the auth
+                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                    } else {
+                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                    }
+                }
+
+                if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                    //Check for the formToken request variable
+                    if (!$this->config->getAuthentication()->validToken($_REQUEST["formToken"])) {
+                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                    } else {
+                        $this->config->setAuthentication( null); //clear the auth
+                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                    }
+                } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                    $this->config->setAuthentication( null); //clear the auth
+                    $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                } else {
+                    return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                }
+
+                //check for an empty result
+                if ($result === null && !is_array($result) && !is_object($result)) {
+                    return new RouterResponse("", HTTP_OK);
+                } else if (!is_string($result)) {
+                    $headers[] = $result["contentType"];
+                    $content = $result["content"];
+                    $httpCode = $result["httpCode"];
+                    return new RouterResponse($content, $httpCode, $headers);
+                }
+
+                break;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param $class
+     * @param $method
+     * @param $params
+     * @return false|mixed
+     * @throws \ReflectionException
+     */
+    public function getRouteResult ($class, $method, $params) : ?array
+    {
+        if (!empty($class)) {
+            $methodCheck = new \ReflectionMethod($class, $method);
+            if ($methodCheck->isStatic()) {
+                return call_user_func_array([$class, $method], $params);
+            }
+            $classInstance = new \ReflectionClass($class);
+            $class = $classInstance->newInstance();
+            return call_user_func_array([$class, $method], $params);
+        }
+
+        return call_user_func_array($method, $params);
+    }
+
+    /**
+     * Method to download / stream files
+     * @param $file
+     * @return RouterResponse
+     */
+    public function rangeDownload($file): RouterResponse
+    {
+        $headers = [];
+        $fp = @fopen($file, 'rb');
+        $size = filesize($file); // File size
+        $length = $size;           // Content length
+        $start = 0;               // Start byte
+        $end = $size - 1;       // End byte
+        // Now that we've gotten so far without errors we send the accept range header
+        /* At the moment we only support single ranges.
+         * Multiple ranges requires some more work to ensure it works correctly
+         * and comply with the specifications: http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
+         *
+         * Multi-range support announces itself with:
+         * header('Accept-Ranges: bytes');
+         *
+         * Multi-range content must be sent with multipart/byteranges mediatype,
+         * (mediatype = mimetype)
+         * as well as a boundry header to indicate the various chunks of data.
+         */
+        $headers[] = ("Accept-Ranges: 0-$length");
+        // header('Accept-Ranges: bytes');
+        // multipart/byteranges
+        // http://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.2
+        if (isset($_SERVER['HTTP_RANGE'])) {
+            $c_end = $end;
+            // Extract the range string
+            [, $range] = explode('=', $_SERVER['HTTP_RANGE'], 2);
+            // Make sure the client hasn't sent us a multibyte range
+            if (strpos($range, ',') !== false) {
+
+                // (?) Should this be issued here, or should the first
+                // range be used? Or should the header be ignored and
+                // we output the whole content?
+                $headers[] = ('HTTP/1.1 416 Requested Range Not Satisfiable');
+                $headers[] = ("Content-Range: bytes $start-$end/$size");
+                // (?) Echo some info to the client?
+                return new RouterResponse("", HTTP_REQUEST_RANGE_NOT_SATISFIABLE, $headers);
+            }
+            // If the range starts with an '-' we start from the beginning
+            // If not, we forward the file pointer
+            // And make sure to get the end byte if specified
+            if ($range === '-') {
+                // The n-number of the last bytes is requested
+                $c_start = $size - substr($range, 1);
+            } else {
+
+                $range = explode('-', $range);
+                $c_start = $range[0];
+                $c_end = (isset($range[1]) && is_numeric($range[1])) ? $range[1] : $size;
+            }
+            /* Check the range and make sure it's treated according to the specs.
+             * http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
+             */
+            // End bytes can not be larger than $end.
+            $c_end = ($c_end > $end) ? $end : $c_end;
+            // Validate the requested range and return an error if it's not correct.
+            if ($c_start > $c_end || $c_start > $size - 1 || $c_end >= $size) {
+
+                $headers[] = ('HTTP/1.1 416 Requested Range Not Satisfiable');
+                $headers[] = ("Content-Range: bytes $start-$end/$size");
+                // (?) Echo some info to the client?
+                return new RouterResponse("", HTTP_REQUEST_RANGE_NOT_SATISFIABLE, $headers);
+            }
+            $start = $c_start;
+            $end = $c_end;
+            $length = $end - $start + 1; // Calculate new content length
+            fseek($fp, $start);
+            $headers[] = ('HTTP/1.1 206 Partial Content');
+            return new RouterResponse("", HTTP_PARTIAL_CONTENT, $headers);
+        }
+        // Notify the client the byte range we'll be outputting
+        $headers[] = ("Content-Range: bytes $start-$end/$size");
+        $headers[] = ("Content-Length: $length");
+
+        // Start buffered download
+        $buffer = 1024 * 8;
+        $content = "";
+        while (!feof($fp) && ($p = ftell($fp)) <= $end) {
+
+            if ($p + $buffer > $end) {
+
+                // In case we're only outputtin a chunk, make sure we don't
+                // read past the length
+                $buffer = $end - $p + 1;
+            }
+            set_time_limit(0); // Reset time limit for big files
+            $content.= fread($fp, $buffer);
+            flush(); // Free up memory. Otherwise large files will trigger PHP's memory limit.
+        }
+        fclose($fp);
+        return new RouterResponse($content, HTTP_OK, $headers);
+    }
+
+    /**
+     * Match path
+     * @param $url
+     * @param $routePath
+     * @return bool
+     */
+    public function matchPath($url, $routePath): bool
+    {
+        $url .= "/";
+        $routePath .= "/";
+
+        Debug::message("Matching {$url} -> {$routePath}", TINA4_LOG_DEBUG );
+        preg_match_all($this->pathMatchExpression, $url, $matchesPath);
+        preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
+        $matching = true;
+        $variables = [];
+
+        if (count($matchesPath[1]) === count($matchesRoute[1])) {
+            foreach ($matchesPath[1] as $rid => $matchPath) {
+
+                if ($matchPath !== "" && !empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
+                    $variables[] = urldecode($matchPath);
+                } else
+                    if (!empty($matchesRoute[1][$rid])) {
+                        if ($matchPath !== $matchesRoute[1][$rid]) {
+                            $matching = false;
+                            break;
+                        }
+                    } else
+                        if (  $matchesRoute[1][$rid] === "" && $rid > 1) {
+                            $matching = false;
+                            break;
+                        }
+            }
+
+        } else {
+            $matching = false; //The path was totally different from the route
+        }
+
+        if ($matching) {
+            Debug::message("Matching {$url} with {$routePath}", TINA4_LOG_DEBUG);
+            $this->params = $variables;
+        } else {
+            $matching = false;
+        }
+
+        return $matching;
+    }
+
+    /**
+     * Get the params
+     * @param $response
+     * @param false $inlineToRequest
+     * @return array
+     */
+    public function getParams($response, $inlineToRequest = false): array
+    {
+        $request = new Request(file_get_contents("php://input"));
+
+        if ($inlineToRequest) { //Pull the inlineParams into the request by resetting the params
+            $request->inlineParams = $this->params;
+            $this->params = [];
+        }
+
+        $this->params[] = $response;
+        $this->params[] = $request; //Check if header is JSON
+
+        return $this->params;
+    }
+
+
+
+
+}

@@ -387,7 +387,7 @@ class ORM implements \JsonSerializable
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-            Debug::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
+            Debug::message("TINA4: check " . $sqlCheck, TINA4_LOG_DEBUG);
         }
 
         $exists = $this->DBA->fetch($sqlCheck, 1);
@@ -485,7 +485,7 @@ class ORM implements \JsonSerializable
                 $sqlCreate = $this->generateCreateSQL($this->getTableData(), $tableName);
 
                 if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-                    Debug::message("TINA4: We need to make a table for " . $tableName."\n".$sqlCreate, TINA4_DEBUG_LEVEL);
+                    Debug::message("TINA4: We need to make a table for " . $tableName."\n".$sqlCreate, TINA4_LOG_DEBUG);
                     //Make a migration for it
                     $migrate = (new Migration());
                     $migrate->createMigration(" create table {$tableName}", $sqlCreate, true);
@@ -613,7 +613,7 @@ class ORM implements \JsonSerializable
         }
 
         Debug::message("SQL:\ninsert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
-        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_CONSOLE);
+        Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
         return ["sql" => "insert into {$tableName} (" . implode(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
@@ -631,7 +631,7 @@ class ORM implements \JsonSerializable
         $fieldValues = [];
         $updateValues = [];
 
-        Debug::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
+        Debug::message("Table Data:\n" .print_r ($tableData,1), TINA4_LOG_DEBUG);
 
         $fieldIndex = 0;
         foreach ($tableData as $fieldName => $fieldValue) {
@@ -670,7 +670,7 @@ class ORM implements \JsonSerializable
 
 
         Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_CONSOLE);
-        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_CONSOLE);
+        Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }

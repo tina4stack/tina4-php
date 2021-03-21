@@ -23,22 +23,22 @@ class DataResult implements JsonSerializable
     /**
      * @var array Fields in the table and their types
      */
-    public $fields;
+    public ?array $fields;
 
     /**
      * @var integer Number of records
      */
-    public $noOfRecords;
+    public integer $noOfRecords;
 
     /**
      * @var integer Data row offset
      */
-    public $offSet;
+    public integer $offSet;
 
     /**
      * @var DataError Database error
      */
-    public $error;
+    public ?DataError $error;
 
     /**
      * DataResult constructor.
@@ -62,7 +62,7 @@ class DataResult implements JsonSerializable
      * @param $id
      * @return mixed
      */
-    public function record($id)
+    public function record($id): ?object
     {
         if (!empty($this->records)) {
             return $this->records[$id];
@@ -94,7 +94,7 @@ class DataResult implements JsonSerializable
      * @param boolean $original Original field names
      * @return array|mixed
      */
-    public function asObject($original = false)
+    public function asObject($original = false): ?array
     {
         return $this->records($original);
     }
@@ -105,7 +105,7 @@ class DataResult implements JsonSerializable
      * @return array|null
      * @example examples\exampleDataResultRecords.php
      */
-    public function records($original = false)
+    public function records($original = false): ?array
     {
         $results = [];
         if (!empty($this->records)) {
@@ -121,7 +121,7 @@ class DataResult implements JsonSerializable
      * Gets an array of objects in the original form
      * @return array|mixed
      */
-    public function asOriginal()
+    public function asOriginal(): ?array
     {
         return $this->records(true);
     }
@@ -131,9 +131,8 @@ class DataResult implements JsonSerializable
      * @param boolean $original Original field names
      * @return array
      */
-    public function asArray($original = false)
+    public function asArray($original = false): array
     {
-        //$records = $this->jsonSerialize();
         $result = [];
         if (!empty($this->records)) {
             foreach ($this->records() as $id => $record) {

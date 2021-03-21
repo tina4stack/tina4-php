@@ -12,17 +12,22 @@ namespace Tina4;
 class Request
 {
     public $data = null;
-    public $params = null;
-    public $inlineParams = null;
-    public $server = null;
-    public $session = null;
+    public ?array $params = null;
+    public ?array $inlineParams = null;
+    public ?array $server = null;
+    public ?array $session = null;
+    public ?array $files = null;
 
     public function __construct($rawRequest)
     {
-        Debug::message($rawRequest);
+        Debug::message($rawRequest, TINA4_LOG_DEBUG);
         $this->data = (object)[];
         if (!empty($_REQUEST)) {
             $this->params = $_REQUEST;
+        }
+
+        if (!empty($_FILES)) {
+            $this->files = $_FILES;
         }
 
         if (!empty($_SERVER)) {
@@ -53,12 +58,12 @@ class Request
 
     public function __toString(): string
     {
-        return json_encode($this->data);
+        return json_encode($this->data, JSON_THROW_ON_ERROR);
     }
 
     public function asArray()
     {
-        return (array)json_decode(json_encode($this->data), true);
+        return json_decode(json_encode($this->data, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
     }
 
 }

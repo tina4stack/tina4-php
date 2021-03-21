@@ -1,6 +1,14 @@
 <?php
 
 namespace Tina4;
+use Coyl\Git\Git;
+use Twig\Environment;
+use Twig\Error\LoaderError;
+use Twig\Extension\DebugExtension;
+use Twig\Loader\FilesystemLoader;
+use Twig\TwigFilter;
+use Twig\TwigFunction;
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4 (Andre van Zuydam)
@@ -16,7 +24,7 @@ trait Utility
      * Recursively includes directories
      * @param $dirName
      */
-    public function includeDirectory($dirName): void
+    public static function includeDirectory($dirName): void
     {
         $d = dir($dirName);
         while (($file = $d->read()) !== false) {
@@ -30,11 +38,37 @@ trait Utility
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
 
                 if (($file !== ".") && ($file !== "..") && is_dir($fileNameRoute)) {
-                    $this->includeDirectory($fileNameRoute);
+                    self::includeDirectory($fileNameRoute);
                 }
             }
         }
         $d->close();
+    }
+
+
+    /**
+     * Recursively copy the files
+     * @param $src
+     * @param $dst
+     */
+    public static function recurseCopy($src, $dst): void
+    {
+        if (file_exists($src)) {
+            $dir = opendir($src);
+            if (!file_exists($dst) && !mkdir($dst, $mode = 0755, true) && !is_dir($dst)) {
+                throw new \RuntimeException(sprintf('Directory "%s" was not created', $dst));
+            }
+            while (false !== ($file = readdir($dir))) {
+                if (($file !== '.') && ($file !== '..')) {
+                    if (is_dir($src . '/' . $file)) {
+                        self::recurseCopy($src . '/' . $file, $dst . '/' . $file);
+                    } else {
+                        copy($src . '/' . $file, $dst . '/' . $file);
+                    }
+                }
+            }
+            closedir($dir);
+        }
     }
 
     /**
@@ -71,14 +105,13 @@ trait Utility
         $dateString = str_replace(".000000", "", $dateString);
 
         if (!empty($dateString)) {
-            if (substr($dateString, -1, 1) === "Z") {
+            if ($dateString[strlen($dateString) - 1] === "Z") {
                 $delimiter = "T";
                 $dateParts = explode($delimiter, $dateString);
                 $d = \DateTime::createFromFormat($databaseFormat, $dateParts[0]);
                 if ($d) {
                     return $d->format($outputFormat) . $delimiter . $dateParts[1];
                 }
-
                 return null;
             }
 
@@ -148,34 +181,14 @@ trait Utility
     }
 
 
-    public function getDebugBackTrace(): void
+    public function getDebugBackTrace()
     {
-        global $arrRoutes;
-
-        $routing = new Routing("", "", "", "", null, true);
-
-        if (isset($_SERVER["REQUEST_URI"])) {
-            $urlToParse = $_SERVER["REQUEST_URI"];
-            if ($urlToParse !== "/") {
-                $urlToParse .= "/";
-                $urlToParse = str_replace("//", "/", $urlToParse);
-            }
-        } else {
-            $urlToParse = "/";
-        }
-
         $debug = debug_backtrace();
+        $trace = [];
         foreach ($debug as $id => $debugInfo) {
-            if (strpos($debugInfo["file"], "Tina4") === false) {
-                Debug::handleError("Trace", "", $debugInfo["file"], $debugInfo["line"]);
-            }
+            $trace[] = $debugInfo["file"];
         }
-        foreach ($arrRoutes as $routId => $route) {
-            if ($routing->matchPath($urlToParse, $route["routePath"])) {
-                Debug::handleError("Trace", "", $route["fileInfo"][0]["file"], $route["fileInfo"][0]["line"]);
-                break;
-            }
-        }
+        return $trace;
     }
 
     /**
@@ -223,32 +236,23 @@ trait Utility
     }
 
     /**
-     * Logic to determine the subfolder - result must be /folder/
+     * Logic to determine the sub folder - result must be /folder/
+     * @param string $documentRoot
+     * @return string|null
      */
-    public function getSubFolder(): ?string
+    public function getSubFolder($documentRoot=""): ?string
     {
         if (defined("TINA4_SUB_FOLDER")) {
             return TINA4_SUB_FOLDER;
         }
 
-        if (TINA4_DOCUMENT_ROOT !== null) {
-            $documentRoot = TINA4_DOCUMENT_ROOT;
-        } else {
-            $documentRoot = "";
-            if (isset($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
-                $documentRoot = $_SERVER["CONTEXT_DOCUMENT_ROOT"];
-            } else
-                if (isset($_SERVER["DOCUMENT_ROOT"])) {
-                    $documentRoot = $_SERVER["DOCUMENT_ROOT"];
-                }
-        }
+        $subFolder = str_replace($_SERVER["DOCUMENT_ROOT"], "", $documentRoot);
 
-        $subFolder = (str_replace($_SERVER["DOCUMENT_ROOT"], "", $documentRoot));
-
-        if ($subFolder === DIRECTORY_SEPARATOR || $subFolder === ".")
+        if ($subFolder === $documentRoot || $subFolder === DIRECTORY_SEPARATOR || $subFolder === ".")
         {
-            $subFolder = null;
+            $subFolder = "";
         }
+
         define("TINA4_SUB_FOLDER", $subFolder);
         return $subFolder;
     }
@@ -292,5 +296,192 @@ trait Utility
         $html .= implode("", $fileItems);
         $html .= "</ul>";
         return $html;
+    }
+
+    /**
+     * Initialize twig engine
+     * @param Auth|null $auth
+     * @param Config|null $config
+     * @return Environment
+     * @throws LoaderError
+     */
+    public static function initTwig(?Config $config = null): Environment
+    {
+        global $twig;
+        //Twig initialization
+        if (empty($twig)) {
+            $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
+
+            if (TINA4_DEBUG) {
+                Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_LOG_DEBUG);
+            }
+
+            foreach ($twigPaths as $tid => $twigPath) {
+                if (!is_array($twigPath) && !file_exists($twigPath) && !file_exists(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, TINA4_DOCUMENT_ROOT . $twigPath))) {
+                    unset($twigPaths[$tid]);
+                }
+            }
+
+            $twigLoader = new FilesystemLoader();
+            foreach ($twigPaths as $twigPath) {
+
+                if (is_array($twigPath)) {
+                    if (isset($twigPath["nameSpace"])) {
+                        $twigLoader->addPath($twigPath["path"], $twigPath["nameSpace"]);
+                        $twigLoader->addPath($twigPath["path"], "__main__");
+                    }
+                } else
+                    if (file_exists(TINA4_SUB_FOLDER .$twigPath)) {
+                        $twigLoader->addPath(TINA4_SUB_FOLDER.$twigPath, '__main__');
+                    } else {
+                        $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . $twigPath), '__main__');
+                    }
+            }
+
+            if (TINA4_DEBUG) {
+                $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => false]);
+                $twig->addExtension(new DebugExtension());
+            } else {
+                $twig = new Environment($twigLoader, ["cache" => "./cache"]);
+            }
+            $twig->addGlobal('Tina4', new Caller());
+            if (isset($_SERVER["HTTP_HOST"])) {
+                $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
+            }
+
+            $twig->addGlobal('baseUrl', TINA4_SUB_FOLDER);
+            $twig->addGlobal('baseURL', TINA4_SUB_FOLDER);
+            $twig->addGlobal('uniqId', uniqid('', true));
+            $auth = $config->getAuthentication();
+            if ($auth === null)
+            {
+                $auth = new Auth();
+                $config->setAuthentication($auth);
+            }
+
+            if ($auth !== null) {
+                $twig->addGlobal('formToken', $config->getAuthentication()->getToken());
+            }
+
+            if (isset($_COOKIE) && !empty($_COOKIE)) {
+                $twig->addGlobal('cookie', $_COOKIE);
+            }
+
+            if (isset($_SESSION) && !empty($_SESSION)) {
+                $twig->addGlobal('session', $_SESSION);
+            }
+
+            if (isset($_REQUEST) && !empty($_REQUEST)) {
+                $twig->addGlobal('request', $_REQUEST);
+            }
+
+            if (isset($_SERVER) && !empty($_SERVER)) {
+                $twig->addGlobal('server', $_SERVER);
+            }
+
+            if ($config !== null) {
+                self::addTwigMethods($config, $twig);
+            }
+            //Add form Token
+
+            if ($auth !== null) {
+                $filter = new TwigFilter("formToken", function ($payload) use ($auth) {
+                    if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
+                        return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
+                    }
+
+                    return "";
+                });
+                $twig->addFilter($filter);
+            } else {
+                $filter = new TwigFilter("formToken", function() {
+                    return "Auth protocol not configured";
+                });
+                $twig->addFilter($filter);
+            }
+
+            $filter = new TwigFilter("dateValue", function ($dateString) {
+                global $DBA;
+                if (!empty($DBA)) {
+                    if (substr($dateString, -1, 1) === "Z") {
+                        return substr($DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d"), 0, -1);
+                    }
+                    return $DBA->formatDate($dateString, $DBA->dateFormat, "Y-m-d");
+                }
+                return $dateString;
+            });
+
+            $twig->addFilter($filter);
+            return $twig;
+        }  else {
+            return $twig;
+        }
+    }
+
+    /**
+     * @param Config $config
+     * @param Environment $twig
+     * @return bool
+     */
+    public static function addTwigMethods(Config $config, Environment $twig): bool
+    {
+        if ($config !== null && !empty($config->getTwigGlobals())) {
+            foreach ($config->getTwigGlobals() as $name => $method) {
+                $twig->addGlobal($name, $method);
+            }
+        }
+
+        if ($config !== null && !empty($config->getTwigFilters())) {
+            foreach ($config->getTwigFilters() as $name => $method) {
+                $filter = new TwigFilter($name, $method);
+                $twig->addFilter($filter);
+            }
+        }
+
+        if ($config !== null && !empty($config->getTwigFunctions())) {
+            foreach ($config->getTwigFunctions() as $name => $method) {
+                $function = new TwigFunction($name, $method);
+                $twig->addFunction($function);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Runs git on the repository
+     * @todo finish this implementation
+     * @param $gitEnabled
+     * @param $gitMessage
+     * @param $push
+     */
+    public function initGit($gitEnabled, $gitMessage, $push = false): void
+    {
+        global $GIT;
+        if ($gitEnabled) {
+            try {
+                Git::setBin("git");
+                $GIT = Git::open($this->documentRoot);
+                $message = "";
+                if (!empty($gitMessage)) {
+                    $message = " " . $gitMessage;
+                }
+
+                try {
+                    if (strpos($GIT->status(), "nothing to commit") === false) {
+                        $GIT->add();
+                        $GIT->commit("Tina4: Committed changes at " . date("Y-m-d H:i:s") . $message);
+                        if ($push) {
+                            $GIT->push("", "master");
+                        }
+                    }
+                } catch (\Exception $e) {
+
+                }
+
+            } catch (\Exception $e) {
+                echo $e->getMessage();
+            }
+        }
     }
 }

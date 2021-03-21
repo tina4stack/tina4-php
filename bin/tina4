@@ -405,7 +405,7 @@ function drawMenu($menus)
             }
         } else {
             foreach ($menus as $id => $menu) {
-                if ($menu["show"] === null)
+                if (!isset($menu["show"]))
                 {
                     $menu["show"] = true;
                 }

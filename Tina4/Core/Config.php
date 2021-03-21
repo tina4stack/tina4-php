@@ -14,10 +14,10 @@ class Config
 {
 
 
-    protected $twigFilters = [];
-    protected $twigFunctions = [];
-    protected $twigGlobals = [];
-    protected $authMechanism = null;
+    protected array $twigFilters = [];
+    protected array $twigFunctions = [];
+    protected array $twigGlobals = [];
+    protected ?Auth $authMechanism = null;
 
 
 
@@ -26,7 +26,7 @@ class Config
      * @param $filterName string Name of the filter
      * @param $function null Anonymous function which takes parameters based on the name of the twig filter
      */
-    public function addTwigFilter($filterName, $function): void
+    public function addTwigFilter(string $filterName, $function): void
     {
         $this->twigFilters[$filterName] = $function;
     }
@@ -36,7 +36,7 @@ class Config
      * @param $functionName string Name of the filter
      * @param $function null Anonymous function which takes parameters based on the name of the twig filter
      */
-    public function addTwigFunction($functionName, $function): void
+    public function addTwigFunction(string $functionName, $function): void
     {
         $this->twigFunctions[$functionName] = $function;
     }
@@ -46,7 +46,7 @@ class Config
      * @param $globalName
      * @param $function
      */
-    public function addTwigGlobal($globalName, $function): void
+    public function addTwigGlobal(string $globalName, $function): void
     {
         $this->twigGlobals[$globalName] = $function;
     }
@@ -65,7 +65,7 @@ class Config
      * Sets an auth parameter - alias of setAuth
      * @param $auth Auth
      */
-    public function setAuthentication(Auth $auth): void
+    public function setAuthentication(?Auth $auth): void
     {
         $this->authMechanism = $auth;
     }
@@ -99,9 +99,9 @@ class Config
 
     /**
      * Gets the auth variable
-     * @return false|null
+     * @return Auth
      */
-    public function getAuthentication()
+    public function getAuthentication(): ?Auth
     {
         if (!empty($this->authMechanism)) {
             return $this->authMechanism;
