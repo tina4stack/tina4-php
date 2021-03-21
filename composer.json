@@ -1,34 +1,47 @@
 {
-  "name": "andrevanzuydam/tina4php",
-  "description": "Tina4 PHP",
-  "license": "MIT",
-  "autoload": {
-    "files": [
-      "Tina4/Functions.php",
-      "Tina4/Initialize.php"
+    "name": "andrevanzuydam/tina4php",
+    "description": "Tina4 PHP",
+    "license": "MIT",
+    "autoload": {
+        "files": [
+            "Tina4/Functions.php",
+            "Tina4/Initialize.php"
+        ],
+        "psr-4": {
+            "Tina4\\": [
+                "Tina4/",
+                "Tina4/Api/",
+                "Tina4/Core/",
+                "Tina4/Database/",
+                "Tina4/Messaging/",
+                "Tina4/ORM/",
+                "Tina4/Routing/",
+                "Tina4/Security/",
+                "Tina4/Service"
+            ]
+        }
+    },
+    "require": {
+        "psr/log": "^1.1",
+        "nowakowskir/php-jwt": "^2.0",
+        "twig/twig": "^3.3",
+        "phpfastcache/phpfastcache": "^8.0",
+        "coyl/git": "^0.1.7",
+        "scssphp/scssphp": "^1.4"
+    },
+    "bin": [
+        "bin/tina4",
+        "bin/tina4service"
     ],
-    "psr-4": {
-      "Tina4\\": ["Tina4/","Tina4/Api/","Tina4/Core/","Tina4/Database/","Tina4/Messaging/","Tina4/ORM/","Tina4/Routing/","Tina4/Security/", "Tina4/Service"]
+    "scripts": {
+        "tina4": "tina4",
+        "tina4service": "tina4service",
+        "test": "@tina4 tests:run",
+        "initialize": "@tina4 initialize:run",
+        "start": "@tina4 webservice:run",
+        "start-service": "@tina4service"
+    },
+    "config": {
+        "process-timeout": 0
     }
-  },
-  "require": {
-    "psr/log": "^1.1",
-    "nowakowskir/php-jwt": "^2.0",
-    "twig/twig": "^3.3",
-    "phpfastcache/phpfastcache": "^8.0",
-    "coyl/git": "^0.1.7",
-    "scssphp/scssphp": "^1.4"
-  },
-  "bin": ["bin/tina4","bin/tina4service"],
-  "scripts": {
-    "tina4": "tina4",
-    "tina4service": "tina4service",
-    "test" : "@tina4 tests:run",
-    "initialize": "@tina4 initialize:run",
-    "start" : "@tina4 webservice:run",
-    "start-service": "@tina4service"
-  },
-  "config": {
-    "process-timeout": 0
-  }
 }

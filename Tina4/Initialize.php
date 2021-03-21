@@ -62,6 +62,9 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 
 //Initialize the ENV
 (new \Tina4\Env());
+if(!defined("TINA4_DEBUG_LEVEL")) {
+    define("TINA4_DEBUG_LEVEL", [TINA4_LOG_DEBUG]);
+}
 \Tina4\Debug::$logLevel = TINA4_DEBUG_LEVEL;
 
 if (TINA4_DEBUG)
