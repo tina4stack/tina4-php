@@ -171,7 +171,7 @@ class Crud
         //READ
         Route::get($path,
             function (Response $response, Request $request) use ($object, $function) {
-                $filter = Crud::getDataTablesFilter();
+                $filter = Crud::getDataTablesFilter("t.");
                 $jsonResult = $function ("read", new $object(), $filter, $request);
                 return $response ($jsonResult, HTTP_OK);
             }
@@ -232,7 +232,7 @@ class Crud
      * @return array
      * @throws \Exception
      */
-    public static function getDataTablesFilter()
+    public static function getDataTablesFilter($tablePrefix="")
     {
         $ORM = new ORM();
         $request = $_REQUEST;
@@ -255,7 +255,7 @@ class Crud
 
                 if (($column["searchable"] == "true") && !empty($search["value"])) {
                     //Add each searchable column to array
-                    $listOfColumnNames[] = $columnName;
+                    $listOfColumnNames[] = $tablePrefix.$columnName;
                     //Split search phrase into individual searchable words
                     $splitValue = explode(" ", $search["value"]);
 
@@ -281,7 +281,7 @@ class Crud
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
                 $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"]);
-                $ordering[] = $columnName . " " . $orderEntry["dir"];
+                $ordering[] = $tablePrefix.$columnName . " " . $orderEntry["dir"];
             }
         }
 
