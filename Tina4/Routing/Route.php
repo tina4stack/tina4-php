@@ -18,10 +18,10 @@ class Route implements RouteCore
 
     /**
      * Get route
-     * @param $routePath
+     * @param string $routePath
      * @param $function
      */
-    public static function get($routePath, $function): void
+    public static function get(string $routePath, $function): void
     {
         self::$method = TINA4_GET;
         self::add($routePath, $function, true);
@@ -40,7 +40,7 @@ class Route implements RouteCore
      * @param bool $secure
      * @example "api/tests.php"
      */
-    public static function add(string $routePath, $function, $inlineParamsToRequest = false, $secure = false): void
+    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void
     {
         global $arrRoutes;
 

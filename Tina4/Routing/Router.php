@@ -381,6 +381,16 @@ class Router extends Data
         preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
         $matching = true;
         $variables = [];
+        $this->params = [];
+
+        if (count($matchesPath[1]) === 2 && count($matchesRoute[1]) === 2 && $url === $routePath)
+        {
+            return true;
+        }
+           else
+           {
+                return false;
+           }
 
         if (count($matchesPath[1]) === count($matchesRoute[1])) {
             foreach ($matchesPath[1] as $rid => $matchPath) {
