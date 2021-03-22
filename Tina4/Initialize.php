@@ -68,7 +68,7 @@ if(!defined("TINA4_DEBUG_LEVEL")) {
 }
 \Tina4\Debug::$logLevel = TINA4_DEBUG_LEVEL;
 
-if (!define("TINA4_DEBUG"))
+if (!defined("TINA4_DEBUG"))
 {
     define("TINA4_DEBUG", false);
 }
