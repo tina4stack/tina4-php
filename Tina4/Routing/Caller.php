@@ -18,10 +18,10 @@ class Caller
      * @param $inputClass
      * @param string $method
      * @param array $variables
-     * @return string
+     * @return mixed
      * @throws \Exception
      */
-    public function call($inputClass, $method = "", $variables = []): string
+    public function call($inputClass, $method = "", $variables = [])
     {
         $classInstance = new \ReflectionClass($inputClass);
         $class = $classInstance->newInstance();

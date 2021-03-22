@@ -113,7 +113,7 @@ class Router extends Data
         if (is_null($cachedString->get())) {
             //$CachedString = "Files Cache --> Cache Enabled --> Well done !";
             // Write products to Cache in 1 minutes with same keyword
-            $cachedString->set(["url" => $url,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers])->expiresAfter(60);
+            $cachedString->set(["url" => $url,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers])->expiresAfter(360);
             $cache->save($cachedString);
             return true;
         } else {
@@ -445,18 +445,13 @@ class Router extends Data
         $variables = [];
         $this->params = [];
 
-        if (count($matchesPath[1]) === 2 && count($matchesRoute[1]) === 2 && $url === $routePath)
-        {
-            return true;
-        }
-        else
+        if ($url !== $routePath && count($matchesPath[1]) === count($matchesRoute[1]) && count($matchesPath[1]) === 2)
         {
             return false;
         }
 
         if (count($matchesPath[1]) === count($matchesRoute[1])) {
             foreach ($matchesPath[1] as $rid => $matchPath) {
-
                 if ($matchPath !== "" && !empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
                     $variables[] = urldecode($matchPath);
                 } else
@@ -506,5 +501,4 @@ class Router extends Data
 
         return $this->params;
     }
-
 }
