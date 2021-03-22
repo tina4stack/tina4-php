@@ -42,32 +42,33 @@ class Route implements RouteCore
      */
     public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void
     {
-        if (isset($_SERVER["REQUEST_URI"]) && substr($routePath, 0,2) === substr($_SERVER["REQUEST_URI"], 0,2)) {
-            global $arrRoutes;
+        global $arrRoutes;
 
-            $originalRoute = $routePath;
-            //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
-            $routePath .= "|";
-            $routes = explode("|", $routePath);
+        $originalRoute = $routePath;
+        //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
+        $routePath .= "|";
+        $routes = explode("|", $routePath);
 
-            foreach ($routes as $rid => $routePathLoop) {
-                if ($routePathLoop !== "") {
-                    if ($routePathLoop[0] !== "/") {
-                        $routePathLoop = "/" . $routePathLoop;
-                    }
+        foreach ($routes as $rid => $routePathLoop) {
+            if ($routePathLoop !== "") {
+                if (isset($_SERVER["REQUEST_URI"]) && substr($routePathLoop, 0,2) !== substr($_SERVER["REQUEST_URI"], 0,2)) continue;
 
-                    $class = null;
-                    $method = $function;
-
-                    if (is_array($function) && class_exists($function[0]) && method_exists($function[0], $function[1])) {
-                        $class = $function[0];
-                        $method = $function[1];
-                    }
-
-                    $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
+                if ($routePathLoop[0] !== "/") {
+                    $routePathLoop = "/" . $routePathLoop;
                 }
+
+                $class = null;
+                $method = $function;
+
+                if (is_array($function) && class_exists($function[0]) && method_exists($function[0], $function[1])) {
+                    $class = $function[0];
+                    $method = $function[1];
+                }
+
+                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
             }
         }
+
     }
 
     /**
