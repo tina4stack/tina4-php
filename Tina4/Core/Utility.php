@@ -20,6 +20,38 @@ use Twig\TwigFunction;
  */
 trait Utility
 {
+    public static function getMimeType($fileName): string
+    {
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        switch ($ext) {
+            case "png":
+            case "jpeg":
+            case "ico":
+            case "jpg":
+                $mimeType = "image/{$ext}";
+                break;
+            case "svg":
+                $mimeType = "image/svg+xml";
+                break;
+            case "css":
+                $mimeType = "text/css";
+                break;
+            case "pdf":
+                $mimeType = "application/pdf";
+                break;
+            case "js":
+                $mimeType = "application/javascript";
+                break;
+            case "mp4":
+                $mimeType = "video/mp4";
+                break;
+            default:
+                $mimeType = "text/html";
+                break;
+        }
+        return $mimeType;
+    }
+
     /**
      * Recursively includes directories
      * @param $dirName

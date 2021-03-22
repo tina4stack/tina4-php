@@ -91,9 +91,9 @@ class Router extends Data
         $parseFile = new ParseTemplate($url);
         $content = $parseFile->content;
         $responseCode = $parseFile->httpCode;
-        $headers = ["Context-Type: ".TEXT_HTML];
+        $headers = $parseFile->headers;
 
-        $this->createCacheResponse($url, HTTP_NOT_FOUND, $content, $headers);
+        $this->createCacheResponse($url, $responseCode, $content, $headers);
         return new RouterResponse($content, $responseCode, $headers);
     }
 
@@ -152,33 +152,7 @@ class Router extends Data
             return false;
         }
         $fileName = preg_replace('#/+#', '/', $fileName);
-        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
-        switch ($ext) {
-            case "png":
-            case "jpeg":
-            case "ico":
-            case "jpg":
-                $mimeType = "image/{$ext}";
-                break;
-            case "svg":
-                $mimeType = "image/svg+xml";
-                break;
-            case "css":
-                $mimeType = "text/css";
-                break;
-            case "pdf":
-                $mimeType = "application/pdf";
-                break;
-            case "js":
-                $mimeType = "application/javascript";
-                break;
-            case "mp4":
-                $mimeType = "video/mp4";
-                break;
-            default:
-                $mimeType = "text/html";
-                break;
-        }
+        $mimeType = Utility::getMimeType($fileName);
 
         if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
             return $this->rangeDownload($fileName);

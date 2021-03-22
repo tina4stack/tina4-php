@@ -22,7 +22,8 @@ class ParseTemplate
     private $definedVariables;
     private array $evals = [];
     public string $content;
-    public int $httpCode = 200;
+    public int $httpCode = HTTP_OK;
+    public array $headers = [];
 
 
 
@@ -66,6 +67,7 @@ class ParseTemplate
         //find a file in the public or templates folder which matches the route given
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
 
+
         if (empty($ext)) {
             $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName."/index.twig", $fileName."/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
             $possibleFiles = array_unique($possibleFiles);
@@ -86,6 +88,7 @@ class ParseTemplate
                 $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
                 if (file_exists($testFile)) {
                     $realFileName = $testFile;
+                    $mimeType = Utility::getMimeType($fileName);
                     break;
                 }
 
@@ -103,8 +106,14 @@ class ParseTemplate
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
+                $this->headers[] = "Content-Type: ".TEXT_HTML;
+
                 $content = renderTemplate($realFileName, $_SESSION["renderData"]);
             } else {
+                $this->headers[] = "Content-Type: ".$mimeType;
+                $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
+                $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
                 $content = file_get_contents($realFileName);
                 $content = $this->parseSnippets($content);
                 $content = $this->parseCalls($content);
