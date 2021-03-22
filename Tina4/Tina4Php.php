@@ -80,10 +80,13 @@ class Tina4Php extends Data
 
         $this->config = $config;
 
-        try {
-            Utility::initTwig($config);
-        } catch (LoaderError $e) {
-            Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
+        if (defined("TINA4_SUPPRESS") && TINA4_SUPPRESS) {
+            $this->config->callInitFunction();
+            try {
+                Utility::initTwig($config);
+            } catch (LoaderError $e) {
+                Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
+            }
         }
 
         $this->initRoutes($this);

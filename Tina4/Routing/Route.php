@@ -42,40 +42,30 @@ class Route implements RouteCore
      */
     public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void
     {
-        global $arrRoutes;
+        if (isset($_SERVER["REQUEST_URI"]) && substr($routePath, 0,2) === substr($_SERVER["REQUEST_URI"], 0,2)) {
+            global $arrRoutes;
 
-        $debugFile = [];
-        if (TINA4_DEBUG) {
-            $debug = debug_backtrace();
-            foreach ($debug as $fid => $file) {
-                if (isset($file["file"])) {
-                    if (strpos($file["file"], "Tina4") === false) {
-                        $debugFile[] = ["file" => $file["file"], "line" => $file["line"]];
+            $originalRoute = $routePath;
+            //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
+            $routePath .= "|";
+            $routes = explode("|", $routePath);
+
+            foreach ($routes as $rid => $routePathLoop) {
+                if ($routePathLoop !== "") {
+                    if ($routePathLoop[0] !== "/") {
+                        $routePathLoop = "/" . $routePathLoop;
                     }
+
+                    $class = null;
+                    $method = $function;
+
+                    if (is_array($function) && class_exists($function[0]) && method_exists($function[0], $function[1])) {
+                        $class = $function[0];
+                        $method = $function[1];
+                    }
+
+                    $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
                 }
-            }
-        }
-
-        $originalRoute = $routePath;
-        //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
-        $routePath .= "|";
-        $routes = explode("|", $routePath);
-
-        foreach ($routes as $rid => $routePathLoop) {
-            if ($routePathLoop !== "") {
-                if ($routePathLoop[0] !== "/") {
-                    $routePathLoop = "/" . $routePathLoop;
-                }
-
-                $class = null;
-                $method = $function;
-
-                if (is_array($function) && class_exists($function[0]) && method_exists($function[0], $function[1])) {
-                   $class = $function[0];
-                   $method = $function[1];
-                }
-
-                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest, "fileInfo" => $debugFile];
             }
         }
     }

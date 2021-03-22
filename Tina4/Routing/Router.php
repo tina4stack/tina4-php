@@ -162,6 +162,7 @@ class Router extends Data
         $headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
         $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         if ($ext !== "twig") {
             $content = file_get_contents($fileName);
         } else {
