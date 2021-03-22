@@ -240,7 +240,6 @@ if (empty($cache)) {
         \Tina4\Debug::message("Could not initialize cache", TINA4_LOG_ERROR);
     }
 }
-//Run migrations if needed
 
 //@todo Init Git Here
 

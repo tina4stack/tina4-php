@@ -4,6 +4,8 @@
 namespace Tina4;
 
 
+use Twig\Error\LoaderError;
+
 class Router extends Data
 {
 
@@ -32,6 +34,12 @@ class Router extends Data
             return null;
         }
 
+        $cacheResult = $this->getCacheResponse($url);
+        if ($cacheResult !== null){
+            Debug::message("Got cached result for $url", TINA4_LOG_DEBUG);
+            return new RouterResponse($cacheResult["content"], $cacheResult["httpCode"], $cacheResult["headers"]);
+        }
+
         $url = $this->cleanURL($url);
         Debug::message("{$method} - {$url}", TINA4_LOG_DEBUG);
         //Clean the URL
@@ -47,12 +55,22 @@ class Router extends Data
         }
 
         //SECOND STATIC FILES - ONLY GET
+
         if ($method === TINA4_GET) {
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
+                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers);
                 return $routerResponse;
             }
+        }
+
+        //Initialize only after statics, initialize the twig engine
+        $config->callInitFunction();
+        try {
+            Utility::initTwig($config);
+        } catch (LoaderError $e) {
+            Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
         }
 
         //THIRD ROUTING
@@ -60,7 +78,6 @@ class Router extends Data
         {
             return $routerResponse;
         }
-
 
         //LAST RESORT -> GO LOOKING IN TEMPLATES FOR FILE BY THE NAME
         if ($url === "/")
@@ -70,11 +87,56 @@ class Router extends Data
 
         //GO THROUGH ALL THE TEMPLATE INCLUDE LOCATIONS AND SEE IF WE CAN FIND SOMETHING
         Debug::message("URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
+
         $parseFile = new ParseTemplate($url);
         $content = $parseFile->content;
         $responseCode = $parseFile->httpCode;
         $headers = ["Context-Type: ".TEXT_HTML];
+
+        $this->createCacheResponse($url, HTTP_NOT_FOUND, $content, $headers);
         return new RouterResponse($content, $responseCode, $headers);
+    }
+
+    /**
+     * Create cache response
+     * @param $url
+     * @param $httpCode
+     * @param $content
+     * @return bool
+     */
+    public function createCacheResponse($url, $httpCode, $content, $headers): bool
+    {
+        global $cache;
+        $key = "url_".md5($url);
+
+        $cachedString = $cache->getItem($key);
+        if (is_null($cachedString->get())) {
+            //$CachedString = "Files Cache --> Cache Enabled --> Well done !";
+            // Write products to Cache in 1 minutes with same keyword
+            $cachedString->set(["url" => $url,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers])->expiresAfter(60);
+            $cache->save($cachedString);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Get cache response
+     * @param $url
+     * @return array|null
+     */
+    public function getCacheResponse($url): ?array
+    {
+        global $cache;
+        $key = "url_".md5($url);
+
+        $cachedString = $cache->getItem($key);
+        if (!is_null($cachedString->get())) {
+            return $cachedString->get();
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -387,10 +449,10 @@ class Router extends Data
         {
             return true;
         }
-           else
-           {
-                return false;
-           }
+        else
+        {
+            return false;
+        }
 
         if (count($matchesPath[1]) === count($matchesRoute[1])) {
             foreach ($matchesPath[1] as $rid => $matchPath) {
@@ -444,8 +506,5 @@ class Router extends Data
 
         return $this->params;
     }
-
-
-
 
 }

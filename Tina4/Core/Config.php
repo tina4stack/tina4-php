@@ -12,14 +12,25 @@ namespace Tina4;
  */
 class Config
 {
-
-
     protected array $twigFilters = [];
     protected array $twigFunctions = [];
     protected array $twigGlobals = [];
     protected ?Auth $authMechanism = null;
 
+    protected $initFunction;
 
+    public function callInitFunction(): void
+    {
+        call_user_func_array($this->initFunction, [$this]);
+    }
+
+    public function __construct($initFunction=null)
+    {
+        if ($initFunction !== null)
+        {
+            $this->initFunction = $initFunction;
+        }
+    }
 
     /**
      * Adds a twig filter for use in your templates
