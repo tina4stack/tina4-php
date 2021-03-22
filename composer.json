@@ -8,8 +8,8 @@
             "Tina4/Initialize.php"
         ],
         "classmap": [
-            "Tina4/*",
-            "src/*"
+            "Tina4/",
+            "src/"
         ],
         "psr-4": {
             "\\": ["src", "src/app", "src/orm", "src/routes"],
