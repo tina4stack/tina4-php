@@ -21,7 +21,9 @@ class Config
 
     public function callInitFunction(): void
     {
-        call_user_func_array($this->initFunction, [$this]);
+        if ($this->initFunction !== null) {
+            call_user_func_array($this->initFunction, [$this]);
+        }
     }
 
     public function __construct($initFunction=null)
