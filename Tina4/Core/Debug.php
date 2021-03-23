@@ -239,11 +239,11 @@ class Debug implements \Psr\Log\LoggerInterface
 
     /**
      * Gets 10 lines around line where error occurred
-     * @param $fileName
-     * @param $lineNo
+     * @param string $fileName
+     * @param int $lineNo
      * @return string
      */
-    public static function getCodeSnippet($fileName, $lineNo) : string
+    public static function getCodeSnippet(string $fileName, int $lineNo) : string
     {
         $lines = explode(PHP_EOL, file_get_contents($fileName));
         $lineStart = $lineNo - 5;

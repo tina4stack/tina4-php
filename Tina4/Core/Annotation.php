@@ -114,9 +114,10 @@ class Annotation
         $reflection = new \ReflectionClass($className);
         $docComment = $reflection->getDocComment();
         $annotation = $this->parseAnnotations($docComment, $annotationName);
+        $constructor = $reflection->getConstructor();
 
         if (!empty($annotation)) {
-            $annotations[] = ["type" => "class", "class" => $className, "annotations" => $annotation, "method" => null, "params" => [], "isStatic" => null];
+            $annotations[] = ["type" => "class", "class" => $className, "annotations" => $annotation, "method" => null, "params" => $constructor->getParameters(), "isStatic" => null];
         }
 
         $methods = get_class_methods($className);

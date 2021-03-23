@@ -12,17 +12,17 @@ namespace Tina4;
  */
 class Api
 {
-    public $baseURL;
-    public $authHeader;
+    public ?string $baseURL;
+    public ?string $authHeader;
 
     /**
      * API constructor.
-     * @param $baseURL
+     * @param ?string $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
      * @tests
      *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
      */
-    public function __construct($baseURL, $authHeader = "")
+    public function __construct(?string $baseURL, $authHeader = "")
     {
         $this->baseURL = $baseURL;
         $this->authHeader = $authHeader;
