@@ -3,6 +3,7 @@
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 use Tina4\HTMLElement;
+use Tina4\Module;
 
 //DEBUG & ERROR LOG CONSTANTS
 define("TINA4_LOG_EMERGENCY","emergency");

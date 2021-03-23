@@ -239,9 +239,9 @@ class Router extends Data
                 $params = $this->getParams($response, $route["inlineParamsToRequest"]);
 
                 if (in_array("secure", $annotations[1], true)) {
-                    $headers = getallheaders();
+                    $requestHeaders = getallheaders();
 
-                    if (isset($headers["Authorization"]) && $this->config->getAuthentication()->validToken($headers["Authorization"])) {
+                    if (isset($headers["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
                         //call closure with & without params
                         $this->config->setAuthentication( null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
@@ -250,19 +250,21 @@ class Router extends Data
                     }
                 }
 
-                if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
-                    //Check for the formToken request variable
-                    if (!$this->config->getAuthentication()->validToken($_REQUEST["formToken"])) {
-                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
-                    } else {
-                        $this->config->setAuthentication( null); //clear the auth
+                if ($result === null) {
+                    if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        //Check for the formToken request variable
+                        if (!$this->config->getAuthentication()->validToken($_REQUEST["formToken"])) {
+                            return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                        } else {
+                            $this->config->setAuthentication(null); //clear the auth
+                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        }
+                    } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        $this->config->setAuthentication(null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                    } else {
+                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
                     }
-                } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
-                    $this->config->setAuthentication( null); //clear the auth
-                    $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                } else {
-                    return new RouterResponse("", HTTP_FORBIDDEN, $headers);
                 }
 
                 //check for an empty result
