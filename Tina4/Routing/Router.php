@@ -222,7 +222,7 @@ class Router extends Data
         //iterate through the routes
 
         foreach ($arrRoutes as $rid => $route) {
-            $result = "";
+            $result = null;
             Debug::message("Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
             if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
                 //Look to see if we are a secure route
@@ -230,7 +230,7 @@ class Router extends Data
                     $reflectionClass =  new \ReflectionClass($route["class"]);
                     $reflection = $reflectionClass->getMethod($route["function"]);
                 } else {
-                    $reflection = new \ReflectionFunction($route["function"]);
+                    $reflection = new  \ReflectionFunction($route["function"]);
                 }
 
                 $doc = $reflection->getDocComment();

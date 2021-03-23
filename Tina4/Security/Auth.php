@@ -1,5 +1,4 @@
 <?php
-
 namespace Tina4;
 
 use Nowakowskir\JWT\Exceptions\IntegrityViolationException;
@@ -142,7 +141,7 @@ class Auth extends Data
      *   assert $this->getToken() !== "", "Token must not be blank"
      *   assert ($this->getToken()) === true,"The token is not valid"
      */
-    public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256): bool
     {
         Debug::message("Validating token");
         $this->initSession();
