@@ -70,7 +70,7 @@ class Debug implements \Psr\Log\LoggerInterface
 
     /**
      * Logs a log for the current level
-     * @param mixed $level
+     * @param string $level
      * @param string $message
      * @param array $context
      * @tests
@@ -80,31 +80,31 @@ class Debug implements \Psr\Log\LoggerInterface
      */
     public function log($level, $message, array $context = []):void
     {
-        if (!is_string($message)) {
-            $message .= "\n".print_r($message, 1);
-        }
-        switch($level)
-        {
-            case LogLevel::INFO:
-                $color = $this->colorCyan;
-            break;
-            case LogLevel::WARNING:
-                $color = $this->colorOrange;
-            break;
-            case LogLevel::ERROR:
-            case LogLevel::CRITICAL:
-                $color = $this->colorRed;
-            break;
-            default:
-                $color = $this->colorCyan;
-        }
+        if (is_string($level)) {
+            if (!is_string($message)) {
+                $message .= "\n" . print_r($message, 1);
+            }
+            switch ($level) {
+                case LogLevel::INFO:
+                    $color = $this->colorCyan;
+                    break;
+                case LogLevel::WARNING:
+                    $color = $this->colorOrange;
+                    break;
+                case LogLevel::ERROR:
+                case LogLevel::CRITICAL:
+                    $color = $this->colorRed;
+                    break;
+                default:
+                    $color = $this->colorCyan;
+            }
 
-        $debugLevel = implode("", self::$logLevel);
-        if (strpos($debugLevel, "all") !== false || strpos($debugLevel, $level) !== false) {
-            $output = $color . strtoupper($level) . $this->colorReset . ":" . $message;
-            error_log($output);
+            $debugLevel = implode("", self::$logLevel);
+            if (strpos($debugLevel, "all") !== false || strpos($debugLevel, $level) !== false) {
+                $output = $color . strtoupper($level) . $this->colorReset . ":" . $message;
+                error_log($output);
+            }
         }
-
     }
 
     public static function message ($message, $level=LogLevel::INFO)

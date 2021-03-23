@@ -2,6 +2,7 @@
 
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
+use Tina4\Debug;
 use Tina4\HTMLElement;
 use Tina4\Module;
 
@@ -65,9 +66,13 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 //Initialize the ENV
 (new \Tina4\Env());
 if(!defined("TINA4_DEBUG_LEVEL")) {
-    define("TINA4_DEBUG_LEVEL", [TINA4_LOG_DEBUG]);
+    define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);
 }
 \Tina4\Debug::$logLevel = TINA4_DEBUG_LEVEL;
+
+Debug::message("Project Root: " . TINA4_PROJECT_ROOT);
+Debug::message("Document Root: " . TINA4_DOCUMENT_ROOT);
+Debug::message("SubFolder: " . TINA4_SUB_FOLDER);
 
 if (!defined("TINA4_DEBUG"))
 {

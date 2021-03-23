@@ -27,7 +27,6 @@ class Data
      */
     public function __construct()
     {
-
         if (!defined("TINA4_DOCUMENT_ROOT")) {
 
             $reflection = new \ReflectionClass(ClassLoader::class);
@@ -40,12 +39,8 @@ class Data
             } else {
                 $this->documentRoot = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR;
             }
-            Debug::$logLevel = [TINA4_LOG_INFO];
-            $this->subFolder = $this->getSubFolder($this->documentRoot);
-            Debug::message("Project Root: " . $this->projectRoot);
-            Debug::message("Document Root: " . $this->documentRoot);
-            Debug::message("SubFolder: " . $this->subFolder);
 
+            $this->subFolder = $this->getSubFolder($this->documentRoot);
             define("TINA4_DOCUMENT_ROOT", $this->documentRoot);
             define("TINA4_PROJECT_ROOT", $this->projectRoot);
         } else {
