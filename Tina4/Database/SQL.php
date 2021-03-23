@@ -305,6 +305,15 @@ class SQL implements \JsonSerializable
                         $newRecord = clone $this->ORM;
                         $newRecord->mapFromRecord($record, true);
 
+                        if (!empty($this->hasOne))
+                        {
+                            $newRecord->loadHasOne();
+                        }
+
+                        if (!empty($this->hasMany))
+                        {
+                            $newRecord->loadHasMany();
+                        }
 
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
@@ -324,6 +333,9 @@ class SQL implements \JsonSerializable
                                 }
                             }
                         }
+
+
+
 
                         //Apply a filter to the record
                         if (!empty($this->filterMethod)) {

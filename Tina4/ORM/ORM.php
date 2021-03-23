@@ -692,13 +692,13 @@ class ORM implements \JsonSerializable
             if ($overRide) {
                 $this->{$ormField} = $fieldValue;
             } else
-            if (property_exists($this, $ormField)){
                 if (property_exists($this, $ormField)){
-                    if  ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
-                        $this->{$ormField} = $fieldValue;
+                    if (property_exists($this, $ormField)){
+                        if  ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
+                            $this->{$ormField} = $fieldValue;
+                        }
                     }
                 }
-            }
         }
 
         //work out the virtual fields here from the load
@@ -769,17 +769,17 @@ class ORM implements \JsonSerializable
                         }
                     }
                 } else
-                if (is_array($value)) {
-                    foreach ($value as $vid => $vvalue) {
-                        if (get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
-                            if ($isObject) {
-                                $value[$vid] = $vvalue->asObject();
-                            } else {
-                                $value[$vid] = $vvalue->asArray();
+                    if (is_array($value)) {
+                        foreach ($value as $vid => $vvalue) {
+                            if (get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
+                                if ($isObject) {
+                                    $value[$vid] = $vvalue->asObject();
+                                } else {
+                                    $value[$vid] = $vvalue->asArray();
+                                }
                             }
                         }
                     }
-                }
                 $tableData[$fieldName] = $value;
             }
         }
@@ -938,7 +938,8 @@ class ORM implements \JsonSerializable
         foreach ($this->hasOne() as $id => $item) {
             foreach ($item as $className => $foreignKey) {
                 $class = new $className;
-                $records = $class->select("*", $this->hasManyLimit)->where ("$class->primaryKey = {$this->{$foreignKey}}");
+                $primaryKey = $this->getFieldName($class->primaryKey);
+                $records = $class->select("*", $this->hasManyLimit)->where ("{$primaryKey} = {$this->{$foreignKey}}");
                 $className = strtolower($className);
                 $this->readOnlyFields[] = $className;
                 $this->{$className} = $records->asObject()[0];
