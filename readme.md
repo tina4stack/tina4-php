@@ -67,9 +67,21 @@ composer start-service
 ```
 
 #### Tina4 menu
+
 ```bash
 composer tina4
 ```
+
+*Note* The above command only seems to run on Linux and Mac
+
+On Windows do the following:
+
+```
+php bin\tina4
+```
+
+
+
 
 ### Quick Reference ###
 
