@@ -36,11 +36,11 @@ class Api
      * @param string $contentType
      * @return array|mixed
      * @tests
-     *   assert ("/book")->docs[0]->name === "The Fellowship Of The Ring", "API Get request"
-     *   assert ("/book")->docs[1]->name !== "The Fellowship Of The Ring", "API Get request"
-     *   assert is_object("/book") === true, "This is not an object"
+     *   assert ("/book")['docs'][0]['name'] === "The Fellowship Of The Ring", "API Get request"
+     *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
+     *   assert is_array("/book") === true, "This is not an array"
      */
-    public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*")
+    public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*"): array
     {
         try {
             $headers = [];
@@ -72,7 +72,7 @@ class Api
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
                 return ["error" => $curlInfo, "body" => json_decode($curlResult, false)];
             } else {
-                return json_decode($curlResult, false);
+                return json_decode($curlResult, true);
             }
         } catch (\Exception $error) {
             return ["error" => $error->getMessage()];

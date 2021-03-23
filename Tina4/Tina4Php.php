@@ -87,14 +87,15 @@ class Tina4Php extends Data
             } catch (LoaderError $e) {
                 Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
             }
-        }
+        } else {
 
-        $this->initRoutes($this);
+            $this->initRoutes($this);
 
-        try {
-            $this->initCSS();
-        } catch (CompilerException $e) {
-            Debug::message("Could not create default.css twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
+            try {
+                $this->initCSS();
+            } catch (CompilerException $e) {
+                Debug::message("Could not create default.css twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
+            }
         }
     }
 
