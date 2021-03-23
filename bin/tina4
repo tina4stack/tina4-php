@@ -314,11 +314,8 @@ class [CLASS_NAME] extends \Tina4\ORM
 [FIELDS]
 }';
 
-                        if (file_exists("Tina4Php.php")) {
-                            $fileName = $rootPath  . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
-                        } else {
-                            $fileName = $rootPath  . "src" . DIRECTORY_SEPARATOR . "objects" . DIRECTORY_SEPARATOR . $className . ".php";
-                        }
+                        $fileName = $rootPath  . "src" . DIRECTORY_SEPARATOR . "orm" . DIRECTORY_SEPARATOR . $className . ".php";
+
                         echo "Creating object in {$fileName} {$className}\n";
                         if (!file_exists($fileName)) {
                             $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);

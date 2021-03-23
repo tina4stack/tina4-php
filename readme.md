@@ -76,11 +76,10 @@ composer tina4
 The folder layout is as follows and can be overridden by defining PHP constants for ```TINA4_TEMPLATE_LOCATIONS```, ```TINA4_ROUTE_LOCATIONS``` & ```TINA4_INCLUDE_LOCATIONS```:
 
 * src
-     * api (routing)
      * app (helpers, PHP classes)
-     * assets (system twig files, images, css, js)
-     * objects (ORM objects - extend \Tina4\ORM)
-     * routes (app routing)
+     * public (system twig files, images, css, js)
+     * orm (ORM objects - extend \Tina4\ORM)
+     * routes (routing)
      * scss - style sheet templates  
      * services (service processes - extend \Tina4\Process)
      * templates (app twig files)
