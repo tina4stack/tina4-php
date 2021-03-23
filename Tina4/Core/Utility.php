@@ -345,9 +345,7 @@ trait Utility
         if (empty($twig)) {
             $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
 
-            if (TINA4_DEBUG) {
-                Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_LOG_DEBUG);
-            }
+            Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_LOG_DEBUG);
 
             foreach ($twigPaths as $tid => $twigPath) {
                 if (!is_array($twigPath) && !file_exists($twigPath) && !file_exists(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, TINA4_DOCUMENT_ROOT . $twigPath))) {

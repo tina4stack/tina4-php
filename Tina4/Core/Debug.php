@@ -74,9 +74,9 @@ class Debug implements \Psr\Log\LoggerInterface
      * @param string $message
      * @param array $context
      * @tests
-     *   assert log(\Psr\Log\LogLevel::INFO,"Testing info") === null,"Could not log Info"
-     *   assert log(\Psr\Log\LogLevel::WARNING,"Testing warning") === null,"Could not log Warning"
-     *   assert log(\Psr\Log\LogLevel::DEBUG,"Testing debug") === null,"Could not log Debug"
+     *   assert log("info","Testing info") === null,"Could not log Info"
+     *   assert log("warning","Testing warning") === null,"Could not log Warning"
+     *   assert log("test","Testing debug") === null,"Could not log Debug"
      */
     public function log($level, $message, array $context = []):void
     {
