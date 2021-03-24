@@ -51,7 +51,7 @@ class Route implements RouteCore
 
         foreach ($routes as $rid => $routePathLoop) {
             if ($routePathLoop !== "") {
-                if (isset($_SERVER["REQUEST_URI"]) && substr($routePathLoop, 0,2) !== substr($_SERVER["REQUEST_URI"], 0,2)) continue;
+                if (isset($_SERVER["REQUEST_URI"]) && $_SERVER["REQUEST_URI"] !== "/swagger/json.json" && substr($routePathLoop, 0,2) !== substr($_SERVER["REQUEST_URI"], 0,2)) continue;
 
                 if ($routePathLoop[0] !== "/") {
                     $routePathLoop = "/" . $routePathLoop;
