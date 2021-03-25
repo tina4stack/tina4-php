@@ -50,6 +50,7 @@ class ParseTemplate
         $this->subFolder = TINA4_SUB_FOLDER;
         $this->definedVariables = $definedVariables;
         //parse the file for objects and tags
+        $this->fileName = $fileName;
         $this->content = $this->parseFile($fileName);
     }
 
@@ -126,6 +127,7 @@ class ParseTemplate
             Debug::message("Returning File not found {$fileName}", TINA4_LOG_DEBUG);
             $this->httpCode = HTTP_NOT_FOUND;
             $content = "";
+            $this->fileName = "";
             if (defined("TINA4_APP")) {
                 $content = file_get_contents("./" . TINA4_APP);
                 $this->httpCode = HTTP_OK;

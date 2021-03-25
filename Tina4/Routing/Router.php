@@ -91,7 +91,7 @@ class Router extends Data
         $parseFile = new ParseTemplate($url);
 
         $this->createCacheResponse($url, $parseFile->httpCode, $parseFile->content, $parseFile->headers, $parseFile->fileName);
-        return new RouterResponse($content, $responseCode, $headers);
+        return new RouterResponse($parseFile->content, $parseFile->httpCode, $parseFile->headers);
     }
 
     /**
