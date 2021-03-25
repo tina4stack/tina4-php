@@ -39,7 +39,7 @@
         "bin/tina4service"
     ],
     "scripts": {
-        "tina4": "tina4",
+        "tina4": "@php bin/tina4",
         "tina4service": "tina4service",
         "test": "@tina4 tests:run",
         "initialize": "@tina4 initialize:run",

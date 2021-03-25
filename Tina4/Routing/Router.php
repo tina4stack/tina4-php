@@ -60,7 +60,7 @@ class Router extends Data
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
-                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers);
+                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
                 return $routerResponse;
             }
         }
@@ -89,11 +89,8 @@ class Router extends Data
         Debug::message("URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
 
         $parseFile = new ParseTemplate($url);
-        $content = $parseFile->content;
-        $responseCode = $parseFile->httpCode;
-        $headers = $parseFile->headers;
 
-        $this->createCacheResponse($url, $responseCode, $content, $headers);
+        $this->createCacheResponse($url, $parseFile->httpCode, $parseFile->content, $parseFile->headers, $parseFile->fileName);
         return new RouterResponse($content, $responseCode, $headers);
     }
 
@@ -102,9 +99,11 @@ class Router extends Data
      * @param $url
      * @param $httpCode
      * @param $content
+     * @param $headers
+     * @param $fileName
      * @return bool
      */
-    public function createCacheResponse($url, $httpCode, $content, $headers): bool
+    public function createCacheResponse($url, $httpCode, $content, $headers, $fileName): bool
     {
         global $cache;
         $key = "url_".md5($url);
@@ -113,7 +112,7 @@ class Router extends Data
         if (is_null($cachedString->get())) {
             //$CachedString = "Files Cache --> Cache Enabled --> Well done !";
             // Write products to Cache in 1 minutes with same keyword
-            $cachedString->set(["url" => $url,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers])->expiresAfter(360);
+            $cachedString->set(["url" => $url, "fileName" => $fileName,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers])->expiresAfter(360);
             $cache->save($cachedString);
             return true;
         } else {
@@ -133,7 +132,12 @@ class Router extends Data
 
         $cachedString = $cache->getItem($key);
         if (!is_null($cachedString->get())) {
-            return $cachedString->get();
+            $response = $cachedString->get();
+            if (defined("TINA4_DEBUG") && TINA4_DEBUG && strpos($response["fileName"], ".twig") !== false)
+            {
+                return null;
+            }
+            return $response;
         } else {
             return null;
         }

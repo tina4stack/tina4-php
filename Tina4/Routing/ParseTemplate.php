@@ -24,6 +24,7 @@ class ParseTemplate
     public string $content;
     public int $httpCode = HTTP_OK;
     public array $headers = [];
+    public string $fileName;
 
 
 
@@ -108,12 +109,14 @@ class ParseTemplate
                 }
                 $this->headers[] = "Content-Type: ".TEXT_HTML;
 
+                $this->fileName = $realFileName;
                 $content = renderTemplate($realFileName, $_SESSION["renderData"]);
             } else {
                 $this->headers[] = "Content-Type: ".$mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
                 $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
+                $this->fileName = $realFileName;
                 $content = file_get_contents($realFileName);
                 $content = $this->parseSnippets($content);
                 $content = $this->parseCalls($content);

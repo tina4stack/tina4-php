@@ -40,7 +40,7 @@ class Api
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
      *   assert is_array("/book") === true, "This is not an array"
      */
-    public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*"): array
+    public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*"): array
     {
         try {
             $headers = [];
