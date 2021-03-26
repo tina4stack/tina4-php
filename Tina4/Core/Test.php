@@ -73,7 +73,7 @@ class Test
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
         } else {
-            preg_match_all('/(^.*[\W\w])(\ \=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
+            preg_match_all('/(^.*[\W\w])(\ \<\=|\ \>\=|\ \<|\ \>|\ \=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
 
             $actualExpression = trim($parts[0][1]);
             $actualResult = "-";
