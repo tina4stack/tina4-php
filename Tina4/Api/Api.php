@@ -19,7 +19,7 @@ class Api
      * API constructor.
      * @param ?string $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
-     * @tests
+     * @tests tina4
      *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
      */
     public function __construct(?string $baseURL, $authHeader = "")
@@ -35,7 +35,7 @@ class Api
      * @param null $body
      * @param string $contentType
      * @return array|mixed
-     * @tests
+     * @tests tina4
      *   assert ("/book")['docs'][0]['name'] === "The Fellowship Of The Ring", "API Get request"
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
      *   assert is_array("/book") === true, "This is not an array"
