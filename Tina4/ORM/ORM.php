@@ -388,6 +388,12 @@ class ORM implements \JsonSerializable
         //See if the record exists already using the primary key
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
+
+        //See if we can get the fetch from the cached data
+
+        $key = "orm".md5($sqlCheck);
+        (new Cache())->set($key, null, 0);
+
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             Debug::message("TINA4: check " . $sqlCheck, TINA4_LOG_DEBUG);
         }
