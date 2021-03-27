@@ -191,7 +191,7 @@ $menus[] = ["id" => 3, "name" => "database", "description" => "Create database c
             }
 
             $nextIndex = 12;
-            $prompt = "Add database configuration to the index.php {$input["input"]} (Y/n) ?";
+            $prompt = "Add database configuration to the index.php {$input} (Y/n) ?";
             break;
         case 12:
             $indexContent = createDatabaseConnection($settings["databaseType"], $settings["databasePath"], $settings["databaseHost"], $settings["databaseUsername"], $settings["databasePassword"]);
