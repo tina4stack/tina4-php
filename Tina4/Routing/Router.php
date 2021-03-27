@@ -242,8 +242,8 @@ class Router extends Data
 
                 $params = $this->getParams($response, $route["inlineParamsToRequest"]);
 
-                if (in_array("secure", $annotations[1], true)) {
-                    $requestHeaders = getallheaders();
+                $requestHeaders = getallheaders();
+                if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
 
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
                         //call closure with & without params
