@@ -19,14 +19,14 @@ class Cache
      * @param $keyName
      * @param $value
      * @param int $expires
-     * @return mixed
+     * @return bool
      */
-    public function set($keyName, $value, $expires=60)
+    public function set($keyName, $value, $expires=60): bool
     {
         $cachedString = $this->cache->getItem($keyName);
         $cachedString->set($value)->expiresAfter($expires);
         $this->cache->save($cachedString);
-        return $cachedString;
+        return true;
     }
 
     /**
@@ -39,7 +39,6 @@ class Cache
      */
     public function get($keyName)
     {
-
         $cachedString = $this->cache->getItem($keyName);
         return $cachedString->get();
     }
