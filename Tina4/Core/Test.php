@@ -232,8 +232,9 @@ class Test
      * @param bool $onlyShowFailed
      * @throws \ReflectionException
      */
-    public function run($onlyShowFailed = true): void
+    public function run($onlyShowFailed = true, $groups = ""): void
     {
+
         //Find all the functions and classes with annotated methods
         //Look for test annotations
         $annotation = new Annotation();
