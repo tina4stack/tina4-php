@@ -769,7 +769,7 @@ class ORM implements \JsonSerializable
             if (!in_array($fieldName, $this->protectedFields, true) && !in_array($fieldName, $this->excludeFields, true)) {
 
                 if (is_object($value)) {
-                    if (is_string($value) && get_parent_class(get_class($value)) === "Tina4\ORM") {
+                    if (get_parent_class(get_class($value)) === "Tina4\ORM") {
                         if ($isObject) {
                             $value = $value->asObject();
                         } else {
@@ -779,7 +779,7 @@ class ORM implements \JsonSerializable
                 } else
                     if (is_array($value)) {
                         foreach ($value as $vid => $vvalue) {
-                            if (is_string($vvalue) && get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
+                            if (is_object($vvalue) && get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
                                 if ($isObject) {
                                     $value[$vid] = $vvalue->asObject();
                                 } else {
