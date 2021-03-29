@@ -4,6 +4,7 @@
 namespace Tina4;
 
 
+use Phpfastcache\Helper\CacheConditionalHelper;
 use Twig\Error\LoaderError;
 
 class Router extends Data
@@ -108,16 +109,8 @@ class Router extends Data
         global $cache;
         $key = "url_".md5($url);
 
-        $cachedString = $cache->getItem($key);
-        if (is_null($cachedString->get())) {
-            //$CachedString = "Files Cache --> Cache Enabled --> Well done !";
-            // Write products to Cache in 1 minutes with same keyword
-            $cachedString->set(["url" => $url, "fileName" => $fileName,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers])->expiresAfter(360);
-            $cache->save($cachedString);
-            return true;
-        } else {
-            return false;
-        }
+        return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
+        return true;
     }
 
     /**
@@ -130,17 +123,13 @@ class Router extends Data
         global $cache;
         $key = "url_".md5($url);
 
-        $cachedString = $cache->getItem($key);
-        if (!is_null($cachedString->get())) {
-            $response = $cachedString->get();
-            if (defined("TINA4_DEBUG") && TINA4_DEBUG && strpos($response["fileName"], ".twig") !== false)
-            {
-                return null;
-            }
-            return $response;
-        } else {
+        $response = (new Cache())->get($key);
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && strpos($response["fileName"], ".twig") !== false)
+        {
             return null;
         }
+
+        return $response;
     }
 
     /**
@@ -242,8 +231,8 @@ class Router extends Data
 
                 $params = $this->getParams($response, $route["inlineParamsToRequest"]);
 
-                if (in_array("secure", $annotations[1], true)) {
-                    $requestHeaders = getallheaders();
+                $requestHeaders = getallheaders();
+                if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
 
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
                         //call closure with & without params

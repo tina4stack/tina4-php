@@ -229,10 +229,10 @@ class Crud
 
     /**
      * Returns an array of dataTables style filters for use in your queries
+     * @param string $tablePrefix
      * @return array
-     * @throws \Exception
      */
-    public static function getDataTablesFilter($tablePrefix="")
+    public static function getDataTablesFilter(string $tablePrefix=""): array
     {
         $ORM = new ORM();
         $request = $_REQUEST;
@@ -300,10 +300,15 @@ class Crud
             //Check for type of database
             if (!empty($ORM->DBA) && get_class($ORM->DBA) === "Tina4\DataMySQL") {
                 //Mysql
-                $columnsToSearch = "concat(" . join(",' ',", $listOfColumnNames) . ")";
+                foreach ($listOfColumnNames as $id => $listColumn)
+                {
+                    $listOfColumnNames[$id] = "case when ($listColumn is null) then '' else $listColumn end";
+                }
+
+                $columnsToSearch = "concat(" . join(",'',", $listOfColumnNames) . ")";
             } else {
                 //Non-mysql
-                $columnsToSearch = join(" || ' ' || ", $listOfColumnNames);
+                $columnsToSearch = join(" || '' || ", $listOfColumnNames);
             }
 
             //Create check statement per searched word

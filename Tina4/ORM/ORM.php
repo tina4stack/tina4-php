@@ -1,6 +1,8 @@
 <?php
 
 namespace Tina4;
+use Phpfastcache\Helper\CacheConditionalHelper;
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4 (Andre van Zuydam)
@@ -386,6 +388,12 @@ class ORM implements \JsonSerializable
         //See if the record exists already using the primary key
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
+
+        //See if we can get the fetch from the cached data
+
+        $key = "orm".md5($sqlCheck);
+        (new Cache())->set($key, null, 0);
+
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             Debug::message("TINA4: check " . $sqlCheck, TINA4_LOG_DEBUG);
         }
@@ -907,7 +915,18 @@ class ORM implements \JsonSerializable
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
 
-        $fetchData = $this->DBA->fetch($sqlStatement, 1, 0, $fieldMapping)->asObject();
+        //See if we can get the fetch from the cached data
+
+        $key = "orm".md5($sqlStatement);
+
+        if ($cacheData = (new Cache())->get($key)) {
+            Debug::message("Loaded {$sqlStatement} from cache", TINA4_LOG_DEBUG);
+            $fetchData = $cacheData;
+        } else {
+            Debug::message("Creating {$sqlStatement} into cache", TINA4_LOG_DEBUG);
+            $fetchData = $this->DBA->fetch($sqlStatement, 1, 0, $fieldMapping)->asObject();
+            (new Cache())->set($key, $fetchData);
+        }
 
         if (!empty($fetchData)) {
             //Get the first record
