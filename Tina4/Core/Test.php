@@ -37,7 +37,7 @@ class Test
      * @param string $conditionText
      * @param string $actualResult
      * @return string
-     * @tests
+     * @tests tina4
      *   assert (1 === 1) === "\e[32;1mPassed ()\e[0m", "Test is positive"
      */
     public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
@@ -234,12 +234,10 @@ class Test
      */
     public function run($onlyShowFailed = true, $groups = ""): void
     {
-
         //Find all the functions and classes with annotated methods
         //Look for test annotations
         $annotation = new Annotation();
-        $tests = $annotation->get("tests");
-
+        $tests = $annotation->get("tests", $groups);
         $logLevel = Debug::$logLevel;
         Debug::$logLevel = [];
         echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;

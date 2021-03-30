@@ -15,7 +15,7 @@ class Annotation
     /**
      * Gets all the user defined functions
      * @return array
-     * @tests
+     * @tests tina4
      *   assert is_object() !== true, "Expects an array"
      */
     public function getFunctions(): array
@@ -27,7 +27,7 @@ class Annotation
     /**
      * Gets all the classes in the system
      * @return array
-     * @tests
+     * @tests tina4
      *   assert is_array() === true, "Expects an array"
      */
     public function getClasses(): array
@@ -51,10 +51,10 @@ class Annotation
      * @param $docComment
      * @param string $annotationName
      * @return array
-     * @tests
+     * @tests tina4
      *   assert ('  * @param weird')["param"][0] === "weird", "Expects value of param to be weird"
      */
-    public function parseAnnotations($docComment, $annotationName = ""): array
+    public function parseAnnotations($docComment, $annotationName = "", $groups = ""): array
     {
         //clean *
         $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);
@@ -69,8 +69,24 @@ class Annotation
             } else {
                 $toPos = strlen($docComment) - 1;
             }
+            // Check if the annotation is that of the requested annotation name
             if ($annotationName === "" || $annotationName === $name[0]) {
-                $annotations[$name[0]][] = trim(substr($docComment, $comment[1] + strlen($name[0]), $toPos - strlen($name[0])));
+                // Check if only a subset group or annotations are being requested.
+                if (!empty($groups)) {
+                    // Check if the annotation allows for group selection
+                    if (isset($name[1])) {
+                        $nameGroups = array_slice($name, 1);
+                        // check if the requested group is part of the annotation.
+                        if (array_intersect($nameGroups, (array)$groups )) {
+                            $annotations[$name[0]][] = trim(substr($docComment, $comment[1] + strlen($name[0]), $toPos - strlen($name[0])));
+                        }
+                    }
+                // Otherwise include everything
+                } else {
+                    if (!(isset($name[1]) && $name[1] == "tina4")) {
+                        $annotations[$name[0]][] = trim(substr($docComment, $comment[1] + strlen($name[0]), $toPos - strlen($name[0])));
+                    }
+                }
             }
         }
 
@@ -83,16 +99,15 @@ class Annotation
      * @param string $annotationName
      * @return array
      * @throws \ReflectionException
-     * @tests
+     * @tests tina4
      *   assert ("strpos", "param") === [], "Expects value class"
      */
-    public function getFunctionAnnotations($functionName, $annotationName=""): array
+    public function getFunctionAnnotations($functionName, $annotationName="", $groups = ""): array
     {
         $annotations = [];
-
         $reflection = new \ReflectionFunction($functionName);
         $docComment = $reflection->getDocComment();
-        $annotation = $this->parseAnnotations($docComment, $annotationName);
+        $annotation = $this->parseAnnotations($docComment, $annotationName, $groups);
         if (!empty($annotation)) {
             $annotations[] = ["type" => "function", "method" => $functionName, "params" => $reflection->getParameters(), "annotations" => $annotation];
         }
@@ -107,24 +122,24 @@ class Annotation
      * @return array
      * @throws \ReflectionException
      */
-    public function getClassAnnotations($className, $annotationName="") : array
+    public function getClassAnnotations($className, $annotationName="", $groups = "") : array
     {
+        // Check if there are any tests on the Class itself.
         $annotations = [];
-
         $reflection = new \ReflectionClass($className);
         $docComment = $reflection->getDocComment();
-        $annotation = $this->parseAnnotations($docComment, $annotationName);
+        $annotation = $this->parseAnnotations($docComment, $annotationName, $groups);
         $constructor = $reflection->getConstructor();
-
         if (!empty($annotation)) {
             $annotations[] = ["type" => "class", "class" => $className, "annotations" => $annotation, "method" => null, "params" => $constructor->getParameters(), "isStatic" => null];
         }
 
+        // Check for any tests on the methods
         $methods = get_class_methods($className);
         foreach ($methods as $mid => $method) {
             $docComment = $reflection->getMethod($method)->getDocComment();
             $isStatic =  $reflection->getMethod($method)->isStatic();
-            $annotation = $this->parseAnnotations($docComment, $annotationName);
+            $annotation = $this->parseAnnotations($docComment, $annotationName, $groups);
 
             if (!empty($annotation)) {
                 $annotations[] = ["type" => "classMethod", "class" => $className, "method" => $method, "params" => $reflection->getMethod($method)->getParameters(), "isStatic" => $isStatic, "annotations" => $annotation];
@@ -140,7 +155,7 @@ class Annotation
      * @return array
      * @throws \ReflectionException
      */
-    public function get($annotationName = ""): array
+    public function get($annotationName = "", $groups = ""): array
     {
         $functions = $this->getFunctions();
         asort($functions);
@@ -151,12 +166,12 @@ class Annotation
 
         //Get annotations for each function
         foreach ($functions as $id => $function) {
-            $annotations = array_merge($annotations, $this->getFunctionAnnotations($function, $annotationName));
+            $annotations = array_merge($annotations, $this->getFunctionAnnotations($function, $annotationName, $groups));
         }
 
         //Get annotations for each class and class method
         foreach ($classes as $cid => $class) {
-            $annotations = array_merge($annotations, $this->getClassAnnotations($class, $annotationName));
+            $annotations = array_merge($annotations, $this->getClassAnnotations($class, $annotationName, $groups));
         }
 
         return $annotations;

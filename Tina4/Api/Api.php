@@ -35,7 +35,7 @@ class Api
      * @param null $body
      * @param string $contentType
      * @return array|mixed
-     * @tests tina4
+     * tests tina4
      *   assert ("/book")['docs'][0]['name'] === "The Fellowship Of The Ring", "API Get request"
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
      *   assert is_array("/book") === true, "This is not an array"
