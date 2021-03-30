@@ -8,10 +8,11 @@ namespace Tina4;
  * @return string
  * @throws \Twig\Error\LoaderError
  */
-function renderTemplate($fileNameString, $data = []): string
+function renderTemplate($fileNameString, $data = [], $location = ""): string
 {
+
     if (!defined("TINA4_DOCUMENT_ROOT")) {
-        define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR);
+        define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR);
     }
 
     $fileName = str_replace(TINA4_DOCUMENT_ROOT, "", $fileNameString);
@@ -24,17 +25,17 @@ function renderTemplate($fileNameString, $data = []): string
 
         $internalTwig = clone $twig;
 
-        if ($internalTwig->getLoader()->exists($fileNameString)) {
-            return $internalTwig->render($fileName, $data);
+        if (is_file($fileNameString)) {
+            $renderFile = str_replace($location, "", $fileName);
+            $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
+            $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
+            return $internalTwig->render($renderFile, $data);
         } else
-            if ($internalTwig->getLoader()->exists(basename($fileNameString))) {
-                return $internalTwig->render(basename($fileName), $data);
+            if ($internalTwig->getLoader()->exists($fileName)) {
+                return $internalTwig->render($fileName, $data);
             } else
-                if (is_file($fileNameString)) {
-                    $renderFile = basename($fileNameString);
-                    $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-                    $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
-                    return $internalTwig->render($renderFile, $data);
+                if ($internalTwig->getLoader()->exists(basename($fileName))) {
+                    return $internalTwig->render(basename($fileName), $data);
                 } else {
                     if (!is_file($fileNameString)) {
                         $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";

@@ -79,6 +79,7 @@ class ParseTemplate
         }
 
         $realFileName = $fileName;
+        $found = false;
         foreach ($this->locations as $lid => $location) {
             foreach ($possibleFiles as $id => $parseFileName) {
                 if (is_array($location)) { //@todo refactor
@@ -86,17 +87,18 @@ class ParseTemplate
                         $location = $location["path"];
                     }
                 }
-                $testFile = $this->root . $location . DIRECTORY_SEPARATOR . $parseFileName;
+                $testFile = realpath($this->root . $location . DIRECTORY_SEPARATOR . $parseFileName);
                 $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
                 if (file_exists($testFile)) {
+                    $found = true;
                     $realFileName = $testFile;
                     $mimeType = Utility::getMimeType($fileName);
                     break;
                 }
-
+                if ($found) break;
             }
+            if ($found) break;
         }
-
 
         $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
 
@@ -105,13 +107,14 @@ class ParseTemplate
             $this->httpCode = HTTP_OK;
             //Render a twig file if the extension is twig
             if ($ext === "twig") {
+
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
                 $this->headers[] = "Content-Type: ".TEXT_HTML;
 
                 $this->fileName = $realFileName;
-                $content = renderTemplate($realFileName, $_SESSION["renderData"]);
+                $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
             } else {
                 $this->headers[] = "Content-Type: ".$mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
