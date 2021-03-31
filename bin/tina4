@@ -110,19 +110,20 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
 
 $menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "commandLine" => ["options" => ["run", "verbose"]], "menuCode" => static function ($index, $input, $options) use ($argv) {
     global $rootPath;
-    $groups = "";
+    $testGroups = [];
+    // If test groups have been requested, get the requested group names into a usable array to pass to the run
     if (isset($argv[2])){
         $groups = array_slice($argv,2);
     }
 
     if (!empty($options)) {
         if ($options === "tests:verbose") {
-            (new \Tina4\Test($rootPath))->run(false, $groups);
+            (new \Tina4\Test($rootPath))->run(false, $testGroups);
         } else {
-            (new \Tina4\Test($rootPath))->run(true, $groups);
+            (new \Tina4\Test($rootPath))->run(true, $testGroups);
         }
     } else {
-        (new \Tina4\Test($rootPath))->run(true, $groups);
+        (new \Tina4\Test($rootPath))->run(true, $testGroups);
         readLn();
     }
     return ["index" => 0, "prompt" => ""];

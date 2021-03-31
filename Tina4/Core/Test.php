@@ -245,7 +245,26 @@ class Test
         //Run the tests
 
         foreach ($tests as $id => $test) {
-            $this->parseAnnotations($test, $onlyShowFailed);
+            $groupMember = [];
+            // Extracting which group the test belongs to.
+            if (isset($test["annotations"]["tests"][0])) {
+                $testString = $test["annotations"]["tests"][0];
+                $testString = (substr($testString, 0, strpos($testString, "assert")));
+                $groupMember = array_map("trim", explode(",", $testString));
+            }
+            // Check if only a subset group or annotations are being requested.
+            if (!empty($testGroups) && !empty($groupMember)) {
+                // Check if the group on the test declaration is the same as the requested group
+                if (array_intersect($groupMember, $testGroups )) {
+                    $this->parseAnnotations($test, $onlyShowFailed);
+                }
+            // No groups were appended to the test call
+            } else {
+                // Include test unless a tina4 test is running in a tina4 Project
+                if (!in_array("tina4", $groupMember) || file_exists(TINA4_DOCUMENT_ROOT . "Tina4")) {
+                    $this->parseAnnotations($test, $onlyShowFailed);
+                }
+            }
         }
 
         echo str_repeat("=", 80) . PHP_EOL;
