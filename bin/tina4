@@ -114,7 +114,9 @@ $menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "command
     $testGroups = [];
     // If test groups have been requested, get the requested group names into a usable array to pass to the run
     if (isset($argv[2])){
-        $groups = array_slice($argv,2);
+        $testGroups = array_slice($argv,2);
+        $testGroups = implode(" ", $testGroups);
+        $testGroups = array_map("trim", explode(",", $testGroups));
     }
 
     if (!empty($options)) {

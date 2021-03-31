@@ -54,7 +54,7 @@ class Annotation
      * @tests tina4
      *   assert ('  * @param weird')["param"][0] === "weird", "Expects value of param to be weird"
      */
-    public function parseAnnotations($docComment, $annotationName = "", $groups = ""): array
+    public function parseAnnotations($docComment, $annotationName = ""): array
     {
         //clean *
         $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);

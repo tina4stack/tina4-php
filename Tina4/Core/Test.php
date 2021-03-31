@@ -230,14 +230,16 @@ class Test
     /**
      * Run all the tests
      * @param bool $onlyShowFailed
+     * @param array $testGroups  array of comma separated groupMembers to be included in the output
      * @throws \ReflectionException
      */
-    public function run($onlyShowFailed = true, $groups = ""): void
+    public function run(bool $onlyShowFailed = true, array $testGroups = []): void
     {
         //Find all the functions and classes with annotated methods
         //Look for test annotations
         $annotation = new Annotation();
-        $tests = $annotation->get("tests", $groups);
+        $tests = $annotation->get("tests");
+
         $logLevel = Debug::$logLevel;
         Debug::$logLevel = [];
         echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;
@@ -270,7 +272,5 @@ class Test
         echo str_repeat("=", 80) . PHP_EOL;
         echo $this->colorGreen . "END OF TESTS" . $this->colorReset . PHP_EOL;
         Debug::$logLevel = $logLevel;
-        //Output the results
-
     }
 }
