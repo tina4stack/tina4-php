@@ -13,7 +13,7 @@ use Nowakowskir\JWT\TokenEncoded;
  *
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
- * @tests
+ * @tests tina4
  *   assert session_status() !== PHP_SESSION_NONE, "Session should not be active"
  *   assert $configured === true, "Configured is supposed to be true"
  */
@@ -42,7 +42,7 @@ class Auth extends Data
 
     /**
      * The auth constructor looks for a secrets folder and tries to generate keys for the site
-     * @tests
+     * @tests tina4
      *   assert $configured === true, "Auth state of configured must be true"
      */
     public function __construct()
@@ -76,7 +76,7 @@ class Auth extends Data
 
     /**
      * Starts a php session
-     * @tests
+     * @tests tina4
      *   assert session_status() !== PHP_SESSION_NONE, "Session should be active by now"
      */
     public function initSession(): void
@@ -93,7 +93,7 @@ class Auth extends Data
     /**
      * Creates a secrets folder and generates keys for the application
      * @return bool
-     * @tests
+     * @tests tina4
      *   assert file_exists("./secrets/private.key") === true,"private.key does not exist - openssl installed ?"
      *   assert file_exists("./secrets/private.key.pub") === true,"private.key.pub does not exist - openssl installed ?"
      *   assert file_exists("./secrets/public.pub") === true,"public.pub does not exist - openssl installed ?"
@@ -137,7 +137,7 @@ class Auth extends Data
      * @param string $publicKey
      * @param string $encryption
      * @return bool
-     * @tests
+     * @tests tina4
      *   assert $this->getToken() !== "", "Token must not be blank"
      *   assert ($this->getToken()) === true,"The token is not valid"
      */
@@ -242,7 +242,7 @@ class Auth extends Data
      * @param string $privateKey
      * @param string $encryption
      * @return string
-     * @tests
+     * @tests tina4
      *   assert $this->getPayload($this->getToken(["name" => "tina4"])) === ["name" => "tina4"],"Return back the token"
      */
     public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256): string

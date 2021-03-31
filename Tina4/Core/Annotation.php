@@ -15,7 +15,7 @@ class Annotation
     /**
      * Gets all the user defined functions
      * @return array
-     * @tests
+     * @tests tina4
      *   assert is_object() !== true, "Expects an array"
      */
     public function getFunctions(): array
@@ -27,7 +27,7 @@ class Annotation
     /**
      * Gets all the classes in the system
      * @return array
-     * @tests
+     * @tests tina4
      *   assert is_array() === true, "Expects an array"
      */
     public function getClasses(): array
@@ -51,7 +51,7 @@ class Annotation
      * @param $docComment
      * @param string $annotationName
      * @return array
-     * @tests
+     * @tests tina4
      *   assert ('  * @param weird')["param"][0] === "weird", "Expects value of param to be weird"
      */
     public function parseAnnotations($docComment, $annotationName = ""): array
@@ -83,13 +83,12 @@ class Annotation
      * @param string $annotationName
      * @return array
      * @throws \ReflectionException
-     * @tests
+     * @tests tina4
      *   assert ("strpos", "param") === [], "Expects value class"
      */
     public function getFunctionAnnotations($functionName, $annotationName=""): array
     {
         $annotations = [];
-
         $reflection = new \ReflectionFunction($functionName);
         $docComment = $reflection->getDocComment();
         $annotation = $this->parseAnnotations($docComment, $annotationName);
@@ -109,17 +108,17 @@ class Annotation
      */
     public function getClassAnnotations($className, $annotationName="") : array
     {
+        // Check if there are any tests on the Class itself.
         $annotations = [];
-
         $reflection = new \ReflectionClass($className);
         $docComment = $reflection->getDocComment();
         $annotation = $this->parseAnnotations($docComment, $annotationName);
         $constructor = $reflection->getConstructor();
-
         if (!empty($annotation)) {
             $annotations[] = ["type" => "class", "class" => $className, "annotations" => $annotation, "method" => null, "params" => $constructor->getParameters(), "isStatic" => null];
         }
 
+        // Check for any tests on the methods
         $methods = get_class_methods($className);
         foreach ($methods as $mid => $method) {
             $docComment = $reflection->getMethod($method)->getDocComment();

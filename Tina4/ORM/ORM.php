@@ -185,7 +185,7 @@ class ORM implements \JsonSerializable
      * @param string $name Improper object name
      * @param boolean $camelCase Return the name as camel case
      * @return string Proper object name
-     * @tests
+     * @tests tina4
      *   assert ("test_name", true) === "testName", "Camel case is broken"
      *   assert ("test_name", false) === "test_name", "Camel case is broken"
      */

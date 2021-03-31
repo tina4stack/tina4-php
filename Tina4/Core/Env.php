@@ -34,7 +34,7 @@ class Env extends Data
     /**
      * The readEnvParams reads the environment variables from the .env.{ENVIRONMENT} file
      * @param $environment
-     * @tests
+     * @tests tina4
      *   assert ("test") === null,"Parsing the environment"
      *   assert file_exists(".env.test") === true,"File does not exist .env.test"
      */

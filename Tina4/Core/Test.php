@@ -37,7 +37,7 @@ class Test
      * @param string $conditionText
      * @param string $actualResult
      * @return string
-     * @tests
+     * @tests tina4
      *   assert (1 === 1) === "\e[32;1mPassed ()\e[0m", "Test is positive"
      */
     public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
@@ -73,7 +73,7 @@ class Test
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
         } else {
-            preg_match_all('/(^.*[\W\w])(\ \=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
+            preg_match_all('/(^.*[\W\w])(\ \<\=|\ \>\=|\ \<|\ \>|\ \=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
 
             $actualExpression = trim($parts[0][1]);
             $actualResult = "-";
@@ -230,9 +230,10 @@ class Test
     /**
      * Run all the tests
      * @param bool $onlyShowFailed
+     * @param array $testGroups  array of comma separated groupMembers to be included in the output
      * @throws \ReflectionException
      */
-    public function run($onlyShowFailed = true): void
+    public function run(bool $onlyShowFailed = true, array $testGroups = []): void
     {
         //Find all the functions and classes with annotated methods
         //Look for test annotations
@@ -246,13 +247,30 @@ class Test
         //Run the tests
 
         foreach ($tests as $id => $test) {
-            $this->parseAnnotations($test, $onlyShowFailed);
+            $groupMember = [];
+            // Extracting which group the test belongs to.
+            if (isset($test["annotations"]["tests"][0])) {
+                $testString = $test["annotations"]["tests"][0];
+                $testString = (substr($testString, 0, strpos($testString, "assert")));
+                $groupMember = array_map("trim", explode(",", $testString));
+            }
+            // Check if only a subset group or annotations are being requested.
+            if (!empty($testGroups) && !empty($groupMember)) {
+                // Check if the group on the test declaration is the same as the requested group
+                if (array_intersect($groupMember, $testGroups )) {
+                    $this->parseAnnotations($test, $onlyShowFailed);
+                }
+            // No groups were appended to the test call
+            } else {
+                // Include test unless a tina4 test is running in a tina4 Project
+                if (!in_array("tina4", $groupMember) || file_exists(TINA4_DOCUMENT_ROOT . "Tina4")) {
+                    $this->parseAnnotations($test, $onlyShowFailed);
+                }
+            }
         }
 
         echo str_repeat("=", 80) . PHP_EOL;
         echo $this->colorGreen . "END OF TESTS" . $this->colorReset . PHP_EOL;
         Debug::$logLevel = $logLevel;
-        //Output the results
-
     }
 }

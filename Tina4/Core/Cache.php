@@ -33,7 +33,7 @@ class Cache
      * Gets data from the cache, returns null if nothing is found
      * @param $keyName
      * @return mixed
-     * @tests
+     * @tests tina4
      *   assert $this->set("test", "test") !== null, "Could not set cache value"
      *   assert $this->get("test") === "test", "Could not get cache value"
      */
