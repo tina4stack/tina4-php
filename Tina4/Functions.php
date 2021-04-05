@@ -10,7 +10,6 @@ namespace Tina4;
  */
 function renderTemplate($fileNameString, $data = [], $location = ""): string
 {
-
     if (!defined("TINA4_DOCUMENT_ROOT")) {
         define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR);
     }
@@ -26,8 +25,8 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
         $internalTwig = clone $twig;
 
         if (is_file($fileNameString)) {
-            $renderFile = str_replace($location, "", $fileName);
             $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
+            $renderFile = str_replace($newPath, "", $fileName);
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
             return $internalTwig->render($renderFile, $data);
         } else
