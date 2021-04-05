@@ -7,6 +7,8 @@ namespace Tina4;
  * @param array $data
  * @return string
  * @throws \Twig\Error\LoaderError
+ * @tests
+ *
  */
 function renderTemplate($fileNameString, $data = [], $location = ""): string
 {
@@ -26,7 +28,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
 
         if (is_file($fileNameString)) {
             $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-            $renderFile = str_replace($newPath, "", $fileName);
+            $renderFile = str_replace($location, "", $fileName);
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
             return $internalTwig->render($renderFile, $data);
         } else
