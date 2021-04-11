@@ -7,7 +7,6 @@ namespace Tina4;
  * @param array $data
  * @param string $location
  * @return string
- * @tests
  */
 function renderTemplate($fileNameString, $data = [], $location = ""): string
 {
