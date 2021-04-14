@@ -87,7 +87,7 @@ class ORM implements \JsonSerializable
     /**
      * @var string[] Fields that do not need to be returned in the resulting ORM object serialization
      */
-    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "hasManyLimit", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
+    public $protectedFields = ["primaryKey", "genPrimaryKey", "phpsessid", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "hasManyLimit", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
 
     /**
      * ORM constructor.

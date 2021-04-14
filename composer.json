@@ -34,7 +34,9 @@
         "twig/twig": "^3.3",
         "phpfastcache/phpfastcache": "^8.0",
         "coyl/git": "^0.1.7",
-        "scssphp/scssphp": "^1.4"
+        "scssphp/scssphp": "^1.4",
+        "ext-json": "*",
+        "ext-curl": "*"
     },
     "bin": [
         "bin/tina4",
