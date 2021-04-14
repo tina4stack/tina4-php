@@ -80,6 +80,45 @@ class Tina4Php extends Data
 
         $this->config = $config;
 
+        //Add built in Tina4 functions
+        $config->addTwigFunction("dateCompare", function ($dateA, $operator, $dateB="now"){
+            global $DBA;
+
+            $dateA = str_replace("/", ".", $dateA);
+
+            $dateA = strtotime($dateA);
+
+            if ($dateB === "now") {
+                $dateB = strtotime("today");
+            }  else {
+                $dateB = str_replace("/", ".", $dateA);
+                $dateB = strtotime($dateB);
+            }
+
+            switch ($operator) {
+                case "==":
+                    return $dateA == $dateB;
+                    break;
+                case "!=":
+                    return $dateA != $dateB;
+                    break;
+                case ">":
+                    return $dateA > $dateB;
+                    break;
+                case "<":
+                    return $dateA < $dateB;
+                    break;
+                case ">=":
+                    return $dateA >= $dateB;
+                    break;
+                case "<=":
+                    return $dateA <= $dateB;
+                    break;
+
+            }
+        });
+
+
         if (defined("TINA4_SUPPRESS") && TINA4_SUPPRESS) {
             $this->config->callInitFunction();
             try {
