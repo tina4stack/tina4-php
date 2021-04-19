@@ -223,11 +223,16 @@ class ORM implements \JsonSerializable
         $tableName = $this->getTableName();
         $tableData = $this->getTableData();
         if (!empty($_FILES) && isset($_FILES[$fileInputName])) {
-            $primaryCheck = $this->getPrimaryCheck($tableData);
-            $fieldName = $this->getFieldName($fieldName);
-            $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
-            $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
-            $this->DBA->commit();
+            if ($_FILES[$fileInputName]["error"] === 0) {
+                $primaryCheck = $this->getPrimaryCheck($tableData);
+                $fieldName = $this->getFieldName($fieldName);
+                $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+                $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
+                $this->DBA->commit();
+            } else {
+                \Tina4\Debug::message("File error occurred\n".print_r ($_FILES[$fileInputName],1));
+                return false;
+            }
         } else {
             return false;
         }

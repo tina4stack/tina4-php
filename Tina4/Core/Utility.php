@@ -218,7 +218,9 @@ trait Utility
         $debug = debug_backtrace();
         $trace = [];
         foreach ($debug as $id => $debugInfo) {
-            $trace[] = $debugInfo["file"];
+            if (isset($debugInfo["file"])) {
+                $trace[] = $debugInfo["file"];
+            }
         }
         return $trace;
     }

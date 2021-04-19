@@ -22,3 +22,6 @@ test.php
 /src/assets/css/default.css
 /messages.mo
 /messages.po
+/data.db
+/data.db-shm
+/data.db-wal
