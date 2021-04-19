@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "775978decc9d0e1f406f6fa6d6085a52",
+    "content-hash": "850c0d73e26e0bf1c6b8ac882142a474",
     "packages": [
         {
             "name": "coyl/git",
@@ -103,16 +103,16 @@
         },
         {
             "name": "phpfastcache/phpfastcache",
-            "version": "8.0.4",
+            "version": "8.0.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/PHPSocialNetwork/phpfastcache.git",
-                "reference": "f1a22a821a30b928b28d2ec73ed1b0245b5ab3f9"
+                "reference": "6d66cc0604bcbd7681ef1b3fdd1ba22901a16b1c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/PHPSocialNetwork/phpfastcache/zipball/f1a22a821a30b928b28d2ec73ed1b0245b5ab3f9",
-                "reference": "f1a22a821a30b928b28d2ec73ed1b0245b5ab3f9",
+                "url": "https://api.github.com/repos/PHPSocialNetwork/phpfastcache/zipball/6d66cc0604bcbd7681ef1b3fdd1ba22901a16b1c",
+                "reference": "6d66cc0604bcbd7681ef1b3fdd1ba22901a16b1c",
                 "shasum": ""
             },
             "require": {
@@ -204,7 +204,7 @@
             ],
             "support": {
                 "issues": "https://github.com/PHPSocialNetwork/phpfastcache/issues",
-                "source": "https://github.com/PHPSocialNetwork/phpfastcache/tree/8.0.4"
+                "source": "https://github.com/PHPSocialNetwork/phpfastcache/tree/8.0.5"
             },
             "funding": [
                 {
@@ -216,7 +216,7 @@
                     "type": "patreon"
                 }
             ],
-            "time": "2020-12-21T19:35:04+00:00"
+            "time": "2021-04-05T22:24:16+00:00"
         },
         {
             "name": "psr/cache",
@@ -677,7 +677,10 @@
     "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
+    "platform": {
+        "ext-json": "*",
+        "ext-curl": "*"
+    },
     "platform-dev": [],
     "plugin-api-version": "2.0.0"
 }
