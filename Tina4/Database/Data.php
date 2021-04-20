@@ -34,11 +34,7 @@ class Data
 
             $this->projectRoot = dirname(dirname(__DIR__ . ".." . DIRECTORY_SEPARATOR) . ".." . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
-            if ($_SERVER["DOCUMENT_ROOT"] === null || $_SERVER["DOCUMENT_ROOT"] === "" ) {
-                $this->documentRoot = str_replace("vendor", "", dirname($vendorDir . ".." . DIRECTORY_SEPARATOR));
-            } else {
-                $this->documentRoot = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR;
-            }
+            $this->documentRoot = str_replace("vendor", "", dirname($vendorDir . ".." . DIRECTORY_SEPARATOR));
 
             $this->subFolder = $this->getSubFolder($this->documentRoot);
             define("TINA4_DOCUMENT_ROOT", $this->documentRoot);
