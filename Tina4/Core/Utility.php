@@ -270,6 +270,20 @@ trait Utility
     }
 
     /**
+     * Clean URL by splitting string at "?" to get actual URL
+     * @param string $url URL to be cleaned that may contain "?"
+     * @return mixed Part of the URL before the "?" if it existed
+     */
+    public function cleanURL(string $url): string
+    {
+        $url = explode("?", $url, 2);
+
+        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
+
+        return str_replace("//", "/", $url[0]);
+    }
+
+    /**
      * Logic to determine the sub folder - result must be /folder/
      * @param string $documentRoot
      * @return string|null

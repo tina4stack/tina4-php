@@ -10,6 +10,8 @@ use Twig\Error\LoaderError;
 class Router extends Data
 {
 
+
+
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
@@ -35,6 +37,7 @@ class Router extends Data
             return null;
         }
 
+
         $cacheResult = $this->getCacheResponse($url);
         if ($cacheResult !== null){
             Debug::message("Got cached result for $url", TINA4_LOG_DEBUG);
@@ -58,6 +61,7 @@ class Router extends Data
         //SECOND STATIC FILES - ONLY GET
 
         if ($method === TINA4_GET) {
+
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
@@ -88,6 +92,7 @@ class Router extends Data
 
         //GO THROUGH ALL THE TEMPLATE INCLUDE LOCATIONS AND SEE IF WE CAN FIND SOMETHING
         Debug::message("URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
+
 
         $parseFile = new ParseTemplate($url);
 
@@ -164,16 +169,7 @@ class Router extends Data
         return new RouterResponse($content , HTTP_OK, $headers);
     }
 
-    /**
-     * Clean URL by splitting string at "?" to get actual URL
-     * @param string $url URL to be cleaned that may contain "?"
-     * @return mixed Part of the URL before the "?" if it existed
-     */
-    public function cleanURL(string $url): string
-    {
-        $url = explode("?", $url, 2);
-        return str_replace("//", "/", $url[0]);
-    }
+
 
     /**
      * Handles an options request
@@ -213,6 +209,8 @@ class Router extends Data
         $response = new Response();
         $headers = [];
         //iterate through the routes
+
+
 
         foreach ($arrRoutes as $rid => $route) {
             $result = null;
