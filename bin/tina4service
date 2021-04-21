@@ -13,7 +13,7 @@ foreach (get_included_files() as $id => $file) {
 }
 
 if (empty($rootPath)) {
-    $rootPath = str_replace("vendor".DIRECTORY_SEPARATOR."andrevanzuydam".DIRECTORY_SEPARATOR."tina4php".DIRECTORY_SEPARATOR."bin".DIRECTORY_SEPARATOR."tina4service", "", __FILE__);
+    $rootPath = str_replace("vendor".DIRECTORY_SEPARATOR."tina4stack".DIRECTORY_SEPARATOR."tina4php".DIRECTORY_SEPARATOR."bin".DIRECTORY_SEPARATOR."tina4service", "", __FILE__);
     $rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4service", "", $rootPath);
 }
 
