@@ -71,27 +71,30 @@ class DataRecord implements JsonSerializable
     /**
      * Transform to a camel case result
      */
-    public function transformObject(): object
+    public function transformObject($original=false): object
     {
         $object = (object)[];
         if (!empty($this->original)) {
             foreach ($this->original as $column => $value) {
                 $columnName = $this->getObjectName($column);
-                $object->{$column} = $value; // to be added in
-                $object->{$columnName} = $value;
-            }
+                if (!$original) {
+                    $object->{$columnName} = $value;
+                }
+                $object->{$column} = $value;
 
+            }
         }
         return $object;
     }
 
     /**
      * Cast the object to an array
+     * @param bool $original
      * @return array
      */
-    public function asArray(): array
+    public function asArray($original=false): array
     {
-        return (array)$this->transformObject();
+        return (array)$this->transformObject($original);
     }
 
     /**
