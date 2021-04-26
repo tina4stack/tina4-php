@@ -135,7 +135,7 @@ class DataResult implements JsonSerializable
     {
         $result = [];
         if (!empty($this->records)) {
-            foreach ($this->records() as $id => $record) {
+            foreach ($this->records($original) as $id => $record) {
                 $result[] = (array)$record;
             }
         }
