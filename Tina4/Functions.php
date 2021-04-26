@@ -49,7 +49,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
                     return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
                 }
     } catch (\Exception $exception) {
-        return $exception->getMessage();
+        return $exception->getFile(). " (".$exception->getLine().") ".$exception->getMessage();
     }
 }
 

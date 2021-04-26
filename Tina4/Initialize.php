@@ -84,6 +84,12 @@ if (TINA4_DEBUG)
     error_reporting(E_ALL);
 }
 
+//twig globals are on by default
+if (!defined("TINA4_TWIG_GLOBALS"))
+{
+    define("TINA4_TWIG_GLOBALS", true);
+}
+
 //DEFINE EXPIRY FOR TOKENS
 if (!defined("TINA4_TOKEN_MINUTES"))
 {

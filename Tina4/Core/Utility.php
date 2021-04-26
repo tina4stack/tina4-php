@@ -416,20 +416,23 @@ trait Utility
                 $twig->addGlobal('formToken', $config->getAuthentication()->getToken());
             }
 
-            if (isset($_COOKIE) && !empty($_COOKIE)) {
-                $twig->addGlobal('cookie', $_COOKIE);
-            }
 
-            if (isset($_SESSION) && !empty($_SESSION)) {
-                $twig->addGlobal('session', $_SESSION);
-            }
+            if (defined("TINA4_TWIG_GLOBALS") && TINA4_TWIG_GLOBALS) {
+                if (isset($_COOKIE) && !empty($_COOKIE)) {
+                    $twig->addGlobal('cookie', $_COOKIE);
+                }
 
-            if (isset($_REQUEST) && !empty($_REQUEST)) {
-                $twig->addGlobal('request', $_REQUEST);
-            }
+                if (isset($_SESSION) && !empty($_SESSION)) {
+                    $twig->addGlobal('session', $_SESSION);
+                }
 
-            if (isset($_SERVER) && !empty($_SERVER)) {
-                $twig->addGlobal('server', $_SERVER);
+                if (isset($_REQUEST) && !empty($_REQUEST)) {
+                    $twig->addGlobal('request', $_REQUEST);
+                }
+
+                if (isset($_SERVER) && !empty($_SERVER)) {
+                    $twig->addGlobal('server', $_SERVER);
+                }
             }
 
             if ($config !== null) {
