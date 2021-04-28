@@ -10,6 +10,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*March 21, 2021* - This marks the release of a major update to the routing, it has been fully refactored and optimized.  Also updates to the debugging and modules make things much better for development.
+
 *February 15, 2021* - Routing in large projects seems to be really messy and finding stuff is a pain.  To this end you can now direct your routing to class methods, they still behave the same as the anonymous methods but now make more sense for grouping functionality. Also added back in, the ability to generate ORM objects directly from your database using the command line tool.
 
 *December 28, 2020* - We are getting close to a release point, there are still a number of bugs to be fixed though and things to be documented. PHP 8.0 is not in a good place for database use from what we've tested.
@@ -35,7 +37,7 @@ The premise of the project is to make you the developer and PHP, the heroes!
 - In your project folder terminal / console
 
 ```bash
-composer require andrevanzuydam/tina4php
+composer require tina4stack/tina4php
 ```
 
 #### Begin your Tina4 project using
@@ -65,20 +67,31 @@ composer start-service
 ```
 
 #### Tina4 menu
+
 ```bash
 composer tina4
 ```
+
+*Note* The above command only seems to run on Linux and Mac
+
+On Windows do the following:
+
+```
+php bin\tina4
+```
+
+
+
 
 ### Quick Reference ###
 
 The folder layout is as follows and can be overridden by defining PHP constants for ```TINA4_TEMPLATE_LOCATIONS```, ```TINA4_ROUTE_LOCATIONS``` & ```TINA4_INCLUDE_LOCATIONS```:
 
 * src
-     * api (routing)
      * app (helpers, PHP classes)
-     * assets (system twig files, images, css, js)
-     * objects (ORM objects - extend \Tina4\ORM)
-     * routes (app routing)
+     * public (system twig files, images, css, js)
+     * orm (ORM objects - extend \Tina4\ORM)
+     * routes (routing)
      * scss - style sheet templates  
      * services (service processes - extend \Tina4\Process)
      * templates (app twig files)
@@ -236,6 +249,7 @@ function add ($a,$b) {
 
 ### Change Log
 ```
+2021-03-21 Refactored routing, added better debugging, release candidate now in action
 2021-03-05 Added foreign table support to ORM, minor fixes and improvements to testing & annotations, auto migrations on objects
 2021-02-21 Added ability to configure database connections via vendor/tina4/bin
 2021-02-15 New! Routes can now be directed to Class methods, ORM generation available in tina4

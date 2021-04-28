@@ -15,6 +15,7 @@ class SQL implements \JsonSerializable
     public $DBA;
     public $ORM;
     public $fields;
+    public $resultFields;
     public $tableName;
     public $join;
     public $filter;
@@ -25,6 +26,7 @@ class SQL implements \JsonSerializable
     public $limit;
     public $offset;
     public $hasOne;
+    public $hasMany;
     public $noOfRecords;
     public $error;
     public $lastSQL;
@@ -52,8 +54,9 @@ class SQL implements \JsonSerializable
     /**
      * Excludes fields from the result set
      * @param $fields
+     * @return SQL
      */
-    function exclude($fields)
+    public function exclude($fields): SQL
     {
         if (is_array($fields)) {
             $this->excludeFields[] = $fields;
@@ -72,7 +75,7 @@ class SQL implements \JsonSerializable
      * @param array $hasMany
      * @return $this
      */
-    public function select($fields = "*", $limit = 10, $offset = 0, $hasOne = [], $hasMany = [])
+    public function select($fields = "*", $limit = 10, $offset = 0, $hasOne = [], $hasMany = []): SQL
     {
         if (is_array($fields)) {
             $this->fields[] = $fields;
@@ -82,16 +85,25 @@ class SQL implements \JsonSerializable
         $this->limit = $limit;
         $this->offset = $offset;
         $this->hasOne = $hasOne;
+        $this->hasMany = $hasMany;
         return $this;
     }
 
-    function from($tableName)
+    /**
+     * @param $tableName
+     * @return $this
+     */
+    public function from($tableName): SQL
     {
         $this->tableName = $tableName;
         return $this;
     }
 
-    function where($filter)
+    /**
+     * @param $filter
+     * @return $this
+     */
+    public function where($filter): SQL
     {
         //@todo parse filter
         if (trim($filter) !== "") {
@@ -101,7 +113,11 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    public function and($filter)
+    /**
+     * @param $filter
+     * @return $this
+     */
+    public function and($filter): SQL
     {
         //@todo parse filter
         if (trim($filter) !== "") {
@@ -116,35 +132,55 @@ class SQL implements \JsonSerializable
         return $this;
     }
 
-    public function or($filter)
+    /**
+     * @param $filter
+     * @return $this
+     */
+    public function or($filter): SQL
     {
         //@todo parse filter
         $this->filter[] = ["or", $filter];
         return $this;
     }
 
-    function join($tableName)
+    /**
+     * @param $tableName
+     * @return $this
+     */
+    function join($tableName): SQL
     {
         $this->nextAnd = "join";
         $this->join[] = ["join", $tableName];
         return $this;
     }
 
-    function leftJoin($tableName)
+    /**
+     * @param $tableName
+     * @return $this
+     */
+    function leftJoin($tableName): SQL
     {
         $this->nextAnd = "join";
         $this->join[] = ["left join", $tableName];
         return $this;
     }
 
-    function on($filter)
+    /**
+     * @param $filter
+     * @return $this
+     */
+    public function on($filter): SQL
     {
         //@todo parse filter
         $this->join[] = ["on", $filter];
         return $this;
     }
 
-    function groupBy($fields)
+    /**
+     * @param $fields
+     * @return $this
+     */
+    public function groupBy($fields): SQL
     {
         if (is_array($fields)) {
             $this->groupBy = $fields;
@@ -160,7 +196,7 @@ class SQL implements \JsonSerializable
      * @param $fields
      * @return array
      */
-    function translateFields($fields)
+    function translateFields($fields): array
     {
         $result = [];
         foreach ($fields as $id => $field) {
@@ -173,14 +209,22 @@ class SQL implements \JsonSerializable
         return $result;
     }
 
-    function having($filter)
+    /**
+     * @param $filter
+     * @return $this
+     */
+    public function having($filter): SQL
     {
         $this->nextAnd = "having";
         $this->having[] = ["having", $filter];
         return $this;
     }
 
-    function orderBy($fields)
+    /**
+     * @param $fields
+     * @return $this
+     */
+    public function orderBy($fields): SQL
     {
         if (!empty($fields)) {
             if (is_array($fields)) {
@@ -198,8 +242,9 @@ class SQL implements \JsonSerializable
     /**
      * A method which will filter the records
      * @param $filterMethod
+     * @return SQL
      */
-    function filter($filterMethod)
+    public function filter($filterMethod): SQL
     {
         if (!empty($filterMethod)) {
             $this->filterMethod[] = $filterMethod;
@@ -222,7 +267,7 @@ class SQL implements \JsonSerializable
      * @param $fields
      * @return array
      */
-    public function getColumnNames($fields)
+    public function getColumnNames($fields): array
     {
         $columnNames = [];
         foreach ($fields as $id => $field) {
@@ -240,7 +285,7 @@ class SQL implements \JsonSerializable
     /**
      * Makes a neat JSON response
      */
-    public function jsonSerialize()
+    public function jsonSerialize(): array
     {
         //run the query
         $sqlStatement = $this->generateSQLStatement();
@@ -248,6 +293,7 @@ class SQL implements \JsonSerializable
         if (!empty($this->DBA)) {
             $result = $this->DBA->fetch($sqlStatement, $this->limit, $this->offset);
             $this->noOfRecords = $result->getNoOfRecords();
+            $this->resultFields = $result->fields;
             $records = [];
             //transform the records into an array of the ORM if ORM exists
 
@@ -256,11 +302,21 @@ class SQL implements \JsonSerializable
 
             if (!empty($result->records()) && $this->noOfRecords > 0) {
                 $records = $result->AsObject();
+
                 if (!empty($this->ORM)) {
                     foreach ($records as $id => $record) {
                         $newRecord = clone $this->ORM;
                         $newRecord->mapFromRecord($record, true);
 
+                        if (!empty($this->hasOne))
+                        {
+                            $newRecord->loadHasOne();
+                        }
+
+                        if (!empty($this->hasMany))
+                        {
+                            $newRecord->loadHasMany();
+                        }
 
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
@@ -280,6 +336,9 @@ class SQL implements \JsonSerializable
                                 }
                             }
                         }
+
+
+
 
                         //Apply a filter to the record
                         if (!empty($this->filterMethod)) {
@@ -304,6 +363,7 @@ class SQL implements \JsonSerializable
     }
 
     /**
+     * Generates and SQL Statement
      * @return string
      */
     public function generateSQLStatement(): string
@@ -336,7 +396,7 @@ class SQL implements \JsonSerializable
             $sql .= "order by " . join(",", $this->orderBy) . "\n";
         }
 
-        \Tina4\Debug::message("SQL:" . $sql);
+        \Tina4\Debug::message("SQL:\n" . $sql, TINA4_LOG_DEBUG);
         return $sql;
     }
 
@@ -365,13 +425,13 @@ class SQL implements \JsonSerializable
      * Gets the records as a result
      * @return mixed
      */
-    public function asResult()
+    public function asResult(): ?object
     {
         $records = $this->jsonSerialize();
         //error_log (print_r ($this->error,1));
         if (!empty($this->error) && $this->error->getError()["errorCode"] == 0) {
             $this->error = null;
         }
-        return (new DataResult($records, null, $this->noOfRecords, $this->offset, $this->error));
+        return (new DataResult($records, $this->resultFields, $this->noOfRecords, $this->offset, $this->error));
     }
 }

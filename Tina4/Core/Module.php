@@ -12,7 +12,7 @@ namespace Tina4;
  */
 class Module
 {
-    public static function getModuleFolder()
+    public static function getModuleFolder(): string
     {
         $backtrace = debug_backtrace();
         if (isset($backtrace[1])) {
@@ -29,7 +29,7 @@ class Module
      * @param string $nameSpace
      * @param Config $config
      */
-    public static function addModule($name = "Tina4Module", $version = "1.0.0", $nameSpace = "", $config = null)
+    public static function addModule($name = "Tina4Module", $version = "1.0.0", $nameSpace = "", $config = null): void
     {
         $moduleFolder = self::getModuleFolder();
 
@@ -55,13 +55,12 @@ class Module
         $_TINA4_MODULES[$baseName]["migrationPath"] = [];
         $_TINA4_MODULES[$baseName]["scssPath"] = [];
 
-        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "api", $baseName);
-        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "routes", $baseName);
-        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "app", $baseName);
-        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "objects", $baseName);
-        self::addTemplatePath($moduleFolder . DIRECTORY_SEPARATOR . "templates", $baseName);
+        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "routes", $baseName);
+        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "app", $baseName);
+        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "orm", $baseName);
+        self::addTemplatePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "templates", $baseName);
         self::addMigrationPath($moduleFolder . DIRECTORY_SEPARATOR . "migrations", $baseName);
-        self::addSCSSPath($moduleFolder . DIRECTORY_SEPARATOR . "scss", $baseName);
+        self::addSCSSPath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "scss", $baseName);
 
     }
 
@@ -70,7 +69,7 @@ class Module
      * @param $pathType
      * @param $path
      */
-    public static function addPath($pathType, $path, $baseName)
+    public static function addPath($pathType, $path, $baseName): void
     {
         global $_TINA4_MODULES;
         if (file_exists($path)) {
@@ -83,7 +82,7 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addRoutePath($path, $baseName)
+    public static function addRoutePath($path, $baseName): void
     {
         self::addPath("routePath", $path, $baseName);
     }
@@ -93,7 +92,7 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addIncludePath($path, $baseName)
+    public static function addIncludePath($path, $baseName): void
     {
         self::addPath("includePath", $path, $baseName);
     }
@@ -113,7 +112,7 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addMigrationPath($path, $baseName)
+    public static function addMigrationPath($path, $baseName): void
     {
         self::addPath("migrationPath", $path, $baseName);
     }
@@ -123,7 +122,7 @@ class Module
      * @param $path
      * @param $baseName
      */
-    public static function addSCSSPath($path, $baseName)
+    public static function addSCSSPath($path, $baseName): void
     {
         self::addPath("scssPath", $path, $baseName);
     }
@@ -133,7 +132,7 @@ class Module
      * Gets the Route Folders
      * @return array
      */
-    public static function getRouteFolders()
+    public static function getRouteFolders(): array
     {
         global $_TINA4_MODULES;
         $routes = [];
@@ -153,7 +152,7 @@ class Module
      * Gets the Template Folders
      * @return array
      */
-    public static function getTemplateFolders()
+    public static function getTemplateFolders(): array
     {
         global $_TINA4_MODULES;
         $routes = [];
@@ -176,7 +175,7 @@ class Module
      * Gets the Include Folders
      * @return array
      */
-    public static function getIncludeFolders()
+    public static function getIncludeFolders(): array
     {
         global $_TINA4_MODULES;
         $routes = [];
@@ -196,7 +195,7 @@ class Module
      * Gets the Migration Folders
      * @return array
      */
-    public static function getMigrationFolders()
+    public static function getMigrationFolders(): array
     {
         global $_TINA4_MODULES;
         $routes = [];
@@ -216,7 +215,7 @@ class Module
      * Gets the Include Folders
      * @return array
      */
-    public static function getSCSSFolders()
+    public static function getSCSSFolders(): array
     {
         global $_TINA4_MODULES;
         $routes = [];
@@ -232,7 +231,7 @@ class Module
         return $routes;
     }
 
-    public static function getModuleConfigs()
+    public static function getModuleConfigs(): array
     {
         global $_TINA4_MODULES;
         $configs = [];

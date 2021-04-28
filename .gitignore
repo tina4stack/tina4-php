@@ -3,7 +3,7 @@
 .vscode
 /vendor/
 /cache/
-/assets/index.twig
+/src/assets/index.twig
 /auth.db
 /tools/HTMLFunctions.txt
 /secrets/
@@ -19,7 +19,10 @@ tests/tests/functional/
 /migrations/
 /.env.test
 test.php
-/assets/css/default.css
+/src/assets/css/default.css
 /messages.mo
 /messages.po
-/src/
+/data.db
+/data.db-shm
+/data.db-wal
+/cms.db

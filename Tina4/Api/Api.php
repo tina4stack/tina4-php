@@ -12,17 +12,17 @@ namespace Tina4;
  */
 class Api
 {
-    public $baseURL;
-    public $authHeader;
+    public ?string $baseURL;
+    public ?string $authHeader;
 
     /**
      * API constructor.
-     * @param $baseURL
+     * @param ?string $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
-     * @tests
+     * @tests tina4
      *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
      */
-    public function __construct($baseURL, $authHeader = "")
+    public function __construct(?string $baseURL, $authHeader = "")
     {
         $this->baseURL = $baseURL;
         $this->authHeader = $authHeader;
@@ -35,12 +35,12 @@ class Api
      * @param null $body
      * @param string $contentType
      * @return array|mixed
-     * @tests
-     *   assert ("/book")->docs[0]->name === "The Fellowship Of The Ring", "API Get request"
-     *   assert ("/book")->docs[1]->name !== "The Fellowship Of The Ring", "API Get request"
-     *   assert is_object("/book") === true, "This is not an object"
+     * tests tina4
+     *   assert ("/book")['docs'][0]['name'] === "The Fellowship Of The Ring", "API Get request"
+     *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
+     *   assert is_array("/book") === true, "This is not an array"
      */
-    public function sendRequest($restService = "", $requestType = "GET", $body = null, $contentType = "*/*")
+    public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*"): array
     {
         try {
             $headers = [];
@@ -72,7 +72,7 @@ class Api
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
                 return ["error" => $curlInfo, "body" => json_decode($curlResult, false)];
             } else {
-                return json_decode($curlResult, false);
+                return json_decode($curlResult, true);
             }
         } catch (\Exception $error) {
             return ["error" => $error->getMessage()];

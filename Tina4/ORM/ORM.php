@@ -1,6 +1,8 @@
 <?php
 
 namespace Tina4;
+use Phpfastcache\Helper\CacheConditionalHelper;
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4 (Andre van Zuydam)
@@ -85,7 +87,7 @@ class ORM implements \JsonSerializable
     /**
      * @var string[] Fields that do not need to be returned in the resulting ORM object serialization
      */
-    public $protectedFields = ["primaryKey", "genPrimaryKey", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "hasManyLimit", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
+    public $protectedFields = ["primaryKey", "genPrimaryKey", "phpsessid", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "hasManyLimit", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
 
     /**
      * ORM constructor.
@@ -183,7 +185,7 @@ class ORM implements \JsonSerializable
      * @param string $name Improper object name
      * @param boolean $camelCase Return the name as camel case
      * @return string Proper object name
-     * @tests
+     * @tests tina4
      *   assert ("test_name", true) === "testName", "Camel case is broken"
      *   assert ("test_name", false) === "test_name", "Camel case is broken"
      */
@@ -221,11 +223,16 @@ class ORM implements \JsonSerializable
         $tableName = $this->getTableName();
         $tableData = $this->getTableData();
         if (!empty($_FILES) && isset($_FILES[$fileInputName])) {
-            $primaryCheck = $this->getPrimaryCheck($tableData);
-            $fieldName = $this->getFieldName($fieldName);
-            $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
-            $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
-            $this->DBA->commit();
+            if ($_FILES[$fileInputName]["error"] === 0) {
+                $primaryCheck = $this->getPrimaryCheck($tableData);
+                $fieldName = $this->getFieldName($fieldName);
+                $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+                $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
+                $this->DBA->commit();
+            } else {
+                \Tina4\Debug::message("File error occurred\n".print_r ($_FILES[$fileInputName],1));
+                return false;
+            }
         } else {
             return false;
         }
@@ -386,8 +393,14 @@ class ORM implements \JsonSerializable
         //See if the record exists already using the primary key
 
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
+
+        //See if we can get the fetch from the cached data
+
+        $key = "orm".md5($sqlCheck);
+        (new Cache())->set($key, null, 0);
+
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-            Debug::message("TINA4: check " . $sqlCheck, TINA4_DEBUG_LEVEL);
+            Debug::message("TINA4: check " . $sqlCheck, TINA4_LOG_DEBUG);
         }
 
         $exists = $this->DBA->fetch($sqlCheck, 1);
@@ -485,7 +498,7 @@ class ORM implements \JsonSerializable
                 $sqlCreate = $this->generateCreateSQL($this->getTableData(), $tableName);
 
                 if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-                    Debug::message("TINA4: We need to make a table for " . $tableName."\n".$sqlCreate, TINA4_DEBUG_LEVEL);
+                    Debug::message("TINA4: We need to make a table for " . $tableName."\n".$sqlCreate, TINA4_LOG_DEBUG);
                     //Make a migration for it
                     $migrate = (new Migration());
                     $migrate->createMigration(" create table {$tableName}", $sqlCreate, true);
@@ -613,7 +626,7 @@ class ORM implements \JsonSerializable
         }
 
         Debug::message("SQL:\ninsert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
-        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_CONSOLE);
+        Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
         return ["sql" => "insert into {$tableName} (" . implode(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
@@ -631,7 +644,7 @@ class ORM implements \JsonSerializable
         $fieldValues = [];
         $updateValues = [];
 
-        Debug::message("Table Data:\n" .print_r ($tableData,1), DEBUG_SCREEN);
+        Debug::message("Table Data:\n" .print_r ($tableData,1), TINA4_LOG_DEBUG);
 
         $fieldIndex = 0;
         foreach ($tableData as $fieldName => $fieldValue) {
@@ -669,8 +682,8 @@ class ORM implements \JsonSerializable
         }
 
 
-        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", DEBUG_CONSOLE);
-        Debug::message("Field Values:\n".print_r($fieldValues,1), DEBUG_CONSOLE);
+        Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", TINA4_LOG_DEBUG);
+        Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }
@@ -692,13 +705,13 @@ class ORM implements \JsonSerializable
             if ($overRide) {
                 $this->{$ormField} = $fieldValue;
             } else
-            if (property_exists($this, $ormField)){
                 if (property_exists($this, $ormField)){
-                    if  ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
-                        $this->{$ormField} = $fieldValue;
+                    if (property_exists($this, $ormField)){
+                        if  ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
+                            $this->{$ormField} = $fieldValue;
+                        }
                     }
                 }
-            }
         }
 
         //work out the virtual fields here from the load
@@ -769,17 +782,17 @@ class ORM implements \JsonSerializable
                         }
                     }
                 } else
-                if (is_array($value)) {
-                    foreach ($value as $vid => $vvalue) {
-                        if (get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
-                            if ($isObject) {
-                                $value[$vid] = $vvalue->asObject();
-                            } else {
-                                $value[$vid] = $vvalue->asArray();
+                    if (is_array($value)) {
+                        foreach ($value as $vid => $vvalue) {
+                            if (is_object($vvalue) && get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
+                                if ($isObject) {
+                                    $value[$vid] = $vvalue->asObject();
+                                } else {
+                                    $value[$vid] = $vvalue->asArray();
+                                }
                             }
                         }
                     }
-                }
                 $tableData[$fieldName] = $value;
             }
         }
@@ -809,6 +822,7 @@ class ORM implements \JsonSerializable
         $error = $this->DBA->exec($sqlStatement);
 
         if (empty($error->getError()["errorCode"])) {
+            $this->DBA->commit();
             return (object)["success" => true];
         } else {
             return (object)$error->getError();
@@ -906,7 +920,18 @@ class ORM implements \JsonSerializable
             $sqlStatement = "select * from {$tableName} where {$primaryCheck}";
         }
 
-        $fetchData = $this->DBA->fetch($sqlStatement, 1, 0, $fieldMapping)->asObject();
+        //See if we can get the fetch from the cached data
+
+        $key = "orm".md5($sqlStatement);
+
+        if ($cacheData = (new Cache())->get($key)) {
+            Debug::message("Loaded {$sqlStatement} from cache", TINA4_LOG_DEBUG);
+            $fetchData = $cacheData;
+        } else {
+            Debug::message("Creating {$sqlStatement} into cache", TINA4_LOG_DEBUG);
+            $fetchData = $this->DBA->fetch($sqlStatement, 1, 0, $fieldMapping)->asObject();
+            (new Cache())->set($key, $fetchData);
+        }
 
         if (!empty($fetchData)) {
             //Get the first record
@@ -937,7 +962,8 @@ class ORM implements \JsonSerializable
         foreach ($this->hasOne() as $id => $item) {
             foreach ($item as $className => $foreignKey) {
                 $class = new $className;
-                $records = $class->select("*", $this->hasManyLimit)->where ("$class->primaryKey = {$this->{$foreignKey}}");
+                $primaryKey = $this->getFieldName($class->primaryKey);
+                $records = $class->select("*", $this->hasManyLimit)->where ("{$primaryKey} = {$this->{$foreignKey}}");
                 $className = strtolower($className);
                 $this->readOnlyFields[] = $className;
                 $this->{$className} = $records->asObject()[0];
@@ -1088,11 +1114,11 @@ class ORM implements \JsonSerializable
              
             if ($action == "form") {
                 $title = "Add [OBJECT]";
-                $savePath =  TINA4_BASE_URL . "[PATH]";
+                $savePath =  TINA4_SUB_FOLDER . "[PATH]";
                 $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", []);
             } else {
                 $title = "Edit [OBJECT]";
-                $savePath =  TINA4_BASE_URL . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
+                $savePath =  TINA4_SUB_FOLDER . "[PATH]/".$[OBJECT_NAME]->[PRIMARY_KEY];
                 $content = \Tina4\renderTemplate("[TEMPLATE_PATH]/form.twig", ["data" => $[OBJECT_NAME]]);
             }
 
@@ -1158,7 +1184,7 @@ EOT;
         }
 
 
-        $componentPath = $_SERVER["DOCUMENT_ROOT"].DIRECTORY_SEPARATOR."src". DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
+        $componentPath = TINA4_DOCUMENT_ROOT.DIRECTORY_SEPARATOR."src". DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
 
 
         if (!file_exists($componentPath) && !mkdir($componentPath, 0755, true) && !is_dir($componentPath)) {

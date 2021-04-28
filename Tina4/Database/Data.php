@@ -14,19 +14,36 @@ use Composer\Autoload\ClassLoader;
  */
 class Data
 {
-    public $DBA;
-    public $cache;
-    public $rootFolder;
+    use Utility;
+
+    public ?object $DBA;
+    public ?object $cache;
+    public string  $projectRoot;
+    public string  $documentRoot;
+    public string  $subFolder;
 
     /**
      * Data constructor
      */
     public function __construct()
     {
-        $reflection = new \ReflectionClass(ClassLoader::class);
-        $vendorDir = dirname($reflection->getFileName());
+        if (!defined("TINA4_DOCUMENT_ROOT")) {
 
-        $this->rootFolder = dirname($vendorDir . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR);
+            $reflection = new \ReflectionClass(ClassLoader::class);
+            $vendorDir = dirname($reflection->getFileName());
+
+            $this->projectRoot = dirname(dirname(__DIR__ . ".." . DIRECTORY_SEPARATOR) . ".." . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+            $this->documentRoot = str_replace("vendor", "", dirname($vendorDir . ".." . DIRECTORY_SEPARATOR));
+
+            $this->subFolder = $this->getSubFolder($this->documentRoot);
+            define("TINA4_DOCUMENT_ROOT", $this->documentRoot);
+            define("TINA4_PROJECT_ROOT", $this->projectRoot);
+        } else {
+            $this->documentRoot = TINA4_DOCUMENT_ROOT;
+            $this->projectRoot = TINA4_PROJECT_ROOT;
+            $this->subFolder = TINA4_SUB_FOLDER;
+        }
 
         //Check if we have a database connection declared as global , add it to the data class
         foreach ($GLOBALS as $dbName => $GLOBAL) {
@@ -44,5 +61,4 @@ class Data
             }
         }
     }
-
 }

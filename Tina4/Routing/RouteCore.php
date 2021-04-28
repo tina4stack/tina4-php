@@ -12,5 +12,5 @@ interface RouteCore
      * @param false $inlineParamsToRequest
      * @param false $secure
      */
-    public static function add(string $routePath, $function, $inlineParamsToRequest = false, $secure = false): void;
+    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void;
 }

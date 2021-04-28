@@ -21,7 +21,7 @@ class MessengerSettings
     public $smtpPort = 25;
     public $usePHPMailer = false;
     public $useTwigTemplates = true;
-    public $templatePath = "messenger"; //off the templates or assets folder
+    public $templatePath = "messenger"; //off the templates or public folder
 
     /**
      * MessengerSettings constructor.

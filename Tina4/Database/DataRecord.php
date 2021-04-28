@@ -17,8 +17,8 @@ class DataRecord implements JsonSerializable
 {
     use Utility;
 
-    private $original;
-    private $fieldMapping;
+    private ?object $original;
+    private ?array $fieldMapping;
 
     /**
      * DataRecord constructor Converts array to object
@@ -35,17 +35,14 @@ class DataRecord implements JsonSerializable
         if (!empty($record)) {
             $this->original = (object)$record;
             foreach ($record as $column => $value) {
+
                 if ($this->isBinary($value)) {
                     $value = \base64_encode($value);
                     $this->original->{$column} = $value;
                 }
 
                 if ($this->isDate($value, $databaseFormat)) {
-
-
                     $value = $this->formatDate($value, $databaseFormat, $outputFormat);
-
-
                     $this->original->{$column} = $value;
                 }
 
@@ -62,48 +59,51 @@ class DataRecord implements JsonSerializable
      * @param bool $original Whether to get the result as original field names
      * @return object
      */
-    public function asObject($original = false)
+    public function asObject($original = false): ?object
     {
         if ($original) {
             return $this->original;
-        } else {
-            return $this->transformObject();
         }
+
+        return $this->transformObject();
     }
 
     /**
      * Transform to a camel case result
      */
-    public function transformObject()
+    public function transformObject($original=false): object
     {
         $object = (object)[];
         if (!empty($this->original)) {
             foreach ($this->original as $column => $value) {
                 $columnName = $this->getObjectName($column);
-                $object->{$column} = $value; // to be added in
-                $object->{$columnName} = $value;
-            }
+                if (!$original) {
+                    $object->{$columnName} = $value;
+                }
+                $object->{$column} = $value;
 
+            }
         }
         return $object;
     }
 
     /**
      * Cast the object to an array
+     * @param bool $original
      * @return array
      */
-    public function asArray()
+    public function asArray($original=false): array
     {
-        return (array)$this->transformObject();
+        return (array)$this->transformObject($original);
     }
 
     /**
      * Gets a proper object name for returning back data
      * @param string $name Improper object name
-     * @param array $fieldMapping Field mapping to map fields
+     * @param array|null $fieldMapping Field mapping to map fields
      * @return string Proper object name
      */
-    public function getObjectName($name, $fieldMapping = [])
+    public function getObjectName(string $name, ?array $fieldMapping = []): string
     {
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
@@ -112,49 +112,51 @@ class DataRecord implements JsonSerializable
 
         if (!empty($fieldMapping) && isset($fieldMapping[$name])) {
             return $fieldMapping[$name];
-        } else {
-            $fieldName = "";
-            if (strpos($name, "_") !== false) {
-                $name = strtolower($name);
-                for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
-                    if ($name[$i] === "_") {
-                        $i++;
-                        $fieldName .= strtoupper($name[$i]);
-                    } else {
-                        $fieldName .= $name[$i];
-                    }
-                }
-            } else {
-                //We have a field which is all uppercase
-                if (strtoupper($name) === $name || strtolower($name) === $name) {
-                    return strtolower($name);
-                }
-                for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
-                    if ($name[$i] !== strtolower($name[$i])) {
-                        $fieldName .= "_" . strtolower($name[$i]);
-                    } else {
-                        $fieldName .= $name[$i];
-                    }
+        }
+
+        $fieldName = "";
+        if (strpos($name, "_") !== false) {
+            $name = strtolower($name);
+            for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
+                if ($name[$i] === "_") {
+                    $i++;
+                    $fieldName .= strtoupper($name[$i]);
+                } else {
+                    $fieldName .= $name[$i];
                 }
             }
-            return $fieldName;
+        } else {
+            //We have a field which is all uppercase
+            if (strtoupper($name) === $name || strtolower($name) === $name) {
+                return strtolower($name);
+            }
+            for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
+                if ($name[$i] !== strtolower($name[$i])) {
+                    $fieldName .= "_" . strtolower($name[$i]);
+                } else {
+                    $fieldName .= $name[$i];
+                }
+            }
         }
+        return $fieldName;
     }
 
     /**
      * @return false|string
+     * @throws \JsonException
      */
-    function asJSON()
+    public function asJSON(): string
     {
-        return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
      * @return string
+     * @throws \JsonException
      */
     public function __toString(): string
     {
-        return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -162,22 +164,24 @@ class DataRecord implements JsonSerializable
      * @param $name
      * @return false
      */
-    public function byName($name)
+    public function byName($name): ?bool
     {
         $columnName = strtoupper($name);
-        if (!empty($this->original) && !empty($this->$columnName)) {
+        if (!empty($this->original) && !empty($this->$columnName))
+        {
             return $this->$columnName;
-        } else {
-            return false;
         }
+
+        return null;
     }
 
     /**
      * Serialize
      * @return false|mixed|string
+     * @throws \JsonException
      */
     public function jsonSerialize()
     {
-        return json_encode($this->original, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

@@ -92,12 +92,13 @@ class Messenger
                 //Check if class exists
                 if (!class_exists("PHPMailer\PHPMailer\PHPMailer")) {
                     if (!empty($_SERVER)) {
+                        Debug::message("Install PHP Mailer for emailing to work\ncomposer require phpmailer/phpmailer", TINA4_LOG_ERROR);
                         die("<h3>Install PHP Mailer for emailing to work</h3><pre>composer require phpmailer/phpmailer</pre>");
                     } else {
+                        Debug::message("Install PHP Mailer for emailing to work\ncomposer require phpmailer/phpmailer", TINA4_LOG_ERROR);
                         die("Install PHP Mailer - composer require phpmailer/phpmailer");
                     }
                 } else {
-
                     $phpMailer = new \PHPMailer\PHPMailer\PHPMailer(true);
                     try {
                         //Server settings

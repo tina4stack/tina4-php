@@ -10,51 +10,44 @@ namespace Tina4;
  * Reads a .env file or .env.{environment} file for settings that should not be committed up with the repository
  * @package Tina4
  */
-class Env
+class Env extends Data
 {
-    private $environment = "";
-
     /**
      * Env constructor.
      * @param string $forceEnvironment
      */
     public function __construct($forceEnvironment = "")
     {
+        parent::__construct();
+
         if (!empty(getenv("ENVIRONMENT"))) {
-            $this->environment = getenv("ENVIRONMENT");
+            $environment = getenv("ENVIRONMENT");
         }
 
-        if (!empty($forceEnvironment)) {
-            $this->environment = $forceEnvironment;
+        if (empty($environment)) {
+            $environment = $forceEnvironment;
         }
 
-        $this->readParams($this->environment);
+        $this->readParams($environment);
     }
 
     /**
      * The readEnvParams reads the environment variables from the .env.{ENVIRONMENT} file
      * @param $environment
-     * @tests
+     * @tests tina4
      *   assert ("test") === null,"Parsing the environment"
      *   assert file_exists(".env.test") === true,"File does not exist .env.test"
      */
     public function readParams($environment): void
     {
-        $fileName = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . ".env";
-
-        if (!file_exists($fileName)) {
-            $reflection = new \ReflectionClass(\Composer\Autoload\ClassLoader::class);
-            $vendorDir = dirname(dirname($reflection->getFileName()));
-            $fileName = $vendorDir . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . ".env";
-        }
+        $fileName =   $this->documentRoot . ".env";
 
         if (!empty($environment)) {
             $fileName .= ".{$environment}";
         }
 
         if (file_exists($fileName)) {
-            Debug::message("Parsing {$fileName}");
-
+            Debug::message("Parsing {$fileName}", TINA4_LOG_DEBUG);
             $fileContents = file_get_contents($fileName);
             if (strpos($fileContents, "\r")) {
                 $fileContents = explode("\r\n", $fileContents);
@@ -71,7 +64,7 @@ class Env
                         $variables = explode("=", $line, 2);
                         if (isset($variables[0], $variables[1])) {
                             if (!defined(trim($variables[0]))) {
-                                Debug::message("Defining {$variables[0]} = $variables[1]");
+                                Debug::message("Defining {$variables[0]} = $variables[1]", TINA4_LOG_DEBUG);
                                 //echo 'return (defined("'.$variables[1].'") ? '.$variables[1].' : "'.$variables[1].'");';
                                 if (defined($variables[1])) {
                                     define(trim($variables[0]), eval('return (defined("' . $variables[1] . '") ? ' . $variables[1] . ' : "' . $variables[1] . '");'));
@@ -89,7 +82,7 @@ class Env
             }
         } else {
             Debug::message("Created an ENV file for you {$fileName}");
-            file_put_contents($fileName, "[Project Settings]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=DEBUG_CONSOLE\n[Open API]\nSWAGGER_TITLE=Tina4 Project\nSWAGGER_DESCRIPTION=Edit your .env file to change this description\nSWAGGER_VERSION=1.0.0");
+            file_put_contents($fileName, "[Project Settings]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=[TINA4_LOG_ALL]\n[Open API]\nSWAGGER_TITLE=Tina4 Project\nSWAGGER_DESCRIPTION=Edit your .env file to change this description\nSWAGGER_VERSION=1.0.0");
 
         }
     }

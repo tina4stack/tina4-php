@@ -13,9 +13,9 @@ namespace Tina4;
  */
 class Swagger implements \JsonSerializable
 {
-    public $root;
-    public $subFolder;
-    public $swagger = [];
+    public string $root;
+    public string $subFolder;
+    public array $swagger = [];
 
     /**
      * Swagger constructor.
@@ -31,7 +31,6 @@ class Swagger implements \JsonSerializable
 
         global $arrRoutes;
 
-
         if (empty($this->root)) {
             $this->root = $_SERVER["DOCUMENT_ROOT"];
         }
@@ -39,8 +38,6 @@ class Swagger implements \JsonSerializable
         $this->subFolder = $subFolder;
 
         $paths = (object)[];
-
-
 
         foreach ($arrRoutes as $arId => $route) {
 
@@ -58,9 +55,6 @@ class Swagger implements \JsonSerializable
 
             $doc = $reflection->getDocComment();
             preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
-
-
-
 
             $summary = "None";
             $description = "None";
@@ -207,7 +201,19 @@ class Swagger implements \JsonSerializable
 
     }
 
-    public function getSwaggerEntry($tags, $summary, $description, $produces, $security, $params, $example, $responses)
+    /**
+     * Get Swagger Entry
+     * @param $tags
+     * @param $summary
+     * @param $description
+     * @param $produces
+     * @param $security
+     * @param $params
+     * @param $example
+     * @param $responses
+     * @return object
+     */
+    public function getSwaggerEntry($tags, $summary, $description, $produces, $security, $params, $example, $responses): object
     {
         $entry = (object)[
             "tags" => $tags,
@@ -249,7 +255,7 @@ class Swagger implements \JsonSerializable
      * which is a value of any type other than a resource.
      * @since 5.4.0
      */
-    public function jsonSerialize()
+    public function jsonSerialize(): array
     {
         return $this->swagger;
     }

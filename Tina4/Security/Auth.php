@@ -1,5 +1,4 @@
 <?php
-
 namespace Tina4;
 
 use Nowakowskir\JWT\Exceptions\IntegrityViolationException;
@@ -14,7 +13,7 @@ use Nowakowskir\JWT\TokenEncoded;
  *
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
- * @tests
+ * @tests tina4
  *   assert session_status() !== PHP_SESSION_NONE, "Session should not be active"
  *   assert $configured === true, "Configured is supposed to be true"
  */
@@ -24,52 +23,48 @@ class Auth extends Data
      * The path where the website is served from
      * @var string
      */
-    private $documentRoot;
+    public string $documentRoot;
     /**
      * Is the authentication configured, so it only runs once in a page load
      * @var bool
      */
-    public $configured = false;
+    public bool $configured = false;
     /**
      * Private key read from the secrets folder
      * @var false|string
      */
-    protected $privateKey;
+    protected string $privateKey;
     /**
      * Public key read from the secrets folder
      * @var false|string
      */
-    protected $publicKey;
+    protected string $publicKey;
 
     /**
      * The auth constructor looks for a secrets folder and tries to generate keys for the site
-     * @param string $documentRoot
-     * @throws \Exception
-     * @tests
+     * @tests tina4
      *   assert $configured === true, "Auth state of configured must be true"
      */
-    public function __construct($documentRoot = "")
+    public function __construct()
     {
         parent::__construct();
         $this->initSession();
 
-        $this->documentRoot = $documentRoot;
-
         //Check security
 
-        if (!file_exists($this->documentRoot . "secrets")) {
+        if (!file_exists($this->documentRoot. "secrets")) {
             $this->generateSecureKeys();
         }
 
         //Load secrets
-        if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
-            $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
+        if (file_exists($this->documentRoot. "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
+            $this->privateKey = file_get_contents($this->documentRoot. "secrets" . DIRECTORY_SEPARATOR . "private.key");
         } else {
             die("OpenSSL is probably not installed or secrets/private.key is missing, please run this on your project root : <pre>ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N \"\"</pre>");
         }
 
-        if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
-            $this->publicKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub");
+        if (file_exists($this->documentRoot. "secrets" . DIRECTORY_SEPARATOR . "public.pub")) {
+            $this->publicKey = file_get_contents($this->documentRoot. "secrets" . DIRECTORY_SEPARATOR . "public.pub");
         } else {
             die("OpenSSL is probably not installed or secrets/public.pub is missing, please run this on your project root : <pre>openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub</pre>");
         }
@@ -81,7 +76,7 @@ class Auth extends Data
 
     /**
      * Starts a php session
-     * @tests
+     * @tests tina4
      *   assert session_status() !== PHP_SESSION_NONE, "Session should be active by now"
      */
     public function initSession(): void
@@ -98,19 +93,20 @@ class Auth extends Data
     /**
      * Creates a secrets folder and generates keys for the application
      * @return bool
-     * @tests
+     * @tests tina4
      *   assert file_exists("./secrets/private.key") === true,"private.key does not exist - openssl installed ?"
      *   assert file_exists("./secrets/private.key.pub") === true,"private.key.pub does not exist - openssl installed ?"
      *   assert file_exists("./secrets/public.pub") === true,"public.pub does not exist - openssl installed ?"
      */
-    public function generateSecureKeys()
+    public function generateSecureKeys() : bool
     {
         Debug::message("Generating Auth keys - {$this->documentRoot}secrets");
-        if (file_exists($this->documentRoot . "secrets")) {
+        if (file_exists($this->documentRoot.DIRECTORY_SEPARATOR. "secrets")) {
             Debug::message("Secrets folder exists already, please remove");
             return false;
         }
-        if (!mkdir($concurrentDirectory = $this->documentRoot . "secrets") && !is_dir($concurrentDirectory)) {
+
+        if (!mkdir($concurrentDirectory = $this->documentRoot.DIRECTORY_SEPARATOR. "secrets") && !is_dir($concurrentDirectory)) {
             throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
         `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
@@ -119,13 +115,14 @@ class Auth extends Data
         if (!file_exists($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore")) {
             file_put_contents($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore", "*");
         }
+
         return true;
     }
 
     /**
      * Checks for $_SESSION["tokens"]
      */
-    public function tokenExists()
+    public function tokenExists(): bool
     {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;
@@ -140,11 +137,11 @@ class Auth extends Data
      * @param string $publicKey
      * @param string $encryption
      * @return bool
-     * @tests
+     * @tests tina4
      *   assert $this->getToken() !== "", "Token must not be blank"
      *   assert ($this->getToken()) === true,"The token is not valid"
      */
-    public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function validToken($token, $publicKey = "", $encryption = JWT::ALGORITHM_RS256): bool
     {
         Debug::message("Validating token");
         $this->initSession();
@@ -215,7 +212,7 @@ class Auth extends Data
      * @return string
      * @throws \Exception
      */
-    public function validateAuth($request, $lastPath = null)
+    public function validateAuth($request, $lastPath = null): string
     {
         $this->initSession();
 
@@ -231,7 +228,7 @@ class Auth extends Data
     /**
      * Clears the session auth tokens
      */
-    public function clearTokens()
+    public function clearTokens(): void
     {
         $this->initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
@@ -245,10 +242,10 @@ class Auth extends Data
      * @param string $privateKey
      * @param string $encryption
      * @return string
-     * @tests
+     * @tests tina4
      *   assert $this->getPayload($this->getToken(["name" => "tina4"])) === ["name" => "tina4"],"Return back the token"
      */
-    public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function getToken($payLoad = [], $privateKey = "", $encryption = JWT::ALGORITHM_RS256): string
     {
         $this->initSession();
 
@@ -271,11 +268,11 @@ class Auth extends Data
             $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
         }
 
-        $tokenDecoded = new TokenDecoded([], $payLoad);
+        $tokenDecoded = new TokenDecoded($payLoad);
 
         if (!empty($this->privateKey)) {
             $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
-            $tokenString = $tokenEncoded->__toString();
+            $tokenString = $tokenEncoded->toString();
             $_SESSION["tina4:authToken"] = $tokenString;
         } else {
             $tokenString = "secrets folder is empty of tokens";
@@ -286,11 +283,12 @@ class Auth extends Data
     /**
      * Gets the payload from token
      * @param $token
+     * @param bool $returnExpires
      * @param string $publicKey
      * @param string $encryption
      * @return array|false
      */
-    public function getPayLoad($token, $returnExpires=false, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
+    public function getPayLoad($token, $returnExpires = false, $publicKey = "", $encryption = JWT::ALGORITHM_RS256)
     {
         Debug::message("Getting token payload");
 
@@ -323,6 +321,8 @@ class Auth extends Data
             return $tokenDecoded->getPayload();
         } else {
                 $payLoad = $tokenDecoded->getPayload();
+
+
                 if (isset($payLoad["expires"])){
                     unset($payLoad["expires"]);
                 }
