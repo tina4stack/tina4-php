@@ -130,7 +130,7 @@ class DataMySQL implements DataBase
                     }
                 }
 
-                if (is_array($records) && count($records) >= 1) {
+                if (is_array($records) && count($records) > 0) {
                     if (stripos($sql, "returning") === false  && count($records) === $noOfRecords && $offSet === 0) {
                         $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
