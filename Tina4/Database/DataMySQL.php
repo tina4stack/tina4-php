@@ -108,7 +108,7 @@ class DataMySQL implements DataBase
         $initialSQL = $sql;
 
         //Don't add a limit if there is a limit already or if there is a stored procedure call
-        if (strpos($sql, "limit") === false && strpos($sql, "call") === false) {
+        if (stripos($sql, "limit") === false && stripos($sql, "call") === false) {
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
@@ -133,7 +133,7 @@ class DataMySQL implements DataBase
                 if (is_array($records) && count($records) > 0) {
                     if (stripos($sql, "returning") === false) {
                         //Check to prevent second call of procedure
-                        if (strpos($sql, "call") !== false) {
+                        if (stripos($sql, "call") !== false) {
                             $resultCount["COUNT_RECORDS"] = count($records);
                         } else {
                             $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
@@ -175,7 +175,7 @@ class DataMySQL implements DataBase
         }
 
         //Ensures the pointer is at the end in order to close the connection - Might be a buggy fix
-        if (strpos($sql, "call") !== false) {
+        if (stripos($sql, "call") !== false) {
             while (mysqli_next_result($this->dbh)) {
             }
         }
