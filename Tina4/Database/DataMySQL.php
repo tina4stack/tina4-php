@@ -122,7 +122,7 @@ class DataMySQL implements DataBase
         $resultCount["COUNT_RECORDS"] = 1;
 
         if ($error->getError()["errorCode"] == 0) {
-            if ($recordCursor->num_rows > 0) {
+            if(isset($recordCursor,$recordCursor->num_rows) && !empty($recordCursor) && $recordCursor->num_rows > 0) {
                 while ($record = mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
