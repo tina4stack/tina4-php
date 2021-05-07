@@ -108,7 +108,7 @@ class DataMySQL implements DataBase
         $initialSQL = $sql;
 
         //Don't add a limit if there is a limit already or if there is a stored procedure call
-        if (strpos($sql, "limit") === false || strpos($sql, "call") === false) {
+        if (stripos($sql, "limit") === false && stripos($sql, "call") === false) {
             $sql .= " limit {$offSet},{$noOfRecords}";
         }
 
@@ -122,7 +122,7 @@ class DataMySQL implements DataBase
         $resultCount["COUNT_RECORDS"] = 1;
 
         if ($error->getError()["errorCode"] == 0) {
-            if ($recordCursor->num_rows > 0) {
+            if(isset($recordCursor,$recordCursor->num_rows) && !empty($recordCursor) && $recordCursor->num_rows > 0) {
                 while ($record = mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
@@ -131,18 +131,23 @@ class DataMySQL implements DataBase
                 }
 
                 if (is_array($records) && count($records) > 0) {
-                    if (stripos($sql, "returning") === false) { //&& count($records) === $noOfRecords && $offSet === 0
-                        $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
+                    if (stripos($sql, "returning") === false) {
+                        //Check to prevent second call of procedure
+                        if (stripos($sql, "call") !== false) {
+                            $resultCount["COUNT_RECORDS"] = count($records);
+                        } else {
+                            $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
 
-                        $recordCount = mysqli_query($this->dbh, $sqlCount);
+                            $recordCount = mysqli_query($this->dbh, $sqlCount);
 
-                        $resultCount = mysqli_fetch_assoc($recordCount);
+                            $resultCount = mysqli_fetch_assoc($recordCount);
 
-                        if (empty($resultCount)) {
-                            $resultCount["COUNT_RECORDS"] = 0;
+                            if (empty($resultCount)) {
+                                $resultCount["COUNT_RECORDS"] = 0;
+                            }
                         }
                     } else {
-                        $resultCount["COUNT_RECORDS"] = count($records);
+                        $resultCount["COUNT_RECORDS"] = 0;
                     }
                 } else {
                     $resultCount["COUNT_RECORDS"] = 0;
@@ -170,7 +175,7 @@ class DataMySQL implements DataBase
         }
 
         //Ensures the pointer is at the end in order to close the connection - Might be a buggy fix
-        if (strpos($sql, "call") !== false) {
+        if (stripos($sql, "call") !== false) {
             while (mysqli_next_result($this->dbh)) {
             }
         }
