@@ -457,7 +457,7 @@ class ORM implements \JsonSerializable
                 if (!empty($fetchData)) {
                     $this->mapFromRecord($fetchData->asArray(), false);
 
-                    return $this->asObject();
+                    return $this;
                 } else {
                     return null;
                 }
