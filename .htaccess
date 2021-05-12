@@ -4,8 +4,13 @@ RewriteEngine On
 # If you need to use the `RewriteBase` directive, it should be the
 # absolute physical path to the directory that contains this htaccess file.
 
+#Block access to .env
+<Files ~ "\.(env|json|config.js|md|gitignore|gitattributes|lock)$">
+    Order allow,deny
+    Deny from all
+</Files>
 
-#Enable the 3 lines below for redirect to https
+#Disable the 3 lines below for just to http
 RewriteCond %{HTTPS} !=on
 RewriteCond %{REQUEST_URI} !^/.well-known/.*$ [NC]
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301,NE]
