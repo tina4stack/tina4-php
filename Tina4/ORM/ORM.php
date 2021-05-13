@@ -457,7 +457,7 @@ class ORM implements \JsonSerializable
                 if (!empty($fetchData)) {
                     $this->mapFromRecord($fetchData->asArray(), false);
 
-                    return $this->asObject();
+                    return $this;
                 } else {
                     return null;
                 }
@@ -577,7 +577,7 @@ class ORM implements \JsonSerializable
             } //form token is reserved
 
 
-            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true)) {
                 continue;
             }
             $fieldIndex++;
@@ -658,7 +658,7 @@ class ORM implements \JsonSerializable
                 continue;
             }
 
-            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true) || in_array($fieldName, $this->excludeFields, true)) {
+            if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true)) {
                 continue;
             }
 
