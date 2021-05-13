@@ -25,16 +25,23 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
         $internalTwig = clone $twig;
 
         if (is_file($fileNameString)) {
-
             $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
             if ($location === "")
             {
                 $location = $newPath;
             }
             $renderFile = str_replace($location, "", $fileName);
+
+            if ($renderFile[0] === DIRECTORY_SEPARATOR) {
+                $renderFile = substr($renderFile, 1);
+            }
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
             return $internalTwig->render($renderFile, $data);
         } else
+            if ($fileName[0] === DIRECTORY_SEPARATOR || $fileName[0] === "/") {
+                $fileName = substr($fileName, 1);
+            }
+
             if ($internalTwig->getLoader()->exists($fileName)) {
                 return $internalTwig->render($fileName, $data);
             } else
