@@ -38,7 +38,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
             return $internalTwig->render($renderFile, $data);
         } else
-            if ($fileName[0] === DIRECTORY_SEPARATOR || $fileName[0] === "/") {
+            if (strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR || strlen($fileName) > 1 && $fileName[0] === "/") {
                 $fileName = substr($fileName, 1);
             }
 
