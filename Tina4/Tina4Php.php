@@ -289,7 +289,7 @@ class Tina4Php extends Data
                 }
             }
             $scss = new Compiler();
-            $scssDefault = $scss->compile($scssContent);
+            $scssDefault = $scss->compileString($scssContent);
             if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
                 if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
                     throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
