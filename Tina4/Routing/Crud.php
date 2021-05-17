@@ -139,14 +139,16 @@ class Crud
      * @param $path
      * @param ORM $object
      * @param $function
+     * @param bool $secure
      * @params $secure
-     * @param $secures
      */
-    public static function route($path, ORM $object, $function, $secure = false)
+    public static function route($path, ORM $object, $function, $secure = false): void
     {
         //What if the path has ids in it ? /store/{id}/{hash}
-
-        //CREATE
+        /**
+         * @description  {$path} CRUD
+         * @tags CRUD
+         */
         Route::get($path . "/form",
             function (Response $response, Request $request) use ($object, $function) {
                 $htmlResult = $function ("form", $object, null, $request);
@@ -154,6 +156,9 @@ class Crud
             }
         );
 
+        /**
+         * @description  {$path} CRUD
+         */
         Route::post($path,
             function (Response $response, Request $request) use ($object, $function) {
                 if (!empty($request->data)) {
@@ -168,7 +173,10 @@ class Crud
             }
         );
 
-        //READ
+        /**
+         * @description  {$path} CRUD
+         * @tags CRUD
+         */
         Route::get($path,
             function (Response $response, Request $request) use ($object, $function) {
                 $filter = Crud::getDataTablesFilter("t.");
@@ -178,7 +186,10 @@ class Crud
         );
 
 
-        //UPDATE
+        /**
+         * @description  {$path} CRUD
+         * @tags CRUD
+         */
         Route::get($path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
@@ -192,6 +203,10 @@ class Crud
             }
         );
 
+        /**
+         * @description  {$path} CRUD
+         * @tags CRUD
+         */
         Route::post($path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
@@ -208,7 +223,10 @@ class Crud
             }
         );
 
-        //DELETE
+        /**
+         * @description  {$path} CRUD
+         * @tags CRUD
+         */
         Route::delete($path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param

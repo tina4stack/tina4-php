@@ -11,8 +11,8 @@ namespace Tina4;
  */
 class DataError
 {
-    private $errorCode;
-    private $errorMessage;
+    private string $errorCode;
+    private string $errorMessage;
 
     /**
      * DataError constructor.
@@ -29,7 +29,7 @@ class DataError
     /**
      * @return string Contains the code and message of the error as a single string
      */
-    public function getErrorText()
+    public function getErrorText(): string
     {
         return $this->errorCode . " " . $this->errorMessage;
     }

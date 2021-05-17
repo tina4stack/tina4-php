@@ -32,7 +32,7 @@ class Api
      * Sends a request to the specified API
      * @param string $restService
      * @param string $requestType
-     * @param null $body
+     * @param string|null $body
      * @param string $contentType
      * @return array|mixed
      * tests tina4
@@ -70,9 +70,9 @@ class Api
             curl_close($curlRequest);
             //If an error
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
-                return ["error" => $curlInfo, "body" => json_decode($curlResult, false)];
+                return ["error" => $curlInfo, "body" => json_decode($curlResult, false, 512, JSON_THROW_ON_ERROR)];
             } else {
-                return json_decode($curlResult, true);
+                return json_decode($curlResult, true, 512, JSON_THROW_ON_ERROR);
             }
         } catch (\Exception $error) {
             return ["error" => $error->getMessage()];

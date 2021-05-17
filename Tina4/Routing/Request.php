@@ -39,7 +39,11 @@ class Request
         }
 
         if (!empty($rawRequest)) {
-            $this->data = json_decode($rawRequest);
+            $this->data = json_decode($rawRequest, true, 512, JSON_THROW_ON_ERROR);
+            //pass raw request anyway
+            if ($this->data === null && $rawRequest !== '') {
+                $this->data = $rawRequest;
+            }
         } else {
             foreach ($_REQUEST as $key => $value) {
                 $this->data->{$key} = $value;
