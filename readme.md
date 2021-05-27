@@ -10,6 +10,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*May 27, 2021* - Some fixes on caching, introduced TINA4_CACHED_ROUTES
+
 *March 21, 2021* - This marks the release of a major update to the routing, it has been fully refactored and optimized.  Also updates to the debugging and modules make things much better for development.
 
 *February 15, 2021* - Routing in large projects seems to be really messy and finding stuff is a pain.  To this end you can now direct your routing to class methods, they still behave the same as the anonymous methods but now make more sense for grouping functionality. Also added back in, the ability to generate ORM objects directly from your database using the command line tool.
