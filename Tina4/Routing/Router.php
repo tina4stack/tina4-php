@@ -82,7 +82,9 @@ class Router extends Data
         //THIRD ROUTING
         if ($routerResponse = $this->handleRoutes($method, $url))
         {
-            $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+            if (defined("TINA4_CACHED_ROUTES") && strpos(print_r (TINA4_CACHED_ROUTES,1), $url) !== false) {
+                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+            }
             return $routerResponse;
         }
 
