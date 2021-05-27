@@ -81,6 +81,7 @@ class Router extends Data
         //THIRD ROUTING
         if ($routerResponse = $this->handleRoutes($method, $url))
         {
+            $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
             return $routerResponse;
         }
 
@@ -113,9 +114,11 @@ class Router extends Data
     {
         global $cache;
         $key = "url_".md5($url);
-
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG &&  (strpos($url, ".twig") !== false || strpos($url, "/public/") !== false))
+        {
+            return false;
+        }
         return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
-        return true;
     }
 
     /**
@@ -198,7 +201,6 @@ class Router extends Data
         } else {
             $httpCode = HTTP_METHOD_NOT_ALLOWED;
         }
-
         return new RouterResponse("", $httpCode, $headers);
     }
 
@@ -209,8 +211,6 @@ class Router extends Data
         $response = new Response();
         $headers = [];
         //iterate through the routes
-
-
 
         foreach ($arrRoutes as $rid => $route) {
             $result = null;
@@ -265,6 +265,8 @@ class Router extends Data
                     $headers[] = $result["contentType"];
                     $content = $result["content"];
                     $httpCode = $result["httpCode"];
+
+
                     return new RouterResponse($content, $httpCode, $headers);
                 }
 
