@@ -10,34 +10,36 @@ namespace Tina4;
  * Extend this class to make your own processes
  * @package Tina4
  */
-class Process
+class Process implements ProcessInterface
 {
-    public $name;
+    public string $name;
 
     /**
      * Process constructor.
-     * @param $name
-     * @param $function
+     * @param string $name
      */
-    public function __construct($name = "")
+    public function __construct(string $name = "")
     {
-        $this->name = $name;
+        if (!empty($name)) {
+            $this->name = $name;
+        }
+        Debug::message("Initializing Process: {$this->name}", TINA4_LOG_DEBUG);
     }
 
     /**
-     * Can run
+     * Returns true or false whether the process can run
      * @return bool
      */
     public function canRun(): bool
     {
-        return true;
+        // TODO: Implement canRun() method.
     }
 
     /**
-     * The script that runs things
+     * The code that will run when this process can run
      */
     public function run()
     {
-        echo "You should overwrite this!";
+        // TODO: Implement run() method.
     }
 }

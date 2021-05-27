@@ -28,3 +28,4 @@ test.php
 /cms.db
 /src/app/TestClass.php
 /src/app/routes/test.php
+/src/services/TestService.php
