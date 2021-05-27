@@ -40,6 +40,12 @@ class Cache
     public function get($keyName)
     {
         $cachedString = $this->cache->getItem($keyName);
-        return $cachedString->get();
+        $cachedData =  $cachedString->get();
+        if (empty($cachedData) && $cachedData === null) {
+            Debug::message("No cache ".$keyName);
+            return null;
+        } else {
+            return $cachedData;
+        }
     }
 }
