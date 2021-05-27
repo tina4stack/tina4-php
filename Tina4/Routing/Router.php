@@ -129,7 +129,7 @@ class Router extends Data
         $key = "url_".md5($url);
 
         $response = (new Cache())->get($key);
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && strpos($response["fileName"], ".twig") !== false)
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && (strpos($response["fileName"], ".twig") !== false || strpos($response["fileName"], "/public/") !== false))
         {
             return null;
         }
