@@ -44,7 +44,6 @@ class Router extends Data
             Debug::message("Got cached result for $url", TINA4_LOG_DEBUG);
             return new RouterResponse($cacheResult["content"], $cacheResult["httpCode"], $cacheResult["headers"]);
         }
-
         Debug::message("{$method} - {$url}", TINA4_LOG_DEBUG);
         //Clean the URL
 
@@ -65,8 +64,9 @@ class Router extends Data
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
-
-                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+                if ($url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
+                    $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+                }
                 return $routerResponse;
             }
         }
