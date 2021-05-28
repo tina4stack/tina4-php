@@ -32,19 +32,18 @@ class Router extends Data
      */
     public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
     {
+
         $this->config = $config;
         if ($url === ""){
             return null;
         }
 
-
+        $url = $this->cleanURL($url);
         $cacheResult = $this->getCacheResponse($url);
-        if ($cacheResult !== null){
+        if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create"){
             Debug::message("Got cached result for $url", TINA4_LOG_DEBUG);
             return new RouterResponse($cacheResult["content"], $cacheResult["httpCode"], $cacheResult["headers"]);
         }
-
-        $url = $this->cleanURL($url);
         Debug::message("{$method} - {$url}", TINA4_LOG_DEBUG);
         //Clean the URL
 
@@ -65,7 +64,9 @@ class Router extends Data
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
-                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+                if (defined("TINA4_CACHED_ROUTES") && strpos(print_r (TINA4_CACHED_ROUTES,1), $url) !== false) {
+                    $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+                }
                 return $routerResponse;
             }
         }
@@ -81,6 +82,9 @@ class Router extends Data
         //THIRD ROUTING
         if ($routerResponse = $this->handleRoutes($method, $url))
         {
+            if (defined("TINA4_CACHED_ROUTES") && strpos(print_r (TINA4_CACHED_ROUTES,1), $url) !== false) {
+                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, "");
+            }
             return $routerResponse;
         }
 
@@ -113,9 +117,11 @@ class Router extends Data
     {
         global $cache;
         $key = "url_".md5($url);
-
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG &&  (strpos($url, ".twig") !== false || strpos($url, "/public/") !== false))
+        {
+            return false;
+        }
         return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
-        return true;
     }
 
     /**
@@ -129,7 +135,7 @@ class Router extends Data
         $key = "url_".md5($url);
 
         $response = (new Cache())->get($key);
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && strpos($response["fileName"], ".twig") !== false)
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && (strpos($response["fileName"], ".twig") !== false || strpos($response["fileName"], "/public/") !== false))
         {
             return null;
         }
@@ -198,7 +204,6 @@ class Router extends Data
         } else {
             $httpCode = HTTP_METHOD_NOT_ALLOWED;
         }
-
         return new RouterResponse("", $httpCode, $headers);
     }
 
@@ -209,8 +214,6 @@ class Router extends Data
         $response = new Response();
         $headers = [];
         //iterate through the routes
-
-
 
         foreach ($arrRoutes as $rid => $route) {
             $result = null;
@@ -265,6 +268,8 @@ class Router extends Data
                     $headers[] = $result["contentType"];
                     $content = $result["content"];
                     $httpCode = $result["httpCode"];
+
+
                     return new RouterResponse($content, $httpCode, $headers);
                 }
 

@@ -29,7 +29,7 @@ class Response
             $contentType = TEXT_HTML;
         }
 
-        if (!empty($content) && (is_array($content) || is_object($content))) {
+        if (!empty($content) || (is_array($content) || is_object($content))) {
             switch ($contentType) {
                 case APPLICATION_JSON:
                     $content = json_encode($content, JSON_THROW_ON_ERROR);

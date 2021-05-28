@@ -11,8 +11,8 @@ namespace Tina4;
  */
 class Service extends Data
 {
-    private $sleepTime = 5;
-    private $servicePath;
+    private int $sleepTime = 5;
+    private string $servicePath;
 
     /**
      * Service constructor
@@ -20,8 +20,7 @@ class Service extends Data
     function __construct()
     {
         parent::__construct();
-        $this->servicePath = $_SERVER["DOCUMENT_ROOT"]."cache".DIRECTORY_SEPARATOR."services";
-
+        $this->servicePath = TINA4_DOCUMENT_ROOT."cache".DIRECTORY_SEPARATOR."services";
     }
 
     /**
@@ -40,9 +39,9 @@ class Service extends Data
 
     /**
      * Add process to the list to be run
-     * @param Process $process
+     * @param string $name
      */
-    public function removeProcess($name) {
+    public function removeProcess(string $name) {
         if (file_exists($this->servicePath)) {
             $services = unserialize(file_get_contents($this->servicePath));
         } else {
@@ -72,7 +71,9 @@ class Service extends Data
      * Sleep time between each run
      * @return int
      */
-    public function getSleepTime() {
+    public function getSleepTime(): int
+    {
+        \Tina4\Debug::message("Process Sleep Time: {$this->sleepTime}", TINA4_LOG_DEBUG);
         return $this->sleepTime;
     }
 }

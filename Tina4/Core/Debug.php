@@ -227,7 +227,7 @@ class Debug implements \Psr\Log\LoggerInterface
      * @param string $errorFile
      * @param string $errorLine
      */
-    public static function errorHandler ($errorNo="",$errorString="",$errorFile="",$errorLine=""): void
+    public static function errorHandler (string $errorNo="", string $errorString="", string $errorFile="", string $errorLine=""): void
     {
         self::message($errorString. "\n[".$errorFile.":".$errorLine."]", TINA4_LOG_ERROR );
         self::$errors[] = ["time" => date("Y-m-d H:i:s"), "message" => "<span style=\"color:red\">Error($errorNo):</span> ".$errorString, "line" => $errorLine, "file" => $errorFile, "codeSnippet" => self::getCodeSnippet($errorFile, $errorLine)];
@@ -267,7 +267,6 @@ class Debug implements \Psr\Log\LoggerInterface
 
         }
 
-        $codeContent = implode(PHP_EOL, $codeContent);
-        return $codeContent;
+        return implode(PHP_EOL, $codeContent);
     }
 }
