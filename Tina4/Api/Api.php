@@ -67,11 +67,11 @@ class Api
             }
             $curlResult = curl_exec($curlRequest); //execute the Curl request
             $curlInfo = curl_getinfo($curlRequest); //Assign the response to a variable
-
+            $curlError = curl_error($curlRequest);
             curl_close($curlRequest);
             //If an error
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
-                return ["error" => $curlInfo, "body" => json_decode($curlResult, false)];
+                return ["error" => $curlError, "info" => $curlInfo, "body" => json_decode($curlResult, false)];
             } else {
                 return json_decode($curlResult, true);
             }
