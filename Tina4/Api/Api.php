@@ -67,6 +67,7 @@ class Api
             }
             $curlResult = curl_exec($curlRequest); //execute the Curl request
             $curlInfo = curl_getinfo($curlRequest); //Assign the response to a variable
+
             curl_close($curlRequest);
             //If an error
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
