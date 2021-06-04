@@ -1,7 +1,7 @@
 #Services
 
 ```php
-class TestService extends \Tina4\Process implements \Tina4\ProcessInterface
+class TestProcess extends \Tina4\Process implements \Tina4\ProcessInterface
 {
     public string $name = "My Service";
 
@@ -18,6 +18,7 @@ class TestService extends \Tina4\Process implements \Tina4\ProcessInterface
     }
 }
 
+$service = new \Tina4\Service();
+$service->addProcess(new TestProcess("My Process"));
 
-\Tina4\Service
 ```

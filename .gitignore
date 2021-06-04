@@ -29,3 +29,4 @@ test.php
 /src/app/TestClass.php
 /src/app/routes/test.php
 /src/services/TestService.php
+/src/services/TestProcess.php
