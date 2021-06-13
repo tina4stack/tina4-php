@@ -97,17 +97,17 @@ Example of running composer
 
 Install
 ```
-docker run -v $(pwd):/app tina4php composer install --working-dir /app
+docker run -v $(pwd):/app tina4php composer install
 ```
 Upgrade
 ```
-docker run -v $(pwd):/app tina4php composer upgrade --working-dir /app
+docker run -v $(pwd):/app tina4php composer upgrade
 ```
 
 
 Example of running a webservice on port 8080
 ```
-docker run -v $(pwd):/app -p 8080:8080 -w /app tina4php php -S 0.0.0.0:8080 index.php
+docker run -v $(pwd):/app -p 8080:8080 tina4php composer start 8080
 ```
 
 
