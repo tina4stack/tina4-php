@@ -99,6 +99,12 @@ class Debug implements \Psr\Log\LoggerInterface
             if (strpos($debugLevel, "all") !== false || strpos($debugLevel, $level) !== false) {
                 $output = $color . strtoupper($level) . $this->colorReset . ":" . $message;
                 error_log($output);
+                if (!file_exists(TINA4_DOCUMENT_ROOT. "/log"))
+                {
+                    if (!mkdir($concurrentDirectory = TINA4_DOCUMENT_ROOT . "/log", 0777, true) && !is_dir($concurrentDirectory)) {
+                        throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                    }
+                }
                 file_put_contents(TINA4_DOCUMENT_ROOT. "/log/debug.log", date("Y-m-d H:i:s: ").$message.PHP_EOL, FILE_APPEND);
             }
 

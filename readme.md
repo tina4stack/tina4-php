@@ -89,27 +89,28 @@ php bin\tina4
 
 This requires you to have your docker environment already running
 
+We assume /app is the internal path for the current project
+*Installing*
 ```
-docker build -t tina4php .
+docker run -v $(pwd):/app tina4stack/php:latest composer require tina4stack/tina4php
 ```
-
-Example of running composer
-
-Install
 ```
-docker run -v $(pwd):/app tina4php composer install
+docker run -v $(pwd):/app tina4stack/php:latest composer exec tina4 initialise:run
 ```
-Upgrade
+*Upgrading*
 ```
-docker run -v $(pwd):/app tina4php composer upgrade
+docker run -v $(pwd):/app -p7145:7145 tina4stack/php:latest composer upgrade 
 ```
 
+*Running*
 
-Example of running a webservice on port 8080
 ```
-docker run -v $(pwd):/app -p 8080:8080 tina4php composer start 8080
+docker run -v $(pwd):/app -p7145:7145 tina4stack/php:latest composer start 
 ```
-
+On a different port like 8080 for example
+```
+docker run -v $(pwd):/app --p8080:8080 tina4stack/php:latest composer start 8080
+```
 
 
 ### Quick Reference ###
