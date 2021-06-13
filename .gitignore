@@ -33,3 +33,4 @@ test.php
 test.db
 /src/templates/api/tests/
 /src/templates/test/
+/log/debug.log
