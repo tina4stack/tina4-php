@@ -279,6 +279,7 @@ function add ($a,$b) {
 
 ### Change Log
 ```
+2021-06-13 Added docker support and better logging
 2021-03-21 Refactored routing, added better debugging, release candidate now in action
 2021-03-05 Added foreign table support to ORM, minor fixes and improvements to testing & annotations, auto migrations on objects
 2021-02-21 Added ability to configure database connections via vendor/tina4/bin
