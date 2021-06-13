@@ -10,6 +10,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*June 13, 2021* - Adding docker support
+
 *May 27, 2021* - Some fixes on caching, introduced TINA4_CACHED_ROUTES
 
 *March 21, 2021* - This marks the release of a major update to the routing, it has been fully refactored and optimized.  Also updates to the debugging and modules make things much better for development.
@@ -33,7 +35,7 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 *PHP 8.0 is not a stable candidate yet, for example some database functionlity is not completely supported*
 
-- Install PHP7.1 > make sure the following extensions are enabled php_fileinfo, mbstring, curl.
+- Install PHP7.3 >  make sure the following extensions are enabled php_fileinfo, mbstring, curl.
 - Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly  
 - Create a project folder where you want to work
 - In your project folder terminal / console
@@ -57,6 +59,7 @@ If you want to run the webservice on a specific port
 ```
 composer start 8080
 ```
+
 
 #### Run tests
 ```bash
@@ -82,6 +85,30 @@ On Windows do the following:
 php bin\tina4
 ```
 
+### Working with Docker ###
+
+This requires you to have your docker environment already running
+
+```
+docker build -t tina4php .
+```
+
+Example of running composer
+
+Install
+```
+docker run -v $(pwd):/app tina4php composer install --working-dir /app
+```
+Upgrade
+```
+docker run -v $(pwd):/app tina4php composer upgrade --working-dir /app
+```
+
+
+Example of running a webservice on port 8080
+```
+docker run -v $(pwd):/app -p 8080:8080 -w /app tina4php php -S 0.0.0.0:8080 index.php
+```
 
 
 

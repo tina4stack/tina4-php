@@ -368,7 +368,7 @@ class [CLASS_NAME] extends \Tina4\ORM
 
 $menus[] = ["id" => 5, "name" => "webservice", "show" => false, "description" => "Runs webservice", "commandLine" => ["options" => ["run"]], "menuCode" => static function ($index, $input) use ($argv) {
     $port = $argv[2] ?? "7145";
-    `php -S localhost:{$port} index.php`;
+    `php -S 0.0.0.0:{$port} index.php`;
 }];
 
 /**
