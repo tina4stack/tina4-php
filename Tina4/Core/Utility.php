@@ -1,4 +1,9 @@
 <?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
 use Coyl\Git\Git;
@@ -10,11 +15,6 @@ use Twig\TwigFilter;
 use Twig\TwigFunction;
 
 /**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
- * License: MIT https://opensource.org/licenses/MIT
- *
- * Trait Utility
  * A bunch of useful methods used across different classes in the library
  * @package Tina4
  */

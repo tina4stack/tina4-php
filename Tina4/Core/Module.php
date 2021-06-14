@@ -1,12 +1,13 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
- * Class Module
+ */
+
+namespace Tina4;
+
+/**
  * The back bone of extending and incorporating Tina4 libraries together
  * @package Tina4
  */
@@ -68,6 +69,7 @@ class Module
      * Add Path
      * @param $pathType
      * @param $path
+     * @param $baseName
      */
     public static function addPath($pathType, $path, $baseName): void
     {
@@ -231,6 +233,10 @@ class Module
         return $routes;
     }
 
+    /**
+     * Gets the configs for the modules
+     * @return array
+     */
     public static function getModuleConfigs(): array
     {
         global $_TINA4_MODULES;
@@ -248,5 +254,4 @@ class Module
         }
         return $configs;
     }
-
 }

@@ -1,11 +1,13 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
+ */
+
+namespace Tina4;
+
+/**
  * Interface DataBase and future database abstractions
  * @package Tina4
  */

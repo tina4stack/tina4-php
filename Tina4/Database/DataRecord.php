@@ -17,8 +17,8 @@ class DataRecord implements JsonSerializable
 {
     use Utility;
 
-    private ?object $original;
-    private ?array $fieldMapping;
+    private $original;
+    private $fieldMapping;
 
     /**
      * DataRecord constructor Converts array to object

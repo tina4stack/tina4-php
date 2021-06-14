@@ -87,5 +87,4 @@ function redirect(string $url, $statusCode = 303)
         header('Location: ' . $url, true, $statusCode);
         die();
     }
-
 }

@@ -1,14 +1,15 @@
 <?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
+
 use Composer\Autoload\ClassLoader;
 
 /**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
- * License: MIT https://opensource.org/licenses/MIT
- *
- * Class Data
  * Extending this class makes any class "data" aware
  * @package Tina4
  */
@@ -16,11 +17,11 @@ class Data
 {
     use Utility;
 
-    public ?object $DBA;
-    public ?object $cache;
-    public string  $projectRoot;
-    public string  $documentRoot;
-    public string  $subFolder;
+    public $DBA;
+    public $cache;
+    public $projectRoot;
+    public $documentRoot;
+    public $subFolder;
 
     /**
      * Data constructor

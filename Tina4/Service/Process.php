@@ -12,7 +12,7 @@ namespace Tina4;
  */
 class Process implements ProcessInterface
 {
-    public string $name;
+    public $name;
 
     /**
      * Process constructor.

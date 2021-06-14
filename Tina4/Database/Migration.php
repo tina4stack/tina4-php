@@ -22,17 +22,17 @@ class Migration extends Data
      * The database connection
      * @var DataBase
      */
-    public ?object $DBA = null;
+    public $DBA = null;
     /**
      * The migration path
      * @var String
      */
-    private string $migrationPath = "migrations";
+    private $migrationPath = "migrations";
     /**
      * The delimiter
      * @var String
      */
-    private string $delim = ";";
+    private $delim = ";";
 
     /**
      * Constructor for Migrations

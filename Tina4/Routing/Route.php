@@ -15,7 +15,7 @@ class Route implements RouteCore
     /**
      * @var string Type of method e.g. ANY, POST, DELETE, etc
      */
-    public static string $method;
+    public static $method;
 
     /**
      * Clean URL by splitting string at "?" to get actual URL

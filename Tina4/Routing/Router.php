@@ -15,12 +15,12 @@ class Router extends Data
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
-    protected string $pathMatchExpression = "/([a-zA-Z0-9\\%\\ \\! \\-\\}\\{\\.\\_]*)\\//";
-    private array $params;
+    protected $pathMatchExpression = "/([a-zA-Z0-9\\%\\ \\! \\-\\}\\{\\.\\_]*)\\//";
+    private $params;
     /**
      * @var Config|null
      */
-    private ?Config $config;
+    private $config;
 
     /**
      * Resolves to a route that is registered in code and returns the result from that code

@@ -11,8 +11,8 @@ namespace Tina4;
  */
 class DataError
 {
-    private string $errorCode;
-    private string $errorMessage;
+    private $errorCode;
+    private $errorMessage;
 
     /**
      * DataError constructor.

@@ -12,11 +12,11 @@ namespace Tina4;
 class Request
 {
     public $data = null;
-    public ?array $params = null;
-    public ?array $inlineParams = null;
-    public ?array $server = null;
-    public ?array $session = null;
-    public ?array $files = null;
+    public $params = null;
+    public $inlineParams = null;
+    public $server = null;
+    public $session = null;
+    public $files = null;
 
     public function __construct($rawRequest)
     {

@@ -12,19 +12,19 @@ namespace Tina4;
  */
 class ParseTemplate
 {
-    private string $root;
-    private string $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";
-    private string $callRegEx = "/\\{\\{call:(.*)\\}\\}/i";
-    private string $objectRegEx = "/\\{\\{(.*)\\:(.*)\\}\\}/i";
-    private string $varRegEx = "";
-    private array $locations = ["public", "templates"];
-    private string $subFolder;
+    private $root;
+    private $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";
+    private $callRegEx = "/\\{\\{call:(.*)\\}\\}/i";
+    private $objectRegEx = "/\\{\\{(.*)\\:(.*)\\}\\}/i";
+    private $varRegEx = "";
+    private $locations = ["public", "templates"];
+    private $subFolder;
     private $definedVariables;
-    private array $evals = [];
-    public string $content;
-    public int $httpCode = HTTP_OK;
-    public array $headers = [];
-    public string $fileName;
+    private $evals = [];
+    public $content;
+    public $httpCode = HTTP_OK;
+    public $headers = [];
+    public $fileName;
 
 
 

@@ -1,32 +1,36 @@
 <?php
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
-
 
 use Psr\Log\LogLevel;
 use Twig\Error\LoaderError;
 
-
 /**
+ * Debug class to make messages in the console
  * @property Debug logger
+ * @package Tina4
  */
 class Debug implements \Psr\Log\LoggerInterface
 {
     use Utility;
 
-    public static array $errors = [];
+    public static $errors = [];
 
-    public string $colorRed = "\e[31;1m";
-    public string $colorOrange = "\e[33;1m";
-    public string $colorGreen = "\e[32;1m";
-    public string $colorCyan = "\e[36;1m";
-    public string $colorYellow = "\e[0;33m'";
-    public string $colorReset = "\e[0m";
+    public $colorRed = "\e[31;1m";
+    public $colorOrange = "\e[33;1m";
+    public $colorGreen = "\e[32;1m";
+    public $colorCyan = "\e[36;1m";
+    public $colorYellow = "\e[0;33m'";
+    public $colorReset = "\e[0m";
 
     public static $logger;
-    public static array $logLevel = [];
-    public static array $context = [];
+    public static $logLevel = [];
+    public static $context = [];
 
     public function emergency($message, array $context = []): void
     {

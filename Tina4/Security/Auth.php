@@ -23,22 +23,22 @@ class Auth extends Data
      * The path where the website is served from
      * @var string
      */
-    public string $documentRoot;
+    public $documentRoot;
     /**
      * Is the authentication configured, so it only runs once in a page load
      * @var bool
      */
-    public bool $configured = false;
+    public $configured = false;
     /**
      * Private key read from the secrets folder
      * @var false|string
      */
-    protected string $privateKey;
+    protected $privateKey;
     /**
      * Public key read from the secrets folder
      * @var false|string
      */
-    protected string $publicKey;
+    protected $publicKey;
 
     /**
      * The auth constructor looks for a secrets folder and tries to generate keys for the site

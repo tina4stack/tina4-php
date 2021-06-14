@@ -1,12 +1,13 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
- * Class Env
+ */
+
+namespace Tina4;
+
+/**
  * Reads a .env file or .env.{environment} file for settings that should not be committed up with the repository
  * @package Tina4
  */

@@ -7,42 +7,92 @@ use Tina4\HTMLElement;
 use Tina4\Module;
 
 //DEBUG & ERROR LOG CONSTANTS
-define("TINA4_LOG_EMERGENCY","emergency");
-define("TINA4_LOG_ALERT","alert");
-define("TINA4_LOG_CRITICAL","critical");
-define("TINA4_LOG_ERROR","error");
-define("TINA4_LOG_WARNING","warning");
-define("TINA4_LOG_NOTICE","notice");
-define("TINA4_LOG_INFO","info");
-define("TINA4_LOG_DEBUG","debug");
-define("TINA4_LOG_ALL","all");
+const TINA4_LOG_EMERGENCY = "emergency";
+const TINA4_LOG_ALERT = "alert";
+const TINA4_LOG_CRITICAL = "critical";
+const TINA4_LOG_ERROR = "error";
+const TINA4_LOG_WARNING = "warning";
+const TINA4_LOG_NOTICE = "notice";
+const TINA4_LOG_INFO = "info";
+const TINA4_LOG_DEBUG = "debug";
+const TINA4_LOG_ALL = "all";
 
 //TINA4 CONSTANTS
-if (!defined("TINA4_DATABASE_TYPES")) define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"]);
+const TINA4_DATABASE_TYPES = ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"];
 
+if (!defined("HTTP_OK")) {
+    define("HTTP_OK", 200);
+}
 
-if (!defined("HTTP_OK")) define("HTTP_OK", 200);
-if (!defined("HTTP_CREATED")) define("HTTP_CREATED", 201);
-if (!defined("HTTP_NO_CONTENT")) define("HTTP_NO_CONTENT", 204);
-if (!defined("HTTP_PARTIAL_CONTENT")) define("HTTP_PARTIAL_CONTENT", 206);
-if (!defined("HTTP_BAD_REQUEST")) define("HTTP_BAD_REQUEST", 400);
-if (!defined("HTTP_UNAUTHORIZED")) define("HTTP_UNAUTHORIZED", 401);
-if (!defined("HTTP_FORBIDDEN")) define("HTTP_FORBIDDEN", 403);
-if (!defined("HTTP_NOT_FOUND")) define("HTTP_NOT_FOUND", 404);
-if (!defined("HTTP_REQUEST_RANGE_NOT_SATISFIABLE")) define("HTTP_REQUEST_RANGE_NOT_SATISFIABLE", 416);
-if (!defined("HTTP_METHOD_NOT_ALLOWED")) define("HTTP_METHOD_NOT_ALLOWED", 405);
-if (!defined("HTTP_RESOURCE_CONFLICT")) define("HTTP_RESOURCE_CONFLICT", 409);
-if (!defined("HTTP_MOVED_PERMANENTLY")) define("HTTP_MOVED_PERMANENTLY", 301);
-if (!defined("HTTP_INTERNAL_SERVER_ERROR")) define("HTTP_INTERNAL_SERVER_ERROR", 500);
-if (!defined("HTTP_NOT_IMPLEMENTED")) define("HTTP_NOT_IMPLEMENTED", 501);
+if (!defined("HTTP_CREATED")) {
+    define("HTTP_CREATED", 201);
+}
 
+if (!defined("HTTP_NO_CONTENT")) {
+    define("HTTP_NO_CONTENT", 204);
+}
 
-if (!defined("TINA4_POST")) define("TINA4_POST", "POST");
-if (!defined("TINA4_GET")) define("TINA4_GET", "GET");
-if (!defined("TINA4_ANY")) define("TINA4_ANY", "ANY");
-if (!defined("TINA4_PUT")) define("TINA4_PUT", "PUT");
-if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
-if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
+if (!defined("HTTP_PARTIAL_CONTENT"))
+{
+    define("HTTP_PARTIAL_CONTENT", 206);
+}
+
+if (!defined("HTTP_BAD_REQUEST"))
+{
+    define("HTTP_BAD_REQUEST", 400);
+}
+
+if (!defined("HTTP_UNAUTHORIZED"))
+{
+    define("HTTP_UNAUTHORIZED", 401);
+}
+
+if (!defined("HTTP_FORBIDDEN"))
+{
+    define("HTTP_FORBIDDEN", 403);
+}
+
+if (!defined("HTTP_NOT_FOUND"))
+{
+    define("HTTP_NOT_FOUND", 404);
+}
+
+if (!defined("HTTP_REQUEST_RANGE_NOT_SATISFIABLE"))
+{
+    define("HTTP_REQUEST_RANGE_NOT_SATISFIABLE", 416);
+}
+
+if (!defined("HTTP_METHOD_NOT_ALLOWED"))
+{
+    define("HTTP_METHOD_NOT_ALLOWED", 405);
+}
+
+if (!defined("HTTP_RESOURCE_CONFLICT"))
+{
+    define("HTTP_RESOURCE_CONFLICT", 409);
+}
+
+if (!defined("HTTP_MOVED_PERMANENTLY"))
+{
+    define("HTTP_MOVED_PERMANENTLY", 301);
+}
+
+if (!defined("HTTP_INTERNAL_SERVER_ERROR"))
+{
+    define("HTTP_INTERNAL_SERVER_ERROR", 500);
+}
+
+if (!defined("HTTP_NOT_IMPLEMENTED"))
+{
+    define("HTTP_NOT_IMPLEMENTED", 501);
+}
+
+const TINA4_POST = "POST";
+const TINA4_GET = "GET";
+const TINA4_ANY = "ANY";
+const TINA4_PUT = "PUT";
+const TINA4_PATCH = "PATCH";
+const TINA4_DELETE = "DELETE";
 
 
 if (!defined("TEXT_HTML")) define("TEXT_HTML", "text/html");
@@ -180,11 +230,22 @@ function autoLoadFolders($documentRoot, $location, $class) {
     }
 }
 
+/**
+ * Handle exceptions
+ * @param $exception
+ */
 function tina4_exception_handler ($exception)
 {
     \Tina4\Debug::exceptionHandler($exception);
 }
 
+/**
+ * Handle Errors
+ * @param string $errorNo
+ * @param string $errorString
+ * @param string $errorFile
+ * @param string $errorLine
+ */
 function tina4_error_handler ($errorNo="",$errorString="",$errorFile="",$errorLine="")
 {
     \Tina4\Debug::errorHandler($errorNo,$errorString,$errorFile,$errorLine);
@@ -300,7 +361,8 @@ function _a (...$elements) {
  * @tests tina4
  *   assert ("test")."" === "<abbr>test</abbr>","Abbr tag is not working"
  */
-function _abbr (...$elements) {
+function _abbr (...$elements): HTMLElement
+{
     return new HTMLElement(":abbr", $elements);
 }
 /**

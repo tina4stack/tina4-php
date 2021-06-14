@@ -1,29 +1,30 @@
 <?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
 
 /**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
- * License: MIT https://opensource.org/licenses/MIT
- *
- * Class Test
+ * Testing class for Tina4 library which reads tests based on annotations
  * @package Tina4
  */
 class Test
 {
     use Utility;
-    public string $colorRed = "\e[31;1m";
-    public string $colorOrange = "\e[33;1m";
-    public string $colorGreen = "\e[32;1m";
-    public string $colorCyan = "\e[36;1m";
-    public string $colorYellow = "\e[0;33m'";
-    public string $colorReset = "\e[0m";
+    public $colorRed = "\e[31;1m";
+    public $colorOrange = "\e[33;1m";
+    public $colorGreen = "\e[32;1m";
+    public $colorCyan = "\e[36;1m";
+    public $colorYellow = "\e[0;33m'";
+    public $colorReset = "\e[0m";
 
-    public ?object $testClass = null;
-    public string $lastClass = "";
+    public $testClass = null;
+    public $lastClass = "";
 
-    public ?string $rootPath;
+    public $rootPath;
 
     public function __construct (?string $rootPath)
     {

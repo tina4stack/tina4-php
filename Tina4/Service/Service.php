@@ -11,8 +11,8 @@ namespace Tina4;
  */
 class Service extends Data
 {
-    private int $sleepTime = 5;
-    private string $servicePath;
+    private $sleepTime = 5;
+    private $servicePath;
 
     /**
      * Service constructor

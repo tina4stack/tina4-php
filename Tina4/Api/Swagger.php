@@ -1,21 +1,22 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
- * @todo This is a work in progress and may contain many gaps
- * Class Swagger
- * Attempts to document in OpenAPI format and return a JSON file
+ */
+
+namespace Tina4;
+
+/**
+ * Document methods in OpenAPI format using annotations and return a JSON file
  * @package Tina4
+ * @todo This is a work in progress and may contain many gaps
  */
 class Swagger implements \JsonSerializable
 {
-    public string $root;
-    public string $subFolder;
-    public array $swagger = [];
+    public $root;
+    public $subFolder;
+    public $swagger = [];
 
     /**
      * Swagger constructor.

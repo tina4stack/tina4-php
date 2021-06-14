@@ -1,19 +1,20 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
- * Class Api
- * This is supposed to make it easier to consume REST API interfaces with little code
+ */
+
+namespace Tina4;
+
+/**
+ * Consume REST API interfaces with little code
  * @package Tina4
  */
 class Api
 {
-    public ?string $baseURL;
-    public ?string $authHeader;
+    public $baseURL;
+    public $authHeader;
 
     /**
      * API constructor.

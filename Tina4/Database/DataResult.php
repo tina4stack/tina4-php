@@ -23,22 +23,22 @@ class DataResult implements JsonSerializable
     /**
      * @var array Fields in the table and their types
      */
-    public ?array $fields;
+    public $fields;
 
     /**
      * @var integer Number of records
      */
-    public int $noOfRecords;
+    public $noOfRecords;
 
     /**
      * @var integer Data row offset
      */
-    public int $offSet;
+    public $offSet;
 
     /**
      * @var DataError Database error
      */
-    public ?DataError $error;
+    public $error;
 
     /**
      * DataResult constructor.

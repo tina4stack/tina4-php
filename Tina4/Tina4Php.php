@@ -8,7 +8,7 @@ use Twig\Error\LoaderError;
 
 class Tina4Php extends Data
 {
-    public ?Config $config;
+    public $config;
 
     public function __construct(?\Tina4\Config $config = null)
     {
