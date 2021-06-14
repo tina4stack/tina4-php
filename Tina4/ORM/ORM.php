@@ -395,10 +395,11 @@ class ORM implements \JsonSerializable
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
 
         //See if we can get the fetch from the cached data
+        $key = "orm" . md5($sqlCheck);
 
-        $key = "orm".md5($sqlCheck);
-        (new Cache())->set($key, null, 0);
-
+        if (TINA4_ORM_CACHE) {
+            (new Cache())->set($key, null, 0);
+        }
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             Debug::message("TINA4: check " . $sqlCheck, TINA4_LOG_DEBUG);
         }

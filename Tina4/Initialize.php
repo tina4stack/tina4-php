@@ -45,7 +45,7 @@ if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
 if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
 
 
-if(!defined("TINA4_ORM_CACHE")) define("TINA4_ORM_CACHE",false);
+if (!defined("TINA4_ORM_CACHE")) define("TINA4_ORM_CACHE", true);
 
 
 if (!defined("TEXT_HTML")) define("TEXT_HTML", "text/html");
