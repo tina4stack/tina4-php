@@ -13,6 +13,9 @@ class Tina4Php extends Data
     public function __construct(?\Tina4\Config $config = null)
     {
         parent::__construct();
+        if (!isset($config)) {
+            $config = new \Tina4\Config();
+        }
         //Get all the include folders
         if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
@@ -82,8 +85,6 @@ class Tina4Php extends Data
 
         //Add built in Tina4 functions
         $config->addTwigFunction("dateCompare", function ($dateA, $operator, $dateB="now"){
-            global $DBA;
-
             $dateA = str_replace("/", ".", $dateA);
 
             $dateA = strtotime($dateA);

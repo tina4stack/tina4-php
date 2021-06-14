@@ -34,9 +34,15 @@ class Data
 
             $this->projectRoot = dirname(dirname(__DIR__ . ".." . DIRECTORY_SEPARATOR) . ".." . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
-            $this->documentRoot = str_replace("vendor", "", dirname($vendorDir . ".." . DIRECTORY_SEPARATOR));
+            $vendorFolder = explode("vendor", $this->projectRoot);
+            if (count($vendorFolder) > 0) {
+                $this->documentRoot = $vendorFolder[0];
+                $this->subFolder = $this->getSubFolder($vendorFolder[0]);
+            } else {
+                $this->documentRoot = str_replace("vendor", "", dirname($vendorDir . ".." . DIRECTORY_SEPARATOR));
+                $this->subFolder = $this->getSubFolder($this->documentRoot);
+            }
 
-            $this->subFolder = $this->getSubFolder($this->documentRoot);
             define("TINA4_DOCUMENT_ROOT", $this->documentRoot);
             define("TINA4_PROJECT_ROOT", $this->projectRoot);
         } else {
