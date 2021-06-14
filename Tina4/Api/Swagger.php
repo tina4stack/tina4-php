@@ -53,7 +53,10 @@ class Swagger implements \JsonSerializable
                 $reflection = new \ReflectionFunction($route["function"]);
             }
 
+
             $doc = $reflection->getDocComment();
+
+
             preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
             $summary = "None";

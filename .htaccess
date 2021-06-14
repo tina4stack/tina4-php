@@ -4,8 +4,14 @@ RewriteEngine On
 # If you need to use the `RewriteBase` directive, it should be the
 # absolute physical path to the directory that contains this htaccess file.
 
-#Block access to .env
+#Block access to .env and other files
 <Files ~ "\.(env|json|config.js|md|gitignore|gitattributes|lock)$">
+    Order allow,deny
+    Deny from all
+</Files>
+
+#Block access to database & log folders if they exist
+<Files ~ "\(database|log)$">
     Order allow,deny
     Deny from all
 </Files>

@@ -10,6 +10,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*June 13, 2021* - Adding docker support
+
 *May 27, 2021* - Some fixes on caching, introduced TINA4_CACHED_ROUTES
 
 *March 21, 2021* - This marks the release of a major update to the routing, it has been fully refactored and optimized.  Also updates to the debugging and modules make things much better for development.
@@ -33,7 +35,7 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 *PHP 8.0 is not a stable candidate yet, for example some database functionlity is not completely supported*
 
-- Install PHP7.1 > make sure the following extensions are enabled php_fileinfo, mbstring, curl.
+- Install PHP7.3 >  make sure the following extensions are enabled php_fileinfo, mbstring, curl.
 - Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly  
 - Create a project folder where you want to work
 - In your project folder terminal / console
@@ -57,6 +59,7 @@ If you want to run the webservice on a specific port
 ```
 composer start 8080
 ```
+
 
 #### Run tests
 ```bash
@@ -82,7 +85,32 @@ On Windows do the following:
 php bin\tina4
 ```
 
+### Working with Docker ###
 
+This requires you to have your docker environment already running
+
+We assume /app is the internal path for the current project
+*Installing*
+```
+docker run -v $(pwd):/app tina4stack/php:latest composer require tina4stack/tina4php
+```
+```
+docker run -v $(pwd):/app tina4stack/php:latest composer exec tina4 initialise:run
+```
+*Upgrading*
+```
+docker run -v $(pwd):/app -p7145:7145 tina4stack/php:latest composer upgrade 
+```
+
+*Running*
+
+```
+docker run -v $(pwd):/app -p7145:7145 tina4stack/php:latest composer start 
+```
+On a different port like 8080 for example
+```
+docker run -v $(pwd):/app --p8080:8080 tina4stack/php:latest composer start 8080
+```
 
 
 ### Quick Reference ###
@@ -251,6 +279,7 @@ function add ($a,$b) {
 
 ### Change Log
 ```
+2021-06-13 Added docker support and better logging
 2021-03-21 Refactored routing, added better debugging, release candidate now in action
 2021-03-05 Added foreign table support to ORM, minor fixes and improvements to testing & annotations, auto migrations on objects
 2021-02-21 Added ability to configure database connections via vendor/tina4/bin

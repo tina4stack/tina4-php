@@ -30,4 +30,8 @@ test.php
 /src/app/routes/test.php
 /src/services/TestService.php
 /src/services/TestProcess.php
+test.db
+/src/templates/api/tests/
+/src/templates/test/
+/log/debug.log
 /subfolder/
