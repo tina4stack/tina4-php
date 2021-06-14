@@ -927,13 +927,15 @@ class ORM implements \JsonSerializable
 
         $key = "orm".md5($sqlStatement);
 
-        if ($cacheData = (new Cache())->get($key)) {
+        if ($cacheData = (new Cache())->get($key) && TINA4_ORM_CACHE) {
             Debug::message("Loaded {$sqlStatement} from cache", TINA4_LOG_DEBUG);
             $fetchData = $cacheData;
         } else {
-            Debug::message("Creating {$sqlStatement} into cache", TINA4_LOG_DEBUG);
             $fetchData = $this->DBA->fetch($sqlStatement, 1, 0, $fieldMapping)->asObject();
-            (new Cache())->set($key, $fetchData);
+            if (TINA4_ORM_CACHE) {
+                Debug::message("Creating {$sqlStatement} into cache", TINA4_LOG_DEBUG);
+                (new Cache())->set($key, $fetchData);
+            }
         }
 
         if (!empty($fetchData)) {
