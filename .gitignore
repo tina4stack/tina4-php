@@ -36,3 +36,4 @@ test.db
 /log/debug.log
 /subfolder/
 /.phpdoc/
+/phpmetrics/

@@ -14,8 +14,11 @@ namespace Tina4;
  */
 class Cache
 {
-    protected $cache;
+    private $cache;
 
+    /**
+     * Cache constructor which sets the cache variable based on the global instance
+     */
     public function __construct()
     {
         global $cache;
@@ -24,14 +27,14 @@ class Cache
 
     /**
      * Sets a piece of data into cache, returns the cached key for further manipulation
-     * @param $keyName
-     * @param $value
+     * @param string $keyName
+     * @param mixed $value
      * @param int $expires
      * @return bool
      * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
      * @throws \Psr\Cache\InvalidArgumentException
      */
-    public function set($keyName, $value, $expires = 60): bool
+    final public function set(string $keyName, $value, int $expires = 60): bool
     {
         $cachedString = $this->cache->getItem($keyName);
         $cachedString->set($value)->expiresAfter($expires);
@@ -41,7 +44,7 @@ class Cache
 
     /**
      * Gets data from the cache, returns null if nothing is found
-     * @param $keyName
+     * @param string $keyName
      * @return mixed
      * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
      * @throws \Psr\Cache\InvalidArgumentException
@@ -49,7 +52,7 @@ class Cache
      *   assert $this->set("test", "test") !== null, "Could not set cache value"
      *   assert $this->get("test") === "test", "Could not get cache value"
      */
-    public function get($keyName)
+    final public function get(string $keyName)
     {
         $cachedString = $this->cache->getItem($keyName);
         $cachedData = $cachedString->get();

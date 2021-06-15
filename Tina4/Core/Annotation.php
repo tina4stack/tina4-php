@@ -16,11 +16,11 @@ class Annotation
 {
     /**
      * Gets all the annotations from the code based on a filter
-     * @param string $annotationName
-     * @return array
+     * @param string $annotationName Filter for the annotations
+     * @return array An array of the annotations
      * @throws \ReflectionException
      */
-    public function get($annotationName = ""): array
+    final public function get(string $annotationName = ""): array
     {
         $functions = $this->getFunctions();
         asort($functions);
@@ -44,22 +44,22 @@ class Annotation
 
     /**
      * Gets all the user defined functions
-     * @return array
+     * @return array Array of the defined functions
      * @tests tina4
      *   assert is_object() !== true, "Expects an array"
      */
-    public function getFunctions(): array
+    final public function getFunctions(): array
     {
         return get_defined_functions()["user"];
     }
 
     /**
      * Gets all the classes in the system
-     * @return array
+     * @return array An array of classes
      * @tests tina4
      *   assert is_array() === true, "Expects an array"
      */
-    public function getClasses(): array
+    final public function getClasses(): array
     {
         $classes = get_declared_classes();
         $autoloaderClassName = "";
@@ -78,14 +78,14 @@ class Annotation
 
     /**
      * Gets the annotations for a function
-     * @param $functionName
-     * @param string $annotationName
-     * @return array
+     * @param string $functionName Name of the function for th
+     * @param string $annotationName Name of the annotation
+     * @return array An array of annotations on a function
      * @throws \ReflectionException
      * @tests tina4
      *   assert ("strpos", "param") === [], "Expects value class"
      */
-    public function getFunctionAnnotations($functionName, $annotationName = ""): array
+    final public function getFunctionAnnotations(string $functionName, string $annotationName = ""): array
     {
         $annotations = [];
         $reflection = new \ReflectionFunction($functionName);
@@ -99,13 +99,13 @@ class Annotation
     }
 
     /**
-     * @param $docComment
+     * @param string $docComment
      * @param string $annotationName
-     * @param weird')["param"][0] === "weird", "Expects value of param to be weird"
      * @return array
      * @tests tina4
-     *   assert ('  */
-    public function parseAnnotations($docComment, $annotationName = ""): array
+     *   assert ('weird')["param"][0] === "weird", "Expects value of param to be weird"
+     */
+    final public function parseAnnotations(string $docComment, string $annotationName = ""): array
     {
         //clean *
         $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);
@@ -130,12 +130,12 @@ class Annotation
 
     /**
      * Gets the annotations for a class
-     * @param $className
-     * @param string $annotationName
+     * @param string $className Name of the class to scan for annotations
+     * @param string $annotationName Name of the annotation
      * @return array
      * @throws \ReflectionException
      */
-    public function getClassAnnotations($className, $annotationName = ""): array
+    final public function getClassAnnotations(string $className, string $annotationName = ""): array
     {
         // Check if there are any tests on the Class itself.
         $annotations = [];
