@@ -1,17 +1,21 @@
 <?php
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
-
 
 use Phpfastcache\Helper\CacheConditionalHelper;
 use Twig\Error\LoaderError;
 
+/**
+ * Class Router
+ * @package Tina4
+ */
 class Router extends Data
 {
-
-
-
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
@@ -128,6 +132,8 @@ class Router extends Data
      * Get cache response
      * @param $url
      * @return array|null
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
+     * @throws \Psr\Cache\InvalidArgumentException
      */
     public function getCacheResponse($url): ?array
     {

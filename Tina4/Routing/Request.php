@@ -1,11 +1,11 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
+ */
+namespace Tina4;
+/**
  * Class Request
  * @package Tina4
  */
@@ -39,7 +39,7 @@ class Request
         }
 
         if (!empty($rawRequest)) {
-            $this->data = json_decode($rawRequest, true, 512, JSON_THROW_ON_ERROR);
+            $this->data = json_decode($rawRequest, true, 512);
             //pass raw request anyway
             if ($this->data === null && $rawRequest !== '') {
                 $this->data = $rawRequest;

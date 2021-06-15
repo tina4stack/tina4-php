@@ -1,12 +1,11 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
- * Class MessengerSettings
+ */
+namespace Tina4;
+/**
  * This is the settings and configuration for sending messages from Tina4
  * @package Tina4
  */

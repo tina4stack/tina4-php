@@ -1,4 +1,10 @@
 <?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
+
 namespace Tina4;
 
 use Nowakowskir\JWT\Exceptions\IntegrityViolationException;
@@ -7,10 +13,6 @@ use Nowakowskir\JWT\TokenDecoded;
 use Nowakowskir\JWT\TokenEncoded;
 
 /**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
- * License: MIT https://opensource.org/licenses/MIT
- *
  * Class Auth for creating and validating secure tokens for use with the API layers
  * @package Tina4
  * @tests tina4

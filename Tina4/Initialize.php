@@ -1,5 +1,9 @@
 <?php
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 use Tina4\Debug;

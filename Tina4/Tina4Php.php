@@ -1,11 +1,19 @@
 <?php
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 namespace Tina4;
 
 use ScssPhp\ScssPhp\Compiler;
 use ScssPhp\ScssPhp\Exception\CompilerException;
 use Twig\Error\LoaderError;
 
+/**
+ * The main webserver initializer
+ * @package Tina4
+ */
 class Tina4Php extends Data
 {
     public $config;

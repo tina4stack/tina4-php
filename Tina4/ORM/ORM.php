@@ -1,14 +1,13 @@
 <?php
-
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 namespace Tina4;
 use Phpfastcache\Helper\CacheConditionalHelper;
 
 /**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
- * License: MIT https://opensource.org/licenses/MIT
- *
- * Class ORM
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
  * @package Tina4
  */

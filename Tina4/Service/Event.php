@@ -1,13 +1,13 @@
 <?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
 
 /**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
- * License: MIT https://opensource.org/licenses/MIT
- *
- * Class Event
  * This handles triggering and creating of events in a system
  * @package Tina4
  */
