@@ -8,7 +8,7 @@
 namespace Tina4;
 
 /**
- * Class RouterResponse
+ * The response of a router
  * @package Tina4
  */
 class RouterResponse

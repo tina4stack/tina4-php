@@ -4,9 +4,11 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
- * Class Response Used in apis to return a response
+ * Used in apis and routes to return a response
  * @package Tina4
  */
 class Response

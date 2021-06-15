@@ -11,7 +11,7 @@ use Phpfastcache\Helper\CacheConditionalHelper;
 use Twig\Error\LoaderError;
 
 /**
- * Class Router
+ * Router class which resolves routes in the Tina4 stack
  * @package Tina4
  */
 class Router extends Data

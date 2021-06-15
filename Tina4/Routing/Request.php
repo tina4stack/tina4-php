@@ -4,9 +4,11 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
- * Class Request
+ * Implements request params which get passed through to the routers
  * @package Tina4
  */
 class Request

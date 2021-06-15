@@ -35,3 +35,4 @@ test.db
 /src/templates/test/
 /log/debug.log
 /subfolder/
+/.phpdoc/

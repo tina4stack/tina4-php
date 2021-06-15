@@ -4,7 +4,9 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
  * Useful for sending emails, requires a MessengerSettings class
  * @package Tina4

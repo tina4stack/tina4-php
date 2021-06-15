@@ -4,7 +4,9 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
  * The RouteCore from which to inherit router classes
  * @package Tina4

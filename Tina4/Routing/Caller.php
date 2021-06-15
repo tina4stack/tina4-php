@@ -4,7 +4,9 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
  * Used in conjunction with Twig to call PHP classes and methods in the project
  * @package Tina4

@@ -1,11 +1,13 @@
 <?php
-
-namespace Tina4;
 /**
  * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4 (Andre van Zuydam)
+ * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
- *
+ */
+
+namespace Tina4;
+
+/**
  * Description of Tina4 Migration
  * There are some "rules" that Tina4 prescribes for the migrations and it would be in your best interests to follow them.
  * 1.) File formats are in the following format:

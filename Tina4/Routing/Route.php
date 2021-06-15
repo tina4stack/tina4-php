@@ -4,9 +4,11 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
- * Class Route Determines what occurs when a route is called
+ * Determines what occurs when a route is called
  * @package Tina4
  */
 class Route implements RouteCore

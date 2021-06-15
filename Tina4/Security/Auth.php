@@ -13,7 +13,7 @@ use Nowakowskir\JWT\TokenDecoded;
 use Nowakowskir\JWT\TokenEncoded;
 
 /**
- * Class Auth for creating and validating secure tokens for use with the API layers
+ * For creating and validating secure tokens for use with the API layers
  * @package Tina4
  * @tests tina4
  *   assert session_status() !== PHP_SESSION_NONE, "Session should not be active"

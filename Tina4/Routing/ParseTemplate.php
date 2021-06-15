@@ -4,7 +4,9 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
  * A very simple template engine with limited functionality
  * @package Tina4

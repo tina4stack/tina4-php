@@ -4,7 +4,9 @@
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
+
 /**
  * This is for helping doing heavy lifting and helping with mundane tasks
  * @package Tina4
