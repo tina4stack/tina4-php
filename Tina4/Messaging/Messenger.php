@@ -102,6 +102,7 @@ class Messenger
                 } else {
                     $phpMailer = new \PHPMailer\PHPMailer\PHPMailer(true);
                     try {
+                        ob_start();
                         //Server settings
                         if (TINA4_DEBUG) {
                             $phpMailer->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_LOWLEVEL;                      // Enable verbose debug output
@@ -148,7 +149,9 @@ class Messenger
                         $phpMailer->AltBody = str_replace("<br>", "\n", strip_tags($message, "<br>"));
 
                         $mailSent = $phpMailer->send();
-
+                        $messageLog = ob_get_contents();
+                        ob_end_clean();
+                        Debug::message("Message results". $messageLog, TINA4_LOG_DEBUG);
                     } catch (\Exception $e) {
                         $mailSent = false;
                         Debug::message("Messenger Error:" . $e->getMessage());
