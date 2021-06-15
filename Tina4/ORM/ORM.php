@@ -397,7 +397,7 @@ class ORM implements \JsonSerializable
         //See if we can get the fetch from the cached data
         $key = "orm" . md5($sqlCheck);
 
-        if (TINA4_ORM_CACHE) {
+        if (defined("TINA4_ORM_CACHE") && TINA4_ORM_CACHE) {
             (new Cache())->set($key, null, 0);
         }
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
@@ -928,12 +928,12 @@ class ORM implements \JsonSerializable
 
         $key = "orm".md5($sqlStatement);
 
-        if ($cacheData = (new Cache())->get($key) && TINA4_ORM_CACHE) {
+        if (($cacheData = (new Cache())->get($key)) && defined("TINA4_ORM_CACHE") && TINA4_ORM_CACHE) {
             Debug::message("Loaded {$sqlStatement} from cache", TINA4_LOG_DEBUG);
             $fetchData = $cacheData;
         } else {
             $fetchData = $this->DBA->fetch($sqlStatement, 1, 0, $fieldMapping)->asObject();
-            if (TINA4_ORM_CACHE) {
+            if (defined("TINA4_ORM_CACHE") && TINA4_ORM_CACHE) {
                 Debug::message("Creating {$sqlStatement} into cache", TINA4_LOG_DEBUG);
                 (new Cache())->set($key, $fetchData);
             }

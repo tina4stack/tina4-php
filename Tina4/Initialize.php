@@ -45,9 +45,6 @@ if (!defined("TINA4_PATCH")) define("TINA4_PATCH", "PATCH");
 if (!defined("TINA4_DELETE")) define("TINA4_DELETE", "DELETE");
 
 
-if (!defined("TINA4_ORM_CACHE")) define("TINA4_ORM_CACHE", true);
-
-
 if (!defined("TEXT_HTML")) define("TEXT_HTML", "text/html");
 if (!defined("TEXT_PLAIN")) define("TEXT_PLAIN", "text/plain");
 if (!defined("APPLICATION_JSON")) define("APPLICATION_JSON", "application/json");
@@ -71,6 +68,7 @@ if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
 if(!defined("TINA4_DEBUG_LEVEL")) {
     define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);
 }
+
 \Tina4\Debug::$logLevel = TINA4_DEBUG_LEVEL;
 
 Debug::message("Project Root: " . TINA4_PROJECT_ROOT);
@@ -98,6 +96,9 @@ if (!defined("TINA4_TOKEN_MINUTES"))
 {
     define("TINA4_TOKEN_MINUTES", 10);
 }
+
+//Define ORM Caching state
+if (!defined("TINA4_ORM_CACHE")) define("TINA4_ORM_CACHE", true);
 
 //Initialize Secrets
 (new \Tina4\Auth());
