@@ -111,7 +111,7 @@ class Auth extends Data
         if (!mkdir($concurrentDirectory = $this->documentRoot.DIRECTORY_SEPARATOR. "secrets") && !is_dir($concurrentDirectory)) {
             throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
-        `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
+        `openssl genrsa -out secrets/private.key 1024`;
         `chmod 600 secrets/private.key`;
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
         if (!file_exists($this->documentRoot . "secrets".DIRECTORY_SEPARATOR.".gitignore")) {
