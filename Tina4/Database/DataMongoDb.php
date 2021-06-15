@@ -41,17 +41,17 @@ class DataMongoDb implements Database
         // TODO: Implement tableExists() method.
     }
 
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = [])
     {
         // TODO: Implement fetch() method.
     }
 
-    public function rollback($transactionId = null)
+    public function rollback(int $transactionId = null)
     {
         // TODO: Implement rollback() method.
     }
 
-    public function autoCommit($onState = true)
+    public function autoCommit(bool $onState = true)
     {
         // TODO: Implement autoCommit() method.
     }

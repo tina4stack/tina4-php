@@ -33,6 +33,16 @@ class Event
     }
 
     /**
+     * Alias for onTrigger
+     * @param $eventName
+     * @param $method
+     */
+    public static function addTrigger($eventName, $method): void
+    {
+        self::onTrigger($eventName, $method);
+    }
+
+    /**
      * Method to handle on an event, this is what will be triggered when the event is fired
      * @param $eventName
      * @param $method
@@ -44,16 +54,6 @@ class Event
         $debugTrace = debug_backtrace();
         $TINA4_EVENTS_DETAIL[$eventName]["handler"][] = ["debug" => $debugTrace[0]];
         $TINA4_EVENTS[$eventName][] = $method;
-    }
-
-    /**
-     * Alias for onTrigger
-     * @param $eventName
-     * @param $method
-     */
-    public static function addTrigger($eventName, $method): void
-    {
-        self::onTrigger($eventName, $method);
     }
 
     /**

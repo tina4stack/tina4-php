@@ -31,8 +31,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
 
         if (is_file($fileNameString)) {
             $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-            if ($location === "")
-            {
+            if ($location === "") {
                 $location = $newPath;
             }
             $renderFile = str_replace($location, "", $fileName);
@@ -47,21 +46,21 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
                 $fileName = substr($fileName, 1);
             }
 
-            if ($internalTwig->getLoader()->exists($fileName)) {
-                return $internalTwig->render($fileName, $data);
-            } else
-                if ($internalTwig->getLoader()->exists(basename($fileName))) {
-                    return $internalTwig->render(basename($fileName), $data);
-                } else {
-                    if (!is_file($fileNameString)) {
-                        $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
-                        file_put_contents($fileName, $fileNameString);
-                    }
-                    $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
-                    return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
+        if ($internalTwig->getLoader()->exists($fileName)) {
+            return $internalTwig->render($fileName, $data);
+        } else
+            if ($internalTwig->getLoader()->exists(basename($fileName))) {
+                return $internalTwig->render(basename($fileName), $data);
+            } else {
+                if (!is_file($fileNameString)) {
+                    $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
+                    file_put_contents($fileName, $fileNameString);
                 }
+                $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
+                return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
+            }
     } catch (\Exception $exception) {
-        return $exception->getFile(). " (".$exception->getLine().") ".$exception->getMessage();
+        return $exception->getFile() . " (" . $exception->getLine() . ") " . $exception->getMessage();
     }
 }
 

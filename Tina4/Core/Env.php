@@ -41,7 +41,7 @@ class Env extends Data
      */
     public function readParams($environment): void
     {
-        $fileName =   $this->documentRoot . ".env";
+        $fileName = $this->documentRoot . ".env";
 
         if (!empty($environment)) {
             $fileName .= ".{$environment}";

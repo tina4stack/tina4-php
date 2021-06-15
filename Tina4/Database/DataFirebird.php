@@ -39,6 +39,15 @@ class DataFirebird implements DataBase
     }
 
     /**
+     * Gets the default database date format
+     * @return mixed|string
+     */
+    public function getDefaultDatabaseDateFormat(): string
+    {
+        return "m/d/Y";
+    }
+
+    /**
      * Close a Firebird database connection
      */
     public function close()
@@ -79,10 +88,10 @@ class DataFirebird implements DataBase
      * @param string $sql
      * @param int $noOfRecords
      * @param int $offSet
-     * @param $fieldMapping
+     * @param array $fieldMapping
      * @return bool|DataResult
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
     {
         if (is_array($sql)) {
             $initialSQL = $sql[0];
@@ -100,7 +109,7 @@ class DataFirebird implements DataBase
         }
 
         if (is_array($sql)) {
-            $recordCursor = call_user_func("ibase_query",  ...$params);
+            $recordCursor = call_user_func("ibase_query", ...$params);
         } else {
             $recordCursor = ibase_query($this->dbh, $sql);
         }
@@ -183,10 +192,10 @@ class DataFirebird implements DataBase
 
     /**
      * Rollback
-     * @param null $transactionId
+     * @param int|null $transactionId
      * @return bool
      */
-    public function rollback($transactionId = null)
+    public function rollback(int $transactionId = null)
     {
         if (!empty($transactionId)) {
             return ibase_rollback($transactionId);
@@ -200,28 +209,26 @@ class DataFirebird implements DataBase
      * @param bool $onState
      * @return bool|void
      */
-    public function autoCommit($onState = false)
+    public function autoCommit(bool $onState = false): void
     {
         //Firebird has commit off by default
-        return false;
     }
 
     /**
      * Start Transaction
      * @return false|int|resource
      */
-    public function startTransaction()
+    public function startTransaction(): string
     {
-
         return ibase_trans(IBASE_COMMITTED + IBASE_NOWAIT, $this->dbh);
     }
 
     /**
      * Check if table exists
-     * @param $tableName
+     * @param string $tableName
      * @return bool
      */
-    public function tableExists($tableName): bool
+    public function tableExists(string $tableName): bool
     {
         if (!empty($tableName)) {
             // table name must be in upper case
@@ -236,18 +243,18 @@ class DataFirebird implements DataBase
 
     /**
      * Get the last id
-     * @return int
+     * @return string
      */
-    public function getLastId()
+    public function getLastId(): string
     {
-        return null;
+        return "";
     }
 
     /**
      * Get the database metadata
      * @return array|mixed
      */
-    public function getDatabase()
+    public function getDatabase(): array
     {
         $sqlTables = 'select distinct rdb$relation_name as table_name
                       from rdb$relation_fields
@@ -350,19 +357,10 @@ class DataFirebird implements DataBase
     }
 
     /**
-     * Gets the default database date format
-     * @return mixed|string
-     */
-    public function getDefaultDatabaseDateFormat()
-    {
-        return "m/d/Y";
-    }
-
-    /**
      * Gets the default database port
      * @return int|mixed
      */
-    public function getDefaultDatabasePort()
+    public function getDefaultDatabasePort(): int
     {
         return 3050;
     }

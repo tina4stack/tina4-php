@@ -16,12 +16,12 @@ interface DataBase
 
     /**
      * DataBase constructor.
-     * @param $database
-     * @param string $username
-     * @param string $password
-     * @param string $dateFormat
+     * @param string $database - In the form [host/port:database]
+     * @param string $username Database user username
+     * @param string $password Database user password
+     * @param string $dateFormat Format of date
      */
-    public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d");
+    public function __construct(string $database, string $username = "", string $password = "", string $dateFormat = "Y-m-d");
 
     /**
      * Close the database connection
@@ -37,16 +37,16 @@ interface DataBase
 
     /**
      * Sets database get last inserted row's id from currently used database
-     * @return bool
+     * @return string
      */
-    public function getLastId();
+    public function getLastId(): string;
 
     /**
      * Checks to see if a table exists
-     * @param $tableName
-     * @return mixed
+     * @param string $tableName
+     * @return bool
      */
-    public function tableExists($tableName);
+    public function tableExists(string $tableName): bool;
 
     /**
      * Fetch a result set of DataResult
@@ -54,30 +54,30 @@ interface DataBase
      * @param int $noOfRecords Number of records wanted to return
      * @param int $offSet Row offset for fetched data
      * @param array $fieldMapping Array of mapped fields for mapping to different results
-     * @return array DataResult Array of query result data
+     * @return DataResult Array of query result data
      * @example examples\exampleDataBaseFetch.php
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = []);
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult;
 
     /**
      * Sets database commit from currently used database
-     * @param $transactionId integer Id of the transaction
+     * @param $transactionId integer|null Id of the transaction
      * @return mixed
      */
-    public function rollback($transactionId = null);
+    public function rollback(int $transactionId = null);
 
     /**
      * Set autocommit on or off
      * @param bool $onState
-     * @return bool
+     * @return void
      */
-    public function autoCommit($onState = true);
+    public function autoCommit(bool $onState = true): void;
 
     /**
      * Starts a transaction
-     * @return integer
+     * @return string
      */
-    public function startTransaction();
+    public function startTransaction(): string;
 
     /**
      * Sets database errors from currently used database
@@ -90,26 +90,26 @@ interface DataBase
      *  $database => [tables][fields]
      * @return mixed
      */
-    public function getDatabase();
+    public function getDatabase(): array;
 
     /**
      * Returns default date format
-     * @return mixed
+     * @return string
      */
-    public function getDefaultDatabaseDateFormat();
+    public function getDefaultDatabaseDateFormat(): string;
 
     /**
      * Returns the default database port
-     * @return mixed
+     * @return int
      */
-    public function getDefaultDatabasePort();
+    public function getDefaultDatabasePort(): ?int;
 
     /**
      * Returns back the correct param type convention for parameterised queries
      * Default is normally ?
-     * @param $fieldName
-     * @param $fieldIndex
+     * @param string $fieldName
+     * @param int $fieldIndex
      * @return mixed
      */
-    public function getQueryParam($fieldName,$fieldIndex): string;
+    public function getQueryParam(string $fieldName, int $fieldIndex): string;
 }

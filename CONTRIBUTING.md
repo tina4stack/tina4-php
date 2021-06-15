@@ -8,6 +8,7 @@ In order to contribute you need to fork this project and submit a pull request
 - Tina4 is highly opinionated from a design stand point so please discuss new features with the team.
 
 #### Where can you make the most impact?
+
 - Adding to documentation
 - Submitting or fixing bugs
 - Adding new database functionality (MSSQL,PostGres,CUBRID,ODBC are top priority)

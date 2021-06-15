@@ -109,9 +109,9 @@ class DataMySQL implements DataBase
      * @param integer $noOfRecords Number of records requested
      * @param integer $offSet Record offset
      * @param array $fieldMapping Mapped Fields
-     * @return bool|DataResult
+     * @return null|DataResult
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
     {
         $initialSQL = $sql;
 
@@ -203,11 +203,16 @@ class DataMySQL implements DataBase
         return (new DataError($errorNo, $errorMessage));
     }
 
+    public function getDefaultDatabaseDateFormat(): string
+    {
+        return "Y-m-d";
+    }
+
     /**
      * Gets the last inserted row's ID from database
-     * @return bool
+     * @return string
      */
-    public function getLastId()
+    public function getLastId(): string
     {
         $lastId = $this->fetch("SELECT LAST_INSERT_ID() as last_id");
         return $lastId->records(0)[0]->lastId;
@@ -215,10 +220,10 @@ class DataMySQL implements DataBase
 
     /**
      * Check if the table exists
-     * @param $tableName
-     * @return bool|mixed
+     * @param string $tableName
+     * @return bool
      */
-    public function tableExists($tableName)
+    public function tableExists(string $tableName): bool
     {
         if (!empty($tableName)) {
             $exists = $this->fetch("SELECT * 
@@ -243,19 +248,19 @@ class DataMySQL implements DataBase
 
     /**
      * Rollback the transaction
-     * @param null $transactionId
+     * @param int|null $transactionId
      * @return bool|mixed
      */
-    public function rollback($transactionId = null)
+    public function rollback(int $transactionId = null)
     {
         return mysqli_rollback($this->dbh);
     }
 
     /**
      * Start the transaction
-     * @return bool|int
+     * @return string
      */
-    public function startTransaction()
+    public function startTransaction(): string
     {
         $this->dbh->autocommit(false);
         mysqli_begin_transaction($this->dbh);
@@ -265,9 +270,9 @@ class DataMySQL implements DataBase
     /**
      * Auto commit on for mysql
      * @param bool $onState
-     * @return bool|void
+     * @return void
      */
-    public function autoCommit($onState = true)
+    public function autoCommit(bool $onState = true): void
     {
         $this->dbh->autocommit($onState);
     }
@@ -276,7 +281,7 @@ class DataMySQL implements DataBase
      * Gets the database metadata
      * @return array|mixed
      */
-    public function getDatabase()
+    public function getDatabase(): array
     {
         $sqlTables = "SELECT table_name, table_type, engine
                       FROM INFORMATION_SCHEMA.tables
@@ -310,12 +315,7 @@ class DataMySQL implements DataBase
         return $database;
     }
 
-    public function getDefaultDatabaseDateFormat()
-    {
-        return "Y-m-d";
-    }
-
-    public function getDefaultDatabasePort()
+    public function getDefaultDatabasePort(): int
     {
         return 3306;
     }

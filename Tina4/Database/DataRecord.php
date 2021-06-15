@@ -60,7 +60,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Whether to get the result as original field names
      * @return object
      */
-    public function asObject($original = false): ?object
+    public function asObject(bool $original = false): ?object
     {
         if ($original) {
             return $this->original;
@@ -70,9 +70,11 @@ class DataRecord implements JsonSerializable
     }
 
     /**
-     * Transform to a camel case result
+     * Transform the objects keys to camel case response
+     * @param bool $original Do we want the original result returned in the object
+     * @return object An object with the transformed column names
      */
-    public function transformObject($original=false): object
+    public function transformObject(bool $original = false): object
     {
         $object = (object)[];
         if (!empty($this->original)) {
@@ -86,16 +88,6 @@ class DataRecord implements JsonSerializable
             }
         }
         return $object;
-    }
-
-    /**
-     * Cast the object to an array
-     * @param bool $original
-     * @return array
-     */
-    public function asArray($original=false): array
-    {
-        return (array)$this->transformObject($original);
     }
 
     /**
@@ -143,6 +135,17 @@ class DataRecord implements JsonSerializable
     }
 
     /**
+     * Cast the object to an array
+     * @param bool $original Do we want the original key names passed back
+     * @return array An array with transformed key names
+     */
+    public function asArray(bool $original = false): array
+    {
+        return (array)$this->transformObject($original);
+    }
+
+    /**
+     * Returns back the record as a JSON response
      * @return false|string
      * @throws \JsonException
      */
@@ -152,6 +155,7 @@ class DataRecord implements JsonSerializable
     }
 
     /**
+     * Returns everything as a JSON string
      * @return string
      * @throws \JsonException
      */
@@ -162,14 +166,13 @@ class DataRecord implements JsonSerializable
 
     /**
      * Get the value by the field name
-     * @param $name
-     * @return false
+     * @param string $name Name of the data column
+     * @return null|value Value of the named column
      */
-    public function byName($name): ?bool
+    public function byName(string $name): ?bool
     {
         $columnName = strtoupper($name);
-        if (!empty($this->original) && !empty($this->$columnName))
-        {
+        if (!empty($this->original) && !empty($this->$columnName)) {
             return $this->$columnName;
         }
 

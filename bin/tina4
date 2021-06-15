@@ -6,23 +6,23 @@ global $session; //store things here you want to reuse
 $session = [];
 
 foreach (get_included_files() as $id => $file) {
-    if (strpos($file, "vendor".DIRECTORY_SEPARATOR."autoload.php")) {
-        $rootPath = str_ireplace("vendor".DIRECTORY_SEPARATOR."autoload.php", "", $file);
+    if (strpos($file, "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
+        $rootPath = str_ireplace("vendor" . DIRECTORY_SEPARATOR . "autoload.php", "", $file);
         break;
     }
 }
 
 if (empty($rootPath)) {
-    $rootPath = str_replace("vendor".DIRECTORY_SEPARATOR."tina4stack".DIRECTORY_SEPARATOR."tina4php".DIRECTORY_SEPARATOR."bin".DIRECTORY_SEPARATOR."tina4", "", __FILE__);
-    $rootPath = str_replace("bin".DIRECTORY_SEPARATOR."tina4", "", $rootPath);
+    $rootPath = str_replace("vendor" . DIRECTORY_SEPARATOR . "tina4stack" . DIRECTORY_SEPARATOR . "tina4php" . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4", "", __FILE__);
+    $rootPath = str_replace("bin" . DIRECTORY_SEPARATOR . "tina4", "", $rootPath);
 }
 
 require_once "{$rootPath}vendor/autoload.php";
 define("TINA4_SUPPRESS", true);
 
 
-if (file_exists($rootPath  . "index.php")) {
-    include $rootPath  . "index.php";
+if (file_exists($rootPath . "index.php")) {
+    include $rootPath . "index.php";
 }
 
 function writeLine($output): void
@@ -35,7 +35,8 @@ function write($output): void
     echo $output;
 }
 
-function readLn ($prefix="") {
+function readLn($prefix = "")
+{
     if (PHP_OS === 'WINNT') {
         echo $prefix;
         return stream_get_line(STDIN, 1024, PHP_EOL);
@@ -45,17 +46,18 @@ function readLn ($prefix="") {
 }
 
 $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "commandLine" => ["options" => ["run"]], "menuCode" => static function ($index, $input, $options) {
-    function configureComposerJson($composerFile) {
+    function configureComposerJson($composerFile)
+    {
         $composer = json_decode(file_get_contents($composerFile), true);
         $scripts = ["tina4" => "tina4",
-                    "tina4service" => "tina4service",
-                    "test" => "@tina4 tests:run",
-                    "test:verbose" => "@tina4 tests:verbose",
-                    "initialize" => "@tina4 initialize:run",
-                    "start" => "@tina4 webservice:run",
-                    "start-service" => "@tina4service"];
+            "tina4service" => "tina4service",
+            "test" => "@tina4 tests:run",
+            "test:verbose" => "@tina4 tests:verbose",
+            "initialize" => "@tina4 initialize:run",
+            "start" => "@tina4 webservice:run",
+            "start-service" => "@tina4service"];
         $classMap = ["src/*", "src/app/*", "src/orm/*", "src/routes/*"];
-        $psr4 = ["\\" => ["src/", "src/app/","src/orm/","/src/routes"]];
+        $psr4 = ["\\" => ["src/", "src/app/", "src/orm/", "/src/routes"]];
         $config = ["process-timeout" => 0];
         if (!isset($composer["scripts"])) {
             $composer["scripts"] = $scripts;
@@ -76,7 +78,7 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
             $index = 1;
             $input = "y";
 
-            configureComposerJson($rootPath."composer.json");
+            configureComposerJson($rootPath . "composer.json");
         }
     }
     switch ($index) {
@@ -113,8 +115,8 @@ $menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "command
     global $rootPath;
     $testGroups = [];
     // If test groups have been requested, get the requested group names into a usable array to pass to the run
-    if (isset($argv[2])){
-        $testGroups = array_slice($argv,2);
+    if (isset($argv[2])) {
+        $testGroups = array_slice($argv, 2);
         $testGroups = implode(" ", $testGroups);
         $testGroups = array_map("trim", explode(",", $testGroups));
     }
@@ -134,7 +136,8 @@ $menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "command
 
 
 //Helper functions for menu 3
-function createDatabaseConnection($databaseType, $databaseName, $databaseHost="", $username="", $password="") {
+function createDatabaseConnection($databaseType, $databaseName, $databaseHost = "", $username = "", $password = "")
+{
     $settings = [];
     switch ($databaseType) {
         case "sqlite3":
@@ -300,7 +303,7 @@ $menus[] = ["id" => 4, "name" => "orm", "description" => "Create orm objects", "
                 }
 
                 $prompt = "Is this correct ? (y/n):";
-            break;
+                break;
             case 2:
                 $nextIndex = -1;
 
@@ -331,7 +334,7 @@ class [CLASS_NAME] extends \Tina4\ORM
 [FIELDS]
 }';
 
-                        $fileName = $rootPath  . "src" . DIRECTORY_SEPARATOR . "orm" . DIRECTORY_SEPARATOR . $className . ".php";
+                        $fileName = $rootPath . "src" . DIRECTORY_SEPARATOR . "orm" . DIRECTORY_SEPARATOR . $className . ".php";
 
                         echo "Creating object in {$fileName} {$className}\n";
                         if (!file_exists($fileName)) {
@@ -348,19 +351,19 @@ class [CLASS_NAME] extends \Tina4\ORM
                     $prompt = "Press Enter to continue, no object created!";
                 }
                 $session["tableData"] = null;
-            break;
+                break;
             default:
                 $nextIndex = 1;
                 $no = 0;
                 foreach ($database as $table => $fields) {
                     $no++;
-                    writeLine( "{$no}.) {$table}");
+                    writeLine("{$no}.) {$table}");
                 }
-                writeLine( "0.) Exit" );
-                writeLine( "Type 'all' to convert all the tables, no existing objects will be over written" );
+                writeLine("0.) Exit");
+                writeLine("Type 'all' to convert all the tables, no existing objects will be over written");
 
                 $prompt = "Choose table:";
-            break;
+                break;
         }
     }
     return ["index" => $nextIndex, "prompt" => $prompt];
@@ -380,8 +383,6 @@ $menus[] = ["id" => 5, "name" => "webservice", "show" => false, "description" =>
  * return ["index" => 0, "prompt" => ""];
  * }];
  */
-
-
 
 
 /**
@@ -420,12 +421,10 @@ function drawMenu($menus)
             }
         } else {
             foreach ($menus as $id => $menu) {
-                if (!isset($menu["show"]))
-                {
+                if (!isset($menu["show"])) {
                     $menu["show"] = true;
                 }
-                if ($menu["show"])
-                {
+                if ($menu["show"]) {
                     writeLine(($menu["id"]) . ".) " . $menu["description"]);
                 }
 
@@ -480,7 +479,7 @@ $comments[] = "Keep learning!";
 $comments[] = "Live long and prosper!";
 $comments[] = "Life is lemons, make lemonade!";
 
-$complimentary = $comments[rand(0, count($comments)-1)];
+$complimentary = $comments[rand(0, count($comments) - 1)];
 writeLine("");
 echo "Thank you for using Tina4 - {$complimentary}\n";
 

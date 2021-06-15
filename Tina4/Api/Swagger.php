@@ -27,7 +27,7 @@ class Swagger implements \JsonSerializable
      * @param string $subFolder - for when the swagger is running under a sub folder
      * @throws \ReflectionException
      */
-    public function __construct($root = null, $title = "Open API", $apiDescription = "API Documentation", $version = "1.0.0", $subFolder="/")
+    public function __construct($root = null, $title = "Open API", $apiDescription = "API Documentation", $version = "1.0.0", $subFolder = "/")
     {
 
         global $arrRoutes;
@@ -42,13 +42,13 @@ class Swagger implements \JsonSerializable
 
         foreach ($arrRoutes as $arId => $route) {
 
-            $route["routePath"] = str_replace("//", "/", $this->subFolder.$route["routePath"]);
+            $route["routePath"] = str_replace("//", "/", $this->subFolder . $route["routePath"]);
 
             $method = strtolower($route["method"]);
             //echo $method;
 
             if (!empty($route["class"])) {
-                $reflectionClass =  new \ReflectionClass($route["class"]);
+                $reflectionClass = new \ReflectionClass($route["class"]);
                 $reflection = $reflectionClass->getMethod($route["function"]);
             } else {
                 $reflection = new \ReflectionFunction($route["function"]);
@@ -200,7 +200,6 @@ class Swagger implements \JsonSerializable
             "paths" => $paths
 
         ];
-
 
 
     }

@@ -24,8 +24,7 @@ class Response
      */
     public function __invoke($content, $httpCode = 200, $contentType = null): ?array
     {
-        if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"]))
-        {
+        if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"])) {
             $contentType = $_SERVER["CONTENT_TYPE"];
         } else if (empty($contentType)) {
             $contentType = TEXT_HTML;
@@ -51,7 +50,7 @@ class Response
                     } else {
                         $contentType = TEXT_HTML;
                     }
-                break;
+                    break;
             }
         }
         return ["contentType" => "Content-Type: {$contentType}", "content" => $content, "httpCode" => $httpCode];

@@ -6,7 +6,6 @@
  */
 
 namespace Tina4;
-use Phpfastcache\Helper\CacheConditionalHelper;
 
 /**
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
@@ -15,6 +14,7 @@ use Phpfastcache\Helper\CacheConditionalHelper;
 class ORM implements \JsonSerializable
 {
     use Utility;
+
     /**
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
      */
@@ -230,7 +230,7 @@ class ORM implements \JsonSerializable
                 $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
                 $this->DBA->commit();
             } else {
-                \Tina4\Debug::message("File error occurred\n".print_r ($_FILES[$fileInputName],1));
+                \Tina4\Debug::message("File error occurred\n" . print_r($_FILES[$fileInputName], 1));
                 return false;
             }
         } else {
@@ -380,7 +380,7 @@ class ORM implements \JsonSerializable
         }
 
         $tableName = $this->getTableName($tableName);
-        if (!$this->checkDBConnection($tableName))  {
+        if (!$this->checkDBConnection($tableName)) {
             throw new \Exception("No database connection");
         }
 
@@ -396,7 +396,7 @@ class ORM implements \JsonSerializable
 
         //See if we can get the fetch from the cached data
 
-        $key = "orm".md5($sqlCheck);
+        $key = "orm" . md5($sqlCheck);
         (new Cache())->set($key, null, 0);
 
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
@@ -407,7 +407,7 @@ class ORM implements \JsonSerializable
 
         $getLastId = false;
         //@todo this next piece needs to standardize the errors from the different database sources - perhaps with a getNoneError on the database abstraction
-        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available"  || $exists->error->getErrorMessage() === "unknown error") {
+        if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available" || $exists->error->getErrorMessage() === "unknown error") {
             if ($exists->noOfRecords === 0) { //insert
                 $getLastId = ((string)($this->{$this->primaryKey}) === "");
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
@@ -419,8 +419,8 @@ class ORM implements \JsonSerializable
             $params[] = $sqlStatement["sql"];
             $params = array_merge($params, $sqlStatement["fieldValues"]);
             // Return can be a DataResult or a DataError. We need to pickup the difference
-            $returning = call_user_func([$this->DBA, "exec"],  ...$params);
-            if (get_class($returning) == "Tina4\DataError"){
+            $returning = call_user_func([$this->DBA, "exec"], ...$params);
+            if (get_class($returning) == "Tina4\DataError") {
                 $error = $returning;
             } else {
                 $error = $returning->error;
@@ -463,11 +463,11 @@ class ORM implements \JsonSerializable
                 }
             } else {
                 $this->getDebugBackTrace();
-                throw new \Exception("Error:\n".print_r($error->getError(), 1));
+                throw new \Exception("Error:\n" . print_r($error->getError(), 1));
             }
         } else {
             $this->getDebugBackTrace();
-            throw new \Exception("Error:\n".print_r($exists->error, 1));
+            throw new \Exception("Error:\n" . print_r($exists->error, 1));
         }
     }
 
@@ -498,7 +498,7 @@ class ORM implements \JsonSerializable
                 $sqlCreate = $this->generateCreateSQL($this->getTableData(), $tableName);
 
                 if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
-                    Debug::message("TINA4: We need to make a table for " . $tableName."\n".$sqlCreate, TINA4_LOG_DEBUG);
+                    Debug::message("TINA4: We need to make a table for " . $tableName . "\n" . $sqlCreate, TINA4_LOG_DEBUG);
                     //Make a migration for it
                     $migrate = (new Migration());
                     $migrate->createMigration(" create table {$tableName}", $sqlCreate, true);
@@ -569,7 +569,6 @@ class ORM implements \JsonSerializable
         $fieldIndex = 0;
 
 
-
         foreach ($tableData as $fieldName => $fieldValue) {
             if (empty($fieldValue) && $fieldValue !== 0) {
                 continue;
@@ -629,10 +628,9 @@ class ORM implements \JsonSerializable
         }
 
         Debug::message("SQL:\ninsert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
-        Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
+        Debug::message("Field Values:\n" . print_r($fieldValues, 1), TINA4_LOG_DEBUG);
         return ["sql" => "insert into {$tableName} (" . implode(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
-
 
 
     /**
@@ -642,22 +640,20 @@ class ORM implements \JsonSerializable
      * @param string $tableName Name of the table
      * @return array Generated update query
      */
-    public function generateUpdateSQL($tableData, $filter, $tableName) : array
+    public function generateUpdateSQL($tableData, $filter, $tableName): array
     {
         $fieldValues = [];
         $updateValues = [];
 
-        Debug::message("Table Data:\n" .print_r ($tableData,1), TINA4_LOG_DEBUG);
+        Debug::message("Table Data:\n" . print_r($tableData, 1), TINA4_LOG_DEBUG);
 
         $fieldIndex = 0;
         foreach ($tableData as $fieldName => $fieldValue) {
-            if ($fieldName == "form_token")
-            {
+            if ($fieldName == "form_token") {
                 continue;
             } //form token is reserved
 
-            if ($this->primaryKey === $fieldName)
-            {
+            if ($this->primaryKey === $fieldName) {
                 continue;
             }
 
@@ -671,22 +667,22 @@ class ORM implements \JsonSerializable
             }
 
             $fieldIndex++;
-            if ((strlen($fieldValue) > 1  && isset($fieldValue[0]) && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $updateValues[] = "{$fieldName} = ".$this->DBA->getQueryParam($fieldName, $fieldIndex);
+            if ((strlen($fieldValue) > 1 && isset($fieldValue[0]) && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
+                $updateValues[] = "{$fieldName} = " . $this->DBA->getQueryParam($fieldName, $fieldIndex);
                 $fieldValues[] = $fieldValue;
             } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $updateValues[] = "{$fieldName} = ".$this->DBA->getQueryParam($fieldName, $fieldIndex);
+                $updateValues[] = "{$fieldName} = " . $this->DBA->getQueryParam($fieldName, $fieldIndex);
                 $fieldValues[] = $fieldValue;
             }
         }
 
 
         Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", TINA4_LOG_DEBUG);
-        Debug::message("Field Values:\n".print_r($fieldValues,1), TINA4_LOG_DEBUG);
+        Debug::message("Field Values:\n" . print_r($fieldValues, 1), TINA4_LOG_DEBUG);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
 
     }
@@ -708,9 +704,9 @@ class ORM implements \JsonSerializable
             if ($overRide) {
                 $this->{$ormField} = $fieldValue;
             } else
-                if (property_exists($this, $ormField)){
-                    if (property_exists($this, $ormField)){
-                        if  ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
+                if (property_exists($this, $ormField)) {
+                    if (property_exists($this, $ormField)) {
+                        if ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
                             $this->{$ormField} = $fieldValue;
                         }
                     }
@@ -755,7 +751,7 @@ class ORM implements \JsonSerializable
      * @param bool $isObject
      * @return array
      */
-    public function jsonSerialize($isObject=false): array
+    public function jsonSerialize($isObject = false): array
     {
         return $this->getObjectData($isObject);
     }
@@ -765,7 +761,7 @@ class ORM implements \JsonSerializable
      * @param bool $isObject
      * @return array
      */
-    public function getObjectData($isObject=false): array
+    public function getObjectData($isObject = false): array
     {
         //See if we have exclude fields for parsing
         if (!empty($this->excludeFields) && is_string($this->excludeFields)) {
@@ -925,7 +921,7 @@ class ORM implements \JsonSerializable
 
         //See if we can get the fetch from the cached data
 
-        $key = "orm".md5($sqlStatement);
+        $key = "orm" . md5($sqlStatement);
 
         if ($cacheData = (new Cache())->get($key)) {
             Debug::message("Loaded {$sqlStatement} from cache", TINA4_LOG_DEBUG);
@@ -958,6 +954,17 @@ class ORM implements \JsonSerializable
     }
 
     /**
+     * Implements a relationship in the following form:
+     * The link field is tied directly to whatever is indicated as the primary key in the external table
+     * [["linkField" => "ORM Object"], ["linkField" => "ORM Object"], .....]
+     * @return array
+     */
+    public function hasOne(): array
+    {
+        return $this->hasOne;
+    }
+
+    /**
      * Loads all the references to the table with a one to one relationship
      */
     public function loadHasOne(): void
@@ -966,12 +973,24 @@ class ORM implements \JsonSerializable
             foreach ($item as $className => $foreignKey) {
                 $class = new $className;
                 $primaryKey = $this->getFieldName($class->primaryKey);
-                $records = $class->select("*", $this->hasManyLimit)->where ("{$primaryKey} = {$this->{$foreignKey}}");
+                $records = $class->select("*", $this->hasManyLimit)->where("{$primaryKey} = {$this->{$foreignKey}}");
                 $className = strtolower($className);
                 $this->readOnlyFields[] = $className;
                 $this->{$className} = $records->asObject()[0];
             }
         }
+    }
+
+    /**
+     * Implements a relationship in the following form:
+     * The link field is tied directly to whatever is indicated as the primary key
+     * [["ORM OBJECT" => "linkField"], ["ORM OBJECT" => "linkField"], .... ]
+     * //Creates a variable on the ORM object of the same name as the ORM Object which is an array / result set of that object
+     * @return array
+     */
+    public function hasMany(): array
+    {
+        return $this->hasMany;
     }
 
     /**
@@ -1001,14 +1020,14 @@ class ORM implements \JsonSerializable
     public function pluralize($word): string
     {
         $word = strtolower($word);
-        $lastLetter = strtolower($word[strlen($word)-1]);
-        switch($lastLetter) {
+        $lastLetter = strtolower($word[strlen($word) - 1]);
+        switch ($lastLetter) {
             case 'y':
-                return substr($word,0,-1).'ies';
+                return substr($word, 0, -1) . 'ies';
             case 's':
-                return $word.'es';
+                return $word . 'es';
             default:
-                return $word.'s';
+                return $word . 's';
         }
     }
 
@@ -1016,7 +1035,7 @@ class ORM implements \JsonSerializable
      * Returns back a JSON string of the table structure
      * @return string
      */
-    public function __toString() : string
+    public function __toString(): string
     {
         return json_encode($this->jsonSerialize());
     }
@@ -1048,29 +1067,6 @@ class ORM implements \JsonSerializable
     }
 
     /**
-     * Implements a relationship in the following form:
-     * The link field is tied directly to whatever is indicated as the primary key in the external table
-     * [["linkField" => "ORM Object"], ["linkField" => "ORM Object"], .....]
-     * @return array
-     */
-    public function hasOne(): array
-    {
-        return $this->hasOne;
-    }
-
-    /**
-     * Implements a relationship in the following form:
-     * The link field is tied directly to whatever is indicated as the primary key
-     * [["ORM OBJECT" => "linkField"], ["ORM OBJECT" => "linkField"], .... ]
-     * //Creates a variable on the ORM object of the same name as the ORM Object which is an array / result set of that object
-     * @return array
-     */
-    public function hasMany(): array
-    {
-        return $this->hasMany;
-    }
-
-    /**
      * Generates CRUD
      * @param string $path
      * @throws \Twig\Error\LoaderError
@@ -1088,7 +1084,7 @@ class ORM implements \JsonSerializable
             $backtrace = debug_backtrace();
             $path = $backtrace[1]["args"][0];
 
-            $path = str_replace(getcwd(),  "", $path);
+            $path = str_replace(getcwd(), "", $path);
             $path = str_replace(DIRECTORY_SEPARATOR . "src", "", $path);
 
             $path = str_replace(".php", "", $path);
@@ -1187,7 +1183,7 @@ EOT;
         }
 
 
-        $componentPath = TINA4_DOCUMENT_ROOT.DIRECTORY_SEPARATOR."src". DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
+        $componentPath = TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "templates" . str_replace("/", DIRECTORY_SEPARATOR, $path);
 
 
         if (!file_exists($componentPath) && !mkdir($componentPath, 0755, true) && !is_dir($componentPath)) {

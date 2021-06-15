@@ -64,12 +64,12 @@ class Request
 
     public function __toString(): string
     {
-        return json_encode($this->data, JSON_THROW_ON_ERROR);
+        return json_encode($this->data);
     }
 
     public function asArray()
     {
-        return json_decode(json_encode($this->data, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
+        return json_decode(json_encode($this->data), true, 512);
     }
 
 }

@@ -20,18 +20,17 @@ class Config
 
     protected $initFunction;
 
+    public function __construct($initFunction = null)
+    {
+        if ($initFunction !== null) {
+            $this->initFunction = $initFunction;
+        }
+    }
+
     public function callInitFunction(): void
     {
         if ($this->initFunction !== null) {
             call_user_func_array($this->initFunction, [$this]);
-        }
-    }
-
-    public function __construct($initFunction=null)
-    {
-        if ($initFunction !== null)
-        {
-            $this->initFunction = $initFunction;
         }
     }
 

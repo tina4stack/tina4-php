@@ -251,7 +251,7 @@ class Crud
      * @param string $tablePrefix
      * @return array
      */
-    public static function getDataTablesFilter(string $tablePrefix=""): array
+    public static function getDataTablesFilter(string $tablePrefix = ""): array
     {
         $ORM = new ORM();
         $request = $_REQUEST;
@@ -274,7 +274,7 @@ class Crud
 
                 if (($column["searchable"] == "true") && !empty($search["value"])) {
                     //Add each searchable column to array
-                    $listOfColumnNames[] = $tablePrefix.$columnName;
+                    $listOfColumnNames[] = $tablePrefix . $columnName;
                     //Split search phrase into individual searchable words
                     $splitValue = explode(" ", $search["value"]);
 
@@ -300,7 +300,7 @@ class Crud
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
                 $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"]);
-                $ordering[] = $tablePrefix.$columnName . " " . $orderEntry["dir"];
+                $ordering[] = $tablePrefix . $columnName . " " . $orderEntry["dir"];
             }
         }
 
@@ -319,8 +319,7 @@ class Crud
             //Check for type of database
             if (!empty($ORM->DBA) && get_class($ORM->DBA) === "Tina4\DataMySQL") {
                 //Mysql
-                foreach ($listOfColumnNames as $id => $listColumn)
-                {
+                foreach ($listOfColumnNames as $id => $listColumn) {
                     $listOfColumnNames[$id] = "case when ($listColumn is null) then '' else $listColumn end";
                 }
 

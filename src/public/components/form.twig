@@ -3,9 +3,11 @@
         {% for tableField in tableFields %}
             <div class="form-group col-md-6">
                 <label for="{{ tableField.fieldName }}">{{ tableField.fieldLabel }}</label>
-                <input class="form-control" type="text" id="{{ tableField.fieldName }}" name="{{ tableField.fieldName }}" placeholder="{{ tableField.fieldLabel }}" value="{% verbatim %}{{{% endverbatim %} data.{{ tableField.fieldName}} {% verbatim %}}}{% endverbatim %}">
+                <input class="form-control" type="text" id="{{ tableField.fieldName }}"
+                       name="{{ tableField.fieldName }}" placeholder="{{ tableField.fieldLabel }}"
+                       value="{% verbatim %}{{{% endverbatim %} data.{{ tableField.fieldName }} {% verbatim %}}}{% endverbatim %}">
             </div>
         {% endfor %}
     </div>
-    {{  '{{'~'\"'~formId~'Form'~'\"'~' | formToken | raw }}' | raw }}
+    {{ '{{'~'\"'~formId~'Form'~'\"'~' | formToken | raw }}' | raw }}
 </form>

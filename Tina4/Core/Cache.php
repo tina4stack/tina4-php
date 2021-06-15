@@ -30,7 +30,7 @@ class Cache
      * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
      * @throws \Psr\Cache\InvalidArgumentException
      */
-    public function set($keyName, $value, $expires=60): bool
+    public function set($keyName, $value, $expires = 60): bool
     {
         $cachedString = $this->cache->getItem($keyName);
         $cachedString->set($value)->expiresAfter($expires);
@@ -51,9 +51,9 @@ class Cache
     public function get($keyName)
     {
         $cachedString = $this->cache->getItem($keyName);
-        $cachedData =  $cachedString->get();
+        $cachedData = $cachedString->get();
         if (empty($cachedData) && $cachedData === null) {
-            Debug::message("No cache ".$keyName);
+            Debug::message("No cache " . $keyName);
             return null;
         } else {
             return $cachedData;

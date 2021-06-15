@@ -262,27 +262,6 @@ class SQL implements \JsonSerializable
         return $this->jsonSerialize();
     }
 
-
-    /**
-     * Cleans up column names for JsonSerializable
-     * @param $fields
-     * @return array
-     */
-    public function getColumnNames($fields): array
-    {
-        $columnNames = [];
-        foreach ($fields as $id => $field) {
-            $columnName = $field;
-            $field = str_replace([".", " as", " "], "^", $field);
-            if (strpos($field, "^") !== false) {
-                $explodedField = explode("^", $field);
-                $columnName = array_pop($explodedField);
-            }
-            $columnNames[] = $columnName;
-        }
-        return $columnNames;
-    }
-
     /**
      * Makes a neat JSON response
      */
@@ -309,13 +288,11 @@ class SQL implements \JsonSerializable
                         $newRecord = clone $this->ORM;
                         $newRecord->mapFromRecord($record, true);
 
-                        if (!empty($this->hasOne))
-                        {
+                        if (!empty($this->hasOne)) {
                             $newRecord->loadHasOne();
                         }
 
-                        if (!empty($this->hasMany))
-                        {
+                        if (!empty($this->hasMany)) {
                             $newRecord->loadHasMany();
                         }
 
@@ -337,8 +314,6 @@ class SQL implements \JsonSerializable
                                 }
                             }
                         }
-
-
 
 
                         //Apply a filter to the record
@@ -399,6 +374,26 @@ class SQL implements \JsonSerializable
 
         \Tina4\Debug::message("SQL:\n" . $sql, TINA4_LOG_DEBUG);
         return $sql;
+    }
+
+    /**
+     * Cleans up column names for JsonSerializable
+     * @param $fields
+     * @return array
+     */
+    public function getColumnNames($fields): array
+    {
+        $columnNames = [];
+        foreach ($fields as $id => $field) {
+            $columnName = $field;
+            $field = str_replace([".", " as", " "], "^", $field);
+            if (strpos($field, "^") !== false) {
+                $explodedField = explode("^", $field);
+                $columnName = array_pop($explodedField);
+            }
+            $columnNames[] = $columnName;
+        }
+        return $columnNames;
     }
 
     /**

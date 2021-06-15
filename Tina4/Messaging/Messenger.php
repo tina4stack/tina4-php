@@ -151,7 +151,7 @@ class Messenger
                         $mailSent = $phpMailer->send();
                         $messageLog = ob_get_contents();
                         ob_end_clean();
-                        Debug::message("Message results". $messageLog, TINA4_LOG_DEBUG);
+                        Debug::message("Message results" . $messageLog, TINA4_LOG_DEBUG);
                     } catch (\Exception $e) {
                         $mailSent = false;
                         Debug::message("Messenger Error:" . $e->getMessage());

@@ -13,6 +13,10 @@ namespace Tina4;
  */
 class ParseTemplate
 {
+    public $content;
+    public $httpCode = HTTP_OK;
+    public $headers = [];
+    public $fileName;
     private $root;
     private $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";
     private $callRegEx = "/\\{\\{call:(.*)\\}\\}/i";
@@ -22,12 +26,6 @@ class ParseTemplate
     private $subFolder;
     private $definedVariables;
     private $evals = [];
-    public $content;
-    public $httpCode = HTTP_OK;
-    public $headers = [];
-    public $fileName;
-
-
 
     /**
      * ParseTemplate constructor.
@@ -72,7 +70,7 @@ class ParseTemplate
 
 
         if (empty($ext)) {
-            $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName."/index.twig", $fileName."/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
+            $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName . "/index.twig", $fileName . "/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
             $possibleFiles = array_unique($possibleFiles);
         } else {
             $possibleFiles = [$fileName];
@@ -112,12 +110,12 @@ class ParseTemplate
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
-                $this->headers[] = "Content-Type: ".TEXT_HTML;
+                $this->headers[] = "Content-Type: " . TEXT_HTML;
 
                 $this->fileName = $realFileName;
                 $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
             } else {
-                $this->headers[] = "Content-Type: ".$mimeType;
+                $this->headers[] = "Content-Type: " . $mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
                 $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 

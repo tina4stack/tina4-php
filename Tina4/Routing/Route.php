@@ -20,20 +20,6 @@ class Route implements RouteCore
     public static $method;
 
     /**
-     * Clean URL by splitting string at "?" to get actual URL
-     * @param string $url URL to be cleaned that may contain "?"
-     * @return mixed Part of the URL before the "?" if it existed
-     */
-    public static function cleanURL(string $url): string
-    {
-        $url = explode("?", $url, 2);
-
-        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
-
-        return str_replace("//", "/", $url[0]);
-    }
-
-    /**
      * Get route
      * @param string $routePath
      * @param $function
@@ -43,8 +29,6 @@ class Route implements RouteCore
         self::$method = TINA4_GET;
         self::add($routePath, $function, true);
     }
-
-    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
 
     /**
      * Add a route to be called on the web server
@@ -70,7 +54,7 @@ class Route implements RouteCore
         foreach ($routes as $rid => $routePathLoop) {
             if ($routePathLoop !== "") {
 
-                if (isset($_SERVER["REQUEST_URI"]) && self::cleanURL($_SERVER["REQUEST_URI"]) !== "/swagger/json.json" && substr($routePathLoop, 0,2) !== substr(self::cleanURL($_SERVER["REQUEST_URI"]), 0,2)) continue;
+                if (isset($_SERVER["REQUEST_URI"]) && self::cleanURL($_SERVER["REQUEST_URI"]) !== "/swagger/json.json" && substr($routePathLoop, 0, 2) !== substr(self::cleanURL($_SERVER["REQUEST_URI"]), 0, 2)) continue;
 
                 if ($routePathLoop[0] !== "/") {
                     $routePathLoop = "/" . $routePathLoop;
@@ -89,6 +73,22 @@ class Route implements RouteCore
             }
         }
 
+    }
+
+    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
+
+    /**
+     * Clean URL by splitting string at "?" to get actual URL
+     * @param string $url URL to be cleaned that may contain "?"
+     * @return mixed Part of the URL before the "?" if it existed
+     */
+    public static function cleanURL(string $url): string
+    {
+        $url = explode("?", $url, 2);
+
+        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
+
+        return str_replace("//", "/", $url[0]);
     }
 
     /**

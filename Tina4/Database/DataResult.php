@@ -46,7 +46,7 @@ class DataResult implements JsonSerializable
      * @param array $fields Fields in the table and their types
      * @param integer $noOfRecords Number of records
      * @param integer $offSet Which row to start recording
-     * @param DataError $error Database error
+     * @param DataError|null $error Database error
      */
     public function __construct($records, $fields, $noOfRecords, $offSet = 0, DataError $error = null)
     {
@@ -91,21 +91,21 @@ class DataResult implements JsonSerializable
 
     /**
      * Gets an array of objects
-     * @param boolean $original Original field names
+     * @param bool $original Original field names
      * @return array|mixed
      */
-    public function asObject($original = false): ?array
+    public function asObject(bool $original = false): ?array
     {
         return $this->records($original);
     }
 
     /**
      * Converts returned results as array of objects
-     * @param boolean $original Original field name
+     * @param bool $original Original field name
      * @return array|null
      * @example examples\exampleDataResultRecords.php
      */
-    public function records($original = false): ?array
+    public function records(bool $original = false): ?array
     {
         $results = [];
         if (!empty($this->records)) {
@@ -128,10 +128,10 @@ class DataResult implements JsonSerializable
 
     /**
      * Gets the result as a generic array without the extra object information
-     * @param boolean $original Original field names
+     * @param bool $original Original field names
      * @return array
      */
-    public function asArray($original = false): array
+    public function asArray(bool $original = false): array
     {
         $result = [];
         if (!empty($this->records)) {
@@ -171,7 +171,7 @@ class DataResult implements JsonSerializable
     /**
      * Makes a neat JSON response
      */
-    public function jsonSerialize()
+    public function jsonSerialize(): object
     {
         $results = [];
 
@@ -190,9 +190,9 @@ class DataResult implements JsonSerializable
 
     /**
      * Gets the error from the result if the query failed
-     * @return mixed
+     * @return array|null
      */
-    public function getError()
+    public function getError(): ?array
     {
         if (!empty($this->error)) {
             return $this->error->getError();

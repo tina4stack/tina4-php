@@ -13,7 +13,13 @@ namespace Tina4;
  */
 class Api
 {
+    /**
+     * @var string|null Base url for the Api
+     */
     public $baseURL;
+    /**
+     * @var string Auth header , normally basic auth or token auth
+     */
     public $authHeader;
 
     /**
