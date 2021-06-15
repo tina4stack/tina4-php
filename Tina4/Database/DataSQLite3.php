@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -57,21 +58,18 @@ class DataSQLite3 implements DataBase
             foreach ($params as $pid => $param) {
                 if (is_numeric($param)) {
                     $preparedQuery->bindValue((string)($pid), $param, SQLITE3_FLOAT);
-                } else
-                    if (is_int($param)) {
-                        $preparedQuery->bindValue((string)($pid), $param, SQLITE3_INTEGER);
-                    } else
-                        if ($this->isBinary($param)) {
-                            $preparedQuery->bindValue((string)($pid), $param, SQLITE3_BLOB);
-                        } else {
-                            $preparedQuery->bindValue((string)($pid), $param, SQLITE3_TEXT);
-                        }
+                } elseif (is_int($param)) {
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_INTEGER);
+                } elseif ($this->isBinary($param)) {
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_BLOB);
+                } else {
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_TEXT);
+                }
             }
 
 
             $preparedQuery->execute();
             $preparedQuery->close();
-
         }
 
         return $this->error();

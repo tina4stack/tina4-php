@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -29,7 +30,6 @@ class DataMySQL implements DataBase
 
         $this->dbh = mysqli_connect($this->hostName, $this->username, $this->password, $this->databaseName, $this->port);
         $this->dbh->set_charset("utf8mb4");
-
     }
 
     /**
@@ -59,28 +59,25 @@ class DataMySQL implements DataBase
             $preparedQuery = $this->dbh->prepare($params[0]);
             $executeError = $this->error();
             if (!empty($preparedQuery)) {
-
                 unset($params[0]);
                 if (!empty($params)) {
                     $paramTypes = "";
                     foreach ($params as $pid => $param) {
                         if ($this->isBinary($param)) {
                             $paramTypes .= "s"; //Should be b but does not work as expected
-                        } else
-                            if (is_int($param)) {
-                                $paramTypes .= "i";
-                            } else
-                                if (is_array($param)) {
-                                    if (array_key_exists(0, $param)) {
-                                        $paramTypes .= (($param[0] !== "0") ? "d" : "s");
-                                    } else {
-                                        $paramTypes .= "s";
-                                    }
-                                } else if ($param !== '' && is_numeric($param)) {
-                                    $paramTypes .= "d";
-                                } else {
-                                    $paramTypes .= "s";
-                                }
+                        } elseif (is_int($param)) {
+                            $paramTypes .= "i";
+                        } elseif (is_array($param)) {
+                            if (array_key_exists(0, $param)) {
+                                $paramTypes .= (($param[0] !== "0") ? "d" : "s");
+                            } else {
+                                $paramTypes .= "s";
+                            }
+                        } elseif ($param !== '' && is_numeric($param)) {
+                            $paramTypes .= "d";
+                        } else {
+                            $paramTypes .= "s";
+                        }
                     }
 
                     //Fix for reference values https://stackoverflow.com/questions/16120822/mysqli-bind-param-expected-to-be-a-reference-value-given
@@ -90,14 +87,11 @@ class DataMySQL implements DataBase
                     $executeError = $this->error(); //We need the error here!
                     \mysqli_stmt_affected_rows($preparedQuery);
                     \mysqli_stmt_close($preparedQuery);
-
-
                 } else { //Execute a statement without params
                     $params[0] = $preparedQuery;
                     call_user_func_array("mysqli_execute", $params);
                     $executeError = $this->error(); //We need the error here!
                 }
-
             }
             return $executeError;
         }
@@ -132,7 +126,6 @@ class DataMySQL implements DataBase
         if ($error->getError()["errorCode"] == 0) {
             if (isset($recordCursor, $recordCursor->num_rows) && !empty($recordCursor) && $recordCursor->num_rows > 0) {
                 while ($record = mysqli_fetch_assoc($recordCursor)) {
-
                     if (is_array($record)) {
                         $records[] = (new DataRecord($record, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
                     }

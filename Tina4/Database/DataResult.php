@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -19,28 +20,23 @@ class DataResult implements JsonSerializable
      * @var resource Records returned from query
      */
     public $records;
-
-    /**
+/**
      * @var array Fields in the table and their types
      */
     public $fields;
-
-    /**
+/**
      * @var integer Number of records
      */
     public $noOfRecords;
-
-    /**
+/**
      * @var integer Data row offset
      */
     public $offSet;
-
-    /**
+/**
      * @var DataError Database error
      */
     public $error;
-
-    /**
+/**
      * DataResult constructor.
      * @param resource $records records returned from query
      * @param array $fields Fields in the table and their types
@@ -149,7 +145,6 @@ class DataResult implements JsonSerializable
     public function __toString(): string
     {
         $results = [];
-
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
                 if (get_class($record) == "Tina4\DataRecord") {
@@ -165,7 +160,6 @@ class DataResult implements JsonSerializable
         } else {
             return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "fields" => [], "data" => [], "error" => $this->error->getErrorText()]);
         }
-
     }
 
     /**
@@ -174,7 +168,6 @@ class DataResult implements JsonSerializable
     public function jsonSerialize(): object
     {
         $results = [];
-
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
                 if (get_class($record) == "Tina4\DataRecord") {
@@ -200,5 +193,4 @@ class DataResult implements JsonSerializable
             return null;
         }
     }
-
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -118,7 +119,6 @@ class Module
         if (empty($_TINA4_MODULES)) {
             return [];
         } else {
-
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["templatePath"] as $routePath) {
                     $routes[] = ["path" => $routePath, "nameSpace" => $module["nameSpace"]];
@@ -167,11 +167,9 @@ class Module
             return [];
         } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
-
                 if (!empty($module["config"])) {
                     $configs[] = $module["config"];
                 }
-
             }
         }
         return $configs;

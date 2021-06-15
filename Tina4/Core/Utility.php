@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -68,7 +69,7 @@ trait Utility
         while (($file = $d->read()) !== false) {
             $pathInfo = pathinfo($file);
 
-            if (isset ($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
+            if (isset($pathInfo["extension"]) && strtolower($pathInfo["extension"]) === "php") {
                 $fileNameRoute = realpath($dirName) . DIRECTORY_SEPARATOR . $file;
 
                 require_once $fileNameRoute;
@@ -136,11 +137,9 @@ trait Utility
                 $html .= self::iterateDirectory($path . "/" . $fileName, $relativePath, $event);
                 $html .= "</li>";
                 $dirItems[] = $html;
-
             } else {
                 $fileItems[] = '<li ' . $event . ' file-data="' . str_replace("./", "/", $path . "/" . $fileName) . '" data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/file.png"}\'>' . $fileName . '</li>';
             }
-
         }
 
         $html = "<ul>";
@@ -173,18 +172,16 @@ trait Utility
 
             $twigLoader = new FilesystemLoader();
             foreach ($twigPaths as $twigPath) {
-
                 if (is_array($twigPath)) {
                     if (isset($twigPath["nameSpace"])) {
                         $twigLoader->addPath($twigPath["path"], $twigPath["nameSpace"]);
                         $twigLoader->addPath($twigPath["path"], "__main__");
                     }
-                } else
-                    if (file_exists(TINA4_SUB_FOLDER . $twigPath)) {
-                        $twigLoader->addPath(TINA4_SUB_FOLDER . $twigPath, '__main__');
-                    } else {
-                        $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . $twigPath), '__main__');
-                    }
+                } elseif (file_exists(TINA4_SUB_FOLDER . $twigPath)) {
+                    $twigLoader->addPath(TINA4_SUB_FOLDER . $twigPath, '__main__');
+                } else {
+                    $twigLoader->addPath(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . $twigPath), '__main__');
+                }
             }
 
             if (TINA4_DEBUG) {
@@ -465,7 +462,7 @@ trait Utility
         } elseif (is_file($target)) {
             if ($filter === "*") {
                 $result[] = realpath($target);
-            } else if (strpos($target, $filter) !== false) {
+            } elseif (strpos($target, $filter) !== false) {
                 $result[] = realpath($target);
             }
         }
@@ -536,9 +533,7 @@ trait Utility
                         }
                     }
                 } catch (\Exception $e) {
-
                 }
-
             } catch (\Exception $e) {
                 echo $e->getMessage();
             }

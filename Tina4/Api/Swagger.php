@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -41,7 +42,6 @@ class Swagger implements \JsonSerializable
         $paths = (object)[];
 
         foreach ($arrRoutes as $arId => $route) {
-
             $route["routePath"] = str_replace("//", "/", $this->subFolder . $route["routePath"]);
 
             $method = strtolower($route["method"]);
@@ -84,26 +84,20 @@ class Swagger implements \JsonSerializable
                 if (!empty($matches)) {
                     if ($matches[1] === "@summary") {
                         $summary = $matches[2];
-                    } else
-                        if ($matches[1] === "@description") {
-                            $description = str_replace("\n", "", $matches[2]);
-                        } else
-                            if ($matches[1] === "@tags") {
-                                $tags = explode(",", $matches[2]);
-                                foreach ($tags as $tid => $tag) {
-                                    $tags[$tid] = str_replace("\n", "", $tag);
-                                }
-                            } else
-                                if ($matches[1] === "@queryParams" || $matches[1] === "@params") {
-                                    $queryParams = explode(",", $matches[2]);
-                                } else
-                                    if ($matches[1] === "@example") {
-                                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\" . $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "asArray")) { $example = (object)$example->asArray(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
-                                    } else
-                                        if ($matches[1] === "@secure") {
-                                            $security[] = (object)["bearerAuth" => []];
-                                        }
-
+                    } elseif ($matches[1] === "@description") {
+                        $description = str_replace("\n", "", $matches[2]);
+                    } elseif ($matches[1] === "@tags") {
+                        $tags = explode(",", $matches[2]);
+                        foreach ($tags as $tid => $tag) {
+                            $tags[$tid] = str_replace("\n", "", $tag);
+                        }
+                    } elseif ($matches[1] === "@queryParams" || $matches[1] === "@params") {
+                        $queryParams = explode(",", $matches[2]);
+                    } elseif ($matches[1] === "@example") {
+                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\" . $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "asArray")) { $example = (object)$example->asArray(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
+                    } elseif ($matches[1] === "@secure") {
+                        $security[] = (object)["bearerAuth" => []];
+                    }
                 }
             }
 
@@ -122,7 +116,6 @@ class Swagger implements \JsonSerializable
             $propertyName = "name";
 
             foreach ($params as $pid => $param) {
-
                 if (!isset($params[$pid]->{$propertyIn})) {
                     $params[$pid]->{$propertyIn} = "path";
                 }
@@ -183,7 +176,6 @@ class Swagger implements \JsonSerializable
                             ])];
                     }
                 }
-
             }
         }
 
@@ -200,8 +192,6 @@ class Swagger implements \JsonSerializable
             "paths" => $paths
 
         ];
-
-
     }
 
     /**

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -292,7 +293,7 @@ class Messenger
         $tmpcel = trim($tmpcel);
         if (substr($tmpcel, 0, 1) === "0") {
             $tmpcel = substr_replace($tmpcel, $countryPrefix, 0, 1);
-        } else if (strlen($tmpcel) < 11) {
+        } elseif (strlen($tmpcel) < 11) {
             $tmpcel = $countryPrefix . $tmpcel;
         }
 

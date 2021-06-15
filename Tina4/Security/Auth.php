@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -148,7 +149,6 @@ class Auth extends Data
             if (!isset($payLoad["expires"])) { //take care of expires if the user forgets to set it
                 $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
             }
-
         } else {
             $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
         }
@@ -298,7 +298,6 @@ class Auth extends Data
         } else {
             return "";
         }
-
     }
 
     /**

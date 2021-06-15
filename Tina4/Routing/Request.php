@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -19,7 +20,6 @@ class Request
     public $server = null;
     public $session = null;
     public $files = null;
-
     public function __construct($rawRequest)
     {
         Debug::message($rawRequest, TINA4_LOG_DEBUG);
@@ -42,7 +42,7 @@ class Request
 
         if (!empty($rawRequest)) {
             $this->data = json_decode($rawRequest, true, 512);
-            //pass raw request anyway
+    //pass raw request anyway
             if ($this->data === null && $rawRequest !== '') {
                 $this->data = $rawRequest;
             }
@@ -71,5 +71,4 @@ class Request
     {
         return json_decode(json_encode($this->data), true, 512);
     }
-
 }

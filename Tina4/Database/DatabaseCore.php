@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -101,7 +102,6 @@ trait DataBaseCore
         //Set the date format we want date results to display in
         $this->dateFormat = $dateFormat;
         $this->open();
-
     }
 
     /**
@@ -163,5 +163,4 @@ trait DataBaseCore
     {
         return (new SQL())->select($fields, $limit, $offset, $hasOne, $hasMany);
     }
-
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -15,8 +16,7 @@ class DataError
 {
     private $errorCode;
     private $errorMessage;
-
-    /**
+/**
      * DataError constructor.
      * @param string $errorCode Code of error
      * @param string $errorMessage Message of error

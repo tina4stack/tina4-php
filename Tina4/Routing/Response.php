@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -26,30 +27,33 @@ class Response
     {
         if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"])) {
             $contentType = $_SERVER["CONTENT_TYPE"];
-        } else if (empty($contentType)) {
+        } elseif (empty($contentType)) {
             $contentType = TEXT_HTML;
         }
 
         if (!empty($content) || (is_array($content) || is_object($content))) {
             switch ($contentType) {
                 case APPLICATION_JSON:
-                    $content = json_encode($content, JSON_THROW_ON_ERROR);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                $content = json_encode($content, JSON_THROW_ON_ERROR);
+
                     break;
                 case APPLICATION_XML:
-                    $content = self::generateValidXmlFromArray($content);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        $content = self::generateValidXmlFromArray($content);
+
                     break;
                 default:
                     if (is_object($content) && $content instanceof HTMLElement) {
                         $content .= "";
                     }
 
-                    //Try determine the  content type
+                            //Try determine the  content type
                     if (!is_string($content) && (is_object($content) || is_array($content))) {
                         $contentType = APPLICATION_JSON;
                         $content = json_encode($content, JSON_THROW_ON_ERROR);
                     } else {
                         $contentType = TEXT_HTML;
                     }
+
                     break;
             }
         }
@@ -70,11 +74,9 @@ class Response
     public static function generateValidXmlFromArray($array, $node_block = 'nodes', $node_name = 'node'): string
     {
         $xml = '<?xml version="1.0" encoding="UTF-8" ?>';
-
         $xml .= '<' . $node_block . '>';
         $xml .= self::generateXmlFromArray($array, $node_name);
         $xml .= '</' . $node_block . '>';
-
         return $xml;
     }
 

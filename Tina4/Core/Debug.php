@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -50,11 +51,10 @@ class Debug implements \Psr\Log\LoggerInterface
     public static function message($message, $level = LogLevel::INFO)
     {
         if (self::$logger === null) {
-            self::$logger = new self;
+            self::$logger = new self();
         }
 
         self::$logger->log($level, $message, self::$context);
-
     }
 
     /**
@@ -83,7 +83,6 @@ class Debug implements \Psr\Log\LoggerInterface
             } else {
                 $codeContent[] = "<span class='lineNo'>{$lineNr}</span>" . ($lines[$i]);
             }
-
         }
 
         return implode(PHP_EOL, $codeContent);
@@ -91,7 +90,9 @@ class Debug implements \Psr\Log\LoggerInterface
 
     public static function render(): string
     {
-        if (count(self::$errors) === 0) return "";
+        if (count(self::$errors) === 0) {
+            return "";
+        }
         $htmlTemplate = '<html><body><style>
     h5 {
         background: lightblue;
@@ -161,7 +162,6 @@ class Debug implements \Psr\Log\LoggerInterface
 {{error.time}}: {{error.message | raw}} in {{ error.file }} ({{error.line}}) 
 {%endfor%}';
         try {
-
             if (is_array(self::$errors)) {
                 self::$errors = array_unique(self::$errors, SORT_REGULAR);
             }
@@ -232,7 +232,6 @@ class Debug implements \Psr\Log\LoggerInterface
                 }
                 file_put_contents(TINA4_DOCUMENT_ROOT . "/log/debug.log", date("Y-m-d H:i:s: ") . $message . PHP_EOL, FILE_APPEND);
             }
-
         }
     }
 

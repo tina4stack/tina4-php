@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -140,7 +141,6 @@ class DataFirebird implements DataBase
                 $recordCount = ibase_query($this->dbh, $sqlCount);
 
                 $resultCount = ibase_fetch_assoc($recordCount);
-
             } else {
                 $resultCount["COUNT_RECORDS"] = count($records); //used for insert into or update
             }

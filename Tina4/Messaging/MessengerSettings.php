@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -22,7 +23,8 @@ class MessengerSettings
     public $smtpPort = 25;
     public $usePHPMailer = false;
     public $useTwigTemplates = true;
-    public $templatePath = "messenger"; //off the templates or public folder
+    public $templatePath = "messenger";
+//off the templates or public folder
 
     /**
      * MessengerSettings constructor.

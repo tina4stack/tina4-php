@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -155,8 +156,7 @@ class ORM implements \JsonSerializable
                 $request = json_decode((string)$request, true);
 
                 foreach ($request as $key => $value) {
-                    if (!property_exists($this, $key)) //Add to virtual and excluded fields anything that isn't in the object
-                    {
+                    if (!property_exists($this, $key)) { //Add to virtual and excluded fields anything that isn't in the object
                         $this->virtualFields[] = $key;
                         $this->excludeFields[] = $key;
                     }
@@ -254,7 +254,7 @@ class ORM implements \JsonSerializable
         } else {
             if (!empty($tableName)) {
                 return $tableName;
-            } else if (!empty($this->tableName)) {
+            } elseif (!empty($this->tableName)) {
                 return $this->tableName;
             }
         }
@@ -430,21 +430,18 @@ class ORM implements \JsonSerializable
 
                 //get last id
                 if ($getLastId) {
-
                     $lastId = $this->DBA->getLastId();
 
                     if (!empty($lastId)) {
                         $this->{$this->primaryKey} = $lastId;
-                    } else
-                        if (method_exists($returning, "records") && !empty($returning->records())) {
-                            $record = $returning->asObject()[0];
+                    } elseif (method_exists($returning, "records") && !empty($returning->records())) {
+                        $record = $returning->asObject()[0];
 
-                            $primaryFieldName = ($this->getObjectName($this->primaryKey));
-                            if (isset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
-                                $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines (Firebird works)
-                            }
+                        $primaryFieldName = ($this->getObjectName($this->primaryKey));
+                        if (isset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
+                            $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines (Firebird works)
                         }
-
+                    }
                 }
 
                 $tableData = $this->getTableData();
@@ -494,7 +491,6 @@ class ORM implements \JsonSerializable
         } else {
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
-
                 $sqlCreate = $this->generateCreateSQL($this->getTableData(), $tableName);
 
                 if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
@@ -528,7 +524,9 @@ class ORM implements \JsonSerializable
 
         foreach ($tableData as $fieldName => $fieldValue) {
             //@todo fix
-            if (!property_exists($className, $this->getObjectName($fieldName, true))) continue;
+            if (!property_exists($className, $this->getObjectName($fieldName, true))) {
+                continue;
+            }
             $property = new \ReflectionProperty($className, $this->getObjectName($fieldName, true));
 
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
@@ -622,7 +620,7 @@ class ORM implements \JsonSerializable
         if (!empty($this->DBA) && !$keyInFieldList) {
             if (get_class($this->DBA) === "Tina4\DataFirebird") {
                 $returningStatement = " returning (" . $this->getFieldName($this->primaryKey) . ")";
-            } else if (get_class($this->DBA) === "Tina4\DataSQLite3") {
+            } elseif (get_class($this->DBA) === "Tina4\DataSQLite3") {
                 $returningStatement = "";
             }
         }
@@ -684,7 +682,6 @@ class ORM implements \JsonSerializable
         Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", TINA4_LOG_DEBUG);
         Debug::message("Field Values:\n" . print_r($fieldValues, 1), TINA4_LOG_DEBUG);
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
-
     }
 
     /**
@@ -703,14 +700,13 @@ class ORM implements \JsonSerializable
 
             if ($overRide) {
                 $this->{$ormField} = $fieldValue;
-            } else
+            } elseif (property_exists($this, $ormField)) {
                 if (property_exists($this, $ormField)) {
-                    if (property_exists($this, $ormField)) {
-                        if ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
-                            $this->{$ormField} = $fieldValue;
-                        }
+                    if ($this->{$ormField} === null && $this->{$ormField} !== "0" && $this->{$ormField} !== "") {
+                        $this->{$ormField} = $fieldValue;
                     }
                 }
+            }
         }
 
         //work out the virtual fields here from the load
@@ -771,7 +767,6 @@ class ORM implements \JsonSerializable
         $tableData = [];
         foreach ($this as $fieldName => $value) {
             if (!in_array($fieldName, $this->protectedFields, true) && !in_array($fieldName, $this->excludeFields, true)) {
-
                 if (is_object($value)) {
                     if (get_parent_class(get_class($value)) === "Tina4\ORM") {
                         if ($isObject) {
@@ -780,18 +775,17 @@ class ORM implements \JsonSerializable
                             $value = $value->asArray();
                         }
                     }
-                } else
-                    if (is_array($value)) {
-                        foreach ($value as $vid => $vvalue) {
-                            if (is_object($vvalue) && get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
-                                if ($isObject) {
-                                    $value[$vid] = $vvalue->asObject();
-                                } else {
-                                    $value[$vid] = $vvalue->asArray();
-                                }
+                } elseif (is_array($value)) {
+                    foreach ($value as $vid => $vvalue) {
+                        if (is_object($vvalue) && get_parent_class(get_class($vvalue)) === "Tina4\ORM") {
+                            if ($isObject) {
+                                $value[$vid] = $vvalue->asObject();
+                            } else {
+                                $value[$vid] = $vvalue->asArray();
                             }
                         }
                     }
+                }
                 $tableData[$fieldName] = $value;
             }
         }
@@ -809,7 +803,9 @@ class ORM implements \JsonSerializable
     public function delete($filter = "", $tableName = "", $fieldMapping = "")
     {
         $tableName = $this->getTableName($tableName);
-        if (!$this->checkDBConnection($tableName)) return false;
+        if (!$this->checkDBConnection($tableName)) {
+            return false;
+        }
 
         $tableData = $this->getTableData($fieldMapping, true);
         if (empty($filter)) {
@@ -826,7 +822,6 @@ class ORM implements \JsonSerializable
         } else {
             return (object)$error->getError();
         }
-
     }
 
     /**
@@ -971,7 +966,7 @@ class ORM implements \JsonSerializable
     {
         foreach ($this->hasOne() as $id => $item) {
             foreach ($item as $className => $foreignKey) {
-                $class = new $className;
+                $class = new $className();
                 $primaryKey = $this->getFieldName($class->primaryKey);
                 $records = $class->select("*", $this->hasManyLimit)->where("{$primaryKey} = {$this->{$foreignKey}}");
                 $className = strtolower($className);
@@ -1000,7 +995,7 @@ class ORM implements \JsonSerializable
     {
         foreach ($this->hasMany() as $id => $item) {
             foreach ($item as $className => $foreignKey) {
-                $class = new $className;
+                $class = new $className();
 
                 if ($class->checkDBConnection()) {
                     $foreignKey = $this->getFieldName($foreignKey);
@@ -1096,7 +1091,9 @@ class ORM implements \JsonSerializable
         $line = $backTrace["line"];
 
 
-        if (empty($path)) $path = str_replace($_SERVER["DOCUMENT_ROOT"], "", str_replace(".php", "", realpath($fileName)));
+        if (empty($path)) {
+            $path = str_replace($_SERVER["DOCUMENT_ROOT"], "", str_replace(".php", "", realpath($fileName)));
+        }
 
         $template = <<<'EOT'
 /**
@@ -1214,7 +1211,6 @@ EOT;
         $content = str_replace($callingCode, $gridRouterCode . PHP_EOL . $template, $content);
 
         file_put_contents($fileName, $content);
-
     }
 
     /**
@@ -1234,5 +1230,4 @@ EOT;
         }
         return ucwords($fieldName);
     }
-
 }

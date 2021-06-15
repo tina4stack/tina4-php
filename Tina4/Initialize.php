@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -89,21 +90,49 @@ const TINA4_PATCH = "PATCH";
 const TINA4_DELETE = "DELETE";
 
 
-if (!defined("TEXT_HTML")) define("TEXT_HTML", "text/html");
-if (!defined("TEXT_PLAIN")) define("TEXT_PLAIN", "text/plain");
-if (!defined("APPLICATION_JSON")) define("APPLICATION_JSON", "application/json");
-if (!defined("APPLICATION_XML")) define("APPLICATION_XML", "application/xml");
+if (!defined("TEXT_HTML")) {
+    define("TEXT_HTML", "text/html");
+}
+if (!defined("TEXT_PLAIN")) {
+    define("TEXT_PLAIN", "text/plain");
+}
+if (!defined("APPLICATION_JSON")) {
+    define("APPLICATION_JSON", "application/json");
+}
+if (!defined("APPLICATION_XML")) {
+    define("APPLICATION_XML", "application/xml");
+}
 
-if (!defined("DATA_ARRAY")) define("DATA_ARRAY", 0);
-if (!defined("DATA_OBJECT")) define("DATA_OBJECT", 1);
-if (!defined("DATA_NUMERIC")) define("DATA_NUMERIC", 2);
-if (!defined("DATA_TYPE_TEXT")) define("DATA_TYPE_TEXT", 0);
-if (!defined("DATA_TYPE_NUMERIC")) define("DATA_TYPE_NUMERIC", 1);
-if (!defined("DATA_TYPE_BINARY")) define("DATA_TYPE_BINARY", 2);
-if (!defined("DATA_ALIGN_LEFT")) define("DATA_ALIGN_LEFT", 0);
-if (!defined("DATA_ALIGN_RIGHT")) define("DATA_ALIGN_RIGHT", 1);
-if (!defined("DATA_CASE_UPPER")) define("DATA_CASE_UPPER", true);
-if (!defined("DATA_NO_SQL")) define("DATA_NO_SQL", "ERR001");
+if (!defined("DATA_ARRAY")) {
+    define("DATA_ARRAY", 0);
+}
+if (!defined("DATA_OBJECT")) {
+    define("DATA_OBJECT", 1);
+}
+if (!defined("DATA_NUMERIC")) {
+    define("DATA_NUMERIC", 2);
+}
+if (!defined("DATA_TYPE_TEXT")) {
+    define("DATA_TYPE_TEXT", 0);
+}
+if (!defined("DATA_TYPE_NUMERIC")) {
+    define("DATA_TYPE_NUMERIC", 1);
+}
+if (!defined("DATA_TYPE_BINARY")) {
+    define("DATA_TYPE_BINARY", 2);
+}
+if (!defined("DATA_ALIGN_LEFT")) {
+    define("DATA_ALIGN_LEFT", 0);
+}
+if (!defined("DATA_ALIGN_RIGHT")) {
+    define("DATA_ALIGN_RIGHT", 1);
+}
+if (!defined("DATA_CASE_UPPER")) {
+    define("DATA_CASE_UPPER", true);
+}
+if (!defined("DATA_NO_SQL")) {
+    define("DATA_NO_SQL", "ERR001");
+}
 
 //Initialize error handler
 
@@ -176,14 +205,13 @@ function tina4_auto_loader($class)
                 require_once $location . DIRECTORY_SEPARATOR . "{$class}.php";
                 $found = true;
                 break;
-            } else
-                if (file_exists(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                    require_once TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
-                    $found = true;
-                    break;
-                } else {
-                    autoLoadFolders(TINA4_DOCUMENT_ROOT, $location, $class);
-                }
+            } elseif (file_exists(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                require_once TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                $found = true;
+                break;
+            } else {
+                autoLoadFolders(TINA4_DOCUMENT_ROOT, $location, $class);
+            }
         }
     }
 

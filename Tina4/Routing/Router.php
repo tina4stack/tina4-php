@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -63,7 +64,6 @@ class Router extends Data
         //SECOND STATIC FILES - ONLY GET
 
         if ($method === TINA4_GET) {
-
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
@@ -220,7 +220,6 @@ class Router extends Data
             [, $range] = explode('=', $_SERVER['HTTP_RANGE'], 2);
             // Make sure the client hasn't sent us a multibyte range
             if (strpos($range, ',') !== false) {
-
                 // (?) Should this be issued here, or should the first
                 // range be used? Or should the header be ignored and
                 // we output the whole content?
@@ -236,7 +235,6 @@ class Router extends Data
                 // The n-number of the last bytes is requested
                 $c_start = $size - substr($range, 1);
             } else {
-
                 $range = explode('-', $range);
                 $c_start = $range[0];
                 $c_end = (isset($range[1]) && is_numeric($range[1])) ? $range[1] : $size;
@@ -248,7 +246,6 @@ class Router extends Data
             $c_end = ($c_end > $end) ? $end : $c_end;
             // Validate the requested range and return an error if it's not correct.
             if ($c_start > $c_end || $c_start > $size - 1 || $c_end >= $size) {
-
                 $headers[] = ('HTTP/1.1 416 Requested Range Not Satisfiable');
                 $headers[] = ("Content-Range: bytes $start-$end/$size");
                 // (?) Echo some info to the client?
@@ -269,9 +266,7 @@ class Router extends Data
         $buffer = 1024 * 8;
         $content = "";
         while (!feof($fp) && ($p = ftell($fp)) <= $end) {
-
             if ($p + $buffer > $end) {
-
                 // In case we're only outputtin a chunk, make sure we don't
                 // read past the length
                 $buffer = $end - $p + 1;
@@ -330,7 +325,6 @@ class Router extends Data
 
                 $requestHeaders = getallheaders();
                 if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
-
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
                         //call closure with & without params
                         $this->config->setAuthentication(null); //clear the auth
@@ -349,7 +343,7 @@ class Router extends Data
                             $this->config->setAuthentication(null); //clear the auth
                             $result = $this->getRouteResult($route["class"], $route["function"], $params);
                         }
-                    } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                    } elseif (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
                         $this->config->setAuthentication(null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
                     } else {
@@ -360,7 +354,7 @@ class Router extends Data
                 //check for an empty result
                 if ($result === null && !is_array($result) && !is_object($result)) {
                     return new RouterResponse("", HTTP_OK);
-                } else if (!is_string($result)) {
+                } elseif (!is_string($result)) {
                     $headers[] = $result["contentType"];
                     $content = $result["content"];
                     $httpCode = $result["httpCode"];
@@ -401,19 +395,16 @@ class Router extends Data
             foreach ($matchesPath[1] as $rid => $matchPath) {
                 if ($matchPath !== "" && !empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
                     $variables[] = urldecode($matchPath);
-                } else
-                    if (!empty($matchesRoute[1][$rid])) {
-                        if ($matchPath !== $matchesRoute[1][$rid]) {
-                            $matching = false;
-                            break;
-                        }
-                    } else
-                        if ($matchesRoute[1][$rid] === "" && $rid > 1) {
-                            $matching = false;
-                            break;
-                        }
+                } elseif (!empty($matchesRoute[1][$rid])) {
+                    if ($matchPath !== $matchesRoute[1][$rid]) {
+                        $matching = false;
+                        break;
+                    }
+                } elseif ($matchesRoute[1][$rid] === "" && $rid > 1) {
+                    $matching = false;
+                    break;
+                }
             }
-
         } else {
             $matching = false; //The path was totally different from the route
         }

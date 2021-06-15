@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -110,7 +111,6 @@ class Test
         }
 
         foreach ($tests as $tid => $test) {
-
             $test = trim($test);
             $testCount++;
             if ($annotations["type"] === "function") {
@@ -118,11 +118,13 @@ class Test
             } else {
                 $message = $this->runTest($testCount, $test, $annotations["method"], $this->testClass, $annotations["isStatic"]);
             }
-            if (empty($message)) $testCount--;
+            if (empty($message)) {
+                $testCount--;
+            }
             if ($onlyShowFailed && strpos($message, "Failed") !== false) {
                 $testResult .= $message;
                 $testFailed++;
-            } else if (!$onlyShowFailed) {
+            } elseif (!$onlyShowFailed) {
                 $testResult .= $message;
             }
         }
@@ -131,7 +133,6 @@ class Test
             if ($testCount - $testFailed !== $testCount) {
                 $testResult .= $this->colorOrange . "Tests: Passed " . ($testCount - $testFailed) . " of {$testCount} " . round(($testCount - $testFailed) / $testCount * 100.00, 2) . "%" . $this->colorReset . PHP_EOL;
             } else {
-
                 $testResult = substr($testResult, 0, -strlen(PHP_EOL)) . $this->colorGreen . " 100%" . $this->colorReset . PHP_EOL;
             }
         } else {
@@ -139,7 +140,6 @@ class Test
         }
 
         echo $testResult;
-
     }
 
     /**
@@ -155,7 +155,9 @@ class Test
     {
 
         preg_match_all('/^(assert)(.*),(.*)$/m', $test, $testParts, PREG_SET_ORDER);
-        if (empty($testParts)) return "";
+        if (empty($testParts)) {
+            return "";
+        }
 
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
@@ -197,7 +199,6 @@ class Test
 
                 //Check if starts with bracket then we are calling the method
                 if ($condition[0] === "(") {
-
                     if ($isStatic) {
                         $condition = '$testClass::' . $method . $condition; //("test") === true
                     } else {
@@ -212,16 +213,14 @@ class Test
                     }
 
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', 1));');
-                } else if ($condition[0] === '$' && strpos($condition, '$testClass') === false) {
+                } elseif ($condition[0] === '$' && strpos($condition, '$testClass') === false) {
                     if ($isStatic) {
                         $condition = '$testClass::' . str_replace('$', '', $condition);
                     } else {
                         $condition = '$testClass->' . str_replace('$', '', $condition);
                     }
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', 1));');
-
                 } else {
-
                     //Condition does not have form x === y or x !== y
                     if (!empty($actualExpression)) {
                         @eval('$actualResult = str_replace(PHP_EOL, "", print_r(' . $actualExpression . ',1));');
@@ -233,7 +232,6 @@ class Test
                 } catch (\Exception $exception) {
                     echo $condition;
                 }
-
             } else {
                 $condition = trim($testParts[0][2]);
                 if ($condition[0] === "(") {
@@ -242,7 +240,6 @@ class Test
                 } else {
                     $actualResult = $actualExpression;
                 }
-
             }
 
             return "# {$testNo} " . $method . ": " . $this->assert($condition, trim($testParts[0][3]), trim($testParts[0][2]), $actualResult) . "\n";

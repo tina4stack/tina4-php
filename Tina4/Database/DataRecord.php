@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -36,7 +37,6 @@ class DataRecord implements JsonSerializable
         if (!empty($record)) {
             $this->original = (object)$record;
             foreach ($record as $column => $value) {
-
                 if ($this->isBinary($value)) {
                     $value = \base64_encode($value);
                     $this->original->{$column} = $value;
@@ -50,8 +50,6 @@ class DataRecord implements JsonSerializable
 
                 $this->{$column} = $value;
             }
-
-
         }
     }
 
@@ -84,7 +82,6 @@ class DataRecord implements JsonSerializable
                     $object->{$columnName} = $value;
                 }
                 $object->{$column} = $value;
-
             }
         }
         return $object;

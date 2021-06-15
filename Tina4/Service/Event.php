@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -29,7 +30,6 @@ class Event
                 call_user_func_array($method, $params);
             }
         }
-
     }
 
     /**

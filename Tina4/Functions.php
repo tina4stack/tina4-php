@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -6,6 +7,7 @@
  */
 
 namespace Tina4;
+
 /**
  * Render a twig file or string
  * @param $fileNameString
@@ -41,24 +43,22 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             }
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
             return $internalTwig->render($renderFile, $data);
-        } else
-            if (strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR || strlen($fileName) > 1 && $fileName[0] === "/") {
-                $fileName = substr($fileName, 1);
-            }
+        } elseif (strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR || strlen($fileName) > 1 && $fileName[0] === "/") {
+            $fileName = substr($fileName, 1);
+        }
 
         if ($internalTwig->getLoader()->exists($fileName)) {
             return $internalTwig->render($fileName, $data);
-        } else
-            if ($internalTwig->getLoader()->exists(basename($fileName))) {
-                return $internalTwig->render(basename($fileName), $data);
-            } else {
-                if (!is_file($fileNameString)) {
-                    $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
-                    file_put_contents($fileName, $fileNameString);
-                }
-                $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
-                return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
+        } elseif ($internalTwig->getLoader()->exists(basename($fileName))) {
+            return $internalTwig->render(basename($fileName), $data);
+        } else {
+            if (!is_file($fileNameString)) {
+                $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
+                file_put_contents($fileName, $fileNameString);
             }
+            $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
+            return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
+        }
     } catch (\Exception $exception) {
         return $exception->getFile() . " (" . $exception->getLine() . ") " . $exception->getMessage();
     }
@@ -86,7 +86,6 @@ function redirect(string $url, $statusCode = 303)
             header('Location: ' . $url, true, $statusCode);
             die();
         }
-
     } else {
         header('Location: ' . $url, true, $statusCode);
         die();

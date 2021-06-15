@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -17,24 +18,21 @@ class Data
 {
     use Utility;
 
+
     public $DBA;
     public $cache;
     public $projectRoot;
     public $documentRoot;
     public $subFolder;
-
-    /**
+/**
      * Data constructor
      */
     public function __construct()
     {
         if (!defined("TINA4_DOCUMENT_ROOT")) {
-
             $reflection = new \ReflectionClass(ClassLoader::class);
             $vendorDir = dirname($reflection->getFileName());
-
             $this->projectRoot = dirname(dirname(__DIR__ . ".." . DIRECTORY_SEPARATOR) . ".." . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-
             $vendorFolder = explode("vendor", $this->projectRoot);
             if (count($vendorFolder) > 0) {
                 $this->documentRoot = $vendorFolder[0];

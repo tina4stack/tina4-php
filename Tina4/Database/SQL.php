@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -124,7 +125,7 @@ class SQL implements \JsonSerializable
         if (trim($filter) !== "") {
             if ($this->nextAnd == "join") {
                 $this->join[] = ["and", $filter];
-            } else if ($this->nextAnd == "having") {
+            } elseif ($this->nextAnd == "having") {
                 $this->having[] = ["and", $filter];
             } else {
                 $this->filter[] = ["and", $filter];
@@ -298,7 +299,6 @@ class SQL implements \JsonSerializable
 
                         if (!empty($this->excludeFields)) {
                             foreach ($this->excludeFields as $eid => $excludeField) {
-
                                 if (property_exists($newRecord, $excludeField)) {
                                     unset($newRecord->{$excludeField});
                                 }
@@ -308,7 +308,9 @@ class SQL implements \JsonSerializable
                         //Only return what was requested
                         if (!empty($this->fields) && !in_array("*", $this->getColumnNames($this->fields))) {
                             foreach ($newRecord as $key => $value) {
-                                if (in_array($key, $newRecord->protectedFields, true)) continue;
+                                if (in_array($key, $newRecord->protectedFields, true)) {
+                                    continue;
+                                }
                                 if (!in_array($this->ORM->getFieldName($key), $this->getColumnNames($this->fields), true) && strpos($key, " as") === false && strpos($key, ".") === false) {
                                     unset($newRecord->{$key});
                                 }
@@ -318,7 +320,6 @@ class SQL implements \JsonSerializable
 
                         //Apply a filter to the record
                         if (!empty($this->filterMethod)) {
-
                             foreach ($this->filterMethod as $fid => $filterMethod) {
                                 call_user_func($filterMethod, $newRecord);
                             }
@@ -403,7 +404,9 @@ class SQL implements \JsonSerializable
     public function asArray(): array
     {
         $records = $this->jsonSerialize();
-        if (isset($records["error"]) && !empty($records["error"])) return $records;
+        if (isset($records["error"]) && !empty($records["error"])) {
+            return $records;
+        }
         $result = [];
         foreach ($records as $id => $record) {
             if (get_parent_class($record) === "Tina4\ORM") {
@@ -411,7 +414,6 @@ class SQL implements \JsonSerializable
             } else {
                 $result[] = (array)$record;
             }
-
         }
 
         return $result;
