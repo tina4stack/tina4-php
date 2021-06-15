@@ -70,7 +70,13 @@ class DataMySQL implements DataBase
                             if (is_int($param)) {
                                 $paramTypes .= "i";
                             } else
-                                if ($param !== '' && $param[0] !== "0" && is_numeric($param)) {
+                                if (is_array($param)) {
+                                    if (array_key_exists(0, $param)) {
+                                        $paramTypes .= (($param[0] !== "0") ? "d" : "s");
+                                    } else {
+                                        $paramTypes .= "s";
+                                    }
+                                } else if ($param !== '' && is_numeric($param)) {
                                     $paramTypes .= "d";
                                 } else {
                                     $paramTypes .= "s";
@@ -124,7 +130,7 @@ class DataMySQL implements DataBase
         $resultCount["COUNT_RECORDS"] = 1;
 
         if ($error->getError()["errorCode"] == 0) {
-            if(isset($recordCursor,$recordCursor->num_rows) && !empty($recordCursor) && $recordCursor->num_rows > 0) {
+            if (isset($recordCursor, $recordCursor->num_rows) && !empty($recordCursor) && $recordCursor->num_rows > 0) {
                 while ($record = mysqli_fetch_assoc($recordCursor)) {
 
                     if (is_array($record)) {
