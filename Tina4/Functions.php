@@ -26,7 +26,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
         global $twig;
 
         if (empty($twig)) {
-            Utility::initTwig();
+            TwigUtility::initTwig();
         }
 
         $internalTwig = clone $twig;

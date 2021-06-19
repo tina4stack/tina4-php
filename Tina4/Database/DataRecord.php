@@ -24,12 +24,12 @@ class DataRecord implements JsonSerializable
 
     /**
      * DataRecord constructor Converts array to object
-     * @param array $record Array of records
+     * @param array|null $record Array of records
      * @param array $fieldMapping Array of field mapping
      * @param string $databaseFormat Input format use the PHP date format conventions
      * @param string $outputFormat Output date format - use the PHP date format conventions
      */
-    public function __construct($record = null, $fieldMapping = [], $databaseFormat = "Y-m-d", $outputFormat = "Y-m-d")
+    public function __construct(array $record = null, array $fieldMapping = [], string $databaseFormat = "Y-m-d", string $outputFormat = "Y-m-d")
     {
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
@@ -47,7 +47,6 @@ class DataRecord implements JsonSerializable
                     $this->original->{$column} = $value;
                 }
 
-
                 $this->{$column} = $value;
             }
         }
@@ -58,7 +57,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Whether to get the result as original field names
      * @return object
      */
-    public function asObject(bool $original = false): ?object
+    final public function asObject(bool $original = false): ?object
     {
         if ($original) {
             return $this->original;
@@ -72,7 +71,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Do we want the original result returned in the object
      * @return object An object with the transformed column names
      */
-    public function transformObject(bool $original = false): object
+    final public function transformObject(bool $original = false): object
     {
         $object = (object)[];
         if (!empty($this->original)) {
@@ -93,7 +92,7 @@ class DataRecord implements JsonSerializable
      * @param array|null $fieldMapping Field mapping to map fields
      * @return string Proper object name
      */
-    public function getObjectName(string $name, ?array $fieldMapping = []): string
+    final public function getObjectName(string $name, ?array $fieldMapping = []): string
     {
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
@@ -136,7 +135,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Do we want the original key names passed back
      * @return array An array with transformed key names
      */
-    public function asArray(bool $original = false): array
+    final public function asArray(bool $original = false): array
     {
         return (array)$this->transformObject($original);
     }
@@ -146,7 +145,7 @@ class DataRecord implements JsonSerializable
      * @return false|string
      * @throws \JsonException
      */
-    public function asJSON(): string
+    final public function asJSON(): string
     {
         return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
@@ -166,7 +165,7 @@ class DataRecord implements JsonSerializable
      * @param string $name Name of the data column
      * @return null|value Value of the named column
      */
-    public function byName(string $name): ?bool
+    final public function byName(string $name): ?bool
     {
         $columnName = strtoupper($name);
         if (!empty($this->original) && !empty($this->$columnName)) {
@@ -181,7 +180,7 @@ class DataRecord implements JsonSerializable
      * @return false|mixed|string
      * @throws \JsonException
      */
-    public function jsonSerialize()
+    final public function jsonSerialize(): string
     {
         return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

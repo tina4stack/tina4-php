@@ -34,7 +34,7 @@ class Router extends Data
      * @return RouterResponse
      * @throws \Twig\Error\LoaderError
      */
-    public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
+    final public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
     {
 
         $this->config = $config;
@@ -77,7 +77,7 @@ class Router extends Data
         //Initialize only after statics, initialize the twig engine
         $config->callInitFunction();
         try {
-            Utility::initTwig($config);
+            TwigUtility::initTwig($config);
         } catch (LoaderError $e) {
             Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
         }

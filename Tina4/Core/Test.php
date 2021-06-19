@@ -41,6 +41,7 @@ class Test
      */
     public function run(bool $onlyShowFailed = true, array $testGroups = []): void
     {
+
         //Find all the functions and classes with annotated methods
         //Look for test annotations
         $annotation = new Annotation();

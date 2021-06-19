@@ -22,12 +22,16 @@ class Annotation
      */
     final public function get(string $annotationName = ""): array
     {
+
         $functions = $this->getFunctions();
         asort($functions);
+
         $classes = $this->getClasses();
         asort($classes);
 
         $annotations = [];
+
+
 
         //Get annotations for each function
         foreach ($functions as $id => $function) {
@@ -50,7 +54,8 @@ class Annotation
      */
     final public function getFunctions(): array
     {
-        return get_defined_functions()["user"];
+        $allFunctions =  get_defined_functions(true);
+        return $allFunctions["user"];
     }
 
     /**
@@ -61,18 +66,6 @@ class Annotation
      */
     final public function getClasses(): array
     {
-        $classes = get_declared_classes();
-        $autoloaderClassName = "";
-        foreach ($classes as $className) {
-            if (strpos($className, 'ComposerAutoloaderInit') === 0) {
-                $autoloaderClassName = $className;
-                break;
-            }
-        }
-        $classLoader = $autoloaderClassName::getLoader();
-        foreach ($classLoader->getClassMap() as $path) {
-            require_once $path;
-        }
         return get_declared_classes();
     }
 
@@ -103,12 +96,13 @@ class Annotation
      * @param string $annotationName
      * @return array
      * @tests tina4
-     *   assert ('weird')["param"][0] === "weird", "Expects value of param to be weird"
+     *   assert ('@weird weird')["weird"][0] === "weird", "Expects value of param to be weird"
      */
     final public function parseAnnotations(string $docComment, string $annotationName = ""): array
     {
         //clean *
         $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);
+
 
         $annotations = [];
         preg_match_all('/^@([^\n|\r\n|\t]+)/m', $docComment, $comments, PREG_OFFSET_CAPTURE, 0);

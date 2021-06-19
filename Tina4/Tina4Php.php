@@ -127,7 +127,7 @@ class Tina4Php extends Data
         if (defined("TINA4_SUPPRESS") && TINA4_SUPPRESS) {
             $this->config->callInitFunction();
             try {
-                Utility::initTwig($config);
+                TwigUtility::initTwig($config);
             } catch (LoaderError $e) {
                 Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
             }

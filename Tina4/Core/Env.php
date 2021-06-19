@@ -18,7 +18,7 @@ class Env extends Data
      * Env constructor.
      * @param string $forceEnvironment
      */
-    public function __construct($forceEnvironment = "")
+    public function __construct(string $forceEnvironment = "")
     {
         parent::__construct();
 
@@ -35,12 +35,12 @@ class Env extends Data
 
     /**
      * The readEnvParams reads the environment variables from the .env.{ENVIRONMENT} file
-     * @param $environment
+     * @param string $environment
      * @tests tina4
      *   assert ("test") === null,"Parsing the environment"
      *   assert file_exists(".env.test") === true,"File does not exist .env.test"
      */
-    public function readParams($environment): void
+    final public function readParams(string $environment): void
     {
         $fileName = $this->documentRoot . ".env";
 

@@ -22,7 +22,7 @@ define("TINA4_SUPPRESS", true);
 
 
 if (file_exists($rootPath . "index.php")) {
-    include $rootPath . "index.php";
+    include_once $rootPath . "index.php";
 }
 
 function writeLine($output): void

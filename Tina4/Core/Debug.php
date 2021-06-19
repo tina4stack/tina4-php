@@ -31,7 +31,11 @@ class Debug implements \Psr\Log\LoggerInterface
     public $colorYellow = "\e[0;33m'";
     public $colorReset = "\e[0m";
 
-    public static function exceptionHandler($exception = null)
+    /**
+     * Exception handler for better debugging
+     * @param \Exception|null $exception
+     */
+    public static function exceptionHandler(\Exception $exception = null): void
     {
         $trace = $exception->getTrace()[0];
         if (isset($trace["file"])) {
@@ -48,7 +52,12 @@ class Debug implements \Psr\Log\LoggerInterface
         }
     }
 
-    public static function message($message, $level = LogLevel::INFO)
+    /**
+     * Creates a debug message based on the debug level
+     * @param string $message
+     * @param string $level
+     */
+    public static function message(string $message, string $level = LogLevel::INFO) : void
     {
         if (self::$logger === null) {
             self::$logger = new self();
@@ -65,29 +74,37 @@ class Debug implements \Psr\Log\LoggerInterface
      */
     public static function getCodeSnippet(string $fileName, int $lineNo): string
     {
-        $lines = explode(PHP_EOL, file_get_contents($fileName));
-        $lineStart = $lineNo - 5;
-        if ($lineStart < 0) {
-            $lineStart = 0;
-        }
-        $lineEnd = $lineNo + 5;
-        if ($lineEnd > count($lines) - 1) {
-            $lineEnd = count($lines) - 1;
-        }
-
-        $codeContent = [];
-        for ($i = $lineStart; $i < $lineEnd; $i++) {
-            $lineNr = $i + 1;
-            if ($lineNr == $lineNo) {
-                $codeContent[] = "<span class='selected'><span class='lineNo'>{$lineNr}</span>" . ($lines[$i]) . "</span>";
-            } else {
-                $codeContent[] = "<span class='lineNo'>{$lineNr}</span>" . ($lines[$i]);
+        if (file_exists($fileName)) {
+            $lines = explode(PHP_EOL, file_get_contents($fileName));
+            $lineStart = $lineNo - 5;
+            if ($lineStart < 0) {
+                $lineStart = 0;
             }
+            $lineEnd = $lineNo + 5;
+            if ($lineEnd > count($lines) - 1) {
+                $lineEnd = count($lines) - 1;
+            }
+
+            $codeContent = [];
+            for ($i = $lineStart; $i < $lineEnd; $i++) {
+                $lineNr = $i + 1;
+                if ($lineNr === $lineNo) {
+                    $codeContent[] = "<span class='selected'><span class='lineNo'>{$lineNr}</span>" . ($lines[$i]) . "</span>";
+                } else {
+                    $codeContent[] = "<span class='lineNo'>{$lineNr}</span>" . ($lines[$i]);
+                }
+            }
+
+            return implode(PHP_EOL, $codeContent);
         }
 
-        return implode(PHP_EOL, $codeContent);
+        return "";
     }
 
+    /**
+     * Renders the debugging information on the screen with the line number where the error occurred
+     * @return string
+     */
     public static function render(): string
     {
         if (count(self::$errors) === 0) {
@@ -168,9 +185,9 @@ class Debug implements \Psr\Log\LoggerInterface
 
             if (!defined("TINA4_SUPPRESS")) {
                 return renderTemplate($htmlTemplate, ["errors" => self::$errors]);
-            } else {
-                return renderTemplate($consoleTemplate, ["errors" => self::$errors]);
             }
+
+            return renderTemplate($consoleTemplate, ["errors" => self::$errors]);
         } catch (LoaderError $e) {
         }
 
@@ -178,6 +195,7 @@ class Debug implements \Psr\Log\LoggerInterface
     }
 
     /**
+     * Error handler to handle errors
      * @param string $errorNo
      * @param string $errorString
      * @param string $errorFile
@@ -189,6 +207,11 @@ class Debug implements \Psr\Log\LoggerInterface
         self::$errors[] = ["time" => date("Y-m-d H:i:s"), "message" => "<span style=\"color:red\">Error($errorNo):</span> " . $errorString, "line" => $errorLine, "file" => $errorFile, "codeSnippet" => self::getCodeSnippet($errorFile, $errorLine)];
     }
 
+    /**
+     * Implements the emergency message
+     * @param string $message
+     * @param array $context
+     */
     public function emergency($message, array $context = []): void
     {
         $this->log(LogLevel::EMERGENCY, $message, $context);
@@ -235,36 +258,71 @@ class Debug implements \Psr\Log\LoggerInterface
         }
     }
 
+    /**
+     * Implements alert message
+     * @param string $message
+     * @param array $context
+     */
     public function alert($message, array $context = [])
     {
         $this->log(LogLevel::ALERT, $message, $context);
     }
 
+    /**
+     * Implements critical error message
+     * @param string $message
+     * @param array $context
+     */
     public function critical($message, array $context = [])
     {
         $this->log(LogLevel::CRITICAL, $message, $context);
     }
 
+    /**
+     * Implements error message
+     * @param string $message
+     * @param array $context
+     */
     public function error($message, array $context = [])
     {
         $this->log(LogLevel::ERROR, $message, $context);
     }
 
+    /**
+     * Implements warning message
+     * @param string $message
+     * @param array $context
+     */
     public function warning($message, array $context = [])
     {
         $this->log(LogLevel::WARNING, $message, $context);
     }
 
+    /**
+     * Implements notice message
+     * @param string $message
+     * @param array $context
+     */
     public function notice($message, array $context = [])
     {
         $this->log(LogLevel::NOTICE, $message, $context);
     }
 
+    /**
+     * Implements info message
+     * @param string $message
+     * @param array $context
+     */
     public function info($message, array $context = [])
     {
         $this->log(LogLevel::INFO, $message, $context);
     }
 
+    /**
+     * Implements debug message
+     * @param string $message
+     * @param array $context
+     */
     public function debug($message, array $context = []): void
     {
         $this->log(LogLevel::DEBUG, $message, $context);
