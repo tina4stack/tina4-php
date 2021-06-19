@@ -58,5 +58,9 @@
   },
   "config": {
     "process-timeout": 0
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9",
+    "overtrue/phplint": "^2.0"
   }
 }

@@ -37,3 +37,4 @@ test.db
 /subfolder/
 /.phpdoc/
 /phpmetrics/
+/.phplint-cache

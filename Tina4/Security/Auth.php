@@ -73,7 +73,7 @@ class Auth extends Data
         }
 
         if (static::class === "Tina4\Auth") {
-            $this->getToken("default");
+            $this->getToken(["name" => "default"]);
         }
     }
 

@@ -80,14 +80,19 @@ class Ruth
         switch ($routeType) {
             case TINA4_ANY:
                 \Tina4\Any::add($routePath, $function);
+                break;
             case TINA4_PUT:
                 \Tina4\Put::add($routePath, $function);
+                break;
             case TINA4_POST:
                 \Tina4\Post::add($routePath, $function);
+                break;
             case TINA4_PATCH:
                 \Tina4\Patch::add($routePath, $function);
+                break;
             case TINA4_DELETE:
                 \Tina4\Delete::add($routePath, $function);
+                break;
             case TINA4_GET:
             default:
                 \Tina4\Get::add($routePath, $function);
