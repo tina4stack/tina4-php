@@ -15,6 +15,11 @@ namespace Tina4;
 class Messenger
 {
     /**
+     * @var MessengerSettings
+     */
+    private $settings;
+
+    /**
      * Messenger constructor.
      * @param MessengerSettings|null $settings
      */
@@ -42,7 +47,7 @@ class Messenger
      * @return Boolean true, false
      * @throws \Twig\Error\LoaderError
      */
-    public function sendEmail($recipients, string $subject, $message, string $fromName, string $fromAddress, $attachments = null, $bcc = null)
+    final public function sendEmail($recipients, string $subject, $message, string $fromName, string $fromAddress, $attachments = null, $bcc = null): bool
     {
         //define the headers we want passed. Note that they are separated with \r\n
         $boundary_rel = md5(uniqid(time(), true));
@@ -169,17 +174,17 @@ class Messenger
             Debug::message("Message sending failed");
         }
 
-        return $mailSent ? true : false;
+        return (bool)$mailSent;
     }
 
     /**
-     * @param $html
-     * @param $eol
-     * @param $boundary_rel
-     * @param $boundary_alt
+     * @param string $html
+     * @param string $eol
+     * @param string $boundary_rel
+     * @param string $boundary_alt
      * @return string
      */
-    public function prepareHtmlMail($html, $eol, $boundary_rel, $boundary_alt)
+    final public function prepareHtmlMail(string $html, string $eol, string $boundary_rel, string $boundary_alt): string
     {
         preg_match_all('~<img.*?src=.([\/.a-z0-9:;,+=_-]+).*?>~si', $html, $matches);
 
@@ -243,13 +248,14 @@ class Messenger
 
     /**
      * Alias of send SMS
-     * @param string $mobileno Mobile contact number
+     * @param string $mobileNo
      * @param string $message Message to be sent
      * @param string $countryPrefix Prefix to determine country of origin
+     * @return bool
      */
-    public function sendText($mobileNo, $message = "", $countryPrefix = "01")
+    final public function sendText(string $mobileNo, string $message = "", string $countryPrefix = "01"):bool
     {
-        $this->sendSMS($mobileNo, $message, $countryPrefix);
+        return $this->sendSMS($mobileNo, $message, $countryPrefix);
     }
 
     /**
@@ -257,9 +263,9 @@ class Messenger
      * @param String $mobileNo Mobile contact number
      * @param String $message Message to be sent
      * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
-     * @return String Result of SMS send
+     * @return bool Result of SMS send
      */
-    function sendSMS($mobileNo, $message = "", $countryPrefix = "27")
+    final public function sendSMS(string $mobileNo, string $message = "", string $countryPrefix = "27"): bool
     {
         $cellphone = $this->formatMobile($mobileNo, $countryPrefix);
         $curl = curl_init($this->settings->bulkSMSURL);
@@ -273,34 +279,34 @@ class Messenger
 
     /**
      * Format the Mobile Number
-     * @param String $cellphone Mobile number to send with
+     * @param string $mobileNo
      * @param String $countryPrefix Prefix to determine country of origin e.g. 1 - america, 27 - south africa
      * @return string
      */
-    public function formatMobile($cellphone, $countryPrefix = "27")
+    final public function formatMobile(string $mobileNo, string $countryPrefix = "27") : string
     {
-        $ilen = strlen($cellphone);
-        $tmpCel = '';
+        $ilen = strlen($mobileNo);
+        $tempMobileNo = '';
         $i = 0;
         while ($i < $ilen) {
-            $val = substr($cellphone, $i, 1);
+            $val = substr($mobileNo, $i, 1);
             if (is_numeric($val)) {
-                $tmpcel = $tmpCel . substr($cellphone, $i, 1);
+                $tempMobileNo = $tempMobileNo . substr($mobileNo, $i, 1);
             }
             $i++;
         }
 
-        $tmpcel = trim($tmpcel);
-        if (substr($tmpcel, 0, 1) === "0") {
-            $tmpcel = substr_replace($tmpcel, $countryPrefix, 0, 1);
-        } elseif (strlen($tmpcel) < 11) {
-            $tmpcel = $countryPrefix . $tmpcel;
+        $tempMobileNo = trim($tempMobileNo);
+        if (substr($tempMobileNo, 0, 1) === "0") {
+            $tempMobileNo = substr_replace($tempMobileNo, $countryPrefix, 0, 1);
+        } elseif (strlen($tempMobileNo) < 11) {
+            $tempMobileNo = $countryPrefix . $tempMobileNo;
         }
 
-        if ((strlen($tmpcel) < 11) || (strlen($tmpcel) > 11)) {
+        if ((strlen($tempMobileNo) < 11) || (strlen($tempMobileNo) > 11)) {
             return "Failed";
         } else {
-            return $tmpcel;
+            return $tempMobileNo;
         }
     }
 }

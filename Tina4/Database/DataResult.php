@@ -55,10 +55,10 @@ class DataResult implements JsonSerializable
 
     /**
      * Returns back a certain record
-     * @param $id
+     * @param int $id
      * @return mixed
      */
-    public function record($id): ?object
+    final public function record(int $id): ?object
     {
         if (!empty($this->records)) {
             return $this->records[$id];
@@ -71,7 +71,7 @@ class DataResult implements JsonSerializable
      * Gets back the number of records that were not filtered out by the pagination
      * @return int
      */
-    public function getNoOfRecords(): int
+    final public function getNoOfRecords(): int
     {
         return $this->noOfRecords;
     }
@@ -80,7 +80,7 @@ class DataResult implements JsonSerializable
      * Returns the fields and their types
      * @return mixed
      */
-    public function fields(): array
+    final public function fields(): array
     {
         return $this->fields;
     }
@@ -90,7 +90,7 @@ class DataResult implements JsonSerializable
      * @param bool $original Original field names
      * @return array|mixed
      */
-    public function asObject(bool $original = false): ?array
+    final public function asObject(bool $original = false): ?array
     {
         return $this->records($original);
     }
@@ -101,7 +101,7 @@ class DataResult implements JsonSerializable
      * @return array|null
      * @example examples\exampleDataResultRecords.php
      */
-    public function records(bool $original = false): ?array
+    final public function records(bool $original = false): ?array
     {
         $results = [];
         if (!empty($this->records)) {
@@ -117,7 +117,7 @@ class DataResult implements JsonSerializable
      * Gets an array of objects in the original form
      * @return array|mixed
      */
-    public function asOriginal(): ?array
+    final public function asOriginal(): ?array
     {
         return $this->records(true);
     }
@@ -127,7 +127,7 @@ class DataResult implements JsonSerializable
      * @param bool $original Original field names
      * @return array
      */
-    public function asArray(bool $original = false): array
+    final public function asArray(bool $original = false): array
     {
         $result = [];
         if (!empty($this->records)) {
@@ -147,7 +147,7 @@ class DataResult implements JsonSerializable
         $results = [];
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
-                if (get_class($record) == "Tina4\DataRecord") {
+                if (get_class($record) === "Tina4\DataRecord") {
                     $results[] = $record->asObject();
                 } else {
                     $results [] = (object)$record;
@@ -165,7 +165,7 @@ class DataResult implements JsonSerializable
     /**
      * Makes a neat JSON response
      */
-    public function jsonSerialize(): object
+    final public function jsonSerialize(): object
     {
         $results = [];
         if (!empty($this->records)) {
@@ -185,7 +185,7 @@ class DataResult implements JsonSerializable
      * Gets the error from the result if the query failed
      * @return array|null
      */
-    public function getError(): ?array
+    final public function getError(): ?array
     {
         if (!empty($this->error)) {
             return $this->error->getError();
