@@ -16,6 +16,7 @@ use Twig\Error\LoaderError;
  */
 class Router extends Data
 {
+    use Utility;
     /**
      * @var string Used to check if path matches route path in matchPath()
      */

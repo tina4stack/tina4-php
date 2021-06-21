@@ -18,6 +18,8 @@ use Twig\Error\LoaderError;
  */
 class Tina4Php extends Data
 {
+    use Utility;
+
     public $config;
 
     public function __construct(?\Tina4\Config $config = null)
@@ -296,6 +298,8 @@ class Tina4Php extends Data
 
         return $content;
     }
+
+
 
     /**
      * Swagger

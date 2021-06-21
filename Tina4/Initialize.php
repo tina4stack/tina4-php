@@ -251,7 +251,7 @@ function autoLoadFolders($documentRoot, $location, $class)
  * Handle exceptions
  * @param $exception
  */
-function tina4_exception_handler($exception)
+function tina4_exception_handler(\Error $exception)
 {
     \Tina4\Debug::exceptionHandler($exception);
 }

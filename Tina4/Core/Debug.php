@@ -35,7 +35,7 @@ class Debug implements \Psr\Log\LoggerInterface
      * Exception handler for better debugging
      * @param \Exception|null $exception
      */
-    public static function exceptionHandler(\Exception $exception = null): void
+    public static function exceptionHandler($exception = null): void
     {
         $trace = $exception->getTrace()[0];
         if (isset($trace["file"])) {
