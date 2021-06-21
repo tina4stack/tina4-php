@@ -9,14 +9,30 @@
 namespace Tina4;
 
 /**
+ * List of Html tags prefixed with a : for where the opening tag should go
+ */
+const HTML_ELEMENTS = [":!DOCTYPE", ":!--", ":a", ":abbr", ":acronym", ":address", ":applet", ":area", ":article", ":aside", ":audio", ":b", ":base", ":basefont", ":bb", ":bdo", ":big", ":blockquote", ":body", ":br/", ":button", ":canvas", ":caption", ":center", ":cite", ":code", ":col", ":colgroup", ":command", ":datagrid", ":datalist", ":dd", ":del", ":details", ":dfn", ":dialog", ":dir", ":div", ":dl", ":dt", ":em", ":embed", ":eventsource", ":fieldset", ":figcaption", ":figure", ":font", ":footer", ":form", ":frame", ":frameset", ":h1", ":head", ":header", ":hgroup", ":hr/", ":html", ":i", ":iframe", ":img/", ":input", ":ins", ":isindex", ":kbd", ":keygen", ":label", ":legend", ":li", ":link", ":map", ":mark", ":menu", ":meta/", ":meter", ":nav", ":noframes", ":noscript", ":object", ":ol", ":optgroup", ":option", ":output", ":p", ":param", ":pre", ":progress", ":q", ":rp", ":rt", ":ruby", ":s", ":samp", ":script", ":section", ":select", ":small", ":source", ":span", ":strike", ":strong", ":style", ":sub", ":sup", ":table", ":tbody", ":td", ":textarea", ":tfoot", ":th", ":thead", ":time", ":title", ":tr", ":track", ":tt", ":u", ":ul", ":var", ":video", ":wbr"];
+/**
  * A way to code HTML5 elements using only PHP
  * @package Tina4
  */
-const HTML_ELEMENTS = [":!DOCTYPE", ":!--", ":a", ":abbr", ":acronym", ":address", ":applet", ":area", ":article", ":aside", ":audio", ":b", ":base", ":basefont", ":bb", ":bdo", ":big", ":blockquote", ":body", ":br/", ":button", ":canvas", ":caption", ":center", ":cite", ":code", ":col", ":colgroup", ":command", ":datagrid", ":datalist", ":dd", ":del", ":details", ":dfn", ":dialog", ":dir", ":div", ":dl", ":dt", ":em", ":embed", ":eventsource", ":fieldset", ":figcaption", ":figure", ":font", ":footer", ":form", ":frame", ":frameset", ":h1", ":head", ":header", ":hgroup", ":hr/", ":html", ":i", ":iframe", ":img/", ":input", ":ins", ":isindex", ":kbd", ":keygen", ":label", ":legend", ":li", ":link", ":map", ":mark", ":menu", ":meta/", ":meter", ":nav", ":noframes", ":noscript", ":object", ":ol", ":optgroup", ":option", ":output", ":p", ":param", ":pre", ":progress", ":q", ":rp", ":rt", ":ruby", ":s", ":samp", ":script", ":section", ":select", ":small", ":source", ":span", ":strike", ":strong", ":style", ":sub", ":sup", ":table", ":tbody", ":td", ":textarea", ":tfoot", ":th", ":thead", ":time", ":title", ":tr", ":track", ":tt", ":u", ":ul", ":var", ":video", ":wbr"];
 class HTMLElement
 {
+    /**
+     * String tag name like h1, p, b etc
+     * @var false|string
+     */
     private $tag = "";
+    /**
+     * An array of attributes -> name="test", class=""
+     * @var array
+     */
     private $attributes = [];
+
+    /**
+     * An array of html elements
+     * @var array
+     */
     private $elements = [];
 
     /**
@@ -26,7 +42,7 @@ class HTMLElement
     public function __construct(...$elements)
     {
         //elements can be attributes or body parts
-        foreach ($elements as $id => $element) {
+        foreach ($elements as  $element) {
             if (is_string($element) && in_array($element, HTML_ELEMENTS)) {
                 $this->tag = substr($element, 1);
             } elseif (is_array($element)) {
@@ -42,7 +58,7 @@ class HTMLElement
      * Sort the elements
      * @param $element
      */
-    public function sortElements($element): void
+    private function sortElements($element): void
     {
         foreach ($element as $pId => $param) {
             if (is_array($param)) {
@@ -77,30 +93,32 @@ class HTMLElement
     {
         //Check what type of tag
         if ($this->tag === "document") {
-            return "{$this->getElements()}";
+            $html = "{$this->getElements()}";
         } elseif ($this->tag === "") {
-            return "{$this->getElements()}";
+            $html =  "{$this->getElements()}";
         } elseif ($this->tag[0] === "!") {
             if (strpos($this->tag, "!--") !== false) {
-                return "<$this->tag{$this->getAttributes()}{$this->getElements()}" . substr($this->tag, 1) . ">";
+                $html =  "<$this->tag{$this->getAttributes()}{$this->getElements()}" . substr($this->tag, 1) . ">";
             } else {
-                return "<$this->tag{$this->getAttributes()}>";
+                $html =  "<$this->tag{$this->getAttributes()}>";
             }
         } elseif ($this->tag[strlen($this->tag) - 1] === "/") {
-            return "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
+            $html =  "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
         } else {
-            return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
+            $html =  "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
         }
+
+        return $html;
     }
 
     /**
      * Gets all the elements
      * @return string
      */
-    public function getElements(): string
+    private function getElements(): string
     {
         $html = "";
-        foreach ($this->elements as $id => $element) {
+        foreach ($this->elements as $element) {
             $html .= $element;
         }
         return $html;
@@ -110,10 +128,10 @@ class HTMLElement
      * Gets all the attributes for an HTML element
      * @return string
      */
-    public function getAttributes(): string
+    private function getAttributes(): string
     {
         $html = "";
-        foreach ($this->attributes as $id => $attribute) {
+        foreach ($this->attributes as $attribute) {
             if (is_array($attribute)) {
                 foreach ($attribute as $key => $value) {
                     if (is_numeric($key)) {

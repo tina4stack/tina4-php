@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0f3337f27c6a85b7ac6996cc6d065862",
+    "content-hash": "6ec2312d4b896f5cc1f8e87b5bef38c5",
     "packages": [
         {
             "name": "coyl/git",
@@ -3712,5 +3712,5 @@
         "ext-curl": "*"
     },
     "platform-dev": [],
-    "plugin-api-version": "2.1.0"
+    "plugin-api-version": "2.0.0"
 }

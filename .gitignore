@@ -39,3 +39,4 @@ test.db
 /phpmetrics/
 /.phplint-cache
 /tests/junit.xml
+/.env.prod
