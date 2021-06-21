@@ -293,3 +293,7 @@ function add ($a,$b) {
 2020-12-08 Fixes for MySQL & ORM saving
 2020-12-08 Fixes for isBinary under Utilities
 ```
+### PhpDocs
+
+```
+docker run --rm -v %cd%:/data phpdoc/phpdoc:3 -d Tina4
