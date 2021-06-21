@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -19,7 +20,7 @@ class DataSQLite3 implements DataBase
     /**
      * Open an SQLite3 connection
      */
-    public function open()
+    public function open(): void
     {
         $this->dbh = (new \SQLite3($this->databaseName)); //create the new database or open existing one
         $this->dbh->busyTimeout(5000); //prevent database locks
@@ -36,7 +37,7 @@ class DataSQLite3 implements DataBase
 
     /**
      * Executes a query
-     * @return array|bool|mixed
+     * @return bool
      */
     public function exec()
     {
@@ -51,27 +52,24 @@ class DataSQLite3 implements DataBase
 
         $error = $this->error();
 
-        if ($error->getError()["errorCode"] == 0 && !empty($preparedQuery)) {
+        if ($error->getError()["errorCode"] === 0 && !empty($preparedQuery)) {
             unset($params[0]);
 
             foreach ($params as $pid => $param) {
                 if (is_numeric($param)) {
                     $preparedQuery->bindValue((string)($pid), $param, SQLITE3_FLOAT);
-                } else
-                    if (is_int($param)) {
-                        $preparedQuery->bindValue((string)($pid), $param, SQLITE3_INTEGER);
-                    } else
-                        if ($this->isBinary($param)) {
-                            $preparedQuery->bindValue((string)($pid), $param, SQLITE3_BLOB);
-                        } else {
-                            $preparedQuery->bindValue((string)($pid), $param, SQLITE3_TEXT);
-                        }
+                } elseif (is_int($param)) {
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_INTEGER);
+                } elseif ($this->isBinary($param)) {
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_BLOB);
+                } else {
+                    $preparedQuery->bindValue((string)($pid), $param, SQLITE3_TEXT);
+                }
             }
 
 
             $preparedQuery->execute();
             $preparedQuery->close();
-
         }
 
         return $this->error();
@@ -79,22 +77,22 @@ class DataSQLite3 implements DataBase
 
     /**
      * Error from the database
-     * @return bool|DataError
+     * @return DataError
      */
-    public function error()
+    public function error(): DataError
     {
         return (new DataError($this->dbh->lastErrorCode(), $this->dbh->lastErrorMsg()));
     }
 
     /**
      * Check if table exists
-     * @param $tableName
-     * @return bool|mixed
+     * @param string $tableName
+     * @return bool
      */
-    public function tableExists($tableName)
+    public function tableExists(string $tableName): bool
     {
         if (!empty($tableName)) {
-            $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{$tableName}'");
+            $exists = $this->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name = '{$tableName}'");
             return !empty($exists->records);
         } else {
             return false;
@@ -107,9 +105,9 @@ class DataSQLite3 implements DataBase
      * @param int $noOfRecords
      * @param int $offSet
      * @param array $fieldMapping
-     * @return bool|DataResult
+     * @return DataResult
      */
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
 
         $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
@@ -144,29 +142,42 @@ class DataSQLite3 implements DataBase
         return (new DataResult($records, $fields, $countRecords, $offSet, $error));
     }
 
-    public function getLastId()
+    /**
+     * The default date format for this database type
+     * @return string
+     */
+    public function getDefaultDatabaseDateFormat(): string
+    {
+        return "Y-m-d";
+    }
+
+    /**
+     * Returns the last id after an insert to a table
+     * @return string Gets the last id
+     */
+    public function getLastId(): string
     {
         $lastId = $this->fetch("SELECT last_insert_rowid() as last_id");
         return $lastId->records(0)[0]->lastId;
     }
 
     /**
-     * Commit
+     * Commit doesn't exist on SQlite3
      * @param null $transactionId
      * @return bool
      */
-    public function commit($transactionId = null)
+    public function commit($transactionId = null): bool
     {
         //No commit for sqlite
         return true;
     }
 
     /**
-     * Rollback
-     * @param null $transactionId
+     * Rollback does not exist on SQLite3
+     * @param int|null $transactionId
      * @return bool
      */
-    public function rollback($transactionId = null)
+    public function rollback(int $transactionId = null): bool
     {
         //No transactions for sqlite
         return true;
@@ -174,9 +185,9 @@ class DataSQLite3 implements DataBase
 
     /**
      * Start transaction
-     * @return bool
+     * @return string
      */
-    public function startTransaction()
+    public function startTransaction(): string
     {
         //No transactions for sqlite
         return "Resource id #0";
@@ -185,17 +196,20 @@ class DataSQLite3 implements DataBase
     /**
      * Auto commit on for SQlite
      * @param bool $onState
-     * @return bool|void
+     * @return bool
      */
-    public function autoCommit($onState = false)
+    public function autoCommit(bool $onState = false): void
     {
-        //SQlite has no commits
-        return true;
+        //SQlite3 has no commits
     }
 
-    function getDatabase()
+    /**
+     * Determines the database layout in the form table -> columns
+     * @return array
+     */
+    public function getDatabase(): array
     {
-        /** @noinspection SqlResolve */
+
         $sqlTables = "select name as table_name
                       from sqlite_master
                      where type='table'
@@ -222,23 +236,22 @@ class DataSQLite3 implements DataBase
         return $database;
     }
 
-    public function getDefaultDatabaseDateFormat()
-    {
-        return "Y-m-d";
-    }
-
-    public function getDefaultDatabasePort()
+    /**
+     * SQlite3 does not have a port
+     * @return int
+     */
+    public function getDefaultDatabasePort(): ?int
     {
         return null;
     }
 
     /**
-     * @param $fieldName
-     * @param $fieldIndex
+     * @param string $fieldName
+     * @param int $fieldIndex
      * @return string
      */
-    public function getQueryParam($fieldName,$fieldIndex): string
+    public function getQueryParam(string $fieldName, int $fieldIndex): string
     {
-        return ":$fieldIndex";
+        return ":{$fieldIndex}";
     }
 }

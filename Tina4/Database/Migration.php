@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -145,18 +146,16 @@ class Migration extends Data
                 $this->DBA->commit($transId);
                 $runsql = true;
             } else {
-
                 if ($record->passed === "0" || $record->passed === "" || $record->passed == 0) {
                     $result .= "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
                     $runsql = true;
-                } else
-                    if ($record->passed === "1" || $record->passed == 1) {
-                        //Update the migration with the latest copy
-                        $sqlUpdate = "update tina4_migration set content =? where migration_id = '{$migrationId}'";
-                        $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
-                        $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
-                        $runsql = false;
-                    }
+                } elseif ($record->passed === "1" || $record->passed == 1) {
+                    //Update the migration with the latest copy
+                    $sqlUpdate = "update tina4_migration set content =? where migration_id = '{$migrationId}'";
+                    $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
+                    $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
+                    $runsql = false;
+                }
             }
 
             if ($runsql) {
@@ -173,8 +172,6 @@ class Migration extends Data
                 $error = false;
                 foreach ($content as $cid => $sql) {
                     if (!empty(trim($sql))) {
-
-
                         $success = $this->DBA->exec($sql, $transId);
                         if ($success->getError()["errorMessage"] !== "" && $success->getError()["errorMessage"] !== "not an error" && $success->getError()["errorMessage"] !== false) {
                             $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:" . $success->getError()["errorMessage"] . "\n";
@@ -191,7 +188,6 @@ class Migration extends Data
                     $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nAll Transactions Rolled Back ...\n";
                     $this->DBA->rollback($transId);
                 } else {
-
                     $this->DBA->commit($transId);
 
                     //we need to make sure the commit resulted in no errors
@@ -210,7 +206,9 @@ class Migration extends Data
             }
         }
 
-        if (!$error) $result .= "<span style=\"color:green;\">FINISHED! ....</span>\n";
+        if (!$error) {
+            $result .= "<span style=\"color:green;\">FINISHED! ....</span>\n";
+        }
         error_reporting(E_ALL);
         $result .= "</pre>";
 
@@ -248,10 +246,8 @@ class Migration extends Data
             } else {
                 return "Migration exists already in {$fileName}";
             }
-
         } else {
             return "Failed to create a migration, needs description & content";
         }
     }
-
 }

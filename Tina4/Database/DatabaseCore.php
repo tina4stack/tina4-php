@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -7,8 +8,7 @@
 
 namespace Tina4;
 
- /**
- *
+/**
  * Trait DataBaseCore Instantiates all common database methods
  * @package Tina4
  */
@@ -66,12 +66,12 @@ trait DataBaseCore
 
     /**
      * DataBase constructor.
-     * @param $database - In the form [host/port:database]
+     * @param string $database - In the form [host/port:database]
      * @param string $username Database user username
      * @param string $password Database user password
      * @param string $dateFormat Format of date
      */
-    public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d")
+    public function __construct(string $database, string $username = "", string $password = "", string $dateFormat = "Y-m-d")
     {
         global $cache;
 
@@ -82,6 +82,7 @@ trait DataBaseCore
         $this->username = $username;
         $this->password = $password;
 
+        //Ignore memory database for SQLite in this line
         if (strpos($database, ":") !== false && strpos($database, "memory") === false) {
             $database = explode(":", $database, 2);
             $this->hostName = $database[0];
@@ -94,21 +95,21 @@ trait DataBaseCore
             } else {
                 $this->port = $this->getDefaultDatabasePort();
             }
-        } else {
+        } else {  //Probably SQLite database
             $this->hostName = "";
             $this->databaseName = $database;
         }
+        //Set the date format we want date results to display in
         $this->dateFormat = $dateFormat;
         $this->open();
-
     }
 
     /**
      * Parses the params into params & sql, checks for SQL injection
-     * @param $params
+     * @param array $params
      * @return array
      */
-    public function parseParams($params)
+    public function parseParams(array $params): array
     {
         $tranId = "";
         $newParams = [];
@@ -125,14 +126,13 @@ trait DataBaseCore
 
     /**
      * Returns back only the first element of a result which can then be used as is or serialized to array or object
-     * @param $sql
+     * @param string $sql
      * @return mixed
      */
-    public function fetchOne($sql)
+    public function fetchOne(string $sql)
     {
         $records = $this->fetch($sql)->records;
-        if (is_array($records) && count($records) > 0)
-        {
+        if (is_array($records) && count($records) > 0) {
             return $records[0];
         } else {
             return null;
@@ -140,17 +140,18 @@ trait DataBaseCore
     }
 
     /**
-     * @param $fieldName
-     * @param $fieldIndex
+     * This returns the default query params for an exec statement
+     * @param string $fieldName
+     * @param int $fieldIndex
      * @return string
      */
-    public function getQueryParam($fieldName,$fieldIndex): string
+    public function getQueryParam(string $fieldName, int $fieldIndex): string
     {
         return "?";
     }
 
     /**
-     *
+     * The select statement is passed off to \Tina4\SQL
      * @param string $fields
      * @param int $limit
      * @param int $offset
@@ -158,9 +159,8 @@ trait DataBaseCore
      * @param array $hasMany
      * @return SQL
      */
-    public function select ($fields = "*", $limit = 10, $offset = 0, $hasOne = [], $hasMany = [])
+    public function select(string $fields = "*", int $limit = 10, int $offset = 0, array $hasOne = [], array $hasMany = []): SQL
     {
         return (new SQL())->select($fields, $limit, $offset, $hasOne, $hasMany);
     }
-
 }

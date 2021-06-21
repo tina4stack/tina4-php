@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -23,12 +24,12 @@ class DataRecord implements JsonSerializable
 
     /**
      * DataRecord constructor Converts array to object
-     * @param array $record Array of records
+     * @param array|null $record Array of records
      * @param array $fieldMapping Array of field mapping
      * @param string $databaseFormat Input format use the PHP date format conventions
      * @param string $outputFormat Output date format - use the PHP date format conventions
      */
-    public function __construct($record = null, $fieldMapping = [], $databaseFormat = "Y-m-d", $outputFormat = "Y-m-d")
+    public function __construct(array $record = null, array $fieldMapping = [], string $databaseFormat = "Y-m-d", string $outputFormat = "Y-m-d")
     {
         if (!empty($fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
@@ -36,7 +37,6 @@ class DataRecord implements JsonSerializable
         if (!empty($record)) {
             $this->original = (object)$record;
             foreach ($record as $column => $value) {
-
                 if ($this->isBinary($value)) {
                     $value = \base64_encode($value);
                     $this->original->{$column} = $value;
@@ -47,11 +47,8 @@ class DataRecord implements JsonSerializable
                     $this->original->{$column} = $value;
                 }
 
-
                 $this->{$column} = $value;
             }
-
-
         }
     }
 
@@ -60,7 +57,7 @@ class DataRecord implements JsonSerializable
      * @param bool $original Whether to get the result as original field names
      * @return object
      */
-    public function asObject($original = false): ?object
+    final public function asObject(bool $original = false): ?object
     {
         if ($original) {
             return $this->original;
@@ -70,9 +67,11 @@ class DataRecord implements JsonSerializable
     }
 
     /**
-     * Transform to a camel case result
+     * Transform the objects keys to camel case response
+     * @param bool $original Do we want the original result returned in the object
+     * @return object An object with the transformed column names
      */
-    public function transformObject($original=false): object
+    final public function transformObject(bool $original = false): object
     {
         $object = (object)[];
         if (!empty($this->original)) {
@@ -82,20 +81,9 @@ class DataRecord implements JsonSerializable
                     $object->{$columnName} = $value;
                 }
                 $object->{$column} = $value;
-
             }
         }
         return $object;
-    }
-
-    /**
-     * Cast the object to an array
-     * @param bool $original
-     * @return array
-     */
-    public function asArray($original=false): array
-    {
-        return (array)$this->transformObject($original);
     }
 
     /**
@@ -104,7 +92,7 @@ class DataRecord implements JsonSerializable
      * @param array|null $fieldMapping Field mapping to map fields
      * @return string Proper object name
      */
-    public function getObjectName(string $name, ?array $fieldMapping = []): string
+    final public function getObjectName(string $name, ?array $fieldMapping = []): string
     {
         if (!empty($this->fieldMapping) && empty($fieldMapping)) {
             $fieldMapping = $this->fieldMapping;
@@ -143,15 +131,27 @@ class DataRecord implements JsonSerializable
     }
 
     /**
+     * Cast the object to an array
+     * @param bool $original Do we want the original key names passed back
+     * @return array An array with transformed key names
+     */
+    final public function asArray(bool $original = false): array
+    {
+        return (array)$this->transformObject($original);
+    }
+
+    /**
+     * Returns back the record as a JSON response
      * @return false|string
      * @throws \JsonException
      */
-    public function asJSON(): string
+    final public function asJSON(): string
     {
         return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
+     * Returns everything as a JSON string
      * @return string
      * @throws \JsonException
      */
@@ -162,14 +162,13 @@ class DataRecord implements JsonSerializable
 
     /**
      * Get the value by the field name
-     * @param $name
-     * @return false
+     * @param string $name Name of the data column
+     * @return null|value Value of the named column
      */
-    public function byName($name): ?bool
+    final public function byName(string $name): ?bool
     {
         $columnName = strtoupper($name);
-        if (!empty($this->original) && !empty($this->$columnName))
-        {
+        if (!empty($this->original) && !empty($this->$columnName)) {
             return $this->$columnName;
         }
 
@@ -181,7 +180,7 @@ class DataRecord implements JsonSerializable
      * @return false|mixed|string
      * @throws \JsonException
      */
-    public function jsonSerialize()
+    final public function jsonSerialize(): string
     {
         return json_encode($this->original, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

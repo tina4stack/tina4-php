@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -14,6 +15,7 @@ namespace Tina4;
 class Test
 {
     use Utility;
+
     public $colorRed = "\e[31;1m";
     public $colorOrange = "\e[33;1m";
     public $colorGreen = "\e[32;1m";
@@ -26,34 +28,119 @@ class Test
 
     public $rootPath;
 
-    public function __construct (?string $rootPath)
+    public function __construct(?string $rootPath)
     {
         $this->rootPath = $rootPath;
     }
 
     /**
-     * Asserts something to see if it's true and then prints a message if it isn't
-     * @param $condition
-     * @param string $message
-     * @param string $conditionText
-     * @param string $actualResult
-     * @return string
-     * @tests tina4
-     *   assert (1 === 1) === "\e[32;1mPassed ()\e[0m", "Test is positive"
+     * Run all the tests
+     * @param bool $onlyShowFailed
+     * @param array $testGroups array of comma separated groupMembers to be included in the output
+     * @throws \ReflectionException
      */
-    public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
+    public function run(bool $onlyShowFailed = true, array $testGroups = []): void
     {
-        $result = false;
-        if ($condition !== true && $condition !== false) {
-            @eval('$result = (' . $condition . ');');
-        } else {
-            $result = $condition;
+
+        //Find all the functions and classes with annotated methods
+        //Look for test annotations
+        $annotation = new Annotation();
+        $tests = $annotation->get("tests");
+
+        $logLevel = Debug::$logLevel;
+        Debug::$logLevel = [];
+        echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;
+        echo str_repeat("=", 80) . PHP_EOL;
+        //Run the tests
+
+        foreach ($tests as $id => $test) {
+            $groupMember = [];
+            // Extracting which group the test belongs to.
+            if (isset($test["annotations"]["tests"][0])) {
+                $testString = $test["annotations"]["tests"][0];
+                $testString = (substr($testString, 0, strpos($testString, "assert")));
+                $groupMember = array_map("trim", explode(",", $testString));
+            }
+            // Check if only a subset group or annotations are being requested.
+            if (!empty($testGroups) && !empty($groupMember)) {
+                // Check if the group on the test declaration is the same as the requested group
+                if (array_intersect($groupMember, $testGroups)) {
+                    $this->parseAnnotations($test, $onlyShowFailed);
+                }
+                // No groups were appended to the test call
+            } else {
+                // Include test unless a tina4 test is running in a tina4 Project
+                if (!in_array("tina4", $groupMember) || file_exists(TINA4_DOCUMENT_ROOT . "Tina4")) {
+                    $this->parseAnnotations($test, $onlyShowFailed);
+                }
+            }
         }
-        if ($result === true) {
-            return $this->colorGreen . "Passed (" . $conditionText . ")" . $this->colorReset;
+
+        echo str_repeat("=", 80) . PHP_EOL;
+        echo $this->colorGreen . "END OF TESTS" . $this->colorReset . PHP_EOL;
+        Debug::$logLevel = $logLevel;
+    }
+
+    /**
+     * Parse annotations that have been found with the @ tests prefix
+     * @param $annotations
+     * @param $onlyShowFailed
+     */
+    public function parseAnnotations($annotations, $onlyShowFailed): void
+    {
+        $testResult = "";
+        $tests = explode(PHP_EOL, $annotations["annotations"]["tests"][0]);
+        $testCount = 0;
+        $testFailed = 0;
+
+        if ($annotations["type"] === "function") {
+            $testResult .= $this->colorCyan . "Testing Function " . $annotations["method"] . $this->colorReset . PHP_EOL;
         } else {
-            return $this->colorRed . "Failed (" . $conditionText . ") " . $message . ", " . $this->colorOrange . "Actual: {$actualResult}" . $this->colorReset;
+            $testResult .= $this->colorCyan . "Testing Class {$annotations["class"]}->" . $annotations["method"] . $this->colorReset . PHP_EOL;
+            if ($this->lastClass !== $annotations["class"]) {
+                $this->lastClass = $annotations["class"];
+                unset($this->testClass);
+
+                $params = [];
+                foreach ($annotations["params"] as $id => $inParam) {
+                    $params[] = '$' . $inParam->name;
+                    eval('$' . $inParam->name . ' = null;');
+                }
+
+                eval('$this->testClass = new ' . $annotations["class"] . '(' . implode(",", $params) . ');');
+            }
         }
+
+        foreach ($tests as $tid => $test) {
+            $test = trim($test);
+            $testCount++;
+            if ($annotations["type"] === "function") {
+                $message = $this->runTest($testCount, $test, $annotations["method"]);
+            } else {
+                $message = $this->runTest($testCount, $test, $annotations["method"], $this->testClass, $annotations["isStatic"]);
+            }
+            if (empty($message)) {
+                $testCount--;
+            }
+            if ($onlyShowFailed && strpos($message, "Failed") !== false) {
+                $testResult .= $message;
+                $testFailed++;
+            } elseif (!$onlyShowFailed) {
+                $testResult .= $message;
+            }
+        }
+
+        if ($testCount !== 0) {
+            if ($testCount - $testFailed !== $testCount) {
+                $testResult .= $this->colorOrange . "Tests: Passed " . ($testCount - $testFailed) . " of {$testCount} " . round(($testCount - $testFailed) / $testCount * 100.00, 2) . "%" . $this->colorReset . PHP_EOL;
+            } else {
+                $testResult = substr($testResult, 0, -strlen(PHP_EOL)) . $this->colorGreen . " 100%" . $this->colorReset . PHP_EOL;
+            }
+        } else {
+            $testResult .= $this->colorRed . " No Valid Tests!" . $this->colorReset . PHP_EOL;
+        }
+
+        echo $testResult;
     }
 
     /**
@@ -65,11 +152,13 @@ class Test
      * @param bool $isStatic
      * @return string
      */
-    public function runTest($testNo, $test, $method, $testClass = null, $isStatic=false)
+    public function runTest($testNo, $test, $method, $testClass = null, $isStatic = false)
     {
 
         preg_match_all('/^(assert)(.*),(.*)$/m', $test, $testParts, PREG_SET_ORDER);
-        if (empty($testParts)) return "";
+        if (empty($testParts)) {
+            return "";
+        }
 
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
@@ -98,21 +187,19 @@ class Test
                 }
 
                 if (\strpos($condition, '$this') !== false || strpos($condition, 'self::') !== false) {
-                    if ($isStatic)
-                    {
-                        $condition =  str_replace('$this::', '$testClass::', $condition);
-                        $condition =  str_replace('self::', '$testClass::', $condition);
+                    if ($isStatic) {
+                        $condition = str_replace('$this::', '$testClass::', $condition);
+                        $condition = str_replace('self::', '$testClass::', $condition);
                         $actualExpression = str_replace('$this::', '$testClass::', $actualExpression);
                         $actualExpression = str_replace('self::', '$testClass::', $actualExpression);
                     } else {
-                        $condition =  str_replace('$this->', '$testClass->', $condition);
+                        $condition = str_replace('$this->', '$testClass->', $condition);
                         $actualExpression = str_replace('$this->', '$testClass->', $actualExpression);
                     }
                 }
 
                 //Check if starts with bracket then we are calling the method
                 if ($condition[0] === "(") {
-
                     if ($isStatic) {
                         $condition = '$testClass::' . $method . $condition; //("test") === true
                     } else {
@@ -121,23 +208,20 @@ class Test
 
                     //add the enclosing method
                     if (!empty($enclosingMethod)) {
-                        $condition = $enclosingMethod."(".$condition;
+                        $condition = $enclosingMethod . "(" . $condition;
                         $condition = str_replace(" !=", ") !=", $condition);
                         $condition = str_replace(" ==", ") ==", $condition);
                     }
 
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', 1));');
-                } else if ($condition[0] === '$' && strpos($condition,'$testClass') === false) {
-                    if ($isStatic)
-                    {
+                } elseif ($condition[0] === '$' && strpos($condition, '$testClass') === false) {
+                    if ($isStatic) {
                         $condition = '$testClass::' . str_replace('$', '', $condition);
                     } else {
                         $condition = '$testClass->' . str_replace('$', '', $condition);
                     }
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . str_replace('$', '', $actualExpression) . ', 1));');
-
                 } else {
-
                     //Condition does not have form x === y or x !== y
                     if (!empty($actualExpression)) {
                         @eval('$actualResult = str_replace(PHP_EOL, "", print_r(' . $actualExpression . ',1));');
@@ -149,7 +233,6 @@ class Test
                 } catch (\Exception $exception) {
                     echo $condition;
                 }
-
             } else {
                 $condition = trim($testParts[0][2]);
                 if ($condition[0] === "(") {
@@ -158,7 +241,6 @@ class Test
                 } else {
                     $actualResult = $actualExpression;
                 }
-
             }
 
             return "# {$testNo} " . $method . ": " . $this->assert($condition, trim($testParts[0][3]), trim($testParts[0][2]), $actualResult) . "\n";
@@ -166,112 +248,27 @@ class Test
     }
 
     /**
-     * Parse annotations that have been found with the @ tests prefix
-     * @param $annotations
-     * @param $onlyShowFailed
+     * Asserts something to see if it's true and then prints a message if it isn't
+     * @param $condition
+     * @param string $message
+     * @param string $conditionText
+     * @param string $actualResult
+     * @return string
+     * @tests tina4
+     *   assert (1 === 1) === "\e[32;1mPassed ()\e[0m", "Test is positive"
      */
-    public function parseAnnotations($annotations, $onlyShowFailed): void
+    public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
     {
-        $testResult = "";
-        $tests = explode(PHP_EOL, $annotations["annotations"]["tests"][0]);
-        $testCount = 0;
-        $testFailed = 0;
-
-        if ($annotations["type"] === "function") {
-            $testResult .= $this->colorCyan . "Testing Function " . $annotations["method"] . $this->colorReset . PHP_EOL;
+        $result = false;
+        if ($condition !== true && $condition !== false) {
+            @eval('$result = (' . $condition . ');');
         } else {
-            $testResult .= $this->colorCyan . "Testing Class {$annotations["class"]}->" . $annotations["method"] . $this->colorReset . PHP_EOL;
-            if ($this->lastClass !== $annotations["class"]) {
-                $this->lastClass = $annotations["class"];
-                unset($this->testClass);
-
-                $params = [];
-                foreach ($annotations["params"] as $id => $inParam) {
-                    $params[] = '$'.$inParam->name;
-                    eval('$'.$inParam->name.' = null;');
-                }
-
-                eval('$this->testClass = new ' . $annotations["class"] . '('.implode(",", $params).');');
-            }
+            $result = $condition;
         }
-
-        foreach ($tests as $tid => $test) {
-
-            $test = trim($test);
-            $testCount++;
-            if ($annotations["type"] === "function") {
-                $message = $this->runTest($testCount, $test, $annotations["method"]);
-            } else {
-                $message = $this->runTest($testCount, $test, $annotations["method"], $this->testClass, $annotations["isStatic"]);
-            }
-            if (empty($message)) $testCount--;
-            if ($onlyShowFailed && strpos($message, "Failed") !== false) {
-                $testResult .= $message;
-                $testFailed++;
-            } else if (!$onlyShowFailed) {
-                $testResult .= $message;
-            }
-        }
-
-        if ($testCount !== 0) {
-            if ($testCount - $testFailed !== $testCount) {
-                $testResult .= $this->colorOrange . "Tests: Passed " . ($testCount - $testFailed) . " of {$testCount} " . round(($testCount - $testFailed) / $testCount * 100.00, 2) . "%" . $this->colorReset . PHP_EOL;
-            } else {
-
-                $testResult = substr($testResult, 0, -strlen(PHP_EOL)) . $this->colorGreen . " 100%" . $this->colorReset . PHP_EOL;
-            }
+        if ($result === true) {
+            return $this->colorGreen . "Passed (" . $conditionText . ")" . $this->colorReset;
         } else {
-            $testResult .= $this->colorRed . " No Valid Tests!" . $this->colorReset . PHP_EOL;
+            return $this->colorRed . "Failed (" . $conditionText . ") " . $message . ", " . $this->colorOrange . "Actual: {$actualResult}" . $this->colorReset;
         }
-
-        echo $testResult;
-
-    }
-
-    /**
-     * Run all the tests
-     * @param bool $onlyShowFailed
-     * @param array $testGroups  array of comma separated groupMembers to be included in the output
-     * @throws \ReflectionException
-     */
-    public function run(bool $onlyShowFailed = true, array $testGroups = []): void
-    {
-        //Find all the functions and classes with annotated methods
-        //Look for test annotations
-        $annotation = new Annotation();
-        $tests = $annotation->get("tests");
-
-        $logLevel = Debug::$logLevel;
-        Debug::$logLevel = [];
-        echo $this->colorGreen . "BEGINNING OF TESTS" . $this->colorReset . PHP_EOL;
-        echo str_repeat("=", 80) . PHP_EOL;
-        //Run the tests
-
-        foreach ($tests as $id => $test) {
-            $groupMember = [];
-            // Extracting which group the test belongs to.
-            if (isset($test["annotations"]["tests"][0])) {
-                $testString = $test["annotations"]["tests"][0];
-                $testString = (substr($testString, 0, strpos($testString, "assert")));
-                $groupMember = array_map("trim", explode(",", $testString));
-            }
-            // Check if only a subset group or annotations are being requested.
-            if (!empty($testGroups) && !empty($groupMember)) {
-                // Check if the group on the test declaration is the same as the requested group
-                if (array_intersect($groupMember, $testGroups )) {
-                    $this->parseAnnotations($test, $onlyShowFailed);
-                }
-            // No groups were appended to the test call
-            } else {
-                // Include test unless a tina4 test is running in a tina4 Project
-                if (!in_array("tina4", $groupMember) || file_exists(TINA4_DOCUMENT_ROOT . "Tina4")) {
-                    $this->parseAnnotations($test, $onlyShowFailed);
-                }
-            }
-        }
-
-        echo str_repeat("=", 80) . PHP_EOL;
-        echo $this->colorGreen . "END OF TESTS" . $this->colorReset . PHP_EOL;
-        Debug::$logLevel = $logLevel;
     }
 }

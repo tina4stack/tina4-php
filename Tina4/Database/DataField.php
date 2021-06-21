@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -17,38 +18,31 @@ class DataField
      * @var integer Index
      */
     public $index = 0;
-
-    /**
+/**
      * @var string Name of field
      */
     public $fieldName;
-
-    /**
+/**
      * @var string Alias of field
      */
     public $fieldAlias;
-
-    /**
+/**
      * @var integer|string Type of data e.g. NUMERIC
      */
     public $dataType = DATA_TYPE_TEXT;
-
-    /**
+/**
      * @var integer Size of data
      */
     public $size = 0;
-
-    /**
+/**
      * @var integer Number of decimals
      */
     public $decimals = 0;
-
-    /**
+/**
      * @var integer Whether the data is aligned left or right
      */
     public $alignment = DATA_ALIGN_LEFT;
-
-    /**
+/**
      * DataField constructor.
      * @param integer $index Index
      * @param string $fieldName Field name
@@ -96,5 +90,4 @@ class DataField
             return $this->fieldAlias;
         }
     }
-
 }

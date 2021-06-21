@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -13,7 +14,13 @@ namespace Tina4;
  */
 class Api
 {
+    /**
+     * @var string|null Base url for the Api
+     */
     public $baseURL;
+    /**
+     * @var string Auth header , normally basic auth or token auth
+     */
     public $authHeader;
 
     /**
@@ -23,7 +30,7 @@ class Api
      * @tests tina4
      *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
      */
-    public function __construct(?string $baseURL, $authHeader = "")
+    public function __construct(?string $baseURL, string $authHeader = "")
     {
         $this->baseURL = $baseURL;
         $this->authHeader = $authHeader;
@@ -33,7 +40,7 @@ class Api
      * Sends a request to the specified API
      * @param string $restService
      * @param string $requestType
-     * @param null $body
+     * @param string|null $body
      * @param string $contentType
      * @return array|mixed
      * tests tina4
@@ -41,7 +48,7 @@ class Api
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
      *   assert is_array("/book") === true, "This is not an array"
      */
-    public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*"): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*"): array
     {
         try {
             $headers = [];

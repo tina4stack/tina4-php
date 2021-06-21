@@ -36,3 +36,6 @@ test.db
 /log/debug.log
 /subfolder/
 /.phpdoc/
+/phpmetrics/
+/.phplint-cache
+/tests/junit.xml

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -13,6 +14,10 @@ namespace Tina4;
  */
 class ParseTemplate
 {
+    public $content;
+    public $httpCode = HTTP_OK;
+    public $headers = [];
+    public $fileName;
     private $root;
     private $includeRegEx = "/\\{\\{include:(.*)\\}\\}/i";
     private $callRegEx = "/\\{\\{call:(.*)\\}\\}/i";
@@ -22,12 +27,6 @@ class ParseTemplate
     private $subFolder;
     private $definedVariables;
     private $evals = [];
-    public $content;
-    public $httpCode = HTTP_OK;
-    public $headers = [];
-    public $fileName;
-
-
 
     /**
      * ParseTemplate constructor.
@@ -62,7 +61,9 @@ class ParseTemplate
      */
     public function parseFile(string $fileName)
     {
-        if ($fileName === null || $fileName === "") return "";
+        if ($fileName === null || $fileName === "") {
+            return "";
+        }
         //Trim off the first char if /
         if ($fileName[0] === "/") {
             $fileName = substr($fileName, 1);
@@ -72,11 +73,10 @@ class ParseTemplate
 
 
         if (empty($ext)) {
-            $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName."/index.twig", $fileName."/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
+            $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName . "/index.twig", $fileName . "/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
             $possibleFiles = array_unique($possibleFiles);
         } else {
             $possibleFiles = [$fileName];
-
         }
 
         $realFileName = $fileName;
@@ -96,9 +96,13 @@ class ParseTemplate
                     $mimeType = Utility::getMimeType($fileName);
                     break;
                 }
-                if ($found) break;
+                if ($found) {
+                    break;
+                }
             }
-            if ($found) break;
+            if ($found) {
+                break;
+            }
         }
 
         $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
@@ -108,16 +112,15 @@ class ParseTemplate
             $this->httpCode = HTTP_OK;
             //Render a twig file if the extension is twig
             if ($ext === "twig") {
-
                 if (!isset($_SESSION["renderData"])) {
                     $_SESSION["renderData"] = [];
                 }
-                $this->headers[] = "Content-Type: ".TEXT_HTML;
+                $this->headers[] = "Content-Type: " . TEXT_HTML;
 
                 $this->fileName = $realFileName;
                 $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
             } else {
-                $this->headers[] = "Content-Type: ".$mimeType;
+                $this->headers[] = "Content-Type: " . $mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
                 $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
@@ -187,31 +190,29 @@ class ParseTemplate
             try {
                 $response = call_user_func_array($parts["method"], $parts["params"]);
                 if ($response === false || empty($response)) {
-
-                    throw new \Exception ("Failed to call method ");
+                    throw new \Exception("Failed to call method ");
                 } else {
                     return $response;
                 }
             } catch (\Exception $error) {
                 $this->evals[] = $parts["method"];
             }
-        } else
-            if (!empty($parts["method"])) {
-                eval('$object = (new ' . $object . '());');
-                if (method_exists($object, $parts["method"])) {
-                    $response = call_user_func_array(array($object, $parts["method"]), $parts["params"]);
-                    if ($response === false) {
-                        throw new \Exception ("Failed to call method ");
-                    } else {
-                        return $response;
-                    }
+        } elseif (!empty($parts["method"])) {
+            eval('$object = (new ' . $object . '());');
+            if (method_exists($object, $parts["method"])) {
+                $response = call_user_func_array(array($object, $parts["method"]), $parts["params"]);
+                if ($response === false) {
+                    throw new \Exception("Failed to call method ");
                 } else {
-                    return "[Method {$parts["method"]} not found on " . get_class($object) . "]";
+                    return $response;
                 }
             } else {
-                $objectReflection = new \ReflectionClass($object);
-                return $objectReflection->newInstanceArgs($parts["params"]);
+                return "[Method {$parts["method"]} not found on " . get_class($object) . "]";
             }
+        } else {
+            $objectReflection = new \ReflectionClass($object);
+            return $objectReflection->newInstanceArgs($parts["params"]);
+        }
         return null;
     }
 
@@ -301,5 +302,4 @@ class ParseTemplate
         http_response_code($this->responseCode);
         return (string)$this->content;
     }
-
 }

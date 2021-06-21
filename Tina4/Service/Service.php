@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -22,14 +23,15 @@ class Service extends Data
     function __construct()
     {
         parent::__construct();
-        $this->servicePath = TINA4_DOCUMENT_ROOT."cache".DIRECTORY_SEPARATOR."services";
+        $this->servicePath = TINA4_DOCUMENT_ROOT . "cache" . DIRECTORY_SEPARATOR . "services";
     }
 
     /**
      * Add process to the list to be run
      * @param Process $process
      */
-    public function addProcess(\Tina4\Process $process) {
+    public function addProcess(\Tina4\Process $process)
+    {
         if (file_exists($this->servicePath)) {
             $services = unserialize(file_get_contents($this->servicePath));
         } else {
@@ -43,7 +45,8 @@ class Service extends Data
      * Add process to the list to be run
      * @param string $name
      */
-    public function removeProcess(string $name) {
+    public function removeProcess(string $name)
+    {
         if (file_exists($this->servicePath)) {
             $services = unserialize(file_get_contents($this->servicePath));
         } else {
@@ -60,7 +63,8 @@ class Service extends Data
      * Get a list of processes
      * @return array|mixed
      */
-    public function getProcesses () {
+    public function getProcesses()
+    {
         if (file_exists($this->servicePath)) {
             $services = unserialize(file_get_contents($this->servicePath));
         } else {

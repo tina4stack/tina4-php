@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -14,51 +15,94 @@ namespace Tina4;
 class Annotation
 {
     /**
+     * Gets all the annotations from the code based on a filter
+     * @param string $annotationName Filter for the annotations
+     * @return array An array of the annotations
+     * @throws \ReflectionException
+     */
+    final public function get(string $annotationName = ""): array
+    {
+
+        $functions = $this->getFunctions();
+        asort($functions);
+
+        $classes = $this->getClasses();
+        asort($classes);
+
+        $annotations = [];
+
+
+
+        //Get annotations for each function
+        foreach ($functions as $id => $function) {
+            $annotations = array_merge($annotations, $this->getFunctionAnnotations($function, $annotationName));
+        }
+
+        //Get annotations for each class and class method
+        foreach ($classes as $cid => $class) {
+            $annotations = array_merge($annotations, $this->getClassAnnotations($class, $annotationName));
+        }
+
+        return $annotations;
+    }
+
+    /**
      * Gets all the user defined functions
-     * @return array
+     * @return array Array of the defined functions
      * @tests tina4
      *   assert is_object() !== true, "Expects an array"
      */
-    public function getFunctions(): array
+    final public function getFunctions(): array
     {
-        return get_defined_functions()["user"];
+        $allFunctions =  get_defined_functions(true);
+        return $allFunctions["user"];
     }
-
 
     /**
      * Gets all the classes in the system
-     * @return array
+     * @return array An array of classes
      * @tests tina4
      *   assert is_array() === true, "Expects an array"
      */
-    public function getClasses(): array
+    final public function getClasses(): array
     {
-        $classes = get_declared_classes();
-        $autoloaderClassName = "";
-        foreach ( $classes as $className) {
-            if (strpos($className, 'ComposerAutoloaderInit') === 0) {
-                $autoloaderClassName = $className;
-                break;
-            }
-        }
-        $classLoader = $autoloaderClassName::getLoader();
-        foreach ($classLoader->getClassMap() as $path) {
-            require_once $path;
-        }
         return get_declared_classes();
     }
 
     /**
-     * @param $docComment
+     * Gets the annotations for a function
+     * @param string $functionName Name of the function for th
+     * @param string $annotationName Name of the annotation
+     * @return array An array of annotations on a function
+     * @throws \ReflectionException
+     * @tests tina4
+     *   assert ("strpos", "param") === [], "Expects value class"
+     */
+    final public function getFunctionAnnotations(string $functionName, string $annotationName = ""): array
+    {
+        $annotations = [];
+        $reflection = new \ReflectionFunction($functionName);
+        $docComment = $reflection->getDocComment();
+        $annotation = $this->parseAnnotations($docComment, $annotationName);
+        if (!empty($annotation)) {
+            $annotations[] = ["type" => "function", "method" => $functionName, "params" => $reflection->getParameters(), "annotations" => $annotation];
+        }
+
+        return $annotations;
+    }
+
+    /**
+     * @param string $docComment
      * @param string $annotationName
      * @return array
      * @tests tina4
-     *   assert ('  * @param weird')["param"][0] === "weird", "Expects value of param to be weird"
+     *   assert ('@weird weird')["weird"][0] === "weird", "Expects value of param to be weird"
      */
-    public function parseAnnotations($docComment, $annotationName = ""): array
+    final public function parseAnnotations(string $docComment, string $annotationName = ""): array
     {
         //clean *
         $docComment = preg_replace('/^.[\*|\/|\n|\ |\r]+|^(.*)\*/m', "", $docComment);
+
 
         $annotations = [];
         preg_match_all('/^@([^\n|\r\n|\t]+)/m', $docComment, $comments, PREG_OFFSET_CAPTURE, 0);
@@ -79,35 +123,13 @@ class Annotation
     }
 
     /**
-     * Gets the annotations for a function
-     * @param $functionName
-     * @param string $annotationName
-     * @return array
-     * @throws \ReflectionException
-     * @tests tina4
-     *   assert ("strpos", "param") === [], "Expects value class"
-     */
-    public function getFunctionAnnotations($functionName, $annotationName=""): array
-    {
-        $annotations = [];
-        $reflection = new \ReflectionFunction($functionName);
-        $docComment = $reflection->getDocComment();
-        $annotation = $this->parseAnnotations($docComment, $annotationName);
-        if (!empty($annotation)) {
-            $annotations[] = ["type" => "function", "method" => $functionName, "params" => $reflection->getParameters(), "annotations" => $annotation];
-        }
-
-        return $annotations;
-    }
-
-    /**
      * Gets the annotations for a class
-     * @param $className
-     * @param string $annotationName
+     * @param string $className Name of the class to scan for annotations
+     * @param string $annotationName Name of the annotation
      * @return array
      * @throws \ReflectionException
      */
-    public function getClassAnnotations($className, $annotationName="") : array
+    final public function getClassAnnotations(string $className, string $annotationName = ""): array
     {
         // Check if there are any tests on the Class itself.
         $annotations = [];
@@ -123,40 +145,12 @@ class Annotation
         $methods = get_class_methods($className);
         foreach ($methods as $mid => $method) {
             $docComment = $reflection->getMethod($method)->getDocComment();
-            $isStatic =  $reflection->getMethod($method)->isStatic();
+            $isStatic = $reflection->getMethod($method)->isStatic();
             $annotation = $this->parseAnnotations($docComment, $annotationName);
 
             if (!empty($annotation)) {
                 $annotations[] = ["type" => "classMethod", "class" => $className, "method" => $method, "params" => $reflection->getMethod($method)->getParameters(), "isStatic" => $isStatic, "annotations" => $annotation];
             }
-        }
-
-        return $annotations;
-    }
-
-    /**
-     * Gets all the annotations from the code based on a filter
-     * @param string $annotationName
-     * @return array
-     * @throws \ReflectionException
-     */
-    public function get($annotationName = ""): array
-    {
-        $functions = $this->getFunctions();
-        asort($functions);
-        $classes = $this->getClasses();
-        asort($classes);
-
-        $annotations = [];
-
-        //Get annotations for each function
-        foreach ($functions as $id => $function) {
-            $annotations = array_merge($annotations, $this->getFunctionAnnotations($function, $annotationName));
-        }
-
-        //Get annotations for each class and class method
-        foreach ($classes as $cid => $class) {
-            $annotations = array_merge($annotations, $this->getClassAnnotations($class, $annotationName));
         }
 
         return $annotations;

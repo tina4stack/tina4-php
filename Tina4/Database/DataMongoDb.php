@@ -1,13 +1,12 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
 
-
 namespace Tina4;
-
 
 /**
  * The Mongodb database implementation
@@ -18,7 +17,6 @@ class DataMongoDb implements Database
 
     public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d")
     {
-
     }
 
     public function close()
@@ -41,17 +39,17 @@ class DataMongoDb implements Database
         // TODO: Implement tableExists() method.
     }
 
-    public function fetch($sql = "", $noOfRecords = 10, $offSet = 0, $fieldMapping = [])
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = [])
     {
         // TODO: Implement fetch() method.
     }
 
-    public function rollback($transactionId = null)
+    public function rollback(int $transactionId = null)
     {
         // TODO: Implement rollback() method.
     }
 
-    public function autoCommit($onState = true)
+    public function autoCommit(bool $onState = true)
     {
         // TODO: Implement autoCommit() method.
     }

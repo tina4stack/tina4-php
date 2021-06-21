@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -28,12 +29,11 @@ class HTMLElement
         foreach ($elements as $id => $element) {
             if (is_string($element) && in_array($element, HTML_ELEMENTS)) {
                 $this->tag = substr($element, 1);
-            } else
-                if (is_array($element)) {
-                    $this->sortElements($element);
-                } else {
-                    $this->tag = substr($element, 1);
-                }
+            } elseif (is_array($element)) {
+                $this->sortElements($element);
+            } else {
+                $this->tag = substr($element, 1);
+            }
         }
         //return $this;
     }
@@ -78,24 +78,19 @@ class HTMLElement
         //Check what type of tag
         if ($this->tag === "document") {
             return "{$this->getElements()}";
-        } else
-
-            if ($this->tag === "") {
-                return "{$this->getElements()}";
-            } else
-                if ($this->tag[0] === "!") {
-                    if (strpos($this->tag, "!--") !== false) {
-                        return "<$this->tag{$this->getAttributes()}{$this->getElements()}" . substr($this->tag, 1) . ">";
-                    } else {
-                        return "<$this->tag{$this->getAttributes()}>";
-                    }
-                } else
-                    if ($this->tag[strlen($this->tag) - 1] === "/") {
-                        return "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
-                    } else {
-                        return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
-                    }
-
+        } elseif ($this->tag === "") {
+            return "{$this->getElements()}";
+        } elseif ($this->tag[0] === "!") {
+            if (strpos($this->tag, "!--") !== false) {
+                return "<$this->tag{$this->getAttributes()}{$this->getElements()}" . substr($this->tag, 1) . ">";
+            } else {
+                return "<$this->tag{$this->getAttributes()}>";
+            }
+        } elseif ($this->tag[strlen($this->tag) - 1] === "/") {
+            return "<$this->tag{$this->getAttributes()}>{$this->getElements()}";
+        } else {
+            return "<$this->tag{$this->getAttributes()}>{$this->getElements()}</{$this->tag}>";
+        }
     }
 
     /**
@@ -169,4 +164,3 @@ class HTMLElement
  *
  * echo $elements;
  **/
-

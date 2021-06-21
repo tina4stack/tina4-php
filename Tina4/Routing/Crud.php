@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -56,7 +57,9 @@ class Crud
      */
     public static function addFormInput($name, $value = "", $placeHolder = "", $type = "text", $required = false, $javascript = "", $lookupData = [], $label = "")
     {
-        if (empty($label) && !empty($placeHolder)) $label = $placeHolder;
+        if (empty($label) && !empty($placeHolder)) {
+            $label = $placeHolder;
+        }
         return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type, "required" => $required, "javascript" => $javascript, "options" => $lookupData];
     }
 
@@ -76,8 +79,10 @@ class Crud
         $colSpan = 12 / $noOfColumns;
         foreach ($formInputs as $id => $formInput) {
             if (in_array($formInput->type, ["text", "password", "hidden", "color", "file", "tel", "date", "datetime-local", "email", "month", "number", "search", "time", "url", "week"])) {
-                $fields[] = _div(["class" => $columnClass . $colSpan],
-                    _div(["class" => $groupClass],
+                $fields[] = _div(
+                    ["class" => $columnClass . $colSpan],
+                    _div(
+                        ["class" => $groupClass],
                         _label(["for" => $formInput->name], $formInput->label),
                         _input(["class" => $inputClass,
                                 "type" => $formInput->type,
@@ -86,9 +91,9 @@ class Crud
                                 "placeholder" => $formInput->placeHolder,
                                 "value" => $formInput->value,
                                 "required" => $formInput->required,
-                                "_" => $formInput->javascript]
-                        )
-                    ));
+                                "_" => $formInput->javascript])
+                    )
+                );
             } elseif ($formInput->type == "select") {
                 $options = [];
                 $selected = null;
@@ -101,9 +106,11 @@ class Crud
                     $options[] = _option(["value" => $key, $selected], $value);
                 }
 
-                $fields[] = _div(["class" => $columnClass . $colSpan], _div(["class" => $groupClass],
+                $fields[] = _div(["class" => $columnClass . $colSpan], _div(
+                    ["class" => $groupClass],
                     _label(["for" => $formInput->name], $formInput->label),
-                    _select(["class" => $inputClass,
+                    _select(
+                        ["class" => $inputClass,
                         "name" => $formInput->name,
                         "id" => $formInput->name,
                         "required" => $formInput->required,
@@ -112,7 +119,8 @@ class Crud
                     )
                 ));
             } elseif ($formInput->type == "image") {
-                $fields[] = _div(["class" => $columnClass . $colSpan], _div(["class" => $groupClass],
+                $fields[] = _div(["class" => $columnClass . $colSpan], _div(
+                    ["class" => $groupClass],
                     _label(["for" => $formInput->name], $formInput->label),
                     _br(),
                     _img(["src" => "data:image/png;base64," . $formInput->value, "class" => $imageClass]),
@@ -124,13 +132,13 @@ class Crud
                             "placeholder" => $formInput->placeHolder,
                             "value" => $formInput->value,
                             "required" => $formInput->required,
-                            "_" => $formInput->javascript]
-                    )
+                            "_" => $formInput->javascript])
                 ));
             }
         }
 
-        return _form(["name" => $formName, "method" => $formMethod, "action" => $formAction],
+        return _form(
+            ["name" => $formName, "method" => $formMethod, "action" => $formAction],
             _div(["class" => "row"], $fields)
         );
     }
@@ -150,27 +158,29 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          */
-        Route::get($path . "/form",
+        Route::get(
+            $path . "/form",
             function (Response $response, Request $request) use ($object, $function) {
-                $htmlResult = $function ("form", $object, null, $request);
-                return $response ($htmlResult, HTTP_OK);
+                $htmlResult = $function("form", $object, null, $request);
+                return $response($htmlResult, HTTP_OK);
             }
         );
 
         /**
          * @description  {$path} CRUD
          */
-        Route::post($path,
+        Route::post(
+            $path,
             function (Response $response, Request $request) use ($object, $function) {
                 if (!empty($request->data)) {
                     $object->create($request->data);
                 } else {
                     $object->create($request->params);
                 }
-                $function ("create", $object, null, $request);
+                $function("create", $object, null, $request);
                 $object->save();
-                $jsonResult = $function ("afterCreate", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK);
+                $jsonResult = $function("afterCreate", $object, null, $request);
+                return $response($jsonResult, HTTP_OK);
             }
         );
 
@@ -178,11 +188,12 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          */
-        Route::get($path,
+        Route::get(
+            $path,
             function (Response $response, Request $request) use ($object, $function) {
                 $filter = Crud::getDataTablesFilter("t.");
-                $jsonResult = $function ("read", new $object(), $filter, $request);
-                return $response ($jsonResult, HTTP_OK);
+                $jsonResult = $function("read", new $object(), $filter, $request);
+                return $response($jsonResult, HTTP_OK);
             }
         );
 
@@ -191,16 +202,17 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          */
-        Route::get($path . "/{id}",
+        Route::get(
+            $path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
 
-                $jsonResult = $function ("fetch", (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'"), null, $request);
+                $jsonResult = $function("fetch", (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'"), null, $request);
                 if (empty($jsonResult)) {
                     $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
                 }
 
-                return $response ($jsonResult, HTTP_OK);
+                return $response($jsonResult, HTTP_OK);
             }
         );
 
@@ -208,7 +220,8 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          */
-        Route::post($path . "/{id}",
+        Route::post(
+            $path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
                 if (!empty($request->data)) {
@@ -217,10 +230,10 @@ class Crud
                     $object->create($request->params);
                 }
                 $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
-                $function ("update", $object, null, $request);
+                $function("update", $object, null, $request);
                 $object->save();
-                $jsonResult = $function ("afterUpdate", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK);
+                $jsonResult = $function("afterUpdate", $object, null, $request);
+                return $response($jsonResult, HTTP_OK);
             }
         );
 
@@ -228,22 +241,22 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          */
-        Route::delete($path . "/{id}",
+        Route::delete(
+            $path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
                 $object->create($request->params);
                 $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
-                $function ("delete", $object, null, $request);
+                $function("delete", $object, null, $request);
                 if (!$object->softDelete) {
                     $object->delete();
                 } else {
                     $object->save();
                 }
-                $jsonResult = $function ("afterDelete", $object, null, $request);
-                return $response ($jsonResult, HTTP_OK);
+                $jsonResult = $function("afterDelete", $object, null, $request);
+                return $response($jsonResult, HTTP_OK);
             }
         );
-
     }
 
     /**
@@ -251,7 +264,7 @@ class Crud
      * @param string $tablePrefix
      * @return array
      */
-    public static function getDataTablesFilter(string $tablePrefix=""): array
+    public static function getDataTablesFilter(string $tablePrefix = ""): array
     {
         $ORM = new ORM();
         $request = $_REQUEST;
@@ -274,7 +287,7 @@ class Crud
 
                 if (($column["searchable"] == "true") && !empty($search["value"])) {
                     //Add each searchable column to array
-                    $listOfColumnNames[] = $tablePrefix.$columnName;
+                    $listOfColumnNames[] = $tablePrefix . $columnName;
                     //Split search phrase into individual searchable words
                     $splitValue = explode(" ", $search["value"]);
 
@@ -287,7 +300,7 @@ class Crud
                             if (!is_array($filter)) {
                                 $filter[] = $filterValue;
                                 //Check if filter value is already in $filer array
-                            } else if (!in_array($filterValue, $filter)) {
+                            } elseif (!in_array($filterValue, $filter)) {
                                 $filter[] = $filterValue;
                             }
                         }
@@ -300,7 +313,7 @@ class Crud
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
                 $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"]);
-                $ordering[] = $tablePrefix.$columnName . " " . $orderEntry["dir"];
+                $ordering[] = $tablePrefix . $columnName . " " . $orderEntry["dir"];
             }
         }
 
@@ -319,8 +332,7 @@ class Crud
             //Check for type of database
             if (!empty($ORM->DBA) && get_class($ORM->DBA) === "Tina4\DataMySQL") {
                 //Mysql
-                foreach ($listOfColumnNames as $id => $listColumn)
-                {
+                foreach ($listOfColumnNames as $id => $listColumn) {
                     $listOfColumnNames[$id] = "case when ($listColumn is null) then '' else $listColumn end";
                 }
 
@@ -353,5 +365,4 @@ class Crud
 
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
     }
-
 }

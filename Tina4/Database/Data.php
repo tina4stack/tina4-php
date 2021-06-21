@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -15,26 +16,21 @@ use Composer\Autoload\ClassLoader;
  */
 class Data
 {
-    use Utility;
 
     public $DBA;
     public $cache;
     public $projectRoot;
     public $documentRoot;
     public $subFolder;
-
     /**
      * Data constructor
      */
     public function __construct()
     {
         if (!defined("TINA4_DOCUMENT_ROOT")) {
-
             $reflection = new \ReflectionClass(ClassLoader::class);
             $vendorDir = dirname($reflection->getFileName());
-
             $this->projectRoot = dirname(dirname(__DIR__ . ".." . DIRECTORY_SEPARATOR) . ".." . DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-
             $vendorFolder = explode("vendor", $this->projectRoot);
             if (count($vendorFolder) > 0) {
                 $this->documentRoot = $vendorFolder[0];
@@ -67,5 +63,27 @@ class Data
                 }
             }
         }
+    }
+
+    /**
+     * Logic to determine the sub folder - result must be /folder/
+     * @param string $documentRoot
+     * @return string|null
+     */
+    public function getSubFolder(string $documentRoot = ""): ?string
+    {
+        if (defined("TINA4_SUB_FOLDER")) {
+            return TINA4_SUB_FOLDER;
+        }
+
+        $subFolder = str_replace($_SERVER["DOCUMENT_ROOT"], "", $documentRoot);
+
+        if ($subFolder === $documentRoot || $subFolder === DIRECTORY_SEPARATOR || $subFolder === ".") {
+            $subFolder = "";
+        }
+
+        define("TINA4_BASE_URL", $subFolder);
+        define("TINA4_SUB_FOLDER", $subFolder);
+        return $subFolder;
     }
 }

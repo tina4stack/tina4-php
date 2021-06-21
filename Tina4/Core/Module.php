@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -13,24 +14,14 @@ namespace Tina4;
  */
 class Module
 {
-    public static function getModuleFolder(): string
-    {
-        $backtrace = debug_backtrace();
-        if (isset($backtrace[1])) {
-            return dirname($backtrace[1]['file']);
-        } else {
-            return __DIR__;
-        }
-    }
-
     /**
      * Adds a module
      * @param string $name
      * @param string $version
      * @param string $nameSpace
-     * @param Config $config
+     * @param Config|null $config
      */
-    public static function addModule($name = "Tina4Module", $version = "1.0.0", $nameSpace = "", $config = null): void
+    public static function addModule(string $name = "Tina4Module", string $version = "1.0.0", string $nameSpace = "", ?Config $config = null): void
     {
         $moduleFolder = self::getModuleFolder();
 
@@ -56,22 +47,35 @@ class Module
         $_TINA4_MODULES[$baseName]["migrationPath"] = [];
         $_TINA4_MODULES[$baseName]["scssPath"] = [];
 
-        self::addRoutePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "routes", $baseName);
-        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "app", $baseName);
-        self::addIncludePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "orm", $baseName);
-        self::addTemplatePath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "templates", $baseName);
-        self::addMigrationPath($moduleFolder . DIRECTORY_SEPARATOR . "migrations", $baseName);
-        self::addSCSSPath($moduleFolder . DIRECTORY_SEPARATOR . "src". DIRECTORY_SEPARATOR. "scss", $baseName);
-
+        self::addPath("routePath", $moduleFolder . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "routes", $baseName);
+        self::addPath("includePath", $moduleFolder . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "app", $baseName);
+        self::addPath("includePath", $moduleFolder . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "orm", $baseName);
+        self::addPath("templatePath", $moduleFolder . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "templates", $baseName);
+        self::addPath("migrationPath", $moduleFolder . DIRECTORY_SEPARATOR . "migrations", $baseName);
+        self::addPath("scssPath", $moduleFolder . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "scss", $baseName);
     }
 
     /**
-     * Add Path
-     * @param $pathType
-     * @param $path
-     * @param $baseName
+     * Gets the path to the module folder in the vendor folder
+     * @return string Path to the module folder
      */
-    public static function addPath($pathType, $path, $baseName): void
+    public static function getModuleFolder(): string
+    {
+        $backtrace = debug_backtrace();
+        if (isset($backtrace[1])) {
+            return dirname($backtrace[1]['file']);
+        } else {
+            return __DIR__;
+        }
+    }
+
+    /**
+     * Add Path method
+     * @param string $pathType Can be a routePath, templatePath, migrationPath, scssPath
+     * @param string $path Path to where the modules reside
+     * @param string $baseName Name of the Tina4 Module
+     */
+    public static function addPath(string $pathType, string $path, string $baseName): void
     {
         global $_TINA4_MODULES;
         if (file_exists($path)) {
@@ -80,74 +84,28 @@ class Module
     }
 
     /**
-     * Add Route Path
-     * @param $path
-     * @param $baseName
-     */
-    public static function addRoutePath($path, $baseName): void
-    {
-        self::addPath("routePath", $path, $baseName);
-    }
-
-    /**
-     * Add Include Path
-     * @param $path
-     * @param $baseName
-     */
-    public static function addIncludePath($path, $baseName): void
-    {
-        self::addPath("includePath", $path, $baseName);
-    }
-
-    /**
-     * Add Template Path
-     * @param $path
-     * @param $baseName
-     */
-    public static function addTemplatePath($path, $baseName)
-    {
-        self::addPath("templatePath", $path, $baseName);
-    }
-
-    /**
-     * Add Migration Path
-     * @param $path
-     * @param $baseName
-     */
-    public static function addMigrationPath($path, $baseName): void
-    {
-        self::addPath("migrationPath", $path, $baseName);
-    }
-
-    /**
-     * Add SCSS Path
-     * @param $path
-     * @param $baseName
-     */
-    public static function addSCSSPath($path, $baseName): void
-    {
-        self::addPath("scssPath", $path, $baseName);
-    }
-
-
-    /**
      * Gets the Route Folders
      * @return array
      */
     public static function getRouteFolders(): array
     {
+        return self::getFolders("routePath");
+    }
+
+    public static function getFolders(string $folderType): array
+    {
         global $_TINA4_MODULES;
-        $routes = [];
+        $folders = [];
         if (empty($_TINA4_MODULES)) {
             return [];
         } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
-                foreach ($module["routePath"] as $routePath) {
-                    $routes[] = $routePath;
+                foreach ($module[$folderType] as $routePath) {
+                    $folders[] = $routePath;
                 }
             }
         }
-        return $routes;
+        return $folders;
     }
 
     /**
@@ -161,15 +119,12 @@ class Module
         if (empty($_TINA4_MODULES)) {
             return [];
         } else {
-
             foreach ($_TINA4_MODULES as $moduleName => $module) {
                 foreach ($module["templatePath"] as $routePath) {
                     $routes[] = ["path" => $routePath, "nameSpace" => $module["nameSpace"]];
                 }
             }
         }
-
-
         return $routes;
     }
 
@@ -179,18 +134,7 @@ class Module
      */
     public static function getIncludeFolders(): array
     {
-        global $_TINA4_MODULES;
-        $routes = [];
-        if (empty($_TINA4_MODULES)) {
-            return [];
-        } else {
-            foreach ($_TINA4_MODULES as $moduleName => $module) {
-                foreach ($module["includePath"] as $routePath) {
-                    $routes[] = $routePath;
-                }
-            }
-        }
-        return $routes;
+        return self::getFolders("includePath");
     }
 
     /**
@@ -199,18 +143,7 @@ class Module
      */
     public static function getMigrationFolders(): array
     {
-        global $_TINA4_MODULES;
-        $routes = [];
-        if (empty($_TINA4_MODULES)) {
-            return [];
-        } else {
-            foreach ($_TINA4_MODULES as $moduleName => $module) {
-                foreach ($module["migrationPath"] as $routePath) {
-                    $routes[] = $routePath;
-                }
-            }
-        }
-        return $routes;
+        return self::getFolders("migrationPath");
     }
 
     /**
@@ -219,18 +152,7 @@ class Module
      */
     public static function getSCSSFolders(): array
     {
-        global $_TINA4_MODULES;
-        $routes = [];
-        if (empty($_TINA4_MODULES)) {
-            return [];
-        } else {
-            foreach ($_TINA4_MODULES as $moduleName => $module) {
-                foreach ($module["scssPath"] as $routePath) {
-                    $routes[] = $routePath;
-                }
-            }
-        }
-        return $routes;
+        return self::getFolders("scssPath");
     }
 
     /**
@@ -245,11 +167,9 @@ class Module
             return [];
         } else {
             foreach ($_TINA4_MODULES as $moduleName => $module) {
-
                 if (!empty($module["config"])) {
                     $configs[] = $module["config"];
                 }
-
             }
         }
         return $configs;

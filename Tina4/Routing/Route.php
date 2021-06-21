@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -18,22 +19,7 @@ class Route implements RouteCore
      * @var string Type of method e.g. ANY, POST, DELETE, etc
      */
     public static $method;
-
-    /**
-     * Clean URL by splitting string at "?" to get actual URL
-     * @param string $url URL to be cleaned that may contain "?"
-     * @return mixed Part of the URL before the "?" if it existed
-     */
-    public static function cleanURL(string $url): string
-    {
-        $url = explode("?", $url, 2);
-
-        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
-
-        return str_replace("//", "/", $url[0]);
-    }
-
-    /**
+/**
      * Get route
      * @param string $routePath
      * @param $function
@@ -43,8 +29,6 @@ class Route implements RouteCore
         self::$method = TINA4_GET;
         self::add($routePath, $function, true);
     }
-
-    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
 
     /**
      * Add a route to be called on the web server
@@ -60,17 +44,15 @@ class Route implements RouteCore
     public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void
     {
         global $arrRoutes;
-
-
         $originalRoute = $routePath;
-        //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
+//pipe is an or operator for the routing which will allow multiple routes for one anonymous function
         $routePath .= "|";
         $routes = explode("|", $routePath);
-
         foreach ($routes as $rid => $routePathLoop) {
             if ($routePathLoop !== "") {
-
-                if (isset($_SERVER["REQUEST_URI"]) && self::cleanURL($_SERVER["REQUEST_URI"]) !== "/swagger/json.json" && substr($routePathLoop, 0,2) !== substr(self::cleanURL($_SERVER["REQUEST_URI"]), 0,2)) continue;
+                if (isset($_SERVER["REQUEST_URI"]) && self::cleanURL($_SERVER["REQUEST_URI"]) !== "/swagger/json.json" && substr($routePathLoop, 0, 2) !== substr(self::cleanURL($_SERVER["REQUEST_URI"]), 0, 2)) {
+                    continue;
+                }
 
                 if ($routePathLoop[0] !== "/") {
                     $routePathLoop = "/" . $routePathLoop;
@@ -78,17 +60,28 @@ class Route implements RouteCore
 
                 $class = null;
                 $method = $function;
-
                 if (is_array($function) && class_exists($function[0]) && method_exists($function[0], $function[1])) {
                     $class = $function[0];
                     $method = $function[1];
                 }
 
                 $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
-
             }
         }
+    }
 
+    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
+
+    /**
+     * Clean URL by splitting string at "?" to get actual URL
+     * @param string $url URL to be cleaned that may contain "?"
+     * @return mixed Part of the URL before the "?" if it existed
+     */
+    public static function cleanURL(string $url): string
+    {
+        $url = explode("?", $url, 2);
+        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
+        return str_replace("//", "/", $url[0]);
     }
 
     /**
@@ -145,5 +138,4 @@ class Route implements RouteCore
         self::$method = TINA4_ANY;
         self::add($routePath, $function, true);
     }
-
 }

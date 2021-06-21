@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -7,7 +8,6 @@
 
 namespace Tina4;
 
-use Phpfastcache\Helper\CacheConditionalHelper;
 use Twig\Error\LoaderError;
 
 /**
@@ -16,6 +16,7 @@ use Twig\Error\LoaderError;
  */
 class Router extends Data
 {
+    use Utility;
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
@@ -34,17 +35,17 @@ class Router extends Data
      * @return RouterResponse
      * @throws \Twig\Error\LoaderError
      */
-    public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
+    final public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
     {
 
         $this->config = $config;
-        if ($url === ""){
+        if ($url === "") {
             return null;
         }
 
         $url = $this->cleanURL($url);
         $cacheResult = $this->getCacheResponse($url);
-        if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create"){
+        if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
             Debug::message("Got cached result for $url", TINA4_LOG_DEBUG);
             return new RouterResponse($cacheResult["content"], $cacheResult["httpCode"], $cacheResult["headers"]);
         }
@@ -53,22 +54,21 @@ class Router extends Data
 
         $content = "Page not found";
         $responseCode = HTTP_NOT_FOUND;
-        $headers = ["Content-Type: ".TEXT_HTML];
+        $headers = ["Content-Type: " . TEXT_HTML];
 
         //FIRST OPTIONS
         if ($routerResponse = $this->handleOptionsMethod($method)) {
-            Debug::message("OPTIONS - ".$url, TINA4_LOG_DEBUG);
+            Debug::message("OPTIONS - " . $url, TINA4_LOG_DEBUG);
             return $routerResponse;
         }
 
         //SECOND STATIC FILES - ONLY GET
 
         if ($method === TINA4_GET) {
-
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
-                if (defined("TINA4_CACHED_ROUTES") && strpos(print_r (TINA4_CACHED_ROUTES,1), $url) !== false) {
+                if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
                     $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
                 }
                 return $routerResponse;
@@ -78,23 +78,21 @@ class Router extends Data
         //Initialize only after statics, initialize the twig engine
         $config->callInitFunction();
         try {
-            Utility::initTwig($config);
+            TwigUtility::initTwig($config);
         } catch (LoaderError $e) {
             Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
         }
 
         //THIRD ROUTING
-        if ($routerResponse = $this->handleRoutes($method, $url))
-        {
-            if (defined("TINA4_CACHED_ROUTES") && strpos(print_r (TINA4_CACHED_ROUTES,1), $url) !== false) {
+        if ($routerResponse = $this->handleRoutes($method, $url)) {
+            if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
                 $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, "");
             }
             return $routerResponse;
         }
 
         //LAST RESORT -> GO LOOKING IN TEMPLATES FOR FILE BY THE NAME
-        if ($url === "/")
-        {
+        if ($url === "/") {
             $url .= "index";
         }
 
@@ -109,26 +107,6 @@ class Router extends Data
     }
 
     /**
-     * Create cache response
-     * @param $url
-     * @param $httpCode
-     * @param $content
-     * @param $headers
-     * @param $fileName
-     * @return bool
-     */
-    public function createCacheResponse($url, $httpCode, $content, $headers, $fileName): bool
-    {
-        global $cache;
-        $key = "url_".md5($url);
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG &&  (strpos($url, ".twig") !== false || strpos($url, "/public/") !== false))
-        {
-            return false;
-        }
-        return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName,  "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
-    }
-
-    /**
      * Get cache response
      * @param $url
      * @return array|null
@@ -138,50 +116,15 @@ class Router extends Data
     public function getCacheResponse($url): ?array
     {
         global $cache;
-        $key = "url_".md5($url);
+        $key = "url_" . md5($url);
 
         $response = (new Cache())->get($key);
-        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && (strpos($response["fileName"], ".twig") !== false || strpos($response["fileName"], "/public/") !== false))
-        {
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG && $response !== null && (strpos($response["fileName"], ".twig") !== false || strpos($response["fileName"], "/public/") !== false)) {
             return null;
         }
 
         return $response;
     }
-
-    /**
-     * Get static files
-     * @param $fileName
-     * @return false|RouterResponse
-     * @throws \Twig\Error\LoaderError
-     */
-    public function returnStatic($fileName)
-    {
-        if (is_dir($fileName))
-        {
-            return false;
-        }
-        $fileName = preg_replace('#/+#', '/', $fileName);
-        $mimeType = Utility::getMimeType($fileName);
-
-        if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
-            return $this->rangeDownload($fileName);
-        }
-
-        $headers[] = ('Content-Type: ' . $mimeType);
-        $headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
-        $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
-
-        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
-        if ($ext !== "twig") {
-            $content = file_get_contents($fileName);
-        } else {
-            $content = renderTemplate($fileName);
-        }
-        return new RouterResponse($content , HTTP_OK, $headers);
-    }
-
-
 
     /**
      * Handles an options request
@@ -190,8 +133,7 @@ class Router extends Data
      */
     public function handleOptionsMethod(string $method): ?RouterResponse
     {
-        if ($method !== "OPTIONS")
-        {
+        if ($method !== "OPTIONS") {
             return null;
         }
 
@@ -213,98 +155,35 @@ class Router extends Data
         return new RouterResponse("", $httpCode, $headers);
     }
 
-    public function handleRoutes ($method, $url): ?RouterResponse
-    {
-        Debug::message("Looking in routes for {$method} - {$url}", TINA4_LOG_DEBUG);
-        global $arrRoutes;
-        $response = new Response();
-        $headers = [];
-        //iterate through the routes
-
-        foreach ($arrRoutes as $rid => $route) {
-            $result = null;
-            Debug::message("Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
-            if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
-                //Look to see if we are a secure route
-                if (!empty($route["class"])) {
-                    $reflectionClass =  new \ReflectionClass($route["class"]);
-                    $reflection = $reflectionClass->getMethod($route["function"]);
-                } else {
-                    $reflection = new  \ReflectionFunction($route["function"]);
-                }
-
-                $doc = $reflection->getDocComment();
-                preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
-
-                $params = $this->getParams($response, $route["inlineParamsToRequest"]);
-
-                $requestHeaders = getallheaders();
-                if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
-
-                    if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
-                        //call closure with & without params
-                        $this->config->setAuthentication( null); //clear the auth
-                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                    } else {
-                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
-                    }
-                }
-
-                if ($result === null) {
-                    if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
-                        //Check for the formToken request variable
-                        if (!$this->config->getAuthentication()->validToken($_REQUEST["formToken"])) {
-                            return new RouterResponse("", HTTP_FORBIDDEN, $headers);
-                        } else {
-                            $this->config->setAuthentication(null); //clear the auth
-                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                        }
-                    } else if (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
-                        $this->config->setAuthentication(null); //clear the auth
-                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                    } else {
-                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
-                    }
-                }
-
-                //check for an empty result
-                if ($result === null && !is_array($result) && !is_object($result)) {
-                    return new RouterResponse("", HTTP_OK);
-                } else if (!is_string($result)) {
-                    $headers[] = $result["contentType"];
-                    $content = $result["content"];
-                    $httpCode = $result["httpCode"];
-
-
-                    return new RouterResponse($content, $httpCode, $headers);
-                }
-
-                break;
-            }
-        }
-        return null;
-    }
-
     /**
-     * @param $class
-     * @param $method
-     * @param $params
-     * @return false|mixed
-     * @throws \ReflectionException
+     * Get static files
+     * @param $fileName
+     * @return false|RouterResponse
+     * @throws \Twig\Error\LoaderError
      */
-    public function getRouteResult ($class, $method, $params) : ?array
+    public function returnStatic($fileName)
     {
-        if (!empty($class)) {
-            $methodCheck = new \ReflectionMethod($class, $method);
-            if ($methodCheck->isStatic()) {
-                return call_user_func_array([$class, $method], $params);
-            }
-            $classInstance = new \ReflectionClass($class);
-            $class = $classInstance->newInstance();
-            return call_user_func_array([$class, $method], $params);
+        if (is_dir($fileName)) {
+            return false;
+        }
+        $fileName = preg_replace('#/+#', '/', $fileName);
+        $mimeType = Utility::getMimeType($fileName);
+
+        if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
+            return $this->rangeDownload($fileName);
         }
 
-        return call_user_func_array($method, $params);
+        $headers[] = ('Content-Type: ' . $mimeType);
+        $headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
+        $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        if ($ext !== "twig") {
+            $content = file_get_contents($fileName);
+        } else {
+            $content = renderTemplate($fileName);
+        }
+        return new RouterResponse($content, HTTP_OK, $headers);
     }
 
     /**
@@ -342,7 +221,6 @@ class Router extends Data
             [, $range] = explode('=', $_SERVER['HTTP_RANGE'], 2);
             // Make sure the client hasn't sent us a multibyte range
             if (strpos($range, ',') !== false) {
-
                 // (?) Should this be issued here, or should the first
                 // range be used? Or should the header be ignored and
                 // we output the whole content?
@@ -358,7 +236,6 @@ class Router extends Data
                 // The n-number of the last bytes is requested
                 $c_start = $size - substr($range, 1);
             } else {
-
                 $range = explode('-', $range);
                 $c_start = $range[0];
                 $c_end = (isset($range[1]) && is_numeric($range[1])) ? $range[1] : $size;
@@ -370,7 +247,6 @@ class Router extends Data
             $c_end = ($c_end > $end) ? $end : $c_end;
             // Validate the requested range and return an error if it's not correct.
             if ($c_start > $c_end || $c_start > $size - 1 || $c_end >= $size) {
-
                 $headers[] = ('HTTP/1.1 416 Requested Range Not Satisfiable');
                 $headers[] = ("Content-Range: bytes $start-$end/$size");
                 // (?) Echo some info to the client?
@@ -391,19 +267,107 @@ class Router extends Data
         $buffer = 1024 * 8;
         $content = "";
         while (!feof($fp) && ($p = ftell($fp)) <= $end) {
-
             if ($p + $buffer > $end) {
-
                 // In case we're only outputtin a chunk, make sure we don't
                 // read past the length
                 $buffer = $end - $p + 1;
             }
             set_time_limit(0); // Reset time limit for big files
-            $content.= fread($fp, $buffer);
+            $content .= fread($fp, $buffer);
             flush(); // Free up memory. Otherwise large files will trigger PHP's memory limit.
         }
         fclose($fp);
         return new RouterResponse($content, HTTP_OK, $headers);
+    }
+
+    /**
+     * Create cache response
+     * @param $url
+     * @param $httpCode
+     * @param $content
+     * @param $headers
+     * @param $fileName
+     * @return bool
+     */
+    public function createCacheResponse($url, $httpCode, $content, $headers, $fileName): bool
+    {
+        global $cache;
+        $key = "url_" . md5($url);
+        if (defined("TINA4_DEBUG") && TINA4_DEBUG && (strpos($url, ".twig") !== false || strpos($url, "/public/") !== false)) {
+            return false;
+        }
+        return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName, "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
+    }
+
+    public function handleRoutes($method, $url): ?RouterResponse
+    {
+        Debug::message("Looking in routes for {$method} - {$url}", TINA4_LOG_DEBUG);
+        global $arrRoutes;
+        $response = new Response();
+        $headers = [];
+        //iterate through the routes
+
+        foreach ($arrRoutes as $rid => $route) {
+            $result = null;
+            Debug::message("Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
+            if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
+                //Look to see if we are a secure route
+                if (!empty($route["class"])) {
+                    $reflectionClass = new \ReflectionClass($route["class"]);
+                    $reflection = $reflectionClass->getMethod($route["function"]);
+                } else {
+                    $reflection = new  \ReflectionFunction($route["function"]);
+                }
+
+                $doc = $reflection->getDocComment();
+                preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
+
+                $params = $this->getParams($response, $route["inlineParamsToRequest"]);
+
+                $requestHeaders = getallheaders();
+                if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
+                    if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
+                        //call closure with & without params
+                        $this->config->setAuthentication(null); //clear the auth
+                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                    } else {
+                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                    }
+                }
+
+                if ($result === null) {
+                    if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        //Check for the formToken request variable
+                        if (!$this->config->getAuthentication()->validToken($_REQUEST["formToken"])) {
+                            return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                        } else {
+                            $this->config->setAuthentication(null); //clear the auth
+                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        }
+                    } elseif (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        $this->config->setAuthentication(null); //clear the auth
+                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                    } else {
+                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                    }
+                }
+
+                //check for an empty result
+                if ($result === null && !is_array($result) && !is_object($result)) {
+                    return new RouterResponse("", HTTP_OK);
+                } elseif (!is_string($result)) {
+                    $headers[] = $result["contentType"];
+                    $content = $result["content"];
+                    $httpCode = $result["httpCode"];
+
+
+                    return new RouterResponse($content, $httpCode, $headers);
+                }
+
+                break;
+            }
+        }
+        return null;
     }
 
     /**
@@ -417,15 +381,14 @@ class Router extends Data
         $url .= "/";
         $routePath .= "/";
 
-        Debug::message("Matching {$url} -> {$routePath}", TINA4_LOG_DEBUG );
+        Debug::message("Matching {$url} -> {$routePath}", TINA4_LOG_DEBUG);
         preg_match_all($this->pathMatchExpression, $url, $matchesPath);
         preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
         $matching = true;
         $variables = [];
         $this->params = [];
 
-        if ($url !== $routePath && count($matchesPath[1]) === count($matchesRoute[1]) && count($matchesPath[1]) === 2)
-        {
+        if ($url !== $routePath && count($matchesPath[1]) === count($matchesRoute[1]) && count($matchesPath[1]) === 2) {
             return false;
         }
 
@@ -433,19 +396,16 @@ class Router extends Data
             foreach ($matchesPath[1] as $rid => $matchPath) {
                 if ($matchPath !== "" && !empty($matchesRoute[1][$rid]) && strpos($matchesRoute[1][$rid], "{") !== false) {
                     $variables[] = urldecode($matchPath);
-                } else
-                    if (!empty($matchesRoute[1][$rid])) {
-                        if ($matchPath !== $matchesRoute[1][$rid]) {
-                            $matching = false;
-                            break;
-                        }
-                    } else
-                        if (  $matchesRoute[1][$rid] === "" && $rid > 1) {
-                            $matching = false;
-                            break;
-                        }
+                } elseif (!empty($matchesRoute[1][$rid])) {
+                    if ($matchPath !== $matchesRoute[1][$rid]) {
+                        $matching = false;
+                        break;
+                    }
+                } elseif ($matchesRoute[1][$rid] === "" && $rid > 1) {
+                    $matching = false;
+                    break;
+                }
             }
-
         } else {
             $matching = false; //The path was totally different from the route
         }
@@ -479,5 +439,27 @@ class Router extends Data
         $this->params[] = $request; //Check if header is JSON
 
         return $this->params;
+    }
+
+    /**
+     * @param $class
+     * @param $method
+     * @param $params
+     * @return false|mixed
+     * @throws \ReflectionException
+     */
+    public function getRouteResult($class, $method, $params): ?array
+    {
+        if (!empty($class)) {
+            $methodCheck = new \ReflectionMethod($class, $method);
+            if ($methodCheck->isStatic()) {
+                return call_user_func_array([$class, $method], $params);
+            }
+            $classInstance = new \ReflectionClass($class);
+            $class = $classInstance->newInstance();
+            return call_user_func_array([$class, $method], $params);
+        }
+
+        return call_user_func_array($method, $params);
     }
 }

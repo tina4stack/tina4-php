@@ -1,9 +1,11 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
+
 namespace Tina4;
 
 use ScssPhp\ScssPhp\Compiler;
@@ -16,6 +18,8 @@ use Twig\Error\LoaderError;
  */
 class Tina4Php extends Data
 {
+    use Utility;
+
     public $config;
 
     public function __construct(?\Tina4\Config $config = null)
@@ -42,7 +46,6 @@ class Tina4Php extends Data
         }
 
         if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
-
             if (defined("TINA4_INCLUDE_LOCATIONS")) {
                 define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, \Tina4\Module::getIncludeFolders()));
             } else {
@@ -58,22 +61,18 @@ class Tina4Php extends Data
             }
         }
 
-        foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $includeId => $includeLocation)
-        {
-            if (!file_exists($includeLocation)) //Modules have absolute paths
-            {
-                $includeLocation = TINA4_DOCUMENT_ROOT.$includeLocation;
+        foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $includeId => $includeLocation) {
+            if (!file_exists($includeLocation)) { //Modules have absolute paths
+                $includeLocation = TINA4_DOCUMENT_ROOT . $includeLocation;
             }
             if (file_exists($includeLocation)) {
                 \Tina4\Utility::includeDirectory($includeLocation);
             }
         }
 
-        foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $includeId => $includeLocation)
-        {
-            if (!file_exists($includeLocation)) //Modules have absolute paths
-            {
-                $includeLocation = TINA4_DOCUMENT_ROOT.$includeLocation;
+        foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $includeId => $includeLocation) {
+            if (!file_exists($includeLocation)) { //Modules have absolute paths
+                $includeLocation = TINA4_DOCUMENT_ROOT . $includeLocation;
             }
             if (file_exists($includeLocation)) {
                 \Tina4\Utility::includeDirectory($includeLocation);
@@ -86,20 +85,20 @@ class Tina4Php extends Data
             if ($config === null) {
                 $config = new Config();
             }
-            $configMethod ($config);
+            $configMethod($config);
         }
 
         $this->config = $config;
 
         //Add built in Tina4 functions
-        $config->addTwigFunction("dateCompare", function ($dateA, $operator, $dateB="now"){
+        $config->addTwigFunction("dateCompare", function ($dateA, $operator, $dateB = "now") {
             $dateA = str_replace("/", ".", $dateA);
 
             $dateA = strtotime($dateA);
 
             if ($dateB === "now") {
                 $dateB = strtotime("today");
-            }  else {
+            } else {
                 $dateB = str_replace("/", ".", $dateA);
                 $dateB = strtotime($dateB);
             }
@@ -123,7 +122,6 @@ class Tina4Php extends Data
                 case "<=":
                     return $dateA <= $dateB;
                     break;
-
             }
         });
 
@@ -131,12 +129,11 @@ class Tina4Php extends Data
         if (defined("TINA4_SUPPRESS") && TINA4_SUPPRESS) {
             $this->config->callInitFunction();
             try {
-                Utility::initTwig($config);
+                TwigUtility::initTwig($config);
             } catch (LoaderError $e) {
                 Debug::message("Could not initialize twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
             }
         } else {
-
             $this->initRoutes($this);
 
             try {
@@ -147,60 +144,6 @@ class Tina4Php extends Data
         }
     }
 
-    public function __toString(): string
-    {
-        if (!isset($_SERVER["REQUEST_METHOD"]))
-        {
-            $_SERVER["REQUEST_METHOD"] = TINA4_GET;
-        }
-
-        if (!isset($_SERVER["REQUEST_URI"]))
-        {
-            $_SERVER["REQUEST_URI"] = "";
-        }
-
-        $routerResponse = (new Router())->resolveRoute($_SERVER["REQUEST_METHOD"], $_SERVER["REQUEST_URI"], $this->config);
-
-        $content = "";
-        if ($routerResponse !== null) {
-            if (!headers_sent()) {
-                foreach ($routerResponse->headers as $hid => $header) {
-                    header($header);
-                }
-            }
-            http_response_code($routerResponse->httpCode);
-            if ($routerResponse->content === "") {
-                //try give back a response based on the error code - first templates then public
-                if (file_exists(TINA4_DOCUMENT_ROOT."src".DIRECTORY_SEPARATOR."templates".DIRECTORY_SEPARATOR."errors".DIRECTORY_SEPARATOR.$routerResponse->httpCode.".twig"))
-                {
-                    $content = \Tina4\renderTemplate(TINA4_DOCUMENT_ROOT."src".DIRECTORY_SEPARATOR."templates".DIRECTORY_SEPARATOR."errors".DIRECTORY_SEPARATOR.$routerResponse->httpCode.".twig");
-                }
-
-                if (file_exists(TINA4_DOCUMENT_ROOT."src".DIRECTORY_SEPARATOR."public".DIRECTORY_SEPARATOR."errors".DIRECTORY_SEPARATOR.$routerResponse->httpCode.".twig"))
-                {
-                    $content = \Tina4\renderTemplate(TINA4_DOCUMENT_ROOT."src".DIRECTORY_SEPARATOR."public".DIRECTORY_SEPARATOR."errors".DIRECTORY_SEPARATOR.$routerResponse->httpCode.".twig");
-                }
-            } else {
-                $content = $routerResponse->content;
-            }
-        } else {
-            $content = "";
-        }
-
-        if (TINA4_DEBUG)
-        {
-            $debugContent = Debug::render();
-            if ($debugContent !== "")
-            {
-                header("Content-Type: text/html");
-                $content = $debugContent."\n".$content;
-            }
-
-        }
-
-        return $content;
-    }
-
     /**
      * Initializes the built in routes
      * @param $tina4Php
@@ -208,13 +151,13 @@ class Tina4Php extends Data
     public function initRoutes($tina4Php): void
     {
         //Migration routes
-        Route::get("/migrate|/migrations|/migration", function (Response $response)  {
+        Route::get("/migrate|/migrations|/migration", function (Response $response) {
             $result = (new Migration())->doMigration();
             $migrationFolders = (new Module())::getMigrationFolders();
             foreach ($migrationFolders as $id => $migrationFolder) {
                 $result .= (new Migration($migrationFolder))->doMigration();
             }
-            return $response ($result, HTTP_OK, TEXT_HTML);
+            return $response($result, HTTP_OK, TEXT_HTML);
         });
 
         Route::get("/cache/clear", function (Response $response) use ($tina4Php) {
@@ -233,13 +176,16 @@ class Tina4Php extends Data
         <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.js" integrity="sha512-S4i/WUGRs22+8rjUVu4kBjfNuBNp8GVsgcK2lbaFdws4q6TF3Nd00LxqnHhuxS9iVDfNcUh0h6OxFUMP5DBD+g==" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-sqlserver.min.js" integrity="sha512-TkNvDZzCp+GGiwfXNAOxt6JDzuELz8qquDcZrUzPXuKRvOcUA6kSZu2/uPhKbbjqeJIjoevYn10yrt8TS+qUXQ==" crossorigin="anonymous"></script>
                     '),
-                    _body(_style(
-                        "body { font-family: Arial; border: 1px solid black; padding: 20px; }
+                    _body(
+                        _style(
+                            "body { font-family: Arial; border: 1px solid black; padding: 20px; }
                         label{ display:block; margin-top: 5px; }
                         input, textarea { width: 100%; font-size: 14px; }
                         button {font-size: 14px; border: 1px solid black; border-radius: 10px; background: #61affe; color: #fff; padding:10px; cursor: hand }
-                        "),
-                        _form(["class" => "form", "method" => "post"],
+                        "
+                        ),
+                        _form(
+                            ["class" => "form", "method" => "post"],
                             _label("Migration Description"),
                             _input(["type" => "text", "name" => "description"]),
                             _label("SQL Statement"),
@@ -256,29 +202,27 @@ class Tina4Php extends Data
 
                                     });'),
                             _br(),
-                            _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth)->getToken()]),
+                            _input(["type" => "hidden", "name" => "formToken", "value" => (new Auth())->getToken()]),
                             _button("Create Migration")
                         )
                     )
                 );
-                return $response ($html, HTTP_OK, TEXT_HTML);
+                return $response($html, HTTP_OK, TEXT_HTML);
             });
 
             Route::post("/migrate/create|/migrations/create|/migration/create", function (Response $response) {
                 $result = (new Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
-                return $response ($result, HTTP_OK, TEXT_HTML);
+                return $response($result, HTTP_OK, TEXT_HTML);
             });
-
         }
 
         \Tina4\Route::get('/swagger/json.json', function (\Tina4\Response $response) use ($tina4Php) {
-            if (!defined("SWAGGER_TITLE"))
-            {
+            if (!defined("SWAGGER_TITLE")) {
                 define("SWAGGER_TITLE", "Default Swagger");
                 define("SWAGGER_DESCRIPTION", "Please declare in your .env values for SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION");
                 define("SWAGGER_VERSION", "1.0.0");
             }
-            return $response ($tina4Php->getSwagger(SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION));
+            return $response($tina4Php->getSwagger(SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION));
         });
     }
 
@@ -308,6 +252,55 @@ class Tina4Php extends Data
         }
     }
 
+    public function __toString(): string
+    {
+        if (!isset($_SERVER["REQUEST_METHOD"])) {
+            $_SERVER["REQUEST_METHOD"] = TINA4_GET;
+        }
+
+        if (!isset($_SERVER["REQUEST_URI"])) {
+            $_SERVER["REQUEST_URI"] = "";
+        }
+
+        $routerResponse = (new Router())->resolveRoute($_SERVER["REQUEST_METHOD"], $_SERVER["REQUEST_URI"], $this->config);
+
+        $content = "";
+        if ($routerResponse !== null) {
+            if (!headers_sent()) {
+                foreach ($routerResponse->headers as $hid => $header) {
+                    header($header);
+                }
+            }
+            http_response_code($routerResponse->httpCode);
+            if ($routerResponse->content === "") {
+                //try give back a response based on the error code - first templates then public
+                if (file_exists(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig")) {
+                    $content = \Tina4\renderTemplate(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig");
+                }
+
+                if (file_exists(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig")) {
+                    $content = \Tina4\renderTemplate(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig");
+                }
+            } else {
+                $content = $routerResponse->content;
+            }
+        } else {
+            $content = "";
+        }
+
+        if (TINA4_DEBUG) {
+            $debugContent = Debug::render();
+            if ($debugContent !== "") {
+                header("Content-Type: text/html");
+                $content = $debugContent . "\n" . $content;
+            }
+        }
+
+        return $content;
+    }
+
+
+
     /**
      * Swagger
      * @param string $title
@@ -318,7 +311,6 @@ class Tina4Php extends Data
      */
     public function getSwagger($title = "Tina4", $description = "Swagger Documentation", $version = "1.0.0"): string
     {
-        return  (new Swagger($this->documentRoot, $title, $description, $version, $this->subFolder));
+        return (new Swagger($this->documentRoot, $title, $description, $version, $this->subFolder));
     }
-
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -29,7 +30,16 @@ class Event
                 call_user_func_array($method, $params);
             }
         }
+    }
 
+    /**
+     * Alias for onTrigger
+     * @param $eventName
+     * @param $method
+     */
+    public static function addTrigger($eventName, $method): void
+    {
+        self::onTrigger($eventName, $method);
     }
 
     /**
@@ -44,16 +54,6 @@ class Event
         $debugTrace = debug_backtrace();
         $TINA4_EVENTS_DETAIL[$eventName]["handler"][] = ["debug" => $debugTrace[0]];
         $TINA4_EVENTS[$eventName][] = $method;
-    }
-
-    /**
-     * Alias for onTrigger
-     * @param $eventName
-     * @param $method
-     */
-    public static function addTrigger($eventName, $method): void
-    {
-        self::onTrigger($eventName, $method);
     }
 
     /**

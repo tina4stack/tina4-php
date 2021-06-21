@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -19,5 +20,4 @@ class Get extends Route
      * @var string Sets $method to GET
      */
     public static $method = TINA4_GET;
-
 }
