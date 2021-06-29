@@ -174,10 +174,10 @@ class DataSQLite3 implements DataBase
 
     /**
      * Rollback does not exist on SQLite3
-     * @param int|null $transactionId
+     * @param null $transactionId
      * @return bool
      */
-    public function rollback(int $transactionId = null): bool
+    public function rollback($transactionId = null): bool
     {
         //No transactions for sqlite
         return true;

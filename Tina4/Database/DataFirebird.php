@@ -192,10 +192,10 @@ class DataFirebird implements DataBase
 
     /**
      * Rollback
-     * @param int|null $transactionId
+     * @param null $transactionId
      * @return bool
      */
-    public function rollback(int $transactionId = null)
+    public function rollback($transactionId = null)
     {
         if (!empty($transactionId)) {
             return ibase_rollback($transactionId);

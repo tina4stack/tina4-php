@@ -241,10 +241,10 @@ class DataMySQL implements DataBase
 
     /**
      * Rollback the transaction
-     * @param int|null $transactionId
+     * @param null $transactionId
      * @return bool|mixed
      */
-    public function rollback(int $transactionId = null)
+    public function rollback($transactionId = null)
     {
         return mysqli_rollback($this->dbh);
     }

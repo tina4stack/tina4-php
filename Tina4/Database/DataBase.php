@@ -61,11 +61,18 @@ interface DataBase
     public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult;
 
     /**
-     * Sets database commit from currently used database
-     * @param $transactionId integer|null Id of the transaction
+     * Commits the transaction for the current database
+     * @param null $transactionId
      * @return mixed
      */
-    public function rollback(int $transactionId = null);
+    public function commit($transactionId = null);
+
+    /**
+     * Rolls back database commit from currently used database
+     * @param $transactionId null Id of the transaction
+     * @return mixed
+     */
+    public function rollback($transactionId = null);
 
     /**
      * Set autocommit on or off
