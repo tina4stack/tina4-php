@@ -41,7 +41,7 @@ class Request
         }
 
         if (!empty($rawRequest)) {
-            $this->data = json_decode($rawRequest, true, 512);
+            $this->data = json_decode($rawRequest, false, 512);
     //pass raw request anyway
             if ($this->data === null && $rawRequest !== '') {
                 $this->data = $rawRequest;

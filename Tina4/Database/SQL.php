@@ -257,7 +257,7 @@ class SQL implements \JsonSerializable
      * @param array $fields
      * @return $this
      */
-    final public function orderBy(array $fields): SQL
+    final public function orderBy($fields): SQL
     {
         if (!empty($fields)) {
             if (is_array($fields)) {
