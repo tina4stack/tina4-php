@@ -145,12 +145,17 @@ trait Utility
 
     /**
      * Makes sure the field is a date field and formats the data accordingly
-     * @param string $dateString
+     * @param string|null $dateString
      * @param string $databaseFormat
      * @return bool
      */
-    public function isDate(string $dateString, string $databaseFormat): bool
+    public function isDate(?string $dateString, string $databaseFormat): bool
     {
+        if ($dateString === null)
+        {
+            return false;
+        }
+
         if (is_array($dateString) || is_object($dateString)) {
             return false;
         }
@@ -209,6 +214,8 @@ trait Utility
      * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
      * @param string|null $string $string Data to be checked to see if it is binary data like images
      * @return bool True if the string is binary
+     * @tests
+     *   assert(null) === false,"Check if binary returns false"
      */
     public function isBinary(?string $string): bool
     {
