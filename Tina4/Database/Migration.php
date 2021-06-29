@@ -35,7 +35,7 @@ class Migration extends Data
      * The delimiter
      * @var String
      */
-    private $delim = ";";
+    private $delimit = ";";
 
     /**
      * Constructor for Migrations
@@ -47,7 +47,7 @@ class Migration extends Data
     public function __construct($migrationPath = "./migrations", $delim = ";")
     {
         parent::__construct();
-        $this->delim = $delim;
+        $this->delimit = $delim;
         $this->migrationPath = $migrationPath;
 
         if ($this->DBA === null) {
@@ -91,7 +91,9 @@ class Migration extends Data
         $result .= "<span style=\"color:green;\">STARTING Migrations ....</span>\n";
 
         $error = false;
+        restore_error_handler();
         error_reporting(0);
+
         $fileArray = [];
         while (false !== ($entry = readdir($dirHandle)) && !$error) {
             if ($entry != "." && $entry != ".." && stripos($entry, ".sql")) {
@@ -162,7 +164,7 @@ class Migration extends Data
                 $transId = $this->DBA->startTransaction();
                 //before exploding the content, see if it is a stored procedure, trigger or view.
                 if (stripos($content, "create trigger") === false && stripos($content, "create procedure") === false && stripos($content, "create view") === false) {
-                    $content = explode($this->delim, $content);
+                    $content = explode($this->delimit, $content);
                 } else {
                     $sql = $content;
                     $content = [];
