@@ -33,11 +33,10 @@ class Response
 
         if (!empty($content) || (is_array($content) || is_object($content))) {
             switch ($contentType) {
-                case APPLICATION_JSON:
-                    break;
                 case APPLICATION_XML:
                     $content = XMLResponse::generateValidXmlFromArray($content);
                     break;
+                case APPLICATION_JSON:
                 default:
                     if (is_object($content) && $content instanceof HTMLElement) {
                         $content .= "";
