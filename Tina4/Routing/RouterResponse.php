@@ -18,7 +18,7 @@ class RouterResponse
     public $httpCode;
     public $headers;
 
-    public function __construct(?string $content, ?int $httpCode = HTTP_NOT_FOUND, array $headers = [])
+    public function __construct($content, ?int $httpCode = HTTP_NOT_FOUND, array $headers = [])
     {
         $this->content = $content;
         $this->httpCode = $httpCode;

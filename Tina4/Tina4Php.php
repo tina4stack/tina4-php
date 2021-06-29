@@ -289,7 +289,7 @@ class Tina4Php extends Data
         }
 
         if (TINA4_DEBUG) {
-            $debugContent = Debug::render();
+            $debugContent = DebugRender::render();
             if ($debugContent !== "") {
                 header("Content-Type: text/html");
                 $content = $debugContent . "\n" . $content;
@@ -298,8 +298,6 @@ class Tina4Php extends Data
 
         return $content;
     }
-
-
 
     /**
      * Swagger

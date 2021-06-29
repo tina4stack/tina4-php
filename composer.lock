@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6ec2312d4b896f5cc1f8e87b5bef38c5",
+    "content-hash": "615f094632e734bd21d25edefc5c4131",
     "packages": [
         {
             "name": "coyl/git",
@@ -599,6 +599,54 @@
                 }
             ],
             "time": "2021-05-27T09:27:20+00:00"
+        },
+        {
+            "name": "tina4stack/tina4php-debug",
+            "version": "v2.0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4php-debug.git",
+                "reference": "666db74269de5d05ab6e09920063a96cf5a351fe"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/666db74269de5d05ab6e09920063a96cf5a351fe",
+                "reference": "666db74269de5d05ab6e09920063a96cf5a351fe",
+                "shasum": ""
+            },
+            "require": {
+                "psr/log": "^1.1",
+                "twig/twig": "^3.3"
+            },
+            "require-dev": {
+                "overtrue/phplint": "^2.0",
+                "phpunit/phpunit": "^9",
+                "roave/security-advisories": "dev-latest"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "Tina4/Initialize.php"
+                ],
+                "classmap": [
+                    "Tina4/"
+                ],
+                "psr-4": {
+                    "Tina4\\": [
+                        "Tina4/"
+                    ]
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 PHP Debug Functionality",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4php-debug/issues",
+                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.1"
+            },
+            "time": "2021-06-25T16:41:39+00:00"
         },
         {
             "name": "twig/twig",
@@ -1627,16 +1675,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "9.5.5",
+            "version": "9.5.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "89ff45ea9d70e35522fb6654a2ebc221158de276"
+                "reference": "fb9b8333f14e3dce976a60ef6a7e05c7c7ed8bfb"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/89ff45ea9d70e35522fb6654a2ebc221158de276",
-                "reference": "89ff45ea9d70e35522fb6654a2ebc221158de276",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/fb9b8333f14e3dce976a60ef6a7e05c7c7ed8bfb",
+                "reference": "fb9b8333f14e3dce976a60ef6a7e05c7c7ed8bfb",
                 "shasum": ""
             },
             "require": {
@@ -1666,7 +1714,7 @@
                 "sebastian/global-state": "^5.0.1",
                 "sebastian/object-enumerator": "^4.0.3",
                 "sebastian/resource-operations": "^3.0.3",
-                "sebastian/type": "^2.3.2",
+                "sebastian/type": "^2.3.4",
                 "sebastian/version": "^3.0.2"
             },
             "require-dev": {
@@ -1714,7 +1762,7 @@
             ],
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/9.5.5"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/9.5.6"
             },
             "funding": [
                 {
@@ -1726,7 +1774,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2021-06-05T04:49:07+00:00"
+            "time": "2021-06-23T05:14:38+00:00"
         },
         {
             "name": "psr/container",
@@ -2629,7 +2677,6 @@
                     "type": "github"
                 }
             ],
-            "abandoned": true,
             "time": "2020-09-28T06:45:17+00:00"
         },
         {

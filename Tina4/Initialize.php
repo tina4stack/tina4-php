@@ -12,16 +12,6 @@ use Tina4\Debug;
 use Tina4\HTMLElement;
 use Tina4\Module;
 
-//DEBUG & ERROR LOG CONSTANTS
-const TINA4_LOG_EMERGENCY = "emergency";
-const TINA4_LOG_ALERT = "alert";
-const TINA4_LOG_CRITICAL = "critical";
-const TINA4_LOG_ERROR = "error";
-const TINA4_LOG_WARNING = "warning";
-const TINA4_LOG_NOTICE = "notice";
-const TINA4_LOG_INFO = "info";
-const TINA4_LOG_DEBUG = "debug";
-const TINA4_LOG_ALL = "all";
 
 //TINA4 CONSTANTS
 const TINA4_DATABASE_TYPES = ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"];
@@ -247,26 +237,6 @@ function autoLoadFolders($documentRoot, $location, $class)
     }
 }
 
-/**
- * Handle exceptions
- * @param $exception
- */
-function tina4_exception_handler(\Error $exception)
-{
-    \Tina4\Debug::exceptionHandler($exception);
-}
-
-/**
- * Handle Errors
- * @param string $errorNo
- * @param string $errorString
- * @param string $errorFile
- * @param string $errorLine
- */
-function tina4_error_handler($errorNo = "", $errorString = "", $errorFile = "", $errorLine = "")
-{
-    \Tina4\Debug::errorHandler($errorNo, $errorString, $errorFile, $errorLine);
-}
 
 //Initialize the Error handling
 //We only want to fiddle with the defaults if we are developing
