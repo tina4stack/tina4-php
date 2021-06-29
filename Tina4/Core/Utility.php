@@ -207,13 +207,13 @@ trait Utility
 
     /**
      * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
-     * @param string $string Data to be checked to see if it is binary data like images
+     * @param string|null $string $string Data to be checked to see if it is binary data like images
      * @return bool True if the string is binary
      */
-    public function isBinary(string $string): bool
+    public function isBinary(?string $string): bool
     {
         //immediately return back binary if we can get an image size
-        if (is_numeric($string) || empty($string)) {
+        if ($string === null || is_numeric($string) || empty($string)) {
             return false;
         }
         if (is_string($string) && strlen($string) > 50 && @is_array(@getimagesizefromstring($string))) {
