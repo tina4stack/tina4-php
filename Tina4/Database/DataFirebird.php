@@ -86,13 +86,13 @@ class DataFirebird implements DataBase
 
     /**
      * Firebird implementation of fetch
-     * @param string $sql
+     * @param string|array $sql
      * @param int $noOfRecords
      * @param int $offSet
      * @param array $fieldMapping
      * @return bool|DataResult
      */
-    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
+    public function fetch($sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
     {
         if (is_array($sql)) {
             $initialSQL = $sql[0];
