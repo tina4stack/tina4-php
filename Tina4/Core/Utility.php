@@ -214,7 +214,7 @@ trait Utility
      * This tests a string result from the DB to see if it is binary or not so it gets base64 encoded on the result
      * @param string|null $string $string Data to be checked to see if it is binary data like images
      * @return bool True if the string is binary
-     * @tests
+     * @tests tina4
      *   assert(null) === false,"Check if binary returns false"
      */
     public function isBinary(?string $string): bool
