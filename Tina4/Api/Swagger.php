@@ -111,9 +111,12 @@ class Swagger implements \JsonSerializable
             $params = json_decode(json_encode($arguments));
             $params = array_merge($params, $addParams);
 
+
+
             $propertyIn = "in";
             $propertyType = "type";
             $propertyName = "name";
+            $schema = "schema";
 
             foreach ($params as $pid => $param) {
                 if (!isset($params[$pid]->{$propertyIn})) {
@@ -124,10 +127,18 @@ class Swagger implements \JsonSerializable
                     $params[$pid]->{$propertyType} = "string";
                 }
 
+                if (!isset($params[$pid]->{$schema})) {
+                    $params[$pid]->{$schema} = ['$ref' => "#/definitions/Test"];
+                }
+
                 if ($params[$pid]->name === "response" || $params[$pid]->name === "request") {
                     unset($params[$pid]);
                 }
+
+
             }
+
+
 
             foreach ($queryParams as $pid => $param) {
                 $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string"];
@@ -135,6 +146,8 @@ class Swagger implements \JsonSerializable
             }
 
             $params = json_decode(json_encode(array_values($params)));
+
+
 
             if ($description !== "None") {
                 if ($method === "any") {
@@ -189,7 +202,8 @@ class Swagger implements \JsonSerializable
             ],
             "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],
             "basePath" => $this->subFolder,
-            "paths" => $paths
+            "paths" => $paths,
+            "definitions" => $this->getDefinitions()
 
         ];
     }
@@ -240,6 +254,11 @@ class Swagger implements \JsonSerializable
         header("Content-Type: application/json");
         return json_encode($this->swagger, JSON_UNESCAPED_SLASHES);
     }
+
+    public function getDefinitions() {
+        return ["Test" => ["type" => "object", "properties" => ["name" => ["type" => "integer"], "message" => ["type" => "string"]]]];
+    }
+
 
     /**
      * Specify data which should be serialized to JSON
