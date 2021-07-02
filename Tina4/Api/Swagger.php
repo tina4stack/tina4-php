@@ -18,6 +18,7 @@ class Swagger implements \JsonSerializable
     public $root;
     public $subFolder;
     public $swagger = [];
+    public $ormObjects = []; //define which objects should be returned in the schema
 
     /**
      * Swagger constructor.
@@ -94,8 +95,33 @@ class Swagger implements \JsonSerializable
                     } elseif ($matches[1] === "@queryParams" || $matches[1] === "@params") {
                         $queryParams = explode(",", $matches[2]);
                     } elseif ($matches[1] === "@example") {
-                        eval('  if ( class_exists("' . trim(str_replace("\n", "", "\\" . $matches[2])) . '")) { $example = (new ' . trim(str_replace("\n", "", $matches[2])) . '()); if (method_exists($example, "asArray")) { $example = (object)$example->asArray(); } else { $example = json_decode (json_encode($example)); }  } else { $example = (object)[];} ');
-                    } elseif ($matches[1] === "@secure") {
+                        $this->ormObjects[] = trim(str_replace("\n", "", "\\" . $matches[2]));
+                        $example = [];
+                        $className = trim(str_replace("\n", "", "\\" . $matches[2]));
+                        if (class_exists($className)) {
+                            $exampleObject = (new $className);
+
+                            if (method_exists($exampleObject, "asArray")) {
+                                $example["data"] = (object)$exampleObject->asArray();
+                                $fields = $exampleObject->getFieldDefinitions();
+                                $properties = [];
+                                foreach ($fields as $field)
+                                {
+                                    array_push($properties, (object)[$field["field"] => (object) ["type" => $field["type"]]]);
+                                }
+
+                                $example["properties"] = $properties;
+                            } else {
+                                $example["data"] = (object)json_decode(json_encode($exampleObject));
+                                $example["properties"] = (object)[];
+                            }
+
+                        } else {
+                            $example["data"] = (object)[];
+                            $example["properties"] = (object)[];
+                        }
+
+                     } elseif ($matches[1] === "@secure") {
                         $security[] = (object)["bearerAuth" => []];
                     }
                 }
@@ -112,11 +138,10 @@ class Swagger implements \JsonSerializable
             $params = array_merge($params, $addParams);
 
 
-
             $propertyIn = "in";
             $propertyType = "type";
             $propertyName = "name";
-            $schema = "schema";
+
 
             foreach ($params as $pid => $param) {
                 if (!isset($params[$pid]->{$propertyIn})) {
@@ -127,9 +152,7 @@ class Swagger implements \JsonSerializable
                     $params[$pid]->{$propertyType} = "string";
                 }
 
-                if (!isset($params[$pid]->{$schema})) {
-                    $params[$pid]->{$schema} = ['$ref' => "#/definitions/Test"];
-                }
+
 
                 if ($params[$pid]->name === "response" || $params[$pid]->name === "request") {
                     unset($params[$pid]);
@@ -137,7 +160,6 @@ class Swagger implements \JsonSerializable
 
 
             }
-
 
 
             foreach ($queryParams as $pid => $param) {
@@ -148,26 +170,25 @@ class Swagger implements \JsonSerializable
             $params = json_decode(json_encode(array_values($params)));
 
 
-
             if ($description !== "None") {
                 if ($method === "any") {
                     $paths->{$route["routePath"]} = (object)[
-                        "get" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
+                        "get" => $this->getSwaggerEntry("get", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
                             "200" => (object)["description" => "Success"],
                             "400" => (object)["description" => "Failed"]
 
                         ]),
-                        "delete" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
+                        "delete" => $this->getSwaggerEntry("delete", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
                             "200" => (object)["description" => "Success"],
                             "400" => (object)["description" => "Failed"]
 
                         ]),
-                        "put" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                        "put" => $this->getSwaggerEntry("put", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
                             "200" => (object)["description" => "Success"],
                             "400" => (object)["description" => "Failed"]
 
                         ]),
-                        "post" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                        "post" => $this->getSwaggerEntry("post", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
                             "200" => (object)["description" => "Success"],
                             "400" => (object)["description" => "Failed"]
 
@@ -175,14 +196,14 @@ class Swagger implements \JsonSerializable
                     ];
                 } else {
                     if (!empty($paths->{$route["routePath"]})) {
-                        $paths->{$route["routePath"]}->{$method} = $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                        $paths->{$route["routePath"]}->{$method} = $this->getSwaggerEntry($method, $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
                             "200" => (object)["description" => "Success"],
                             "400" => (object)["description" => "Failed"]
 
                         ]);
                     } else {
                         $paths->{$route["routePath"]} = (object)[
-                            "{$method}" => $this->getSwaggerEntry($tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
+                            (string)($method) => $this->getSwaggerEntry($method, $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
                                 "200" => (object)["description" => "Success"],
                                 "400" => (object)["description" => "Failed"]
 
@@ -202,9 +223,7 @@ class Swagger implements \JsonSerializable
             ],
             "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],
             "basePath" => $this->subFolder,
-            "paths" => $paths,
-            "definitions" => $this->getDefinitions()
-
+            "paths" => $paths
         ];
     }
 
@@ -220,8 +239,16 @@ class Swagger implements \JsonSerializable
      * @param $responses
      * @return object
      */
-    public function getSwaggerEntry($tags, $summary, $description, $produces, $security, $params, $example, $responses): object
+    public function getSwaggerEntry($method, $tags, $summary, $description, $produces, $security, $params, $example, $responses): object
     {
+
+        if (is_array($example))
+        {
+           $schema = (object)["type" => "object", "properties" => $example["properties"], "example" => $example["data"]];
+        } else {
+            $schema = (object)["type" => "object",  "example" => $example];
+        }
+
         $entry = (object)[
             "tags" => $tags,
             "summary" => $summary,
@@ -233,7 +260,7 @@ class Swagger implements \JsonSerializable
                 "required" => true,
                 "content" => [
                     "application/json" => [
-                        "schema" => ["type" => "object", "example" => $example]
+                        "schema" => $schema
                     ]
                 ]
             ],
@@ -255,9 +282,6 @@ class Swagger implements \JsonSerializable
         return json_encode($this->swagger, JSON_UNESCAPED_SLASHES);
     }
 
-    public function getDefinitions() {
-        return ["Test" => ["type" => "object", "properties" => ["name" => ["type" => "integer"], "message" => ["type" => "string"]]]];
-    }
 
 
     /**

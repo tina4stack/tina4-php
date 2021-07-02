@@ -110,9 +110,13 @@ class DataSQLite3 implements DataBase
     public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
 
-        $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
-
-        $sql = $sql . " limit {$offSet},{$noOfRecords}";
+        //check for one liners and reserved methods in sqlite3
+        if (strpos($sql,"pragma") === false) {
+            $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
+            $sql .= " limit {$offSet},{$noOfRecords}";
+        } else {
+            $countRecords = 1;
+        }
 
         $recordCursor = $this->dbh->query($sql);
         $records = [];
@@ -217,7 +221,7 @@ class DataSQLite3 implements DataBase
         $tables = $this->fetch($sqlTables, 1000, 0)->asObject();
         $database = [];
         foreach ($tables as $id => $record) {
-            $sqlInfo = "pragma table_info($record->tableName);";
+            $sqlInfo = "pragma table_info($record->tableName)";
             $tableInfo = $this->fetch($sqlInfo, 1000, 0)->AsObject();
 
             //Go through the tables and extract their column information

@@ -838,6 +838,15 @@ class ORM implements \JsonSerializable
     }
 
     /**
+     * Gets the field definitions for the table
+     * @return mixed
+     */
+    final public function getFieldDefinitions() {
+        $tableName = $this->getTableName();
+        return $this->DBA->getDatabase()[$tableName];
+    }
+
+    /**
      * Excludes fields based on a json object or record
      * @param $request
      */
@@ -1050,6 +1059,7 @@ class ORM implements \JsonSerializable
      * @param int $limit
      * @param int $offset
      * @return SQL
+     * @throws \ReflectionException
      */
     public function select($fields = "*", $limit = 10, $offset = 0)
     {
