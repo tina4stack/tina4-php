@@ -42,7 +42,8 @@
     "scssphp/scssphp": "^1.5.2",
     "ext-json": "*",
     "ext-curl": "*",
-    "tina4stack/tina4php-debug": "^2.0"
+    "tina4stack/tina4php-debug": "^2.0",
+    "tina4stack/tina4php-shape": "^2.0"
   },
   "bin": [
     "bin/tina4",

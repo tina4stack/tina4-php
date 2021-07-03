@@ -40,3 +40,5 @@ test.db
 /.phplint-cache
 /tests/junit.xml
 /.env.prod
+/cms.db-shm
+/cms.db-wal

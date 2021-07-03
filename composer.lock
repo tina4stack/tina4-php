@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "615f094632e734bd21d25edefc5c4131",
+    "content-hash": "c27792302c79d50fe27bd2981e765122",
     "packages": [
         {
             "name": "coyl/git",
@@ -647,6 +647,51 @@
                 "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.1"
             },
             "time": "2021-06-25T16:41:39+00:00"
+        },
+        {
+            "name": "tina4stack/tina4php-shape",
+            "version": "v2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4php-shape.git",
+                "reference": "50f4e698b9a774f45d2b5000f7fdbc86d6f3a7ee"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/50f4e698b9a774f45d2b5000f7fdbc86d6f3a7ee",
+                "reference": "50f4e698b9a774f45d2b5000f7fdbc86d6f3a7ee",
+                "shasum": ""
+            },
+            "require-dev": {
+                "overtrue/phplint": "^2.0",
+                "phpunit/phpunit": "^9",
+                "roave/security-advisories": "dev-latest"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "Tina4/HTMLElement.php",
+                    "Tina4/Initialize.php"
+                ],
+                "classmap": [
+                    "Tina4/"
+                ],
+                "psr-4": {
+                    "Tina4\\": [
+                        "Tina4/"
+                    ]
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 PHP HTML Shape Language",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4php-shape/issues",
+                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.0"
+            },
+            "time": "2021-07-03T13:09:41+00:00"
         },
         {
             "name": "twig/twig",
