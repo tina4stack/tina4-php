@@ -22,11 +22,13 @@ class Data
     public $projectRoot;
     public $documentRoot;
     public $subFolder;
+
     /**
      * Data constructor
      */
     public function __construct()
     {
+
         if (!defined("TINA4_DOCUMENT_ROOT")) {
             $reflection = new \ReflectionClass(ClassLoader::class);
             $vendorDir = dirname($reflection->getFileName());

@@ -197,13 +197,13 @@ class Swagger implements \JsonSerializable
                             $schema = (object)["type" => "object", "example" => $example];
                         }
 
-                        if (!empty($example)) {
-                            $responseContent = (object)["application/json" => $schema];
-                            $response = (object)[
-                                "200" => (object)["description" => "Success", "content" => $responseContent],
-                                "400" => (object)["description" => "Failed"]
-                            ];
-                        }
+
+                        $responseContent = (object)["application/json" => $schema];
+                        $response = (object)[
+                            "200" => (object)["description" => "Success", "content" => $responseContent],
+                            "400" => (object)["description" => "Failed"]
+                        ];
+
                     } else {
                         $response = (object)[
                             "200" => (object)["description" => "Success"],

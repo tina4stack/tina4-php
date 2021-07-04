@@ -42,3 +42,5 @@ test.db
 /.env.prod
 /cms.db-shm
 /cms.db-wal
+/test.db-shm
+/test.db-wal

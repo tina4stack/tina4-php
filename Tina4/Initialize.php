@@ -16,6 +16,9 @@ use Tina4\Module;
 //TINA4 CONSTANTS
 const TINA4_DATABASE_TYPES = ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"];
 
+//Get the sub folders etc using the data class
+(new \Tina4\Data());
+
 if (!defined("HTTP_OK")) {
     define("HTTP_OK", 200);
 }
@@ -124,10 +127,8 @@ if (!defined("DATA_NO_SQL")) {
     define("DATA_NO_SQL", "ERR001");
 }
 
-//Initialize error handler
 
 //Initialize the ENV
-(new \Tina4\Env());
 if (!defined("TINA4_DEBUG_LEVEL")) {
     define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);
 }
