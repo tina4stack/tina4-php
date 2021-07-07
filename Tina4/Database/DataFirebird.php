@@ -18,6 +18,11 @@ class DataFirebird implements DataBase
     use Utility;
 
     /**
+     * @var The database metadata
+     */
+    private $databaseMetaData;
+
+    /**
      * Open a Firebird database connection
      * @param bool $persistent
      * @throws \Exception
@@ -256,8 +261,8 @@ class DataFirebird implements DataBase
      */
     public function getDatabase(): array
     {
-        if (!empty($this->database)) {
-            return $this->database;
+        if (!empty($this->databaseMetaData)) {
+            return $this->databaseMetaData;
         }
 
         $sqlTables = 'select distinct rdb$relation_name as table_name
@@ -359,7 +364,7 @@ class DataFirebird implements DataBase
             }
         }
 
-        $this->database = $database;
+        $this->databaseMetaData = $database;
 
         return $database;
     }
