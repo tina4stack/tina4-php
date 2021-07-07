@@ -256,6 +256,10 @@ class DataFirebird implements DataBase
      */
     public function getDatabase(): array
     {
+        if (!empty($this->database)) {
+            return $database;
+        }
+
         $sqlTables = 'select distinct rdb$relation_name as table_name
                       from rdb$relation_fields
                      where rdb$system_flag=0
@@ -334,24 +338,27 @@ class DataFirebird implements DataBase
 
 
             //Go through the tables and extract their column information
+            $tableName = strtolower(trim($record->tableName));
             foreach ($tableInfo as $tid => $tRecord) {
-                $database[trim($record->tableName)][$tid]["column"] = $tid;
-                $database[trim($record->tableName)][$tid]["field"] = trim($tRecord->fieldName);
-                $database[trim($record->tableName)][$tid]["description"] = trim($tRecord->fieldDescription);
-                $database[trim($record->tableName)][$tid]["type"] = trim($tRecord->fieldType);
-                $database[trim($record->tableName)][$tid]["length"] = trim($tRecord->fieldLength);
-                $database[trim($record->tableName)][$tid]["precision"] = trim($tRecord->fieldPrecision);
-                $database[trim($record->tableName)][$tid]["default"] = trim($tRecord->fieldDefaultValue);
+                $database[$tableName][$tid]["column"] = $tid;
+                $database[$tableName][$tid]["field"] = trim($tRecord->fieldName);
+                $database[$tableName][$tid]["description"] = trim($tRecord->fieldDescription);
+                $database[$tableName][$tid]["type"] = trim($tRecord->fieldType);
+                $database[$tableName][$tid]["length"] = trim($tRecord->fieldLength);
+                $database[$tableName][$tid]["precision"] = trim($tRecord->fieldPrecision);
+                $database[$tableName][$tid]["default"] = trim($tRecord->fieldDefaultValue);
                 if (!empty($tRecord->fieldNotNullContraint)) {
-                    $database[trim($record->tableName)][$tid]["notnull"] = trim($tRecord->fieldNotNullContraint);
+                    $database[$tableName][$tid]["notnull"] = trim($tRecord->fieldNotNullContraint);
                 }
                 if (!empty($PK[$tRecord->fieldName])) {
-                    $database[trim($record->tableName)][$tid]["pk"] = trim($PK[$tRecord->fieldName]["CONSTRAINT_TYPE"]);
+                    $database[$tableName][$tid]["pk"] = trim($PK[$tRecord->fieldName]["CONSTRAINT_TYPE"]);
                 } else {
-                    $database[trim($record->tableName)][$tid]["pk"] = "";
+                    $database[$tableName][$tid]["pk"] = "";
                 }
             }
         }
+
+        $this->database = $database;
 
         return $database;
     }
