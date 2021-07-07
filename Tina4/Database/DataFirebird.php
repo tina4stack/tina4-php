@@ -257,7 +257,7 @@ class DataFirebird implements DataBase
     public function getDatabase(): array
     {
         if (!empty($this->database)) {
-            return $database;
+            return $this->database;
         }
 
         $sqlTables = 'select distinct rdb$relation_name as table_name
@@ -286,7 +286,8 @@ class DataFirebird implements DataBase
                               WHEN 8 THEN \'INTEGER\'
                               WHEN 9 THEN \'QUAD\'
                               WHEN 7 THEN \'SMALLINT\'
-                              WHEN 12 THEN \'DATE\'
+                              WHEN 
+                                  12 THEN \'DATE\'
                               WHEN 13 THEN \'TIME\'
                               WHEN 35 THEN \'TIMESTAMP\'
                               WHEN 37 THEN \'VARCHAR\'
