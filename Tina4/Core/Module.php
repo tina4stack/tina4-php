@@ -19,9 +19,9 @@ class Module
      * @param string $name
      * @param string $version
      * @param string $nameSpace
-     * @param Config|null $config
+     * @param null $config
      */
-    public static function addModule(string $name = "Tina4Module", string $version = "1.0.0", string $nameSpace = "", ?Config $config = null): void
+    public static function addModule(string $name = "Tina4Module", string $version = "1.0.0", string $nameSpace = "", $config = null): void
     {
         $moduleFolder = self::getModuleFolder();
 
