@@ -1,13 +1,6 @@
 <?php
 require_once "vendor/autoload.php";
 
-$config = new \Tina4\Config(function (\Tina4\Config $config) {
-
-    $config->addTwigGlobal("HELLO", "ME");
-    $config->addTwigFunction("getUsers", function($myvar) {
-        return $myvar;
-    });
-
-});
+$config = new \Tina4\Config(function (\Tina4\Config $config) {});
 
 echo new \Tina4\Tina4Php($config);

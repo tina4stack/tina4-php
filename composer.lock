@@ -103,16 +103,16 @@
         },
         {
             "name": "phpfastcache/phpfastcache",
-            "version": "8.0.5",
+            "version": "8.0.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/PHPSocialNetwork/phpfastcache.git",
-                "reference": "6d66cc0604bcbd7681ef1b3fdd1ba22901a16b1c"
+                "reference": "c93bd7d341176b64b428953365ef67002af9f61e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/PHPSocialNetwork/phpfastcache/zipball/6d66cc0604bcbd7681ef1b3fdd1ba22901a16b1c",
-                "reference": "6d66cc0604bcbd7681ef1b3fdd1ba22901a16b1c",
+                "url": "https://api.github.com/repos/PHPSocialNetwork/phpfastcache/zipball/c93bd7d341176b64b428953365ef67002af9f61e",
+                "reference": "c93bd7d341176b64b428953365ef67002af9f61e",
                 "shasum": ""
             },
             "require": {
@@ -204,7 +204,7 @@
             ],
             "support": {
                 "issues": "https://github.com/PHPSocialNetwork/phpfastcache/issues",
-                "source": "https://github.com/PHPSocialNetwork/phpfastcache/tree/8.0.5"
+                "source": "https://github.com/PHPSocialNetwork/phpfastcache/tree/8.0.6"
             },
             "funding": [
                 {
@@ -216,7 +216,7 @@
                     "type": "patreon"
                 }
             ],
-            "time": "2021-04-05T22:24:16+00:00"
+            "time": "2021-07-07T14:21:56+00:00"
         },
         {
             "name": "psr/cache",
@@ -650,16 +650,16 @@
         },
         {
             "name": "tina4stack/tina4php-env",
-            "version": "v2.0.1",
+            "version": "v2.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-env.git",
-                "reference": "f57d431eb33970b22f6a95720f72d69e99d001c8"
+                "reference": "4c5a95b0dea557913134211c1dc61cd87a733028"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-env/zipball/f57d431eb33970b22f6a95720f72d69e99d001c8",
-                "reference": "f57d431eb33970b22f6a95720f72d69e99d001c8",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-env/zipball/4c5a95b0dea557913134211c1dc61cd87a733028",
+                "reference": "4c5a95b0dea557913134211c1dc61cd87a733028",
                 "shasum": ""
             },
             "require-dev": {
@@ -688,9 +688,9 @@
             "description": "Tina4 PHP Environment Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-env/issues",
-                "source": "https://github.com/tina4stack/tina4php-env/tree/v2.0.1"
+                "source": "https://github.com/tina4stack/tina4php-env/tree/v2.0.2"
             },
-            "time": "2021-07-04T18:57:11+00:00"
+            "time": "2021-07-07T12:23:54+00:00"
         },
         {
             "name": "tina4stack/tina4php-shape",
@@ -3848,5 +3848,5 @@
         "ext-curl": "*"
     },
     "platform-dev": [],
-    "plugin-api-version": "2.1.0"
+    "plugin-api-version": "2.0.0"
 }
