@@ -140,11 +140,9 @@ class DataFirebird implements DataBase
         }
 
         if (is_array($records) && count($records) > 0) {
-            if (stripos($initialSQL, "returning") === false && count($records) === $noOfRecords && $offSet === 0) {
+            if (stripos($initialSQL, "returning") === false) {
                 $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL)";
-
                 $recordCount = ibase_query($this->dbh, $sqlCount);
-
                 $resultCount = ibase_fetch_assoc($recordCount);
             } else {
                 $resultCount["COUNT_RECORDS"] = count($records); //used for insert into or update
