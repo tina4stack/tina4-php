@@ -156,7 +156,7 @@ class DataResult implements JsonSerializable
         }
 
         if (!empty($results)) {
-            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "fields" => $this->fields, "data" => $results, "error" => null]);
+            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => count($results), "fields" => $this->fields, "data" => $results, "error" => null]);
         } else {
             return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "fields" => [], "data" => [], "error" => $this->error->getErrorText()]);
         }
@@ -178,7 +178,7 @@ class DataResult implements JsonSerializable
             }
         }
 
-        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "fields" => $this->fields, "data" => $results, "error" => $this->getError()];
+        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => count($results), "fields" => $this->fields, "data" => $results, "error" => $this->getError()];
     }
 
     /**
