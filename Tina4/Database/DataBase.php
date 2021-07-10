@@ -85,7 +85,7 @@ interface DataBase
      * Starts a transaction
      * @return string
      */
-    public function startTransaction(): string;
+    public function startTransaction();
 
     /**
      * Sets database errors from currently used database

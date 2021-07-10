@@ -221,7 +221,7 @@ class DataFirebird implements DataBase
      * Start Transaction
      * @return false|int|resource
      */
-    public function startTransaction(): string
+    public function startTransaction()
     {
         return ibase_trans(IBASE_COMMITTED + IBASE_NOWAIT, $this->dbh);
     }
