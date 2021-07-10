@@ -694,16 +694,16 @@
         },
         {
             "name": "tina4stack/tina4php-shape",
-            "version": "v2.0.0",
+            "version": "v2.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-shape.git",
-                "reference": "50f4e698b9a774f45d2b5000f7fdbc86d6f3a7ee"
+                "reference": "d53d29679102c0b05b524b04ee928adc04888ac9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/50f4e698b9a774f45d2b5000f7fdbc86d6f3a7ee",
-                "reference": "50f4e698b9a774f45d2b5000f7fdbc86d6f3a7ee",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/d53d29679102c0b05b524b04ee928adc04888ac9",
+                "reference": "d53d29679102c0b05b524b04ee928adc04888ac9",
                 "shasum": ""
             },
             "require-dev": {
@@ -733,9 +733,9 @@
             "description": "Tina4 PHP HTML Shape Language",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-shape/issues",
-                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.0"
+                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.1"
             },
-            "time": "2021-07-03T13:09:41+00:00"
+            "time": "2021-07-09T21:41:47+00:00"
         },
         {
             "name": "twig/twig",

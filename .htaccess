@@ -5,15 +5,16 @@ RewriteEngine On
 # absolute physical path to the directory that contains this htaccess file.
 
 #Block access to .env and other files
-<Files ~ "\.(env|json|config.js|md|gitignore|gitattributes|lock|secrets)$">
-    Order allow,deny
-    Deny from all
+<Files ~ ".env">
+Order Allow,Deny
+Deny from all
+Satisfy all
 </Files>
 
-#Block access to database & log folders if they exist
-<Files ~ "\(database|log)$">
-    Order allow,deny
-    Deny from all
+<Files ~ "^.*\.([Hh][Tt][Aa])">
+Order allow,deny
+Deny from all
+Satisfy all
 </Files>
 
 #Disable the 3 lines below for just to http
