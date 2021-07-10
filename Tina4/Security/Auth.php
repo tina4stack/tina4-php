@@ -59,6 +59,10 @@ class Auth extends Data
             $this->generateSecureKeys();
         }
 
+        if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess")) {
+            file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
+        }
+
         //Load secrets
         if (file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key")) {
             $this->privateKey = file_get_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key");
@@ -117,6 +121,10 @@ class Auth extends Data
         `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
         if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore")) {
             file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore", "*");
+        }
+
+        if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess")) {
+            file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
         }
 
         return true;

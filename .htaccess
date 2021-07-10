@@ -5,7 +5,7 @@ RewriteEngine On
 # absolute physical path to the directory that contains this htaccess file.
 
 #Block access to .env and other files
-<Files ~ "\.(env|json|config.js|md|gitignore|gitattributes|lock)$">
+<Files ~ "\.(env|json|config.js|md|gitignore|gitattributes|lock|secrets)$">
     Order allow,deny
     Deny from all
 </Files>
