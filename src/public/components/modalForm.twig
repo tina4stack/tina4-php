@@ -20,4 +20,7 @@
 </div>
 <script>
     $("#formModal").modal();
+    $('#formModal').on('hidden.bs.modal', function () {
+        $(this).removeData();
+    })
 </script>
