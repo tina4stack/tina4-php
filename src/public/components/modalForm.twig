@@ -19,8 +19,9 @@
     </div>
 </div>
 <script>
-    $("#formModal").modal();
+    $('#formModal').modal();
     $('#formModal').on('hidden.bs.modal', function () {
         $(this).removeData();
-    })
+        $('.modal-backdrop').remove();
+    });
 </script>
