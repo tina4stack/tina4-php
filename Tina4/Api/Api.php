@@ -81,7 +81,15 @@ class Api
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
                 return ["error" => $curlError, "info" => $curlInfo, "body" => json_decode($curlResult, false)];
             } else {
-                return json_decode($curlResult, true);
+                if ($response = json_decode($curlResult, true)) {
+                    if (is_array($response)) {
+                        return $response;
+                    } else {
+                        return  ["body" => $response];
+                    }
+                } else {
+                    return ["body" => $response];
+                }
             }
         } catch (\Exception $error) {
             return ["error" => $error->getMessage()];
