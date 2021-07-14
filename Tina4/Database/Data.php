@@ -28,7 +28,6 @@ class Data
      */
     public function __construct()
     {
-
         if (!defined("TINA4_DOCUMENT_ROOT")) {
             $reflection = new \ReflectionClass(ClassLoader::class);
             $vendorDir = dirname($reflection->getFileName());
@@ -48,6 +47,13 @@ class Data
             $this->documentRoot = TINA4_DOCUMENT_ROOT;
             $this->projectRoot = TINA4_PROJECT_ROOT;
             $this->subFolder = TINA4_SUB_FOLDER;
+        }
+
+        //Check if we have a .env file
+        $fileName = TINA4_DOCUMENT_ROOT."/.env";
+        if (!file_exists($fileName)) {
+            Debug::message("Created an ENV file for you {$fileName}");
+            file_put_contents($fileName, "[Project Settings]\nVERSION=1.0.0\nTINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=[TINA4_LOG_ALL]\nTINA4_CACHE_ON=false\n[Open API]\nSWAGGER_TITLE=Tina4 Project\nSWAGGER_DESCRIPTION=Edit your .env file to change this description\nSWAGGER_VERSION=1.0.0");
         }
 
         //Check if we have a database connection declared as global , add it to the data class

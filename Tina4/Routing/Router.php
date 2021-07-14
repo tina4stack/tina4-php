@@ -115,7 +115,6 @@ class Router extends Data
      */
     public function getCacheResponse($url): ?array
     {
-        global $cache;
         $key = "url_" . md5($url);
 
         $response = (new Cache())->get($key);

@@ -44,3 +44,4 @@ test.db
 /cms.db-wal
 /test.db-shm
 /test.db-wal
+/TINA4_DOCUMENT_ROOT/log/debug.log

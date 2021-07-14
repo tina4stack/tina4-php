@@ -843,7 +843,11 @@ class ORM implements \JsonSerializable
      */
     final public function getFieldDefinitions() {
         $tableName = strtolower($this->getTableName());
-        return $this->DBA->getDatabase()[$tableName];
+        if ($this->DBA !== null) {
+            return $this->DBA->getDatabase()[$tableName];
+        } else {
+            return null;
+        }
     }
 
     /**

@@ -22,6 +22,7 @@ class TwigUtility
     public static function initTwig(?Config $config = null): Environment
     {
         global $twig;
+
         //Twig initialization
         if (empty($twig)) {
             $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
@@ -48,12 +49,12 @@ class TwigUtility
                 }
             }
 
-            if (TINA4_DEBUG) {
-                $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => false]);
-                $twig->addExtension(new DebugExtension());
+            if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON) {
+                $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => "./cache"]);
             } else {
-                $twig = new Environment($twigLoader, ["cache" => "./cache"]);
+                $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG]);
             }
+
             $twig->addGlobal('Tina4', new Caller());
             if (isset($_SERVER["HTTP_HOST"])) {
                 $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
