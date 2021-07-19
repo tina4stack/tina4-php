@@ -1,71 +1,73 @@
 {
-  "name": "tina4stack/tina4php",
-  "description": "Tina4 PHP",
-  "license": "MIT",
-  "autoload": {
-    "files": [
-      "Tina4/Functions.php",
-      "Tina4/Initialize.php"
+    "name": "tina4stack/tina4php",
+    "description": "Tina4 PHP",
+    "license": "MIT",
+    "autoload": {
+        "files": [
+            "Tina4/Functions.php",
+            "Tina4/Initialize.php"
+        ],
+        "classmap": [
+            "Helpers/",
+            "Tina4/",
+            "src/"
+        ],
+        "psr-4": {
+            "\\": [
+                "src",
+                "src/app",
+                "src/orm",
+                "src/routes",
+                "Helpers/"
+            ],
+            "Tina4\\": [
+                "Tina4/",
+                "Tina4/Api/",
+                "Tina4/Core/",
+                "Tina4/Database/",
+                "Tina4/Messaging/",
+                "Tina4/ORM/",
+                "Tina4/Routing/",
+                "Tina4/Security/",
+                "Tina4/Service/"
+            ]
+        }
+    },
+    "require": {
+        "psr/log": "^1.1.4",
+        "nowakowskir/php-jwt": "^2.0.1",
+        "twig/twig": "^3.3.2",
+        "phpfastcache/phpfastcache": "^8.0.5",
+        "coyl/git": "^0.1.7",
+        "scssphp/scssphp": "^1.5.2",
+        "ext-json": "*",
+        "ext-curl": "*",
+        "tina4stack/tina4php-debug": "^2.0",
+        "tina4stack/tina4php-shape": "^2.0",
+        "tina4stack/tina4php-env": "^2.0"
+    },
+    "bin": [
+        "bin/tina4",
+        "bin/tina4service"
     ],
-    "classmap": [
-      "Helpers/",
-      "Tina4/",
-      "src/"
-    ],
-    "psr-4": {
-      "\\": [
-        "src",
-        "src/app",
-        "src/orm",
-        "src/routes",
-        "Helpers/"
-      ],
-      "Tina4\\": [
-        "Tina4/",
-        "Tina4/Api/",
-        "Tina4/Core/",
-        "Tina4/Database/",
-        "Tina4/Messaging/",
-        "Tina4/ORM/",
-        "Tina4/Routing/",
-        "Tina4/Security/",
-        "Tina4/Service/"
-      ]
+    "scripts": {
+        "tina4": "@php bin/tina4",
+        "tina4service": "tina4service",
+        "test": "@tina4 tests:run",
+        "test:verbose": "@tina4 tests:verbose",
+        "initialize": "@tina4 initialize:run",
+        "initialise": "@tina4 initialize:run",
+        "begin": "@tina4 initialize:run",
+        "start": "@tina4 webservice:run",
+        "start-service": "@tina4service",
+        "run-tests": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml -v",
+        "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4"
+    },
+    "config": {
+        "process-timeout": 0
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9",
+        "overtrue/phplint": "^2.0"
     }
-  },
-  "require": {
-    "psr/log": "^1.1.4",
-    "nowakowskir/php-jwt": "^2.0.1",
-    "twig/twig": "^3.3.2",
-    "phpfastcache/phpfastcache": "^8.0.5",
-    "coyl/git": "^0.1.7",
-    "scssphp/scssphp": "^1.5.2",
-    "ext-json": "*",
-    "ext-curl": "*",
-    "tina4stack/tina4php-debug": "^2.0",
-    "tina4stack/tina4php-shape": "^2.0",
-    "tina4stack/tina4php-env": "^2.0"
-  },
-  "bin": [
-    "bin/tina4",
-    "bin/tina4service"
-  ],
-  "scripts": {
-    "tina4": "@php bin/tina4",
-    "tina4service": "tina4service",
-    "test": "@tina4 tests:run",
-    "test:verbose": "@tina4 tests:verbose",
-    "initialize": "@tina4 initialize:run",
-    "start": "@tina4 webservice:run",
-    "start-service": "@tina4service",
-    "run-tests" : "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml -v",
-    "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4"
-  },
-  "config": {
-    "process-timeout": 0
-  },
-  "require-dev": {
-    "phpunit/phpunit": "^9",
-    "overtrue/phplint": "^2.0"
-  }
 }
