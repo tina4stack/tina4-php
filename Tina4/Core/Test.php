@@ -20,7 +20,7 @@ class Test
     public $colorOrange = "\e[33;1m";
     public $colorGreen = "\e[32;1m";
     public $colorCyan = "\e[36;1m";
-    public $colorYellow = "\e[0;33m'";
+    public $colorYellow = "\e[0;33m";
     public $colorReset = "\e[0m";
 
     public $testClass = null;
@@ -88,10 +88,13 @@ class Test
      */
     public function parseAnnotations($annotations, $onlyShowFailed): void
     {
+
         $testResult = "";
         $tests = explode(PHP_EOL, $annotations["annotations"]["tests"][0]);
         $testCount = 0;
         $testFailed = 0;
+
+
 
         if ($annotations["type"] === "function") {
             $testResult .= $this->colorCyan . "Testing Function " . $annotations["method"] . $this->colorReset . PHP_EOL;
@@ -110,6 +113,8 @@ class Test
                 eval('$this->testClass = new ' . $annotations["class"] . '(' . implode(",", $params) . ');');
             }
         }
+
+
 
         foreach ($tests as $tid => $test) {
             $test = trim($test);
@@ -163,14 +168,14 @@ class Test
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
         } else {
-            preg_match_all('/(^.*[\W\w])(\ \<\=|\ \>\=|\ \<|\ \>|\ \=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
+            preg_match_all('/(^.*[\W\w])(\ \<\=|\ \>\=|\ \<|\ \>|\ \=\=|\ \=\=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
 
             $actualExpression = trim($parts[0][1]);
+            $expectedExpression = trim($parts[0][3]);
             $actualResult = "-";
 
             if (!empty($testClass)) {
                 $condition = trim($testParts[0][2]);
-
                 //check for enclosing method before the ()
                 preg_match_all('/(.*)\((.*)\)/m', $condition, $methods, PREG_SET_ORDER);
 
@@ -209,6 +214,8 @@ class Test
                     //add the enclosing method
                     if (!empty($enclosingMethod)) {
                         $condition = $enclosingMethod . "(" . $condition;
+                        $condition = str_replace(" ===", ") ===", $condition);
+                        $condition = str_replace(" !==", ") !==", $condition);
                         $condition = str_replace(" !=", ") !=", $condition);
                         $condition = str_replace(" ==", ") ==", $condition);
                     }
@@ -243,7 +250,10 @@ class Test
                 }
             }
 
-            return "# {$testNo} " . $method . ": " . $this->assert($condition, trim($testParts[0][3]), trim($testParts[0][2]), $actualResult) . "\n";
+            $expectedResult = "";
+            @eval('$expectedResult = str_replace(PHP_EOL, "", print_r(' . $expectedExpression . ',1));');
+
+            return "# {$testNo} " . $method . ": " . $this->assert($condition, trim($testParts[0][3]), trim($testParts[0][2]), $actualResult, $expectedResult) . "\n";
         }
     }
 
@@ -253,11 +263,12 @@ class Test
      * @param string $message
      * @param string $conditionText
      * @param string $actualResult
+     * @param string $expectedResult
      * @return string
      * @tests tina4
      *   assert (1 === 1) === "\e[32;1mPassed ()\e[0m", "Test is positive"
      */
-    public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = ""): string
+    public function assert($condition, $message = "Test failed!", $conditionText = "", $actualResult = "", $expectedResult=""): string
     {
         $result = false;
         if ($condition !== true && $condition !== false) {
@@ -268,7 +279,7 @@ class Test
         if ($result === true) {
             return $this->colorGreen . "Passed (" . $conditionText . ")" . $this->colorReset;
         } else {
-            return $this->colorRed . "Failed (" . $conditionText . ") " . $message . ", " . $this->colorOrange . "Actual: {$actualResult}" . $this->colorReset;
+            return $this->colorRed . "Failed (" . $conditionText . ") " . $message . ", " . $this->colorOrange . "\nActual:\n{$actualResult}" . $this->colorReset. $this->colorYellow."\nExpected:\n{$expectedResult}".$this->colorReset;
         }
     }
 }
