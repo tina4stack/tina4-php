@@ -168,7 +168,7 @@ class Test
         if (strtolower($testParts[0][1]) !== "assert") {
             return "";
         } else {
-            preg_match_all('/(^.*[\W\w])(\ \<\=|\ \>\=|\ \<|\ \>|\ \=\=|\ \=\=\=|\ \!)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
+            preg_match_all('/(^.*[\W\w])(\ \<\=|\ \>\=|\ \<|\ \>|\ \=\=\=|\ \=\=|\ \!\=\=|\ \!\=)(.*)/m', $testParts[0][2], $parts, PREG_SET_ORDER);
 
             $actualExpression = trim($parts[0][1]);
             $expectedExpression = trim($parts[0][3]);
@@ -211,14 +211,14 @@ class Test
                         $condition = '$testClass->' . $method . $condition;
                     }
 
+
                     //add the enclosing method
                     if (!empty($enclosingMethod)) {
                         $condition = $enclosingMethod . "(" . $condition;
-                        $condition = str_replace(" ===", ") ===", $condition);
-                        $condition = str_replace(" !==", ") !==", $condition);
                         $condition = str_replace(" !=", ") !=", $condition);
                         $condition = str_replace(" ==", ") ==", $condition);
                     }
+
 
                     eval('$actualResult = str_replace(PHP_EOL, "", print_r($testClass->' . $method . $actualExpression . ', 1));');
                 } elseif ($condition[0] === '$' && strpos($condition, '$testClass') === false) {
@@ -251,7 +251,9 @@ class Test
             }
 
             $expectedResult = "";
-            @eval('$expectedResult = str_replace(PHP_EOL, "", print_r(' . $expectedExpression . ',1));');
+            if (!empty($expectedExpression)) {
+               @eval('$expectedResult = str_replace(PHP_EOL, "", print_r(' . $expectedExpression . ',1));');
+            }
 
             return "# {$testNo} " . $method . ": " . $this->assert($condition, trim($testParts[0][3]), trim($testParts[0][2]), $actualResult, $expectedResult) . "\n";
         }
