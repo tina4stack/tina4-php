@@ -602,16 +602,16 @@
         },
         {
             "name": "tina4stack/tina4php-debug",
-            "version": "v2.0.1",
+            "version": "v2.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-debug.git",
-                "reference": "666db74269de5d05ab6e09920063a96cf5a351fe"
+                "reference": "ed41c30d575e7a76638bf14733dca077b7c12bb4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/666db74269de5d05ab6e09920063a96cf5a351fe",
-                "reference": "666db74269de5d05ab6e09920063a96cf5a351fe",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/ed41c30d575e7a76638bf14733dca077b7c12bb4",
+                "reference": "ed41c30d575e7a76638bf14733dca077b7c12bb4",
                 "shasum": ""
             },
             "require": {
@@ -644,9 +644,9 @@
             "description": "Tina4 PHP Debug Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-debug/issues",
-                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.1"
+                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.2"
             },
-            "time": "2021-06-25T16:41:39+00:00"
+            "time": "2021-07-21T10:32:21+00:00"
         },
         {
             "name": "tina4stack/tina4php-env",
@@ -694,16 +694,16 @@
         },
         {
             "name": "tina4stack/tina4php-shape",
-            "version": "v2.0.1",
+            "version": "v2.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-shape.git",
-                "reference": "d53d29679102c0b05b524b04ee928adc04888ac9"
+                "reference": "2701fdc744bea76afd9068d481d051ddcf9f04c5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/d53d29679102c0b05b524b04ee928adc04888ac9",
-                "reference": "d53d29679102c0b05b524b04ee928adc04888ac9",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/2701fdc744bea76afd9068d481d051ddcf9f04c5",
+                "reference": "2701fdc744bea76afd9068d481d051ddcf9f04c5",
                 "shasum": ""
             },
             "require-dev": {
@@ -733,9 +733,9 @@
             "description": "Tina4 PHP HTML Shape Language",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-shape/issues",
-                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.1"
+                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.2"
             },
-            "time": "2021-07-09T21:41:47+00:00"
+            "time": "2021-07-21T10:35:18+00:00"
         },
         {
             "name": "twig/twig",
@@ -1110,16 +1110,16 @@
         },
         {
             "name": "phar-io/manifest",
-            "version": "2.0.1",
+            "version": "2.0.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phar-io/manifest.git",
-                "reference": "85265efd3af7ba3ca4b2a2c34dbfc5788dd29133"
+                "reference": "97803eca37d319dfa7826cc2437fc020857acb53"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phar-io/manifest/zipball/85265efd3af7ba3ca4b2a2c34dbfc5788dd29133",
-                "reference": "85265efd3af7ba3ca4b2a2c34dbfc5788dd29133",
+                "url": "https://api.github.com/repos/phar-io/manifest/zipball/97803eca37d319dfa7826cc2437fc020857acb53",
+                "reference": "97803eca37d319dfa7826cc2437fc020857acb53",
                 "shasum": ""
             },
             "require": {
@@ -1164,9 +1164,9 @@
             "description": "Component for reading phar.io manifest information from a PHP Archive (PHAR)",
             "support": {
                 "issues": "https://github.com/phar-io/manifest/issues",
-                "source": "https://github.com/phar-io/manifest/tree/master"
+                "source": "https://github.com/phar-io/manifest/tree/2.0.3"
             },
-            "time": "2020-06-27T14:33:11+00:00"
+            "time": "2021-07-20T11:28:43+00:00"
         },
         {
             "name": "phar-io/version",
@@ -1764,16 +1764,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "9.5.6",
+            "version": "9.5.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "fb9b8333f14e3dce976a60ef6a7e05c7c7ed8bfb"
+                "reference": "d0dc8b6999c937616df4fb046792004b33fd31c5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/fb9b8333f14e3dce976a60ef6a7e05c7c7ed8bfb",
-                "reference": "fb9b8333f14e3dce976a60ef6a7e05c7c7ed8bfb",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/d0dc8b6999c937616df4fb046792004b33fd31c5",
+                "reference": "d0dc8b6999c937616df4fb046792004b33fd31c5",
                 "shasum": ""
             },
             "require": {
@@ -1851,7 +1851,7 @@
             ],
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/9.5.6"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/9.5.7"
             },
             "funding": [
                 {
@@ -1863,7 +1863,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2021-06-23T05:14:38+00:00"
+            "time": "2021-07-19T06:14:47+00:00"
         },
         {
             "name": "psr/container",
