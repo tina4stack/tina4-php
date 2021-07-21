@@ -170,12 +170,12 @@ trait Utility
 
     /**
      * Returns a formatted date in the specified output format
-     * @param string $dateString Date input
+     * @param string|null $dateString Date input
      * @param string $databaseFormat Format in date format of PHP
      * @param string $outputFormat Output of the date in the specified format
      * @return string The resulting formatted date
      */
-    public function formatDate(string $dateString, string $databaseFormat, string $outputFormat): ?string
+    public function formatDate(?string $dateString, string $databaseFormat, string $outputFormat): ?string
     {
         //Hacky fix for weird dates?
         $dateString = str_replace(".000000", "", $dateString);
