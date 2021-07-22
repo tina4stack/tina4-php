@@ -419,3 +419,12 @@ const popupCenter = ({url, title, w, h}) => {
     })
 }(window.jQuery);
 //# sourceMappingURL=bootstrap-tagsinput.min.js.map
+
+function openReport(sreport){
+    if (sreport.indexOf("No data available") < 0){
+        open(sreport, "content", "target=_blank, toolbar=no, scrollbars=yes, resizable=yes, width=800, height=600, top=0, left=0");
+    }
+    else {
+        window.alert("Sorry , unable to print a report according to your selection!");
+    }
+}
