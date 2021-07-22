@@ -14,14 +14,27 @@ namespace Tina4;
  */
 class DataMongoDb implements Database
 {
+    use DataBaseCore;
+    use Utility;
 
-    public function __construct($database, $username = "", $password = "", $dateFormat = "Y-m-d")
+
+
+    public function open()
     {
+        // TODO: Implement open() method.
     }
 
     public function close()
     {
-        // TODO: Implement close() method.
+        if (!class_exists("MongoDB\Client")) {
+            throw new \Exception("MongoDb extension for PHP needs to be installed");
+        }
+
+        if (empty($username)) {
+            $this->dbh = new \MongoDB\Client("mongodb://" . $this->hostName . ":" . $this->port."/{$this->database}");
+        } else {
+            $this->dbh = new \MongoDB\Client("mongodb://{$this->username}:{$this->password}@" . $this->hostName . ":" . $this->port."/{$this->database}");
+        }
     }
 
     public function exec()
@@ -88,4 +101,6 @@ class DataMongoDb implements Database
     {
         // TODO: Implement commit() method.
     }
+
+
 }

@@ -24,6 +24,13 @@ interface DataBase
      */
     public function __construct(string $database, string $username = "", string $password = "", string $dateFormat = "Y-m-d");
 
+
+    /**
+     * Open the database connection
+     * @return mixed
+     */
+    public function open();
+
     /**
      * Close the database connection
      * @return mixed
