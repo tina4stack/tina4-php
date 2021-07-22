@@ -13,7 +13,7 @@ use Tina4\HTMLElement;
 use Tina4\Module;
 
 //TINA4 CONSTANTS
-const TINA4_DATABASE_TYPES = ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3"];
+const TINA4_DATABASE_TYPES = ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb"];
 
 //Get the sub folders etc using the data class
 (new \Tina4\Data());

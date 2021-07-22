@@ -8,6 +8,8 @@
 
 namespace Tina4;
 
+use function PHPUnit\Framework\throwException;
+
 /**
  * A very simple ORM for reading and writing data to a database or just for a simple NO SQL solution
  * @package Tina4
@@ -535,6 +537,11 @@ class ORM implements \JsonSerializable
         if (empty($this->DBA)) {
             return false;
         } else {
+            if ($this->DBA->isNoSQL())
+            {
+                return true; //NoSQL databases do not need table to exist
+            }
+
             //Check to see if the table exists
             if (!$this->DBA->tableExists($tableName)) {
                 $sqlCreate = $this->generateCreateSQL($this->getTableData(), $tableName);

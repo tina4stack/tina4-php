@@ -127,4 +127,10 @@ interface DataBase
      * @return mixed
      */
     public function getQueryParam(string $fieldName, int $fieldIndex): string;
+
+    /**
+     * Check if the database is a no SQL database
+     * @return bool
+     */
+    public function isNoSQL(): bool;
 }

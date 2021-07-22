@@ -386,4 +386,13 @@ class DataFirebird implements DataBase
     {
         return ibase_gen_id(strtoupper($generatorName), $increment, $this->dbh);
     }
+
+    /**
+     * Is it a No SQL database?
+     * @return bool
+     */
+    public function isNoSQL(): bool
+    {
+        return false;
+    }
 }

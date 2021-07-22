@@ -258,4 +258,13 @@ class DataSQLite3 implements DataBase
     {
         return ":{$fieldIndex}";
     }
+
+    /**
+     * Is it a No SQL database?
+     * @return bool
+     */
+    public function isNoSQL(): bool
+    {
+        return false;
+    }
 }

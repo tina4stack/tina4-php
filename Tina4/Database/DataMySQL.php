@@ -137,7 +137,7 @@ class DataMySQL implements DataBase
                         if (stripos($sql, "call") !== false) {
                             $resultCount["COUNT_RECORDS"] = count($records);
                         } else {
-                            $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) t";
+                            $sqlCount = "select count(*) as COUNT_RECORDS from ($initialSQL) tcount";
 
                             $recordCount = mysqli_query($this->dbh, $sqlCount);
 
@@ -308,8 +308,21 @@ class DataMySQL implements DataBase
         return $database;
     }
 
+    /**
+     * The default MySQL port
+     * @return int
+     */
     public function getDefaultDatabasePort(): int
     {
         return 3306;
+    }
+
+    /**
+     * Is it a No SQL database?
+     * @return bool
+     */
+    public function isNoSQL(): bool
+    {
+        return false;
     }
 }

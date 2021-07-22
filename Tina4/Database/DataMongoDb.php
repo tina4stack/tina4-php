@@ -15,51 +15,117 @@ namespace Tina4;
 class DataMongoDb implements Database
 {
     use DataBaseCore;
+
     use Utility;
 
-
+    private $manager;
 
     public function open()
-    {
-        // TODO: Implement open() method.
-    }
-
-    public function close()
     {
         if (!class_exists("MongoDB\Client")) {
             throw new \Exception("MongoDb extension for PHP needs to be installed");
         }
 
-        if (empty($username)) {
-            $this->dbh = new \MongoDB\Client("mongodb://" . $this->hostName . ":" . $this->port."/{$this->database}");
-        } else {
-            $this->dbh = new \MongoDB\Client("mongodb://{$this->username}:{$this->password}@" . $this->hostName . ":" . $this->port."/{$this->database}");
+        if (empty($this->hostName))
+        {
+            $this->hostName = "localhost";
         }
+
+        if (empty($this->port))
+        {
+            $this->port = $this->getDefaultDatabasePort();
+        }
+
+        if (empty($this->databaseName))
+        {
+            $this->databaseName = "testing";
+        }
+
+        $connectionString = "mongodb://" . $this->hostName . ":" . $this->port;
+        if (!empty($username)) {
+            $connectionString = "mongodb://{$this->username}:{$this->password}@" . $this->hostName . ":" . $this->port;
+        }
+
+        $this->dbh = (new \MongoDB\Client($connectionString))->{$this->databaseName};
+
+        $this->manager = new \MongoDB\Driver\Manager($connectionString);
+    }
+
+    public function close()
+    {
+        unset($this->dbh);
     }
 
     public function exec()
     {
-        // TODO: Implement exec() method.
+        $params = $this->parseParams(func_get_args());
+
+        $tranId = $params["tranId"];
+
+        $params = $params["params"];
+
+        $sql = $params[0];
+
+        $statement = $this->parseSQLToNoSQL($sql);
+
+        $data = [];
+
+        foreach ($statement["columns"] as $id => $column) {
+            $data[$this->camelCase($column)] = $params[$id+1];
+        }
+
+        if (strpos($sql, "update") !== false) {
+            foreach ($this->dbh->{$statement["collectionName"]}->find($statement["filter"]) as $document) {
+                $this->dbh->{$statement["collectionName"]}->findOneAndUpdate($statement["filter"], ['$set' => $data]);
+            }
+        } else {
+            $this->dbh->{$statement["collectionName"]}->insertOne($data);
+        }
+
+        return $this->error();
     }
 
     public function getLastId(): string
     {
-        // TODO: Implement getLastId() method.
+       return 0;
     }
 
     public function tableExists($tableName): bool
     {
-        // TODO: Implement tableExists() method.
+        $collections = new \MongoDB\Command\ListCollections($this->databaseName);
+
+        $collectionNames = [];
+
+        foreach ($collections as $collection) {
+            $collectionNames[] = $collection->getName();
+        }
+
+        return in_array($tableName, $collectionNames);
     }
 
     public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
-        // TODO: Implement fetch() method.
-    }
+        $statement = $this->parseSQLToNoSQL($sql);
 
-    public function rollback(int $transactionId = null)
-    {
-        // TODO: Implement rollback() method.
+        $collection = $this->dbh->{$statement["collectionName"]}->find($statement["filter"]);
+
+        $countRecords = 0;
+
+        $records = [];
+
+        if (!empty($collection)) {
+            foreach ($collection as  $document) {
+                if (!empty($document)) {
+
+                    $records[] = (new DataRecord((array)$document, $fieldMapping, $this->getDefaultDatabaseDateFormat(), $this->dateFormat));
+                    $countRecords++;
+                }
+            }
+        }
+
+        $error = $this->error();
+
+        return (new DataResult($records, $fields=[], $countRecords, $offSet, $error));
     }
 
     public function autoCommit(bool $onState = true):void
@@ -74,7 +140,7 @@ class DataMongoDb implements Database
 
     public function error()
     {
-        // TODO: Implement error() method.
+        return (new DataError("", ""));
     }
 
     public function getDatabase(): array
@@ -84,17 +150,17 @@ class DataMongoDb implements Database
 
     public function getDefaultDatabaseDateFormat(): string
     {
-        // TODO: Implement getDefaultDatabaseDateFormat() method.
+        return "Y-m-d";
     }
 
     public function getDefaultDatabasePort(): ?int
     {
-        // TODO: Implement getDefaultDatabasePort() method.
+        return 27017;
     }
 
     public function getQueryParam($fieldName, $fieldIndex): string
     {
-        // TODO: Implement getQueryParam() method.
+        return ":{$fieldName}";
     }
 
     public function commit($transactionId = null)
@@ -103,4 +169,17 @@ class DataMongoDb implements Database
     }
 
 
+    public function rollback($transactionId = null)
+    {
+        // TODO: Implement rollback() method.
+    }
+
+    /**
+     * Is it a No SQL database?
+     * @return bool
+     */
+    public function isNoSQL(): bool
+    {
+        return true;
+    }
 }

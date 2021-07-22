@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
+
+namespace Tina4;
 
 class Report extends \Tina4\Data
 {
@@ -51,10 +58,15 @@ class Report extends \Tina4\Data
      */
     public function asPDF($fileName="", $orientation="P" , $html="") {
         $mpdf = new \Mpdf\Mpdf(['orientation' => $orientation, 'setAutoBottomMargin' => 'stretch', 'margin_top' => 20, 'margin_left' => 5, 'margin_right' => 5, 'margin_bottom' => 5, 'margin_header' => 2, "margin_footer" => 5]);
+
         $mpdf->SetHTMLHeader($this->header, "", true);
+
         $mpdf->SetHTMLFooter($this->footer);
+
         $mpdf->WriteHTML(str_replace(".report ", "", $this->getStyleSheet()),\Mpdf\HTMLParserMode::HEADER_CSS);
+
         $mpdf->WriteHTML($this->asHTML($html));
+
         return $mpdf->Output($fileName);
     }
 
@@ -106,6 +118,7 @@ class Report extends \Tina4\Data
     public function setHeader($header)
     {
         $this->header = $header;
+
         return $this;
     }
 
@@ -116,7 +129,9 @@ class Report extends \Tina4\Data
     public function setFooter($footer)
     {
         $footer = "Page {PAGENO} of {nb}". $footer;
+
         $this->footer = $footer;
+
         return $this;
     }
 
@@ -145,6 +160,7 @@ class Report extends \Tina4\Data
             if (!empty($this->currentGroupBy)) {
                 $html .= $this->getFooter($fields, $calculation, $excludedFields);
             }
+
             $this->currentGroupBy = $newGroup;
             //add footer - calculated fields
 
@@ -153,12 +169,14 @@ class Report extends \Tina4\Data
                 foreach ($groupBy as $column => $function) {
                     if (!empty($function)) {
                         $data = $function ($record);
+
                         if (!empty($data)) {
                             $html .= _tr(_th(["style" => "text-align: left", "colspan" => $columnCount - count($excludedFields)], $data));
                         }
                     }
                 }
             }
+
             $html .= $this->tableHeader;
         }
 
@@ -176,8 +194,11 @@ class Report extends \Tina4\Data
     public function getFooter($fields, $calculation, $excludedFields, $global = false)
     {
         $html = "";
+
         $footerInfo = [];
+
         $csvFooter = [];
+
         foreach ($fields as $id => $field)
         {
 
@@ -199,11 +220,14 @@ class Report extends \Tina4\Data
 
 
             $footerInfo[] = _th(["class" => "footer-th", "style" => "text-align: {$align}"], $value);
+
             $csvFooter[] = $value;
         }
 
         $html .= _tr($footerInfo);
+
         $this->csv .= join($this->delimiter, $csvFooter).PHP_EOL;
+
         return $html;
     }
 
@@ -233,14 +257,18 @@ class Report extends \Tina4\Data
 
         if (is_string($value)) {
             $this->calculatedValuesGlobal[$fieldName] = null;
+
             return $value;
         } else {
             if (!isset($this->calculatedValuesGlobal[$fieldName] ))
             {
                 $this->calculatedValuesGlobal[$fieldName]  = 0.00;
             }
+
             $this->calculatedValuesGlobal[$fieldName] += $value;
+
             $this->calculatedValues[$fieldName] = 0.00;
+
             return number_format($value,  2);
         }
     }
@@ -253,8 +281,10 @@ class Report extends \Tina4\Data
     public function getCaption($caption)
     {
         $caption = str_replace("_", " ", $caption);
+
         $caption = strtolower($caption);
-        return ucwords($caption);;
+
+        return ucwords($caption);
     }
 
     /**
@@ -266,24 +296,30 @@ class Report extends \Tina4\Data
     public function getTableHeader($fields, $excludedFields)
     {
         $header = [];
+
         $csvHeader = [];
 
         foreach ($fields as $id => $field) {
             if (is_array($excludedFields) && in_array($field->fieldAlias, $excludedFields, true)) {
                 continue;
             }
+
             if (strpos($field->dataType, "NUMERIC") !== false )
             {
                 $align = "right";
             } else {
                 $align = "left";
             }
+
             $header[] = _th(["style" => "text-align: {$align}"], $this->getCaption($field->fieldAlias));
+
             $csvHeader[] = '"'.$this->getCaption($field->fieldAlias).'"';
         }
 
         $this->tableHeader .= _tr($header);
+
         $this->csv .= join($this->delimiter, $csvHeader).PHP_EOL;
+
         return $this->tableHeader;
     }
 
@@ -300,14 +336,18 @@ class Report extends \Tina4\Data
     public function getRow($record, $groupBy, $lookup, $calculation, $fields, $excludedFields)
     {
         $result = [];
+
         $csvRow = [];
 
         $count = -1;
+
         foreach ($record as $column => $value) {
             $count++;
+
             if (is_array($excludedFields) && in_array($fields[$count]->fieldAlias, $excludedFields,  true)) continue;
 
             $align = "left";
+
             if (strpos($fields[$count]->dataType, "NUMERIC") !== false )
             {
                 $align = "right";
@@ -327,6 +367,7 @@ class Report extends \Tina4\Data
             }
 
             $result[] = _td(["style" => "text-align: {$align}"], $value);
+
             if (is_string($value)) {
                 $csvRow[] = '"'.str_replace("\n", " ", $value).'"';
             } else {
@@ -335,6 +376,7 @@ class Report extends \Tina4\Data
         }
 
         $this->csv .= join($this->delimiter, $csvRow).PHP_EOL;
+
         return _tr($result);
     }
 
@@ -352,6 +394,7 @@ class Report extends \Tina4\Data
         $data = $this->DBA->fetch($sql, $limit);
 
         $fields = $data->fields;
+
         $records = $data->asArray(true);
 
         $columnCount = count($fields);
@@ -359,10 +402,12 @@ class Report extends \Tina4\Data
         $this->csv = "";
 
         $this->getTableHeader($fields, $excludedFields);
+
         $html = "";
-        //$html = "Number of records {$columnCount}";
+
         foreach ($records as $id => $record) {
             $html .= $this->getHeader($record, $groupBy, $columnCount, $fields, $calculation, $excludedFields);
+
             $html .= $this->getRow($record, $groupBy, $lookup, $calculation, $fields, $excludedFields);
         }
 
@@ -371,6 +416,7 @@ class Report extends \Tina4\Data
         $html .= $this->getFooter($fields, $calculation, $excludedFields, true);
 
         $this->html =  _div(["class" => "report"], _table(["border" => 0],$html));
+
         return $this;
     }
 
