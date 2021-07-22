@@ -27,6 +27,7 @@
                 "Tina4/Database/",
                 "Tina4/Messaging/",
                 "Tina4/ORM/",
+                "Tina4/Reporting/",
                 "Tina4/Routing/",
                 "Tina4/Security/",
                 "Tina4/Service/"
@@ -44,7 +45,9 @@
         "ext-curl": "*",
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
-        "tina4stack/tina4php-env": "^2.0"
+        "tina4stack/tina4php-env": "^2.0",
+        "mongodb/mongodb": "^1.8",
+        "mpdf/mpdf": "^8.0"
     },
     "bin": [
         "bin/tina4",

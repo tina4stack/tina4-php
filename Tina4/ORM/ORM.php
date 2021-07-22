@@ -20,10 +20,17 @@ class ORM implements \JsonSerializable
      * @var string The primary key fields in the table, can have more than one separated by comma e.g. store_id,company_id
      */
     public $primaryKey = "id"; //Comma separated fields used for primary key
+
     /**
      * @var string  A filter for the table being referenced e.g. company_id = 10
      */
     public $tableFilter = ""; //May be used to filter table records for quicker updating
+
+    /**
+     * @var string defines the global name for the database handle
+     */
+    public $databaseGlobal = null;
+
     /**
      * @var string A specific table to reference if the class name is not the name of the table
      */
@@ -88,7 +95,7 @@ class ORM implements \JsonSerializable
     /**
      * @var string[] Fields that do not need to be returned in the resulting ORM object serialization
      */
-    public $protectedFields = ["primaryKey", "genPrimaryKey", "PHPSESSID", "phpsessid", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "hasManyLimit", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
+    public $protectedFields = ["databaseGlobal", "primaryKey", "genPrimaryKey", "PHPSESSID", "phpsessid", "virtualFields", "tableFilter", "DBA", "tableName", "fieldMapping", "protectedFields", "hasOne", "hasMany", "hasManyLimit", "excludeFields", "readOnlyFields", "filterMethod", "softDelete"];
 
     /**
      * ORM constructor.
@@ -116,7 +123,7 @@ class ORM implements \JsonSerializable
      * @param string $primaryKey
      * @param string $tableFilter
      * @param null $DBA
-     * @throws Exception
+     * @throws Exception|\Exception
      */
     public function create($request = null, $fromDB = false, $tableName = "", $fieldMapping = "", $primaryKey = "", $tableFilter = "", $DBA = null): void
     {
@@ -144,8 +151,15 @@ class ORM implements \JsonSerializable
             $this->DBA = $DBA;
         }
 
+        if (!empty($this->databaseGlobal)) {
+            if (isset($GLOBALS[$this->databaseGlobal])) {
+                $this->DBA = $GLOBALS[$this->databaseGlobal];
+            }
+        }
+
         if (empty($this->DBA)) {
             global $DBA;
+
             if (!empty($DBA)) {
                 $this->DBA = $DBA;
             }
@@ -221,16 +235,23 @@ class ORM implements \JsonSerializable
     public function saveFile($fieldName, $fileInputName): bool
     {
         $tableName = $this->getTableName();
+
         $tableData = $this->getTableData();
+
         if (!empty($_FILES) && isset($_FILES[$fileInputName])) {
             if ($_FILES[$fileInputName]["error"] === 0) {
                 $primaryCheck = $this->getPrimaryCheck($tableData);
+
                 $fieldName = $this->getFieldName($fieldName);
+
                 $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+
                 $this->DBA->exec($sql, file_get_contents($_FILES[$fileInputName]["tmp_name"]));
+
                 $this->DBA->commit();
             } else {
                 \Tina4\Debug::message("File error occurred\n" . print_r($_FILES[$fileInputName], 1));
+
                 return false;
             }
         } else {
@@ -249,15 +270,20 @@ class ORM implements \JsonSerializable
     {
         if (empty($tableName) && empty($this->tableName)) {
             $className = explode("\\", get_class($this));
+
             $className = $className[count($className) - 1];
+
             return strtolower($this->getFieldName($className));
         } else {
             if (!empty($tableName)) {
+
                 return $tableName;
             } elseif (!empty($this->tableName)) {
+
                 return $this->tableName;
             }
         }
+
         return "";
     }
 
@@ -274,6 +300,7 @@ class ORM implements \JsonSerializable
             return strtolower($fieldMapping[$name]);
         } else {
             $fieldName = "";
+
             for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
                 if (\ctype_upper($name[$i]) && $i != 0 && $i < strlen($name) - 1 && (!\ctype_upper($name[$i - 1]) || !\ctype_upper($name[$i + 1]))) {
                     $fieldName .= "_" . $name[$i];
@@ -281,6 +308,7 @@ class ORM implements \JsonSerializable
                     $fieldName .= $name[$i];
                 }
             }
+
             return strtolower($fieldName);
         }
     }
@@ -308,6 +336,7 @@ class ORM implements \JsonSerializable
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
                 }
+
                 $tableData[$this->getFieldName($fieldName, $fieldMapping)] = $value;
             }
         }
@@ -325,11 +354,13 @@ class ORM implements \JsonSerializable
     public function getPrimaryCheck($tableData): string
     {
         $primaryFields = explode(",", $this->primaryKey);
+
         $primaryFieldFilter = [];
 
         if (is_array($primaryFields)) {
             foreach ($primaryFields as $id => $primaryField) {
                 $primaryTableField = $this->getFieldName($primaryField, $this->fieldMapping);
+
                 if (key_exists($primaryTableField, $tableData)) {
                     $primaryFieldFilter[] = str_replace("= ''", "is null", "{$primaryTableField} = '" . $tableData[$primaryTableField] . "'");
                 } else {
@@ -350,16 +381,23 @@ class ORM implements \JsonSerializable
     public function saveBlob($fieldName, $content): bool
     {
         $tableName = $this->getTableName();
+
         $tableData = $this->getTableData();
+
         if (!empty($content)) {
             $primaryCheck = $this->getPrimaryCheck($tableData);
+
             $fieldName = $this->getFieldName($fieldName);
+
             $sql = "update {$tableName} set {$fieldName} = ? where {$primaryCheck}";
+
             $this->DBA->exec($sql, $content);
+
             $this->DBA->commit();
         } else {
             return false;
         }
+
         return true;
     }
 
@@ -384,19 +422,16 @@ class ORM implements \JsonSerializable
             throw new \Exception("No database connection");
         }
 
-
         $tableData = $this->getTableData($fieldMapping, false);
-
 
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
         //See if the record exists already using the primary key
-
         $sqlCheck = "select * from {$tableName} where {$primaryCheck}";
 
         //See if we can get the fetch from the cached data
-
         $key = "orm" . md5($sqlCheck);
+
         (new Cache())->set($key, null, 0);
 
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
@@ -406,6 +441,7 @@ class ORM implements \JsonSerializable
         $exists = $this->DBA->fetch($sqlCheck, 1);
 
         $getLastId = false;
+
         //@todo this next piece needs to standardize the errors from the different database sources - perhaps with a getNoneError on the database abstraction
         if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available" || $exists->error->getErrorMessage() === "unknown error") {
             if ($exists->noOfRecords === 0) { //insert
@@ -416,15 +452,20 @@ class ORM implements \JsonSerializable
             }
 
             $params = [];
+
             $params[] = $sqlStatement["sql"];
+
             $params = array_merge($params, $sqlStatement["fieldValues"]);
+
             // Return can be a DataResult or a DataError. We need to pickup the difference
             $returning = call_user_func([$this->DBA, "exec"], ...$params);
+
             if (get_class($returning) == "Tina4\DataError") {
                 $error = $returning;
             } else {
                 $error = $returning->error;
             }
+
             if (empty($error->getErrorMessage()) || $error->getErrorMessage() === "not an error") {
                 $this->DBA->commit();
 
@@ -438,6 +479,7 @@ class ORM implements \JsonSerializable
                         $record = $returning->asObject()[0];
 
                         $primaryFieldName = ($this->getObjectName($this->primaryKey));
+
                         if (isset($record->{$primaryFieldName}) && $record->{$primaryFieldName} !== "") {
                             $this->{$this->primaryKey} = $record->{$primaryFieldName}; //@todo test on other database engines (Firebird works)
                         }
@@ -445,6 +487,7 @@ class ORM implements \JsonSerializable
                 }
 
                 $tableData = $this->getTableData();
+
                 $primaryCheck = $this->getPrimaryCheck($tableData);
 
                 $sqlFetch = "select * from {$tableName} where {$primaryCheck}";
@@ -460,10 +503,12 @@ class ORM implements \JsonSerializable
                 }
             } else {
                 $this->getDebugBackTrace();
+
                 throw new \Exception("Error:\n" . print_r($error->getError(), 1));
             }
         } else {
             $this->getDebugBackTrace();
+
             throw new \Exception("Error:\n" . print_r($exists->error, 1));
         }
     }
@@ -483,6 +528,7 @@ class ORM implements \JsonSerializable
 
         if (empty($this->DBA)) {
             global $DBA;
+
             $this->DBA = $DBA;
         }
 
@@ -500,7 +546,6 @@ class ORM implements \JsonSerializable
                     $migrate->createMigration(" create table {$tableName}", $sqlCreate, true);
                 }
 
-                //$this->DBA->exec($sql);
                 return false;
             }
 
@@ -518,23 +563,27 @@ class ORM implements \JsonSerializable
     public function generateCreateSQL($tableData, $tableName = ""): string
     {
         $className = get_class($this);
-        $tableName = $this->getTableName($tableName);
-        $fields = [];
 
+        $tableName = $this->getTableName($tableName);
+
+        $fields = [];
 
         foreach ($tableData as $fieldName => $fieldValue) {
             //@todo fix
             if (!property_exists($className, $this->getObjectName($fieldName, true))) {
                 continue;
             }
+
             $property = new \ReflectionProperty($className, $this->getObjectName($fieldName, true));
 
             preg_match_all('#@(.*?)(\r\n|\n)#s', $property->getDocComment(), $annotations);
+
             if (!empty($annotations[1])) {
                 $fieldInfo = explode(" ", $annotations[1][0], 2);
             } else {
                 $fieldInfo = [];
             }
+
             if (empty($fieldInfo[1])) {
                 if ($fieldName == "id") {
                     $fieldInfo[1] = "integer not null";
@@ -542,10 +591,12 @@ class ORM implements \JsonSerializable
                     $fieldInfo[1] = "varchar(1000)";
                 }
             }
+
             $fields[] = "\t" . $this->getObjectName($fieldName) . " " . $fieldInfo[1];
         }
 
         $fields[] = "   primary key (" . $this->primaryKey . ")";
+
         return "create table {$tableName} (\n" . implode(",\n", $fields) . "\n)";
     }
 
@@ -559,13 +610,16 @@ class ORM implements \JsonSerializable
     public function generateInsertSQL($tableData, $tableName): array
     {
         $insertColumns = [];
+
         $insertValues = [];
+
         $fieldValues = [];
+
         $returningStatement = "";
 
         $keyInFieldList = false;
-        $fieldIndex = 0;
 
+        $fieldIndex = 0;
 
         foreach ($tableData as $fieldName => $fieldValue) {
             if (empty($fieldValue) && $fieldValue !== 0) {
@@ -576,11 +630,12 @@ class ORM implements \JsonSerializable
                 continue;
             } //form token is reserved
 
-
             if (in_array($this->getObjectName($fieldName, true), $this->virtualFields, true) || in_array($fieldName, $this->virtualFields, true) || in_array($fieldName, $this->readOnlyFields, true)) {
                 continue;
             }
+
             $fieldIndex++;
+
             $insertColumns[] = $this->getFieldName($fieldName);
 
             if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
@@ -600,6 +655,7 @@ class ORM implements \JsonSerializable
                 }
 
                 $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
+
                 $fieldValues[] = $fieldValue;
             }
         }
@@ -607,13 +663,21 @@ class ORM implements \JsonSerializable
         //Create a new primary key because we are not using a generator or auto increment
         if (!$keyInFieldList && $this->genPrimaryKey) {
             $sqlGen = "select max(" . $this->getFieldName($this->primaryKey) . ") as new_id from {$tableName}";
+
             $maxResult = $this->DBA->fetch($sqlGen)->AsObject();
+
             $insertColumns[] = $this->getFieldName($this->primaryKey);
+
             $newId = $maxResult[0]->newId;
+
             $newId++;
+
             $this->{$this->primaryKey} = $newId;
+
             $fieldIndex++;
+
             $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($this->primaryKey), $fieldIndex);
+
             $fieldValues[] = $newId;
         }
 
@@ -626,7 +690,9 @@ class ORM implements \JsonSerializable
         }
 
         Debug::message("SQL:\ninsert into {$tableName} (" . join(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}");
+
         Debug::message("Field Values:\n" . print_r($fieldValues, 1), TINA4_LOG_DEBUG);
+
         return ["sql" => "insert into {$tableName} (" . implode(",", $insertColumns) . ")\nvalues (" . join(",", $insertValues) . "){$returningStatement}", "fieldValues" => $fieldValues];
     }
 
@@ -641,11 +707,13 @@ class ORM implements \JsonSerializable
     public function generateUpdateSQL($tableData, $filter, $tableName): array
     {
         $fieldValues = [];
+
         $updateValues = [];
 
         Debug::message("Table Data:\n" . print_r($tableData, 1), TINA4_LOG_DEBUG);
 
         $fieldIndex = 0;
+
         foreach ($tableData as $fieldName => $fieldValue) {
             if ($fieldName == "form_token") {
                 continue;
@@ -667,6 +735,7 @@ class ORM implements \JsonSerializable
             $fieldIndex++;
             if ((strlen($fieldValue) > 1 && isset($fieldValue[0]) && $fieldValue[0] !== "0") && (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
                 $updateValues[] = "{$fieldName} = " . $this->DBA->getQueryParam($fieldName, $fieldIndex);
+
                 $fieldValues[] = $fieldValue;
             } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
@@ -674,13 +743,16 @@ class ORM implements \JsonSerializable
                 }
 
                 $updateValues[] = "{$fieldName} = " . $this->DBA->getQueryParam($fieldName, $fieldIndex);
+
                 $fieldValues[] = $fieldValue;
             }
         }
 
 
         Debug::message("SQL:\nupdate {$tableName} set " . join(",", $updateValues) . " where {$filter}", TINA4_LOG_DEBUG);
+
         Debug::message("Field Values:\n" . print_r($fieldValues, 1), TINA4_LOG_DEBUG);
+
         return ["sql" => "update {$tableName} set " . join(",", $updateValues) . " where {$filter}", "fieldValues" => $fieldValues];
     }
 
@@ -692,6 +764,7 @@ class ORM implements \JsonSerializable
     public function mapFromRecord($record, $overRide = false): void
     {
         $databaseFields = [];
+
         foreach ($record as $fieldName => $fieldValue) {
             $ormField = $this->getObjectName($fieldName);
 
@@ -841,7 +914,8 @@ class ORM implements \JsonSerializable
      * Gets the field definitions for the table
      * @return mixed
      */
-    final public function getFieldDefinitions() {
+    final public function getFieldDefinitions()
+    {
         $tableName = strtolower($this->getTableName());
         if ($this->DBA !== null) {
             return $this->DBA->getDatabase()[$tableName];

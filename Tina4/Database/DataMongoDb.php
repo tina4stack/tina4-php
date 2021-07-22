@@ -29,17 +29,17 @@ class DataMongoDb implements Database
         // TODO: Implement exec() method.
     }
 
-    public function getLastId()
+    public function getLastId(): string
     {
         // TODO: Implement getLastId() method.
     }
 
-    public function tableExists($tableName)
+    public function tableExists($tableName): bool
     {
         // TODO: Implement tableExists() method.
     }
 
-    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = [])
+    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
         // TODO: Implement fetch() method.
     }
@@ -49,7 +49,7 @@ class DataMongoDb implements Database
         // TODO: Implement rollback() method.
     }
 
-    public function autoCommit(bool $onState = true)
+    public function autoCommit(bool $onState = true):void
     {
         // TODO: Implement autoCommit() method.
     }
@@ -64,17 +64,17 @@ class DataMongoDb implements Database
         // TODO: Implement error() method.
     }
 
-    public function getDatabase()
+    public function getDatabase(): array
     {
         // TODO: Implement getDatabase() method.
     }
 
-    public function getDefaultDatabaseDateFormat()
+    public function getDefaultDatabaseDateFormat(): string
     {
         // TODO: Implement getDefaultDatabaseDateFormat() method.
     }
 
-    public function getDefaultDatabasePort()
+    public function getDefaultDatabasePort(): ?int
     {
         // TODO: Implement getDefaultDatabasePort() method.
     }
@@ -82,5 +82,10 @@ class DataMongoDb implements Database
     public function getQueryParam($fieldName, $fieldIndex): string
     {
         // TODO: Implement getQueryParam() method.
+    }
+
+    public function commit($transactionId = null)
+    {
+        // TODO: Implement commit() method.
     }
 }

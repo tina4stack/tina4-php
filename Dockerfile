@@ -28,6 +28,9 @@ RUN php -r "if (hash_file('sha384', 'composer-setup.php') === '756890a4488ce9024
 RUN php composer-setup.php
 RUN php -r "unlink('composer-setup.php');"
 RUN mv composer.phar /usr/local/bin/composer
+#install wine for the report engine
+RUN dpkg --add-architecture i386 && apt-get update && apt-get install wine32 -y
+RUN apt-get install wine -y
 WORKDIR /app
 
 

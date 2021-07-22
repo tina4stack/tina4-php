@@ -1,0 +1,8 @@
+{
+  "hostName": "127.0.0.1",
+  "database": "",
+  "port" : 3050,
+  "username": "user",
+  "password": "password",
+  "driver" : "firebird-2.5"
+}
