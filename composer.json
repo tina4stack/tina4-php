@@ -46,7 +46,6 @@
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
-        "mongodb/mongodb": "^1.8",
         "mpdf/mpdf": "^8.0"
     },
     "bin": [
