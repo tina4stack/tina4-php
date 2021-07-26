@@ -50,9 +50,7 @@ class Route implements RouteCore
         $routes = explode("|", $routePath);
         foreach ($routes as $rid => $routePathLoop) {
             if ($routePathLoop !== "") {
-                if (isset($_SERVER["REQUEST_URI"]) && self::cleanURL($_SERVER["REQUEST_URI"]) !== "/swagger/json.json" && substr($routePathLoop, 0, 2) !== substr(self::cleanURL($_SERVER["REQUEST_URI"]), 0, 2)) {
-                    continue;
-                }
+                //@todo refine caching of the routes
 
                 if ($routePathLoop[0] !== "/") {
                     $routePathLoop = "/" . $routePathLoop;
