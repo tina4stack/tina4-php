@@ -54,7 +54,7 @@ class Api
             $headers = [];
             $headers[] = "Accept: " . $contentType;
             $headers[] = "Accept-Charset: utf-8, *;q=0.8";
-            $headers[] = "Accept-Encoding: gzip, deflate,br";
+
             if (!empty($this->authHeader)) {
                 $headers[] = $this->authHeader;
             }
@@ -77,18 +77,15 @@ class Api
             $curlInfo = curl_getinfo($curlRequest); //Assign the response to a variable
             $curlError = curl_error($curlRequest);
             curl_close($curlRequest);
+
             //If an error
             if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
-                return ["error" => $curlError, "info" => $curlInfo, "body" => json_decode($curlResult, false)];
+                return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult];
             } else {
                 if ($response = json_decode($curlResult, true)) {
-                    if (is_array($response)) {
-                        return $response;
-                    } else {
-                        return  ["body" => $response];
-                    }
+                    return  ["error" => $curlError, "info" => $curlInfo, "body" => $response];
                 } else {
-                    return ["body" => $response];
+                    return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult];
                 }
             }
         } catch (\Exception $error) {

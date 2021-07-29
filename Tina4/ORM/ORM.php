@@ -338,8 +338,19 @@ class ORM implements \JsonSerializable
                 if (empty($this->primaryKey)) { //use first field as primary if not specified
                     $this->primaryKey = $this->getFieldName($fieldName, $fieldMapping);
                 }
-
-                $tableData[$this->getFieldName($fieldName, $fieldMapping)] = $value;
+                if (is_array($value)) {
+                    foreach ($value as $arrId => $arrayValue) {
+                        if (is_object($arrayValue) && get_parent_class($arrayValue) === "Tina4\ORM") {
+                            $value[$arrId] = $arrayValue->getTableData();
+                        }
+                    }
+                    $tableData[$this->getFieldName($fieldName, $fieldMapping)] = $value;
+                } else
+                    if (is_object($value) && get_parent_class($value) === "Tina4\ORM") {
+                        $tableData[$this->getFieldName($fieldName, $fieldMapping)] = $value->getTableData();
+                    } else {
+                        $tableData[$this->getFieldName($fieldName, $fieldMapping)] = $value;
+                    }
             }
         }
 
