@@ -78,18 +78,13 @@ class Api
             $curlError = curl_error($curlRequest);
             curl_close($curlRequest);
 
-            //If an error
-            if (!($curlInfo['http_code'] === 200 || $curlInfo['http_code'] === 201 || $curlInfo['http_code'] === 202)) {
-                return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult];
+            if ($response = json_decode($curlResult, true)) {
+                return  ["error" => $curlError, "info" => $curlInfo, "body" => $response, "httpCode" => $curlInfo['http_code']];
             } else {
-                if ($response = json_decode($curlResult, true)) {
-                    return  ["error" => $curlError, "info" => $curlInfo, "body" => $response];
-                } else {
-                    return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult];
-                }
+                return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult, "httpCode" => $curlInfo['http_code']];
             }
         } catch (\Exception $error) {
-            return ["error" => $error->getMessage()];
+            return ["error" => $error->getMessage(), "info" => null, "body" => null, "httpCode" => null];
         }
     }
 }
