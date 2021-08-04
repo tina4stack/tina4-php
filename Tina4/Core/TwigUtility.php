@@ -49,7 +49,7 @@ class TwigUtility
                 }
             }
 
-            if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON) {
+            if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
                 $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG, "cache" => "./cache"]);
             } else {
                 $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG]);

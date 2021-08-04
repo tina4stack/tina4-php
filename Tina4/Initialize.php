@@ -278,7 +278,7 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
     }
 }
 
-//Add the icon file for making it look pretty
+//Add the icon file for making it look pretty""
 if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
     copy(TINA4_PROJECT_ROOT . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
 }
@@ -286,20 +286,22 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
 //Initialize the Cache
 global $cache;
 //On a rerun need to check if we have already instantiated the cache
-if (empty($cache)) {
-    //Setup caching options
-    try {
-
-
-        $TINA4_CACHE_CONFIG =
-            new ConfigurationOption([
-                "path" => TINA4_DOCUMENT_ROOT . "cache"
-            ]);
-        CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
-        $cache = CacheManager::getInstance("files");
-    } catch (\Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException $e) {
-        \Tina4\Debug::message("Could not initialize cache", TINA4_LOG_ERROR);
+if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
+    if (empty($cache)) {
+        //Setup caching options
+        try {
+            $TINA4_CACHE_CONFIG =
+                new ConfigurationOption([
+                    "path" => TINA4_DOCUMENT_ROOT . "cache"
+                ]);
+            CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
+            $cache = CacheManager::getInstance("files");
+        } catch (\Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException $e) {
+            \Tina4\Debug::message("Could not initialize cache", TINA4_LOG_ERROR);
+        }
     }
+} else {
+    $cache = null;
 }
 
 //@todo Init Git Here
