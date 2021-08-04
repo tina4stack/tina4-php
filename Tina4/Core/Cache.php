@@ -40,10 +40,14 @@ class Cache
         {
             return true;
         }
-        $cachedString = $this->cache->getItem($keyName);
-        $cachedString->set($value)->expiresAfter($expires);
-        $this->cache->save($cachedString);
-        return true;
+        if (!empty($this->cache)) {
+            $cachedString = $this->cache->getItem($keyName);
+            $cachedString->set($value)->expiresAfter($expires);
+            $this->cache->save($cachedString);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -62,13 +66,18 @@ class Cache
         {
             return null;
         }
-        $cachedString = $this->cache->getItem($keyName);
-        $cachedData = $cachedString->get();
-        if (empty($cachedData) && $cachedData === null) {
-            Debug::message("No cache " . $keyName);
-            return null;
-        } else {
-            return $cachedData;
+        if (!empty($this->cache)) {
+            $cachedString = $this->cache->getItem($keyName);
+            $cachedData = $cachedString->get();
+            if (empty($cachedData) && $cachedData === null) {
+                Debug::message("No cache " . $keyName);
+                return null;
+            } else {
+                return $cachedData;
+            }
         }
+          else {
+              return null;
+          }
     }
 }
