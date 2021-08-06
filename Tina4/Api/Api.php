@@ -48,7 +48,7 @@ class Api
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
      *   assert is_array("/book") === true, "This is not an array"
      */
-    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*"): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*", $customHeaders=[]): array
     {
         try {
             $headers = [];
@@ -61,6 +61,10 @@ class Api
 
             if (!empty($body)) {
                 $headers[] = "Content-Type: " . $contentType;
+            }
+
+            if (!empty($customHeaders)) {
+                $headers = array_merge($headers, $customHeaders);
             }
 
             $curlRequest = curl_init($this->baseURL . $restService);
