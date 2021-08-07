@@ -55,6 +55,15 @@ class TwigUtility
                 $twig = new Environment($twigLoader, ["debug" => TINA4_DEBUG]);
             }
 
+            if (TINA4_DEBUG) {
+                $dumpFunction = new TwigFunction( "dump", function($variable) {
+                    echo "<pre>";
+                    print_r($variable);
+                    echo "</pre>";
+                });
+                $twig->addFunction($dumpFunction);
+            }
+
             $twig->addGlobal('Tina4', new Caller());
             if (isset($_SERVER["HTTP_HOST"])) {
                 $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
