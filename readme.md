@@ -325,3 +325,5 @@ docker run --rm -v %cd%:/data phpdoc/phpdoc:3 -d Tina4
 ```
 docker build . -t tina4stack/php
 ```
+### Jquery validate cheat sheet
+https://gist.github.com/rhacker/3550309

@@ -286,6 +286,13 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
 //Initialize the Cache
 global $cache;
 //On a rerun need to check if we have already instantiated the cache
+
+if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR)) {
+    if (!mkdir("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true)) {
+        Debug::message("Could not create ". DIRECTORY_SEPARATOR . "cache");
+    }
+}
+
 if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
     if (empty($cache)) {
         //Setup caching options
