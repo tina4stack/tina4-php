@@ -161,7 +161,7 @@ trait DataBaseCore
      */
     public function select(string $fields = "*", int $limit = 10, int $offset = 0, array $hasOne = [], array $hasMany = []): SQL
     {
-        return (new SQL())->select($fields, $limit, $offset, $hasOne, $hasMany);
+        return (new SQL())->select($fields, $limit, $offset, $hasOne, $hasMany, $this);
     }
 
     /**

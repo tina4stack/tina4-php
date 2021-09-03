@@ -96,10 +96,16 @@ class SQL implements \JsonSerializable
      * @param int $offset
      * @param array $hasOne
      * @param array $hasMany
+     * @param null $DBA
      * @return $this
      */
-    public function select(string $fields = "*", int $limit = 10, int $offset = 0, array $hasOne = [], array $hasMany = []): SQL
+    public function select(string $fields = "*", int $limit = 10, int $offset = 0, array $hasOne = [], array $hasMany = [], $DBA=null): SQL
     {
+        if (!empty($DBA))
+        {
+            $this->DBA = $DBA;
+        }
+
         if (is_array($fields)) {
             $this->fields[] = $fields;
         } else {
