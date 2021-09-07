@@ -167,7 +167,7 @@ trait DataBaseCore
     /**
      * @param $sql
      * @return array
-     * @tests sql
+     * @tests tina4 sql
      *   assert("select id,test from tableName") === ["collectionName" => "tableName",  "columns" => ["id","test"], "filter" => []],"Testing to see if we can get fields and collection name"
      *   assert("select id,test from tableName where id = 1") === ["collectionName" => "tableName", "columns" => ["id","test"], "filter" => ['id' => ['$eq' => '1']]],"Testing to see if we can get fields and collection name"
      *   assert("select id,test from tableName where id = 1 and id > 0") === ["collectionName" => "tableName",  "columns" => ["id","test"],  "filter" => ['id' => ['$eq' => '1'], 'and' => ['id' => ['$gt' => '0']]] ],"Testing to see if we can get fields and collection name"
