@@ -115,9 +115,15 @@ class Messenger
                         }
                         $phpMailer->isSMTP();                                            // Send using SMTP
                         $phpMailer->Host = $this->settings->smtpServer;                    // Set the SMTP server to send through
-                        $phpMailer->SMTPAuth = true;                                   // Enable SMTP authentication
-                        $phpMailer->Username = $this->settings->smtpUsername;                     // SMTP username
-                        $phpMailer->Password = $this->settings->smtpPassword;                               // SMTP password
+
+                        if (!empty($this->settings->smtpUsername)) {
+                            $phpMailer->SMTPAuth = true;                                   // Enable SMTP authentication
+                            $phpMailer->Username = $this->settings->smtpUsername;                     // SMTP username
+                            $phpMailer->Password = $this->settings->smtpPassword;                               // SMTP password
+                        } else {
+                            Debug::message("SMTP server is insecure", TINA4_LOG_WARNING);
+                        }
+
                         $phpMailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
                         $phpMailer->Port = $this->settings->smtpPort;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
                         $phpMailer->SMTPOptions = [
