@@ -299,12 +299,7 @@ class ORM implements \JsonSerializable
     public function getFieldName(string $name, $fieldMapping = [], $ignoreMapping = false): ?string
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
-
-            if (strpos($fieldMapping[$name], "_") !== false) {
-                return strtolower($fieldMapping[$name]);
-            } else {
-                return $fieldMapping[$name];
-            }
+            return strtolower($fieldMapping[$name]);
         } else {
             $fieldName = "";
 
@@ -316,12 +311,7 @@ class ORM implements \JsonSerializable
                 }
             }
 
-            if (strpos($fieldName, "_") !== false) {
-                return strtolower($fieldName);
-            } else {
-                return $fieldName;
-            }
-
+            return strtolower($fieldName);
         }
     }
 
@@ -442,10 +432,10 @@ class ORM implements \JsonSerializable
 
         $tableName = $this->getTableName($tableName);
         if (!$this->checkDBConnection($tableName)) {
-            throw new \Exception("No database connection or table does not exist");
+            throw new \Exception("No database connection");
         }
 
-        $tableData = $this->getTableData($this->fieldMapping, false);
+        $tableData = $this->getTableData($fieldMapping, false);
 
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
@@ -664,9 +654,9 @@ class ORM implements \JsonSerializable
 
             $fieldIndex++;
 
-            $insertColumns[] = $this->getFieldName($fieldName, $this->fieldMapping);
+            $insertColumns[] = $this->getFieldName($fieldName);
 
-            if (strtoupper($this->getFieldName($fieldName, $this->fieldMapping)) === strtoupper($this->getFieldName($this->primaryKey, $this->fieldMapping))) {
+            if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
                 $keyInFieldList = true;
             }
 
@@ -675,14 +665,14 @@ class ORM implements \JsonSerializable
             }
 
             if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName, $this->fieldMapping), $fieldIndex);
+                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
                 $fieldValues[] = $fieldValue;
             } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName, $this->fieldMapping), $fieldIndex);
+                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
 
                 $fieldValues[] = $fieldValue;
             }
@@ -690,11 +680,11 @@ class ORM implements \JsonSerializable
 
         //Create a new primary key because we are not using a generator or auto increment
         if (!$keyInFieldList && $this->genPrimaryKey) {
-            $sqlGen = "select max(" . $this->getFieldName($this->primaryKey, $this->fieldMapping) . ") as new_id from {$tableName}";
+            $sqlGen = "select max(" . $this->getFieldName($this->primaryKey) . ") as new_id from {$tableName}";
 
             $maxResult = $this->DBA->fetch($sqlGen)->AsObject();
 
-            $insertColumns[] = $this->getFieldName($this->primaryKey, $this->fieldMapping);
+            $insertColumns[] = $this->getFieldName($this->primaryKey);
 
             $newId = $maxResult[0]->newId;
 
@@ -704,14 +694,14 @@ class ORM implements \JsonSerializable
 
             $fieldIndex++;
 
-            $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($this->primaryKey, $this->fieldMapping), $fieldIndex);
+            $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($this->primaryKey), $fieldIndex);
 
             $fieldValues[] = $newId;
         }
 
         if (!empty($this->DBA) && !$keyInFieldList) {
             if (get_class($this->DBA) === "Tina4\DataFirebird") {
-                $returningStatement = " returning (" . $this->getFieldName($this->primaryKey, $this->fieldMapping) . ")";
+                $returningStatement = " returning (" . $this->getFieldName($this->primaryKey) . ")";
             } elseif (get_class($this->DBA) === "Tina4\DataSQLite3") {
                 $returningStatement = "";
             }
