@@ -299,7 +299,8 @@ class ORM implements \JsonSerializable
     public function getFieldName(string $name, $fieldMapping = [], $ignoreMapping = false): ?string
     {
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
-            return strtolower($fieldMapping[$name]);
+
+            return ($fieldMapping[$name]);
         } else {
             $fieldName = "";
 
@@ -311,7 +312,7 @@ class ORM implements \JsonSerializable
                 }
             }
 
-            return strtolower($fieldName);
+            return ($fieldName);
         }
     }
 
@@ -435,7 +436,7 @@ class ORM implements \JsonSerializable
             throw new \Exception("No database connection");
         }
 
-        $tableData = $this->getTableData($fieldMapping, false);
+        $tableData = $this->getTableData($this->fieldMapping, false);
 
         $primaryCheck = $this->getPrimaryCheck($tableData);
 
