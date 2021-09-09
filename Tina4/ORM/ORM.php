@@ -640,7 +640,7 @@ class ORM implements \JsonSerializable
         $fieldIndex = 0;
 
         foreach ($tableData as $fieldName => $fieldValue) {
-            if (empty($fieldValue) && $fieldValue !== 0) {
+            if (is_null($fieldValue) && $fieldValue !== 0) {
                 continue;
             }
 
@@ -654,9 +654,9 @@ class ORM implements \JsonSerializable
 
             $fieldIndex++;
 
-            $insertColumns[] = $this->getFieldName($fieldName);
+            $insertColumns[] = $this->getFieldName($fieldName,$this->fieldMapping);
 
-            if (strtoupper($this->getFieldName($fieldName)) === strtoupper($this->getFieldName($this->primaryKey))) {
+            if (strtoupper($this->getFieldName($fieldName,$this->fieldMapping)) === strtoupper($this->getFieldName($this->primaryKey,$this->fieldMapping))) {
                 $keyInFieldList = true;
             }
 
@@ -665,14 +665,14 @@ class ORM implements \JsonSerializable
             }
 
             if ($fieldValue === "null" || (is_numeric($fieldValue) && !gettype($fieldValue) === "string")) {
-                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
+                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName,$this->fieldMapping), $fieldIndex);
                 $fieldValues[] = $fieldValue;
             } else {
                 if ($this->isDate($fieldValue, $this->DBA->dateFormat)) {
                     $fieldValue = $this->formatDate($fieldValue, $this->DBA->dateFormat, $this->DBA->getDefaultDatabaseDateFormat());
                 }
 
-                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName), $fieldIndex);
+                $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($fieldName,$this->fieldMapping), $fieldIndex);
 
                 $fieldValues[] = $fieldValue;
             }
