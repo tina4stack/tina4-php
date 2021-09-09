@@ -436,7 +436,7 @@ class ORM implements \JsonSerializable
      */
     public function save($tableName = "", $fieldMapping = [])
     {
-        if (!is_null($fieldMapping) && empty($this->fieldMapping)) {
+        if (!empty($fieldMapping) && empty($this->fieldMapping)) {
             $this->fieldMapping = $fieldMapping;
         }
 
