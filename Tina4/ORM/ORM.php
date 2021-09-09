@@ -680,11 +680,11 @@ class ORM implements \JsonSerializable
 
         //Create a new primary key because we are not using a generator or auto increment
         if (!$keyInFieldList && $this->genPrimaryKey) {
-            $sqlGen = "select max(" . $this->getFieldName($this->primaryKey) . ") as new_id from {$tableName}";
+            $sqlGen = "select max(" . $this->getFieldName($this->primaryKey,$this->fieldMapping) . ") as new_id from {$tableName}";
 
             $maxResult = $this->DBA->fetch($sqlGen)->AsObject();
 
-            $insertColumns[] = $this->getFieldName($this->primaryKey);
+            $insertColumns[] = $this->getFieldName($this->primaryKey,$this->fieldMapping);
 
             $newId = $maxResult[0]->newId;
 
@@ -694,14 +694,14 @@ class ORM implements \JsonSerializable
 
             $fieldIndex++;
 
-            $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($this->primaryKey), $fieldIndex);
+            $insertValues[] = $this->DBA->getQueryParam($this->getFieldName($this->primaryKey,$this->fieldMapping), $fieldIndex);
 
             $fieldValues[] = $newId;
         }
 
         if (!empty($this->DBA) && !$keyInFieldList) {
             if (get_class($this->DBA) === "Tina4\DataFirebird") {
-                $returningStatement = " returning (" . $this->getFieldName($this->primaryKey) . ")";
+                $returningStatement = " returning (" . $this->getFieldName($this->primaryKey,$this->fieldMapping) . ")";
             } elseif (get_class($this->DBA) === "Tina4\DataSQLite3") {
                 $returningStatement = "";
             }
