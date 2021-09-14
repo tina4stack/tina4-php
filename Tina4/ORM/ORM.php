@@ -298,6 +298,10 @@ class ORM implements \JsonSerializable
      */
     public function getFieldName(string $name, $fieldMapping = [], $ignoreMapping = false): ?string
     {
+        if (strpos($name, "_")) {
+            return $name;
+        }
+
         if (!empty($fieldMapping) && isset($fieldMapping[$name]) && !$ignoreMapping) {
 
             return ($fieldMapping[$name]);
