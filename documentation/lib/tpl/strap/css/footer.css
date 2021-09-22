@@ -1,0 +1,42 @@
+/* footer styles
+-------------------------------------------------- */
+
+
+
+.footer {
+
+    position: absolute;
+    width: 100%;
+    left: 0px;
+    background-color: #f8f8f8;
+    background-image: linear-gradient(to top,#fff 0,#f8f8f8 100%);
+    background-repeat: repeat-x;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top-width: 20px;
+    padding-bottom: 20px;
+    text-align: center!important;
+
+}
+
+#dokuwiki__footer > div.container > div > div > h3 {
+    font-size: 1rem;
+    font-weight: bold;
+    text-align: left;
+    margin-left: unset;
+    border-bottom-style: none;
+    padding-top: unset;
+    margin-top: unset;
+    margin-bottom: unset;
+}
+
+.footer li {
+    list-style-type: none;
+    text-align: left;
+}
+
+.footer ul {
+    padding-left: 0px;
+}
+
+

@@ -1,0 +1,36 @@
+
+<h1 class="sectionedit1 heading-combo" id="openapi_swagger">OpenAPI &amp; Swagger</h1>
+<div class="level1">
+
+<p>
+One of the reasons Tina4 exists is to lift the tedium of creating those nice Swagger UI documents.  Tina4 has opted for an annotation mechanism to describe the <abbr title="Application Programming Interface">API</abbr> end points. <abbr title="Application Programming Interface">API</abbr>&#039;s are used to secure a user to have access to your source code, network traffic or documentation. OpenAPI is known to be the specification of your interface.
+</p>
+
+<p>
+Swagger is used to describe or annotate your OpenAPI and is known to be the tool used to implement the specification you set out in your OpenAPI. It is good practice to annotate your code for future purposes. For example, if someone else were to look at your code or even continue to work on it. 
+</p>
+
+<p>
+Below is an example of a simple Swagger annotation which you would add to a Class function. 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/
+class MyClass extends \Tina4\Data {
+
+      function someFunction() {
+         \\your function here
+      }
+   }</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+For more information on <strong>OpenAPI</strong>, click on this <a class="link-external link-combo" href="https://www.openapis.org/about" rel="noopener" target="target=_blank">link</a>. For more information on <strong>Swagger</strong>, click on this <a class="link-external link-combo" href="https://swagger.io/solutions/api-documentation/" rel="noopener" target="target=_blank">link</a>.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+</div>

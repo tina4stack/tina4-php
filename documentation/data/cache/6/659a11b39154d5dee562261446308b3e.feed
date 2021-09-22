@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-11T15:01:51+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:routes:crud:introduction&amp;rev=1622203360&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:routes:crud:introduction&amp;rev=1622203360&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T14:02:40+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:routes:crud:introduction</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:routes:crud:introduction&amp;rev=1622203360&amp;do=diff</link>
+        <description>Introduction to CRUD Routes
+
+Restful API's are based on CRUD - CREATE, READ, UPDATE, DELETE actions. 
+
+A lot of what we do for forms or API calls uses just these four actions. 
+
+In Tina4, you can create scaffolding for a CRUD route using generatecrud which is part of ORM. This will create the routes and also a form and grid template for those routes which is useful for building out the Admin section of your site if you're using Tina4CMS.</description>
+    </item>
+</rdf:RDF>

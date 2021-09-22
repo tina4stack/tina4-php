@@ -1,0 +1,76 @@
+====== Database in Tina4 ======
+
+===== Connecting to a Database =====
+For more dynamic websites, there is a strong chance a **Database** will be required. Tina4 currently supports 3 database types:
+
+The database connection is established in a global variable called **$DBA** in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required. For testing purpose, you can use the SQLite database type below.
+
+  * **[[tina4:database:mysql|Connect to Mysql]]**
+  * **[[tina4:database:firebird|Connect to Firebird]]**
+  * **[[tina4:database:sqlite|Connect to Sqlite]]**
+
+===== Query a Database in Tina4 =====
+Here's a quick way to query a database in Tina4. 
+
+Create a class in a new file in the app directory
+I.e. MyClass.php
+
+<code php>
+<?php 
+
+class MyClassHelper extends \Tina4\Data 
+{
+    public function getEvent($variable)
+    {
+        $event = $this->$DBA->select("*") 
+                           ->from("table_name")
+                           ->where("column_name = {$variable}")
+                           ->exclude("id")
+                           });
+        //$DBA is made available because we extended\Tina4\Data
+
+        return $event;
+    }
+}
+</code>
+
+
+==== Summary ====
+
+  - We're extending the  **\Tina4\Data** class which already has access to the database
+  - Note we've included **\Tina4 in front** of the class name (so we don't need to declare the Tina4 namespace in our file)
+  - From here we can use the built-in Tina4 functions to **[[tina4:tutorials:query-database|create a query a database for some records]]** or checkout **[[https://github.com/andrevanzuydam/tina4-php/blob/master/Tina4/Database/SQL.php|GitHub \Tina4\SQL]]**.
+
+
+===== How can the select method be used? =====
+Have a look at the select function from **[[https://github.com/andrevanzuydam/tina4-php/blob/master/Tina4/Database/DatabaseCore.php|\Tina4\Database]]**:
+
+<code php>
+public function select($fields = "*", $limit = 10, $offset = 0, 
+$hasOne = [], $hasMany = [])
+</code>
+
+==== Fields====
+  * Specify "*" or multiple fields.
+<code php> ->select("*") </code> 
+<code php> ->select("name,id") </code> 
+  * limit the records returned (default 10), 
+<code php> ->select("name,id",1) </code>
+  * specify an offset (null based) so 3 would return from results from the 4th record, 
+<code php> ->select("name,id",1,3) </code>
+  
+===== Using hasOne / hasMany =====
+<WRAP center round important>
+This is a new feature on the 2.0.0 Dev Branch. You can only use it on one of your related tables at a time at present. I.e. using hasMany/hasOne on both the Users and Privileges ORM object will result in a circular reference. This issue will be fixed as this version of Tina4 heads for general release.  
+</WRAP>
+
+<code php hasMany.php>
+<?php
+class Users extends \Tina4\ORM
+{
+    public $tableName="users"; //table name
+    public $primaryKey="user_id"; //set for primary key
+
+    // public $hasMany = [["privileges" => "privelege_id"]];
+}
+</code>

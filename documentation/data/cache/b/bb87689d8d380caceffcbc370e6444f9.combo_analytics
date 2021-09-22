@@ -1,0 +1,84 @@
+{
+    "id": "tina4:openapiswagger",
+    "date": "2021-09-03 12:06:06",
+    "metadata": {
+        "title": "OpenAPI & Swagger",
+        "description": "OpenAPI & Swagger\n\nOne of the reasons Tina4 exists is to lift the tedium of creating those nice Swagger UI documents.  Tina4 has opted for an annotation mechanism to describe the API end points. API's are used to secure a user to have access to your source code, network traffic or documentation. OpenAPI is known to be the specification of your interface.",
+        "date_created": "2021-06-15 02:54:01",
+        "date_modified": "2021-09-01 06:18:12",
+        "age_creation": 80,
+        "age_modification": 2
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "andre": 1
+        },
+        "chars_count": 1215,
+        "edits_count": 9,
+        "external_links_count": 2,
+        "formatted": {
+            "1": {
+                "len": 7
+            },
+            "0": 14,
+            "2": {
+                "len": 7
+            }
+        },
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 4,
+            "combo_code": 1,
+            "wrap_divwrap": 1,
+            "strong": 2,
+            "combo_link": 2
+        },
+        "words_count": 159
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 18.25,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 2.25,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

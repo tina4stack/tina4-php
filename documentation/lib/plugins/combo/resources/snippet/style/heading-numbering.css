@@ -1,0 +1,9 @@
+main > h2 { counter-increment: h2; }
+main > h3 { counter-increment: h3; }
+main > h2::before { content: counter(h2) " - \A"; }
+main > h3::before { content: counter(h2) "." counter(h3,lower-alpha) " - \A"; }
+
+#dw__toc .level2 { counter-increment: toc2; }
+#dw__toc .level3 { counter-increment: toc3; }
+#dw__toc .level2 a::before { content: counter(toc2) " - \A"; }
+#dw__toc .level3 a::before { content: counter(toc2) "." counter(toc3,lower-alpha) " - \A"; }

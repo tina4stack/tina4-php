@@ -1,0 +1,85 @@
+{
+    "id": "tina4:tutorials:build-class-with-db-access",
+    "date": "2021-08-16 21:03:02",
+    "metadata": {
+        "title": "Build a class with database access",
+        "description": "Build a class with database access\n\nAny class that extends \\Tina4\\Data will have a database variable $this->DBA to access the database from.\n\nOr you can try this convention:",
+        "date_created": "2021-05-27 03:55:10",
+        "date_modified": "2021-08-16 09:03:02",
+        "age_creation": 81,
+        "age_modification": 0
+    },
+    "statistics": {
+        "authors": {
+            "matthew": 1,
+            "andre": 1,
+            "clayton": 1
+        },
+        "chars_count": 674,
+        "edits_count": 3,
+        "formatted": {
+            "1": {
+                "len": 11
+            },
+            "0": 19,
+            "2": {
+                "len": 5
+            },
+            "3": {
+                "len": 3
+            }
+        },
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 2,
+            "strong": 2,
+            "combo_code": 2
+        },
+        "words_count": 53
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 16.75,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 0.75,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

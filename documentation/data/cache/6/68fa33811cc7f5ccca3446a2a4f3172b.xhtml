@@ -1,0 +1,38 @@
+
+<h1 class="sectionedit1" id="create_an_api_endpoint">Create an API Endpoint</h1>
+<div class="level1">
+
+<p>
+Inside <strong>/src/routes/</strong> we begin by creating a file for our <abbr title="Application Programming Interface">API</abbr> endpoint
+</p>
+<dl class="code">
+<dt><a href="/documentation/doku.php?do=export_code&amp;id=basic-api&amp;codeblock=0" title="Download Snippet" class="mediafile mf_php">/src/routes/someroute.php</a></dt>
+<dd><pre class="code php"><span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="co4">/**
+*
+* @description My new api end point
+* @tags items, testing
+*
+**/</span>
+&nbsp;
+\Tina4\Get<span class="sy0">::</span><span class="me2">add</span><span class="br0">&#40;</span><span class="st0">&quot;/api/items&quot;</span><span class="sy0">,</span> <span class="kw2">function</span><span class="br0">&#40;</span>\Tina4\Response <span class="re0">$response</span><span class="br0">&#41;</span> <span class="br0">&#123;</span>
+&nbsp;
+  <span class="re0">$items</span> <span class="sy0">=</span> <span class="br0">&#91;</span><span class="st0">&quot;one&quot;</span><span class="sy0">,</span> <span class="st0">&quot;two&quot;</span><span class="sy0">,</span> <span class="st0">&quot;three&quot;</span><span class="br0">&#93;</span><span class="sy0">;</span>
+&nbsp;
+  <span class="kw1">return</span> <span class="re0">$response</span><span class="br0">&#40;</span><span class="re0">$items</span><span class="sy0">,</span> HTTP_OK<span class="sy0">,</span> APPLICATION_JSON<span class="br0">&#41;</span>
+<span class="br0">&#125;</span><span class="br0">&#41;</span><span class="sy0">;</span></pre>
+</dd></dl>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Create an API Endpoint&quot;,&quot;hid&quot;:&quot;create_an_api_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-402&quot;} -->
+<h2 class="sectionedit2" id="accessing_our_endpoint">Accessing our Endpoint</h2>
+<div class="level2">
+
+<p>
+To access our enpoint we will navigate to the relevant path in our browser. E.g. <strong><a href="http://localhost:7145/api/items" class="urlextern" title="http://localhost:7145/api/items" rel="ugc nofollow">http://localhost:7145/api/items</a></strong>
+Also the swagger UI for all your annotated endpoints can be found at <strong><a href="http://localhost:7145/swagger" class="urlextern" title="http://localhost:7145/swagger" rel="ugc nofollow">http://localhost:7145/swagger</a></strong>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Accessing our Endpoint&quot;,&quot;hid&quot;:&quot;accessing_our_endpoint&quot;,&quot;codeblockOffset&quot;:1,&quot;secid&quot;:2,&quot;range&quot;:&quot;403-&quot;} -->

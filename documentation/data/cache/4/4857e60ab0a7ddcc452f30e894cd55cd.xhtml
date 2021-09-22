@@ -1,0 +1,66 @@
+
+<h1 class="sectionedit1 heading-combo" id="migrations_in_tina4">Migrations in Tina4</h1>
+<div class="level1">
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Migrations in Tina4&quot;,&quot;hid&quot;:&quot;migrations_in_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-34&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="create_a_table_migration">Create a table/migration</h2>
+<div class="level2">
+
+<p>
+You want to create a table for the database? Migrations are sequential SQL statements which keep track of your database changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.
+</p>
+
+<p>
+<strong>Windows</strong>
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+ c:\projectfolder\migrations\</code>
+</pre>
+
+<p>
+<strong>Linux</strong>
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+ /home/username/Documents/projectfolder/migrations</code>
+</pre>
+
+<p>
+<strong>Start up the built in web service</strong>
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+   composer start</code>
+</pre>
+
+<p>
+Click on the following link to create a migration for your project
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+<strong>Default Url</strong>
+<a href="http://localhost:7145/migrate" class="urlextern" target="target=_blank" title="http://localhost:7145/migrate" rel="ugc nofollow noopener">http://localhost:7145/migrate</a>
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} --><ul>
+<li class="level1"><div class="li"> On this screen you can enter a description for your migration and then type in the SQL you want to run</div>
+</li>
+<li class="level1"><div class="li"> SQL statements should be separated by a “;”</div>
+</li>
+<li class="level1"><div class="li"> If you write a stored procedure or trigger then only one of those statements is allowed per migration</div>
+</li>
+<li class="level1"><div class="li"> You will be shown that the migration was created and a SQL file with the table you just created will be in the migration folder.  </div>
+</li>
+</ul>
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-srcset="https://www.tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=361&amp;tok=2ec289&amp;media=migrate.png 355w, https://www.tina4php.com/documentation/lib/exe/fetch.php?w=556&amp;h=565&amp;tok=e7cfbc&amp;media=migrate.png 556w, https://www.tina4php.com/documentation/lib/exe/fetch.php?media=migrate.png 586w" data-placeholder-background="#fff" src="https://www.tina4php.com/documentation/lib/exe/fetch.php?media=migrate.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="596" width="586" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, 586px" center="true"/>
+</p>
+
+<p>
+Migrations will be run every time you hit up the /migrate route of your project.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Create a table\/migration&quot;,&quot;hid&quot;:&quot;create_a_table_migration&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;35-&quot;} -->

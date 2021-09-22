@@ -1,0 +1,32 @@
+====== Tina4 Directory Structure ======
+
+As you know by now Tina4 is not a Framework. There are some general conventions we used to make things more consistent. You can use all parts of Tina4 or only some parts. 
+
+What makes Tina4 different from Frameworks you may have used is how compact its code base is. Tina also has quick ways of doing things like generating ORM Objects from your database.
+
+<WRAP center round tip>
+Each folder in a new Tina4 project has a README file that explains what part of Tina4 class you should extend. i.e. \Tina4\Process
+</WRAP>
+
+====== Tina4 Directory Structure ======
+  * [[https://en.wikipedia.org/wiki/Binary_file|bin]] -- this folder will be automatically installed when you run the composer require command. 
+  * [[https://en.wikipedia.org/wiki/Cache_(computing)|cache]] -- delete this folder if you want to clear things, in debug mode no caching happens.
+  * [[tina4:migrations|migrations]] -- migrations are stored here.
+  * [[https://en.wikipedia.org/wiki/Logging_(software)|log]] -- all error and debug log files will be stored in here.
+  * [[https://opensource.com/article/21/4/encryption-decryption-openssl|secrets]] -- this folder will be installed when you run the composer exec or initialize command. 
+  * [[https://www.geeksforgeeks.org/what-is-the-role-of-src-and-dist-folders-in-javascript-jquery/|src]] (Source files)
+    * [[https://en.wikipedia.org/wiki/Application_directory|app]] -- app code gets served by routes.
+    * [[https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping|orm]] -- ORM Objects  -- Tina Can generate these initial files from your database
+    * [[https://en.wikipedia.org/wiki/Shared_resource|public]] -- css / js / images and more - all the public stuff
+    * [[tina4:routing|routes]] -- You can setup folders to structure your project as suggested below
+          * [[tina4:basic-api|api]] -- api routes
+    * [[https://en.wikipedia.org/wiki/Sass_(stylesheet_language)|scss]] -- SASS compiled into public/css/default.css file
+    * [[https://en.wikipedia.org/wiki/Service_(systems_architecture)|services]] -- Scripts which need to run on a schedule
+      * [[tina4:templates|templates]] -- twig templates get served at http://yoursite:8282/app
+  * [[https://laravel.com/docs/8.x/structure#the-vendor-directory|vendor]] -- all the magic of Tina4 will be installed here when you install Tina4
+  * [[tina4:env|.env]] -- generated automatically on first run
+  * [[https://www.tutorialspoint.com/what-is-htaccess-in-php|.htaccess]] -- this folder will be automatically installed when you run the composer require command. 
+  * [[https://getcomposer.org/doc/01-basic-usage.md#composer-json-project-setup|composer.json]] -- this folder will be automatically installed when you run the composer require command. 
+  * [[https://getcomposer.org/doc/01-basic-usage.md#installing-from-composer-lock|composer.lock]] -- this folder will be automatically installed when you run the composer require command. 
+  * [[https://en.wikipedia.org/wiki/Favicon|favicon]] -- this folder will be automatically installed when you run the composer require command. 
+  * [[https://www.mediawiki.org/wiki/Manual:Index.php|index.php]] -- tina4 entry point -- this folder will be automatically installed when you run the composer require command. 

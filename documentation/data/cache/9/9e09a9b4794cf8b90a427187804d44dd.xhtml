@@ -1,0 +1,47 @@
+
+<h1 class="sectionedit1 heading-combo" id="errors_while_connecting_to_the_database">Errors while connecting to the Database</h1>
+<div class="level1">
+
+<p>
+You may have seen that in Tina4, if we require a Database, which is included via the <strong>index.php</strong> located in project root via the :
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+require &quot;vendor/autoload.php&quot;;
+
+global $DBA;
+
+//MySQL
+$DBA = new \Tina4\DataMySQL(
+   https://tina4.com/documentation/doku.php?id=playground:playground &quot;localhost:somedatabase&quot;,
+    DB_USERNAME, DB_PASSWORD,
+    &quot;d/m/Y&quot;);
+    
+ echo new \Tina4\Tina4Php();</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Errors while connecting to the Database&quot;,&quot;hid&quot;:&quot;errors_while_connecting_to_the_database&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-473&quot;} -->
+<h3 class="sectionedit2 heading-combo" id="what_errors_you_may_expect">What errors you may expect?</h3>
+<div class="level3">
+
+<p>
+If you experience any trouble connecting to the DB you can try troubleshoot the following:
+<br/>
+
+1. Ensure that you have the Database native app installed on your device
+<br/>
+
+2. Ensure the correct Database type is being used for your project requirements
+<br/>
+
+3. Ensure the Database version is compatible with SQL, IDE and other tools. 
+<br/>
+
+4. Ensure you have all the Tina4 prerequisites installed correctly
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;What errors you may expect?&quot;,&quot;hid&quot;:&quot;what_errors_you_may_expect&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;474-&quot;} -->

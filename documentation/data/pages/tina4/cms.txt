@@ -1,0 +1,44 @@
+====== Introducing Tina4 Content Management System ======
+
+Tina4 [[https://en.wikipedia.org/wiki/Content_management_system|CMS]] is a module written with Tina4.  Here is what you get out of the box:
+
+  * Page driven CMS - Each page can be a landing for content or customized to your project design specifications
+  * Articles - Articles are easily created, categorized and displayed on pages
+  * Snippets - little HTML pieces you can reuse in your Pages or Articles
+  * Article Categories - These double up as menus and categories. These will be the option displayed in your Navigation bar
+
+===== Getting Started =====
+
+The beauty of working with the Tina4CMS is you can build your own site in a matter of minutes as it only needs a tiny SQLite database to start with and you have all the Tina4 power out of the box. For this example we will use a SQLite database type as its the easiest and quickest to use.
+
+Use the following commands to get up and running:
+
+<code bash>
+ composer require tina4stack/tina4cms
+ composer exec tina4 initialize:run
+ composer start
+</code>
+  
+Once you have that working you need to add into your **index.php** file a database connection, your **index.php** should look as follows:
+
+<code php index.php>
+<?php
+require_once "./vendor/autoload.php"; //Load all the libraries
+  
+//Initialize the database
+global $DBA;
+$DBA = new \Tina4\DataSQLite3("cms.db");
+  
+//Create a new config
+$config = new \Tina4\Config();
+  
+//Run the Tina4 engine
+echo new \Tina4\Tina4Php($config);
+</code>
+  
+Once this is all running, browse to this address is your Browsers URL bar to setup your initial user:
+<code url>
+https://localhost:(your_port_number)/cms/login
+</code>
+
+Follow these steps to create a User for the Tina4 CMS. Once your User has been created you will have access to create pages, articles, and article categories. Above you can see the advantages of the the Tina4 CMS.  

@@ -1,0 +1,14 @@
+.lazy-fade-combo {
+    animation-name: lazy-fade-combo;
+    animation-duration: 2s;
+}
+
+@keyframes lazy-fade-combo {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+

@@ -1,0 +1,82 @@
+a:124:{i:0;a:3:{i:0;s:14:"document_start";i:1;a:0:{}i:2;i:0;}i:1;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:1;s:12:"heading_text";s:34:"Troubleshooting ORM returning null";}s:7:"context";s:7:"outline";s:8:"position";i:1;}i:2;i:1;i:3;s:6:"======";}i:2;i:1;}i:2;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:35:" Troubleshooting ORM returning null";s:7:"context";N;}i:2;i:3;i:3;s:36:" Troubleshooting ORM returning null ";}i:2;i:7;}i:3;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:1;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:7:"======
+";}i:2;i:43;}i:4;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:1;}i:2;i:1;}i:5;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:43;}i:6;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:134:"Sometimes you may get no data back from an ORM query. You'll see an error like this one below stating that there was no data returned.";}i:2;i:51;}i:7;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:185;}i:8;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:1:{s:4:"type";s:4:"html";}}i:2;i:1;i:3;s:11:"<file html>";}i:2;i:187;}i:9;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:79:"
+/vendor/twig/twig/src/Extension/DebugExtension.php:59:
+array (size=0)
+  empty
+";s:7:"context";N;s:10:"attributes";a:1:{s:4:"type";s:4:"html";}}i:2;i:3;i:3;s:79:"
+/vendor/twig/twig/src/Extension/DebugExtension.php:59:
+array (size=0)
+  empty
+";}i:2;i:198;}i:10;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:1:{s:4:"type";s:4:"html";}}i:2;i:4;i:3;s:7:"</file>";}i:2;i:277;}i:11;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:277;}i:12;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:286;}i:13;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:26:"So how do we resolve this?";}i:2;i:288;}i:14;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:314;}i:15;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:316;}i:16;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:323;}i:17;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:2;s:12:"heading_text";s:6:"Step 1";}s:7:"context";s:7:"outline";s:8:"position";i:318;}i:2;i:1;i:3;s:5:"=====";}i:2;i:318;}i:18;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:7:" Step 1";s:7:"context";N;}i:2;i:3;i:3;s:8:" Step 1 ";}i:2;i:323;}i:19;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:2;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:5:"=====";}i:2;i:331;}i:20;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:2;}i:2;i:318;}i:21;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:331;}i:22;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:79:"Check the terminal for errors. You should see the query as in the output below.";}i:2;i:337;}i:23;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:416;}i:24;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:0:{}}i:2;i:1;i:3;s:6:"<file>";}i:2;i:418;}i:25;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:146:"
+src/templates/import/matchimport.twig
+[Thu Mar 25 16:25:19 2021] INFO:Adding DBA
+[Thu Mar 25 16:25:19 2021] DEBUG:SQL:
+select  *
+from    match t
+";s:7:"context";N;s:10:"attributes";a:0:{}}i:2;i:3;i:3;s:146:"
+src/templates/import/matchimport.twig
+[Thu Mar 25 16:25:19 2021] INFO:Adding DBA
+[Thu Mar 25 16:25:19 2021] DEBUG:SQL:
+select  *
+from    match t
+";}i:2;i:424;}i:26;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:0:{}}i:2;i:4;i:3;s:7:"</file>";}i:2;i:570;}i:27;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:584;}i:28;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:2;s:12:"heading_text";s:6:"Step 2";}s:7:"context";s:7:"outline";s:8:"position";i:579;}i:2;i:1;i:3;s:5:"=====";}i:2;i:579;}i:29;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:7:" Step 2";s:7:"context";N;}i:2;i:3;i:3;s:8:" Step 2 ";}i:2;i:584;}i:30;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:2;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:5:"=====";}i:2;i:592;}i:31;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:2;}i:2;i:579;}i:32;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:592;}i:33;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:109:"If your ORM query returns no data try running the query using a database client like DB-Beaver or PhpMyAdmin.";}i:2;i:598;}i:34;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:707;}i:35;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:12:"wrap_divwrap";i:1;a:2:{i:0;i:1;i:1;s:16:"center round box";}i:2;i:1;i:3;s:24:"<WRAP center round box >";}i:2;i:710;}i:36;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:710;}i:37;a:3:{i:0;s:18:"doublequoteopening";i:1;a:0:{}i:2;i:735;}i:38;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:25:"select  *
+from    match t";}i:2;i:736;}i:39;a:3:{i:0;s:18:"doublequoteclosing";i:1;a:0:{}i:2;i:761;}i:40;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:0:"";}i:2;i:762;}i:41;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:763;}i:42;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:12:"wrap_divwrap";i:1;a:2:{i:0;i:4;i:1;s:0:"";}i:2;i:4;i:3;s:7:"</WRAP>";}i:2;i:763;}i:43;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:778;}i:44;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:2;s:12:"heading_text";s:6:"Step 3";}s:7:"context";s:7:"outline";s:8:"position";i:773;}i:2;i:1;i:3;s:5:"=====";}i:2;i:773;}i:45;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:7:" Step 3";s:7:"context";N;}i:2;i:3;i:3;s:8:" Step 3 ";}i:2;i:778;}i:46;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:2;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:5:"=====";}i:2;i:786;}i:47;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:2;}i:2;i:773;}i:48;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:786;}i:49;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:19:"Retrace your steps.";}i:2;i:792;}i:50;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:811;}i:51;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:811;}i:52;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:60:"To get data from an ORM object you need the following files:";}i:2;i:813;}i:53;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:873;}i:54;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:873;}i:55;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:875;}i:56;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:27:"Define an ORM Class (Model)";}i:2;i:877;}i:57;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:904;}i:58;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:906;}i:59;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:9:"Match.php";}}i:2;i:1;i:3;s:20:"<file php Match.php>";}i:2;i:908;}i:60;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:155:"
+
+// ./src/orm/Match.php
+<?php
+class Match extends \Tina4\ORM
+{
+    public $tableName="match";
+    public $primaryKey="match_key"; //set for primary key
+}
+";s:7:"context";N;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:9:"Match.php";}}i:2;i:3;i:3;s:155:"
+
+// ./src/orm/Match.php
+<?php
+class Match extends \Tina4\ORM
+{
+    public $tableName="match";
+    public $primaryKey="match_key"; //set for primary key
+}
+";}i:2;i:928;}i:61;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:9:"Match.php";}}i:2;i:4;i:3;s:7:"</file>";}i:2;i:1083;}i:62;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1083;}i:63;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:1092;}i:64;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:22:"a Template file (View)";}i:2;i:1094;}i:65;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:1116;}i:66;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:0:"";}i:2;i:1118;}i:67;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:1119;}i:68;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:10:"match.twig";}}i:2;i:1;i:3;s:21:"<file php match.twig>";}i:2;i:1119;}i:69;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:129:"
+<!-- ./src/templates/match.twig -->
+  {% set match = Tina4.call("MatchHelper","getMatch",[request.id]) %}
+    {{ dump(match) }}
+";s:7:"context";N;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:10:"match.twig";}}i:2;i:3;i:3;s:129:"
+<!-- ./src/templates/match.twig -->
+  {% set match = Tina4.call("MatchHelper","getMatch",[request.id]) %}
+    {{ dump(match) }}
+";}i:2;i:1140;}i:70;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:10:"match.twig";}}i:2;i:4;i:3;s:7:"</file>";}i:2;i:1269;}i:71;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1269;}i:72;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:1278;}i:73;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:10:"Controller";}i:2;i:1280;}i:74;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:1290;}i:75;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:0:"";}i:2;i:1292;}i:76;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:1293;}i:77;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:15:"MatchHelper.php";}}i:2;i:1;i:3;s:26:"<file php MatchHelper.php>";}i:2;i:1293;}i:78;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:306:"
+<?php
+
+class LegacyHelper extends \Tina4\Data 
+{
+  public function getMatch($id) //no data yet
+    {
+        $match=(new OldMatch())->select("*",1,0)
+                               ->where("match_key = {$id}")
+                               ->asArray();                        
+    return $match;
+    }
+}
+";s:7:"context";N;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:15:"MatchHelper.php";}}i:2;i:3;i:3;s:306:"
+<?php
+
+class LegacyHelper extends \Tina4\Data 
+{
+  public function getMatch($id) //no data yet
+    {
+        $match=(new OldMatch())->select("*",1,0)
+                               ->where("match_key = {$id}")
+                               ->asArray();                        
+    return $match;
+    }
+}
+";}i:2;i:1319;}i:79;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:15:"MatchHelper.php";}}i:2;i:4;i:3;s:7:"</file>";}i:2;i:1625;}i:80;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1625;}i:81;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:1634;}i:82;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:16:"Route (optional)";}i:2;i:1636;}i:83;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:1652;}i:84;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:121:"
+a Route is preferable but Tina4 will read your template file by name in the absence of a route matching your url query. ";}i:2;i:1654;}i:85;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:1775;}i:86;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1775;}i:87;a:3:{i:0;s:12:"externallink";i:1;a:2:{i:0;s:31:"http://localhost:8383/match.php";i:1;N;}i:2;i:1777;}i:88;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:103:" should reach your template file if it's located in the templates directory (not a subdirectory of it).";}i:2;i:1808;}i:89;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:1911;}i:90;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:1920;}i:91;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:2;s:12:"heading_text";s:6:"Step 4";}s:7:"context";s:7:"outline";s:8:"position";i:1915;}i:2;i:1;i:3;s:5:"=====";}i:2;i:1915;}i:92;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:7:" Step 4";s:7:"context";N;}i:2;i:3;i:3;s:8:" Step 4 ";}i:2;i:1920;}i:93;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:2;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:5:"=====";}i:2;i:1928;}i:94;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:2;}i:2;i:1915;}i:95;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1928;}i:96;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:43:"Consider reserved words. In the case above ";}i:2;i:1934;}i:97;a:3:{i:0;s:18:"doublequoteopening";i:1;a:0:{}i:2;i:1977;}i:98;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:5:"match";}i:2;i:1978;}i:99;a:3:{i:0;s:18:"doublequoteclosing";i:1;a:0:{}i:2;i:1983;}i:100;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:6:" is a ";}i:2;i:1984;}i:101;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_link";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:1:{s:3:"ref";s:53:"https://dev.mysql.com/doc/refman/8.0/en/keywords.html";}s:7:"context";s:0:"";s:7:"linkTag";s:1:"a";}i:2;i:1;i:3;s:55:"[[https://dev.mysql.com/doc/refman/8.0/en/keywords.html";}i:2;i:1990;}i:102;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_link";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:21:"reseved word in MySQL";s:7:"context";N;}i:2;i:3;i:3;s:22:"|reseved word in MySQL";}i:2;i:2045;}i:103;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_link";i:1;a:5:{s:5:"state";i:4;s:10:"attributes";a:1:{s:3:"ref";s:53:"https://dev.mysql.com/doc/refman/8.0/en/keywords.html";}s:7:"payload";s:0:"";s:7:"context";s:0:"";s:7:"linkTag";s:1:"a";}i:2;i:4;i:3;s:2:"]]";}i:2;i:2067;}i:104;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:2069;}i:105;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:12:"wrap_divwrap";i:1;a:2:{i:0;i:1;i:1;s:22:"center round important";}i:2;i:1;i:3;s:29:"<WRAP center round important>";}i:2;i:2071;}i:106;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:2071;}i:107;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:139:"Avoid Reserved words. If you inherit a database with tables that have reserved words for names you should change the names of those tables.";}i:2;i:2101;}i:108;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:2241;}i:109;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:12:"wrap_divwrap";i:1;a:2:{i:0;i:4;i:1;s:0:"";}i:2;i:4;i:3;s:7:"</WRAP>";}i:2;i:2241;}i:110;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:2254;}i:111;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:3;s:12:"heading_text";s:26:"As a short term workaround";}s:7:"context";s:7:"outline";s:8:"position";i:2250;}i:2;i:1;i:3;s:4:"====";}i:2;i:2250;}i:112;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:27:" As a short term workaround";s:7:"context";N;}i:2;i:3;i:3;s:28:" As a short term workaround ";}i:2;i:2254;}i:113;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:3;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:4:"====";}i:2;i:2282;}i:114;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:3;}i:2;i:2250;}i:115;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:2282;}i:116;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:64:"You can use tildes around the table name using the fetch method:";}i:2;i:2287;}i:117;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:2351;}i:118;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:1:{s:4:"type";s:3:"php";}}i:2;i:1;i:3;s:10:"<file php>";}i:2;i:2353;}i:119;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:89:"
+$match=$this->DBA->fetch("select * from `match`")
+                         ->asArray();
+";s:7:"context";N;s:10:"attributes";a:1:{s:4:"type";s:3:"php";}}i:2;i:3;i:3;s:89:"
+$match=$this->DBA->fetch("select * from `match`")
+                         ->asArray();
+";}i:2;i:2363;}i:120;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_file";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:1:{s:4:"type";s:3:"php";}}i:2;i:4;i:3;s:7:"</file>";}i:2;i:2452;}i:121;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:2459;}i:122;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:15:"combo_analytics";i:1;a:3:{s:10:"attributes";a:7:{s:17:"combo_headingwiki";i:6;s:7:"section";i:6;s:1:"p";i:15;s:10:"combo_file";i:6;s:6:"strong";i:5;s:12:"wrap_divwrap";i:2;s:10:"combo_link";i:1;}s:7:"context";N;s:5:"state";i:5;}i:2;i:5;i:3;s:0:"";}i:2;N;}i:123;a:3:{i:0;s:12:"document_end";i:1;a:0:{}i:2;N;}}

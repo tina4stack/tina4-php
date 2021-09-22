@@ -1,0 +1,49 @@
+.folder {
+    padding-left: 2px;
+    padding-right: 9px;
+    background: url(closed.gif) no-repeat right center;
+}
+
+.folder.open {
+    background: url(open.gif) no-repeat right center;
+}
+
+div.folded {
+    padding: 0.5em;
+    border: 1px dotted __border__;
+}
+
+span.folded {
+    border: 1px dotted __border__;
+}
+
+span.indicator {
+    visibility: hidden;
+}
+
+/* fold/unfold all button in pagetools area */
+#dokuwiki__pagetools ul li a.fold_unfold_all {
+    background-position: right 0;
+}
+
+#dokuwiki__pagetools ul li a.fold_unfold_all:before {
+    content: url(pagetools-close-open-sprite.png);
+    margin-top: 0;
+}
+
+#dokuwiki__pagetools:hover ul li a.fold_unfold_all,
+#dokuwiki__pagetools ul li a.fold_unfold_all:focus,
+#dokuwiki__pagetools ul li a.fold_unfold_all:active {
+    background-image: url(pagetools-close-open-sprite.png);
+}
+
+#dokuwiki__pagetools ul li a.fold_unfold_all:hover,
+#dokuwiki__pagetools ul li a.fold_unfold_all:active,
+#dokuwiki__pagetools ul li a.fold_unfold_all:focus {
+    background-position: right -45px;
+}
+
+/* below style rules are created by javascript
+.folded.hidden { display: none; }
+.folder span.indicator { visibility: visible; }
+*/

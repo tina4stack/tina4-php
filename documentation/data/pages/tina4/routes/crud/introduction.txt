@@ -1,0 +1,48 @@
+====== Introduction to CRUD Routes ======
+Restful API's are based on CRUD - CREATE, READ, UPDATE, DELETE actions. 
+
+A lot of what we do for forms or API calls uses just these four actions. 
+
+In Tina4, you can create scaffolding for a CRUD route using [[tina4:generatecrud|Generate CRUD]] which is part of ORM. This will create the routes and also a form and grid template for those routes which is useful for building out the Admin section of your site if you're using Tina4CMS. 
+
+===== Understanding the CRUD Router Lifecycle =====
+a Crud route has a few actions in addition to the CRUD actions above.
+
+  * **form** - Used to generate a blank form. Return the form to be submitted to the create action.
+  * **fetch** - Used for editing a form. Return a form to be submitted to the create action.
+  * **read** - Reads data for use in the Grid.twig view. Return a dataset to be consumed by the grid with a filter
+  * **create** - Creates the record using ORM in the Database. If your form input names match the column names in the table they are matched seamlessly. Any data you want to manipulate should be changed or matched here as required.
+  * **afterCreate** - on this action you have the full ORM record with its ID available. You can return it to a grid (which is quite common) or something else. 
+  * update - an existing record is updated with new information.
+  * **afterUpdate** - similar to afterCreate. On this action you have the full ORM record with its ID available. You can return it to a grid (which is quite common) or something else.
+  * **delete** - a specific record is deleted. 
+  * **afterDelete** - You can return data to a Grid i.e. all other records, or something else. 
+
+<WRAP center round tip 100%>
+CRUD route actions are in a Switch statement. If you don't put a break in actions like form and fetch will  do the same thing.
+</WRAP>
+
+===== How a CRUD Route knows what information you want =====
+<WRAP center round tip 100%>
+Crud Routes like are linked to an ORM object in the first line of the Route. This means a CRUD route knows your table's columns and will interact with correctly directly after you've generated the CRUD route.
+</WRAP>
+
+Depending on what route you call and if you specify and ID or not, a CRUD route will direct to the correct action.
+
+**Example** when you send a GET request on the route path i.e. localhost:7145/path crud router will return all the records related to this route.
+
+<code>
+ * CRUD Prototype Example
+ * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
+            POST @ /path, /path/{id} - create & update
+            DELETE @ /path/{id} - delete for single
+</code>
+
+<WRAP center round important 100%>
+CRUD Routes will answer to POST and GET calls. Because of this it's important that you don't duplicate the name in any other routes. It's a Tina4 convention to keep your CrudRoutes under /api/ to avoid conflicts between routes.
+</WRAP>
+
+===== Related topics =====
+If you want to gain a good understanding of CRUD routes, you should read the sections on **[[basic-routing|Basic Routing]], **[[tina4:routing|ROUTES]]**, **[[tina4:orm|ORM]]**. We'd also suggest you look at the section on **[[tina4:tina4-js-Helper|tina4helper.js]]** 
+
+**[[tina4:tina4-js-Helper|Tina4helper.js]]** includes functions that wraps Ajax calls and makes working with forms painless. It has the same language as the Crud router.

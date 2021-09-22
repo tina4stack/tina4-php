@@ -1,0 +1,50 @@
+
+
+/* The text area in the edit form */
+textarea {
+    width: 100%;
+}
+
+/* Preview in the edit form */
+div.preview {
+    -moz-border-bottom-colors: none;
+    -moz-border-left-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-top-colors: none;
+    background-color: #f5f5f5;
+    border-bottom-color: #000;
+    border-bottom-style: dashed;
+    border-bottom-width: 1px;
+    border-image-outset: 0 0 0 0;
+    border-image-repeat: stretch stretch;
+    border-image-slice: 100% 100% 100% 100%;
+    border-image-source: none;
+    border-image-width: 1 1 1 1;
+    border-left-color: #000;
+    border-left-style: dashed;
+    border-left-width: 1px;
+    border-right-color: #000;
+    border-right-style: dashed;
+    border-right-width: 1px;
+    border-top-color: #000;
+    border-top-style: dashed;
+    border-top-width: 1px;
+    margin-bottom: 0;
+    margin-left: 2em;
+    margin-right: 0;
+    margin-top: 0;
+    padding-bottom: 4px;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 4px;
+}
+
+/** The input summary when editing a page is 50px fix **/
+input {
+    max-width: 100%;
+}
+
+
+
+
+

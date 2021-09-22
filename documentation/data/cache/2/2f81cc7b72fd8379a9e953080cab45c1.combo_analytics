@@ -1,0 +1,87 @@
+{
+    "id": "tina4:routes:api",
+    "date": "2021-08-24 10:44:17",
+    "metadata": {
+        "title": "APIs in Tina4",
+        "description": "APIs in Tina4\n\nFrom inception Tina4 was designed to rapid prototype API end points in conjunction with making SwaggerUI documentation available quickly with annotated routing.\n\nAfter running the composer start command in your IDE terminal, the Swagger UI will be available when you use the following address in your Web brosers",
+        "date_created": "2021-06-25 11:32:34",
+        "date_modified": "2021-08-18 10:53:45",
+        "age_creation": 60,
+        "age_modification": 6
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1,
+            "barco": 1,
+            "sidney": 1,
+            "clayton": 1
+        },
+        "chars_count": 1078,
+        "edits_count": 16,
+        "formatted": {
+            "1": {
+                "len": 14
+            },
+            "0": 20,
+            "2": {
+                "len": 6
+            }
+        },
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 2,
+            "max": 2,
+            "min": 2
+        },
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 4,
+            "strong": 2,
+            "combo_code": 2,
+            "wrap_divwrap": 1,
+            "combo_link": 1
+        },
+        "words_count": 96
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 21,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 4,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 1,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "3 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,91 @@
+{
+    "id": "tina4:tutorials:beginner:connect-to-database",
+    "date": "2021-08-16 10:35:54",
+    "metadata": {
+        "title": "Connecting to a database",
+        "description": "Connecting to a database\n\nTina4 currently supports 3 database types which are:\n\n* Firebird\n\n\n* MySQL\n\n\n* SQLite\n\nThe database connection is established in a global variable called \u201c$DBA\u201d in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required.",
+        "date_created": "2021-06-15 03:46:22",
+        "date_modified": "2021-06-15 03:47:44",
+        "age_creation": 62,
+        "age_modification": 62
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1,
+            "clayton": 1
+        },
+        "chars_count": 1021,
+        "edits_count": 4,
+        "formatted": {
+            "1": {
+                "len": 21
+            },
+            "0": 60,
+            "2": {
+                "len": 7
+            },
+            "3": {
+                "len": 19
+            },
+            "4": {
+                "len": 5
+            },
+            "5": {
+                "len": 8
+            }
+        },
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "linebreak": 2,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 8,
+            "strong": 5,
+            "combo_code": 3
+        },
+        "words_count": 90
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 17,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 1,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

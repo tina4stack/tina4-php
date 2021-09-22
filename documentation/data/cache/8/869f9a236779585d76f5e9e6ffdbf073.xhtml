@@ -1,0 +1,164 @@
+
+<h1 class="sectionedit1 heading-combo" id="step1_-_create_a_rest_api_endpoint">Step1 - Create a REST <abbr title="Application Programming Interface">API</abbr> Endpoint</h1>
+<div class="level1">
+
+<p>
+Follow the steps below if you need to create an <abbr title="Application Programming Interface">API</abbr> end point to define the interactions between multiple software. 
+</p>
+
+<p>
+*Please Note* : After installing Tina4, you may delete the test.php file located inside the api folder. 
+</p>
+
+<p>
+The REST end point is easily added, with an anonymous method to handle the request, the anonymous method should have the response variable.
+The request exposes more information which comes from the browser, in the case of parameters passed to it. You should always return the ```$response``` object!;
+</p>
+
+<p>
+All your <abbr title="Application Programming Interface">API</abbr>&#039;s must be stored in the api directory. Inside <strong>/src/routes/</strong> we begin by creating a file for our <abbr title="Application Programming Interface">API</abbr> endpoint
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step1 - Create a REST API Endpoint&quot;,&quot;hid&quot;:&quot;step1_-_create_a_rest_api_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-702&quot;} -->
+<h1 class="sectionedit2 heading-combo" id="step_2_-_define_routes_api_endpoint">Step 2 - Define routes <abbr title="Application Programming Interface">API</abbr> Endpoint</h1>
+<div class="level1">
+
+<p>
+There are various methods we can use when creating our <abbr title="Application Programming Interface">API</abbr> Endpoint. 
+</p>
+
+<p>
+<strong>To create a Get Route </strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="/src/routes/someroute.php" data-download-link-label="Download /src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Get::add(&quot;/api/cars&quot;, function(\Tina4\Response $response) {
+
+  $cars = [&quot;one&quot;, &quot;two&quot;, &quot;three&quot;];
+
+  return $response($cars, HTTP_OK, APPLICATION_JSON);
+});</code>
+</pre>
+
+<p>
+<strong>To create a Post Route </strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="/src/routes/someroute.php" data-download-link-label="Download /src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Post::add(&quot;/api/cars&quot;, function(\Tina4\Response $response) {
+
+  $cars = [&quot;one&quot;, &quot;two&quot;, &quot;three&quot;];
+
+  return $response($cars, HTTP_OK, APPLICATION_JSON);
+});</code>
+</pre>
+
+<p>
+<strong>Other methods you could use are:</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+//Other methods you can test
+\Tina4\Post::add(...);
+
+\Tina4\Patch::add(...);
+
+\Tina4\Put::add(...);
+
+\Tina4\Delete::add(...);
+
+//You guessed it - It takes every method - GET, POST, DELETE, PUT, PATCH, OPTIONS
+\Tina4\Any::add(...);</code>
+</pre>
+
+<p>
+<br/>
+
+<strong> Its important to keep in mind and ensure that the paths are correct: </strong>
+<br/>
+
+<br/>
+
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://www.tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=19&amp;tok=3dcd3c&amp;media=tina4:api.png 355w, https://www.tina4php.com/documentation/lib/exe/fetch.php?w=556&amp;h=29&amp;tok=341e78&amp;media=tina4:api.png 556w, https://www.tina4php.com/documentation/lib/exe/fetch.php?media=tina4:api.png 604w" data-placeholder-background="#fff" src="https://www.tina4php.com/documentation/lib/exe/fetch.php?media=tina4:api.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="32" width="604" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, 604px"/>
+<br/>
+
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2 - Define routes API Endpoint&quot;,&quot;hid&quot;:&quot;step_2_-_define_routes_api_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;703-1715&quot;} -->
+<h2 class="sectionedit3 heading-combo" id="secure_api_endpoint">Secure <abbr title="Application Programming Interface">API</abbr> Endpoint</h2>
+<div class="level2">
+
+<p>
+You might want to secure your REST <abbr title="Application Programming Interface">API</abbr> to avoid exposing data and data breaches. After you have created your REST <abbr title="Application Programming Interface">API</abbr>, you can easliy secure it by adding “@secure” in your annotation.
+</p>
+
+<p>
+Here&#039;s an example of securing your <abbr title="Application Programming Interface">API</abbr> Endpoint:
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+* @secure
+*/</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Secure API Endpoint&quot;,&quot;hid&quot;:&quot;secure_api_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;1716-2094&quot;} -->
+<h1 class="sectionedit4 heading-combo" id="step_3_-_annotate_our_endpoint">Step 3 - Annotate our Endpoint</h1>
+<div class="level1">
+
+<p>
+Now we will need to annotate the end point we created. This will be a description of the end point which will be used in Swagger. Its as easy as adding the following lines above the end point you created:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="/src/routes/someroute.php" data-download-link-label="Download /src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/
+\Tina4\Get::add(&quot;/api/cars&quot;, function(\Tina4\Response $response) {
+
+  $cars = [&quot;one&quot;, &quot;two&quot;, &quot;three&quot;];
+
+  return $response($cars, HTTP_OK, APPLICATION_JSON);
+});</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3 - Annotate our Endpoint&quot;,&quot;hid&quot;:&quot;step_3_-_annotate_our_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;2095-2640&quot;} -->
+<h1 class="sectionedit5 heading-combo" id="step_4_-_accessing_testing_our_endpoint">Step 4 - Accessing/Testing our Endpoint</h1>
+<div class="level1">
+
+<p>
+To access our enpoint we will navigate to the relevant path in our browser. E.g. <strong><a href="http://localhost:7145/api/items" class="urlextern" target="target=_blank" title="http://localhost:7145/api/items" rel="ugc nofollow noopener">http://localhost:7145/api/items</a></strong>
+<br/>
+
+<br/>
+
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://www.tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=23&amp;tok=a8c11f&amp;media=tina4:api4.png 355w, https://www.tina4php.com/documentation/lib/exe/fetch.php?w=556&amp;h=37&amp;tok=6ed695&amp;media=tina4:api4.png 556w, https://www.tina4php.com/documentation/lib/exe/fetch.php?media=tina4:api4.png 620w" data-placeholder-background="#fff" src="https://www.tina4php.com/documentation/lib/exe/fetch.php?media=tina4:api4.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="41" width="620" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, 620px"/>
+<br/>
+
+<br/>
+
+Also the swagger UI for all your annotated endpoints can be found at <strong><a href="http://localhost:7145/swagger" class="urlextern" target="target=_blank" title="http://localhost:7145/swagger" rel="ugc nofollow noopener">http://localhost:7145/swagger</a></strong>
+<br/>
+
+<br/>
+
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://www.tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=23&amp;tok=7c89df&amp;media=tina4:api2.png 355w, https://www.tina4php.com/documentation/lib/exe/fetch.php?w=556&amp;h=36&amp;tok=21fc0d&amp;media=tina4:api2.png 556w, https://www.tina4php.com/documentation/lib/exe/fetch.php?media=tina4:api2.png 619w" data-placeholder-background="#fff" src="https://www.tina4php.com/documentation/lib/exe/fetch.php?media=tina4:api2.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="40" width="619" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, 619px"/>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4 - Accessing\/Testing our Endpoint&quot;,&quot;hid&quot;:&quot;step_4_-_accessing_testing_our_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;2641-&quot;} -->

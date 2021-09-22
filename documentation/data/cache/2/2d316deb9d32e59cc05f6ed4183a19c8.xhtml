@@ -1,0 +1,242 @@
+
+<h1 class="sectionedit1 heading-combo" id="save_dates_to_database">Save Dates to Database</h1>
+<div class="level1">
+
+<p>
+Your <a class="link-internal link-combo" data-wiki-id="tina4:database" href="/doku.php?id=tina4:database" title="Connecting to a Database For more dynamic websites, there is a strong chance a Database will be required. Tina4 currently supports 3 database types: The database connection is established in a global variable called $DBA in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required. For testing purpose, you can use the SQLite database type below.">Date Format</a> should be set correctly in your index.php file.
+</p>
+
+<p>
+From here you can save dates into an <a class="link-internal low-quality-page-combo link-combo" data-wiki-id="tina4:orm" href="/doku.php?id=tina4:orm" title="The &lt;https://en.wikipedia.org/wiki/Object-relational_mapping&gt; in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.  is used to map object relations and how they interact with each other, for your app/webpage/system. (LQPP)">ORM</a> object like this:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+$article-&gt;publishedDate = date($article-&gt;DBA-&gt;dateFormat.&quot; H:i:s&quot;)
+$article-&gt;save();</code>
+</pre>
+
+<p>
+Any dates that you return from the ORM will follow your localization date format set in index.php I.e. d/m/Y
+</p>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/toolbar/prism-toolbar.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/normalize-whitespace/prism-normalize-whitespace.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/show-language/prism-show-language.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/command-line/prism-command-line.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/line-numbers/prism-line-numbers.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/download-button/prism-download-button.min.js" integrity="sha512-rGJwSZEEYPBQjqYxrdg6Ug/6i763XQogKx+N/GF1rCGvfmhIlIUFxCjc4FmEdCu5dvovqxHsoe3IPMKP+KlgNQ==" crossorigin="anonymous" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/autoloader/prism-autoloader.min.js" class="snippet-prism-autoloader-combo"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+
+<script class="snippet-prism-combo">document.addEventListener('DOMContentLoaded', (event) => {
+
+    if (typeof self === 'undefined' || !self.Prism || !self.document) {
+        return;
+    }
+
+    // Loading the css from https://cdnjs.com/libraries/prism
+    const head = document.querySelector('head');
+    const baseCdn = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0/";
+    const stylesheets = [
+        ["themes/prism-tomorrow.min.css", "sha512-vswe+cgvic/XBoF1OcM/TeJ2FW0OofqAVdCZiEYkd6dwGXthvkSFWOoGGJgS2CW70VK5dQM5Oh+7ne47s74VTg=="],
+        ["plugins/toolbar/prism-toolbar.min.css","sha512-DSAA0ziYwggOJ3QyWFZhIaU8bSwQLyfnyIrmShRLBdJMtiYKT7Ju35ujBCZ6ApK3HURt34p2xNo+KX9ebQNEPQ=="],
+        /*https://prismjs.com/plugins/command-line/*/
+        ["plugins/command-line/prism-command-line.min.css","sha512-4Y1uID1tEWeqDdbb7452znwjRVwseCy9kK9BNA7Sv4PlMroQzYRznkoWTfRURSADM/SbfZSbv/iW5sNpzSbsYg=="],
+        /*https://prismjs.com/plugins/line-numbers/*/
+        ["plugins/line-numbers/prism-line-numbers.min.css","sha512-cbQXwDFK7lj2Fqfkuxbo5iD1dSbLlJGXGpfTDqbggqjHJeyzx88I3rfwjS38WJag/ihH7lzuGlGHpDBymLirZQ=="]
+    ];
+
+    stylesheets.forEach(stylesheet => {
+            let link = document.createElement('link');
+            link.rel="stylesheet"
+            link.href=baseCdn+"/"+stylesheet[0];
+            link.integrity=stylesheet[1];
+            link.crossOrigin="anonymous";
+            head.append(link);
+        }
+    )
+
+
+    Prism.plugins.NormalizeWhitespace.setDefaults({
+        'remove-trailing': true,
+        'remove-indent': true,
+        'left-trim': true,
+        'right-trim': true,
+    });
+
+    if (!Prism.plugins.toolbar) {
+        console.warn('Copy to Clipboard plugin loaded before Toolbar plugin.');
+
+        return;
+    }
+
+    let ClipboardJS = window.ClipboardJS || undefined;
+
+    if (!ClipboardJS && typeof require === 'function') {
+        ClipboardJS = require('clipboard');
+    }
+
+    const callbacks = [];
+
+    if (!ClipboardJS) {
+        const script = document.createElement('script');
+        const head = document.querySelector('head');
+
+        script.onload = function() {
+            ClipboardJS = window.ClipboardJS;
+
+            if (ClipboardJS) {
+                while (callbacks.length) {
+                    callbacks.pop()();
+                }
+            }
+        };
+
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.0/clipboard.min.js';
+        head.appendChild(script);
+    }
+
+    Prism.plugins.toolbar.registerButton('copy-to-clipboard', function (env) {
+        var linkCopy = document.createElement('button');
+        linkCopy.textContent = 'Copy';
+        linkCopy.setAttribute('type', 'button');
+
+        var element = env.element;
+
+        if (!ClipboardJS) {
+            callbacks.push(registerClipboard);
+        } else {
+            registerClipboard();
+        }
+
+        return linkCopy;
+
+        function registerClipboard() {
+            var clip = new ClipboardJS(linkCopy, {
+                'text': function () {
+                    return element.textContent;
+                }
+            });
+
+            clip.on('success', function() {
+                linkCopy.textContent = 'Copied!';
+
+                resetText();
+            });
+            clip.on('error', function () {
+                linkCopy.textContent = 'Press Ctrl+C to copy';
+
+                resetText();
+            });
+        }
+
+        function resetText() {
+            setTimeout(function () {
+                linkCopy.textContent = 'Copy';
+            }, 5000);
+        }
+    });
+
+});</script>
+
+<script class="snippet-popover-combo">window.addEventListener('load', function () {
+    let namespace = "-bs"
+    let version = 5;
+    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
+        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        jQuery(`[data${namespace}-toggle="popover"]`).popover();
+    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
+        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
+            .forEach(el => {
+                new bootstrap.Popover(el);
+                // to not navigate on a anchor
+                el.onclick = (event => event.preventDefault());
+            });
+    }
+});
+</script>
+
+<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
+    anchors.options = {
+        placement: 'right',
+        icon: '#',
+        class: 'anchor-combo'
+    };
+    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
+});
+</script>
+
+<style class="snippet-lqpp-combo">.low-quality-page-combo {
+    text-decoration: none;
+}
+</style>
+
+<style class="snippet-link-combo">
+a.link-external:not(.btn) {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAABdklEQVR4AWMgAVRo1zY3rGk41rC+rqvCBCJWBpPM4WoomLHtdtuv/t9Lfk263TtrQ0t7Oj9cbzZDc/W6s/8T7khD+P+F/8bv29PZlswJVVBu0vPuVZyNYHFZbmAqE1SR0cbjXR6pjGBO58am962Ta3e3ftqy6B5LCcMasOj7gInrm9jBzI4vTX+bfjT/7/4/p/w/zFXybUmt71u4wJzGfxP/t/xvA+KaP2XnQSKVFpWPav/U/6+HKJjz++OVJUDp1n9N/+r+19QyMCz1mPC/8X/X/26Igrn3GiUeL5n/v+F/8//6/9NOMTC0hDUDefP/L4MoOL6ickVeSQ1QqAGooPdBJE/lnloge/fhixBHftFd9bLkR83/+n/1QAXVP8qX1Pyv/L/s/12f/4xQNz8s3Pa/6X/Vvzqgour/5f/r/q//f2fmLy54WP7lfJN74eMSoKIyoNFz/5/+9ar+Px9aZL3Xfjvz7aO3/96+eLvsnSVE7CPhOAYA9nvIX0UoNU8AAAAASUVORK5CYII=);
+    background-repeat: no-repeat;
+    background-position: 0 center;
+    padding: 0 0 0 18px;
+}
+
+a.link-mail:not(.btn) {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAABOUlEQVR4AaXJMWoUUQDG8f/33ltldyZB3E2xaCAxIQREFKwD2lhb6QmsxMIL6BlU8AhCjmBADdqlWLyACKZKF7LZmUzmzXwiSMTKwl/7478Jng9OXa5fviRzwTS5/j40OcHo2fSofH10tUcXHVg9q54cj3kleOnRj/uHh3e+FVgCbK2drX/dn5xuogAD8uqnyfXZRi3J+tXN2uxj2WwkEgFw0vnW3srmwbU2K2uat2fvi/ObSbII0Kl3VL+9O975PPXEOwe7sb8dZXfqSGB6YWm89Wb+dF+jt+3K3ZoeYUDwwgOjK14wV7tHNXhYUvgEqzUhQeegZVcsSOYBRFeCIXN3ggBoiYYTJBOJIHmhhiWEEHzwl3ycIhjxm5y1nO8FYoJbj268A0D8ISAWj0HQyEOE+Zuwasy//ATU93+97E8p8AAAAABJRU5ErkJggg==);
+    background-repeat: no-repeat;
+    background-position: 0 center;
+    padding: 0 0 0 18px;
+}
+
+</style>
+
+<style class="snippet-prism-combo">/* no margin at the bottom / to close to the next paragraph */
+.code-toolbar { margin-bottom: 1rem }
+</style>
+
+<style class="snippet-historical-breadcrumb-combo">.historical-breadcrumb li {
+    margin-bottom: 0.5rem;
+}
+.historical-breadcrumb a {
+    text-decoration: none;
+}
+.historical-breadcrumb-home {
+    max-width: fit-content;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    margin-bottom: 1rem;
+    padding:0.5rem;
+    text-align: center;
+    border-radius: calc(.3rem - 1px);
+    background-color: #f0f0f0;
+}
+.historical-breadcrumb-home::before {
+    content:'Actual: '
+}
+</style>
+
+<style class="snippet-message-combo">/*Message*/
+.combo-message > .signature {
+    font-size: 80%;
+    font-style: italic;
+    text-align: right;
+}
+</style>

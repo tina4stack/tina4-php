@@ -1,0 +1,8 @@
+Go to your PHP folder and open <span class="st0">&quot;php.ini&quot;</span> with Notepad or your IDE tool<span class="sy0">.</span> 
+    <span class="sy0">*</span>Please ensure that the <span class="st0">&quot;php_xdebug.dll&quot;</span> <a href="http://www.php.net/file"><span class="kw3">file</span></a> location is correct<span class="sy0">*</span> 
+Add the following in the extensions directory <a href="http://www.php.net/list"><span class="kw3">list</span></a> <span class="br0">&#40;</span>HINT<span class="sy0">:</span> its above Module Settings<span class="br0">&#41;</span><span class="sy0">:</span>
+    <span class="br0">&#91;</span>XDebug<span class="br0">&#93;</span>
+    zend_extension<span class="sy0">=</span><span class="st0">&quot;C:\php\ext\php_xdebug.dll
+    xdebug.remote_enable = 1
+    xdebug.remote_autostart = 1
+Press Ctrl+S or save changes you just made to &quot;</span>php<span class="sy0">.</span>ini<span class="st0">&quot; file.</span>

@@ -1,0 +1,95 @@
+
+<h1 class="sectionedit1 heading-combo" id="step1_-_create_a_rest_api_endpoint">Step1 - Create a REST <abbr title="Application Programming Interface">API</abbr> Endpoint</h1>
+<div class="level1">
+
+<p>
+Follow the steps below if you need to create an <abbr title="Application Programming Interface">API</abbr> end point to define the interactions between multiple software. 
+</p>
+
+<p>
+*Please Note* : After installing Tina4, you may delete the test.php file located inside the api folder. 
+</p>
+
+<p>
+The REST end point is easily added, with an anonymous method to handle the request, the anonymous method should have the response variable.
+The request exposes more information which comes from the browser, in the case of parameters passed to it. You should always return the ```$response``` object!;
+</p>
+
+<p>
+All your <abbr title="Application Programming Interface">API</abbr>&#039;s must be stored in the api directory. Inside <strong>/src/routes/</strong> we begin by creating a file for our <abbr title="Application Programming Interface">API</abbr> endpoint
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step1 - Create a REST API Endpoint&quot;,&quot;hid&quot;:&quot;step1_-_create_a_rest_api_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-702&quot;} -->
+<h1 class="sectionedit2 heading-combo" id="step_2_-_define_routes_api_endpoint">Step 2 - Define routes <abbr title="Application Programming Interface">API</abbr> Endpoint</h1>
+<div class="level1">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="/src/routes/someroute.php" data-download-link-label="Download /src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+
+\Tina4\Get::add(&quot;/api/cars&quot;, function(\Tina4\Response $response) {
+
+  $cars = [&quot;one&quot;, &quot;two&quot;, &quot;three&quot;];
+
+  return $response($cars, HTTP_OK, APPLICATION_JSON)
+});</code>
+</pre>
+
+<p>
+<a href="/documentation/lib/exe/fetch.php?cache=&amp;rev=&amp;media=api2.png"><span class="text-danger">The image (api2.png) does not exist</span></a>
+</p>
+
+<p>
+Ensure that the paths are correct: 
+</p>
+
+<p>
+<a href="/documentation/lib/exe/fetch.php?cache=&amp;rev=&amp;media=api.png"><img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=20&amp;tok=025bd8&amp;media=api.png 355w, https://tina4php.com/documentation/lib/exe/fetch.php?w=400&amp;h=22&amp;tok=8a846a&amp;media=api.png 400w" data-placeholder-background="#cbf1ea" src="https://tina4php.com/documentation/lib/exe/fetch.php?media=api.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="22" width="400" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, 400px" style="max-width:400px;width:100%"/></a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2 - Define routes API Endpoint&quot;,&quot;hid&quot;:&quot;step_2_-_define_routes_api_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;703-1043&quot;} -->
+<h1 class="sectionedit3 heading-combo" id="step_3_-_annotate_our_endpoint">Step 3 - Annotate our Endpoint</h1>
+<div class="level1">
+
+<p>
+Now we will need to annotate the end point we created. This will be a description of the end point which will be used in Swagger. Its as easy as adding the following lines above the end point you created:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="/src/routes/someroute.php" data-download-link-label="Download /src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/</code>
+</pre>
+
+<p>
+<a href="/documentation/lib/exe/fetch.php?cache=&amp;rev=&amp;media=api1.png"><span class="text-danger">The image (api1.png) does not exist</span></a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3 - Annotate our Endpoint&quot;,&quot;hid&quot;:&quot;step_3_-_annotate_our_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;1044-1447&quot;} -->
+<h1 class="sectionedit4 heading-combo" id="step_4_-_accessing_testing_our_endpoint">Step 4 - Accessing/Testing our Endpoint</h1>
+<div class="level1">
+
+<p>
+To access our enpoint we will navigate to the relevant path in our browser. E.g. <strong><a href="http://localhost:7145/api/items" class="urlextern" title="http://localhost:7145/api/items" rel="ugc nofollow">http://localhost:7145/api/items</a></strong>
+Also the swagger UI for all your annotated endpoints can be found at <strong><a href="http://localhost:7145/swagger" class="urlextern" title="http://localhost:7145/swagger" rel="ugc nofollow">http://localhost:7145/swagger</a></strong>
+</p>
+
+<p>
+<a href="/documentation/lib/exe/fetch.php?cache=&amp;rev=&amp;media=api5.png"><img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=27&amp;tok=67154f&amp;media=api5.png 355w, https://tina4php.com/documentation/lib/exe/fetch.php?w=400&amp;h=30&amp;tok=0bb12e&amp;media=api5.png 400w" data-placeholder-background="#cbf1ea" src="https://tina4php.com/documentation/lib/exe/fetch.php?media=api5.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="30" width="400" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, 400px" style="max-width:400px;width:100%"/></a>
+<a href="/documentation/lib/exe/fetch.php?cache=&amp;rev=&amp;media=api6.png"><img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=122&amp;tok=648636&amp;media=api6.png 355w, https://tina4php.com/documentation/lib/exe/fetch.php?w=556&amp;h=191&amp;tok=600911&amp;media=api6.png 556w, https://tina4php.com/documentation/lib/exe/fetch.php?w=748&amp;h=257&amp;tok=6c1811&amp;media=api6.png 748w, https://tina4php.com/documentation/lib/exe/fetch.php?w=900&amp;h=310&amp;tok=52b355&amp;media=api6.png 900w" data-placeholder-background="#cbf1ea" src="https://tina4php.com/documentation/lib/exe/fetch.php?media=api6.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="310" width="900" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, 900px" style="max-width:900px;width:100%"/></a>
+<a href="/documentation/lib/exe/fetch.php?cache=&amp;rev=&amp;media=api7.png"><img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-srcset="https://tina4php.com/documentation/lib/exe/fetch.php?w=355&amp;h=127&amp;tok=bb7c21&amp;media=api7.png 355w, https://tina4php.com/documentation/lib/exe/fetch.php?w=556&amp;h=198&amp;tok=ece3ef&amp;media=api7.png 556w, https://tina4php.com/documentation/lib/exe/fetch.php?w=748&amp;h=267&amp;tok=33e261&amp;media=api7.png 748w, https://tina4php.com/documentation/lib/exe/fetch.php?w=900&amp;h=321&amp;tok=79242e&amp;media=api7.png 900w" data-placeholder-background="#cbf1ea" src="https://tina4php.com/documentation/lib/exe/fetch.php?media=api7.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="321" width="900" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, 900px" style="max-width:900px;width:100%"/></a>
+</p>
+
+<p>
+<a class="link-internal link-combo" data-wiki-id="start" href="/documentation/doku.php?id=start" title="First Steps">Back to start</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4 - Accessing\/Testing our Endpoint&quot;,&quot;hid&quot;:&quot;step_4_-_accessing_testing_our_endpoint&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;1448-&quot;} -->

@@ -1,0 +1,50 @@
+====== How do I create a Table/Migration with Tina4 ======
+
+<WRAP center round todo 100% >
+[[tina4:tutorials:connect-to-database|Connect a Database]] to your project before attempting this section
+</WRAP>
+
+
+Migrations in Tina4 are very easy to do. 
+
+**1. Start up your project** with 
+
+    composer start
+or 
+    php -S localhost:7145 index.php 
+
+<WRAP center round tip >
+Run one of these commands from inside the project directory where index.php is located, or it won't work.
+</WRAP>
+
+[[http://localhost:7145/migrations/create|2.Make a new migration]]
+
+  - Enter a description for your migration (anything you like).
+  - Enter the migration in SQL
+  - Click "Create Migration".
+
+[[http://localhost:7145/migrate|3.Run the Migration]]
+
+Note any errors you get after running this. If you made a mistake you can fix the migration file by editing it. You'll find it in the migrations folder under your project.
+
+All done.
+
+<WRAP center round info>
+Read the section on [[tina4:orm|using the ORM next]] to learn how to query and use the database from inside your code.
+</WRAP>
+
+====== Troubleshooting ======
+If you run into problems you can try the SQL you've used in your migration directly in DbBeaver or another SQL client. If it runs you've solved the error. 
+
+Tina4's Migrations are very stable and works in every Database supported. Generally if you run into an error the issue is in your SQL not in Tina4.
+
+===== Roll Back a Migration =====
+Generally if your migration does not work you can make changes to the migration file and [[http://localhost:8383/migrate|Re-run the migration]] just the same way you did before.
+
+Tina4 does not drive you to abstraction here (pun intended): 
+
+  - Simply delete what you inserted (Tables / Data) with an SQL client like DbBeaver.
+  - Delete the record in your Tina4_Migration table that has the Description matching your Migration(s) you want to retry.
+  - Make changes to that Migration
+  - [[http://localhost:8383/migrate|Re-run the migration]]
+

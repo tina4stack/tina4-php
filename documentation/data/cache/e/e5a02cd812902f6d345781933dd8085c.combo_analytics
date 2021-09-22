@@ -1,0 +1,99 @@
+{
+    "id": "tina4:debug",
+    "date": "2021-09-12 23:09:21",
+    "metadata": {
+        "title": "Debugging",
+        "description": "Debugging\n\nA topic that is probably not covered enough. If you do not have debugging working in your IDE environment then you are sadly wasting a lot of your own time.  A debugger allows you to step through problem code and figure out what is going wrong without adding all those die(), var_dump() and print_r() statements.",
+        "date_created": "2021-09-04 06:55:56",
+        "date_modified": "2021-09-12 10:46:06",
+        "age_creation": 9,
+        "age_modification": 0
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "": 1,
+            "andre": 1
+        },
+        "chars_count": 3093,
+        "edits_count": 6,
+        "external_links_count": 6,
+        "formatted": {
+            "1": {
+                "len": 7
+            },
+            "0": 18,
+            "2": {
+                "len": 11
+            }
+        },
+        "headers_count": {
+            "h1": 1,
+            "h2": 3
+        },
+        "internal_backlinks_count": 2,
+        "linebreak": 1,
+        "syntax_count": {
+            "combo_headingwiki": 4,
+            "section": 4,
+            "p": 16,
+            "combo_link": 6,
+            "strong": 2,
+            "wrap_divwrap": 2,
+            "combo_code": 3,
+            "combo_preformatted": 1,
+            "combo_media": 4,
+            "listu": 1,
+            "listitem": 2,
+            "listcontent": 2
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 395
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 18.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 1.5,
+                "internal_backlinks_count": 2,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

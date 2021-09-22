@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4php.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4php.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://tina4php.com/documentation/</link>
+        <image rdf:resource="https://tina4php.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-07-29T02:19:17+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=first-steps&amp;rev=1627314829&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=installing_docker&amp;rev=1625138205&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4php.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4php.com/documentation/</link>
+        <url>https://tina4php.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=first-steps&amp;rev=1627314829&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-26T17:53:49+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>first-steps</title>
+        <link>https://tina4php.com/documentation/doku.php?id=first-steps&amp;rev=1627314829&amp;do=diff</link>
+        <description>First Steps
+
+Get up and running quickly with Docker if you want to preview Tina4 quickly without adding additional dependencies to your operating system.
+Please take a look at the  Setting up your Environment section to get all the prerequisites required for Tina4.</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=installing_docker&amp;rev=1625138205&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-01T13:16:45+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>installing_docker</title>
+        <link>https://tina4php.com/documentation/doku.php?id=installing_docker&amp;rev=1625138205&amp;do=diff</link>
+        <description>For installing Docker onto your machine, please watch the following videos and watch the video which is specific to your Operating System:
+ Windows                      Mac                            Linux                                  
+first-steps</description>
+    </item>
+</rdf:RDF>

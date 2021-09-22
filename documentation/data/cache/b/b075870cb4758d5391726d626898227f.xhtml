@@ -1,0 +1,117 @@
+
+<h1 class="sectionedit1 heading-combo" id="the_route_of_it">The Route of It</h1>
+<div class="level1">
+
+<p>
+Tina4 supports 2 types of routes, those created in code and those that are assumed based on files you drop in the <strong>src/templates</strong> folder.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;The Route of It&quot;,&quot;hid&quot;:&quot;the_route_of_it&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-172&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="dynamic_routing_using_files_in_src_templates">Dynamic Routing Using Files in src/templates</h2>
+<div class="level2">
+
+<p>
+Consider the following folder structure and the routes you can hit up in the browser.
+</p>
+<ul>
+<li class="level1"><div class="li"> src/templates/index.html →  <a class="link-external link-combo" href="http://localhost:7145/" rel="noopener" target="target=_blank">http://localhost:7145/</a> or <a class="link-external link-combo" href="http://localhost:7145/index" rel="noopener" target="target=_blank">http://localhost:7145/index</a></div>
+</li>
+<li class="level1"><div class="li"> src/templates/store/index.html → <a class="link-external link-combo" href="http://localhost:7145/store" rel="noopener" target="target=_blank">http://localhost:7145/store</a> or <a class="link-external link-combo" href="http://localhost:7145/store/index" rel="noopener" target="target=_blank">http://localhost:7145/store/index</a></div>
+</li>
+<li class="level1"><div class="li"> src/templates/store/shop.html → <a class="link-external link-combo" href="http://localhost:7145/store/shop" rel="noopener" target="target=_blank">http://localhost:7145/store/shop</a></div>
+</li>
+</ul>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+You can use either .twig or .html extensions. The html extension will cause the built in Tina4 template engine to be used.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Dynamic Routing Using Files in src\/templates&quot;,&quot;hid&quot;:&quot;dynamic_routing_using_files_in_src_templates&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;173-755&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="coded_routing_in_src_routes_with_subfolders">Coded Routing in src/routes with subfolders</h2>
+<div class="level2">
+
+<p>
+The folders are simply suggested folders where you can place php files to manage your routing.  Any php file place in the routing folder and sub folders will automatically be parsed and run when Tina4 is hit up.
+</p>
+
+<p>
+Try placing the following code in a php file of your choice in the routes folder
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="src/routes/someroute.php" data-download-link-label="Download src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Get::add (&quot;/test/route&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+    return $response (&quot;Hello World!&quot;);
+});</code>
+</pre>
+
+<p>
+Now lets test it by spinning up a built in web-server
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Coded Routing in src\/routes with subfolders&quot;,&quot;hid&quot;:&quot;coded_routing_in_src_routes_with_subfolders&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;756-1352&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="spinning_up_a_web-server">Spinning Up A Web-Server</h2>
+<div class="level2">
+
+<p>
+Spin up a web-server by entering : 
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+composer start</code>
+</pre>
+
+<p>
+Hit up <a class="link-external link-combo" href="http://localhost:7145/test/route" rel="noopener" target="target=_blank">http://localhost:7145/test/route</a> in your Web Browser ( e.g. FireFox, Chrome etc).
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Spinning Up A Web-Server&quot;,&quot;hid&quot;:&quot;spinning_up_a_web-server&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1353-1556&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="various_routing_examples">Various Routing Examples</h2>
+<div class="level2">
+
+<p>
+<br/>
+
+A route with inline parameters can be composed as follows
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="src/routes/someroute.php" data-download-link-label="Download src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Get::add (&quot;/test/route/{name}&quot;,function($name, \Tina4\Response $response, \Tina4\Request $request) {
+  return $response (&quot;Hello {$name}!&quot;);
+});</code>
+</pre>
+
+<p>
+<strong>A POST ROUTE looks as follows and will need a FORM KEY token to accept POSTS to it for CORS prevention</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="src/routes/someroute.php" data-download-link-label="Download src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Post::add (&quot;/test/post&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+    return $response (&quot;Hello {$request-&gt;param[&quot;someInput&quot;]}!&quot;);
+});</code>
+</pre>
+
+<p>
+<strong> Routing directly to a class </strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="src/routes/someroute.php" data-download-link-label="Download src/routes/someroute.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Get::add(&quot;/test&quot;, [&quot;TestClass&quot;, &quot;someRouter&quot;]);
+   
+class TestClass
+{
+   public function someRouter (\Tina4\Response $response, \Tina4\Request $request) {
+     return $response(&quot;Hello&quot;);
+   }
+}</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Various Routing Examples&quot;,&quot;hid&quot;:&quot;various_routing_examples&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1557-&quot;} -->

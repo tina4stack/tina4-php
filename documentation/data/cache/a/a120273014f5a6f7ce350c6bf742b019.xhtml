@@ -1,0 +1,152 @@
+
+<h1 class="sectionedit1 heading-combo" id="tina4_testing">Tina4 Testing</h1>
+<div class="level1">
+
+<p>
+Tina4 has a built in testing system, to assist with test driven development. It utilizes both composer scripts and phpDoc Comments as part of the testing system.
+</p>
+
+</div>
+
+<h4 class="heading-combo" id="declaring_a_test">Declaring a test</h4>
+<div class="level4">
+
+<p>
+Test declarations are included in the phpDoc Comments, and can be included above a function, class or class method. It includes two parts, the test declaration and then a list of tests. A test has two parts, the condition and then the message displayed, should there be a failure.
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+/**
+* @tests
+* assert 1 === 1, This will always be true
+* assert 2 === 2, This will also, always be true
+*/</code>
+</pre>
+
+</div>
+
+<h5 class="heading-combo" id="synopsis_of_a_test">Synopsis of a test</h5>
+<div class="level5">
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+ /**
+ *
+ * @tests
+ * Test declaration  brackets infer calling numberAdd      $a       $b           eval    , Message to show when broken
+ * assert            (                                     5,       5          )  ===  10, 5 + 5 should be 10 
+ **/
+ function numberAdd($a, $b) {
+ 
+   return $a + $b;
+ } </code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="running_the_tests">Running the tests</h4>
+<div class="level4">
+
+<p>
+Tests can be run from the terminal in your IDE, either using composer scripts, or a php command. The required composer scripts are built into your composer.json file when you ran the tina4 initialize. The two lines in  your composer.json file of importance are
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+..
+&quot;test&quot;: &quot;@tina4 tests:run&quot;,
+&quot;test:verbose&quot;: &quot;@tina4 tests:verbose&quot;,
+..</code>
+</pre>
+
+<p>
+The tests can be called using either of these calls, with verbose giving a result for each test, as opposed to just a result for the set of tests under a @tests.
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+composer test
+composer test:verbose</code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="grouping_tests">Grouping tests</h4>
+<div class="level4">
+
+<p>
+Tests can be grouped to help simplify test results, especially when focussing in on an area of code under development. Test groups are declared by a comma delimited list
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+..
+* @tests Test1, another test, &quot;Main group&quot;
+..</code>
+</pre>
+
+<p>
+and then called by appending one or more to the tests call
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+composer test another test, Test1</code>
+</pre>
+
+<p>
+This will return all the tests declared with either another test or Test1. 
+</p>
+
+</div>
+
+<h4 class="heading-combo" id="formulating_a_basic_test">Formulating a basic test</h4>
+<div class="level4">
+
+<p>
+So the formulation of a basic test is made up of
+</p>
+<ol>
+<li class="level1"><div class="li"> The assert, to determine this is the start of a test.</div>
+</li>
+<li class="level1"><div class="li"> The (1,2) essentially is running the function with the variables given and then returning a value</div>
+</li>
+<li class="level1"><div class="li"> The returned value is then tested against the condition thus 3 === 3 so the test will pass.</div>
+</li>
+</ol>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+  /**
+   * Function to add two numbers together
+   * @param $num1
+   * @param $num2
+   * @return mixed
+   * @tests document
+   *   assert (1, 2) === 3, The return can be tested with simple operators
+   */
+  function addNumbers($num1, $num2){
+      return $num1 + $num2;
+  }</code>
+</pre>
+
+<p>
+So using verbose tests this will produce
+</p>
+<pre class="code-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt code-combo">
+composer test:verbose
+
+BEGINNING OF TESTS
+=====================================================
+Testing Function addnumbers
+# 1 addnumbers: Passed ((1, 2) == &quot;3&quot;) 100%
+=====================================================
+END OF TESTS</code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="testing_operators">Testing operators</h4>
+<div class="level4">
+
+<p>
+The following operators are available for use, and behave as expected in php
+==, ===, !=, !==, ⇐, &gt;=, &lt;, &gt;
+</p>
+
+</div>

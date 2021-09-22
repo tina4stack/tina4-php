@@ -1,0 +1,1 @@
+<span class="kw2">&lt;?php</span> <span class="kw1">echo</span> <span class="st0">&quot;hello world!&quot;</span><span class="sy0">;</span> <span class="sy1">?&gt;</span>

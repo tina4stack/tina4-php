@@ -1,0 +1,11 @@
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+  <span class="br0">&#123;</span>%<a href="http://twig.sensiolabs.org/doc/tags/include.html"><span class="kw1">include</span></a> <span class="st0">&quot;snippets/header.twig&quot;</span>%<span class="br0">&#125;</span>
+&lt;body&gt;
+&nbsp;
+&lt;h1&gt;This is a Heading&lt;/h1&gt;
+&lt;p&gt;This is a paragraph.&lt;/p&gt;
+&nbsp;
+  <span class="br0">&#123;</span>%<a href="http://twig.sensiolabs.org/doc/tags/include.html"><span class="kw1">include</span></a> <span class="st0">&quot;snippets/footer.twig&quot;</span>%<span class="br0">&#125;</span>
+&lt;/body&gt;
+&lt;/html&gt;

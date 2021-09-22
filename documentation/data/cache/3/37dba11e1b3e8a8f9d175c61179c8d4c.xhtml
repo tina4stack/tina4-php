@@ -1,0 +1,41 @@
+
+<h1 class="sectionedit1 heading-combo" id="build_a_class_with_database_access">Build a class with database access</h1>
+<div class="level1">
+
+<p>
+Any class that extends <strong>\Tina4\Data</strong> will have a database variable <strong>$this→DBA</strong> to access the database from.
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+class MyDbObject extends \Tina4\Data
+{
+    /**
+    * Return all the fields in the test table
+    **/
+    function queryTheDB () {
+        return $this-&gt;DBA-&gt;fetch('select * from table')-&gt;AsArray();
+    }   
+}</code>
+</pre>
+
+<p>
+Or you can try this convention:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+class MyDbObject extends \Tina4\Data
+{
+    /**
+    * Return all the fields in the test table
+    **/
+    function getSomethingFromDb() {
+        return $this-&gt;DBA--&gt;select (&quot;*&quot;)-&gt;from(&quot;table&quot;)-&gt;asArray();
+    }   
+}</code>
+</pre>
+
+</div>

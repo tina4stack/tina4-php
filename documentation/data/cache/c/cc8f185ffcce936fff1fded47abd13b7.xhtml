@@ -1,0 +1,39 @@
+
+<h1 class="sectionedit1 heading-combo" id="add_a_rest_end_point">Add a REST end point</h1>
+<div class="level1">
+
+<p>
+The REST end point is easily added, with an anonymous method to handle the request, the anonymous method should have the response variable.
+</p>
+
+<p>
+The request exposes more information which comes from the browser, in the case of parameters passed to it. You should always return the <strong>$response</strong> object:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+//Standard
+\Tina4\Get::add(&quot;/hello/world&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {  
+    return $response(&quot;Hello World&quot;, HTTP_OK, TEXT_HTML);
+});
+
+//Inline Params
+\Tina4\Get::add(&quot;/hello/world/{id}&quot;, function($id, \Tina4\Response $response, \Tina4\Request $request){
+    return $response(&quot;Hello World {$id}&quot;, HTTP_OK, TEXT_HTML);
+});
+
+//Other methods you can test
+\Tina4\Post::add(...);
+
+\Tina4\Patch::add(...);
+
+\Tina4\Put::add(...);
+
+\Tina4\Delete::add(...);
+
+//You guessed it - It takes every method - GET, POST, DELETE, PUT, PATCH, OPTIONS
+\Tina4\Any::add(...);
+}  </code>
+</pre>
+
+</div>

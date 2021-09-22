@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://www.tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://www.tina4.com/documentation/feed.php">
+        <title>This is not a framework tina4:tutorials</title>
+        <description></description>
+        <link>https://www.tina4.com/documentation/</link>
+        <image rdf:resource="https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico" />
+       <dc:date>2021-06-22T15:31:43+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1622615618&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:build-class-with-db-access&amp;rev=1622183585&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:connect-to-database&amp;rev=1622183286&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://www.tina4.com/documentation/</link>
+        <url>https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1622615618&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-02T08:33:38+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1622615618&amp;do=diff</link>
+        <description>How Do I? - Advanced
+
+	*      Create a table/migration
+	*      Build a class with database access
+	*      Save a record using the ORM
+	*      Map my ORM object to a table with another name
+	*      Map my ORM field to a database field which doesn't follow the Tina4 pattern
+	*      Secure a REST end point
+	*      Add a filter to process records when they are extracted from the database
+	*      Exclude some fields from being displayed on REST result or query
+	*      Query the database for some reco…</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:21:25+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff</link>
+        <description>How Do I? - Beginner
+
+	*  Initialize a Tina4 project
+	*  Create a basic landing page
+	*  Create a basic route
+	*  Debug a twig template
+	*  Let my class use the database connection
+	*  Connect to a database
+	*  Write an update or insert statement 
+	*  Post form data
+	*  Making tables without migrations</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:build-class-with-db-access&amp;rev=1622183585&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:33:05+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:build-class-with-db-access</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:build-class-with-db-access&amp;rev=1622183585&amp;do=diff</link>
+        <description>Class with database access
+
+Any class that extends \Tina4\Data will have a database variable $this-&gt;DBA to access the database from.
+
+
+class MyData extends \Tina4\Data {
+  function getSomething() {
+    return $this-&gt;DBA-&gt;select (&quot;*&quot;)-&gt;from(&quot;table&quot;)-&gt;asArray();
+  } 
+}</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:connect-to-database&amp;rev=1622183286&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:28:06+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:connect-to-database</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:connect-to-database&amp;rev=1622183286&amp;do=diff</link>
+        <description>Connect to a database
+
+Three database engines are currently supported. The global variable $DBA is used from index.php to establish a database connection.  Adding a date format is optional.
+
+SQLite
+ global $DBA;
+ $DBA = new \Tina4\DataSQLite3(&quot;test.db&quot;, &quot;&quot;, &quot;&quot;, &quot;Y-m-d&quot;);</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:30:56+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:create-migration</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff</link>
+        <description>How do I create a Table/Migration with Tina4
+
+Connect a Database to your project before attempting this section
+
+Migrations in Tina4 are very easy to do. 
+
+1. Start up your project with 
+  composer start
+or 
+  php -S localhost:7145 index.php 
+Run one of these commands from inside the project directory where index.php is located, or it won't work.</description>
+    </item>
+</rdf:RDF>

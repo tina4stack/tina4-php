@@ -1,0 +1,14 @@
+====== Query the database for some records ======
+What if you wanted to query a record in your Database? Using a SQL statement in your script, you can query a record . Here's an example:
+
+<code php>
+<?php
+
+\Tina4\Get::add("/player/names", function ($names, \Tina4\Response $response, \Tina4\Request $request) {
+$names = (new UserName())->select("*") //In accordance with the Helper.
+                         ->from("table_with_names") //The table you want to select
+                         ->where (names = Peter) //The filter you want 
+                         ->asArray;
+ return $response (\Tina4\renderTemplate("yourtemplate.twig", ["names" => $names, ), HTTP_OK, TEXT_HTML);
+});
+</code>

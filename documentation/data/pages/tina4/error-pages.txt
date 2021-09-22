@@ -1,0 +1,8 @@
+====== Custom error Pages ======
+<WRAP center round info 60%>
+This feature is part of the upcoming 2.0.0 release. It's available in the bleeding edge dev branch of Tina4
+</WRAP>
+
+You can now customize error pages in Tina4. 
+
+You can drop a twig file with any valid http error code into /public/errors/404.twig

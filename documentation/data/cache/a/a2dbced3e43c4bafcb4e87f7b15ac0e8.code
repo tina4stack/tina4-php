@@ -1,0 +1,33 @@
+&lt;?php
+&nbsp;
+&nbsp;
+class MessengerService extends \Tina4\Process {
+&nbsp;
+    function run () {
+        echo &quot;Sending Messages&quot;;
+        $messages = (New MessageQueue)-&gt;load();
+&nbsp;
+        foreach ($messages as $message)
+        {
+          // Send messages
+        }
+&nbsp;
+&nbsp;
+    }
+&nbsp;
+    function canRun(): bool
+    {
+       $haveMessages = (New MessageQueue)-&gt;load();
+&nbsp;
+&nbsp;
+       if ($haveMessages)
+       {
+          //We have email messages queued, let the task run
+          return true;
+       }
+       else
+       {
+          //We have no messages queued
+          return false;
+       }
+}

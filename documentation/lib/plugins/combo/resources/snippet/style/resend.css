@@ -1,0 +1,58 @@
+
+.form-resend {
+    width: 100%;
+    max-width: 400px;
+    padding: 15px;
+    margin: auto;
+}
+
+.form-resend .row {
+    margin-bottom: 1rem;
+}
+
+.form-resend .logo {
+    margin-bottom: 1.5rem;
+}
+
+.form-resend label::first-letter {
+    text-transform: capitalize;
+}
+.form-resend label {
+    white-space: nowrap;
+}
+
+.form-resend h1 {
+    font-size: calc(1.3rem + .6vw);
+    margin-bottom: 1.5rem;
+    margin-top: 0;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.form-resend .form-floating:focus-within {
+    z-index: 2;
+}
+
+.form-resend-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.form-resend button {
+    padding: .5rem 1rem;
+    font-size: 1.15rem;
+    border-radius: .3rem;
+    margin-top: 1rem;
+    margin-bottom: 3rem;
+}
+
+.form-resend .login {
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+}
+
+.form-resend .register {
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+

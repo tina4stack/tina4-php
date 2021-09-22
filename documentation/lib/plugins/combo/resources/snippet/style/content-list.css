@@ -1,0 +1,16 @@
+.content-list-combo {
+    margin-bottom: 1rem;
+}
+
+
+/* Spacing is too little on the y and there is a default color */
+.content-list-item-combo {
+    color: inherit;
+    padding: 1rem 1rem;
+    display: flex;
+}
+
+
+
+
+

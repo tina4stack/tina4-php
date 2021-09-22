@@ -1,0 +1,396 @@
+
+<h1 class="sectionedit1 heading-combo" id="tina4_testing">Tina4 Testing</h1>
+<div class="level1">
+
+<p>
+Tina4 has a built in testing system, to assist with test driven development. It utilizes both composer scripts and phpDoc Comments as part of the testing system. A wise Wizard once said, “If you cannot test your code, then why are you creating the piece of code it in the first place?”
+</p>
+
+</div>
+
+<h4 class="heading-combo" id="declaring_a_test">Declaring a test</h4>
+<div class="level4">
+
+<p>
+<a class="link-external link-combo" href="https://www.php.net/manual/en/language.types.declarations.php" rel="nofollow ugc">Test declarations</a> are included in the phpDoc Comments, and can be included above a function, class or class method. It includes two parts, the test declaration and then a list of tests. A test has two parts, the condition and then the message displayed, should there be a failure.
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+  /**
+  * @tests
+  * assert 1 === 1, This will always be true
+  * assert 2 === 2, This will also, always be true
+  */</code>
+</pre>
+
+</div>
+
+<h5 class="heading-combo" id="synopsis_of_a_test">Synopsis of a test</h5>
+<div class="level5">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+   /**
+   * @tests
+   * Test declaration brackets infer calling numberAdd $a  $b  eval , Message to show when broken
+   * assert  ( 5, 5 )  ===  10, 5 + 5 should be 10 
+   **/
+   function numberAdd($a, $b) {
+   
+     return $a + $b;
+   } </code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="running_the_tests">Running the tests</h4>
+<div class="level4">
+
+<p>
+Tests can be run from the terminal in your IDE, either using composer scripts, or a php command. The required composer scripts are built into your composer.json file when you ran the tina4 initialize. 
+</p>
+
+<p>
+The two lines in  your <strong>composer.json</strong> file of importance are:
+</p>
+<pre class="code-container-combo code-container-composer.json-combo" data-download-link="true" data-src="file.composer.json">
+<code class="language-composer.json code-combo code-composer.json-combo">{
+  &quot;name&quot;: &quot;andrevanzuydam/tina4php&quot;,
+  &quot;description&quot;: &quot;Tina4 PHP&quot;,
+  &quot;license&quot;: &quot;MIT&quot;,
+  &quot;require&quot;: {
+    &quot;twig/twig&quot;: &quot;^1.3&quot;,
+    &quot;phpfastcache/phpfastcache&quot;: &quot;^7.0&quot;,
+    &quot;coyl/git&quot;: &quot;^0.1.7&quot;,
+    &quot;ext-json&quot;: &quot;*&quot;,
+    &quot;nowakowskir/php-jwt&quot;: &quot;^1.1&quot;,
+    &quot;nlp-tools/nlp-tools&quot;: &quot;^0.1.3&quot;,
+    &quot;opis/closure&quot;: &quot;^3.6&quot;
+  },
+  &quot;autoload&quot;: {
+    &quot;classmap&quot;: [
+      &quot;test&quot;: &quot;@tina4 tests:run&quot;,
+      &quot;test:verbose&quot;: &quot;@tina4 tests:verbose&quot;,
+      ],</code>
+</pre>
+
+<p>
+The tests can be called using either of these calls, with verbose giving a result for each test, as opposed to just a result for the set of tests under a <strong>@tests</strong>.
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">composer test
+composer test:verbose</code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="grouping_tests">Grouping tests</h4>
+<div class="level4">
+
+<p>
+Tests can be grouped to help simplify test results, especially when focusing in on an area of code under development. Test groups are declared by a comma delimited list:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+   /**
+   * @tests Test1, another test, &quot;Main group&quot;
+   **/</code>
+</pre>
+
+<p>
+and then called by appending one or more to the tests call:
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">composer test another test, Test1</code>
+</pre>
+
+<p>
+This will return all the tests declared with either another test or Test1. 
+</p>
+
+</div>
+
+<h4 class="heading-combo" id="formulating_a_basic_test">Formulating a basic test</h4>
+<div class="level4">
+
+<p>
+So the formulation of a basic test is made up of
+</p>
+<ol>
+<li class="level1"><div class="li"> The assert, to determine this is the start of a test.</div>
+</li>
+<li class="level1"><div class="li"> The (1,2) essentially is running the function with the variables given and then returning a value</div>
+</li>
+<li class="level1"><div class="li"> The returned value is then tested against the condition thus 3 === 3 so the test will pass.</div>
+</li>
+</ol>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo"> &lt;?php
+  
+  /**
+   * Function to add two numbers together
+   * @param $num1
+   * @param $num2
+   * @return mixed
+   * @tests document
+   * assert (1, 2) === 3, The return can be tested with simple operators
+   **/
+
+class ExampleHelper extends \Tina4\Data
+  function addNumbers($num1, $num2){
+      return $num1 + $num2;
+    }
+}</code>
+</pre>
+
+<p>
+So using verbose tests this will produce:
+</p>
+<pre class="code-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt code-combo">composer test:verbose</code>
+</pre>
+
+<p>
+The test will start and you will see the following running in your IDE terminal: 
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">BEGINNING OF TESTS
+=====================================================
+Testing Function addnumbers
+# 1 addnumbers: Passed ((1, 2) == &quot;3&quot;) 100%
+=====================================================
+END OF TESTS</code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="testing_operators">Testing operators</h4>
+<div class="level4">
+
+<p>
+The following operators are available for use, and behave as expected in php
+==, ===, !=, !==, ⇐, &gt;=, &lt;, &gt;
+</p>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/toolbar/prism-toolbar.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/normalize-whitespace/prism-normalize-whitespace.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/show-language/prism-show-language.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/command-line/prism-command-line.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/line-numbers/prism-line-numbers.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/download-button/prism-download-button.min.js" integrity="sha512-rGJwSZEEYPBQjqYxrdg6Ug/6i763XQogKx+N/GF1rCGvfmhIlIUFxCjc4FmEdCu5dvovqxHsoe3IPMKP+KlgNQ==" crossorigin="anonymous" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/autoloader/prism-autoloader.min.js" class="snippet-prism-autoloader-combo"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+
+<script class="snippet-prism-combo">document.addEventListener('DOMContentLoaded', (event) => {
+
+    if (typeof self === 'undefined' || !self.Prism || !self.document) {
+        return;
+    }
+
+    // Loading the css from https://cdnjs.com/libraries/prism
+    const head = document.querySelector('head');
+    const baseCdn = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0/";
+    const stylesheets = [
+        ["themes/prism-tomorrow.min.css", "sha512-vswe+cgvic/XBoF1OcM/TeJ2FW0OofqAVdCZiEYkd6dwGXthvkSFWOoGGJgS2CW70VK5dQM5Oh+7ne47s74VTg=="],
+        ["plugins/toolbar/prism-toolbar.min.css","sha512-DSAA0ziYwggOJ3QyWFZhIaU8bSwQLyfnyIrmShRLBdJMtiYKT7Ju35ujBCZ6ApK3HURt34p2xNo+KX9ebQNEPQ=="],
+        /*https://prismjs.com/plugins/command-line/*/
+        ["plugins/command-line/prism-command-line.min.css","sha512-4Y1uID1tEWeqDdbb7452znwjRVwseCy9kK9BNA7Sv4PlMroQzYRznkoWTfRURSADM/SbfZSbv/iW5sNpzSbsYg=="],
+        /*https://prismjs.com/plugins/line-numbers/*/
+        ["plugins/line-numbers/prism-line-numbers.min.css","sha512-cbQXwDFK7lj2Fqfkuxbo5iD1dSbLlJGXGpfTDqbggqjHJeyzx88I3rfwjS38WJag/ihH7lzuGlGHpDBymLirZQ=="]
+    ];
+
+    stylesheets.forEach(stylesheet => {
+            let link = document.createElement('link');
+            link.rel="stylesheet"
+            link.href=baseCdn+"/"+stylesheet[0];
+            link.integrity=stylesheet[1];
+            link.crossOrigin="anonymous";
+            head.append(link);
+        }
+    )
+
+
+    Prism.plugins.NormalizeWhitespace.setDefaults({
+        'remove-trailing': true,
+        'remove-indent': true,
+        'left-trim': true,
+        'right-trim': true,
+    });
+
+    if (!Prism.plugins.toolbar) {
+        console.warn('Copy to Clipboard plugin loaded before Toolbar plugin.');
+
+        return;
+    }
+
+    let ClipboardJS = window.ClipboardJS || undefined;
+
+    if (!ClipboardJS && typeof require === 'function') {
+        ClipboardJS = require('clipboard');
+    }
+
+    const callbacks = [];
+
+    if (!ClipboardJS) {
+        const script = document.createElement('script');
+        const head = document.querySelector('head');
+
+        script.onload = function() {
+            ClipboardJS = window.ClipboardJS;
+
+            if (ClipboardJS) {
+                while (callbacks.length) {
+                    callbacks.pop()();
+                }
+            }
+        };
+
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.0/clipboard.min.js';
+        head.appendChild(script);
+    }
+
+    Prism.plugins.toolbar.registerButton('copy-to-clipboard', function (env) {
+        var linkCopy = document.createElement('button');
+        linkCopy.textContent = 'Copy';
+        linkCopy.setAttribute('type', 'button');
+
+        var element = env.element;
+
+        if (!ClipboardJS) {
+            callbacks.push(registerClipboard);
+        } else {
+            registerClipboard();
+        }
+
+        return linkCopy;
+
+        function registerClipboard() {
+            var clip = new ClipboardJS(linkCopy, {
+                'text': function () {
+                    return element.textContent;
+                }
+            });
+
+            clip.on('success', function() {
+                linkCopy.textContent = 'Copied!';
+
+                resetText();
+            });
+            clip.on('error', function () {
+                linkCopy.textContent = 'Press Ctrl+C to copy';
+
+                resetText();
+            });
+        }
+
+        function resetText() {
+            setTimeout(function () {
+                linkCopy.textContent = 'Copy';
+            }, 5000);
+        }
+    });
+
+});</script>
+
+<script class="snippet-popover-combo">window.addEventListener('load', function () {
+    let namespace = "-bs"
+    let version = 5;
+    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
+        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        jQuery(`[data${namespace}-toggle="popover"]`).popover();
+    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
+        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
+            .forEach(el => {
+                new bootstrap.Popover(el);
+                // to not navigate on a anchor
+                el.onclick = (event => event.preventDefault());
+            });
+    }
+});
+</script>
+
+<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
+    anchors.options = {
+        placement: 'right',
+        icon: '#',
+        class: 'anchor-combo'
+    };
+    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
+});
+</script>
+
+<style class="snippet-lqpp-combo">.low-quality-page-combo {
+    text-decoration: none;
+}
+</style>
+
+<style class="snippet-link-combo">
+a.link-external:not(.btn) {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAABdklEQVR4AWMgAVRo1zY3rGk41rC+rqvCBCJWBpPM4WoomLHtdtuv/t9Lfk263TtrQ0t7Oj9cbzZDc/W6s/8T7khD+P+F/8bv29PZlswJVVBu0vPuVZyNYHFZbmAqE1SR0cbjXR6pjGBO58am962Ta3e3ftqy6B5LCcMasOj7gInrm9jBzI4vTX+bfjT/7/4/p/w/zFXybUmt71u4wJzGfxP/t/xvA+KaP2XnQSKVFpWPav/U/6+HKJjz++OVJUDp1n9N/+r+19QyMCz1mPC/8X/X/26Igrn3GiUeL5n/v+F/8//6/9NOMTC0hDUDefP/L4MoOL6ickVeSQ1QqAGooPdBJE/lnloge/fhixBHftFd9bLkR83/+n/1QAXVP8qX1Pyv/L/s/12f/4xQNz8s3Pa/6X/Vvzqgour/5f/r/q//f2fmLy54WP7lfJN74eMSoKIyoNFz/5/+9ar+Px9aZL3Xfjvz7aO3/96+eLvsnSVE7CPhOAYA9nvIX0UoNU8AAAAASUVORK5CYII=);
+    background-repeat: no-repeat;
+    background-position: 0 center;
+    padding: 0 0 0 18px;
+}
+
+a.link-mail:not(.btn) {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAABOUlEQVR4AaXJMWoUUQDG8f/33ltldyZB3E2xaCAxIQREFKwD2lhb6QmsxMIL6BlU8AhCjmBADdqlWLyACKZKF7LZmUzmzXwiSMTKwl/7478Jng9OXa5fviRzwTS5/j40OcHo2fSofH10tUcXHVg9q54cj3kleOnRj/uHh3e+FVgCbK2drX/dn5xuogAD8uqnyfXZRi3J+tXN2uxj2WwkEgFw0vnW3srmwbU2K2uat2fvi/ObSbII0Kl3VL+9O975PPXEOwe7sb8dZXfqSGB6YWm89Wb+dF+jt+3K3ZoeYUDwwgOjK14wV7tHNXhYUvgEqzUhQeegZVcsSOYBRFeCIXN3ggBoiYYTJBOJIHmhhiWEEHzwl3ycIhjxm5y1nO8FYoJbj268A0D8ISAWj0HQyEOE+Zuwasy//ATU93+97E8p8AAAAABJRU5ErkJggg==);
+    background-repeat: no-repeat;
+    background-position: 0 center;
+    padding: 0 0 0 18px;
+}
+
+</style>
+
+<style class="snippet-prism-combo">/* no margin at the bottom / to close to the next paragraph */
+.code-toolbar { margin-bottom: 1rem }
+</style>
+
+<style class="snippet-historical-breadcrumb-combo">.historical-breadcrumb li {
+    margin-bottom: 0.5rem;
+}
+.historical-breadcrumb a {
+    text-decoration: none;
+}
+.historical-breadcrumb-home {
+    max-width: fit-content;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    margin-bottom: 1rem;
+    padding:0.5rem;
+    text-align: center;
+    border-radius: calc(.3rem - 1px);
+    background-color: #f0f0f0;
+}
+.historical-breadcrumb-home::before {
+    content:'Actual: '
+}
+</style>
+
+<style class="snippet-message-combo">/*Message*/
+.combo-message > .signature {
+    font-size: 80%;
+    font-style: italic;
+    text-align: right;
+}
+</style>

@@ -1,0 +1,139 @@
+====== Generate HTML with Shape ======
+
+HTML Language called Shape where you write code to make HTML. We can define the client-side image map using HTML Shape. Using this method, you can output HTML elements with PHP. 
+
+===== Installation =====
+Put a file named composer.json at the root of your project, containing your project dependencies:
+
+<code bash>
+composer require tina4stack/tina4php-shape 
+</code>
+
+===== Basic usage =====
+Each HTML tag has an opening underscore prefix, HTML tag element and a closing underscore prefix (e.g. the paragraph tag is <p>. Using HTML Shape the convention would be different as we can write it out as **_p()**
+
+==== Normal Tag ====
+Here's an example of a normal paragraph tag using the HTML Shape method: 
+
+<code php>
+<?php
+
+require_once "vendor/autoload.php";
+
+echo _p("Hello"); //-->this will be output as <p>Hello</p> . We stipulated what the content must be.
+</code>
+
+==== Tag with Attributes ====
+Here's an example of a div and attribute tag using the HTML Shape method: 
+
+<code php>
+<?php
+
+require_once "vendor/autoload.php";
+
+echo _div(["class" => "form-group"], "Testing"); //-->this will be output as <div class="form-group">Testing</div>. We first stipulate the class, thereafter we stipulated what the content must be. 
+</code>
+
+==== Nesting of tags ====
+
+If you think of unordered lists or select tags, somethings can become easier to code due to **nesting**. 
+
+<code php>
+<?php
+
+require_once "vendor/autoload.php";
+
+$lis = []; //--> stipulate an array of items
+
+$lis[] = _li("One"); //--> List item 1
+$lis[] = _li("Two"); //--> List item 1
+
+$ul = _ul ($lis);
+
+$options = [];
+
+$options[] = _option("One");
+$options[] = _option("Two");
+
+$select = _select (["name" => "choose"], $options);
+</code>
+
+
+===== Finding a tag by id =====
+
+You can manipulate a tag's content by targeting the tags id attribute:
+
+<code php>
+<?php
+
+$tag = $html->byId("someId"); //-->The id tag that you want to search for and manipulate. 
+</code>
+
+===== Set the HTML of a tag =====
+
+You can change the HTML tag type using the following convention:
+
+<code php>
+<?php
+
+require_once "vendor/autoload.php";
+
+$tag->html(_p("Changed HTML")); //-->Target the tag you want to manipulate
+</code>
+
+==== Example ====
+
+<code php>
+<?php
+require_once "vendor/autoload.php";
+
+//Start some HTML
+
+$lis = [];
+
+$lis[] = _li("One");
+$lis[] = _li("Two");
+
+$ul = _ul ($lis);
+
+$html = _shape(
+    _doctype("html"),
+    _html(["lang" => "en"],
+    _head(
+        _title("Testing")
+    ),
+    _body(
+        _h1(["id" => "someId"],"Hello World! H1"),
+        _h2("Hello World! H2"),
+        $a = _h3("Hello World! H3"),
+        _h4("Hello World! H4"),
+        _h5("Hello World! H5"),
+        $ul
+    )
+));
+
+$a->html(_b(["style" => "color: red"],"Hello"));
+
+$html->byId("someId")->html("=====");
+
+echo $html;
+</code>
+
+This will be the results:
+
+====== **=====** ======
+
+<heading h2 >Hello World! H2</heading> 
+
+<heading h3 color="red">Hello</heading> 
+
+<heading h4 >Hello World! H4</heading> 
+
+<heading h5 >Hello World! H5</heading> 
+
+* One
+\\
+* Two
+
+
+

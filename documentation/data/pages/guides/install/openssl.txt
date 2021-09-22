@@ -1,0 +1,60 @@
+====== Install OpenSSL ======
+
+Tina4 uses OpenSSL for security key generation. It is a a toolkit used as a Security Layer protocols between a computer network and Internet servers. Follow these instructions to install OpenSSL on your system. 
+
+==== Linux or MacOS Users ====
+
+If you're on Linux or MacOS OpenSSL is installed by default.
+
+==== Windows Users ====
+=== Step 1 - Download & Install ===
+
+Sadly you are going to need to do a bit more work. Luckily, we have taken time to show you how to do this and its very simple so no need to worry. 
+
+<WRAP center info>
+Head to the [[https://slproweb.com/products/Win32OpenSSL.html|SLProWeb OpenSSL Library]] page and download the current stable version for your Operating System.
+</WRAP>
+
+After the download is complete, run the installation file and follow the prompts carefully. The installation window will inform you once the installation is complete. 
+
+===  Step 2 - Edit environment path variable  ===
+After you have installed OpenSSL, you must add the OpenSSL bin folder in your systems environment variable table.
+
+Add path environment variable:
+
+<WRAP center info>
+*Open **Control Panel**
+\\
+*Go to **System**
+\\
+*Go to **Advanced system settings**
+</WRAP>
+
+{{ :tina4:enviro1.png?nolink }}
+
+*<WRAP center info>
+*Go to **Environment variable** 
+\\
+*Look for **Path** in the **Variable** column and click Edit.
+</WRAP>
+
+{{ :tina4:enviro2.png?nolink }}
+
+*<WRAP center info>
+* Click on **Browse**, locate the **bin** folder directory where you installed OpenSSL (e.g. C:\Program Files\OpenSSL-Win64\bin). 
+\\
+* Click **OK** and then click **OK** again to close the **Edit environment variable** window. 
+</WRAP>
+
+{{ :tina4:enviro3.png?nolink }}
+
+=== Step 3 - Confirm installation  ===
+
+Complete the installation by restarting your system so that changes may take effect. After this you can confirm if the installation was a success by opening your command terminal (e.g Command Prompt or terminal in your IDE tool) and typing in **openssl version** and pushing Enter. 
+
+This will display the OpenSSL version if installed correctly. If you receive an error, the installation was unsuccessful. In this case, uninstall OpenSSL and follow the steps again.
+
+{{ :tina4:openssl.png?nolink }}
+
+==== Conclusion ====
+You installed OpenSSL and now have all the requirements to make the magic of Tina4 happen. This will handle all security requirements for requests and responses between your web-app or system and its servers. 

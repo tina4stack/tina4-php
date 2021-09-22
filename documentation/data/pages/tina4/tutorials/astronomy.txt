@@ -1,0 +1,28 @@
+**__Astronomy__**
+
+
+----
+''Hello there. :-D  Last year (21 December 2020) Two of our biggest planets in our solar system were at their closest!! Jupiter and Saturn 🪐🪐 were be VISIBLE!! This is known as The Great Conjunction. This is something which last occurred in 1623. According to NASA and the South African Space Observatory, these two giant planets could be seen with the naked eye. Unfortunately for most of the country, it was a very rainy and cloudy day that day, so we could not see the planets. I also could not see the planets with my telescope because in the evening, it was cloudy and there were just no stars visible. However, some of my international friends from Australia and USA said they saw the planets with their naked eye. Videos of the great event from other parts of the world, were circulating on social media.'' 
+
+{{:tina4:tutorials:sidney_telescope.jpg?200| Sidney holding his telescope}}
+
+<WRAP center round info 80%>
+<wrap em>Here is a table containing the nine planets we have in our solar system:</wrap> 
+</WRAP>
+
+
+^ **PLANET**    ^ **PICTURE **     ^ 
+| Mercury        |  {{:tina4:tutorials:mercury.jpeg?100| Mercury}}          | 
+| Venus          |  {{:tina4:tutorials:venus.jpg?100| Venus}}               |
+| Earth          |  {{:tina4:tutorials:earth.jpg?100| Earth}}               |
+| Mars           |  {{:tina4:tutorials:mars.jpg?100| Mars}}                 |
+|Jupiter         |  {{:tina4:tutorials:jupiter.jpg?100| Jupiter}}           |
+|Saturn          |  {{:tina4:tutorials:saturn.jpg?100| Saturn}}             |
+|Uranus          |  {{:tina4:tutorials:uranus.jpeg?100| Uranus}}            |
+|Neptune         |  {{:tina4:tutorials:neptunejpg.jpg?100| Neptune}}        |
+|Pluto           |  {{:tina4:tutorials:pluto.jpg?100| Pluto}}               |
+
+
+
+
+[[tina4:tutorials:test|Back]]

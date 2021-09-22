@@ -1,0 +1,5 @@
+# This is a list of files that were present in previous plugin releases
+# but were removed later. An up to date plugin should not have any of
+# the files installed
+bootstrap/boostrapCustom.json
+bootstrap/boostrap.json

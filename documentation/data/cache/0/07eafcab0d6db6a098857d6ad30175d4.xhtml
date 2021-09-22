@@ -1,0 +1,100 @@
+
+<h1 class="sectionedit1" id="database_in_tina4">Database in Tina4</h1>
+<div class="level1">
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Database in Tina4&quot;,&quot;hid&quot;:&quot;database_in_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-33&quot;} -->
+<h2 class="sectionedit2" id="connecting_to_a_database">Connecting to a Database</h2>
+<div class="level2">
+
+<p>
+There are 3 database engines currently supported, we are happy to add more if required but for now they are:
+</p>
+
+<p>
+The database connection is established in a global variable called <strong>$DBA</strong> in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required. For testing purpose, you can use the SQLite database type below.
+</p>
+<ul>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database:mysql" class="wikilink1" title="tina4:database:mysql" data-wiki-id="tina4:database:mysql">Connect to Mysql</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database:firebird" class="wikilink1" title="tina4:database:firebird" data-wiki-id="tina4:database:firebird">Connect to Firebird</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database:sqlite" class="wikilink1" title="tina4:database:sqlite" data-wiki-id="tina4:database:sqlite">Connect to Sqlite</a></div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Connecting to a Database&quot;,&quot;hid&quot;:&quot;connecting_to_a_database&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;34-618&quot;} -->
+<h2 class="sectionedit3" id="query_a_database_in_tina4">Query a Database in Tina4</h2>
+<div class="level2">
+
+<p>
+Here&#039;s a quick way to query a database in Tina4. 
+</p>
+
+<p>
+Create a class in a new file in the app directory
+I.e. MyClass.php
+</p>
+<pre class="code php"><span class="kw2">&lt;?php</span> 
+&nbsp;
+<span class="kw2">class</span> LegacyHelper <span class="kw2">extends</span> \Tina4\Data 
+<span class="br0">&#123;</span>
+    <span class="kw2">public</span> <span class="kw2">function</span> getEvent<span class="br0">&#40;</span><span class="re0">$variable</span><span class="br0">&#41;</span>
+    <span class="br0">&#123;</span>
+        <span class="re0">$event</span> <span class="sy0">=</span> <span class="re0">$this</span><span class="sy0">-</span><span class="re0">$DBA</span><span class="sy0">-&gt;</span><span class="me1">select</span><span class="br0">&#40;</span><span class="st0">&quot;*&quot;</span><span class="br0">&#41;</span> <span class="co1">//$DBA is made available because we extended \Tina4\Data</span>
+                           <span class="sy0">-&gt;</span><span class="me1">from</span><span class="br0">&#40;</span><span class="st0">&quot;table_name&quot;</span><span class="br0">&#41;</span>
+                           <span class="sy0">-&gt;</span><span class="me1">where</span><span class="br0">&#40;</span><span class="st0">&quot;column_name = <span class="es4">{$variable}</span>&quot;</span><span class="br0">&#41;</span>
+                           <span class="sy0">-&gt;</span><span class="me1">exclude</span><span class="br0">&#40;</span><span class="st0">&quot;id&quot;</span><span class="br0">&#41;</span>
+                           <span class="br0">&#125;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+        <span class="kw1">return</span> <span class="re0">$event</span><span class="sy0">;</span>
+    <span class="br0">&#125;</span>
+<span class="br0">&#125;</span></pre>
+
+<p>
+<strong>Let&#039;s break down</strong>
+</p>
+<ol>
+<li class="level1"><div class="li"> We&#039;re extending the \Tina4\Data class which already has access to the database</div>
+</li>
+<li class="level1"><div class="li"> Note we&#039;ve included \Tina4 in front of the class name (so we don&#039;t need to declare the Tina4 namespace in our file)</div>
+</li>
+<li class="level1"><div class="li"> From here we can use the built-in Tina4 functions to create a query (see <a href="https://github.com/andrevanzuydam/tina4-php/blob/master/Tina4/Database/SQL.php" class="urlextern" title="https://github.com/andrevanzuydam/tina4-php/blob/master/Tina4/Database/SQL.php" rel="ugc nofollow">\Tina4\SQL</a>)</div>
+</li>
+</ol>
+
+<p>
+<strong>How can the select method be used?</strong>
+Have a look at the select function from <a href="https://github.com/andrevanzuydam/tina4-php/blob/master/Tina4/Database/DatabaseCore.php" class="urlextern" title="https://github.com/andrevanzuydam/tina4-php/blob/master/Tina4/Database/DatabaseCore.php" rel="ugc nofollow">\Tina4\Database</a>
+</p>
+<pre class="code php"><span class="kw2">public</span> <span class="kw2">function</span> select<span class="br0">&#40;</span><span class="re0">$fields</span> <span class="sy0">=</span> <span class="st0">&quot;*&quot;</span><span class="sy0">,</span> <span class="re0">$limit</span> <span class="sy0">=</span> <span class="nu0">10</span><span class="sy0">,</span> <span class="re0">$offset</span> <span class="sy0">=</span> <span class="nu0">0</span><span class="sy0">,</span> <span class="re0">$hasOne</span> <span class="sy0">=</span> <span class="br0">&#91;</span><span class="br0">&#93;</span><span class="sy0">,</span> <span class="re0">$hasMany</span> <span class="sy0">=</span> <span class="br0">&#91;</span><span class="br0">&#93;</span><span class="br0">&#41;</span></pre>
+
+<p>
+<strong>Fields</strong>
+</p>
+<ul>
+<li class="level1"><div class="li"> Specify “*” or multiple fields.</div>
+</li>
+</ul>
+<pre class="code php"> <span class="sy0">-&gt;</span><span class="me1">select</span><span class="br0">&#40;</span><span class="st0">&quot;*&quot;</span><span class="br0">&#41;</span> </pre>
+<pre class="code php"> <span class="sy0">-&gt;</span><span class="me1">select</span><span class="br0">&#40;</span><span class="st0">&quot;name,id&quot;</span><span class="br0">&#41;</span> </pre>
+<ul>
+<li class="level1"><div class="li"> limit the records returned (default 10), </div>
+</li>
+</ul>
+<pre class="code php"> <span class="sy0">-&gt;</span><span class="me1">select</span><span class="br0">&#40;</span><span class="st0">&quot;name,id&quot;</span><span class="sy0">,</span><span class="nu0">1</span><span class="br0">&#41;</span> </pre>
+<ul>
+<li class="level1"><div class="li"> specify an offset (null based) so 3 would return from results from the 4th record, </div>
+</li>
+</ul>
+<pre class="code php"> <span class="sy0">-&gt;</span><span class="me1">select</span><span class="br0">&#40;</span><span class="st0">&quot;name,id&quot;</span><span class="sy0">,</span><span class="nu0">1</span><span class="sy0">,</span><span class="nu0">3</span><span class="br0">&#41;</span> </pre>
+<ul>
+<li class="level1"><div class="li"> hasOne <img src="/documentation/lib/images/smileys/fixme.gif" class="icon" alt="FIXME" /></div>
+</li>
+<li class="level1"><div class="li"> hasMany <img src="/documentation/lib/images/smileys/fixme.gif" class="icon" alt="FIXME" /></div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Query a Database in Tina4&quot;,&quot;hid&quot;:&quot;query_a_database_in_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;619-&quot;} -->

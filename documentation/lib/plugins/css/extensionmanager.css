@@ -1,0 +1,5 @@
+/* The h2 in the extension manager is impacted by the  top-nav-bar fix for the content */
+div.dokuwiki div#extension__manager h2 {
+    padding-top: 0px;
+    margin-top: 0px;
+}

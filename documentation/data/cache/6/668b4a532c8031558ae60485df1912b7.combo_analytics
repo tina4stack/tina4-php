@@ -1,0 +1,176 @@
+{
+    "id": "tina4:routing",
+    "date": "2021-09-16 13:00:26",
+    "metadata": {
+        "title": "Routing in Tina4",
+        "description": "Routing in Tina4\n\nPlease see the Create-a-basic-route for more basics on Routes.\n\nFor further information on routing, please click on this <https:\/\/en.wikipedia.org\/wiki\/Routing>.\n\nSimple Syntax\n\nThe simple syntax of a Route is as follows\n\n\n\n\n\nSo the Route to capture the URL <https:\/\/mywebsite.com\/starthere> would be as below. This uses a Get",
+        "date_created": "2021-09-04 06:55:56",
+        "date_modified": "2021-09-15 12:57:03",
+        "age_creation": 12,
+        "age_modification": 1
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "": 1,
+            "matthew": 1,
+            "cris": 1,
+            "andre": 1,
+            "barco": 1
+        },
+        "chars_count": 6684,
+        "edits_count": 52,
+        "external_links_count": 3,
+        "formatted": {
+            "1": {
+                "len": 6
+            },
+            "0": 257,
+            "2": {
+                "len": 7
+            },
+            "3": {
+                "len": 5
+            },
+            "4": {
+                "len": 5
+            },
+            "5": {
+                "len": 3
+            },
+            "6": {
+                "len": 7
+            },
+            "7": {
+                "len": 3
+            },
+            "8": {
+                "len": 4
+            },
+            "9": {
+                "len": 5
+            },
+            "10": {
+                "len": 6
+            },
+            "11": {
+                "len": 3
+            },
+            "12": {
+                "len": 3
+            },
+            "13": {
+                "len": 3
+            },
+            "14": {
+                "len": 4
+            },
+            "15": {
+                "len": 9
+            },
+            "16": {
+                "len": 25
+            },
+            "17": {
+                "len": 37
+            },
+            "18": {
+                "len": 35
+            },
+            "19": {
+                "len": 36
+            },
+            "20": {
+                "len": 9
+            },
+            "21": {
+                "len": 7
+            },
+            "22": {
+                "len": 14
+            },
+            "23": {
+                "len": 9
+            },
+            "24": {
+                "len": 12
+            }
+        },
+        "headers_count": {
+            "h1": 1,
+            "h2": 6,
+            "h3": 3
+        },
+        "internal_backlinks_count": 8,
+        "internal_links_count": 3,
+        "internal_links_distance": {
+            "avg": 0.6666666666666666,
+            "max": 2,
+            "min": 0
+        },
+        "linebreak": 19,
+        "media": {
+            "total_count": 0,
+            "internal_count": 0,
+            "internal_broken_count": 0,
+            "external_count": 0
+        },
+        "syntax_count": {
+            "combo_headingwiki": 10,
+            "section": 10,
+            "p": 29,
+            "combo_link": 5,
+            "strong": 25,
+            "wrap_divwrap": 6,
+            "combo_code": 12,
+            "listu": 2,
+            "listitem": 6,
+            "listcontent": 6
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 569
+    },
+    "quality": {
+        "message": "No mandatory rules broken",
+        "low": false,
+        "scoring": {
+            "score": 44,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 13,
+                "internal_backlinks_count": 8,
+                "internal_links_count": 8,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

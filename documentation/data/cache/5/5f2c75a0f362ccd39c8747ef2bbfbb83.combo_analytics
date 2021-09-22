@@ -1,0 +1,85 @@
+{
+    "id": "guides:php:install:docker",
+    "date": "2021-09-09 07:27:27",
+    "metadata": {
+        "title": "Docker installation",
+        "description": "Docker installation\n\nTina4PHP comes with a Docker file configured will all the dependencies you need\nYou will first need to <https:\/\/docs.docker.com\/get-docker\/> the Docker environment for your operating system before running the following commands \n\nWhats in the docker\n\n\t*  Composer support",
+        "h1": "Starting with Tina4Php",
+        "date_created": "2021-09-04 06:55:56",
+        "date_modified": "2021-09-04 06:55:56",
+        "age_creation": 5,
+        "age_modification": 5
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1
+        },
+        "chars_count": 1085,
+        "edits_count": 10,
+        "external_links_count": 1,
+        "headers_count": {
+            "h1": 3,
+            "h3": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 4,
+            "section": 4,
+            "p": 3,
+            "combo_link": 1,
+            "listu": 1,
+            "listitem": 2,
+            "listcontent": 2,
+            "combo_preformatted": 3
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 134
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 15.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 0,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 2.5,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "6 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "outline_structure": "The 3 header (h3) has a level bigger than its precedent (1)",
+                "words_by_section_avg_min": "The number of words by section is less than 20",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Failed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

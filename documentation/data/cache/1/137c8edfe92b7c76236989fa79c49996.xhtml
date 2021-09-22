@@ -1,0 +1,115 @@
+
+<h1 class="sectionedit1 heading-combo" id="installing_php_on_windows">Installing PHP on Windows</h1>
+<div class="level1">
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Installing PHP on Windows&quot;,&quot;hid&quot;:&quot;installing_php_on_windows&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-41&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="step_1_-_download_php">Step 1 - Download PHP</h2>
+<div class="level2">
+
+<p>
+Head to the PHP page and download the current stable Zip version for your Operating System.
+</p>
+
+<p>
+Here&#039;s the link : <a class="link-external link-combo" href="https://windows.php.net/download" rel="nofollow ugc">PHP</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 1 - Download PHP&quot;,&quot;hid&quot;:&quot;step_1_-_download_php&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;42-228&quot;} -->
+<h2 class="sectionedit3 heading-combo" id="step_2_-_copy_and_configure_php">Step 2 - Copy and configure PHP</h2>
+<div class="level2">
+
+<p>
+Unpack/extract the zip file or content into a folder (Example: “C:\php”) on a drive on your system. 
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+Simple paths make for easily finding your files, try not put your projects or binaries in difficult to find locations
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:5,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+Once the files have been extracted, you will need to go into the folder and create a configuration file.
+</p>
+
+<p>
+Configure the “php.ini” file: 
+</p>
+<ol>
+<li class="level1"><div class="li"> Go to the folder where you extracted PHP. </div>
+</li>
+<li class="level1"><div class="li"> Rename file named “php.ini-development” to “php.ini”.</div>
+</li>
+<li class="level1"><div class="li"> Open php.ini file by opening it with Notepad or IDE tool </div>
+</li>
+</ol>
+
+<p>
+Find the following extensions and remove the semicolon in front of the word extension:
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+  ;extension=curl
+  ;extension=fileinfo
+  ;extension=gd2
+  ;extension=intl
+  ;extension=mbstring
+  ;extension=openssl
+  ;extension=pdo_mysql
+  ;extension=shmop
+  ;extension=soap
+  ;extension=sqlite3
+  ;extension=tidy
+  ;extension=xmlrpc
+  ;extension=xsl
+  </code>
+</pre>
+
+<p>
+Press Ctrl+S or save changes you just made to “php.ini” file.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2 - Copy and configure PHP&quot;,&quot;hid&quot;:&quot;step_2_-_copy_and_configure_php&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;229-1273&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="step_3_-_edit_environment_path_variable">Step 3 - Edit environment path variable</h2>
+<div class="level2">
+
+<p>
+After you have made changes to the configuration file, you must add the PHP folder in your systems environment variable table.
+</p>
+
+<p>
+Add path environment variable:
+</p>
+<ul>
+<li class="level1"><div class="li"> Open Control Panel</div>
+</li>
+<li class="level1"><div class="li"> Go to System</div>
+</li>
+<li class="level1"><div class="li"> Go to Advanced system settings</div>
+</li>
+<li class="level1"><div class="li"> Click on Browse, locate the PHP folder you extracted. Click OK and then click Ok again to close the “Edit environment variable” window.</div>
+</li>
+<li class="level1"><div class="li"> Go to Environment variable </div>
+</li>
+<li class="level1"><div class="li"> Look for “Path” in the “Variable” column and click Edit.</div>
+</li>
+<li class="level1"><div class="li"> Add the path where you extracted your PHP installation to either by browsing or by typing it in.</div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3 - Edit environment path variable&quot;,&quot;hid&quot;:&quot;step_3_-_edit_environment_path_variable&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1274-1895&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="step_4_-_confirm_installation">Step 4 - Confirm installation</h2>
+<div class="level2">
+
+<p>
+After this you can confirm if the installation successful by opening your command terminal (e.g. Command Prompt or terminal in your IDE tool) and typing in “php -v” and pushing Enter. The PHP version and details will appear in the terminal. 
+</p>
+
+<p>
+<a class="link-internal link-combo" data-wiki-id="guides:install:composer" href="/documentation/doku.php?id=guides:install:composer" title="Installing Composer">Install Composer</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4 - Confirm installation&quot;,&quot;hid&quot;:&quot;step_4_-_confirm_installation&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1896-&quot;} -->

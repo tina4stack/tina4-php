@@ -1,0 +1,20 @@
+
+<h1 class="sectionedit1" id="env">ENV</h1>
+<div class="level1">
+
+<p>
+Tina4 uses a .env file to setup project constants, a .env will be created for you when the system runs for the first time. If you specify an environment variable on your <abbr title="Operating System">OS</abbr> called ENVIRONMENT then .env.ENVIRONMENT will be loaded instead.
+</p>
+
+<p>
+Example of a .env file:
+</p>
+<pre class="code"> [Section]           &lt;-- Group section, only for pretty env file
+ MY_VAR=Test         &lt;-- Example declaration
+ SOMETHING=&quot;Hello&quot;   &lt;-- Other valid example SOMETHING will be Hello
+ TEST_ARRAY=[&quot;ONE&quot;, &quot;TWO&quot;, &quot;THREE&quot;] &lt;-- Will not work on older version of PHP
+ # A commment        &lt;-- This is a comment
+ [Another Section]
+ VERSION=1.0.0</pre>
+
+</div>

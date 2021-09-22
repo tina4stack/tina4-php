@@ -1,0 +1,79 @@
+{
+    "id": "tina4:tutorials:advanced:save-a-record-with-orm",
+    "date": "2021-08-17 11:20:10",
+    "metadata": {
+        "title": "Save a record using the ORM",
+        "description": "Save a record using the ORM\n\nThe <https:\/\/en.wikipedia.org\/wiki\/Object-relational_mapping> in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.\n\nIt is required to extend the \\Tina4\\ORM",
+        "date_created": "2021-06-25 12:39:56",
+        "date_modified": "2021-08-17 11:20:10",
+        "age_creation": 53,
+        "age_modification": 0
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1
+        },
+        "chars_count": 1451,
+        "edits_count": 4,
+        "external_links_count": 1,
+        "formatted": {
+            "1": {
+                "len": 10
+            },
+            "0": 10
+        },
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 2,
+            "combo_link": 1,
+            "strong": 1,
+            "combo_code": 1
+        },
+        "words_count": 147
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 17,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 1,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

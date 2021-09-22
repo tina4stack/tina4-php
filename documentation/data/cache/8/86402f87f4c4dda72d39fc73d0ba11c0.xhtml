@@ -1,0 +1,73 @@
+
+<h1 class="sectionedit1 heading-combo" id="tina4_directory_structure">Tina4 Directory Structure</h1>
+<div class="level1">
+
+<p>
+As you know by now Tina4 is not a Framework. There are some general conventions we used to make things more consistent. You can use all parts of Tina4 or only some parts. 
+</p>
+
+<p>
+What makes Tina4 different from Frameworks you may have used is how compact its code base is. Tina also has quick ways of doing things like generating ORM Objects from your database.
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap">
+<p>
+Each folder in a new Tina4 project has a README file that explains what part of Tina4 class you should extend. i.e. \Tina4\Process
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Tina4 Directory Structure&quot;,&quot;hid&quot;:&quot;tina4_directory_structure&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-562&quot;} -->
+<h1 class="sectionedit4 heading-combo" id="tina4_directory_structure1">Tina4 Directory Structure</h1>
+<div class="level1">
+<ul>
+<li class="level1"><div class="li"> bin – this folder will be automatically installed when you run the composer require command. </div>
+</li>
+<li class="level1"><div class="li"> cache – delete this folder if you want to clear things, in debug mode no caching happens.</div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:migrations" href="/doku.php?id=tina4:migrations" title="Migrations in Tina4">migrations</a> – migrations are stored here.</div>
+</li>
+<li class="level1"><div class="li"> log – all error and debug log files will be stored in here.</div>
+</li>
+<li class="level1"><div class="li"> secrets – this folder will be installed when you run the composer exec or initialize command. </div>
+</li>
+<li class="level1 node"><div class="li"> src (Source files)</div>
+<ul>
+<li class="level2"><div class="li"> app – app code gets served by routes.</div>
+</li>
+<li class="level2"><div class="li"> <a class="link-external link-combo" href="https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping" rel="noopener" target="target=_blank">orm</a> – ORM Objects  – Tina Can generate these initial files from your database</div>
+</li>
+<li class="level2"><div class="li"> public – css / js / images and more - all the public stuff</div>
+</li>
+<li class="level2 node"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:routing" href="/doku.php?id=tina4:routing" title="Routing in Tina4">routes</a> – You can setup folders to structure your project as suggested below</div>
+<ul>
+<li class="level5"><div class="li"> api – api routes</div>
+</li>
+</ul>
+</li>
+<li class="level2"><div class="li"> scss – SASS compiled into public/css/default.css file</div>
+</li>
+<li class="level2 node"><div class="li"> services – Scripts which need to run on a schedule</div>
+<ul>
+<li class="level3"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:templates" href="/doku.php?id=tina4:templates" title="Templates">templates</a> – twig templates get served at <a href="http://yoursite:8282/app" class="urlextern" target="target=_blank" title="http://yoursite:8282/app" rel="ugc nofollow noopener">http://yoursite:8282/app</a></div>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="level1"><div class="li"> vendor – all the magic of Tina4 will be installed here when you install Tina4</div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:env" href="/doku.php?id=tina4:env" title="ENV">.env</a> – generated automatically on first run</div>
+</li>
+<li class="level1"><div class="li"> .htaccess – this folder will be automatically installed when you run the composer require command. </div>
+</li>
+<li class="level1"><div class="li"> composer.json – this folder will be automatically installed when you run the composer require command. </div>
+</li>
+<li class="level1"><div class="li"> composer.lock – this folder will be automatically installed when you run the composer require command. </div>
+</li>
+<li class="level1"><div class="li"> favicon – this folder will be automatically installed when you run the composer require command. </div>
+</li>
+<li class="level1"><div class="li"> index.php – tina4 entry point – this folder will be automatically installed when you run the composer require command. </div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Tina4 Directory Structure&quot;,&quot;hid&quot;:&quot;tina4_directory_structure1&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;563-&quot;} -->

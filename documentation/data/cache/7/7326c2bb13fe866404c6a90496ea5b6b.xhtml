@@ -1,0 +1,129 @@
+
+<h1 class="sectionedit1 heading-combo" id="first_steps">First Steps</h1>
+<div class="level1">
+
+<p>
+Get up and running quickly with Docker if you want to preview Tina4 quickly without adding additional dependencies to your operating system.
+Please take a look at the  <strong>Setting up your Environment</strong> section to get all the prerequisites required for Tina4. 
+</p>
+
+<p>
+<iframe title=" 560,315 noscroll noborder centred|Getting Started With Tina4" src="https://www.youtube.com/embed/9NDpHVlYIOo" style="width:98%; height:400px"></iframe>
+</p>
+
+<p>
+Tina4 is a lightweight routing and templating system which allows you to write websites and <abbr title="Application Programming Interface">API</abbr> applications very quickly.
+This is not another framework. Keep things simple and efficient. Tina4 is perfect if you want to build a website, run a <abbr title="Content Management System">CMS</abbr>, create APIs or if you want to learn a structured PHP framework.
+</p>
+
+<p>
+Tina uses the following methods to make development quicker:
+</p>
+
+<p>
+* <a class="link-external link-combo" href="https://www.php.net/downloads.php" rel="noopener" target="target=_blank">PHP 7.2 or greater</a> built in web server
+<br/>
+
+* <a class="link-external link-combo" href="https://twig.symfony.com/doc/3.x/)" rel="noopener" target="target=_blank">Twig</a> Templating - no configuration needed
+<br/>
+
+* Annotated Routes for <a class="link-external link-combo" href="https://swagger.io/" rel="noopener" target="target=_blank">Swagger</a> UI
+<br/>
+
+* Simple code layout and <a class="link-internal link-combo" data-wiki-id="tina4:introduction:directories" href="/documentation/doku.php?id=tina4:introduction:directories" title="Tina4 Directory Structure">directory structure</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;First Steps&quot;,&quot;hid&quot;:&quot;first_steps&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-1084&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="docker">Docker</h2>
+<div class="level2">
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center plugin_wrap">
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-src="https://tina4php.com/documentation/lib/exe/fetch.php?media=docker.png" data-placeholder-background="#fff" height="31" width="120" style="max-width:120px;width:100%"/>
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-src="https://tina4php.com/documentation/lib/exe/fetch.php?media=linux_logo.jpg" data-placeholder-background="#fff" alt=" Linux" height="77" width="70" style="max-width:70px;width:100%"/>   <img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-src="https://tina4php.com/documentation/lib/exe/fetch.php?media=mac.jpg" data-placeholder-background="#fff" alt=" Mac" height="70" width="70" style="max-width:70px;width:100%"/>
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+docker run -v $(pwd):/app tina4stack/php composer require tina4stack/tina4php
+docker run -v $(pwd):/app tina4stack/php composer exec tina4 initialize:run
+docker run -v $(pwd):/app -p7145:7145 tina4stack/php composer start  </code>
+</pre>
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-src="https://tina4php.com/documentation/lib/exe/fetch.php?media=windows_logo.png" data-placeholder-background="#fff" alt=" Windows" height="79" width="150" style="max-width:150px;width:100%"/>
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+docker run -v %cd%:/app tina4stack/php composer require tina4stack/tina4php
+docker run -v %cd%:/app tina4stack/php composer exec tina4 initialize:run
+docker run -v %cd%:/app -p7145:7145 tina4stack/php composer start  </code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Docker&quot;,&quot;hid&quot;:&quot;docker&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;1085-1747&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="composer">Composer</h2>
+<div class="level2">
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-src="https://tina4php.com/documentation/lib/exe/fetch.php?media=composer.png" data-placeholder-background="#fff" height="123" width="100" style="max-width:100px;width:100%"/>
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+composer require tina4stack/tina4php
+composer exec tina4 initialize:run
+composer start</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Composer&quot;,&quot;hid&quot;:&quot;composer&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1748-1907&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="what_s_in_the_box">What's in the box?</h2>
+<div class="level2">
+
+<p>
+This is 1000 foot overview of what&#039;s included with Tina4
+</p>
+<ul>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:introduction:directories" href="/documentation/doku.php?id=tina4:introduction:directories" title="Tina4 Directory Structure">Suggested Directory Structure</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:routing" href="/documentation/doku.php?id=tina4:routing" title="Routing in Tina4">Routing</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:database" href="/documentation/doku.php?id=tina4:database" title="Database in Tina4">Database</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:migrations" href="/documentation/doku.php?id=tina4:migrations" title="Migrations in Tina4">Migrations</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:orm" href="/documentation/doku.php?id=tina4:orm" title="ORM">ORM</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:templates" href="/documentation/doku.php?id=tina4:templates" title="Templates">Templates</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:api" href="/documentation/doku.php?id=tina4:api" title="Creating API 's With Tina4">Create an <abbr title="Application Programming Interface">API</abbr> endpoint</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:openapiswagger" href="/documentation/doku.php?id=tina4:openapiswagger" title="Open API &amp;amp; Swagger">OpenAPI &amp; Swagger UI</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:modules" href="/documentation/doku.php?id=tina4:modules" title="Create Modules with Tina4">Create Modules with Tina4</a></div>
+</li>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:routes:api" href="/documentation/doku.php?id=tina4:routes:api" title="APIs in Tina4"><abbr title="Application Programming Interface">API</abbr> with Tina4</a></div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;What&#039;s in the box?&quot;,&quot;hid&quot;:&quot;what_s_in_the_box&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1908-2398&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="how_do_i_learn_to_work_with_tina4">How do I learn to work with Tina4?</h2>
+<div class="level2">
+
+<p>
+<a class="link-internal link-combo" data-wiki-id="tina4:down-the-rabbit-hole" href="/documentation/doku.php?id=tina4:down-the-rabbit-hole" title="Down the Rabbit Hole">Down the rabbit hole</a> is a comprehensive tutorial on how to get started with PHP programming leading into the core concepts of Tina4 and how to get a software development environment up and running.
+<br/>
+
+<br/>
+
+<img class="img-fluid lazy-raster-combo lazy-combo raster-combo" data-src="https://tina4php.com/documentation/lib/exe/fetch.php?media=slack.png" data-placeholder-background="#fff" height="31" width="120" style="max-width:120px;width:100%"/>
+<br/>
+
+<a class="link-external link-combo" href="https://docs.google.com/forms/d/e/1FAIpQLSdrapVxI-19DapgKKuhtlLyPc99SLg8Re2Lpn3PS_K0M2Rc7w/viewform" rel="noopener" target="target=_blank">Join our Slack Channel to participate and receive all the latest builds</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;How do I learn to work with Tina4?&quot;,&quot;hid&quot;:&quot;how_do_i_learn_to_work_with_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;2399-&quot;} -->

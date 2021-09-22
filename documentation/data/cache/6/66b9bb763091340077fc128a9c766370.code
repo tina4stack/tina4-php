@@ -1,0 +1,9 @@
+\Tina4\Get::post (&quot;/api/users/login&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+&nbsp;
+    if ((New Users)-&gt;load(&quot;name = $request-&gt;userName&quot;))
+    {
+     //User exists in database validate password...
+    }
+&nbsp;
+    return $response (HTTP_OK, APPLICATION_JSON);
+});

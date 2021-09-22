@@ -1,0 +1,25 @@
+main > h2 { position: relative }
+main > h3 { position: relative }
+main > h4 { position: relative }
+main > h5 { position: relative }
+main > h6 { position: relative }
+
+.anchorjs-link {
+    font-weight: 400;
+    color: rgba(13, 110, 253, 0.5);
+    transition: color 0.15s ease-in-out;
+    left: -20px; /* When there is numbering with the */
+    margin-left: unset !important;
+    padding-right: unset !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .anchorjs-link {
+        transition: none
+    }
+}
+
+.anchorjs-link:focus, .anchorjs-link:hover {
+    color: #0d6efd;
+    text-decoration: none
+}

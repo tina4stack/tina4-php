@@ -1,0 +1,398 @@
+
+<h1 class="sectionedit1 heading-combo" id="generate_html_with_shape">Generate <abbr title="HyperText Markup Language">HTML</abbr> with Shape</h1>
+<div class="level1">
+
+<p>
+<abbr title="HyperText Markup Language">HTML</abbr> Language called Shape where you write code to make <abbr title="HyperText Markup Language">HTML</abbr>. We can define the client-side image map using <abbr title="HyperText Markup Language">HTML</abbr> Shape. Using this method, you can output <abbr title="HyperText Markup Language">HTML</abbr> elements with PHP. 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Generate HTML with Shape&quot;,&quot;hid&quot;:&quot;generate_html_with_shape&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-220&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="installation">Installation</h2>
+<div class="level2">
+
+<p>
+Put a file named composer.json at the root of your project, containing your project dependencies:
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">composer require tina4stack/tina4php-shape </code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Installation&quot;,&quot;hid&quot;:&quot;installation&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;221-409&quot;} -->
+<h2 class="sectionedit3 heading-combo" id="basic_usage">Basic usage</h2>
+<div class="level2">
+
+<p>
+Each <abbr title="HyperText Markup Language">HTML</abbr> tag has an opening underscore prefix, <abbr title="HyperText Markup Language">HTML</abbr> tag element and a closing underscore prefix (e.g. the paragraph tag is &lt;p&gt;. Using <abbr title="HyperText Markup Language">HTML</abbr> Shape the convention would be different as we can write it out as <strong>_p()</strong>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Basic usage&quot;,&quot;hid&quot;:&quot;basic_usage&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;410-649&quot;} -->
+<h3 class="sectionedit4 heading-combo" id="normal_tag">Normal Tag</h3>
+<div class="level3">
+
+<p>
+Here&#039;s an example of a normal paragraph tag using the <abbr title="HyperText Markup Language">HTML</abbr> Shape method: 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+require_once &quot;vendor/autoload.php&quot;;
+
+echo _p(&quot;Hello&quot;); //--&gt;this will be output as &lt;p&gt;Hello&lt;/p&gt; . We stipulated what the content must be.</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Normal Tag&quot;,&quot;hid&quot;:&quot;normal_tag&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;650-910&quot;} -->
+<h3 class="sectionedit5 heading-combo" id="tag_with_attributes">Tag with Attributes</h3>
+<div class="level3">
+
+<p>
+Here&#039;s an example of a div and attribute tag using the <abbr title="HyperText Markup Language">HTML</abbr> Shape method: 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+require_once &quot;vendor/autoload.php&quot;;
+
+echo _div([&quot;class&quot; =&gt; &quot;form-group&quot;], &quot;Testing&quot;); //--&gt;this will be output as &lt;div class=&quot;form-group&quot;&gt;Testing&lt;/div&gt;. We first stipulate the class, thereafter we stipulated what the content must be. </code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Tag with Attributes&quot;,&quot;hid&quot;:&quot;tag_with_attributes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;911-1278&quot;} -->
+<h3 class="sectionedit6 heading-combo" id="nesting_of_tags">Nesting of tags</h3>
+<div class="level3">
+
+<p>
+If you think of unordered lists or select tags, somethings can become easier to code due to <strong>nesting</strong>. 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+require_once &quot;vendor/autoload.php&quot;;
+
+$lis = []; //--&gt; stipulate an array of items
+
+$lis[] = _li(&quot;One&quot;); //--&gt; List item 1
+$lis[] = _li(&quot;Two&quot;); //--&gt; List item 1
+
+$ul = _ul ($lis);
+
+$options = [];
+
+$options[] = _option(&quot;One&quot;);
+$options[] = _option(&quot;Two&quot;);
+
+$select = _select ([&quot;name&quot; =&gt; &quot;choose&quot;], $options);</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Nesting of tags&quot;,&quot;hid&quot;:&quot;nesting_of_tags&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1279-1748&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="finding_a_tag_by_id">Finding a tag by id</h2>
+<div class="level2">
+
+<p>
+You can manipulate a tag&#039;s content by targeting the tags id attribute:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+$tag = $html-&gt;byId(&quot;someId&quot;); //--&gt;The id tag that you want to search for and manipulate. </code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Finding a tag by id&quot;,&quot;hid&quot;:&quot;finding_a_tag_by_id&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1749-1971&quot;} -->
+<h2 class="sectionedit8 heading-combo" id="set_the_html_of_a_tag">Set the <abbr title="HyperText Markup Language">HTML</abbr> of a tag</h2>
+<div class="level2">
+
+<p>
+You can change the <abbr title="HyperText Markup Language">HTML</abbr> tag type using the following convention:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+require_once &quot;vendor/autoload.php&quot;;
+
+$tag-&gt;html(_p(&quot;Changed HTML&quot;)); //--&gt;Target the tag you want to manipulate</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Set the HTML of a tag&quot;,&quot;hid&quot;:&quot;set_the_html_of_a_tag&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;1972-2211&quot;} -->
+<h3 class="sectionedit9 heading-combo" id="example">Example</h3>
+<div class="level3">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+require_once &quot;vendor/autoload.php&quot;;
+
+//Start some HTML
+
+$lis = [];
+
+$lis[] = _li(&quot;One&quot;);
+$lis[] = _li(&quot;Two&quot;);
+
+$ul = _ul ($lis);
+
+$html = _shape(
+    _doctype(&quot;html&quot;),
+    _html([&quot;lang&quot; =&gt; &quot;en&quot;],
+    _head(
+        _title(&quot;Testing&quot;)
+    ),
+    _body(
+        _h1([&quot;id&quot; =&gt; &quot;someId&quot;],&quot;Hello World! H1&quot;),
+        _h2(&quot;Hello World! H2&quot;),
+        $a = _h3(&quot;Hello World! H3&quot;),
+        _h4(&quot;Hello World! H4&quot;),
+        _h5(&quot;Hello World! H5&quot;),
+        $ul
+    )
+));
+
+$a-&gt;html(_b([&quot;style&quot; =&gt; &quot;color: red&quot;],&quot;Hello&quot;));
+
+$html-&gt;byId(&quot;someId&quot;)-&gt;html(&quot;=====&quot;);
+
+echo $html;</code>
+</pre>
+
+<p>
+This will be the results:
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Example&quot;,&quot;hid&quot;:&quot;example&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;2212-2842&quot;} -->
+<h1 class="sectionedit10 heading-combo" id="section"><strong>=====</strong></h1>
+<div class="level1">
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;===== &quot;,&quot;hid&quot;:&quot;section&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:10,&quot;range&quot;:&quot;2843-2867&quot;} -->
+<h2 class="h2 sectionedit11 heading-combo heading-h2-combo" id="hello_world_h2">Hello World! H2</h2>
+<div class="level2">
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Hello World! H2&quot;,&quot;hid&quot;:&quot;hello_world_h2&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:11,&quot;range&quot;:&quot;2868-2908&quot;} -->
+<h3 class="h3 sectionedit12 heading-combo heading-h3-combo" id="hello" style="color:var(--bs-red)">Hello</h3>
+<div class="level3">
+
+</div>
+
+<h4 class="h4 heading-combo heading-h4-combo" id="hello_world_h4">Hello World! H4</h4>
+<div class="level4">
+
+</div>
+
+<h5 class="h5 heading-combo heading-h5-combo" id="hello_world_h5">Hello World! H5</h5>
+<div class="level5">
+
+<p>
+* One
+<br/>
+
+* Two
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Hello&quot;,&quot;hid&quot;:&quot;hello&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:12,&quot;range&quot;:&quot;2909-&quot;} -->
+<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/toolbar/prism-toolbar.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/normalize-whitespace/prism-normalize-whitespace.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/show-language/prism-show-language.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/command-line/prism-command-line.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/line-numbers/prism-line-numbers.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/download-button/prism-download-button.min.js" integrity="sha512-rGJwSZEEYPBQjqYxrdg6Ug/6i763XQogKx+N/GF1rCGvfmhIlIUFxCjc4FmEdCu5dvovqxHsoe3IPMKP+KlgNQ==" crossorigin="anonymous" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/autoloader/prism-autoloader.min.js" class="snippet-prism-autoloader-combo"></script>
+
+<script class="snippet-popover-combo">window.addEventListener('load', function () {
+    let namespace = "-bs"
+    let version = 5;
+    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
+        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        jQuery(`[data${namespace}-toggle="popover"]`).popover();
+    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
+        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
+            .forEach(el => {
+                new bootstrap.Popover(el);
+                // to not navigate on a anchor
+                el.onclick = (event => event.preventDefault());
+            });
+    }
+});
+</script>
+
+<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
+    anchors.options = {
+        placement: 'right',
+        icon: '#',
+        class: 'anchor-combo'
+    };
+    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
+});
+</script>
+
+<script class="snippet-prism-combo">document.addEventListener('DOMContentLoaded', (event) => {
+
+    if (typeof self === 'undefined' || !self.Prism || !self.document) {
+        return;
+    }
+
+    // Loading the css from https://cdnjs.com/libraries/prism
+    const head = document.querySelector('head');
+    const baseCdn = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0/";
+    const stylesheets = [
+        ["themes/prism-tomorrow.min.css", "sha512-vswe+cgvic/XBoF1OcM/TeJ2FW0OofqAVdCZiEYkd6dwGXthvkSFWOoGGJgS2CW70VK5dQM5Oh+7ne47s74VTg=="],
+        ["plugins/toolbar/prism-toolbar.min.css","sha512-DSAA0ziYwggOJ3QyWFZhIaU8bSwQLyfnyIrmShRLBdJMtiYKT7Ju35ujBCZ6ApK3HURt34p2xNo+KX9ebQNEPQ=="],
+        /*https://prismjs.com/plugins/command-line/*/
+        ["plugins/command-line/prism-command-line.min.css","sha512-4Y1uID1tEWeqDdbb7452znwjRVwseCy9kK9BNA7Sv4PlMroQzYRznkoWTfRURSADM/SbfZSbv/iW5sNpzSbsYg=="],
+        /*https://prismjs.com/plugins/line-numbers/*/
+        ["plugins/line-numbers/prism-line-numbers.min.css","sha512-cbQXwDFK7lj2Fqfkuxbo5iD1dSbLlJGXGpfTDqbggqjHJeyzx88I3rfwjS38WJag/ihH7lzuGlGHpDBymLirZQ=="]
+    ];
+
+    stylesheets.forEach(stylesheet => {
+            let link = document.createElement('link');
+            link.rel="stylesheet"
+            link.href=baseCdn+"/"+stylesheet[0];
+            link.integrity=stylesheet[1];
+            link.crossOrigin="anonymous";
+            head.append(link);
+        }
+    )
+
+
+    Prism.plugins.NormalizeWhitespace.setDefaults({
+        'remove-trailing': true,
+        'remove-indent': true,
+        'left-trim': true,
+        'right-trim': true,
+    });
+
+    if (!Prism.plugins.toolbar) {
+        console.warn('Copy to Clipboard plugin loaded before Toolbar plugin.');
+
+        return;
+    }
+
+    let ClipboardJS = window.ClipboardJS || undefined;
+
+    if (!ClipboardJS && typeof require === 'function') {
+        ClipboardJS = require('clipboard');
+    }
+
+    const callbacks = [];
+
+    if (!ClipboardJS) {
+        const script = document.createElement('script');
+        const head = document.querySelector('head');
+
+        script.onload = function() {
+            ClipboardJS = window.ClipboardJS;
+
+            if (ClipboardJS) {
+                while (callbacks.length) {
+                    callbacks.pop()();
+                }
+            }
+        };
+
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.0/clipboard.min.js';
+        head.appendChild(script);
+    }
+
+    Prism.plugins.toolbar.registerButton('copy-to-clipboard', function (env) {
+        var linkCopy = document.createElement('button');
+        linkCopy.textContent = 'Copy';
+        linkCopy.setAttribute('type', 'button');
+
+        var element = env.element;
+
+        if (!ClipboardJS) {
+            callbacks.push(registerClipboard);
+        } else {
+            registerClipboard();
+        }
+
+        return linkCopy;
+
+        function registerClipboard() {
+            var clip = new ClipboardJS(linkCopy, {
+                'text': function () {
+                    return element.textContent;
+                }
+            });
+
+            clip.on('success', function() {
+                linkCopy.textContent = 'Copied!';
+
+                resetText();
+            });
+            clip.on('error', function () {
+                linkCopy.textContent = 'Press Ctrl+C to copy';
+
+                resetText();
+            });
+        }
+
+        function resetText() {
+            setTimeout(function () {
+                linkCopy.textContent = 'Copy';
+            }, 5000);
+        }
+    });
+
+});</script>
+
+<style class="snippet-historical-breadcrumb-combo">.historical-breadcrumb li {
+    margin-bottom: 0.5rem;
+}
+.historical-breadcrumb a {
+    text-decoration: none;
+}
+.historical-breadcrumb-home {
+    max-width: fit-content;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    margin-bottom: 1rem;
+    padding:0.5rem;
+    text-align: center;
+    border-radius: calc(.3rem - 1px);
+    background-color: #f0f0f0;
+}
+.historical-breadcrumb-home::before {
+    content:'Actual: '
+}
+</style>
+
+<style class="snippet-message-combo">/*Message*/
+.combo-message > .signature {
+    font-size: 80%;
+    font-style: italic;
+    text-align: right;
+}
+</style>
+
+<style class="snippet-lqpp-combo">.low-quality-page-combo {
+    text-decoration: none;
+}
+</style>
+
+<style class="snippet-prism-combo">/* no margin at the bottom / to close to the next paragraph */
+.code-toolbar { margin-bottom: 1rem }
+</style>

@@ -1,0 +1,43 @@
+
+<h1 class="sectionedit1 heading-combo" id="apis_in_tina4">APIs in Tina4</h1>
+<div class="level1">
+
+<p>
+From inception Tina4 was designed to rapid prototype <abbr title="Application Programming Interface">API</abbr> end points in conjunction with making SwaggerUI documentation available quickly with annotated routing.
+</p>
+
+<p>
+After running the <strong>composer start</strong> command in your IDE terminal, the Swagger UI will be available when you use the following address in your Web brosers <abbr title="Uniform Resource Locator">URL</abbr> address bar:
+</p>
+<pre class="code-container-combo code-container-url-combo" data-download-link="true" data-src="file.url">
+<code class="language-url code-combo code-url-combo">
+ http://localhost:7145/swagger </code>
+</pre>
+
+<p>
+An example of a post end point end point:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+/**
+* @description This end point allows and upload of a json string and saves it to a file
+* @tags users,uploads
+*/
+\Tina4\Post::add(&quot;/api/users/uploads&quot;, function (\Tina4\Response $response, \Tina4\Request $request){
+
+    if (!empty($request-&gt;data)) {
+        file_put_contents(&quot;./updates/update.json&quot;, serialize($request-&gt;data));
+        $result = &quot;Ok!&quot;;
+    } else {
+        $result = &quot;Failed!&quot;;
+    }
+
+    return $response ($result);
+});</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+You can also <strong>secure</strong> your <abbr title="Application Programming Interface">API</abbr> end points. For more information click this <a class="link-internal link-combo" data-wiki-id="tina4:tutorials:secure_api_endpoint" href="/documentation/doku.php?id=tina4:tutorials:secure_api_endpoint" title="Secure a REST end point">link</a>. 
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+</div>

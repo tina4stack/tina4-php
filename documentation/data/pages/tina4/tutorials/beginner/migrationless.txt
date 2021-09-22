@@ -1,0 +1,13 @@
+====== Migrationless Database ======
+You can create tables in your database without having to create a [[tina4:migrations|migration]]. 
+
+Below you can see how to create a migration without having to use **/migrate/create** in your browsers URL.  
+
+<code php>
+<?php
+ 
+    $users = new Users();
+    if (!$DBA->tableExists($users->tableName)) {
+       $DBA->exec($users->generateCreateSQL($users->getTableData()));
+    }
+</code>    

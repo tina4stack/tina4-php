@@ -1,0 +1,85 @@
+{
+    "id": "tina4:recommendations",
+    "date": "2021-08-04 15:09:21",
+    "metadata": {
+        "title": "Recommendations",
+        "description": "Recommendations\n\nWhat to consider ?\n\nIf you already have a good work flow up and running then you can skip this bit, \nhowever if you do not have an IDE which can do step by step debugging then I'd pause for a while and consider some of \nthe thoughts here.",
+        "date_created": "2021-03-23 05:54:54",
+        "date_modified": "2021-03-23 06:01:22",
+        "age_creation": 134,
+        "age_modification": 134
+    },
+    "statistics": {
+        "authors": {
+            "barco": 1
+        },
+        "chars_count": 4645,
+        "edits_count": 6,
+        "external_links_count": 4,
+        "headers_count": {
+            "h1": 1,
+            "h2": 4,
+            "h3": 4
+        },
+        "internal_backlinks_count": 1,
+        "internal_links_count": 2,
+        "internal_links_distance": {
+            "avg": 2.5,
+            "max": 3,
+            "min": 2
+        },
+        "syntax_count": {
+            "combo_headingwiki": 9,
+            "section": 9,
+            "p": 20,
+            "combo_preformatted": 10,
+            "combo_link": 3,
+            "wrap_div": 4,
+            "combo_code": 4
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 524
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 18.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 1.5,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 1,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

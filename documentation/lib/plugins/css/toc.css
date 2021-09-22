@@ -1,0 +1,25 @@
+
+/* No bullet */
+#dw__toc * ul {
+    list-style-type: none;
+}
+
+/* No minus on the header */
+#dw__toc > h3 > strong {
+    display: none;
+}
+
+/*Toc*/
+#dw__toc h3 {
+    margin-left: 20px; /* as h2 */
+    margin-bottom: 3px;
+}
+
+/* No margin left on small screen */
+@media (min-width: 0px) and (max-width: 576px) {
+
+    #dw__toc h3 {
+        margin-left: 0px;
+    }
+
+}

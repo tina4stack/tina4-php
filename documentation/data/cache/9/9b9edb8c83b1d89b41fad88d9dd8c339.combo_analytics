@@ -1,0 +1,99 @@
+{
+    "id": "tina4:basic-routing",
+    "date": "2021-07-29 20:59:28",
+    "metadata": {
+        "title": "The Route of It",
+        "description": "The Route of It\n\nTina4 supports 2 types of routes, those created in code and those that are assumed based on files you drop in the src\/templates folder.\n\nDynamic Routing Using Files in src\/templates\n\nConsider the following folder structure and the routes you can hit up in the browser.",
+        "date_created": "2021-07-10 10:48:01",
+        "date_modified": "2021-07-21 12:30:18",
+        "age_creation": 19,
+        "age_modification": 8
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "andre": 1
+        },
+        "chars_count": 2464,
+        "edits_count": 16,
+        "external_links_count": 6,
+        "formatted": {
+            "1": {
+                "len": 13
+            },
+            "0": 144,
+            "2": {
+                "len": 102
+            },
+            "3": {
+                "len": 29
+            }
+        },
+        "headers_count": {
+            "h1": 1,
+            "h2": 4
+        },
+        "internal_backlinks_count": 2,
+        "linebreak": 1,
+        "syntax_count": {
+            "combo_headingwiki": 5,
+            "section": 5,
+            "p": 11,
+            "strong": 3,
+            "listu": 1,
+            "listitem": 3,
+            "listcontent": 3,
+            "combo_link": 6,
+            "wrap_divwrap": 1,
+            "combo_code": 5
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 238
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 21,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 4,
+                "internal_backlinks_count": 2,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,52 @@
+1615901857	105.244.33.248	C	tina4:routing	barco	created		32
+1616572016	105.244.33.248	E	tina4:routing	barco			95
+1616572062	105.244.33.248	E	tina4:routing	barco			1
+1616854307	102.65.46.11	E	tina4:routing	andre			121
+1616854358	102.65.46.11	E	tina4:routing	andre			29
+1616854414	102.65.46.11	E	tina4:routing	andre			140
+1616854910	102.65.46.11	E	tina4:routing	andre			288
+1616854924	102.65.46.11	E	tina4:routing	andre			3
+1616854977	102.65.46.11	E	tina4:routing	andre			3
+1616855059	102.65.46.11	E	tina4:routing	andre			93
+1616855129	102.65.46.11	E	tina4:routing	andre			94
+1616855497	102.65.46.11	E	tina4:routing	andre			752
+1616918643	102.65.46.11	E	tina4:routing	andre			280
+1622114196	197.245.238.5	E	tina4:routing	cris			76
+1622114288	197.245.238.5	E	tina4:routing	cris			48
+1622115561	197.245.238.5	E	tina4:routing	cris			28
+1622116322	197.245.238.5	E	tina4:routing	cris			531
+1622116533	197.245.238.5	E	tina4:routing	cris			95
+1622117176	197.245.238.5	E	tina4:routing	cris			111
+1622118358	197.245.238.5	E	tina4:routing	cris			302
+1622118474	197.245.238.5	E	tina4:routing	cris			113
+1622118524	197.245.238.5	E	tina4:routing	cris			-16
+1622119016	197.245.238.5	E	tina4:routing	cris			451
+1622119079	197.245.238.5	E	tina4:routing	cris			12
+1622119097	197.245.238.5	E	tina4:routing	cris			-4
+1622120627	197.245.238.5	E	tina4:routing	cris			969
+1622120842	197.245.238.5	E	tina4:routing	cris			-33
+1622122957	197.245.238.5	E	tina4:routing	cris			381
+1622123115	197.245.238.5	E	tina4:routing	cris			185
+1622123151	197.245.238.5	E	tina4:routing	cris			-1
+1622123358	197.245.238.5	E	tina4:routing	cris			102
+1622124733	197.245.238.5	E	tina4:routing	cris			-474
+1622124863	197.245.238.5	E	tina4:routing	cris	[The Response Object] 		201
+1622125053	197.245.238.5	E	tina4:routing	cris			3
+1622125999	197.245.238.5	E	tina4:routing	cris			184
+1622126020	197.245.238.5	E	tina4:routing	cris	[Ruth - Legacy Routes] 		0
+1622126741	197.245.238.5	E	tina4:routing	cris	[Ruth - Legacy Routes] 		294
+1622126772	197.245.238.5	E	tina4:routing	cris	[Ruth - Legacy Routes] 		6
+1622127651	197.245.238.5	E	tina4:routing	cris			415
+1622127698	197.245.238.5	E	tina4:routing	cris	[Ruth - Legacy Routes] 		8
+1622127734	197.245.238.5	E	tina4:routing	cris	[Ruth - Legacy Routes] 		1
+1622127790	197.245.238.5	E	tina4:routing	cris	[Ruth - Legacy Routes] 		5
+1622186810	102.132.241.206	e	tina4:routing	matthew	formatting changes		42
+1626855452	197.94.41.134	e	tina4:routing	clayton	added prev and next links per to do		136
+1626957282	197.94.41.134	e	tina4:routing	clayton	changed code blocks and some info		163
+1626959274	197.94.41.134	e	tina4:routing	clayton	added missing * to make it look uniform		1
+1627491999	197.94.41.134	e	tina4:routing	clayton	added missing variables - routing		74
+1627493140	197.94.41.134	E	tina4:routing	clayton	remove unnecessary whitespace		-3
+1627493838	197.94.41.134	E	tina4:routing	clayton			2
+1630731356	127.0.0.1	E	tina4:routing		external edit		178
+1631701647	127.0.0.1	E	tina4:routing	clayton	changed text styling and added info bubble		-37
+1631703423	127.0.0.1	E	tina4:routing	clayton	changed some text styling, added/fixed links, added bubbles - Routing in Tina4		204

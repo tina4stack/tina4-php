@@ -1,0 +1,46 @@
+/*
+ * The style for the output of the javascript console in the Iframe
+ * Don't forget to increment the version number in the CONSTANT WEB_CONSOLE_CSS_VERSION of webcode.php
+ * when the content changes
+ */
+
+body {
+    font-family: Consolas, serif;
+    font-size: 14px;
+    color: #333333;
+}
+
+#webCodeConsole {
+    background-color: #E8E8E8;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #969696;
+    border-radius: 4px;
+}
+
+.webCodeConsoleLine {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.webConsoleTitle {
+    padding-left: 10px;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+table>thead>tr>th:first-letter {
+    text-transform:capitalize;
+}
+
+table>tbody>tr:nth-of-type(odd) {
+    background-color: #f9f9f9;
+}
+
+table>tbody>tr:nth-of-type(even) {
+    background-color: #d8d7d7;
+}
+
+td, th {
+    padding: 0.5rem;
+}

@@ -1,0 +1,69 @@
+
+<h1 class="sectionedit1" id="connecting_to_a_database">Connecting to a Database</h1>
+<div class="level1">
+
+<p>
+There are 3 database engines currently supported, we are happy to add more if required but for now they are:
+</p>
+<ul>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database:mysql" class="wikilink1" title="tina4:database:mysql" data-wiki-id="tina4:database:mysql">Connect to Mysql</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database:firebird" class="wikilink1" title="tina4:database:firebird" data-wiki-id="tina4:database:firebird">Connect to Firebird</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database:sqlite" class="wikilink1" title="tina4:database:sqlite" data-wiki-id="tina4:database:sqlite">Connect to Sqlite</a></div>
+</li>
+</ul>
+
+<p>
+The database connection is established in a global variable called <strong>$DBA</strong> in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required. For testing purpose, you can use the SQLite database type below.
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap" style="width: 60%;">
+<p>
+For a custom database hostname and port use the following format in your ENV file
+DB_NAME=10.248.228.22/3306:databasename
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Connecting to a Database&quot;,&quot;hid&quot;:&quot;connecting_to_a_database&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-749&quot;} -->
+<h2 class="sectionedit4" id="examples">Examples:</h2>
+<div class="level2">
+
+<p>
+Notice the convention of using the hostname:[database|database-path] except when it is SQLite which then becomes the local path.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Examples:&quot;,&quot;hid&quot;:&quot;examples&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;750-901&quot;} -->
+<h3 class="sectionedit5" id="for_mysql_database_type">For MySQL database type:</h3>
+<div class="level3">
+<pre class="code file php"><span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="kw2">global</span> <span class="re0">$DBA</span><span class="sy0">;</span>
+&nbsp;
+<span class="co1">//MySQL</span>
+<span class="re0">$DBA</span> <span class="sy0">=</span> <span class="kw2">new</span> \Tina4\DataMySQL<span class="br0">&#40;</span><span class="st0">&quot;localhost:somedatabase&quot;</span><span class="sy0">,</span> DB_USERNAME<span class="sy0">,</span> DB_PASSWORD<span class="sy0">,</span> <span class="st0">&quot;d/m/Y&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span></pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;For MySQL database type:&quot;,&quot;hid&quot;:&quot;for_mysql_database_type&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;902-1076&quot;} -->
+<h3 class="sectionedit6" id="for_firebird_database_type">For Firebird database type:</h3>
+<div class="level3">
+<pre class="code file php"><span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="kw2">global</span> <span class="re0">$DBA</span><span class="sy0">;</span>
+&nbsp;
+<span class="co1">//Firebird </span>
+<span class="re0">$DBA</span> <span class="sy0">=</span> <span class="kw2">new</span> \Tina4\DataFirebird<span class="br0">&#40;</span><span class="st0">&quot;localhost:/home/database/FIREBIRD.DB&quot;</span><span class="sy0">,</span> <span class="st0">&quot;sysdba&quot;</span><span class="sy0">,</span> <span class="st0">&quot;masterkey&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span></pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;For Firebird database type:&quot;,&quot;hid&quot;:&quot;for_firebird_database_type&quot;,&quot;codeblockOffset&quot;:1,&quot;secid&quot;:6,&quot;range&quot;:&quot;1077-1268&quot;} -->
+<h3 class="sectionedit7" id="for_sqlite_database_type">For SQLite database type:</h3>
+<div class="level3">
+<pre class="code file php"><span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="kw2">global</span> <span class="re0">$DBA</span><span class="sy0">;</span>
+&nbsp;
+<span class="co1">//SQLite</span>
+<span class="re0">$DBA</span> <span class="sy0">=</span> <span class="kw2">new</span> \Tina4\DataSQLite3<span class="br0">&#40;</span><span class="st0">&quot;/home/someplace/my.db&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span></pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;For SQLite database type:&quot;,&quot;hid&quot;:&quot;for_sqlite_database_type&quot;,&quot;codeblockOffset&quot;:2,&quot;secid&quot;:7,&quot;range&quot;:&quot;1269-&quot;} -->

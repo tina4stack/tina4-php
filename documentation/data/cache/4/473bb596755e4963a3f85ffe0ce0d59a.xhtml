@@ -1,0 +1,177 @@
+
+<h1 class="sectionedit1 heading-combo" id="troubleshooting_orm_returning_null">Troubleshooting ORM returning null</h1>
+<div class="level1">
+
+<p>
+Sometimes you may get no data back from an <a class="link-internal link-combo" data-wiki-id="tina4:tutorials:query-database" href="/doku.php?id=tina4:tutorials:query-database" title="Query the database for some records">ORM query</a>. You&#039;ll see an error like this one below stating that there was no data returned.
+</p>
+<pre class="code-container-combo code-container-html-combo" data-download-link="true" data-src="file.html">
+<code class="language-html code-combo code-html-combo">
+/vendor/twig/twig/src/Extension/DebugExtension.php:59:
+array (size=0)
+  empty</code>
+</pre>
+
+<p>
+<strong>So how do we resolve this?</strong>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Troubleshooting ORM returning null&quot;,&quot;hid&quot;:&quot;troubleshooting_orm_returning_null&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-352&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="step_1">Step 1</h2>
+<div class="level2">
+
+<p>
+Check the terminal for any queries or output for <strong>errors</strong>. 
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_info plugin_wrap">
+<p>
+you will the output in this direcotry:
+</p>
+<pre class="code-container-combo code-container-url-combo" data-download-link="true" data-src="file.url">
+<code class="language-url code-combo code-url-combo">
+src/templates/import/matchimport.twig</code>
+</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+And it should look something like this: 
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+[Thu Mar 25 16:25:19 2021] INFO:Adding DBA
+[Thu Mar 25 16:25:19 2021] DEBUG:SQL:
+select  *
+from    match t</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 1&quot;,&quot;hid&quot;:&quot;step_1&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;353-727&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="step_2">Step 2</h2>
+<div class="level2">
+
+<p>
+If your ORM query returns no data try running the query using a database client like <a class="link-external link-combo" href="https://github.com/dbeaver/dbeaver/wiki" rel="noopener" target="target=_blank">DB-Beaver</a> or <a class="link-external link-combo" href="https://www.phpmyadmin.net/" rel="noopener" target="target=_blank">PhpMyAdmin</a>.
+</p>
+<pre class="code-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt code-combo">
+select &quot;*&quot;
+from &quot;id t&quot;
+where &quot;id t = user&quot;;</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2&quot;,&quot;hid&quot;:&quot;step_2&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;728-995&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="step_3">Step 3</h2>
+<div class="level2">
+
+<p>
+Retrace your steps.
+</p>
+
+<p>
+To get data from an <a class="link-internal link-combo" data-wiki-id="tina4:tutorials:advanced:save-a-record-with-orm" href="/doku.php?id=tina4:tutorials:advanced:save-a-record-with-orm" title="Save a record using the ORM">ORM object</a> you need the following files:
+</p>
+
+<p>
+<strong>Define an ORM Class (Model)</strong>
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_info plugin_wrap">
+<p>
+The directory should be something like:
+</p>
+<pre class="code-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt code-combo">
+**./src/orm/Match.php**</code>
+</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} -->
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="Match.php" data-download-link-label="Download Match.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+class Match extends \Tina4\ORM
+{
+    public $tableName=&quot;match&quot;;
+    public $primaryKey=&quot;match_key&quot;; //set for primary key
+}</code>
+</pre>
+
+<p>
+<strong>a Template file (View)</strong>
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:9,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_info plugin_wrap">
+<p>
+The directory should be something like:
+<strong>./src/orm/Match.php</strong>
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:10,&quot;range&quot;:&quot;0-&quot;} --><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:11,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_info plugin_wrap">
+<p>
+Our twig template located in the project and looks similar to:
+</p>
+<pre class="code-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt code-combo">
+**./src/templates/match.twig**</code>
+</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:12,&quot;range&quot;:&quot;0-&quot;} -->
+<pre class="code-container-combo code-container-twig-combo" data-download-link="true" data-src="file.twig">
+<code class="language-twig code-combo code-twig-combo">
+{% set match = Tina4.call(&quot;MatchHelper&quot;,&quot;getMatch&quot;,[request.id]) %}
+{{ dump(match) }}</code>
+</pre>
+
+<p>
+<strong>Controller</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="MatchHelper.php" data-download-link-label="Download MatchHelper.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+// if you want your class to extend to a different Helper or Database
+class MatchHelper extends \Tina4\Data 
+{
+  public function getMatch($id) //no data yet
+    {
+        $match=(new OldMatch())-&gt;select(&quot;*&quot;,1,0)
+                               -&gt;where(&quot;match_key = {$id}&quot;)
+                               -&gt;asArray();                        
+    return $match;
+    }
+}</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:13,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_tip wrap_center plugin_wrap">
+<p>
+<strong>Route (optional)</strong>
+a Route is preferable but Tina4 will read your template file by name in the absence of a route matching your url query. 
+</p>
+
+<p>
+<a href="http://localhost:8383/match.php" class="urlextern" target="target=_blank" title="http://localhost:8383/match.php" rel="ugc nofollow noopener">http://localhost:8383/match.php</a> should reach your template file if it&#039;s located in the templates directory (not a subdirectory of it).
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:14,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3&quot;,&quot;hid&quot;:&quot;step_3&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;996-2546&quot;} -->
+<h2 class="sectionedit15 heading-combo" id="step_4">Step 4</h2>
+<div class="level2">
+
+<p>
+Consider reserved words. In the case above <strong>match</strong> is a <a class="link-external link-combo" href="https://dev.mysql.com/doc/refman/8.0/en/keywords.html" rel="noopener" target="target=_blank">reseved word in MySQL</a>
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:16,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_important plugin_wrap">
+<p>
+Avoid Reserved words. If you inherit a database with tables that have reserved words for names you should change the names of those tables. In the case tthat you add a Reserved Word, for example the word name, then ensure to use back-ticks before and after the word e.g. <strong>`name`</strong>. 
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:17,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4&quot;,&quot;hid&quot;:&quot;step_4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:15,&quot;range&quot;:&quot;2547-3027&quot;} -->
+<h3 class="sectionedit18 heading-combo" id="as_a_short_term_workaround">As a short term workaround</h3>
+<div class="level3">
+
+<p>
+You can use tildes around the table name using the fetch method:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+$match=$this-&gt;DBA-&gt;fetch(&quot;select * from `match`&quot;)
+                         -&gt;asArray();</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;As a short term workaround&quot;,&quot;hid&quot;:&quot;as_a_short_term_workaround&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:18,&quot;range&quot;:&quot;3028-&quot;} -->

@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4php.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4php.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://tina4php.com/documentation/</link>
+        <image rdf:resource="https://tina4php.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-15T19:42:33+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=first-steps&amp;rev=1628854829&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:beginner:initialize-a-tina4-project&amp;rev=1628853179&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1628568468&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:database:connection-errors&amp;rev=1628568310&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:api&amp;rev=1628563872&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:localized-date-formats&amp;rev=1628180067&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:custom-twig-filters&amp;rev=1628179687&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:one-rest-endpoint-two-names&amp;rev=1628094298&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Awebsite1.png&amp;ns=tina4&amp;rev=1627742526&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Amigration.png&amp;ns=tina4&amp;rev=1627680743&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi3.png&amp;ns=tina4&amp;rev=1627504179&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=migrate.png&amp;ns=&amp;rev=1627326177&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi2.png&amp;ns=tina4&amp;rev=1626707495&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi4.png&amp;ns=tina4&amp;rev=1626707131&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi.png&amp;ns=tina4&amp;rev=1626696413&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi6.png&amp;ns=tina4&amp;rev=1626476335&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi5.png&amp;ns=tina4&amp;rev=1626476334&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi7.png&amp;ns=tina4&amp;rev=1626476334&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Atutorials%3Aapi7.png&amp;ns=tina4%3Atutorials&amp;rev=1626476037&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4php.com/documentation/doku.php?image=tina4%3Atutorials%3Aapi6.png&amp;ns=tina4%3Atutorials&amp;rev=1626476037&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4php.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4php.com/documentation/</link>
+        <url>https://tina4php.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=first-steps&amp;rev=1628854829&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-13T13:40:29+00:00</dc:date>
+        <dc:creator>andre (andre@undisclosed.example.com)</dc:creator>
+        <title>first-steps</title>
+        <link>https://tina4php.com/documentation/doku.php?id=first-steps&amp;rev=1628854829&amp;do=diff</link>
+        <description>First Steps
+
+Get up and running quickly with Docker if you want to preview Tina4 quickly without adding additional dependencies to your operating system.
+Please take a look at the  Setting up your Environment section to get all the prerequisites required for Tina4.</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:beginner:initialize-a-tina4-project&amp;rev=1628853179&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-13T13:12:59+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:initialize-a-tina4-project - addd some text  - initialize project</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:tutorials:beginner:initialize-a-tina4-project&amp;rev=1628853179&amp;do=diff</link>
+        <description>Initialize a Tina4 project
+
+If you have just installed Tina4 with composer then you run this command in your IDE terminal:
+
+Please note, this adds the necessary scripts to your composer.json file and will NOT work if you already have and index.php file. It will also create a</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1628568468&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-10T06:07:48+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced:create-migration - made changes to to - creatinbg migratrion</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1628568468&amp;do=diff</link>
+        <description>Need to create a table for the database?
+
+To create a table also known as creating a migration, simple follow these steps: 
+
+Step 1 - Spin up Web Server
+
+In your IDE command terminal use this command: 
+
+
+
+Step 2 - Creating your migration
+
+In your URL</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:database:connection-errors&amp;rev=1628568310&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-10T06:05:10+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:database:connection-errors</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:database:connection-errors&amp;rev=1628568310&amp;do=diff</link>
+        <description>Errors while connecting to the Database
+
+You may have seen that in Tina4, if we require a Database, it is included via the “index.php” located in project root via the :
+
+Errors while connecting to the Database
+
+If you experience any trouble connecting to the DB you can try troubleshoot the following:</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:api&amp;rev=1628563872&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-10T04:51:12+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api - added somed links for API knowledgebase</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:api&amp;rev=1628563872&amp;do=diff</link>
+        <description>Creating API 's With Tina4
+API
+
+
+
+
+
+
+
+Follow the steps below if you need to create an API end point to define the interactions between multiple software. 
+
+Please Note : After installing Tina4, you may delete the test.php file located inside the api folder.</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:localized-date-formats&amp;rev=1628180067&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-05T18:14:27+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:localized-date-formats - added content and fixed link for - Add my own localized date format</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:tutorials:localized-date-formats&amp;rev=1628180067&amp;do=diff</link>
+        <description>Add localized date format
+
+If you want Tina to get the Users time and date information correct this is how:
+
+Here's an example:</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:custom-twig-filters&amp;rev=1628179687&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-05T18:08:07+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:custom-twig-filters - fixed link and added content - Add my own filters to twig</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:tutorials:custom-twig-filters&amp;rev=1628179687&amp;do=diff</link>
+        <description>Add my own filters to twig
+
+If you need to add your own filters in Twig you use the config passed to Tina4Php on running Tina4 in the index file. 
+
+Here's an example:</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?id=tina4:tutorials:one-rest-endpoint-two-names&amp;rev=1628094298&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-04T18:24:58+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:one-rest-endpoint-two-names - added content - use REST for two anmes</title>
+        <link>https://tina4php.com/documentation/doku.php?id=tina4:tutorials:one-rest-endpoint-two-names&amp;rev=1628094298&amp;do=diff</link>
+        <description>Use the same REST end point with two different names
+
+We really hate to write too much code, a ``|`` will separate the different end points. Here's an example:</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Awebsite1.png&amp;ns=tina4&amp;rev=1627742526&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-31T16:42:06+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:website1.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Awebsite1.png&amp;ns=tina4&amp;rev=1627742526&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=262&amp;t=1627742526&amp;amp;tok=69a031&amp;amp;media=tina4:website1.png&quot; alt=&quot;tina4:website1.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Amigration.png&amp;ns=tina4&amp;rev=1627680743&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-30T23:32:23+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:migration.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Amigration.png&amp;ns=tina4&amp;rev=1627680743&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=499&amp;h=441&amp;t=1627680743&amp;amp;tok=14ace7&amp;amp;media=tina4:migration.png&quot; alt=&quot;tina4:migration.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi3.png&amp;ns=tina4&amp;rev=1627504179&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-28T22:29:39+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api3.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi3.png&amp;ns=tina4&amp;rev=1627504179&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=141&amp;t=1627504179&amp;amp;tok=c1d005&amp;amp;media=tina4:api3.png&quot; alt=&quot;tina4:api3.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=migrate.png&amp;ns=&amp;rev=1627326177&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-26T21:02:57+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>migrate.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=migrate.png&amp;ns=&amp;rev=1627326177&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=491&amp;h=500&amp;t=1627326177&amp;amp;tok=cebc5c&amp;amp;media=migrate.png&quot; alt=&quot;migrate.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi2.png&amp;ns=tina4&amp;rev=1626707495&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-19T17:11:35+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api2.png</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi2.png&amp;ns=tina4&amp;rev=1626707495&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=499&amp;h=32&amp;t=1626707495&amp;amp;tok=e20415&amp;amp;media=tina4:api2.png&quot; alt=&quot;tina4:api2.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi4.png&amp;ns=tina4&amp;rev=1626707131&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-19T17:05:31+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api4.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi4.png&amp;ns=tina4&amp;rev=1626707131&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=499&amp;h=33&amp;t=1626707131&amp;amp;tok=21cec8&amp;amp;media=tina4:api4.png&quot; alt=&quot;tina4:api4.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi.png&amp;ns=tina4&amp;rev=1626696413&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-19T14:06:53+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api.png</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi.png&amp;ns=tina4&amp;rev=1626696413&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=26&amp;t=1626696413&amp;amp;tok=ed2e4e&amp;amp;media=tina4:api.png&quot; alt=&quot;tina4:api.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi6.png&amp;ns=tina4&amp;rev=1626476335&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-17T00:58:55+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api6.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi6.png&amp;ns=tina4&amp;rev=1626476335&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=172&amp;t=1626476335&amp;amp;tok=694e10&amp;amp;media=tina4:api6.png&quot; alt=&quot;tina4:api6.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi5.png&amp;ns=tina4&amp;rev=1626476334&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-17T00:58:54+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api5.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi5.png&amp;ns=tina4&amp;rev=1626476334&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=37&amp;t=1626476334&amp;amp;tok=9c5ff5&amp;amp;media=tina4:api5.png&quot; alt=&quot;tina4:api5.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Aapi7.png&amp;ns=tina4&amp;rev=1626476334&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-17T00:58:54+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:api7.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Aapi7.png&amp;ns=tina4&amp;rev=1626476334&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=178&amp;t=1626476334&amp;amp;tok=e177f3&amp;amp;media=tina4:api7.png&quot; alt=&quot;tina4:api7.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Atutorials%3Aapi7.png&amp;ns=tina4%3Atutorials&amp;rev=1626476037&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-17T00:53:57+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:api7.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Atutorials%3Aapi7.png&amp;ns=tina4%3Atutorials&amp;rev=1626476037&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=178&amp;t=1626476037&amp;amp;tok=db00bc&amp;amp;media=tina4:tutorials:api7.png&quot; alt=&quot;tina4:tutorials:api7.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4php.com/documentation/doku.php?image=tina4%3Atutorials%3Aapi6.png&amp;ns=tina4%3Atutorials&amp;rev=1626476037&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-17T00:53:57+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:api6.png - created</title>
+        <link>https://tina4php.com/documentation/doku.php?image=tina4%3Atutorials%3Aapi6.png&amp;ns=tina4%3Atutorials&amp;rev=1626476037&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4php.com/documentation/lib/exe/fetch.php?w=500&amp;h=172&amp;t=1626476037&amp;amp;tok=8c2d0b&amp;amp;media=tina4:tutorials:api6.png&quot; alt=&quot;tina4:tutorials:api6.png&quot; /&gt;</description>
+    </item>
+</rdf:RDF>

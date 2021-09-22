@@ -1,0 +1,16 @@
+
+/**
+ The fixed top bar is only for the main page
+ Padding top is in the mail file
+*/
+
+
+#navBarBrand {
+    font-size: 1.20rem;
+    font-weight: bold;
+}
+
+/* To center the logo */
+.navbar-header > a:nth-of-type(1) {
+    padding-top: 15px;
+}

@@ -1,0 +1,58 @@
+====== Installing PHP on Windows ======
+
+===== Step 1 - Download PHP =====
+Head to the PHP page and download the current stable Zip version for your Operating System.
+
+Here's the link : [[https://windows.php.net/download|PHP]]
+
+===== Step 2 - Copy and configure PHP  =====
+Unpack/extract the zip file or content into a folder (Example: "C:\php") on a drive on your system. 
+
+<WRAP center round info>
+Simple paths make for easily finding your files, try not put your projects or binaries in difficult to find locations
+</WRAP>
+    
+Once the files have been extracted, you will need to go into the folder and create a configuration file.
+
+Configure the "php.ini" file: 
+
+  - Go to the folder where you extracted PHP. 
+  - Rename file named "php.ini-development" to "php.ini".
+  - Open php.ini file by opening it with Notepad or IDE tool 
+
+Find the following extensions and remove the semicolon in front of the word extension:
+
+    ;extension=curl
+    ;extension=fileinfo
+    ;extension=gd2
+    ;extension=intl
+    ;extension=mbstring
+    ;extension=openssl
+    ;extension=pdo_mysql
+    ;extension=shmop
+    ;extension=soap
+    ;extension=sqlite3
+    ;extension=tidy
+    ;extension=xmlrpc
+    ;extension=xsl
+    
+Press Ctrl+S or save changes you just made to "php.ini" file.
+
+===== Step 3 - Edit environment path variable =====
+After you have made changes to the configuration file, you must add the PHP folder in your systems environment variable table.
+
+Add path environment variable:
+
+  * Open Control Panel
+  * Go to System
+  * Go to Advanced system settings
+  * Click on Browse, locate the PHP folder you extracted. Click OK and then click Ok again to close the "Edit environment variable" window.
+  * Go to Environment variable 
+  * Look for "Path" in the "Variable" column and click Edit.
+  * Add the path where you extracted your PHP installation to either by browsing or by typing it in.
+
+===== Step 4 - Confirm installation =====
+After this you can confirm if the installation successful by opening your command terminal (e.g. Command Prompt or terminal in your IDE tool) and typing in "php -v" and pushing Enter. The PHP version and details will appear in the terminal. 
+
+[[guides:install:composer|Install Composer]]
+

@@ -1,0 +1,15 @@
+====== Connect to a database ======
+
+Three database engines are currently supported. The global variable **$DBA** is used from index.php to establish a database connection.  Adding a date format is optional.
+
+===== SQLite =====
+   global $DBA;
+   $DBA = new \Tina4\DataSQLite3("test.db", "", "", "Y-m-d");
+
+===== Firebird =====
+   global $DBA;
+   $DBA = new \Tina4\DataFirebird("hostname/3050:/path/to/FIREBIRD.FDB", 
+   "SYSDBA", "masterkey", "d/m/Y");   
+===== MySQL =====
+   global $DBA;
+   $DBA = new \Tina4\DataMySQL("hostname/3306:dbname", "root", "", "Y-m-d");

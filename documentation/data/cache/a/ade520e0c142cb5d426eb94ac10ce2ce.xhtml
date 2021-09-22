@@ -1,0 +1,32 @@
+
+<h1 class="sectionedit1" id="connect_to_a_database">Connect to a database</h1>
+<div class="level1">
+
+<p>
+Three database engines are currently supported. The global variable <strong>$DBA</strong> is used from index.php to establish a database connection.  Adding a date format is optional.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Connect to a database&quot;,&quot;hid&quot;:&quot;connect_to_a_database&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-209&quot;} -->
+<h2 class="sectionedit2" id="sqlite">SQLite</h2>
+<div class="level2">
+<pre class="code"> global $DBA;
+ $DBA = new \Tina4\DataSQLite3(&quot;test.db&quot;, &quot;&quot;, &quot;&quot;, &quot;Y-m-d&quot;);</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;SQLite&quot;,&quot;hid&quot;:&quot;sqlite&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;210-307&quot;} -->
+<h2 class="sectionedit3" id="firebird">Firebird</h2>
+<div class="level2">
+<pre class="code"> global $DBA;
+ $DBA = new \Tina4\DataFirebird(&quot;hostname/3050:/path/to/FIREBIRD.FDB&quot;, 
+ &quot;SYSDBA&quot;, &quot;masterkey&quot;, &quot;d/m/Y&quot;);   </pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Firebird&quot;,&quot;hid&quot;:&quot;firebird&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;308-457&quot;} -->
+<h2 class="sectionedit4" id="mysql">MySQL</h2>
+<div class="level2">
+<pre class="code"> global $DBA;
+ $DBA = new \Tina4\DataMySQL(&quot;hostname/3306:dbname&quot;, &quot;root&quot;, &quot;&quot;, &quot;Y-m-d&quot;);</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;MySQL&quot;,&quot;hid&quot;:&quot;mysql&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;458-&quot;} -->
