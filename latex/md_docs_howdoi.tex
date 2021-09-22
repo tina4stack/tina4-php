@@ -1,0 +1,163 @@
+This is a quick reference for doing things in the \mbox{\hyperlink{namespace_tina4}{Tina4}} environment which will hopefully make your journey easier. If you come up with something cool that you want to add here, please contribute.\hypertarget{md_docs_howdoi_autotoc_md2}{}\doxysection{Connect to a database}\label{md_docs_howdoi_autotoc_md2}
+There are 3 database engines currently supported, we are happy to add more if required but for now they are\+:
+
+
+\begin{DoxyItemize}
+\item Firebird
+\item My\+S\+QL
+\item S\+Q\+Lite
+\end{DoxyItemize}
+
+The database connection is established in a global variable called {\ttfamily \$\+D\+BA} in the index.\+php file for convinience, you could put it anywhere as long as it is global and required before any database functionlity is required.\hypertarget{md_docs_howdoi_autotoc_md3}{}\doxysubsection{Examples\+:}\label{md_docs_howdoi_autotoc_md3}
+Notice the convention of using the {\ttfamily hostname\+:\mbox{[}database$\vert$database-\/path\mbox{]}} except when it is S\+Q\+Lite which then becomes the local path.
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{global \$DBA;}
+\DoxyCodeLine{\textcolor{comment}{//MySQL}}
+\DoxyCodeLine{\$DBA = new \(\backslash\)Tina4\(\backslash\)DataMySQL(\textcolor{stringliteral}{"{}localhost:database"{}}, \textcolor{stringliteral}{"{}admin"{}}, \textcolor{stringliteral}{"{}cool1234"{}});}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//Firebird }}
+\DoxyCodeLine{\$DBA = new \(\backslash\)Tina4\(\backslash\)DataFirebird(\textcolor{stringliteral}{"{}localhost:/home/database/FIREBIRD.DB"{}}, \textcolor{stringliteral}{"{}sysdba"{}}, \textcolor{stringliteral}{"{}masterkey"{}});}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//SQLite}}
+\DoxyCodeLine{\$DBA = new \(\backslash\)Tina4\(\backslash\)DataSQLite3(\textcolor{stringliteral}{"{}/home/someplace/my.db"{}});}
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md4}{}\doxysection{Build a class with database access}\label{md_docs_howdoi_autotoc_md4}
+By default we have a global {\ttfamily \$\+D\+BA} variable and it will get passed into your class if you extend {\ttfamily \textbackslash{}\mbox{\hyperlink{namespace_tina4}{Tina4}}\textbackslash{}Data}. It is advised to store these classes in the app folder.\hypertarget{md_docs_howdoi_autotoc_md5}{}\doxysubsection{Example\+:}\label{md_docs_howdoi_autotoc_md5}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{keyword}{class }MyDBActiveObject \textcolor{keyword}{extends} \mbox{\hyperlink{class_tina4_1_1_data}{\(\backslash\)Tina4\(\backslash\)Data}}}
+\DoxyCodeLine{\{}
+\DoxyCodeLine{    \textcolor{keyword}{function} queryTheDB () \{}
+\DoxyCodeLine{        \textcolor{keywordflow}{return} \$this-\/>DBA-\/>fetch(\textcolor{stringliteral}{'select * from table'})-\/>AsArray();}
+\DoxyCodeLine{    \}   }
+\DoxyCodeLine{}
+\DoxyCodeLine{\}}
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md6}{}\doxysection{Save a record using the O\+RM}\label{md_docs_howdoi_autotoc_md6}
+The O\+RM in \mbox{\hyperlink{namespace_tina4}{Tina4}} tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key. It is required to extend the {\ttfamily \textbackslash{}\mbox{\hyperlink{namespace_tina4}{Tina4}}\textbackslash{}O\+RM} class to make the magic happen.\hypertarget{md_docs_howdoi_autotoc_md7}{}\doxysubsection{Examples\+:}\label{md_docs_howdoi_autotoc_md7}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{comment}{//we need a class extending the ORM}}
+\DoxyCodeLine{\textcolor{keyword}{class }User \textcolor{keyword}{extends} \mbox{\hyperlink{class_tina4_1_1_o_r_m}{\(\backslash\)Tina4\(\backslash\)ORM}} \{ \textcolor{comment}{//assumes we have a table user in the database}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$id; \textcolor{comment}{//primary key because it is first}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$name; \textcolor{comment}{//some additional data}}
+\DoxyCodeLine{\}   }
+\DoxyCodeLine{}
+\DoxyCodeLine{\$user = (\textcolor{keyword}{new} User());}
+\DoxyCodeLine{\$user-\/>name = \textcolor{stringliteral}{"{}Test Save"{}};}
+\DoxyCodeLine{\$user-\/>save();}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//We want the table to be made for us}}
+\DoxyCodeLine{\textcolor{keyword}{class }NewTable \textcolor{keyword}{extends} \mbox{\hyperlink{class_tina4_1_1_o_r_m}{\(\backslash\)Tina4\(\backslash\)ORM}} \{ \textcolor{comment}{//will be created as newtable in the database}}
+\DoxyCodeLine{\textcolor{comment}{}    \textcolor{keyword}{public} \$id; \textcolor{comment}{//primary key because it is first}}
+\DoxyCodeLine{\textcolor{comment}{}    \textcolor{keyword}{public} \$name; \textcolor{comment}{//some additional data}}
+\DoxyCodeLine{\} }
+\DoxyCodeLine{}
+\DoxyCodeLine{}
+\DoxyCodeLine{\$newTable = (\textcolor{keyword}{new} NewTable());}
+\DoxyCodeLine{\$newTable-\/>name = \textcolor{stringliteral}{"{}Test Save"{}};}
+\DoxyCodeLine{\$user-\/>save();}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//How about some thing else}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\$newTable = (\textcolor{keyword}{new} NewTable(\textcolor{stringliteral}{'\{"{}name"{}:"{}TEST"{}\}'}));}
+\DoxyCodeLine{\$newTable-\/>save();}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//Or something else}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\$fields = [\textcolor{stringliteral}{"{}name"{}} => \textcolor{stringliteral}{"{}Testing"{}}];}
+\DoxyCodeLine{\$newTable = (\textcolor{keyword}{new} NewTable(\$fields));}
+\DoxyCodeLine{\$newTable-\/>save();}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//Or something else -\/ request variable should obviously contain fields that match the class declared}}
+\DoxyCodeLine{\$newTable = (\textcolor{keyword}{new} NewTable(\$\_REQUEST));}
+\DoxyCodeLine{\$newTable-\/>save();}
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md8}{}\doxysection{Map my O\+R\+M object to a table with another name}\label{md_docs_howdoi_autotoc_md8}
+Well we did expect you would ask this question\hypertarget{md_docs_howdoi_autotoc_md9}{}\doxysubsection{Example\+:}\label{md_docs_howdoi_autotoc_md9}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{keyword}{class }User \textcolor{keyword}{extends} \mbox{\hyperlink{class_tina4_1_1_o_r_m}{\(\backslash\)Tina4\(\backslash\)ORM}} \{ \textcolor{comment}{//assumes we have a table user in the database}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$tableName=\textcolor{stringliteral}{"{}my\_weird\_database\_table"{}}; \textcolor{comment}{//will make sure this object gets data to and from this table    }}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$id; \textcolor{comment}{//primary key because it is first}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$name; \textcolor{comment}{//some additional data}}
+\DoxyCodeLine{\}   }
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md10}{}\doxysection{Map my O\+R\+M field to a database field which doesn\textquotesingle{}t follow the Tina4 pattern}\label{md_docs_howdoi_autotoc_md10}
+\hypertarget{md_docs_howdoi_autotoc_md11}{}\doxysection{Annotate my R\+E\+S\+T for swagger}\label{md_docs_howdoi_autotoc_md11}
+\hypertarget{md_docs_howdoi_autotoc_md12}{}\doxysection{Secure a R\+E\+S\+T end point}\label{md_docs_howdoi_autotoc_md12}
+\hypertarget{md_docs_howdoi_autotoc_md13}{}\doxysection{Add a filter to process records when they are extracted from the database}\label{md_docs_howdoi_autotoc_md13}
+\hypertarget{md_docs_howdoi_autotoc_md14}{}\doxysection{Exclude some fields from being displayed on R\+E\+S\+T result or query}\label{md_docs_howdoi_autotoc_md14}
+\hypertarget{md_docs_howdoi_autotoc_md15}{}\doxysubsection{Example\+:}\label{md_docs_howdoi_autotoc_md15}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{keyword}{class }User \textcolor{keyword}{extends} \mbox{\hyperlink{class_tina4_1_1_o_r_m}{\(\backslash\)Tina4\(\backslash\)ORM}} \{ \textcolor{comment}{//assumes we have a table user in the database}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$id; \textcolor{comment}{//primary key because it is first}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$name; \textcolor{comment}{//some additional data}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$excludeFields = \textcolor{stringliteral}{"{}password,myId"{}};}
+\DoxyCodeLine{\}   }
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keyword}{class }OtherUser \textcolor{keyword}{extends} \mbox{\hyperlink{class_tina4_1_1_o_r_m}{\(\backslash\)Tina4\(\backslash\)ORM}} \{ \textcolor{comment}{//assumes we have a table user in the database}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$id; \textcolor{comment}{//primary key because it is first}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$name; \textcolor{comment}{//some additional data}}
+\DoxyCodeLine{    \textcolor{keyword}{public} \$excludeFields = [\textcolor{stringliteral}{"{}password"{}},\textcolor{stringliteral}{"{}myId"{}}];}
+\DoxyCodeLine{\}   }
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md16}{}\doxysection{Query the database for some records}\label{md_docs_howdoi_autotoc_md16}
+\hypertarget{md_docs_howdoi_autotoc_md17}{}\doxysection{Get an array of O\+R\+M objects}\label{md_docs_howdoi_autotoc_md17}
+Given that you have an object extending \textbackslash{}\+Tina4\textbackslash{}\+O\+RM it will get \char`\"{}magical powers\char`\"{}, namely the ability to create, load \& save\hypertarget{md_docs_howdoi_autotoc_md18}{}\doxysection{Add a R\+E\+S\+T end point}\label{md_docs_howdoi_autotoc_md18}
+The R\+E\+ST end point is easily added, with an anonymous method to handle the request, the anonymous method should have the response variable. The request exposes more information which comes from the browser, in the case of parameters passed to it. You should always return the {\ttfamily \$response} object!;\hypertarget{md_docs_howdoi_autotoc_md19}{}\doxysubsection{Examples}\label{md_docs_howdoi_autotoc_md19}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{comment}{//Standard}}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Get::add(\textcolor{stringliteral}{"{}/hello/world"{}}, \textcolor{keyword}{function}(\(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Response \$response, \(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Request \$request)\{  }
+\DoxyCodeLine{    \textcolor{keywordflow}{return} \$response(\textcolor{stringliteral}{"{}Hello World"{}}, HTTP\_OK, TEXT\_HTML);}
+\DoxyCodeLine{\});}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//Inline Params}}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Get::add(\textcolor{stringliteral}{"{}/hello/world/\{id\}"{}}, \textcolor{keyword}{function}(\$id, \(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Response \$response, \(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Request \$request)\{}
+\DoxyCodeLine{    \textcolor{keywordflow}{return} \$response(\textcolor{stringliteral}{"{}Hello World \{\$id\}"{}}, HTTP\_OK, TEXT\_HTML);}
+\DoxyCodeLine{\});}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//Other methods you can test}}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Post::add(...);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Patch::add(...);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Put::add(...);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Delete::add(...);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{//You guessed it -\/ It takes every method -\/ GET, POST, DELETE, PUT, PATCH, OPTIONS}}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Any::add(...);}
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md20}{}\doxysection{Use the same R\+E\+S\+T end point with two different names}\label{md_docs_howdoi_autotoc_md20}
+We really hate to write too much code, a {\ttfamily $\vert$} will separate the different end points\hypertarget{md_docs_howdoi_autotoc_md21}{}\doxysubsection{Example}\label{md_docs_howdoi_autotoc_md21}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{comment}{//Standard}}
+\DoxyCodeLine{\(\backslash\)Tina4\(\backslash\)Get::add(\textcolor{stringliteral}{"{}/hello/world|/hello/wrld"{}}, \textcolor{keyword}{function}(\(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Response \$response, \(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Request \$request)\{  }
+\DoxyCodeLine{    \textcolor{keywordflow}{return} \$response(\textcolor{stringliteral}{"{}Hello World"{}}, HTTP\_OK, TEXT\_HTML);}
+\DoxyCodeLine{\});}
+\end{DoxyCode}
+\hypertarget{md_docs_howdoi_autotoc_md22}{}\doxysection{Add my own filters to twig}\label{md_docs_howdoi_autotoc_md22}
+If you need to add your own filters in Twig you use the config passed to Tina4\+Php on running \mbox{\hyperlink{namespace_tina4}{Tina4}} in the index file\hypertarget{md_docs_howdoi_autotoc_md23}{}\doxysubsection{Examples}\label{md_docs_howdoi_autotoc_md23}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\$config = \mbox{\hyperlink{class_tina4_1_1_config}{\(\backslash\)Tina4\(\backslash\)Config}}();}
+\DoxyCodeLine{}
+\DoxyCodeLine{\$config-\/>addFilter(\textcolor{stringliteral}{"{}myFilter"{}}, \textcolor{keyword}{function} (\$name) \{}
+\DoxyCodeLine{    \textcolor{keywordflow}{return} str\_shuffle(\$name);}
+\DoxyCodeLine{\});}
+\DoxyCodeLine{}
+\DoxyCodeLine{echo (\textcolor{keyword}{new} \(\backslash\)\mbox{\hyperlink{namespace_tina4}{Tina4}}\(\backslash\)Tina4Php(\$config));}
+\end{DoxyCode}
+
+
+Somewhere in Twig, in a template, far far away ... 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{<label>\{\{ "{}NAME"{} | myFilter  \}\}</label>}
+\end{DoxyCode}
+ 

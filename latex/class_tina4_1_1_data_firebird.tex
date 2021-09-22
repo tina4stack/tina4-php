@@ -1,0 +1,256 @@
+\hypertarget{class_tina4_1_1_data_firebird}{}\doxysection{Tina4\textbackslash{}Data\+Firebird Class Reference}
+\label{class_tina4_1_1_data_firebird}\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+Inheritance diagram for Tina4\textbackslash{}Data\+Firebird\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{class_tina4_1_1_data_firebird}
+\end{center}
+\end{figure}
+\doxysubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_afe53a186b0723f53523956950db9f5b3}{open}} (\$persistent=true)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a29d6d62102abe96d1e30ef7c00ff7108}{close}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a29e155206ac3fe04e567b9fa029a9ef9}{exec}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a109c2219cb93c807cfe2a0293237555e}{fetch}} (\$sql=\char`\"{}\char`\"{}, \$no\+Of\+Records=10, \$off\+Set=0, \$field\+Mapping=\mbox{[}$\,$\mbox{]})
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_af3694b77c5f56601e52cbf47b4659af5}{error}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a3bae82e3f2da32465583434271ae2672}{commit}} (\$transaction\+Id=null)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a1a634e9f3c58f4f3a48aea6d326cc64e}{rollback}} (\$transaction\+Id=null)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a9b7abc76eb4b7d66c69f23f81beeaa8d}{auto\+Commit}} (\$on\+State=false)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_acc02cf543a88adf89de467e420ff2344}{start\+Transaction}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_ab213b2c2e3097fe8c33c75053a52f70a}{table\+Exists}} (\$table\+Name)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a3a055f7947fdd279a571a553001876bc}{get\+Last\+Id}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a5f620a0fdc4f427dde9d24302bd85251}{get\+Database}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a00c07486a65dc0ec5d3791a40735c66a}{get\+Default\+Database\+Date\+Format}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_firebird_a38540547360842c24d0524d1d741c226}{get\+Default\+Database\+Port}} ()
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a9b7abc76eb4b7d66c69f23f81beeaa8d}\label{class_tina4_1_1_data_firebird_a9b7abc76eb4b7d66c69f23f81beeaa8d}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!autoCommit@{autoCommit}}
+\index{autoCommit@{autoCommit}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{autoCommit()}{autoCommit()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::auto\+Commit (\begin{DoxyParamCaption}\item[{}]{\$on\+State = {\ttfamily false} }\end{DoxyParamCaption})}
+
+Auto commit on for Firebird 
+\begin{DoxyParams}[1]{Parameters}
+bool & {\em \$on\+State} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool$\vert$void 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a426138147c77c42dccc9a414b72d9dbd}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a29d6d62102abe96d1e30ef7c00ff7108}\label{class_tina4_1_1_data_firebird_a29d6d62102abe96d1e30ef7c00ff7108}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!close@{close}}
+\index{close@{close}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{close()}{close()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::close (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Close a Firebird database connection 
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a18155be5c34baa6019abf3a19aea7b04}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a3bae82e3f2da32465583434271ae2672}\label{class_tina4_1_1_data_firebird_a3bae82e3f2da32465583434271ae2672}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!commit@{commit}}
+\index{commit@{commit}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{commit()}{commit()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::commit (\begin{DoxyParamCaption}\item[{}]{\$transaction\+Id = {\ttfamily null} }\end{DoxyParamCaption})}
+
+Commit 
+\begin{DoxyParams}[1]{Parameters}
+null & {\em \$transaction\+Id} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_af3694b77c5f56601e52cbf47b4659af5}\label{class_tina4_1_1_data_firebird_af3694b77c5f56601e52cbf47b4659af5}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!error@{error}}
+\index{error@{error}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{error()}{error()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::error (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns an error \begin{DoxyReturn}{Returns}
+bool$\vert$\+Data\+Error 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a7fdec13feccb3d322555b06612d16faf}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a29e155206ac3fe04e567b9fa029a9ef9}\label{class_tina4_1_1_data_firebird_a29e155206ac3fe04e567b9fa029a9ef9}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!exec@{exec}}
+\index{exec@{exec}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{exec()}{exec()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::exec (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Execute a firebird query, format is query followed by params or variables \begin{DoxyReturn}{Returns}
+array$\vert$bool 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a53f42c7aa9c2695a678c4df040cbedda}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a109c2219cb93c807cfe2a0293237555e}\label{class_tina4_1_1_data_firebird_a109c2219cb93c807cfe2a0293237555e}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!fetch@{fetch}}
+\index{fetch@{fetch}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{fetch()}{fetch()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::fetch (\begin{DoxyParamCaption}\item[{}]{\$sql = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$no\+Of\+Records = {\ttfamily 10},  }\item[{}]{\$off\+Set = {\ttfamily 0},  }\item[{}]{\$field\+Mapping = {\ttfamily \mbox{[}\mbox{]}} }\end{DoxyParamCaption})}
+
+Firebird implementation of fetch 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$sql} & \\
+\hline
+int & {\em \$no\+Of\+Records} & \\
+\hline
+int & {\em \$off\+Set} & \\
+\hline
+ & {\em \$field\+Mapping} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool$\vert$\+Data\+Result 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a5f620a0fdc4f427dde9d24302bd85251}\label{class_tina4_1_1_data_firebird_a5f620a0fdc4f427dde9d24302bd85251}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!getDatabase@{getDatabase}}
+\index{getDatabase@{getDatabase}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{getDatabase()}{getDatabase()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::get\+Database (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_get}{Get}} the database metadata \begin{DoxyReturn}{Returns}
+array$\vert$mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a8955aac7e61d54dd2524c89e7b4bbe01}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a00c07486a65dc0ec5d3791a40735c66a}\label{class_tina4_1_1_data_firebird_a00c07486a65dc0ec5d3791a40735c66a}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!getDefaultDatabaseDateFormat@{getDefaultDatabaseDateFormat}}
+\index{getDefaultDatabaseDateFormat@{getDefaultDatabaseDateFormat}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{getDefaultDatabaseDateFormat()}{getDefaultDatabaseDateFormat()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::get\+Default\+Database\+Date\+Format (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns default date format \begin{DoxyReturn}{Returns}
+mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_abf258049a6cbe1db7d8117ab76e1bf77}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a38540547360842c24d0524d1d741c226}\label{class_tina4_1_1_data_firebird_a38540547360842c24d0524d1d741c226}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!getDefaultDatabasePort@{getDefaultDatabasePort}}
+\index{getDefaultDatabasePort@{getDefaultDatabasePort}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{getDefaultDatabasePort()}{getDefaultDatabasePort()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::get\+Default\+Database\+Port (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns the default database port \begin{DoxyReturn}{Returns}
+mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a32026b304d7480f16a9283876b8aec0e}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a3a055f7947fdd279a571a553001876bc}\label{class_tina4_1_1_data_firebird_a3a055f7947fdd279a571a553001876bc}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!getLastId@{getLastId}}
+\index{getLastId@{getLastId}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{getLastId()}{getLastId()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::get\+Last\+Id (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+\mbox{\hyperlink{class_tina4_1_1_get}{Get}} the last id \begin{DoxyReturn}{Returns}
+int 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a79638ac0b3325a2114e6cbffd38259f5}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_afe53a186b0723f53523956950db9f5b3}\label{class_tina4_1_1_data_firebird_afe53a186b0723f53523956950db9f5b3}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!open@{open}}
+\index{open@{open}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{open()}{open()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::open (\begin{DoxyParamCaption}\item[{}]{\$persistent = {\ttfamily true} }\end{DoxyParamCaption})}
+
+Open a Firebird database connection 
+\begin{DoxyParams}[1]{Parameters}
+bool & {\em \$persistent} & \\
+\hline
+\end{DoxyParams}
+
+\begin{DoxyExceptions}{Exceptions}
+{\em } & \\
+\hline
+\end{DoxyExceptions}
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_a1a634e9f3c58f4f3a48aea6d326cc64e}\label{class_tina4_1_1_data_firebird_a1a634e9f3c58f4f3a48aea6d326cc64e}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!rollback@{rollback}}
+\index{rollback@{rollback}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{rollback()}{rollback()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::rollback (\begin{DoxyParamCaption}\item[{}]{\$transaction\+Id = {\ttfamily null} }\end{DoxyParamCaption})}
+
+Rollback 
+\begin{DoxyParams}[1]{Parameters}
+null & {\em \$transaction\+Id} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a4f4616f254d437523f0e7bd371375650}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_acc02cf543a88adf89de467e420ff2344}\label{class_tina4_1_1_data_firebird_acc02cf543a88adf89de467e420ff2344}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!startTransaction@{startTransaction}}
+\index{startTransaction@{startTransaction}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{startTransaction()}{startTransaction()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::start\+Transaction (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Start Transaction \begin{DoxyReturn}{Returns}
+false$\vert$int$\vert$resource 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a18f11bb0953390835345168461ad7100}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_firebird_ab213b2c2e3097fe8c33c75053a52f70a}\label{class_tina4_1_1_data_firebird_ab213b2c2e3097fe8c33c75053a52f70a}} 
+\index{Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}!tableExists@{tableExists}}
+\index{tableExists@{tableExists}!Tina4\textbackslash{}DataFirebird@{Tina4\textbackslash{}DataFirebird}}
+\doxysubsubsection{\texorpdfstring{tableExists()}{tableExists()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+Firebird\+::table\+Exists (\begin{DoxyParamCaption}\item[{}]{\$table\+Name }\end{DoxyParamCaption})}
+
+Check if table exists 
+\begin{DoxyParams}{Parameters}
+{\em \$table\+Name} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_aae4b54e1a924bc9687117039e40f1f17}{Tina4\textbackslash{}\+Data\+Base}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Tina4/Data\+Firebird.\+php\end{DoxyCompactItemize}

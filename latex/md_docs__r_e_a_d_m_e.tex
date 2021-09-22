@@ -1,0 +1,43 @@
+\hypertarget{md_docs__r_e_a_d_m_e_autotoc_md28}{}\doxysection{What\textquotesingle{}s Tina about ?}\label{md_docs__r_e_a_d_m_e_autotoc_md28}
+Tina uses the following methods to make development quicker
+
+
+\begin{DoxyItemize}
+\item P\+HP built in web server
+\item Twig Templating
+\item Annotated Routes for Swagger UI
+\item Simple code layout and structure
+\end{DoxyItemize}\hypertarget{md_docs__r_e_a_d_m_e_autotoc_md29}{}\doxysection{Requires}\label{md_docs__r_e_a_d_m_e_autotoc_md29}
+
+\begin{DoxyItemize}
+\item P\+HP 7.\+1 $>$ See installing P\+HP 7.4
+\item Composer
+\end{DoxyItemize}\hypertarget{md_docs__r_e_a_d_m_e_autotoc_md30}{}\doxysection{Who should use Tina4 ?}\label{md_docs__r_e_a_d_m_e_autotoc_md30}
+
+\begin{DoxyItemize}
+\item Anyone who wants to build a website quickly using the Twig template engine
+\item React or Angular developers who want a way to create quick A\+P\+Is in P\+HP
+\item Old School P\+HP devs who don\textquotesingle{}t want to learn a frame work but want some structure
+\end{DoxyItemize}\hypertarget{md_docs__r_e_a_d_m_e_autotoc_md31}{}\doxysection{I want to get straight to it!}\label{md_docs__r_e_a_d_m_e_autotoc_md31}
+You can do this if your composer and P\+HP are already available to you on your command line or terminal\+:
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{mkdir tina4example}
+\DoxyCodeLine{cd tina4example}
+\DoxyCodeLine{echo '<?php require "{}vendor/autoload.php"{}; echo new \(\backslash\)Tina4\(\backslash\)Tina4Php();' > index.php}
+\DoxyCodeLine{composer require andrevanzuydam/tina4php }
+\DoxyCodeLine{php -\/S localhost:7145 index.php }
+\end{DoxyCode}
+
+
+Browse to \href{http://localhost:7145}{\texttt{ http\+://localhost\+:7145}} in your favourite browser\hypertarget{md_docs__r_e_a_d_m_e_autotoc_md32}{}\doxysection{What did I just do?}\label{md_docs__r_e_a_d_m_e_autotoc_md32}
+
+\begin{DoxyItemize}
+\item I created a tina4example folder
+\item I made and index.\+php with the bare minimum for \mbox{\hyperlink{namespace_tina4}{Tina4}} to run
+\item I installed the composer dependencies for tina4php
+\item I started up the inbuilt web server
+\end{DoxyItemize}
+
+Continue to \mbox{\hyperlink{md_docs_recommendations}{recommendations}} or \mbox{\hyperlink{md_docs_installation}{installation}} 

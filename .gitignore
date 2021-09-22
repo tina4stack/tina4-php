@@ -1,7 +1,19 @@
 # Created by .ignore support plugin (hsz.mobi)
 .idea
+.vscode
 /vendor/
 /cache/
 /assets/index.twig
 /auth.db
 /tools/HTMLFunctions.txt
+/secrets/
+/tests/vendor/
+/tests/tests/_data/
+/tests/tests/_output/
+/tests/composer.lock
+/tests/.env
+/tests/test.db
+tests/tests/acceptance/
+tests/tests/functional/
+/.env
+/migrations/

@@ -20,27 +20,27 @@ class DataResult implements JsonSerializable
     /**
      * @var resource Records returned from query
      */
-    private $records;
+    public $records;
 
     /**
      * @var array Fields in the table and their types
      */
-    private $fields;
+    public $fields;
 
     /**
      * @var integer Number of records
      */
-    private $noOfRecords;
+    public $noOfRecords;
 
     /**
      * @var integer Data row offset
      */
-    private $offSet;
+    public $offSet;
 
     /**
      * @var DataError Database error
      */
-    private $error;
+    public $error;
 
     /**
      * DataResult constructor.
@@ -77,7 +77,8 @@ class DataResult implements JsonSerializable
      * Gets back the number of records that were not filtered out by the pagination
      * @return int
      */
-    function getNoOfRecords() {
+    function getNoOfRecords()
+    {
         return $this->noOfRecords;
     }
 
@@ -91,24 +92,58 @@ class DataResult implements JsonSerializable
     }
 
     /**
+     * Gets an array of objects
+     * @param boolean $original Original field names
+     * @return array|mixed
+     */
+    public function asObject($original = false)
+    {
+        return $this->records($original);
+    }
+
+    /**
      * Converts returned results as array of objects
+     * @param boolean $original Original field name
      * @return array|null
      * @example examples\exampleDataResultRecords.php
      */
-    function records()
+    function records($original = false)
     {
-        $results = null;
+        $results = [];
         if (!empty($this->records)) {
             foreach ($this->records as $rid => $record) {
-                $results[] = $record->asObject();
+                $results[] = $record->asObject($original);
             }
         }
 
         return $results;
     }
 
+    /**
+     * Gets an array of objects in the original form
+     * @return array|mixed
+     */
+    public function asOriginal()
+    {
+        return $this->records(true);
+    }
 
-
+    /**
+     * Gets the result as a generic array without the extra object information
+     * @param boolean $original Original field names
+     * @return array
+     */
+    public function asArray($original = false)
+    {
+        //$records = $this->jsonSerialize();
+        $result = [];
+        if (!empty($this->records)) {
+            foreach ($this->records() as $id => $record) {
+                $result[] = (array)$record;
+            }
+        }
+        return $result;
+    }
 
     /**
      * Converts array of records to array of objects
@@ -123,19 +158,15 @@ class DataResult implements JsonSerializable
                 if (get_class($record) == "Tina4\DataRecord") {
                     $results[] = $record->asObject();
                 } else {
-                    $results [] = (object) $record;
+                    $results [] = (object)$record;
                 }
             }
         }
 
-
-
-
-
         if (!empty($results)) {
-            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => null]);
+            return json_encode((object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "fields" => $this->fields, "data" => $results, "error" => null]);
         } else {
-            return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "data" => [], "error" => $this->error->getErrorText()]);
+            return json_encode((object)["recordsTotal" => 0, "recordsFiltered" => 0, "fields" => [], "data" => [], "error" => $this->error->getErrorText()]);
         }
 
     }
@@ -143,7 +174,8 @@ class DataResult implements JsonSerializable
     /**
      * Makes a neat JSON response
      */
-    public function jsonSerialize() {
+    public function jsonSerialize()
+    {
         $results = [];
 
         if (!empty($this->records)) {
@@ -151,12 +183,12 @@ class DataResult implements JsonSerializable
                 if (get_class($record) == "Tina4\DataRecord") {
                     $results[] = $record->asObject();
                 } else {
-                    $results [] = (object) $record;
+                    $results [] = (object)$record;
                 }
             }
         }
 
-        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "data" => $results, "error" => $this->getError()];
+        return (object)["recordsTotal" => $this->noOfRecords, "recordsFiltered" => $this->noOfRecords, "fields" => $this->fields, "data" => $results, "error" => $this->getError()];
     }
 
     /**

@@ -1,0 +1,273 @@
+\hypertarget{class_tina4_1_1_data_my_s_q_l}{}\doxysection{Tina4\textbackslash{}Data\+My\+S\+QL Class Reference}
+\label{class_tina4_1_1_data_my_s_q_l}\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+Inheritance diagram for Tina4\textbackslash{}Data\+My\+S\+QL\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{class_tina4_1_1_data_my_s_q_l}
+\end{center}
+\end{figure}
+\doxysubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_ad30b784eb76d20ccb5e39f78742453a5}{open}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_aca0b0487cb91586a50fbc2ac73c3a00a}{close}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_af38336fab8e89a4712369bcddd5633e8}{exec}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_aa33fa37a72f5c9deff15ba3e85967f71}{fetch}} (\$sql=\char`\"{}\char`\"{}, \$no\+Of\+Records=10, \$off\+Set=0, \$field\+Mapping=\mbox{[}$\,$\mbox{]})
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a5a1bdcf871ade3348d1ab25496776b7a}{error}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a9c58cae999e9c6820f5dd88953c65174}{ref\+Values}} (\$arr)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_ab7bf97f86250ae8a57ab713f0a2f5d5f}{get\+Last\+Id}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a3894ee6becbf8ab770b39e94f13e8125}{table\+Exists}} (\$table\+Name)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a723615f6a3ddd0ccfb26dfb9cf85dc13}{commit}} (\$transaction\+Id=null)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_aee48143bc52909654e9d8e99cc60722c}{rollback}} (\$transaction\+Id=null)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a3202bdc86d2b869ab73e136054b6effd}{start\+Transaction}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a029d62fd44eee99737be110691ba75af}{auto\+Commit}} (\$on\+State=true)
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a80ed8aeeae2fef28d09b6f9090ac5116}{get\+Database}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_af4be0146b9398792f26371f55db92fb5}{get\+Default\+Database\+Date\+Format}} ()
+\item 
+\mbox{\hyperlink{class_tina4_1_1_data_my_s_q_l_a16946d5caded81ef03c8e269ecedb5b4}{get\+Default\+Database\+Port}} ()
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Member Function Documentation}
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a029d62fd44eee99737be110691ba75af}\label{class_tina4_1_1_data_my_s_q_l_a029d62fd44eee99737be110691ba75af}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!autoCommit@{autoCommit}}
+\index{autoCommit@{autoCommit}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{autoCommit()}{autoCommit()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::auto\+Commit (\begin{DoxyParamCaption}\item[{}]{\$on\+State = {\ttfamily true} }\end{DoxyParamCaption})}
+
+Auto commit on for mysql 
+\begin{DoxyParams}[1]{Parameters}
+bool & {\em \$on\+State} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool$\vert$void 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a426138147c77c42dccc9a414b72d9dbd}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_aca0b0487cb91586a50fbc2ac73c3a00a}\label{class_tina4_1_1_data_my_s_q_l_aca0b0487cb91586a50fbc2ac73c3a00a}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!close@{close}}
+\index{close@{close}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{close()}{close()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::close (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Closes database connection \begin{DoxyReturn}{Returns}
+bool$\vert$void 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a18155be5c34baa6019abf3a19aea7b04}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a723615f6a3ddd0ccfb26dfb9cf85dc13}\label{class_tina4_1_1_data_my_s_q_l_a723615f6a3ddd0ccfb26dfb9cf85dc13}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!commit@{commit}}
+\index{commit@{commit}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{commit()}{commit()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::commit (\begin{DoxyParamCaption}\item[{}]{\$transaction\+Id = {\ttfamily null} }\end{DoxyParamCaption})}
+
+Commits 
+\begin{DoxyParams}[1]{Parameters}
+null & {\em \$transaction\+Id} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a5a1bdcf871ade3348d1ab25496776b7a}\label{class_tina4_1_1_data_my_s_q_l_a5a1bdcf871ade3348d1ab25496776b7a}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!error@{error}}
+\index{error@{error}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{error()}{error()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::error (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Gets My\+S\+QL errors \begin{DoxyReturn}{Returns}
+bool$\vert$\+Data\+Error 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a7fdec13feccb3d322555b06612d16faf}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_af38336fab8e89a4712369bcddd5633e8}\label{class_tina4_1_1_data_my_s_q_l_af38336fab8e89a4712369bcddd5633e8}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!exec@{exec}}
+\index{exec@{exec}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{exec()}{exec()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::exec (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Executes \begin{DoxyReturn}{Returns}
+array$\vert$bool 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a53f42c7aa9c2695a678c4df040cbedda}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_aa33fa37a72f5c9deff15ba3e85967f71}\label{class_tina4_1_1_data_my_s_q_l_aa33fa37a72f5c9deff15ba3e85967f71}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!fetch@{fetch}}
+\index{fetch@{fetch}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{fetch()}{fetch()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::fetch (\begin{DoxyParamCaption}\item[{}]{\$sql = {\ttfamily \char`\"{}\char`\"{}},  }\item[{}]{\$no\+Of\+Records = {\ttfamily 10},  }\item[{}]{\$off\+Set = {\ttfamily 0},  }\item[{}]{\$field\+Mapping = {\ttfamily \mbox{[}\mbox{]}} }\end{DoxyParamCaption})}
+
+Fetches records from database 
+\begin{DoxyParams}[1]{Parameters}
+string & {\em \$sql} & \mbox{\hyperlink{class_tina4_1_1_s_q_l}{S\+QL}} Query \\
+\hline
+integer & {\em \$no\+Of\+Records} & Number of records requested \\
+\hline
+integer & {\em \$off\+Set} & Record offset \\
+\hline
+array & {\em \$field\+Mapping} & Mapped Fields \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool$\vert$\+Data\+Result 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a80ed8aeeae2fef28d09b6f9090ac5116}\label{class_tina4_1_1_data_my_s_q_l_a80ed8aeeae2fef28d09b6f9090ac5116}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!getDatabase@{getDatabase}}
+\index{getDatabase@{getDatabase}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{getDatabase()}{getDatabase()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::get\+Database (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Gets the database metadata \begin{DoxyReturn}{Returns}
+array$\vert$mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a8955aac7e61d54dd2524c89e7b4bbe01}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_af4be0146b9398792f26371f55db92fb5}\label{class_tina4_1_1_data_my_s_q_l_af4be0146b9398792f26371f55db92fb5}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!getDefaultDatabaseDateFormat@{getDefaultDatabaseDateFormat}}
+\index{getDefaultDatabaseDateFormat@{getDefaultDatabaseDateFormat}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{getDefaultDatabaseDateFormat()}{getDefaultDatabaseDateFormat()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::get\+Default\+Database\+Date\+Format (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns default date format \begin{DoxyReturn}{Returns}
+mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_abf258049a6cbe1db7d8117ab76e1bf77}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a16946d5caded81ef03c8e269ecedb5b4}\label{class_tina4_1_1_data_my_s_q_l_a16946d5caded81ef03c8e269ecedb5b4}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!getDefaultDatabasePort@{getDefaultDatabasePort}}
+\index{getDefaultDatabasePort@{getDefaultDatabasePort}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{getDefaultDatabasePort()}{getDefaultDatabasePort()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::get\+Default\+Database\+Port (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns the default database port \begin{DoxyReturn}{Returns}
+mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a32026b304d7480f16a9283876b8aec0e}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_ab7bf97f86250ae8a57ab713f0a2f5d5f}\label{class_tina4_1_1_data_my_s_q_l_ab7bf97f86250ae8a57ab713f0a2f5d5f}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!getLastId@{getLastId}}
+\index{getLastId@{getLastId}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{getLastId()}{getLastId()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::get\+Last\+Id (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Gets the last inserted row\textquotesingle{}s ID from database \begin{DoxyReturn}{Returns}
+bool 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a79638ac0b3325a2114e6cbffd38259f5}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_ad30b784eb76d20ccb5e39f78742453a5}\label{class_tina4_1_1_data_my_s_q_l_ad30b784eb76d20ccb5e39f78742453a5}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!open@{open}}
+\index{open@{open}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{open()}{open()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::open (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Opens database connection \begin{DoxyReturn}{Returns}
+bool$\vert$void 
+\end{DoxyReturn}
+
+\begin{DoxyExceptions}{Exceptions}
+{\em } & \\
+\hline
+\end{DoxyExceptions}
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a9c58cae999e9c6820f5dd88953c65174}\label{class_tina4_1_1_data_my_s_q_l_a9c58cae999e9c6820f5dd88953c65174}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!refValues@{refValues}}
+\index{refValues@{refValues}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{refValues()}{refValues()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::ref\+Values (\begin{DoxyParamCaption}\item[{}]{\$arr }\end{DoxyParamCaption})}
+
+Helper to make ref values for exec injection 
+\begin{DoxyParams}{Parameters}
+{\em \$arr} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+array 
+\end{DoxyReturn}
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_aee48143bc52909654e9d8e99cc60722c}\label{class_tina4_1_1_data_my_s_q_l_aee48143bc52909654e9d8e99cc60722c}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!rollback@{rollback}}
+\index{rollback@{rollback}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{rollback()}{rollback()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::rollback (\begin{DoxyParamCaption}\item[{}]{\$transaction\+Id = {\ttfamily null} }\end{DoxyParamCaption})}
+
+Rollback the transaction 
+\begin{DoxyParams}[1]{Parameters}
+null & {\em \$transaction\+Id} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool$\vert$mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a4f4616f254d437523f0e7bd371375650}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a3202bdc86d2b869ab73e136054b6effd}\label{class_tina4_1_1_data_my_s_q_l_a3202bdc86d2b869ab73e136054b6effd}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!startTransaction@{startTransaction}}
+\index{startTransaction@{startTransaction}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{startTransaction()}{startTransaction()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::start\+Transaction (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Start the transaction \begin{DoxyReturn}{Returns}
+bool$\vert$int 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_a18f11bb0953390835345168461ad7100}{Tina4\textbackslash{}\+Data\+Base}}.
+
+\mbox{\Hypertarget{class_tina4_1_1_data_my_s_q_l_a3894ee6becbf8ab770b39e94f13e8125}\label{class_tina4_1_1_data_my_s_q_l_a3894ee6becbf8ab770b39e94f13e8125}} 
+\index{Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}!tableExists@{tableExists}}
+\index{tableExists@{tableExists}!Tina4\textbackslash{}DataMySQL@{Tina4\textbackslash{}DataMySQL}}
+\doxysubsubsection{\texorpdfstring{tableExists()}{tableExists()}}
+{\footnotesize\ttfamily Tina4\textbackslash{}\+Data\+My\+S\+Q\+L\+::table\+Exists (\begin{DoxyParamCaption}\item[{}]{\$table\+Name }\end{DoxyParamCaption})}
+
+Check if the table exists 
+\begin{DoxyParams}{Parameters}
+{\em \$table\+Name} & \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool$\vert$mixed 
+\end{DoxyReturn}
+
+
+Implements \mbox{\hyperlink{interface_tina4_1_1_data_base_aae4b54e1a924bc9687117039e40f1f17}{Tina4\textbackslash{}\+Data\+Base}}.
+
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Tina4/Data\+My\+S\+Q\+L.\+php\end{DoxyCompactItemize}
