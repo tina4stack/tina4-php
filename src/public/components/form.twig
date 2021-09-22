@@ -1,0 +1,13 @@
+<form id="{{ formId }}Form" enctype="multipart/form-data" xmlns="http://www.w3.org/1999/html">
+    <div class="row">
+        {% for tableField in tableFields %}
+            <div class="form-group col-md-6">
+                <label for="{{ tableField.fieldName }}">{{ tableField.fieldLabel }}</label>
+                <input class="form-control" type="text" id="{{ tableField.fieldName }}"
+                       name="{{ tableField.fieldName }}" placeholder="{{ tableField.fieldLabel }}"
+                       value="{% verbatim %}{{{% endverbatim %} data.{{ tableField.fieldName }} {% verbatim %}}}{% endverbatim %}">
+            </div>
+        {% endfor %}
+    </div>
+    {{ '{{'~'\"'~formId~'Form'~'\"'~' | formToken | raw }}' | raw }}
+</form>

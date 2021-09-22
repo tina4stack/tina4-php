@@ -1,28 +1,36 @@
 #!/usr/bin/env php
 <?php
-set_time_limit(0);
-
+$replacePath = $argv[0]; //used to figure out where we're running
 global $rootPath;
-$rootPath = str_replace("\n", "", `cd`);
-$rootPath = str_replace("\r", "", $rootPath);
+global $session; //store things here you want to reuse
+$session = [];
 
-$binFile = str_replace("/tina4", "", $argv[0]);
-$rootPath = str_replace($binFile, "", $rootPath) . DIRECTORY_SEPARATOR;
-global $settings;
-$settings = [];
-define("TINA4_SUPPRESS", 1);
-if (file_exists($rootPath.DIRECTORY_SEPARATOR."index.php")) {
-    include $rootPath.DIRECTORY_SEPARATOR."index.php";
+foreach (get_included_files() as $id => $file) {
+    if (strpos($file, "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
+        $rootPath = str_ireplace("vendor" . DIRECTORY_SEPARATOR . "autoload.php", "", $file);
+        break;
+    }
+}
+
+if (empty($rootPath)) {
+    $rootPath = str_replace("vendor" . DIRECTORY_SEPARATOR . "tina4stack" . DIRECTORY_SEPARATOR . "tina4php" . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4service", "", __FILE__);
+    $rootPath = str_replace("bin" . DIRECTORY_SEPARATOR . "tina4service", "", $rootPath);
+}
+
+require_once "{$rootPath}vendor/autoload.php";
+define("TINA4_SUPPRESS", true);
+
+if (file_exists($rootPath . "index.php")) {
+    include_once $rootPath . "index.php";
 }
 
 $stopFileName = "{$rootPath}stop";
-
 if (file_exists($stopFileName)) {
     unlink($stopFileName);
 }
 
-\Tina4\DebugLog::message("Running from folder {$rootPath}");
-\Tina4\DebugLog::message("Running Tina4 service");
+\Tina4\Debug::message("Running from folder {$rootPath}", TINA4_LOG_INFO);
+\Tina4\Debug::message("Running Tina4 service", TINA4_LOG_INFO);
 
 //Garbage collection
 gc_enable();
@@ -30,29 +38,14 @@ gc_enable();
 while (TRUE && !file_exists($stopFileName)) {
     $service = new \Tina4\Service();
     $processes = $service->getProcesses();
-
-
-    while (ob_get_level()) {
-        ob_end_flush();
-    }
-
-    // start output buffering
-    if (ob_get_length() === false) {
-        ob_start();
-    }
-
+    sleep($service->getSleepTime());
     if (!empty($processes)) {
-
         foreach ($processes as $id => $process) {
-
             try {
-
                 if (get_class($process) !== "__PHP_Incomplete_Class") {
                     //How to know we are not on server?
                     if (TINA4_DEBUG) {
-                        \Tina4\DebugLog::message("Running {$process->name}");
-
-
+                        \Tina4\Debug::message("Running {$process->name}", TINA4_LOG_INFO);
 
                         $reflection = new \ReflectionClass(get_class($process));
                         $code = file_get_contents($reflection->getFileName());
@@ -65,37 +58,43 @@ while (TRUE && !file_exists($stopFileName)) {
                         } else {
                             $settings[$process->name]["hash"] = md5($code);
                             $settings[$process->name]["instance"] = $aliasNumber;
-                            $code = str_replace(get_class($process), get_class($process) . $aliasNumber, $code);
+
+                            //Works when name space is used
+                            $className = explode(DIRECTORY_SEPARATOR, get_class($process));
+                            $className = $className[count($className) - 1];
+
+                            $code = str_replace($className, $className . $aliasNumber, $code);
                             //Load new class
+                            \Tina4\Debug::message(date("Y-m-d H:i:s") . " Reloading code for service {$className} \n{$code}", TINA4_LOG_DEBUG);
                             eval($code);
                         }
 
-                        eval('$runner = new ' . get_class($process) . $aliasNumber . '();');
+                        eval('$runner = new ' . get_class($process) . $aliasNumber . "('{$process->name}');");
                         if ($runner->canRun()) {
+                            \Tina4\Debug::message(date("Y-m-d H:i:s") . " Running {$process->name}", TINA4_LOG_DEBUG);
                             $runner->run();
                         }
                         unset ($runner);
                         $runner = null;
-                    }  else {
-                       if ($process->canRun()) {
-                           $process->run();
-                       }
-                       unset($process);
+                    } else {
+                        if ($process->canRun()) {
+                            \Tina4\Debug::message(date("Y-m-d H:i:s") . " Running {$process->name}");
+                            $process->run();
+                        }
+                        unset($process);
                     }
 
                     gc_collect_cycles();
                 } else {
-                    \Tina4\DebugLog::message("Could not load registered process, make sure it is in one of the TINA4_INCLUDE_LOCATIONS");
+                    \Tina4\Debug::message("Could not load registered process, make sure it is in one of the TINA4_INCLUDE_LOCATIONS", TINA4_LOG_DEBUG);
                 }
             } catch (Exception $exception) {
-                \Tina4\DebugLog::message("Could not run ".$exception->getMessage());
+                \Tina4\Debug::message(date("Y-m-d H:i:s") . " Could not run " . $exception->getMessage(), TINA4_LOG_DEBUG);
             }
-
         }
     } else {
-        \Tina4\DebugLog::message("Nothing found to run");
+        \Tina4\Debug::message(date("Y-m-d H:i:s") . " Nothing found to run", TINA4_LOG_DEBUG);
     }
-    sleep($service->getSleepTime());
     //clean up
     unset($service);
 }
