@@ -1,3 +1,0 @@
-====== Sơ đồ trang web ======
-
-Đây là sơ đồ trang web chứa tất cả các trang có sẵn được sắp xếp theo [[doku>namespaces|không gian tên]].

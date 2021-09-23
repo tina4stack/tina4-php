@@ -1,3 +1,0 @@
-====== webcomponent Plugin Gestion des Redirections ======
-
-Vous pouvez gérer les redirections ici. Vous pouvez rediriger vers des pages internes ou même vers des sites web.

@@ -1,5 +1,0 @@
-====== Installing PHP on Linux ======
-
-====== Based on Debian ======
-
-  apt-get install php-curl php-fileinfo php-gd php-intl php-mbstring php-soap php-tidy php-xmlrpc php-xml

@@ -1,1 +1,0 @@
-XDEBUG_CONFIG<span class="sy0">=</span><span class="st0">&quot;remote_host=127.0.0.1&quot;</span> php <span class="sy0">-</span>S localhost<span class="sy0">:</span><span class="nu0">7145</span> index<span class="sy0">.</span>php

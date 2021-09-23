@@ -1,6 +1,0 @@
-<span class="kw2">&lt;?php</span>
-&nbsp;
-<span class="kw2">global</span> <span class="re0">$DBA</span><span class="sy0">;</span>
-&nbsp;
-<span class="co1">//SQLite</span>
-<span class="re0">$DBA</span> <span class="sy0">=</span> <span class="kw2">new</span> \Tina4\DataSQLite3<span class="br0">&#40;</span><span class="st0">&quot;/home/someplace/my.db&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span>

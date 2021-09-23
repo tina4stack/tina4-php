@@ -1,7 +1,0 @@
-base   linksenhanced
-author Andreas Boehler
-email  dev@aboehler.at
-date   2019-05-29
-name   linksenhanced plugin
-desc   Enhanced Link Syntax
-url    http://www.aboehler.at

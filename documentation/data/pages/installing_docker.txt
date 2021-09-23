@@ -1,7 +1,0 @@
-For installing Docker onto your machine, please watch the following videos and watch the video which is **__specific to your Operating System__**:
-
-^ **Windows**                     ^ **Mac**                           ^ **Linux**                             ^
-| {{youtube>_9AWYlt86B8?small}}   | {{youtube>mbSsh40_8WM?small}}     |   {{youtube>KCckWweNSrM?small}}      |
-
-
-[[first-steps|Go back]]

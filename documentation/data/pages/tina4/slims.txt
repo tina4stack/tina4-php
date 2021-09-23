@@ -1,2 +1,0 @@
-====== Shape ======
-Shape is a way to generate valid HTML by using functions.

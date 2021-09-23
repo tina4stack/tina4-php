@@ -1,3 +1,0 @@
-====== Post form data ======
-
-Tina4 prevents CORS from happening so formKey token is used

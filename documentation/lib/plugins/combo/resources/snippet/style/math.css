@@ -1,8 +1,0 @@
-/**
-	MathJax becomes mobile and will not overflow
-**/
-.MJXc-display, .mjx-chtml {
-    overflow-y: hidden;
-    max-width: 100%;
-    overflow-x: auto;
-}
