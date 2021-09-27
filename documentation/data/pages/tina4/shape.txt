@@ -4,7 +4,7 @@ Shape is a way to generate valid HTML by using functions.
 HTML Language called Shape where you write code to make HTML. We can define the client-side image map using HTML Shape. Using this method, you can output HTML elements with PHP. 
 
 ===== Installation =====
-Put a file named composer.json at the root of your project, containing your project dependencies:
+Put a  composer.json file at the root of your project, containing your project dependencies. Do this by running the following command in IDE terminal:
 
 <code bash>
 composer require tina4stack/tina4php-shape 

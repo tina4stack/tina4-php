@@ -6,9 +6,11 @@ ORM is used to map object relations and how they interact with each other, for y
 
 ===== Save a record using the ORM =====
 
-It is required to extend the **\Tina4\ORM** class to make the magic happen.
+To save a record/data to the database using ORM, it is required that you extend the **\Tina4\ORM** class to make the magic happen.
 
-** Examples:**
+Create your ORM classes and objects in the **\src\ORM** directory.
+
+** Example:**
 
 <code php orm-example.php>
 <?php
@@ -59,7 +61,9 @@ $newTable->save();
 
 ===== Other methods using the ORM =====
 
-Tina4 can make use of various types of methods:
+Tina4 can make use of various types of methods.
+
+** Example:**
 
 <code php orm-example-2.php>
 <?php
@@ -87,4 +91,60 @@ Tina4 can make use of various types of methods:
 \Tina4\Any::add(...);
 </code>
 
+===== Referencing a table using ORM =====
 
+To reference a table using ORM, we make use of the **@Table** annotation, which describes the table your record/data exists in. A required attribute of **@Table** is the name of the table.
+
+This is done to provide a sort of hint to the database schema tools. This will serve essential in the initial steps of your project, as you will need to plan and setup your database according to your project requirements.
+
+** Example:**
+
+<code php orm-example-3.php>
+<?php
+
+/**
+ * @User
+ * @description Reference table for User Class to extend to Tina4 ORM
+ * @Table(name="user")
+ */
+class User extends \Tina4\ORM { //assumes we have a table "user" in the database
+    public $id; //primary key because it is first
+    public $name; //some additional data
+}
+
+$user = (new User());
+$user->name = "Test Save";
+$user->save();
+</code>
+
+Optional attributes you may want to include to reference a table are indexes, unique constraints and schema.
+
+  * Indexes - An index is an on-disk data structure which is associated with a table or a view that speeds up the retrieval of rows or data from the table/database/view.
+
+  * Unique Constraints - This is used in SQL to ensure that no duplicate entries or values are created in your database. In SQL you can use the **UNIQUE** or **PRIMARY KEY** statement to create a constraint. The difference is that you can have many UNIQUE constraints per table but only one PRIMARY KEY constraint per table.
+
+  * Schema -  These are the blueprints of your database which describe your database structure, data types and database constraints.
+
+** Example:**
+
+<code php orm-example-4.php>
+<?php
+
+/**
+ * @User
+ * @description Reference table for User Class to extend to Tina4 ORM
+ * @Table(name="user",
+ *      uniqueConstraints={@UniqueConstraint(name="user_name",columns={"username"})},
+ *      indexes={@Index(name="user_id", columns={"name"})}
+ *      schema="schema_name"
+ * )
+ */
+class User extends \Tina4\ORM { //assumes we have a table "user" in the database
+    public $id; //primary key because it is first
+    public $name; //some additional data
+}
+
+$user = (new User());
+$user->name = "Test Save";
+$user->save();
+</code>
