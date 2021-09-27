@@ -1,0 +1,19 @@
+
+<h1 class="sectionedit1 heading-combo" id="filter_database_for_an_entry">Filter Database for an entry</h1>
+<div class="level1">
+
+<p>
+Lets say you want to filter the database for all the entries with the first name “Peter”. In your SQL tool that you are using, you can query a record or it can be done in the IDE Terminal. Here&#039;s an example:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Get::add(&quot;/player/names&quot;, function ($names, \Tina4\Response $response, \Tina4\Request $request) {
+$names = (new UserName())-&gt;select(&quot;*&quot;) --&gt;the table you want to select. It has to be is accordance with the Helper.
+                         -&gt;where (names = Peter) --&gt;the filter you want 
+                         -&gt;asArray;
+ return $response (\Tina4\renderTemplate(&quot;yourtemplate.twig&quot;, [&quot;names&quot; =&gt; $names, ), HTTP_OK, TEXT_HTML);
+});</code>
+</pre>
+
+</div>

@@ -1,0 +1,7 @@
+.blockquote { font-size: 1.03rem; }
+.blockquote-footer { font-size: 95%; }
+/* p and ul have a default bottom margin via the default browser stylesheet that makes the content not in the middle */
+.blockquote-combo p:last-child { margin-bottom: 0; }
+.blockquote-combo ul:last-child { margin-bottom: 0; }
+/* no margin after a blockquote */
+.blockquote-combo { margin-bottom: 1rem; }

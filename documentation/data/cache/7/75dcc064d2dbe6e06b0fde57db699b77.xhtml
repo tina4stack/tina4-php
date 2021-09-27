@@ -1,0 +1,32 @@
+
+<h1 class="sectionedit1 heading-combo" id="posting_form_data">Posting form data</h1>
+<div class="level1">
+
+<p>
+You need a form key to post to a Tina4 Post route, in twig this is easy to add to into your form
+</p>
+<pre class="code-container-combo code-container-html-combo" data-download-link="true" data-src="file.html">
+<code class="language-html code-combo code-html-combo">
+&lt;form action=&quot;/post-route&quot; method=&quot;post&quot;&gt;
+   &lt;button&gt;Submit&lt;/button&gt;
+   {{ &quot;reason for token&quot; | formToken | raw }}
+&lt;/form&gt;</code>
+</pre>
+
+<p>
+In code the token is also available as 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+$_SESSION[&quot;tina4:authToken&quot;]   </code>
+</pre>
+
+<p>
+You can define how load a token lasts in your env file
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+TINA4_TOKEN_MINUTES=5   </code>
+</pre>
+
+</div>

@@ -1,0 +1,22 @@
+====== Posting form data ======
+When creating a form for a user to complete, we use the [[https://en.wikipedia.org/wiki/POST_(HTTP)|POST]] method to secure the data that is sent to  a server/database. 
+
+You need a form key to post to a Tina4 Post route. This is easy to add to into your [[https://twig.symfony.com/doc/3.x/|Twig]] or [[https://html.com|HTML]] form:
+<code twig>
+<form action="/post-route" method="POST">
+   <button>Submit</button>
+   {{ "reason for token" | formToken | raw }}
+</form>
+</code>   
+   
+In code the token is also available as :
+<code php>
+<?php
+
+$_SESSION["tina4:authToken"]   
+</code>   
+   
+You can define how long a token lasts in your [[tina4:env|env]] file:
+<code env>
+TINA4_TOKEN_MINUTES=5   
+</code>

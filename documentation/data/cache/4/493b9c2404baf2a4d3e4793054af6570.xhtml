@@ -1,0 +1,30 @@
+
+<h1 class="sectionedit1 heading-combo" id="create_modules_with_tina4">Create Modules with Tina4</h1>
+<div class="level1">
+
+<p>
+Develop your system as a normal Tina4 project, when you&#039;re done developing it, change your index to have the following code.
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="index.php" data-download-link-label="Download index.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Module::addModule(&quot;My Module&quot;, &quot;1.0.0&quot;, &quot;tina4cms&quot;, function(\Tina4\Config $config) {
+      global $DBA; //access the database
+      //All your things that need to run when you start
+      
+      if (!$DBA-&gt;tableExists(&quot;someTable&quot;)) {
+        (new \Tina4\Migration(__DIR__.&quot;/migrations&quot;))-&gt;doMigration();
+      }
+      
+      //Add a twig function as Example
+       $config-&gt;addTwigFunction(&quot;render&quot;,  function ($content) {
+        return \Tina4\renderTemplate($content);
+      });
+}); </code>
+</pre>
+
+<p>
+Your module can now be included in any other Tina4 project that you would like to create. Tina4 is designed to make things as lightweight as possible. If you have any queries or suggestions please feel free to reach out to our Developers. 
+</p>
+
+</div>

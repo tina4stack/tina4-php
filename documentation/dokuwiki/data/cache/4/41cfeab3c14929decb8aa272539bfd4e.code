@@ -1,0 +1,7 @@
+// ./src/orm/Match.php
+<span class="kw2">&lt;?php</span>
+<span class="kw2">class</span> Match <span class="kw2">extends</span> \Tina4\ORM
+<span class="br0">&#123;</span>
+    <span class="kw2">public</span> <span class="re0">$tableName</span><span class="sy0">=</span><span class="st0">&quot;match&quot;</span><span class="sy0">;</span>
+    <span class="kw2">public</span> <span class="re0">$primaryKey</span><span class="sy0">=</span><span class="st0">&quot;match_key&quot;</span><span class="sy0">;</span> <span class="co1">//set for primary key</span>
+<span class="br0">&#125;</span>

@@ -1,0 +1,5 @@
+a:2:{s:7:"current";a:9:{s:4:"date";a:2:{s:7:"created";i:1630731356;s:8:"modified";i:1630731356;}s:4:"user";s:0:"";s:7:"creator";s:0:"";s:2:"h1";s:64:"Exclude some fields from being displayed on REST result or query";s:16:"low_quality_page";b:1;s:5:"title";s:64:"Exclude some fields from being displayed on REST result or query";s:11:"description";a:2:{s:15:"tableofcontents";a:1:{i:0;a:4:{s:3:"hid";s:64:"exclude_some_fields_from_being_displayed_on_rest_result_or_query";s:5:"title";s:64:"Exclude some fields from being displayed on REST result or query";s:4:"type";s:2:"ul";s:5:"level";i:1;}}s:8:"abstract";s:205:"Exclude some fields from being displayed on REST result or query
+
+Lets say you want to exclude a field from the database. Using SQL statements in your script, you can exclude a record. 
+
+Here's an example:";}s:8:"internal";a:2:{s:5:"cache";b:1;s:3:"toc";b:1;}s:8:"relation";a:1:{s:10:"firstimage";s:0:"";}}s:10:"persistent";a:5:{s:4:"date";a:1:{s:7:"created";i:1630731356;}s:4:"user";s:0:"";s:7:"creator";s:0:"";s:2:"h1";s:64:"Exclude some fields from being displayed on REST result or query";s:16:"low_quality_page";b:1;}}

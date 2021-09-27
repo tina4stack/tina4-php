@@ -1,0 +1,93 @@
+
+<h1 class="sectionedit1 heading-combo" id="templates">Templates</h1>
+<div class="level1">
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Templates&quot;,&quot;hid&quot;:&quot;templates&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-25&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="basic_hello_world_in_tina4">Basic Hello World in Tina4</h2>
+<div class="level2">
+
+<p>
+Templates in Tina4 are written in Twig. Tina4 exposes some common globals into the twig template so please make note of these, if you are worried about security use the following env config to remove them
+</p>
+<pre class="code-container-combo code-container-env-combo" data-download-link="true" data-src="file.env">
+<code class="language-env code-combo code-env-combo">
+TINA4_TWIG_GLOBALS=false</code>
+</pre>
+
+<p>
+The globals map as follows:
+</p>
+<pre class="code-container-combo code-container-env-combo" data-download-link="true" data-src="file.env">
+<code class="language-env code-combo code-env-combo">
+|$_SESSION|session|
+|$_REQUEST|request|
+|$_COOKIE|cookie|
+|$_SERVER|server|</code>
+</pre>
+
+<p>
+We store templates in the app/templates folder in our project directory.
+</p>
+
+<p>
+The following template would be accessed by hitting up the <abbr title="Uniform Resource Locator">URL</abbr> in your web browser:
+</p>
+<pre class="code-container-combo code-container-url-combo" data-download-link="true" data-src="file.url">
+<code class="language-url code-combo code-url-combo">
+ http://localhost:7145/demo</code>
+</pre>
+<pre class="code-container-combo code-container-twig-combo" data-download-link="true" data-src="app/templates/demo.twig" data-download-link-label="Download app/templates/demo.twig">
+<code class="language-twig code-combo code-twig-combo">
+hello world</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+Go to the <a class="link-external link-combo" href="https://twig.symfony.com/doc/3.x" rel="noopener" target="target=_blank">Twig documentation</a> page if you would like to familiarize yourself with Twig.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Basic Hello World in Tina4&quot;,&quot;hid&quot;:&quot;basic_hello_world_in_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;26-864&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="add_my_own_filters_globals_methods_to_twig">Add my own filters, globals &amp; methods to twig</h2>
+<div class="level2">
+
+<p>
+If you need to add your own filters in Twig you use the config passed to Tina4Php on running Tina4 in the index file
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="index.php" data-download-link-label="Download index.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+$config = \Tina4\Config();
+
+/*My Custom Twig Filter */
+$config-&gt;addFilter(&quot;myFilter&quot;, function ($name) {
+    return str_shuffle($name);
+});
+
+$config-&gt;addTwigGlobal(&quot;HELLO&quot;, &quot;ME&quot;);
+
+$config-&gt;addTwigFunction(&quot;getUsers&quot;, function($myvar) {
+        return $myvar;
+    });
+
+/* End of Custom Twig Filter */
+
+echo (new \Tina4\Tina4Php($config));</code>
+</pre>
+
+<p>
+Using the filters and globals
+</p>
+<pre class="code-container-combo code-container-twig-combo" data-download-link="true" data-src="src/templates/index.twig" data-download-link-label="Download src/templates/index.twig">
+<code class="language-twig code-combo code-twig-combo">
+{{ 'Hello World'|myFilter }}
+
+{% set users = getUsers(&quot;Some Users!&quot;) %}
+
+{{users}}
+
+{{HELLO}}</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Add my own filters, globals &amp; methods to twig&quot;,&quot;hid&quot;:&quot;add_my_own_filters_globals_methods_to_twig&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;865-&quot;} -->

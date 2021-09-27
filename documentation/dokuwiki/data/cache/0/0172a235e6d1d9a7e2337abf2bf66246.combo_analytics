@@ -1,0 +1,71 @@
+{
+    "id": "tina4:modules",
+    "date": "2021-08-18 10:33:04",
+    "metadata": {
+        "title": "Create Modules with Tina4",
+        "description": "Create Modules with Tina4\n\nDevelop your system as a normal Tina4 project, when you're done developing it, change your index to have the following code.\n\nYour module can now be included in any other Tina4 project that you would like to create. Tina4 is designed to make things as lightweight as possible. If you have any queries or suggestions please feel free to reach out to our Developers.",
+        "date_created": "2021-06-15 02:31:04",
+        "date_modified": "2021-08-18 10:33:04",
+        "age_creation": 64,
+        "age_modification": 0
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "andre": 1
+        },
+        "chars_count": 934,
+        "edits_count": 6,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 3,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 2,
+            "combo_code": 1
+        },
+        "words_count": 88
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 19.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 1.5,
+                "internal_backlinks_count": 3,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

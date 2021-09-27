@@ -1,0 +1,104 @@
+{
+    "id": "tina4:services",
+    "date": "2021-09-17 09:45:03",
+    "metadata": {
+        "title": "Running Background Tasks - Tina4 Service",
+        "description": "Running Background Tasks - Tina4 Service\n\nTina4 includes a way to define <https:\/\/en.wikipedia.org\/wiki\/Service_(systems_architecture)> that will run in the background. This allows you to execute code without having to define CRON jobs. Simply put, services are the functions and instructions you will create that handle the requests and responses for the retrieval of information between servers.",
+        "h1": "Define your First Service",
+        "date_created": "2021-09-04 06:55:56",
+        "date_modified": "2021-09-14 01:55:31",
+        "age_creation": 13,
+        "age_modification": 3
+    },
+    "statistics": {
+        "authors": {
+            "": 1,
+            "clayton": 1,
+            "andre": 1,
+            "barco": 1
+        },
+        "chars_count": 2624,
+        "edits_count": 12,
+        "external_links_count": 1,
+        "formatted": {
+            "1": {
+                "len": 70
+            },
+            "0": 88,
+            "2": {
+                "len": 18
+            }
+        },
+        "headers_count": {
+            "h1": 2,
+            "h2": 3
+        },
+        "internal_backlinks_count": 2,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "media": {
+            "total_count": 0,
+            "internal_count": 0,
+            "internal_broken_count": 0,
+            "external_count": 0
+        },
+        "syntax_count": {
+            "combo_headingwiki": 5,
+            "section": 5,
+            "p": 7,
+            "strong": 4,
+            "combo_link": 2,
+            "wrap_divwrap": 4,
+            "combo_code": 6
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 210
+    },
+    "quality": {
+        "message": "No mandatory rules broken",
+        "low": false,
+        "scoring": {
+            "score": 22,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 3,
+                "internal_backlinks_count": 2,
+                "internal_links_count": 2,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,3 @@
+.env
+bootstrap/bootstrapLocal.json
+!_test/

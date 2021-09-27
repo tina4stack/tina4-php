@@ -1,0 +1,7 @@
+base   folded
+author Michael Hamann, Fabian van-de-l_Isle, Christopher Smith, Esther Brunner
+email  michael@content-space.de
+date   2020-09-24
+name   folded plugin
+desc   Foldable page sections
+url    http://dokuwiki.org/plugin:folded

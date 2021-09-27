@@ -1,0 +1,92 @@
+
+<h1 class="sectionedit1" id="how_do_i_create_a_table_migration_with_tina4">How do I create a Table/Migration with Tina4</h1>
+<div class="level1">
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_todo plugin_wrap" style="width: 100%;">
+<p>
+<a href="/documentation/doku.php?id=tina4:tutorials:connect-to-database" class="wikilink1" title="tina4:tutorials:connect-to-database" data-wiki-id="tina4:tutorials:connect-to-database">Connect a Database</a> to your project before attempting this section
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+Migrations in Tina4 are very easy to do. 
+</p>
+
+<p>
+<strong>1. Start up your project</strong> with 
+</p>
+<pre class="code">  composer start</pre>
+
+<p>
+or 
+</p>
+<pre class="code">  php -S localhost:7145 index.php </pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap">
+<p>
+Run one of these commands from inside the project directory where index.php is located, or it won&#039;t work.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:5,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+<a href="http://localhost:7145/migrations/create" class="urlextern" title="http://localhost:7145/migrations/create" rel="ugc nofollow">2.Make a new migration</a>
+</p>
+<ol>
+<li class="level1"><div class="li"> Enter a description for your migration (anything you like).</div>
+</li>
+<li class="level1"><div class="li"> Enter the migration in SQL</div>
+</li>
+<li class="level1"><div class="li"> Click “Create Migration”.</div>
+</li>
+</ol>
+
+<p>
+<a href="http://localhost:7145/migrate" class="urlextern" title="http://localhost:7145/migrate" rel="ugc nofollow">3.Run the Migration</a>
+</p>
+
+<p>
+Note any errors you get after running this. If you made a mistake you can fix the migration file by editing it. You&#039;ll find it in the migrations folder under your project.
+</p>
+
+<p>
+All done.
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:6,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+Read the section on <a href="/documentation/doku.php?id=tina4:orm" class="wikilink1" title="tina4:orm" data-wiki-id="tina4:orm">using the ORM next</a> to learn how to query and use the database from inside your code.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;How do I create a Table\/Migration with Tina4&quot;,&quot;hid&quot;:&quot;how_do_i_create_a_table_migration_with_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-1073&quot;} -->
+<h1 class="sectionedit8" id="troubleshooting">Troubleshooting</h1>
+<div class="level1">
+
+<p>
+If you run into problems you can try the SQL you&#039;ve used in your migration directly in DbBeaver or another SQL client. If it runs you&#039;ve solved the error. 
+</p>
+
+<p>
+Tina4&#039;s Migrations are very stable and works in every Database supported. Generally if you run into an error the issue is in your SQL not in Tina4.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Troubleshooting&quot;,&quot;hid&quot;:&quot;troubleshooting&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;1074-1409&quot;} -->
+<h2 class="sectionedit9" id="roll_back_a_migration">Roll Back a Migration</h2>
+<div class="level2">
+
+<p>
+Generally if your migration does not work you can make changes to the migration file and <a href="http://localhost:8383/migrate" class="urlextern" title="http://localhost:8383/migrate" rel="ugc nofollow">Re-run the migration</a> just the same way you did before.
+</p>
+
+<p>
+Tina4 does not drive you to abstraction here (pun intended): 
+</p>
+<ol>
+<li class="level1"><div class="li"> Simply delete what you inserted (Tables / Data) with an SQL client like DbBeaver.</div>
+</li>
+<li class="level1"><div class="li"> Delete the record in your Tina4_Migration table that has the Description matching your Migration(s) you want to retry.</div>
+</li>
+<li class="level1"><div class="li"> Make changes to that Migration</div>
+</li>
+<li class="level1"><div class="li"> <a href="http://localhost:8383/migrate" class="urlextern" title="http://localhost:8383/migrate" rel="ugc nofollow">Re-run the migration</a></div>
+</li>
+</ol>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Roll Back a Migration&quot;,&quot;hid&quot;:&quot;roll_back_a_migration&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;1410-&quot;} -->

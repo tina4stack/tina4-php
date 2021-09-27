@@ -1,0 +1,112 @@
+
+<h1 class="sectionedit1 heading-combo" id="tina4_services">Tina4 Services</h1>
+<div class="level1">
+
+<p>
+Tina4 includes a way to define services that will run in the background. This allows you to execute code while without having to define CRON jobs. 
+</p>
+
+<p>
+Let&#039;s create a service that sends messages. I&#039;ll outline the service bit here. Have a look at <a class="link-internal link-combo" data-wiki-id="tina4:messenger" href="/documentation/doku.php?id=tina4:messenger" title="Sending email with Tina4 Messenger">Sending Email messages with Tina4</a> for more information about sending email.
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<p>
+Ensure your composer.json includes this line:
+“tina4service”: “@php bin/tina4service”,
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Tina4 Services&quot;,&quot;hid&quot;:&quot;tina4_services&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-495&quot;} -->
+<h1 class="sectionedit4 heading-combo" id="define_your_first_service">Define your First Service</h1>
+<div class="level1">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="src/services/MessengerService.php" data-download-link-label="Download src/services/MessengerService.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+
+class MessengerProcess extends \Tina4\Process implements \Tina4\ProcessInterface 
+{
+
+    public string $name = &quot;My Service&quot;;
+
+    function run () 
+    {
+        echo &quot;Sending Messages&quot;;
+        $messages = (new MessageQueue)-&gt;load();
+        
+        foreach ($messages as $message)
+        {
+          // Send messages
+        }
+
+
+    }
+
+    function canRun(): bool
+    {
+       $haveMessages = (New MessageQueue)-&gt;load();
+   
+       
+       if ($haveMessages)
+       {
+          //We have email messages queued, let the task run
+          return true;
+       }
+       else
+       {
+          //We have no messages queued
+          return false;
+       }
+}</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Define your First Service&quot;,&quot;hid&quot;:&quot;define_your_first_service&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;496-1255&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="queue_the_service_process">Queue the Service Process</h2>
+<div class="level2">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+$service = (new Tina4\Service);
+$service-&gt;addProcess(new MessengerProcess(&quot;My Process&quot;));</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Queue the Service Process&quot;,&quot;hid&quot;:&quot;queue_the_service_process&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1256-1403&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="remove_the_service_process_from_the_queue">Remove the Service Process from the Queue</h2>
+<div class="level2">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+(new Tina4\Service)-&gt;removeProcess(&quot;My Process&quot;);</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Remove the Service Process from the Queue&quot;,&quot;hid&quot;:&quot;remove_the_service_process_from_the_queue&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1404-1527&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="start_tina4service">Start Tina4Service</h2>
+<div class="level2">
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap" style="width: 100%;">
+<p>
+You need to add execute permissions on Linux for the tina4service to allow it to execute from the project folder.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:9,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+<strong>
+Change the permissions for bin/tina4service in your project directory</strong>
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:10,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+chmod +x bin/tina4service</code>
+</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:11,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+<strong>
+Start the Service</strong>
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:12,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+composer start-service &amp;</code>
+</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:13,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Start Tina4Service&quot;,&quot;hid&quot;:&quot;start_tina4service&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1528-&quot;} -->

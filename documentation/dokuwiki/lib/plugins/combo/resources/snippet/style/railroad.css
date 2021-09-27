@@ -1,0 +1,8 @@
+.rrConnector {fill:none;stroke:#222222;}
+.rrRule {fill:#d3f0ff;stroke:#222222;}
+.rrRuleText {fill:#000000;font-family:Verdana,Sans-serif, serif;font-size:12px;}
+.rrLiteral {fill:#90d9ff;stroke:#222222;}
+.rrLiteralText {fill:#000000;font-family:Verdana,Sans-serif, serif;font-size:12px;}
+.rrSpecialSequence {fill:#e4f4ff;stroke:#222222;}
+.rrSpecialSequenceText {fill:#000000;font-family: Verdana, Sans-serif, serif;font-size:12px;}
+.rrLoopCardinalities {fill:#000000;font-family:Verdana,Sans-serif, serif;font-size:10px;}

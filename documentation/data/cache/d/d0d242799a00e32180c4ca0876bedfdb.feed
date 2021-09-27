@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework tina4:tutorials:advanced</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-06T14:20:25+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1624377331&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:save-a-record-with-orm&amp;rev=1624576044&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1624377331&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-22T17:55:31+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced:create-migration</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1624377331&amp;do=diff</link>
+        <description>To create a table also known as creating a migration, simple add the following to your url :
+
+localhost:7145/migrate/create
+
+It will take you to a window where you will be able to create your table with the fields you want.
+
+It will look something like this</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:save-a-record-with-orm&amp;rev=1624576044&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-25T01:07:24+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced:save-a-record-with-orm</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:save-a-record-with-orm&amp;rev=1624576044&amp;do=diff</link>
+        <description>Create Post Route using Tina4*
+Your form will need to be secure by using the POST ROUTE which looks as follows and will need a FORM KEY token to validate
+
+\Tina4\Post::add (“/test/post”, function(\Tina4\Response $response, 
+\Tina4\Request $request) {</description>
+    </item>
+</rdf:RDF>

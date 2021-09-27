@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://www.tina4php.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://www.tina4php.com/documentation/feed.php">
+        <title>This is not a framework tina4:tutorials</title>
+        <description></description>
+        <link>https://www.tina4php.com/documentation/</link>
+        <image rdf:resource="https://www.tina4php.com/documentation/lib/tpl/dokuwiki/images/favicon.ico" />
+       <dc:date>2021-06-28T09:50:12+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1624792009&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:baking&amp;rev=1624830591&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:build-class-with-db-access&amp;rev=1622183585&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:connect-to-database&amp;rev=1622183286&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:cooking&amp;rev=1624824483&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:doing_online_courses&amp;rev=1624824549&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:playing_the_acoustic_guitar&amp;rev=1624830775&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:test&amp;rev=1624865070&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://www.tina4php.com/documentation/lib/tpl/dokuwiki/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://www.tina4php.com/documentation/</link>
+        <url>https://www.tina4php.com/documentation/lib/tpl/dokuwiki/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1624792009&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-27T13:06:49+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1624792009&amp;do=diff</link>
+        <description>How Do I? - Advanced
+
+	*      Create a table/migration
+	*      Build a class with database access
+	*      Save a record using the ORM
+	*      Map my ORM object to a table with another name
+	*      Map my ORM field to a database field which doesn't follow the Tina4 pattern
+	*      Secure a REST end point
+	*      Add a filter to process records when they are extracted from the database
+	*      Exclude some fields from being displayed on REST result or query
+	*      Query the database for some reco…</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:baking&amp;rev=1624830591&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-27T23:49:51+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:baking</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:baking&amp;rev=1624830591&amp;do=diff</link>
+        <description>Warining!!! VERY DELICIOUS RECIPES COMING UP
+
+Baking
+
+	*   Chocolate Cake
+
+	*   Muffins
+
+	*   Vegetarian Mushroom Pie 
+
+Back</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:21:25+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff</link>
+        <description>How Do I? - Beginner
+
+	*  Initialize a Tina4 project
+	*  Create a basic landing page
+	*  Create a basic route
+	*  Debug a twig template
+	*  Let my class use the database connection
+	*  Connect to a database
+	*  Write an update or insert statement 
+	*  Post form data
+	*  Making tables without migrations</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:build-class-with-db-access&amp;rev=1622183585&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:33:05+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:build-class-with-db-access</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:build-class-with-db-access&amp;rev=1622183585&amp;do=diff</link>
+        <description>Class with database access
+
+Any class that extends \Tina4\Data will have a database variable $this-&gt;DBA to access the database from.
+
+
+class MyData extends \Tina4\Data {
+  function getSomething() {
+    return $this-&gt;DBA-&gt;select (&quot;*&quot;)-&gt;from(&quot;table&quot;)-&gt;asArray();
+  } 
+}</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:connect-to-database&amp;rev=1622183286&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:28:06+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:connect-to-database</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:connect-to-database&amp;rev=1622183286&amp;do=diff</link>
+        <description>Connect to a database
+
+Three database engines are currently supported. The global variable $DBA is used from index.php to establish a database connection.  Adding a date format is optional.
+
+SQLite
+ global $DBA;
+ $DBA = new \Tina4\DataSQLite3(&quot;test.db&quot;, &quot;&quot;, &quot;&quot;, &quot;Y-m-d&quot;);</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:cooking&amp;rev=1624824483&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-27T22:08:03+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:cooking</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:cooking&amp;rev=1624824483&amp;do=diff</link>
+        <description>Cooking
+
+	*  Fritters
+
+Back</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:30:56+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:create-migration</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff</link>
+        <description>How do I create a Table/Migration with Tina4
+
+Connect a Database to your project before attempting this section
+
+Migrations in Tina4 are very easy to do. 
+
+1. Start up your project with 
+  composer start
+or 
+  php -S localhost:7145 index.php 
+Run one of these commands from inside the project directory where index.php is located, or it won't work.</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:doing_online_courses&amp;rev=1624824549&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-27T22:09:09+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:doing_online_courses</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:doing_online_courses&amp;rev=1624824549&amp;do=diff</link>
+        <description>Online Courses
+
+Learning Bootstrap with SAAS
+
+Learning PHP
+
+Back</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:playing_the_acoustic_guitar&amp;rev=1624830775&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-27T23:52:55+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:playing_the_acoustic_guitar</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:playing_the_acoustic_guitar&amp;rev=1624830775&amp;do=diff</link>
+        <description>Sidney Playing the Acoustic Guitar
+
+Sidney started playing guitar when he was 11 years old 8-)
+
+	*   He knows my name
+
+	*   And can it be
+
+	*   Power of Your love 
+
+Back</description>
+    </item>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:test&amp;rev=1624865070&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T09:24:30+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:test</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=tina4:tutorials:test&amp;rev=1624865070&amp;do=diff</link>
+        <description>Sidney Ramphalile
+
+
+
+Hello, world! Welcome to my first DokuWiki page. I am learning Markup on Dokuwiki. 8-)
+
+I am also available Here:
+
+LinkedIn
+
+GitHub
+
+My name is Sidney and here is a little information about me.
+
+Hobbies
+
+	*  Playing the acoustic guitar
+	*  Baking
+	*  Cooking
+	*  Doing Online Courses
+
+Friends In Business</description>
+    </item>
+</rdf:RDF>

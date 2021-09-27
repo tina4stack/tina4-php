@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-09T02:48:11+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:routing&amp;rev=1627493838&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1628082283&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:astronomy&amp;rev=1624879740&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:test&amp;rev=1624876790&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:doing_online_courses&amp;rev=1624871719&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:cooking&amp;rev=1624871232&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:playing_the_acoustic_guitar&amp;rev=1624871306&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:baking&amp;rev=1624871379&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1624377331&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:routing&amp;rev=1627493838&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-07-28T19:37:18+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:routing</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:routing&amp;rev=1627493838&amp;do=diff</link>
+        <description>Routing in Tina4
+
+For the most basic of Routes, please see the Create-a-basic-route
+
+Simple Syntax
+
+The simple syntax of a Route is as follows
+
+
+
+
+
+So the Route to capture the url &lt;https://mywebsite.com/starthere&gt; would be as below. This uses a Get method, with a simple closure function, with the return using the Response object.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1628082283&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-04T15:04:43+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced&amp;rev=1628082283&amp;do=diff</link>
+        <description>How Do I? - Advanced
+
+	*      create-migration
+	*      build-class-with-db-access
+	*      save-a-record-with-orm
+	*      map_my_orm_object_to_a_table_with_another_name
+	*      map_my_orm_field_to_a_database_field_which_doesn_t_follow_the_tina4_pattern
+	*      secure_api_endpoint
+	*      filter-database-results
+	*      exlude-fields-from-rest-api-results
+	*      query-database
+	*      get-an-array-orm
+	*      create-rest-endpoint
+	*      one-rest-endpoint-two-names
+	*      custom-twig-filters
+	* …</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:astronomy&amp;rev=1624879740&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T13:29:00+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:astronomy</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:astronomy&amp;rev=1624879740&amp;do=diff</link>
+        <description>Astronomy
+
+----------
+
+Hello there. :-D  Last year (21 December 2020) Two of our biggest planets in our solar system were at their closest!! Jupiter and Saturn 🪐🪐 were be VISIBLE!! This is known as The Great Conjunction. This is something which last occurred in 1623. According to NASA and the South African Space Observatory, these two giant planets could be seen with the naked eye. Unfortunately for most of the country, it was a very rainy and cloudy day that day, so we could not see the planets…</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:21:25+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner&amp;rev=1623759685&amp;do=diff</link>
+        <description>How Do I? - Beginner
+
+	*  initialize-a-tina4-project
+	*  create-a-landing-page
+	*  create-a-basic-route
+	*  debug-twig-template
+	*  let-a-class-use-the-database
+	*  connect-to-database
+	*  write-an-update-or-insert-statement 
+	*  post-form-data
+	*  migrationless</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T08:30:56+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:create-migration</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:create-migration&amp;rev=1622183456&amp;do=diff</link>
+        <description>How do I create a Table/Migration with Tina4
+
+connect-to-database to your project before attempting this section
+
+Migrations in Tina4 are very easy to do. 
+
+1. Start up your project with 
+
+or 
+
+Run one of these commands from inside the project directory where index.php is located, or it won't work.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:test&amp;rev=1624876790&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T12:39:50+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:test</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:test&amp;rev=1624876790&amp;do=diff</link>
+        <description>Sidney Ramphalile
+
+----------
+
+
+
+Hello, world! Welcome to my first DokuWiki page. I am learning Markup on Dokuwiki. 8-)
+
+----------
+
+I am also available Here:
+
+&lt;https://www.linkedin.com/in/sidney-ramphalile/&gt;
+
+&lt;https://github.com/SidneyRamphalile&gt;
+
+----------
+
+My name is Sidney and here is a little information about me.
+
+Hobbies
+
+	*</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:doing_online_courses&amp;rev=1624871719&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T11:15:19+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:doing_online_courses</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:doing_online_courses&amp;rev=1624871719&amp;do=diff</link>
+        <description>Online Courses
+
+----------
+
+1. Learning Bootstrap with SAAS 
+
+
+ 
+
+
+2. Learning PHP 
+
+
+ 
+
+
+3. Learning Object Oriented Programming in Python 
+
+
+ 
+
+
+test</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:cooking&amp;rev=1624871232&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T11:07:12+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:cooking</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:cooking&amp;rev=1624871232&amp;do=diff</link>
+        <description>Cooking
+
+----------
+
+1. Fritters
+
+ 
+
+
+2. Vegan steak
+
+ 
+
+
+3. Crispy Cauliflower wings
+
+ 
+
+
+test</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:playing_the_acoustic_guitar&amp;rev=1624871306&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T11:08:26+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:playing_the_acoustic_guitar</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:playing_the_acoustic_guitar&amp;rev=1624871306&amp;do=diff</link>
+        <description>Sidney Playing the Acoustic Guitar
+
+----------
+
+Sidney started playing guitar when he was 11 years old 8-)
+
+	*   He knows my name 
+
+
+ 
+
+
+	*   And can it be 
+
+
+ 
+
+
+	*   Power of Your love 
+
+
+ 
+
+
+test</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:baking&amp;rev=1624871379&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-28T11:09:39+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:baking</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:baking&amp;rev=1624871379&amp;do=diff</link>
+        <description>Warining!!! VERY DELICIOUS RECIPES COMING UP
+
+Baking
+
+----------
+
+	*   Chocolate Cake 
+
+
+ 
+
+
+	*   Muffins 
+
+
+ 
+
+
+	*   Vegetarian Mushroom Pie 
+
+
+ 
+
+
+test</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1624377331&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-22T17:55:31+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:advanced:create-migration</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:advanced:create-migration&amp;rev=1624377331&amp;do=diff</link>
+        <description>To create a table also known as creating a migration, simple add the following to your url :
+
+localhost:7145/migrate/create
+
+It will take you to a window where you will be able to create your table with the fields you want.
+
+It will look something like this</description>
+    </item>
+</rdf:RDF>

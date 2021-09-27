@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-23T13:29:22+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:down-the-rabbit-hole&amp;rev=1629483416&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_007.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_005.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_006.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_004.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslide_001.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_002.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_003.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_1.jpg&amp;ns=wiki&amp;rev=1629298059&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_2.jpg&amp;ns=wiki&amp;rev=1629282639&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Adown_th_rabbit_hole_2.jpg&amp;ns=wiki&amp;rev=1629282627&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Adown_th_rabbit_hole_1.jpg&amp;ns=wiki&amp;rev=1629282624&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aimg-20210818-wa0017.jpg&amp;ns=wiki&amp;rev=1629282284&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aimg-20210818-wa0016.jpg&amp;ns=wiki&amp;rev=1629282275&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_1.png&amp;ns=wiki&amp;rev=1629278513&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_2.png&amp;ns=wiki&amp;rev=1629278308&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?image=wiki%3Aimage.png&amp;ns=wiki&amp;rev=1629277899&amp;tab_details=history&amp;mediado=diff&amp;do=media"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:routes:api&amp;rev=1629276825&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=first-steps&amp;rev=1629276376&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:modules&amp;rev=1629275584&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:down-the-rabbit-hole&amp;rev=1629483416&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-20T20:16:56+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:down-the-rabbit-hole - made changes - Down the Rabbit Hole</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:down-the-rabbit-hole&amp;rev=1629483416&amp;do=diff</link>
+        <description>OS
+	*  Download and install &lt;https://code.visualstudio.com/download&gt; or &lt;https://www.jetbrains.com/phpstorm/download/#section=windows&gt;
+	*  Download and install &lt;https://git-scm.com/downloads&gt;
+	*  Install PHP7.3 or greater with the minimum required extensions - php
+	*  Install Composer - composer
+	*  Install OpenSSL - openSSL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	*  We  should have the basics now to start developing in PHP</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_007.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slides_007.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslides_007.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=ab6796&amp;amp;media=wiki:slides_007.png&quot; alt=&quot;wiki:slides_007.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_005.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slides_005.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslides_005.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=8b8898&amp;amp;media=wiki:slides_005.png&quot; alt=&quot;wiki:slides_005.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_006.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slides_006.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslides_006.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=3bf673&amp;amp;media=wiki:slides_006.png&quot; alt=&quot;wiki:slides_006.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_004.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slides_004.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslides_004.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=7a56d6&amp;amp;media=wiki:slides_004.png&quot; alt=&quot;wiki:slides_004.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslide_001.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slide_001.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslide_001.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=691ffa&amp;amp;media=wiki:slide_001.png&quot; alt=&quot;wiki:slide_001.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_002.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slides_002.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslides_002.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=47bcfa&amp;amp;media=wiki:slides_002.png&quot; alt=&quot;wiki:slides_002.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aslides_003.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T18:03:49+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:slides_003.png - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aslides_003.png&amp;ns=wiki&amp;rev=1629302629&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629302629&amp;amp;tok=7bb96d&amp;amp;media=wiki:slides_003.png&quot; alt=&quot;wiki:slides_003.png&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_1.jpg&amp;ns=wiki&amp;rev=1629298059&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T16:47:39+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:down_the_rabbit_hole_1.jpg - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_1.jpg&amp;ns=wiki&amp;rev=1629298059&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_2.jpg&amp;ns=wiki&amp;rev=1629282639&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T12:30:39+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:down_the_rabbit_hole_2.jpg - created</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_2.jpg&amp;ns=wiki&amp;rev=1629282639&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description>&lt;img src=&quot;https://tina4.com/documentation/lib/exe/fetch.php?w=500&amp;h=281&amp;t=1629282639&amp;amp;tok=fea321&amp;amp;media=wiki:down_the_rabbit_hole_2.jpg&quot; alt=&quot;wiki:down_the_rabbit_hole_2.jpg&quot; /&gt;</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Adown_th_rabbit_hole_2.jpg&amp;ns=wiki&amp;rev=1629282627&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T12:30:27+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:down_th_rabbit_hole_2.jpg - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Adown_th_rabbit_hole_2.jpg&amp;ns=wiki&amp;rev=1629282627&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Adown_th_rabbit_hole_1.jpg&amp;ns=wiki&amp;rev=1629282624&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T12:30:24+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:down_th_rabbit_hole_1.jpg - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Adown_th_rabbit_hole_1.jpg&amp;ns=wiki&amp;rev=1629282624&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aimg-20210818-wa0017.jpg&amp;ns=wiki&amp;rev=1629282284&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T12:24:44+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:img-20210818-wa0017.jpg - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aimg-20210818-wa0017.jpg&amp;ns=wiki&amp;rev=1629282284&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aimg-20210818-wa0016.jpg&amp;ns=wiki&amp;rev=1629282275&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T12:24:35+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:img-20210818-wa0016.jpg - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aimg-20210818-wa0016.jpg&amp;ns=wiki&amp;rev=1629282275&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_1.png&amp;ns=wiki&amp;rev=1629278513&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T11:21:53+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:down_the_rabbit_hole_1.png - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_1.png&amp;ns=wiki&amp;rev=1629278513&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_2.png&amp;ns=wiki&amp;rev=1629278308&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T11:18:28+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:down_the_rabbit_hole_2.png - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Adown_the_rabbit_hole_2.png&amp;ns=wiki&amp;rev=1629278308&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?image=wiki%3Aimage.png&amp;ns=wiki&amp;rev=1629277899&amp;tab_details=history&amp;mediado=diff&amp;do=media">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T11:11:39+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>wiki:image.png - removed</title>
+        <link>https://tina4.com/documentation/doku.php?image=wiki%3Aimage.png&amp;ns=wiki&amp;rev=1629277899&amp;tab_details=history&amp;mediado=diff&amp;do=media</link>
+        <description></description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:routes:api&amp;rev=1629276825&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T10:53:45+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:routes:api - made changes - APIs in Tina4</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:routes:api&amp;rev=1629276825&amp;do=diff</link>
+        <description>APIs in Tina4
+
+From inception Tina4 was designed to rapid prototype API end points in conjunction with making SwaggerUI documentation available quickly with annotated routing.
+
+After running the composer start command in your IDE terminal, the Swagger UI will be available when you use the following address in your Web brosers</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=first-steps&amp;rev=1629276376&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T10:46:16+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>first-steps - change list item text</title>
+        <link>https://tina4.com/documentation/doku.php?id=first-steps&amp;rev=1629276376&amp;do=diff</link>
+        <description>First Steps
+
+Get up and running quickly with Docker if you want to preview Tina4 quickly without adding additional dependencies to your operating system.
+Please take a look at the  Setting up your Environment section to get all the prerequisites required for Tina4.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:modules&amp;rev=1629275584&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-18T10:33:04+00:00</dc:date>
+        <dc:creator>clayton (clayton@undisclosed.example.com)</dc:creator>
+        <title>tina4:modules - chaged header - Create Modules with Tina4</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:modules&amp;rev=1629275584&amp;do=diff</link>
+        <description>Create Modules with Tina4
+
+Develop your system as a normal Tina4 project, when you're done developing it, change your index to have the following code.
+
+Your module can now be included in any other Tina4 project that you would like to create. Tina4 is designed to make things as lightweight as possible. If you have any queries or suggestions please feel free to reach out to our Developers.</description>
+    </item>
+</rdf:RDF>

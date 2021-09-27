@@ -1,0 +1,63 @@
+
+<p>
+This tool allows you to change certain style settings of your currently selected template.
+All changes are stored in a local configuration file and are upgrade safe.
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+
+<script class="snippet-popover-combo">window.addEventListener('load', function () {
+    let namespace = "-bs"
+    let version = 5;
+    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
+        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        jQuery(`[data${namespace}-toggle="popover"]`).popover();
+    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
+        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
+            .forEach(el => {
+                new bootstrap.Popover(el);
+                // to not navigate on a anchor
+                el.onclick = (event => event.preventDefault());
+            });
+    }
+});
+</script>
+
+<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
+    anchors.options = {
+        placement: 'right',
+        icon: '#',
+        class: 'anchor-combo'
+    };
+    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
+});
+</script>
+
+<style class="snippet-historical-breadcrumb-combo">.historical-breadcrumb li {
+    margin-bottom: 0.5rem;
+}
+.historical-breadcrumb a {
+    text-decoration: none;
+}
+.historical-breadcrumb-home {
+    max-width: fit-content;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    margin-bottom: 1rem;
+    padding:0.5rem;
+    text-align: center;
+    border-radius: calc(.3rem - 1px);
+    background-color: #f0f0f0;
+}
+.historical-breadcrumb-home::before {
+    content:'Actual: '
+}
+</style>

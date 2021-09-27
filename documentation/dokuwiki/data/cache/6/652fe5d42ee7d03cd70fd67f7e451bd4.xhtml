@@ -1,0 +1,23 @@
+
+<h1 class="sectionedit1 heading-combo" id="save_dates_to_database">Save Dates to Database</h1>
+<div class="level1">
+
+<p>
+Your <a class="link-internal link-combo" data-wiki-id="tina4:database" href="/documentation/doku.php?id=tina4:database" title="Database in Tina4">Date Format</a> should be set correctly in your index.php file.
+</p>
+
+<p>
+From here you can save dates into an ORM object like this:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+$article-&gt;publishedDate = date($article-&gt;DBA-&gt;dateFormat.&quot; H:i:s&quot;);</code>
+</pre>
+
+<p>
+Any dates that you return from the ORM will follow your localization date format set in index.php I.e. d/m/Y
+</p>
+
+</div>

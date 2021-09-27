@@ -1,0 +1,22 @@
+
+<h1 class="sectionedit1 heading-combo" id="writing_an_update_or_insert_statement">Writing an update or insert statement</h1>
+<div class="level1">
+
+<p>
+Tina4 uses <a class="link-internal link-combo" data-wiki-id="tina4:orm" href="/doku.php?id=tina4:orm" title="ORM">ORM(Object-Relational Mapping)</a> to do most of the heavy lifting for you, on an object extending \Tina4\ORM, the save method handles the insert or update. 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+   global $DBA;
+   
+   $DBA-&gt;exec (&quot;update my_table set my_name = ?, phone = ?&quot;, &quot;Name&quot;, &quot;Phone&quot;);
+   $DBA-&gt;commit(); //based on the database you use</code>
+</pre>
+
+<p>
+Here you can see that we executed an update statement to insert a statement to the database. 
+</p>
+
+</div>

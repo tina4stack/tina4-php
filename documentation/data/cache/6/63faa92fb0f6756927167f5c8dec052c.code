@@ -1,0 +1,16 @@
+<span class="re0">$config</span> <span class="sy0">=</span> \Tina4\Config<span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="coMULTI">/*My Custom Twig Filter */</span>
+<span class="re0">$config</span><span class="sy0">-&gt;</span><span class="me1">addFilter</span><span class="br0">&#40;</span><span class="st0">&quot;myFilter&quot;</span><span class="sy0">,</span> <span class="kw2">function</span> <span class="br0">&#40;</span><span class="re0">$name</span><span class="br0">&#41;</span> <span class="br0">&#123;</span>
+    <span class="kw1">return</span> <a href="http://www.php.net/str_shuffle"><span class="kw3">str_shuffle</span></a><span class="br0">&#40;</span><span class="re0">$name</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="br0">&#125;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="re0">$config</span><span class="sy0">-&gt;</span><span class="me1">addTwigGlobal</span><span class="br0">&#40;</span><span class="st0">&quot;HELLO&quot;</span><span class="sy0">,</span> <span class="st0">&quot;ME&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="re0">$config</span><span class="sy0">-&gt;</span><span class="me1">addTwigFunction</span><span class="br0">&#40;</span><span class="st0">&quot;getUsers&quot;</span><span class="sy0">,</span> <span class="kw2">function</span><span class="br0">&#40;</span><span class="re0">$myvar</span><span class="br0">&#41;</span> <span class="br0">&#123;</span>
+        <span class="kw1">return</span> <span class="re0">$myvar</span><span class="sy0">;</span>
+    <span class="br0">&#125;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="coMULTI">/* End of Custom Twig Filter */</span>
+&nbsp;
+<span class="kw1">echo</span> <span class="br0">&#40;</span><span class="kw2">new</span> \Tina4\Tina4Php<span class="br0">&#40;</span><span class="re0">$config</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>

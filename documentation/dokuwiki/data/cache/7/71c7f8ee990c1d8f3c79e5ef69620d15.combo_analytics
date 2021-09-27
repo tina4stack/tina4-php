@@ -1,0 +1,96 @@
+{
+    "id": "tina4:tutorials:cooking",
+    "date": "2021-07-11 12:59:30",
+    "metadata": {
+        "title": "1. Fritters",
+        "description": "Cooking\n\n----------\n\n1. Fritters\n\n \n\n\n2. Vegan steak\n\n \n\n\n3. Crispy Cauliflower wings\n\n \n\n\ntest",
+        "h1": null,
+        "date_created": "2021-06-27 12:58:14",
+        "date_modified": "2021-06-28 11:07:12",
+        "age_creation": 14,
+        "age_modification": 13
+    },
+    "statistics": {
+        "authors": {
+            "sidney": 1
+        },
+        "chars_count": 248,
+        "edits_count": 4,
+        "formatted": {
+            "1": {
+                "len": 7,
+                "multiformat": 1
+            },
+            "0": 7
+        },
+        "headers_count": {
+            "h5": 3
+        },
+        "hr": 1,
+        "internal_backlinks_count": 1,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "linebreak": 3,
+        "syntax_count": {
+            "p": 5,
+            "strong": 1,
+            "underline": 1,
+            "combo_headingwiki": 3,
+            "section": 3,
+            "vshare": 3,
+            "combo_link": 1
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 8
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "words_min"
+        ],
+        "scoring": {
+            "score": 8,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 0,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 1,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 1,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_min": "Add 42 words to get 10 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Failed"
+            }
+        }
+    }
+}

@@ -1,0 +1,103 @@
+{
+    "id": "wiki:dokuwiki",
+    "date": "2021-08-25 13:24:23",
+    "metadata": {
+        "title": "DokuWiki",
+        "description": "DokuWiki\n\nwiki:dokuwiki DokuWiki is a simple to use and highly versatile Open Source wiki software that doesn't require a database. It is loved by users for its clean and readable syntax. The ease of maintenance, backup and integration makes it an administrator's favorite. Built in",
+        "date_created": "2021-03-16 12:40:49",
+        "date_modified": "2020-07-29 11:35:28",
+        "age_creation": 162,
+        "age_modification": 392
+    },
+    "statistics": {
+        "authors": [],
+        "chars_count": 2729,
+        "edits_count": 1,
+        "external_links_count": 7,
+        "formatted": {
+            "1": {
+                "len": 14
+            },
+            "0": 98,
+            "2": {
+                "len": 19
+            },
+            "3": {
+                "len": 14
+            },
+            "4": {
+                "len": 20
+            },
+            "5": {
+                "len": 31
+            }
+        },
+        "headers_count": {
+            "h1": 1,
+            "h2": 3
+        },
+        "internal_backlinks_count": 1,
+        "internal_links_count": 2,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "interwiki_links_count": 30,
+        "syntax_count": {
+            "combo_headingwiki": 4,
+            "section": 4,
+            "p": 12,
+            "combo_link": 36,
+            "combo_media": 1,
+            "strong": 5,
+            "listu": 5,
+            "listitem": 24,
+            "listcontent": 24
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 275
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 17.25,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 0.25,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 1,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

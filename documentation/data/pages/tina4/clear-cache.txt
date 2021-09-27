@@ -1,0 +1,22 @@
+====== Clearing Cache ======
+Tina4 is heavily [[https://en.wikipedia.org/wiki/Cache_(computing)|cached]] and this leads to blazingly fast loading times. By default, the cache clears every 360 seconds for templates and every 60 seconds on ORM data. While in development you may need to clear cache at times especially if you had routes that delivered 404 content.
+
+<WRAP center round tip>
+**Turn On Debug if you're Developing to disable cache**
+<code env>
+[Tina4 Services]
+TINA4_DEBUG=true
+</code>
+</WRAP>
+
+===== Using the built-in route  =====
+
+To Clear Cache go to this address in your Browsers URL bar: 
+<code bash>
+http://localhost:7145/cache/clear
+</code>
+
+===== Delete the Cache directory =====
+
+You can also delete the cache directory in your project folder.
+

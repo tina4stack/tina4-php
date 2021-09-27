@@ -1,0 +1,16 @@
+a:24:{i:0;a:3:{i:0;s:14:"document_start";i:1;a:0:{}i:2;i:0;}i:1;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:1;s:12:"heading_text";s:18:"Open API & Swagger";}s:7:"context";s:7:"outline";s:8:"position";i:1;}i:2;i:1;i:3;s:6:"======";}i:2;i:1;}i:2;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:6:" Open ";s:7:"context";N;}i:2;i:3;i:3;s:6:" Open ";}i:2;i:7;}i:3;a:3:{i:0;s:7:"acronym";i:1;a:2:{i:0;s:3:"API";i:1;N;}i:2;i:13;}i:4;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:10:" & Swagger";s:7:"context";s:7:"acronym";}i:2;i:3;i:3;s:11:" & Swagger ";}i:2;i:16;}i:5;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:1;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:7:"======
+";}i:2;i:27;}i:6;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:1;}i:2;i:1;}i:7;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:27;}i:8;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:160:"One of the reasons Tina4 exists is to lift the tedium of creating those nice Swagger UI documents.  Tina4 has opted for an annotation mechanism to describe the ";}i:2;i:35;}i:9;a:3:{i:0;s:7:"acronym";i:1;a:1:{i:0;s:3:"API";}i:2;i:195;}i:10;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:13:" end points. ";}i:2;i:198;}i:11;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:211;}i:12;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:211;}i:13;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:119:"It is good practice to annotate your code for future purposes. For example, if someone else were to look at your code. ";}i:2;i:213;}i:14;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:332;}i:15;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:332;}i:16;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:78:"Below is an example of a simple Swagger annotation added to a Class function. ";}i:2;i:334;}i:17;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:412;}i:18;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_code";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:1:{s:4:"type";s:3:"php";}}i:2;i:1;i:3;s:10:"<code php>";}i:2;i:414;}i:19;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_code";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:87:"
+<?php
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/
+";s:7:"context";N;s:10:"attributes";a:1:{s:4:"type";s:3:"php";}}i:2;i:3;i:3;s:87:"
+<?php
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/
+";}i:2;i:424;}i:20;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_code";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:1:{s:4:"type";s:3:"php";}}i:2;i:4;i:3;s:7:"</code>";}i:2;i:511;}i:21;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:518;}i:22;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:15:"combo_analytics";i:1;a:3:{s:10:"attributes";a:4:{s:17:"combo_headingwiki";i:1;s:7:"section";i:1;s:1:"p";i:3;s:10:"combo_code";i:1;}s:7:"context";N;s:5:"state";i:5;}i:2;i:5;i:3;s:0:"";}i:2;N;}i:23;a:3:{i:0;s:12:"document_end";i:1;a:0:{}i:2;N;}}

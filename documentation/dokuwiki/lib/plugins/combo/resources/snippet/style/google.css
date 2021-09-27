@@ -1,0 +1,13 @@
+
+.bg-google-plus{
+    background-color: #dd4b39;
+}
+
+a.bg-google-plus:hover,
+a.bg-google-plus:focus,
+button.bg-google-plus:hover,
+button.bg-google-plus:focus
+{
+    background-color: #c23321 !important;
+}
+

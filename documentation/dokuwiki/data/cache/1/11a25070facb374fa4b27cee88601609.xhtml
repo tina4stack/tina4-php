@@ -1,0 +1,11 @@
+
+<h1 class="sectionedit1" id="troubleshooting_-_installation">Troubleshooting - Installation</h1>
+<div class="level1">
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_important plugin_wrap">
+<p>
+During the initialize phase Tina4 may run into OpenSSL problems. However there are good onscreen instructions, just follow those and you will be on your way. You may need to run the following commands, depending on your current OpenSSL installation. After each command try the tina4 initialize again.
+</p>
+<pre class="code">ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N &quot;&quot;
+openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+</div>

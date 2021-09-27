@@ -1,0 +1,73 @@
+{
+    "id": "tina4:tutorials:beginner:initialize-a-tina4-project",
+    "date": "2021-08-30 22:33:28",
+    "metadata": {
+        "title": "Initialize a Tina4 project",
+        "description": "Initialize a Tina4 project\n\nIf you have just installed Tina4 with composer then you run this command in your IDE terminal:\n\nPlease note, this adds the necessary scripts to your composer.json file and will NOT work if you already have and index.php file. It will also create a",
+        "date_created": "2021-05-27 10:39:13",
+        "date_modified": "2021-08-13 01:12:59",
+        "age_creation": 95,
+        "age_modification": 17
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "andre": 1
+        },
+        "chars_count": 465,
+        "edits_count": 8,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 2,
+            "combo_code": 1,
+            "wrap_divwrap": 1,
+            "combo_preformatted": 1
+        },
+        "words_count": 61
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 18,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 2,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

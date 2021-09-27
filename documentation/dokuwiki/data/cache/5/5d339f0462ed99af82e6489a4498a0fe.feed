@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework guides</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-22T03:33:19+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=guides:install-tina4-0.1.92&amp;rev=1619021804&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=guides:install-tina4-0.1.92&amp;rev=1619021804&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-04-21T18:16:44+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>guides:install-tina4-0.1.92</title>
+        <link>https://tina4.com/documentation/doku.php?id=guides:install-tina4-0.1.92&amp;rev=1619021804&amp;do=diff</link>
+        <description>Install Tina4
+
+Follow the steps below to get Tina4 on your system. Soon you will be able to bring your ideas to life.
+
+Make sure you have the prerequisites installed (php, composer, openssl &amp; ide). 
+
+	*  windows
+	*  mac
+	*  linux
+
+It can sometimes be frustrating to wait for the release. Install the bleeding edge</description>
+    </item>
+</rdf:RDF>

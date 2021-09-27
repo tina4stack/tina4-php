@@ -1,0 +1,36 @@
+
+<h1 class="sectionedit1 heading-combo" id="apis_in_tina4">APIs in Tina4</h1>
+<div class="level1">
+
+<p>
+From inception Tina4 was designed to rapid prototype <abbr title="Application Programming Interface">API</abbr> end points in conjunction with making SwaggerUI documentation available quickly with annotated routing.
+</p>
+
+<p>
+The swagger UI is available at <a href="http://localhost:7145/swagger" class="urlextern" target="target=_blank" title="http://localhost:7145/swagger" rel="ugc nofollow noopener">http://localhost:7145/swagger</a> if you are working from the default composer start.
+</p>
+
+<p>
+An example of a post end point end point:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+/**
+* @description This end point allows and upload of a json string and saves it to a file
+* @tags users,uploads
+* @secure
+*/
+\Tina4\Post::add(&quot;/api/users/uploads&quot;, function (\Tina4\Response $response, \Tina4\Request $request){
+
+    if (!empty($request-&gt;data)) {
+        file_put_contents(&quot;./updates/update.json&quot;, serialize($request-&gt;data));
+        $result = &quot;Ok!&quot;;
+    } else {
+        $result = &quot;Failed!&quot;;
+    }
+
+    return $response ($result);
+});</code>
+</pre>
+
+</div>

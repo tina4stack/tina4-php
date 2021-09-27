@@ -1,0 +1,45 @@
+# General doc
+# https://www.ovh.nl/shared-hosting/persoonlijke-shared-hosting.xml
+# and https://github.com/splitbrain/dokuwiki-travis
+# and https://www.dokuwiki.org/devel:release_process
+
+branches:
+    only:
+        - main
+        - stable
+
+# https://docs.travis-ci.com/user/build-matrix/#excluding-jobs-with-env-value
+jobs:
+    include:
+        # https://config.travis-ci.com/ref/job/if/condition
+        # 7.4 and 9 does not work: https://github.com/splitbrain/dokuwiki/issues/3399
+#        -   if: branch =~ ^main
+#            language: php
+#            php: "8.0"
+#            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
+        -   if: branch =~ ^main
+            language: php
+            php: "7.4"
+            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
+        -   language: php
+            php: "7.3"
+            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
+        -   if: branch =~ ^main
+            language: php
+            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
+            php: "7.2"
+
+
+before_script:
+    # - set | grep TRAVIS # env variable
+    - bash .travis-boot.sh
+    - bash boot.sh
+
+script:
+    # with verbose, you see the configuration file used at the beginning
+    - cd _test && ./phpunit.phar --stderr --group plugin_combo --verbose --debug
+
+notifications:
+    email:
+        - support@combostrap.com
+

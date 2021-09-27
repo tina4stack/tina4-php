@@ -1,0 +1,44 @@
+<span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="co1">//we need a class extending the ORM</span>
+<span class="kw2">class</span> User <span class="kw2">extends</span> \Tina4\ORM <span class="br0">&#123;</span> <span class="co1">//assumes we have a table user in the database</span>
+    <span class="kw2">public</span> <span class="re0">$id</span><span class="sy0">;</span> <span class="co1">//primary key because it is first</span>
+    <span class="kw2">public</span> <span class="re0">$name</span><span class="sy0">;</span> <span class="co1">//some additional data</span>
+<span class="br0">&#125;</span>   
+&nbsp;
+<span class="re0">$user</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">new</span> User<span class="br0">&#40;</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="re0">$user</span><span class="sy0">-&gt;</span><span class="me1">name</span> <span class="sy0">=</span> <span class="st0">&quot;Test Save&quot;</span><span class="sy0">;</span>
+<span class="re0">$user</span><span class="sy0">-&gt;</span><span class="me1">save</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+&nbsp;
+<span class="co1">//We want the table to be made for us</span>
+<span class="kw2">class</span> NewTable <span class="kw2">extends</span> \Tina4\ORM <span class="br0">&#123;</span> <span class="co1">//will be created as newtable in the database</span>
+    <span class="co4">/**
+    *  @var id integer auto_increment  
+    **/</span>
+    <span class="kw2">public</span> <span class="re0">$id</span><span class="sy0">;</span> <span class="co1">//primary key because it is first</span>
+    <span class="co4">/**
+    *  @var varchar(100) default 'Default Name'
+    **/</span>
+    <span class="kw2">public</span> <span class="re0">$name</span><span class="sy0">;</span> <span class="co1">//some additional data</span>
+<span class="br0">&#125;</span> 
+&nbsp;
+&nbsp;
+<span class="re0">$newTable</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">new</span> NewTable<span class="br0">&#40;</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="re0">$newTable</span><span class="sy0">-&gt;</span><span class="me1">name</span> <span class="sy0">=</span> <span class="st0">&quot;Test Save&quot;</span><span class="sy0">;</span>
+<span class="re0">$user</span><span class="sy0">-&gt;</span><span class="me1">save</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="co1">//How about some thing else</span>
+&nbsp;
+<span class="re0">$newTable</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">new</span> NewTable<span class="br0">&#40;</span><span class="st_h">'{&quot;name&quot;:&quot;TEST&quot;}'</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="re0">$newTable</span><span class="sy0">-&gt;</span><span class="me1">save</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="co1">//Or something else</span>
+&nbsp;
+<span class="re0">$fields</span> <span class="sy0">=</span> <span class="br0">&#91;</span><span class="st0">&quot;name&quot;</span> <span class="sy0">=&gt;</span> <span class="st0">&quot;Testing&quot;</span><span class="br0">&#93;</span><span class="sy0">;</span>
+<span class="re0">$newTable</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">new</span> NewTable<span class="br0">&#40;</span><span class="re0">$fields</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="re0">$newTable</span><span class="sy0">-&gt;</span><span class="me1">save</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="co1">//Or something else - request variable should obviously contain fields that match the class declared</span>
+<span class="re0">$newTable</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">new</span> NewTable<span class="br0">&#40;</span><span class="re0">$_REQUEST</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="re0">$newTable</span><span class="sy0">-&gt;</span><span class="me1">save</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>

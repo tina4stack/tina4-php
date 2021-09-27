@@ -1,0 +1,7 @@
+.card-combo { margin-bottom: 1rem; }
+/** Bootstrap has a margin bottom that is not welcome in a card **/
+.card-combo > table { margin-bottom: 0; }
+
+/** No card-combo ui/li styling because it is also used for menu such as tabs if there is a list in the card,
+ * there should be a more specific selection
+ */

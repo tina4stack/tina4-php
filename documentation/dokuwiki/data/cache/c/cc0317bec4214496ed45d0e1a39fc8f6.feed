@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework tina4:tutorials:beginner</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-21T20:25:08+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:connect-to-database&amp;rev=1629102831&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:create-a-basic-route&amp;rev=1628863922&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:create-a-landing-page&amp;rev=1628856010&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:debug-twig-template&amp;rev=1629096993&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:initialize-a-tina4-project&amp;rev=1628853179&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:let-a-class-use-the-database&amp;rev=1629102924&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:migrationless&amp;rev=1629117591&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:post-form-data&amp;rev=1622124421&amp;do=diff"/>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:write-an-update-or-insert-statement&amp;rev=1629108669&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:connect-to-database&amp;rev=1629102831&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-16T10:33:51+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:connect-to-database</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:connect-to-database&amp;rev=1629102831&amp;do=diff</link>
+        <description>Connecting to a database
+
+Tina4 currently supports 3 database types which are:
+
+* Firebird
+
+
+* MySQL
+
+
+* SQLite
+
+The database connection is established in a global variable called “$DBA” in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:create-a-basic-route&amp;rev=1628863922&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-13T16:12:02+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:create-a-basic-route</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:create-a-basic-route&amp;rev=1628863922&amp;do=diff</link>
+        <description>Create a basic route
+
+Every time an User  goes to a link or new page, this can be referred to as they are being directed to a path. With Tina4, creating a route is as easy as naming your route path and including a $response and $request variable as your various functions.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:create-a-landing-page&amp;rev=1628856010&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-13T14:00:10+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:create-a-landing-page</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:create-a-landing-page&amp;rev=1628856010&amp;do=diff</link>
+        <description>Create a basic landing page
+
+Creating a website has just been made much easier with Tina 4! As an example try the below steps and see how simple it is. 
+
+In your src/templates folder create a twig file called index.twig
+
+Add the HTML elements you wish to see on your page (e.g):</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:debug-twig-template&amp;rev=1629096993&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-16T08:56:33+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:debug-twig-template</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:debug-twig-template&amp;rev=1629096993&amp;do=diff</link>
+        <description>Debugging Twig Templates
+
+Make sure debug is on in your .env file, it should be on by default
+
+Use the dump command of twig to dump variables
+
+Learn more about &lt;https://twig.symfony.com/doc/2.x/functions/dump.html&gt; or learn more about basic-debugging.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:initialize-a-tina4-project&amp;rev=1628853179&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-13T13:12:59+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:initialize-a-tina4-project</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:initialize-a-tina4-project&amp;rev=1628853179&amp;do=diff</link>
+        <description>Initialize a Tina4 project
+
+If you have just installed Tina4 with composer then you run this command in your IDE terminal:
+
+Please note, this adds the necessary scripts to your composer.json file and will NOT work if you already have and index.php file. It will also create a</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:let-a-class-use-the-database&amp;rev=1629102924&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-16T10:35:24+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:let-a-class-use-the-database</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:let-a-class-use-the-database&amp;rev=1629102924&amp;do=diff</link>
+        <description>Let my class use the database
+
+You will build classes to define your objects, routes, variables etc. A class will have your functions and variables in it. We call these functions and variables objects. 
+
+A class can be a collection of objects which has different behaviors and properties. For example, you may want to extend your class so that it connects to your database.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:migrationless&amp;rev=1629117591&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-16T14:39:51+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:migrationless</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:migrationless&amp;rev=1629117591&amp;do=diff</link>
+        <description>Migrationless Database
+
+You can create tables in your database without having to create a migrations. 
+
+Below you can see how to create a migration without having to use “/migrate/create” in your browsers URL.</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:post-form-data&amp;rev=1622124421&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-27T16:07:01+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:post-form-data</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:post-form-data&amp;rev=1622124421&amp;do=diff</link>
+        <description>Post form data
+
+Tina4 prevents CORS from happening so formKey token is used</description>
+    </item>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:write-an-update-or-insert-statement&amp;rev=1629108669&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-16T12:11:09+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tutorials:beginner:write-an-update-or-insert-statement</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:tutorials:beginner:write-an-update-or-insert-statement&amp;rev=1629108669&amp;do=diff</link>
+        <description>Writing an update or insert statement
+
+Tina4 uses orm to do most of the heavy lifting for you, on an object extending \Tina4\ORM, the save method handles the insert or update. 
+
+Here you can see that we executed an update statement to insert a statement to the database.</description>
+    </item>
+</rdf:RDF>

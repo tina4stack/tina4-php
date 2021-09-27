@@ -1,0 +1,15 @@
+====== Add a filter to process records when they are extracted from the database ======
+Lets say you want to filter the database for all the entries with the first name "Peter". In your SQL tool that you are using, you can query a record or it can be done in the IDE Terminal. 
+
+Here's an example:
+
+<code php>
+<?php
+
+\Tina4\Get::add("/player/names", function ($names, \Tina4\Response $response, \Tina4\Request $request) {
+$names = (new UserName())->select("*") //The table you want to select. It has to be is accordance with the Helper.
+                         ->where (names = Peter) //The filter you want 
+                         ->asArray;
+ return $response (\Tina4\renderTemplate("yourtemplate.twig", ["names" => $names, ), HTTP_OK, TEXT_HTML);
+});
+</code>

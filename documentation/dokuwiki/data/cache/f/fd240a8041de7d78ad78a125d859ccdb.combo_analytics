@@ -1,0 +1,98 @@
+{
+    "id": "installing_docker",
+    "date": "2021-07-16 09:56:26",
+    "metadata": {
+        "title": null,
+        "description": "For installing Docker onto your machine, please watch the following videos and watch the video which is specific to your Operating System:\n Windows                      Mac                            Linux                                  \nfirst-steps",
+        "date_created": "2021-06-28 10:10:14",
+        "date_modified": "2021-07-01 01:16:45",
+        "age_creation": 17,
+        "age_modification": 15
+    },
+    "statistics": {
+        "authors": {
+            "sidney": 1
+        },
+        "chars_count": 396,
+        "edits_count": 5,
+        "formatted": {
+            "1": {
+                "len": 33,
+                "multiformat": 1
+            },
+            "0": 48,
+            "2": {
+                "len": 7
+            },
+            "3": {
+                "len": 3
+            },
+            "4": {
+                "len": 5
+            }
+        },
+        "internal_backlinks_count": 0,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "syntax_count": {
+            "p": 2,
+            "strong": 4,
+            "underline": 1,
+            "table": 1,
+            "tablethead": 1,
+            "tablerow": 2,
+            "tableheader": 3,
+            "tablecell": 3,
+            "vshare": 3,
+            "combo_link": 1
+        },
+        "words_count": 23
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_backlinks_min",
+            "words_min"
+        ],
+        "scoring": {
+            "score": 3.25,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 0,
+                "correct_outline": 0,
+                "description_present": 0,
+                "edits_count": 1.25,
+                "internal_backlinks_count": 0,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "6 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "outline_structure": "Add headings to create a document outline for 3 points",
+                "words_min": "Add 27 words to get 10 points",
+                "internal_backlinks_min": "Add backlinks for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Failed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Failed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Failed"
+            }
+        }
+    }
+}

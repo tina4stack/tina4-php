@@ -1,0 +1,5 @@
+<span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="br0">&#40;</span><span class="kw2">new</span> User<span class="br0">&#40;</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">-&gt;</span><span class="me1">generateCRUD</span><span class="br0">&#40;</span><span class="st0">&quot;/api/user/&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="co1">//   ^                       ^  </span>
+<span class="co1">// Your ORM object          Desired API Endpoint</span>

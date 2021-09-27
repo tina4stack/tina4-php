@@ -1,0 +1,3 @@
+/* p and ul have a default bottom margin via the default browser stylesheet that makes the content not in the middle */
+.note-combo p:last-child { margin-bottom: 0; }
+.note-combo ul:last-child { margin-bottom: 0; }

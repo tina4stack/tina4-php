@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://www.tina4php.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://www.tina4php.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://www.tina4php.com/documentation/</link>
+        <image rdf:resource="https://www.tina4php.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-07-15T18:32:41+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://www.tina4php.com/documentation/doku.php?id=guides:php:install:docker&amp;rev=1623660524&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://www.tina4php.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://www.tina4php.com/documentation/</link>
+        <url>https://www.tina4php.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://www.tina4php.com/documentation/doku.php?id=guides:php:install:docker&amp;rev=1623660524&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-14T10:48:44+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>guides:php:install:docker</title>
+        <link>https://www.tina4php.com/documentation/doku.php?id=guides:php:install:docker&amp;rev=1623660524&amp;do=diff</link>
+        <description>Docker installation
+
+Tina4PHP comes with a Docker file configured will all the dependencies you need
+You will first need to &lt;https://docs.docker.com/get-docker/&gt; the Docker environment for your operating system before running the following commands 
+
+Whats in the docker
+
+	*  Composer support</description>
+    </item>
+</rdf:RDF>

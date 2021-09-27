@@ -1,0 +1,70 @@
+
+<h1 class="sectionedit1 heading-combo" id="connecting_to_a_database">Connecting to a database</h1>
+<div class="level1">
+
+<p>
+Tina4 currently supports 3 database types which are:
+</p>
+
+<p>
+* Firebird
+<br/>
+
+* MySQL
+<br/>
+
+* SQLite
+</p>
+
+<p>
+The database connection is established in a global variable called “$DBA” in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required.
+</p>
+
+<p>
+<strong>Connecting to SQLite3</strong>
+</p>
+
+<p>
+The simplest connection to configure is <strong>SQLite3</strong> database type:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php 
+
+global $DBA;
+
+//SQLite
+$DBA = new \Tina4\DataSQLite3(&quot;test.db&quot;);</code>
+</pre>
+
+<p>
+<strong>Connecting to MySQL</strong>
+</p>
+
+<p>
+This is how to configure your database connection using <strong>MySQL</strong> database type: 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+global $DBA;
+
+//MySQL
+$DBA = new \Tina4\DataMySQL(&quot;localhost:somedatabase&quot;, DB_USERNAME, DB_PASSWORD, &quot;d/m/Y&quot;);</code>
+</pre>
+
+<p>
+This is how to configure your database connection using <strong>FireBird</strong> database type: 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+global $DBA;
+
+//Firebird 
+$DBA = new \Tina4\DataFirebird(&quot;localhost:/home/database/FIREBIRD.DB&quot;, &quot;sysdba&quot;, &quot;masterkey&quot;);</code>
+</pre>
+
+</div>

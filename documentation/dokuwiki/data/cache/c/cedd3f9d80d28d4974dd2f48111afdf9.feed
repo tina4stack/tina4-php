@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://www.tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://www.tina4.com/documentation/feed.php">
+        <title>This is not a framework guides:php:install</title>
+        <description></description>
+        <link>https://www.tina4.com/documentation/</link>
+        <image rdf:resource="https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico" />
+       <dc:date>2021-06-22T15:30:58+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=guides:php:install:docker&amp;rev=1623660524&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=guides:php:install:linux&amp;rev=1622038497&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=guides:php:install:mac&amp;rev=1623569873&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=guides:php:install:windows&amp;rev=1616004235&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://www.tina4.com/documentation/</link>
+        <url>https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=guides:php:install:docker&amp;rev=1623660524&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-14T10:48:44+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>guides:php:install:docker</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=guides:php:install:docker&amp;rev=1623660524&amp;do=diff</link>
+        <description>Docker installation
+
+Tina4PHP comes with a Docker file configured will all the dependencies you need
+You will first need to install the Docker environment for your operating system before running the following commands 
+
+Whats in the docker
+
+	*  Composer support</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=guides:php:install:linux&amp;rev=1622038497&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-26T16:14:57+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>guides:php:install:linux</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=guides:php:install:linux&amp;rev=1622038497&amp;do=diff</link>
+        <description>Installing PHP on Linux
+
+Based on Debian
+apt-get install php-curl php-fileinfo php-gd php-intl php-mbstring php-soap php-tidy php-xmlrpc php-xml</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=guides:php:install:mac&amp;rev=1623569873&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-13T09:37:53+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>guides:php:install:mac</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=guides:php:install:mac&amp;rev=1623569873&amp;do=diff</link>
+        <description>Installation
+
+The recommended way to install PHP on Mac is with the brew package manager
+
+Follow the instructions &lt;https://brew.sh/&gt; to install brew
+
+Then execute the following:
+ brew install php@7.4
+Docker
+
+Running on a Mac with an M1 chip may cause issues if you want to run all the PHP extensions as some may not be compatible. Docker is a solution here.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=guides:php:install:windows&amp;rev=1616004235&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-03-17T20:03:55+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>guides:php:install:windows</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=guides:php:install:windows&amp;rev=1616004235&amp;do=diff</link>
+        <description>Installing PHP on Windows
+
+Step 1 - Download PHP
+
+Head to the PHP page and download the current stable Zip version for your Operating System.
+
+Here's the link : PHP
+
+Step 2 - Copy and configure PHP
+
+Unpack/extract the zip file or content into a folder (Example:</description>
+    </item>
+</rdf:RDF>

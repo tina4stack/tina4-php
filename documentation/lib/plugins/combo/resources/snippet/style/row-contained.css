@@ -1,0 +1,14 @@
+/* All p are flex and 100% to be able to layout with margin */
+.row-contained {
+    min-width: 100%;
+}
+.row-contained p {
+    min-width: 100%;
+    display: flex;
+}
+
+/* Automated p created around image and other syntax does not have any spacing */
+.row-contained p.row-contained-text-combo {
+    margin-bottom: 0;
+    padding-right: 0;
+}

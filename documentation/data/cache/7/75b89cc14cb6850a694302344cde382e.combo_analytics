@@ -1,0 +1,104 @@
+{
+    "id": "tina4:migrations",
+    "date": "2021-08-17 20:11:42",
+    "metadata": {
+        "title": "Migrations in Tina4",
+        "description": "Migrations in Tina4\n\nCreate a table\/migration\n\nYou want to create a table for the database? Migrations are sequential SQL statements which keep track of your database changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.",
+        "date_created": "2021-03-16 03:46:25",
+        "date_modified": "2021-07-31 12:19:56",
+        "age_creation": 154,
+        "age_modification": 18
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "matthew": 1,
+            "andre": 1,
+            "barco": 1
+        },
+        "chars_count": 1169,
+        "edits_count": 22,
+        "external_links_count": 1,
+        "formatted": {
+            "1": {
+                "len": 7
+            },
+            "0": 56,
+            "2": {
+                "len": 5
+            },
+            "3": {
+                "len": 33
+            },
+            "4": {
+                "len": 11
+            }
+        },
+        "headers_count": {
+            "h1": 1,
+            "h2": 1
+        },
+        "internal_backlinks_count": 5,
+        "syntax_count": {
+            "combo_headingwiki": 2,
+            "section": 2,
+            "p": 8,
+            "strong": 4,
+            "combo_preformatted": 2,
+            "combo_code": 1,
+            "wrap_divwrap": 1,
+            "listu": 1,
+            "listitem": 4,
+            "listcontent": 4,
+            "combo_media": 1
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 157
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 25.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 5.5,
+                "internal_backlinks_count": 5,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,20 @@
+====== Troubleshooting - Installation ======
+
+<WRAP center round important>
+<code bash>
+composer exec tina4 initialize:run
+</code>  
+'tina4' is not recognized as an internal or external command, operable program or batch file.
+  
+This error could be caused by using a substandard terminal. We recommend changing the terminal in your IDE to use the gitbash terminal.
+eg. In PHPStorm:  Files >> Settings >> Tools >> Terminal >> Shell Path and navigate to the gitbash executable.
+</WRAP>
+
+
+<WRAP center round important>
+During the initialize phase Tina4 may run into OpenSSL problems. However there are good onscreen [[https://slproweb.com/products/Win32OpenSSL.html|SLProWeb OpenSSL Library]] instructions. Just follow those and you will be on your way. You may need to run the following commands, depending on your current OpenSSL installation. After each command try the tina4 initialize again.
+<code bash>
+ ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""
+ openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub
+</code>  
+</WRAP>

@@ -1,0 +1,72 @@
+
+<h1 class="sectionedit1 heading-combo" id="connecting_to_a_database">Connecting to a database</h1>
+<div class="level1">
+
+<p>
+Tina4 currently supports 3 database types which are:
+</p>
+
+<p>
+* <a class="link-external link-combo" href="https://firebirdsql.org/en/firebird-rdbms/" rel="noopener" target="target=_blank">Firebird</a>
+<br/>
+
+* <a class="link-external link-combo" href="https://dev.mysql.com/doc/" rel="noopener" target="target=_blank">MySQL</a>
+<br/>
+
+* <a class="link-external link-combo" href="https://www.sqlite.org/docs.html" rel="noopener" target="target=_blank">SQLite</a>
+</p>
+
+<p>
+The database connection is established in a global variable called <strong>$DBA</strong> in the <strong>index.php</strong> file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required.
+</p>
+
+</div>
+
+<h4 class="heading-combo" id="connecting_to_sqlite3">Connecting to SQLite3</h4>
+<div class="level4">
+
+<p>
+The simplest connection to configure is <strong>SQLite3</strong> database type:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php 
+
+global $DBA;
+
+//SQLite
+$DBA = new \Tina4\DataSQLite3(&quot;test.db&quot;);</code>
+</pre>
+
+</div>
+
+<h4 class="heading-combo" id="connecting_to_mysql">Connecting to MySQL</h4>
+<div class="level4">
+
+<p>
+This is how to configure your database connection using <strong>MySQL</strong> database type: 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+global $DBA;
+
+//MySQL
+$DBA = new \Tina4\DataMySQL(&quot;localhost:somedatabase&quot;, DB_USERNAME, DB_PASSWORD, &quot;d/m/Y&quot;);</code>
+</pre>
+
+<p>
+This is how to configure your database connection using <strong>FireBird</strong> database type: 
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+global $DBA;
+
+//Firebird 
+$DBA = new \Tina4\DataFirebird(&quot;localhost:/home/database/FIREBIRD.DB&quot;, &quot;sysdba&quot;, &quot;masterkey&quot;);</code>
+</pre>
+
+</div>

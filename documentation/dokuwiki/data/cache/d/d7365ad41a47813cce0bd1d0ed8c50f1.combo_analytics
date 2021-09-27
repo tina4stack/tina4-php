@@ -1,0 +1,115 @@
+{
+    "id": "tina4:tutorials:test",
+    "date": "2021-07-10 10:12:46",
+    "metadata": {
+        "title": "Sidney Ramphalile",
+        "description": "Sidney Ramphalile\n\n----------\n\n\n\nHello, world! Welcome to my first DokuWiki page. I am learning Markup on Dokuwiki. 8-)\n\n----------\n\nI am also available Here:\n\n<https:\/\/www.linkedin.com\/in\/sidney-ramphalile\/>\n\n<https:\/\/github.com\/SidneyRamphalile>\n\n----------\n\nMy name is Sidney and here is a little information about me.\n\nHobbies\n\n\t*",
+        "h1": null,
+        "date_created": "2021-06-27 08:49:40",
+        "date_modified": "2021-06-28 12:39:50",
+        "age_creation": 13,
+        "age_modification": 12
+    },
+    "statistics": {
+        "authors": {
+            "sidney": 1,
+            "andre": 1
+        },
+        "chars_count": 1115,
+        "edits_count": 16,
+        "external_links_count": 2,
+        "formatted": {
+            "1": {
+                "len": 13
+            },
+            "0": 29,
+            "2": {
+                "len": 5
+            },
+            "3": {
+                "len": 5
+            },
+            "4": {
+                "len": 6
+            }
+        },
+        "headers_count": {
+            "h1": 1,
+            "h3": 1,
+            "h2": 2
+        },
+        "hr": 3,
+        "internal_backlinks_count": 5,
+        "internal_links_count": 5,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "syntax_count": {
+            "wrap_divwrap": 2,
+            "wrap_closesection": 1,
+            "p": 9,
+            "combo_media": 4,
+            "strong": 4,
+            "wrap_spanwrap": 1,
+            "combo_link": 7,
+            "combo_headingwiki": 3,
+            "section": 3,
+            "listu": 4,
+            "listitem": 8,
+            "listcontent": 8,
+            "table": 1,
+            "tablethead": 1,
+            "tablerow": 3,
+            "tableheader": 3,
+            "tablecell": 6,
+            "subscript": 1
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 84
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 26,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 0,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 4,
+                "internal_backlinks_count": 5,
+                "internal_links_count": 5,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "outline_structure": "The 1 header (h3) has a level bigger than its precedent (1)",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Failed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

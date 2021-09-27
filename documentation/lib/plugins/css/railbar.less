@@ -1,0 +1,150 @@
+
+@ico-width: 28px;
+@ico-margin: 8px;
+@item-width: (@ico-width + @ico-margin + @ico-margin);
+@item-height: (@ico-width + @ico-margin);
+@canvas-control-height: 45vh;
+
+.railbar {
+
+    text-align: right;
+    margin: 0;
+    padding: 0;
+    /* add transparent border to prevent jumping when proper border is added on hover */
+    border: 1px solid transparent;
+
+    li {
+        padding: 0;
+        margin: 0;
+        list-style: none;
+        font-size: 0.875em;
+
+        a {
+
+            display: block;
+            /* add transparent border to prevent jumping when proper border is added on focus */
+            border: 1px solid transparent;
+            white-space: nowrap;
+            line-height: @item-height;
+            vertical-align: middle;
+            height: @item-height;
+
+            span {
+                margin: 0 @ico-margin;
+            }
+
+            svg {
+                width: @ico-width;
+                height: @ico-width;
+                margin: 0 @ico-margin;
+                display: inline-block;
+                vertical-align: middle;
+                fill: @ini_border;
+            }
+        }
+
+        // on interaction show the full item
+        a:active,
+        a:focus,
+        a:hover {
+            background-color: @ini_background_alt;
+
+            span {
+                display: inline-block;
+            }
+
+            svg {
+                fill: @ini_link;
+            }
+        }
+
+    }
+}
+
+
+#railbar-fixed {
+
+    position: absolute;
+    right: (-1 * @item-width);
+    /* on same vertical level as first headline, because .page has 2em padding */
+    top: 4rem;
+    width: @item-width;
+
+    div.tools {
+        position: fixed;
+        width: @item-width;
+
+        ul {
+            position: absolute;
+            right: 0;
+            li {
+                a {
+                    span {
+                        display: none; // hide label until hover
+                    }
+                }
+            }
+        }
+    }
+
+    [dir=rtl] & {
+        right: auto;
+        left: (-1 * @item-width);
+
+        div.tools {
+            ul {
+                right: auto;
+                left: 0;
+                text-align: left;
+            }
+        }
+    }
+}
+
+// on hover show all items
+#railbar-fixed:hover {
+    div.tools ul {
+        background-color: @ini_background;
+        border-color: @ini_border;
+        border-radius: 2px;
+        box-shadow: 2px 2px 2px @ini_text_alt;
+
+        li a span {
+            display: inline-block;
+        }
+    }
+}
+
+#railbar-offcanvas-wrapper {
+    .btn {
+        background-color: #e2f1ff;
+        border-color: #e2f1ff;
+        color:@ini_link;
+    }
+}
+
+#railbar-offcanvas-open {
+    position: fixed;
+    right: 0;
+    top: @canvas-control-height;
+}
+
+#railbar-offcanvas-open:before {
+    content: "<";
+}
+
+#railbar-offcanvas-close {
+    position: relative;
+    left: -37px;
+    width: fit-content;
+    top: @canvas-control-height;
+    opacity: 1;
+}
+
+#railbar-offcanvas-close:before {
+    content: ">";
+}
+
+#railbar-offcanvas {
+    width: fit-content
+}

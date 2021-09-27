@@ -1,0 +1,180 @@
+/**
+ * This contains the content styling
+ * @author Sascha Leib <sascha@leib.be>
+ */
+
+main p,
+main blockquote,
+main div.table {
+	margin-bottom:	1em;
+}
+
+/* headlines: */
+main h1,
+main h2,
+main h3,
+main h4,
+main h5,
+main h6 {
+	font-family:	@ini_alt_fonts;
+	color:			@ini_headlines;
+	margin:			1em 0 1em 0;
+	line-height:	1.1em;
+}
+
+main h1 { font-size: 2em; }
+main h2 { font-size: 1.5em; }
+main h3 { font-size: 1.125em; }
+main h4 { font-size: 1em; }
+main h5 { font-size: .875em; }
+main h6 { font-size: .75em; }
+
+main h1 *,
+main h2 *,
+main h3 *,
+main h4 *,
+main h5 *,
+main h6 * {
+	font-family:	inherit;
+	font-size:		inherit;
+	color:			inherit;
+	margin:			inherit;
+	line-height:	inherit;
+}
+
+/* on the homepage only, reduce the H1 top margin: */
+body.home h1:first-child { margin-top: .5em; }
+
+/* make strike-through and underline more useful! */
+u {
+	-webkit-text-decoration: underline #F30 wavy .7pt;
+	text-decoration: underline #F30 wavy .7pt;
+}
+s {
+	-webkit-text-decoration: line-through rgba(255,0,0,.5) solid 1pt; 
+	text-decoration: line-through rgba(255,0,0,.5) solid 1pt;
+}
+
+/* lists: */
+main ul, main ol {
+	margin:			0 2em 1em 1em;
+	padding-left:	1.75em;
+}
+main ul {
+	list-style:		square outside;
+}
+main ol {
+	list-style:		decimal outside;
+}
+main li {
+}
+main li::marker {
+	color:			#666;
+}
+
+main ul ul, main ul ol,
+main ol ul, main ol ol {
+	margin-bottom:		0;
+	padding-left:		.25em;
+}
+
+
+/* horizontal rules */
+main hr {
+	border:				#666 solid 0;
+	border-top-width:	1pt;
+	height:				0;
+	margin:				3pt 0;
+}
+
+main tt, main blockquote tt,
+main code, main blockquote code {
+	font-family:	@ini_mono_fonts;
+}
+main code, main blockquote code {
+	border:			@ini_border solid 1px;
+	border-radius:	3pt;
+	padding:		0 2pt;
+}
+
+/* quotes: */
+main blockquote {
+	border-left:	@ini_blockquote solid .4em;
+	border-radius:	.5em;
+	padding:		.25em 0 .25em .75em;
+	margin:			0 2em 1em 1em;
+	font-family:	@ini_alt_fonts;
+	font-size:		1.1rem;
+}
+main blockquote * {
+	font-family:	@ini_alt_fonts;
+	font-size:		1.1rem;
+}
+
+main svg {
+	display:			block;
+	fill-rule:			evenodd;
+	clip-rule:			evenodd;
+	stroke-linejoin:	round;
+	stroke-miterlimit:	1.5;
+}
+main svg.math {
+	margin-left:		15px
+}
+
+/*  tables */
+main div.table {
+    overflow-x:			auto;
+}
+
+main table {
+    border-collapse:	collapse;
+    empty-cells:		show;
+    border-spacing:		0;
+	font-size:			smaller;
+    border:				1px solid @ini_border;
+	margin-bottom:		1em;
+}
+
+main table.inline {
+    min-width:			50%;
+}
+
+main table th,
+main table td {
+	padding:			.5em .3em;
+	vertical-align:		top;
+	border:				1px solid @ini_border;
+	line-height:		1.25em;
+}
+main table th {
+	font-weight:		bold;
+	background-color:	@ini_background_alt;
+	text-align:			left;
+}
+
+main table.inline tr:hover td {
+    background-color:	@ini_background_alt;
+}
+
+main table.inline tr:hover th {
+    background-color:	@ini_border;
+}
+
+/* asides */
+main aside {
+	width:			33.3%;
+	max-width:		150px;
+	float:			right;
+	text-align:		center;
+	font-size:		smaller;
+}
+main aside footer {
+	line-height:	1.1em;
+}
+
+/* images */
+main img {
+	max-width:		100%;
+	height:			auto;
+}

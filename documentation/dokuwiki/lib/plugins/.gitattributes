@@ -1,0 +1,4 @@
+# https://docs.github.com/en/github/getting-started-with-github/configuring-git-to-handle-line-endings
+js/*.js eol=lf
+bootstrap*.css eol=lf
+* text eol=lf

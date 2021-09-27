@@ -1,0 +1,23 @@
+a:2:{s:7:"current";a:10:{s:4:"date";a:2:{s:7:"created";i:1624776580;s:8:"modified";i:1624876790;}s:7:"creator";s:16:"Andre van Zuydam";s:4:"user";s:5:"andre";s:11:"last_change";a:8:{s:4:"date";i:1624876790;s:2:"ip";s:12:"102.249.2.22";s:4:"type";s:1:"E";s:2:"id";s:20:"tina4:tutorials:test";s:4:"user";s:6:"sidney";s:3:"sum";s:0:"";s:5:"extra";s:0:"";s:10:"sizechange";i:-3;}s:11:"contributor";a:1:{s:6:"sidney";s:17:"Sidney Ramphalile";}s:16:"low_quality_page";b:0;s:5:"title";s:17:"Sidney Ramphalile";s:11:"description";a:2:{s:15:"tableofcontents";a:4:{i:0;a:4:{s:3:"hid";s:17:"sidney_ramphalile";s:5:"title";s:17:"Sidney Ramphalile";s:4:"type";s:2:"ul";s:5:"level";i:1;}i:1;a:4:{s:3:"hid";s:59:"my_name_is_sidney_and_here_is_a_little_information_about_me";s:5:"title";s:60:"My name is Sidney and here is a little information about me.";s:4:"type";s:2:"ul";s:5:"level";i:3;}i:2;a:4:{s:3:"hid";s:7:"hobbies";s:5:"title";s:7:"Hobbies";s:4:"type";s:2:"ul";s:5:"level";i:2;}i:3;a:4:{s:3:"hid";s:19:"friends_in_business";s:5:"title";s:19:"Friends In Business";s:4:"type";s:2:"ul";s:5:"level";i:2;}}s:8:"abstract";s:334:"Sidney Ramphalile
+
+----------
+
+
+
+Hello, world! Welcome to my first DokuWiki page. I am learning Markup on Dokuwiki. 8-)
+
+----------
+
+I am also available Here:
+
+<https://www.linkedin.com/in/sidney-ramphalile/>
+
+<https://github.com/SidneyRamphalile>
+
+----------
+
+My name is Sidney and here is a little information about me.
+
+Hobbies
+
+	*";}s:8:"relation";a:3:{s:5:"media";a:4:{s:26:"tina4:tutorials:sidney.jpg";b:1;s:25:"tina4:tutorials:barco.jpg";b:1;s:25:"tina4:tutorials:andre.jpg";b:1;s:26:"tina4:tutorials:justin.jpg";b:1;}s:10:"references";a:5:{s:43:"tina4:tutorials:playing_the_acoustic_guitar";b:1;s:22:"tina4:tutorials:baking";b:1;s:23:"tina4:tutorials:cooking";b:1;s:36:"tina4:tutorials:doing_online_courses";b:1;s:25:"tina4:tutorials:astronomy";b:1;}s:10:"firstimage";s:26:"tina4:tutorials:sidney.jpg";}s:8:"internal";a:2:{s:5:"cache";b:1;s:3:"toc";b:1;}}s:10:"persistent";a:6:{s:4:"date";a:2:{s:7:"created";i:1624776580;s:8:"modified";i:1624876790;}s:7:"creator";s:16:"Andre van Zuydam";s:4:"user";s:5:"andre";s:11:"last_change";a:8:{s:4:"date";i:1624876790;s:2:"ip";s:12:"102.249.2.22";s:4:"type";s:1:"E";s:2:"id";s:20:"tina4:tutorials:test";s:4:"user";s:6:"sidney";s:3:"sum";s:0:"";s:5:"extra";s:0:"";s:10:"sizechange";i:-3;}s:11:"contributor";a:1:{s:6:"sidney";s:17:"Sidney Ramphalile";}s:16:"low_quality_page";b:0;}}

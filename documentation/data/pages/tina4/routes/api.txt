@@ -1,0 +1,34 @@
+====== APIs in Tina4 ======
+
+From inception Tina4 was designed to rapid prototype API end points in conjunction with making SwaggerUI documentation available quickly with annotated routing.
+
+After running the **composer start** command in your IDE terminal, the Swagger UI will be available when you use the following address in your Web brosers URL address bar:
+<code url>
+ http://localhost:7145/swagger 
+</code>
+
+An example of a post end point end point:
+
+<code php>
+<?php
+
+/**
+* @description This end point allows and upload of a json string and saves it to a file
+* @tags users,uploads
+*/
+\Tina4\Post::add("/api/users/uploads", function (\Tina4\Response $response, \Tina4\Request $request){
+
+    if (!empty($request->data)) {
+        file_put_contents("./updates/update.json", serialize($request->data));
+        $result = "Ok!";
+    } else {
+        $result = "Failed!";
+    }
+
+    return $response ($result);
+});
+</code>
+
+<WRAP center round info>
+You can also **secure** your API end points by clicking on this [[tina4:tutorials:secure_api_endpoint|link]]. 
+</WRAP>

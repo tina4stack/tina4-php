@@ -1,0 +1,7 @@
+&lt;?php
+&lt;head&gt; 
+ &lt;script type=&quot;text/javascript&quot; src=&quot;/src/public/js/tina4helper.js&quot;&gt;&lt;/script&gt;
+&lt;/head&gt;
+&nbsp;
+&lt;button onclick=&quot;loadPage('/login', 'content')&quot;&gt;Login&lt;/button&gt;
+&lt;div id=&quot;content&quot;&gt;&lt;/div&gt;

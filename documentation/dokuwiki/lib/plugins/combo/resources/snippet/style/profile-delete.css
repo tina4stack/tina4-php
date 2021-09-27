@@ -1,0 +1,40 @@
+
+.form-profile-delete {
+    width: 100%;
+    max-width: 330px;
+    padding: 15px;
+    margin: auto;
+}
+
+.form-profile-delete h1 {
+    font-size: calc(1.3rem + .6vw);
+    margin-bottom: 1.5rem;
+    margin-top: 0;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+
+.form-profile-delete .checkbox {
+    font-weight: 400;
+}
+
+.form-profile-delete .form-floating:focus-within {
+    z-index: 2;
+}
+
+.form-profile-delete input[type="text"] {
+    margin-bottom: -1px;
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+
+.form-profile-delete input[type="password"] {
+    margin-bottom: 10px;
+}
+
+.form-profile-delete .rememberMe {
+    margin-bottom: 1rem;
+}
+

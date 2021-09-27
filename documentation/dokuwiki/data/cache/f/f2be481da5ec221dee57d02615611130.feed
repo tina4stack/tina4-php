@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://tina4.com/documentation/feed.php">
+        <title>This is not a framework</title>
+        <description></description>
+        <link>https://tina4.com/documentation/</link>
+        <image rdf:resource="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico" />
+       <dc:date>2021-08-10T20:04:22+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://tina4.com/documentation/doku.php?id=tina4:suggested_topics&amp;rev=1628075031&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://tina4.com/documentation/</link>
+        <url>https://tina4.com/documentation/lib/tpl/strap/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://tina4.com/documentation/doku.php?id=tina4:suggested_topics&amp;rev=1628075031&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-08-04T13:03:51+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:suggested_topics</title>
+        <link>https://tina4.com/documentation/doku.php?id=tina4:suggested_topics&amp;rev=1628075031&amp;do=diff</link>
+        <description>Suggested Topics
+
+A list of community suggested topics. Make a suggestion on our Slack channel.
+
+TODO
+
+	*  introduction
+	*  debug 
+	*  auth
+	*  error-pages
+	*  tina4-js-Helper
+	*  database
+	*  slimsHTML
+	*  modules
+	*  swaggerAPI
+	*  connection-errors
+	*  test
+	*  messenger
+	*  apiAPI
+	*  apiAPI
+	*  apiAPI
+	*  orm-methods -- There's a lot about mapping but not so much about load, delete, select, hasOne, hasMany, softDelete, Auto Generate Primary key, Auto Generate ORM files, etc.</description>
+    </item>
+</rdf:RDF>

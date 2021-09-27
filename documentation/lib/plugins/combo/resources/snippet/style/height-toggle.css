@@ -1,0 +1,38 @@
+button.height-toggle-combo {
+    border: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    font-weight: 400;
+    padding-top: 40px;
+    background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.5));
+    box-sizing: border-box;
+    z-index: 20;
+}
+
+button[class="height-toggle-combo"][aria-expanded="true"]{
+    padding-top: 0;
+    background: none;
+}
+
+button.height-toggle-combo::before {
+    display: inline-block;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    border-radius: 0.5rem;
+    min-width: 1rem;
+    font-size: 180%;
+    content: "▼︎";
+    vertical-align: text-top;
+}
+
+button[class="height-toggle-combo"][aria-expanded="true"]::before {
+    transform: rotate(-180deg) translate(0, -0.6rem);;
+    vertical-align: text-bottom;
+}
+
+

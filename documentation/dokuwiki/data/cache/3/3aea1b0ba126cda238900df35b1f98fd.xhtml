@@ -1,0 +1,313 @@
+
+<h1 class="sectionedit1 heading-combo" id="routing_in_tina4">Routing in Tina4</h1>
+<div class="level1">
+
+<p>
+For the most basic of Routes, please see the <a class="link-internal link-combo" data-wiki-id="tina4:tutorials:beginner:create-a-basic-route" href="/doku.php?id=tina4:tutorials:beginner:create-a-basic-route" title="Create a basic route">How Do I - Beginner section</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Routing in Tina4&quot;,&quot;hid&quot;:&quot;routing_in_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-156&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="simple_syntax">Simple Syntax</h2>
+<div class="level2">
+
+<p>
+The simple syntax of a Route is as follows
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  \Tina4\Method::add(string $routePath, $function)</code>
+</pre>
+
+<p>
+<br/>
+
+So the Route to capture the url <a href="https://mywebsite.com/starthere" class="urlextern" target="target=_blank" title="https://mywebsite.com/starthere" rel="ugc nofollow noopener">https://mywebsite.com/starthere</a> would be as below. This uses a Get method, with a simple closure function, with the return using the Response object.
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  \Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+      // Put all the code that you want to here
+      return $response(&quot;Hello Mars&quot;, HTTP_OK, TEXT_HTML);
+  });</code>
+</pre>
+
+<p>
+<br/>
+
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Simple Syntax&quot;,&quot;hid&quot;:&quot;simple_syntax&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;157-729&quot;} -->
+<h2 class="sectionedit3 heading-combo" id="route_methods">Route Methods</h2>
+<div class="level2">
+
+<p>
+There are a number of routing options in Tina4, they are based around the common <abbr title="Application Programming Interface">API</abbr> routing methods.
+</p>
+<ul>
+<li class="level1"><div class="li"> <strong>GET</strong>    - TINA4_GET</div>
+</li>
+<li class="level1"><div class="li"> <strong>POST</strong>   - TINA4_POST</div>
+</li>
+<li class="level1"><div class="li"> <strong>PATCH</strong>  - TINA4_PATCH</div>
+</li>
+<li class="level1"><div class="li"> <strong>DELETE</strong> - TINA4_DELETE</div>
+</li>
+<li class="level1"><div class="li"> <strong>PUT</strong>    - TINA4_PUT</div>
+</li>
+</ul>
+
+<p>
+A further route is introduced which encapsulates all the above routes and intercepts all the different options
+</p>
+<ul>
+<li class="level1"><div class="li"> <strong>ANY</strong>.   - TINA4_ANY</div>
+</li>
+</ul>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<p>
+So by using the <strong>Get::add(“/starthere”, $function)</strong> and <strong>Post::add(“/starthere”, $function)</strong> we get two unique Routes.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:5,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Route Methods&quot;,&quot;hid&quot;:&quot;route_methods&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;730-1302&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="including_variables">Including Variables</h2>
+<div class="level2">
+
+<p>
+Variables can be included in three different ways.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Including Variables&quot;,&quot;hid&quot;:&quot;including_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1303-1387&quot;} -->
+<h3 class="sectionedit7 heading-combo" id="path_variables">Path variables</h3>
+<div class="level3">
+
+<p>
+Variables can be included as part of the actual url path and passed to the front of the closure function.
+</p>
+
+<p>
+<strong>mywebsite.com/starthere/3</strong> will return 3
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  \Tina4\Get::add(&quot;/starthere/{variable1}&quot;, function($variable1, \Tina4\Response $response, \Tina4\Request $request) {
+      // Use the variables in your code or as the response
+      return $response($variable1, HTTP_OK, TEXT_HTML);
+  });</code>
+</pre>
+
+<p>
+<br/>
+
+mywebsite.com/starthere/3/nextlevel/5 will return 15
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+  
+&lt;?php
+    \Tina4\Get::add(&quot;/starthere/{variable1}/nextlevel/{variable2}&quot;, 
+    function($variable1, $variable2, \Tina4\Response $response, \Tina4\Request $request)) {
+      // Use the variables in your code or as the response
+      $product = $variable1 * $variable2;
+      return $response($product, HTTP_OK, TEXT_HTML);
+  });
+ </code>
+</pre>
+
+<p>
+<br/>
+
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_alert plugin_wrap" style="width: 100%;">
+<p>
+WARNING: Two routes with the same method, <strong>mywebsite.com/starthere/{variable1}</strong> and <strong>mywebsite.com/starthere/anotherroute</strong> are in danger of clashing. In this case it is important to declare the definitive route before the route with the variable. If the definitive route is declared after the variable, then “anotherroute” will end up in variable1 with almost certainly undesired results.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:9,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Path variables&quot;,&quot;hid&quot;:&quot;path_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1388-2679&quot;} -->
+<h3 class="sectionedit10 heading-combo" id="inline_variables">Inline Variables</h3>
+<div class="level3">
+
+<p>
+Variables can also be included as query parameters in the url. The Request object packages these up into the params array. So mywebsite.com/starthere?variable1=3&amp;variable2=5 will return 15
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  \Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+      // Variables are available from the params array
+      $variable1 = $request-&gt;params[&quot;variable1&quot;];
+      $variable2 = $request-&gt;params[&quot;variable2&quot;];
+      
+      $product = $variable1 * $variable2;
+      return $response($product, HTTP_OK, TEXT_HTML);
+  });
+ </code>
+</pre>
+
+<p>
+<br/>
+
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Inline Variables&quot;,&quot;hid&quot;:&quot;inline_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:10,&quot;range&quot;:&quot;2680-3287&quot;} -->
+<h3 class="sectionedit11 heading-combo" id="form_data">Form data</h3>
+<div class="level3">
+
+<p>
+Data posted from a form to a Post Route can be accessed from the Request data object. So a form submitted with two fields of a person&#039;s name “Joe” “Smith” will return “Hello Joe Smith”
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  \Tina4\Post::add(&quot;/endhere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+      // Variables are available from the params array
+      $firstName = $request-&gt;data-&gt;firstName;
+      $lastName = $request-&gt;data-&gt;lastName;
+      
+      $message = &quot;Hello &quot;. $firstName . &quot; &quot;. $lastName;
+      return $response($message, HTTP_OK, TEXT_HTML);
+  });</code>
+</pre>
+
+<p>
+<br/>
+
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Form data&quot;,&quot;hid&quot;:&quot;form_data&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:11,&quot;range&quot;:&quot;3288-3887&quot;} -->
+<h2 class="sectionedit12 heading-combo" id="securing_routes">Securing Routes</h2>
+<div class="level2">
+
+<p>
+Tina4 makes use of phpDoc blocks through the Annotation class. This in combination with the Auth class allows us to secure routes with a single line of code. The @secure enables the Tina4\Auth class, which will now require at least a formToken, or can even make use of custom Bearer tokens.
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  /**
+  * @secure
+  **/
+  \Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+      // Put all the code that you want to here
+      return $response(&quot;Hello Mars&quot;, HTTP_OK, TEXT_HTML);
+  });</code>
+</pre>
+
+<p>
+<br/>
+
+For more information on Tina4 Security please see the <a class="link-internal link-combo" data-wiki-id="tina4:auth" href="/doku.php?id=tina4:auth" title="Custom Auth">Reference Section on Tina4 Auth</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Securing Routes&quot;,&quot;hid&quot;:&quot;securing_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:12,&quot;range&quot;:&quot;3888-4572&quot;} -->
+<h2 class="sectionedit13 heading-combo" id="the_response_object">The Response Object</h2>
+<div class="level2">
+
+<p>
+The response object is an integral part of a Route. The Route object takes three parameters. Basic syntax is 
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+  $response($content, $httpCode, $contentType)</code>
+</pre>
+
+<p>
+<br/>
+
+The return from the Response object will always be a string, if the $content is an array or object it will be converted to a JSON or XML response.
+</p>
+
+<p>
+The httpCode is a standard HTTP Response Status Code.
+</p>
+
+<p>
+The contentType is a standard HTTP Mime Type, indicating what kind of content you are returning.
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:14,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<p>
+It is highly recommended to ALWAYS set both the <strong>$httpCode</strong> and the <strong>$contentType</strong> to ensure that your intentions are clear in terms of what kind of content you are sending and your view on it&#039;s relative success.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:15,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;The Response Object&quot;,&quot;hid&quot;:&quot;the_response_object&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:13,&quot;range&quot;:&quot;4573-5345&quot;} -->
+<h2 class="sectionedit16 heading-combo" id="ruth_-_legacy_routes">Ruth - Legacy Routes</h2>
+<div class="level2">
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:17,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap" style="width: 100%;">
+<p>
+This documentation is for Ruth, the legacy route mechanism. Please only use to maintain older projects
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:18,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+The basic syntax for Ruth Routes bear much resemblance to current Tina Routes.
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+   Ruth::addRoute(TINA4_GET, &quot;/hello/world&quot;, function(){
+      echo &quot;Hello World!&quot;;
+   });</code>
+</pre>
+
+<p>
+<br/>
+
+And also includes Path variables
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+   Ruth::addRoute(TINA4_GET, &quot;/content/{name}&quot;, function($name){
+      echo &quot;OK {$name}!&quot;;
+   });</code>
+</pre>
+
+<p>
+<br/>
+
+Ruth can also be used much like Tina, taking advantage of the Request and Response objects
+<br/>
+
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+   Ruth::get(&quot;/hello/world&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+       return $response (&quot;Hello World!&quot;, HTTP_OK, TEXT_HTML);
+   });
+    
+   Ruth::get(&quot;/hello/{name}&quot;, function($name, \Tina4\Response $response, \Tina4\Request $request) {
+       return $response (&quot;Hello {$name}!&quot;, HTTP_OK, TEXT_HTML);
+   });</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Ruth - Legacy Routes&quot;,&quot;hid&quot;:&quot;ruth_-_legacy_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:16,&quot;range&quot;:&quot;5346-&quot;} -->

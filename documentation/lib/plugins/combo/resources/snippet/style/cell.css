@@ -1,0 +1,3 @@
+/* p bottom margin of zero from the default stylesheet makes the first p touching the top of the background */
+.cell-combo  p:first-child { margin-top: 0; }
+.cell-combo  p:last-child { margin-bottom: 0; }

@@ -1,0 +1,9 @@
+====== Initialize a Tina4 project ======
+If you have just installed Tina4 with composer then you run this command in your IDE terminal:
+<code bash>
+   composer exec tina4 initialize:run
+</code>
+<WRAP center round info>
+Please note, this adds the necessary scripts to your composer.json file and will NOT work if you already have and index.php file. It will also create a **secrets** folder in your project repo which has they security keys used in Tina4. 
+</WRAP>
+   

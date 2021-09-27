@@ -1,0 +1,71 @@
+{
+    "id": "tina4:shape",
+    "date": "2021-09-02 16:13:42",
+    "metadata": {
+        "title": "Shape HTML",
+        "description": "Shape HTML\nHTML\nGenerate HTML with code",
+        "date_created": "2021-06-15 02:11:34",
+        "date_modified": "2021-06-15 02:11:34",
+        "age_creation": 79,
+        "age_modification": 79
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1
+        },
+        "chars_count": 49,
+        "edits_count": 1,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 1
+        },
+        "words_count": 6
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min",
+            "words_min"
+        ],
+        "scoring": {
+            "score": 6.25,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 0,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 0.25,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_min": "Add 44 words to get 10 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Failed"
+            }
+        }
+    }
+}

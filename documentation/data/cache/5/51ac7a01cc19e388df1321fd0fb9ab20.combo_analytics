@@ -1,0 +1,94 @@
+{
+    "id": "tina4:services",
+    "date": "2021-08-04 15:09:14",
+    "metadata": {
+        "title": "Tina4 Services",
+        "description": "Tina4 Services\n\nTina4 includes a way to define services that will run in the background. This allows you to execute code while without having to define CRON jobs. \n\nLet's create a service that sends messages. I'll outline the service bit here. Have a look at",
+        "h1": "Define your First Service",
+        "date_created": "2021-06-30 10:31:10",
+        "date_modified": "2021-06-30 11:05:11",
+        "age_creation": 35,
+        "age_modification": 35
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1,
+            "barco": 1
+        },
+        "chars_count": 1976,
+        "edits_count": 6,
+        "formatted": {
+            "1": {
+                "len": 70
+            },
+            "0": 88,
+            "2": {
+                "len": 18
+            }
+        },
+        "headers_count": {
+            "h1": 2,
+            "h2": 3
+        },
+        "internal_backlinks_count": 2,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "syntax_count": {
+            "combo_headingwiki": 5,
+            "section": 5,
+            "p": 6,
+            "combo_link": 1,
+            "wrap_divwrap": 4,
+            "combo_code": 5,
+            "strong": 2
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 156
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 20.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 1.5,
+                "internal_backlinks_count": 2,
+                "internal_links_count": 2,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,81 @@
+{
+    "date": "2021-09-23 16:24:15",
+    "metadata": {
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-04T06:55:56+02:00",
+        "date_published": null,
+        "description": "Query the database for some records\n\nWhat if you wanted to query a record in your Database? Using a SQL statement in your script, you can query a record . Here's an example:",
+        "h1": "Query the database for some records",
+        "name": "query-database",
+        "path": ":tina4:tutorials:query-database",
+        "title": "Query the database for some records",
+        "type": "article"
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1
+        },
+        "chars_count": 691,
+        "edits_count": 5,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 3,
+        "media": {
+            "total_count": 0,
+            "internal_count": 0,
+            "internal_broken_count": 0,
+            "external_count": 0
+        },
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 1,
+            "combo_code": 1
+        },
+        "word_count": 49
+    },
+    "quality": {
+        "message": "2 mandatory rules broken.",
+        "low": true,
+        "failed_mandatory_rules": [
+            "words_min",
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 9.25,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 0,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 1.25,
+                "internal_backlinks_count": 3,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_min": "Add 1 words to get 10 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Failed"
+            }
+        }
+    }
+}

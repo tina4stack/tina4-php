@@ -1,0 +1,168 @@
+
+<h1 class="sectionedit1 heading-combo" id="basic_api">Basic <abbr title="Application Programming Interface">API</abbr></h1>
+<div class="level1">
+
+<p>
+<iframe title=" 560,315 noscroll noborder centred|Basic API" src="https://www.youtube.com/embed/LP5hVFh2lDQ" style="width:98%; height:400px"></iframe>
+</p>
+
+<p>
+Follow the steps below if you need to create an <abbr title="Application Programming Interface">API</abbr> end point to define the interactions between multiple software. 
+</p>
+
+<p>
+The REST end point is easily added, with an anonymous method to handle the <strong>$request</strong>, the anonymous method should have the <strong>$response</strong> variable. The <strong>$request</strong> exposes more information which comes from the browser, in the case of parameters passed to it. You should always return the <strong>$response</strong> object: 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Basic API &quot;,&quot;hid&quot;:&quot;basic_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-553&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="step_1_-_create_api_file_sub-directories">Step 1 - Create <abbr title="Application Programming Interface">API</abbr> file &amp; sub-directories</h2>
+<div class="level2">
+
+<p>
+All your <abbr title="Application Programming Interface">API</abbr>&#039;s must be stored in the <abbr title="Application Programming Interface">API</abbr> directory. For this example we will make the files and sub-directories for “cars” and “characters”. 
+</p>
+
+<p>
+Now create php files inside those sub-directories (eg. name the file cars.php and the other characters.php).
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 1 - Create API file &amp; sub-directories&quot;,&quot;hid&quot;:&quot;step_1_-_create_api_file_sub-directories&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;554-863&quot;} -->
+<h2 class="sectionedit3 heading-combo" id="step_2_-_define_routes">Step 2 - Define routes</h2>
+<div class="level2">
+
+<p>
+Now that the <abbr title="Application Programming Interface">API</abbr> files has been created, we must define our Routes. There are various methods which can be used.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2 - Define routes&quot;,&quot;hid&quot;:&quot;step_2_-_define_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;864-1013&quot;} -->
+<h3 class="sectionedit4 heading-combo" id="get_method">GET Method</h3>
+<div class="level3">
+
+<p>
+In the cars.php file you created, add the following to the script:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+\Tina4\Get::add(&quot;/api/cars&quot;, function (\Tina4\Response $response) {
+
+    $cars = [&quot;Rolls Royce&quot;, &quot;Aston Martin&quot;, &quot;Bugatti&quot;];
+
+return $response ($cars, HTTP_OK, APPLICATION_JSON);
+});</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;GET Method&quot;,&quot;hid&quot;:&quot;get_method&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;1014-1312&quot;} -->
+<h3 class="sectionedit5 heading-combo" id="post_method">POST Method</h3>
+<div class="level3">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+\Tina4\Post::add(&quot;/api/characters&quot;, function (\Tina4\Response $response) {
+    $characters = [&quot;Clancy Gilroy&quot;, &quot;Peter Griffin&quot;, &quot;Broden Kelly&quot;];
+return $response ($characters, HTTP_OK, APPLICATION_JSON);
+});</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;POST Method&quot;,&quot;hid&quot;:&quot;post_method&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1313-1569&quot;} -->
+<h3 class="sectionedit6 heading-combo" id="other_methods">Other Methods</h3>
+<div class="level3">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+//Other methods you can test
+\Tina4\Post::add(...);
+
+\Tina4\Patch::add(...);
+
+\Tina4\Put::add(...);
+
+\Tina4\Delete::add(...);
+
+//You guessed it - It takes every method - GET, POST, DELETE, PUT, PATCH, OPTIONS
+\Tina4\Any::add(...);</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Other Methods&quot;,&quot;hid&quot;:&quot;other_methods&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1570-1852&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="step_3_-_annotate_api">Step 3 - Annotate <abbr title="Application Programming Interface">API</abbr></h2>
+<div class="level2">
+
+<p>
+Now we will need to annotate the end point we created. This will be a description of the end point which will be used in Swagger. Its as easy as adding the following lines above the end point you created:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3 - Annotate API &quot;,&quot;hid&quot;:&quot;step_3_-_annotate_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1853-2200&quot;} -->
+<h2 class="sectionedit8 heading-combo" id="step_4_-_test_api">Step 4 - Test <abbr title="Application Programming Interface">API</abbr></h2>
+<div class="level2">
+
+<p>
+Now we can test to check if our <abbr title="Application Programming Interface">API</abbr> is working. Spin up a Web-Server by running the following command in your IDE terminal:
+</p>
+<pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
+<code class="language-bash code-combo code-bash-combo">
+composer start</code>
+</pre>
+
+<p>
+Now that the Web-Serveris running, add <strong>/swagger</strong>to the <abbr title="Uniform Resource Locator">URL</abbr>:
+</p>
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-srcset="https://tina4.com/documentation/lib/exe/fetch.php?w=355&amp;h=23&amp;tok=7c89df&amp;media=tina4:api2.png 355w, https://tina4.com/documentation/lib/exe/fetch.php?w=556&amp;h=36&amp;tok=21fc0d&amp;media=tina4:api2.png 556w, https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api2.png 619w" data-placeholder-background="#fff" src="https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api2.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="40" width="619" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, 619px"/>
+</p>
+
+<p>
+A Swagger page will load and you will see the following which will include the data and annotations within the script created:
+</p>
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-srcset="https://tina4.com/documentation/lib/exe/fetch.php?w=355&amp;h=100&amp;tok=cc60f7&amp;media=tina4:api3.png 355w, https://tina4.com/documentation/lib/exe/fetch.php?w=556&amp;h=157&amp;tok=ea6e70&amp;media=tina4:api3.png 556w, https://tina4.com/documentation/lib/exe/fetch.php?w=748&amp;h=212&amp;tok=50ffdc&amp;media=tina4:api3.png 748w, https://tina4.com/documentation/lib/exe/fetch.php?w=972&amp;h=275&amp;tok=abd8dd&amp;media=tina4:api3.png 972w, https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api3.png 1916w" data-placeholder-background="#fff" src="https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api3.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="542" width="1916" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1916px"/>
+</p>
+
+<p>
+Next click on the <abbr title="Application Programming Interface">API</abbr> and then click on “Try It Out” button. Thereafter, click on the <strong>execute</strong> button:
+</p>
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-srcset="https://tina4.com/documentation/lib/exe/fetch.php?w=355&amp;h=27&amp;tok=87d857&amp;media=tina4:api5.png 355w, https://tina4.com/documentation/lib/exe/fetch.php?w=556&amp;h=42&amp;tok=e3a901&amp;media=tina4:api5.png 556w, https://tina4.com/documentation/lib/exe/fetch.php?w=748&amp;h=56&amp;tok=7c2bb6&amp;media=tina4:api5.png 748w, https://tina4.com/documentation/lib/exe/fetch.php?w=972&amp;h=73&amp;tok=965e03&amp;media=tina4:api5.png 972w, https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api5.png 1415w" data-placeholder-background="#fff" src="https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api5.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="106" width="1415" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1415px"/>
+</p>
+
+<p>
+You will see the following responses in the browser:
+</p>
+
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-srcset="https://tina4.com/documentation/lib/exe/fetch.php?w=355&amp;h=122&amp;tok=9364b3&amp;media=tina4:api6.png 355w, https://tina4.com/documentation/lib/exe/fetch.php?w=556&amp;h=191&amp;tok=966eb4&amp;media=tina4:api6.png 556w, https://tina4.com/documentation/lib/exe/fetch.php?w=748&amp;h=257&amp;tok=43cdf4&amp;media=tina4:api6.png 748w, https://tina4.com/documentation/lib/exe/fetch.php?w=972&amp;h=335&amp;tok=018efc&amp;media=tina4:api6.png 972w, https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api6.png 1630w" data-placeholder-background="#fff" src="https://tina4.com/documentation/lib/exe/fetch.php?media=tina4:api6.png" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" height="561" width="1630" sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1630px"/>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4 - Test API &quot;,&quot;hid&quot;:&quot;step_4_-_test_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;2201-2870&quot;} -->
+<h2 class="sectionedit9 heading-combo" id="conclusion">Conclusion</h2>
+<div class="level2">
+
+<p>
+You just created a basic <abbr title="Application Programming Interface">API</abbr> using Tina4. You are on your way to becoming a serious Code Ninja or Kunoichi. Please reach out to the developers if you have any questions or suggestions. 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Conclusion&quot;,&quot;hid&quot;:&quot;conclusion&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;2871-&quot;} -->

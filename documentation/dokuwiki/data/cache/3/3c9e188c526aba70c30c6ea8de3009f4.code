@@ -1,0 +1,3 @@
+<span class="kw1">echo</span> <span class="st_h">'The PHP version: '</span><span class="sy0">;</span>
+<span class="kw1">echo</span> <a href="http://www.php.net/phpversion"><span class="kw3">phpversion</span></a><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+<span class="kw1">echo</span> <span class="st_h">' (inline HTML)'</span><span class="sy0">;</span>

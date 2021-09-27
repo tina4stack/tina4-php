@@ -1,0 +1,156 @@
+/**
+ * This file provides styles for the edit view (?do=edit), preview
+ * and section edit buttons.
+ */
+
+/* edit view
+********************************************************************/
+
+.dokuwiki div.editBox {
+}
+
+.dokuwiki div.editBox button {
+	border:				#666 solid 1px;
+	border-radius:		0;
+	padding:			3pt 6pt;
+}
+
+#edbtn__save {
+	background-color:	#15395B;
+	color:				#FFF;
+}
+
+/*____________ toolbar ____________*/
+
+.dokuwiki div.toolbar {
+    display: inline-block;
+}
+#draft__status {
+    float: right;
+    color: @ini_text_alt;
+    background-color: inherit;
+}
+[dir=rtl] #draft__status {
+    float: left;
+}
+#tool__bar {
+    float: left;
+}
+[dir=rtl] #tool__bar {
+    float: right;
+}
+
+/* buttons inside of toolbar */
+.dokuwiki div.toolbar button.toolbutton {
+	margin:		0 1pt;
+}
+/* picker popups (outside of .dokuwiki) */
+div.picker {
+    width: 300px;
+    border: 1px solid #CCC;
+    background-color: #EEE;
+    color: inherit;
+}
+/* picker for headlines */
+div.picker.pk_hl {
+    width: auto;
+}
+
+/* buttons inside of picker */
+div.picker button.pickerbutton,
+div.picker button.toolbutton {
+    padding: .1em .35em;
+    border-width: 0;
+}
+
+/*____________ edit textarea ____________*/
+
+.dokuwiki textarea.edit {
+    width: 100%;
+    margin-bottom: .5em;
+	background-color: #EEE;
+	font-family: 'Source Code Pro',Menlo,Consolas,'Courier New',Courier,monospace;
+	font-size: 12pt;
+	line-height: 17pt;
+}
+
+/*____________ below the textarea ____________*/
+
+.dokuwiki div.editBar {
+    overflow: hidden;
+    margin-bottom: .5em;
+}
+
+/* size and wrap controls */
+#size__ctl {
+    float: right;
+}
+[dir=rtl] #size__ctl {
+    float: left;
+}
+#size__ctl img {
+    cursor: pointer;
+}
+
+/* edit buttons */
+.dokuwiki .editBar .editButtons {
+    display: inline;
+    margin-right: 1em;
+}
+[dir=rtl] .dokuwiki .editBar .editButtons {
+    margin-right: 0;
+    margin-left: 1em;
+}
+.dokuwiki .editBar .editButtons button {
+}
+
+/* summary input and minor changes checkbox */
+.dokuwiki .editBar .summary {
+    display: inline;
+}
+.dokuwiki .editBar .summary label {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.dokuwiki .editBar .summary label span {
+    vertical-align: middle;
+}
+.dokuwiki .editBar .summary input {
+}
+/* change background colour if summary is missing */
+.dokuwiki .editBar .summary input.missing {
+    color: @ini_text;
+    background-color: #ffcccc;
+}
+
+/* preview
+********************************************************************/
+
+.dokuwiki div.preview {
+    border: dotted #CCC;
+    border-width: .2em 0;
+    padding: 1.4em 0;
+    margin-bottom: 1.4em;
+}
+
+/* section edit buttons
+********************************************************************/
+
+/* .dokuwiki .secedit {
+    float: right;
+    margin-top: -1.4em;
+} */
+[dir=rtl] .dokuwiki .secedit {
+    float: left;
+}
+/*.dokuwiki .secedit button {
+    font-size: 75%;
+}*/
+
+/* style for section highlighting
+.dokuwiki div.section_highlight {
+    margin: 0 -1em;
+    padding: 0 .5em;
+    border: solid @ini_background_alt;
+    border-width: 0 .5em;
+} */

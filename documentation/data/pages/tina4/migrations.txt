@@ -1,0 +1,29 @@
+====== Migrations in Tina4 ======
+===== Create a table/migration =====
+You want to create a table for the database? Migrations are sequential [[https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_1001.htm|SQL statements]] which keep track of your [[tina4:database|database]] changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.
+
+**Windows**
+   c:\projectfolder\migrations\
+**Linux**
+   /home/username/Documents/projectfolder/migrations
+
+**Start up the built in web service** 
+<code bash>
+   composer start
+</code>
+Click on the following link to create a migration for your project
+
+<WRAP center round info>
+**Default Url**
+http://localhost:7145/migrate
+</WRAP>
+
+  * On this screen you can enter a description for your migration and then type in the SQL you want to run
+  * SQL statements should be separated by a ";"
+  * If you write a stored procedure or trigger then only one of those statements is allowed per migration
+  * You will be shown that the migration was created and a SQL file with the table you just created will be in the migration folder.  
+
+{{  :migrate.png?nolink&center  }}
+
+Migrations will be run every time you hit up the /migrate route of your project.
+

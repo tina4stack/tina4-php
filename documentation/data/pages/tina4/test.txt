@@ -1,0 +1,132 @@
+====== Tina4 Testing ======
+
+Tina4 has a built in testing system, to assist with test driven development. It utilizes both composer scripts and phpDoc Comments as part of the testing system. A wise Wizard once said, "If you cannot test your code, then why are you creating the piece of code it in the first place?"
+
+=== Declaring a test ===
+[[https://www.php.net/manual/en/language.types.declarations.php|Test declarations]] are included in the phpDoc Comments, and can be included above a function, class or class method. It includes two parts, the test declaration and then a list of tests. A test has two parts, the condition and then the message displayed, should there be a failure.
+
+<code php>
+<?php
+
+  /**
+  * @tests
+  * assert 1 === 1, This will always be true
+  * assert 2 === 2, This will also, always be true
+  */
+</code>
+
+== Synopsis of a test ==
+
+<code php>
+<?php
+
+   /**
+   * @tests
+   * Test declaration brackets infer calling numberAdd $a  $b  eval , Message to show when broken
+   * assert  ( 5, 5 )  ===  10, 5 + 5 should be 10 
+   **/
+   function numberAdd($a, $b) {
+   
+     return $a + $b;
+   } 
+</code>
+
+=== Running the tests ===
+
+Tests can be run from the terminal in your IDE, either using composer scripts, or a php command. The required composer scripts are built into your composer.json file when you ran the tina4 initialize. 
+
+The two lines in  your **composer.json** file of importance are:
+
+<code composer.json>
+{
+  "name": "andrevanzuydam/tina4php",
+  "description": "Tina4 PHP",
+  "license": "MIT",
+  "require": {
+    "twig/twig": "^1.3",
+    "phpfastcache/phpfastcache": "^7.0",
+    "coyl/git": "^0.1.7",
+    "ext-json": "*",
+    "nowakowskir/php-jwt": "^1.1",
+    "nlp-tools/nlp-tools": "^0.1.3",
+    "opis/closure": "^3.6"
+  },
+  "autoload": {
+    "classmap": [
+      "test": "@tina4 tests:run",
+      "test:verbose": "@tina4 tests:verbose",
+      ],
+</code>
+
+The tests can be called using either of these calls, with verbose giving a result for each test, as opposed to just a result for the set of tests under a **@tests**.
+
+<code bash>
+composer test
+composer test:verbose
+</code>
+
+=== Grouping tests ===
+ 
+Tests can be grouped to help simplify test results, especially when focusing in on an area of code under development. Test groups are declared by a comma delimited list:
+
+<code php>
+<?php
+
+   /**
+   * @tests Test1, another test, "Main group"
+   **/
+</code>
+
+and then called by appending one or more to the tests call:
+
+<code bash>
+composer test another test, Test1
+</code>
+
+This will return all the tests declared with either another test or Test1. 
+
+=== Formulating a basic test ===
+So the formulation of a basic test is made up of 
+  - The assert, to determine this is the start of a test.
+  - The (1,2) essentially is running the function with the variables given and then returning a value
+  - The returned value is then tested against the condition thus 3 === 3 so the test will pass.
+
+ <code php>
+ <?php
+  
+  /**
+   * Function to add two numbers together
+   * @param $num1
+   * @param $num2
+   * @return mixed
+   * @tests document
+   * assert (1, 2) === 3, The return can be tested with simple operators
+   **/
+
+class ExampleHelper extends \Tina4\Data
+  function addNumbers($num1, $num2){
+      return $num1 + $num2;
+    }
+}
+</code>
+
+So using verbose tests this will produce:
+
+<code>
+composer test:verbose
+</code>
+
+The test will start and you will see the following running in your IDE terminal: 
+<code bash>
+BEGINNING OF TESTS
+=====================================================
+Testing Function addnumbers
+# 1 addnumbers: Passed ((1, 2) == "3") 100%
+=====================================================
+END OF TESTS
+</code>
+
+=== Testing operators ===
+
+The following operators are available for use, and behave as expected in php
+==, ===, !=, !==, <=, >=, <, >

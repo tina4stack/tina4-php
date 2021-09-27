@@ -1,0 +1,32 @@
+a:44:{i:0;a:3:{i:0;s:14:"document_start";i:1;a:0:{}i:2;i:0;}i:1;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:2:{s:5:"level";i:1;s:12:"heading_text";s:25:"Create Modules with Tina4";}s:7:"context";s:7:"outline";s:8:"position";i:1;}i:2;i:1;i:3;s:6:"======";}i:2;i:1;}i:2;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:26:" Create Modules with Tina4";s:7:"context";N;}i:2;i:3;i:3;s:27:" Create Modules with Tina4 ";}i:2;i:7;}i:3;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:17:"combo_headingwiki";i:1;a:3:{s:5:"state";i:4;s:10:"attributes";a:1:{s:5:"level";i:1;}s:7:"context";s:7:"outline";}i:2;i:4;i:3;s:7:"======
+";}i:2;i:34;}i:4;a:3:{i:0;s:12:"section_open";i:1;a:1:{i:0;i:1;}i:2;i:1;}i:5;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:34;}i:6;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:42:"When creating your App or Website, we use ";}i:2;i:42;}i:7;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:84;}i:8;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:7:"modules";}i:2;i:86;}i:9;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:93;}i:10;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:123:" which contains one or more functions. Examples of modules can include libraries, your app or webpage and classes/objects. ";}i:2;i:95;}i:11;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:218;}i:12;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:218;}i:13;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:57:"For example, your system might need to deal with various ";}i:2;i:220;}i:14;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:277;}i:15;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:7:"modules";}i:2;i:279;}i:16;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:286;}i:17;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:311:" that deal with accounts, clients, deliveries, production etc. This is highly beneficial to your objects or interfaces as  modules makes this easier.  The benefits of breaking your system/app/webpage into smaller components or modules, is that it makes your system/app/webpage more efficient & interchangeable. ";}i:2;i:288;}i:18;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:599;}i:19;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:599;}i:20;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:124:"Develop your system as a normal Tina4 project, when you're done developing it, change your index to have the following code.";}i:2;i:601;}i:21;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:725;}i:22;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_code";i:1;a:2:{s:5:"state";i:1;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:9:"index.php";}}i:2;i:1;i:3;s:20:"<code php index.php>";}i:2;i:727;}i:23;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_code";i:1;a:4:{s:5:"state";i:3;s:7:"payload";s:501:"
+<?php
+\Tina4\Module::addModule("My Module", "1.0.0", "tina4cms", function(\Tina4\Config $config) {
+      global $DBA; //access the database
+      //All your things that need to run when you start
+      
+      if (!$DBA->tableExists("someTable")) {
+        (new \Tina4\Migration(__DIR__."/migrations"))->doMigration();
+      }
+      
+      //Add a twig function as Example
+       $config->addTwigFunction("render",  function ($content) {
+        return \Tina4\renderTemplate($content);
+      });
+}); 
+";s:7:"context";N;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:9:"index.php";}}i:2;i:3;i:3;s:501:"
+<?php
+\Tina4\Module::addModule("My Module", "1.0.0", "tina4cms", function(\Tina4\Config $config) {
+      global $DBA; //access the database
+      //All your things that need to run when you start
+      
+      if (!$DBA->tableExists("someTable")) {
+        (new \Tina4\Migration(__DIR__."/migrations"))->doMigration();
+      }
+      
+      //Add a twig function as Example
+       $config->addTwigFunction("render",  function ($content) {
+        return \Tina4\renderTemplate($content);
+      });
+}); 
+";}i:2;i:747;}i:24;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_code";i:1;a:2:{s:5:"state";i:4;s:10:"attributes";a:2:{s:4:"type";s:3:"php";s:9:"file-path";s:9:"index.php";}}i:2;i:4;i:3;s:7:"</code>";}i:2;i:1248;}i:25;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1248;}i:26;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:239:"Your module can now be included in any other Tina4 project that you would like to create. Tina4 is designed to make things as lightweight as possible. If you have any queries or suggestions please feel free to reach out to our Developers. ";}i:2;i:1256;}i:27;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:1495;}i:28;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:12:"wrap_divwrap";i:1;a:2:{i:0;i:1;i:1;s:17:"center round info";}i:2;i:1;i:3;s:24:"<WRAP center round info>";}i:2;i:1497;}i:29;a:3:{i:0;s:6:"p_open";i:1;a:0:{}i:2;i:1497;}i:30;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:55:"For more information on modules check out the topic of ";}i:2;i:1522;}i:31;a:3:{i:0;s:11:"strong_open";i:1;a:0:{}i:2;i:1577;}i:32;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:7:"modules";}i:2;i:1579;}i:33;a:3:{i:0;s:12:"strong_close";i:1;a:0:{}i:2;i:1586;}i:34;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:18:" by clicking this ";}i:2;i:1588;}i:35;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_link";i:1;a:4:{s:5:"state";i:1;s:10:"attributes";a:1:{s:3:"ref";s:49:"https://en.wikipedia.org/wiki/Modular_programming";}s:7:"context";s:7:"divwrap";s:7:"linkTag";s:1:"a";}i:2;i:1;i:3;s:51:"[[https://en.wikipedia.org/wiki/Modular_programming";}i:2;i:1606;}i:36;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_link";i:1;a:3:{s:5:"state";i:3;s:7:"payload";s:4:"link";s:7:"context";N;}i:2;i:3;i:3;s:5:"|link";}i:2;i:1657;}i:37;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:10:"combo_link";i:1;a:5:{s:5:"state";i:4;s:10:"attributes";a:1:{s:3:"ref";s:49:"https://en.wikipedia.org/wiki/Modular_programming";}s:7:"payload";s:0:"";s:7:"context";s:7:"divwrap";s:7:"linkTag";s:1:"a";}i:2;i:4;i:3;s:2:"]]";}i:2;i:1662;}i:38;a:3:{i:0;s:5:"cdata";i:1;a:1:{i:0;s:0:"";}i:2;i:1664;}i:39;a:3:{i:0;s:7:"p_close";i:1;a:0:{}i:2;i:1665;}i:40;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:12:"wrap_divwrap";i:1;a:2:{i:0;i:4;i:1;s:0:"";}i:2;i:4;i:3;s:7:"</WRAP>";}i:2;i:1665;}i:41;a:3:{i:0;s:13:"section_close";i:1;a:0:{}i:2;i:1672;}i:42;a:3:{i:0;s:6:"plugin";i:1;a:4:{i:0;s:15:"combo_analytics";i:1;a:3:{s:10:"attributes";a:7:{s:17:"combo_headingwiki";i:1;s:7:"section";i:1;s:1:"p";i:5;s:6:"strong";i:3;s:10:"combo_code";i:1;s:12:"wrap_divwrap";i:1;s:10:"combo_link";i:1;}s:7:"context";N;s:5:"state";i:5;}i:2;i:5;i:3;s:0:"";}i:2;N;}i:43;a:3:{i:0;s:12:"document_end";i:1;a:0:{}i:2;N;}}

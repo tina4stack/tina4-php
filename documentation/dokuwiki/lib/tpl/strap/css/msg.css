@@ -1,0 +1,17 @@
+/* The header tease
+ the message on the top of the page
+*/
+.header-tease {
+    background-color: darkturquoise;
+    color: #fff;
+    display: block;
+    font-weight: bold;
+    padding: 15px 20px;
+    text-align: center;
+}
+
+/* no padding as in container-fluid*/
+.container-tease {
+    margin-left: auto;
+    margin-right: auto;
+}

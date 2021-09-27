@@ -1,0 +1,93 @@
+{
+    "id": "tina4:tutorials:astronomy",
+    "date": "2021-07-26 13:52:00",
+    "metadata": {
+        "title": null,
+        "description": "Astronomy\n\n----------\n\nHello there. :-D  Last year (21 December 2020) Two of our biggest planets in our solar system were at their closest!! Jupiter and Saturn \ud83e\ude90\ud83e\ude90 were be VISIBLE!! This is known as The Great Conjunction. This is something which last occurred in 1623. According to NASA and the South African Space Observatory, these two giant planets could be seen with the naked eye. Unfortunately for most of the country, it was a very rainy and cloudy day that day, so we could not see the planets\u2026",
+        "date_created": "2021-06-28 10:13:12",
+        "date_modified": "2021-06-28 01:29:00",
+        "age_creation": 28,
+        "age_modification": 28
+    },
+    "statistics": {
+        "authors": {
+            "sidney": 1
+        },
+        "chars_count": 1827,
+        "edits_count": 9,
+        "formatted": {
+            "1": {
+                "len": 9,
+                "multiformat": 1
+            },
+            "0": 23,
+            "2": {
+                "len": 6
+            },
+            "3": {
+                "len": 8
+            }
+        },
+        "hr": 1,
+        "internal_backlinks_count": 1,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
+        "syntax_count": {
+            "p": 5,
+            "strong": 3,
+            "underline": 1,
+            "monospace": 1,
+            "combo_media": 10,
+            "wrap_divwrap": 1,
+            "wrap_spanwrap": 1,
+            "table": 1,
+            "tablethead": 1,
+            "tablerow": 10,
+            "tableheader": 2,
+            "tablecell": 18,
+            "combo_link": 1
+        },
+        "words_count": 161
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 16.25,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 0,
+                "description_present": 0,
+                "edits_count": 2.25,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 1,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "outline_structure": "Add headings to create a document outline for 3 points"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Failed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,37 @@
+<span class="kw2">&lt;?php</span>
+&nbsp;
+&nbsp;
+<span class="kw2">class</span> MessengerService <span class="kw2">extends</span> \Tina4\Process <span class="kw2">implements</span> \Tina4\ProcessInterface 
+<span class="br0">&#123;</span>
+&nbsp;
+    <span class="kw2">public</span> string <span class="re0">$name</span> <span class="sy0">=</span> <span class="st0">&quot;My Service&quot;</span><span class="sy0">;</span>
+&nbsp;
+    <span class="kw2">function</span> run <span class="br0">&#40;</span><span class="br0">&#41;</span> 
+    <span class="br0">&#123;</span>
+        <span class="kw1">echo</span> <span class="st0">&quot;Sending Messages&quot;</span><span class="sy0">;</span>
+        <span class="re0">$messages</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">New</span> MessageQueue<span class="br0">&#41;</span><span class="sy0">-&gt;</span><span class="me1">load</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+        <span class="kw1">foreach</span> <span class="br0">&#40;</span><span class="re0">$messages</span> <span class="kw1">as</span> <span class="re0">$message</span><span class="br0">&#41;</span>
+        <span class="br0">&#123;</span>
+          <span class="co1">// Send messages</span>
+        <span class="br0">&#125;</span>
+&nbsp;
+&nbsp;
+    <span class="br0">&#125;</span>
+&nbsp;
+    <span class="kw2">function</span> canRun<span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">:</span> bool
+    <span class="br0">&#123;</span>
+       <span class="re0">$haveMessages</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">New</span> MessageQueue<span class="br0">&#41;</span><span class="sy0">-&gt;</span><span class="me1">load</span><span class="br0">&#40;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+&nbsp;
+       <span class="kw1">if</span> <span class="br0">&#40;</span><span class="re0">$haveMessages</span><span class="br0">&#41;</span>
+       <span class="br0">&#123;</span>
+          <span class="co1">//We have email messages queued, let the task run</span>
+          <span class="kw1">return</span> <span class="kw4">true</span><span class="sy0">;</span>
+       <span class="br0">&#125;</span>
+       <span class="kw1">else</span>
+       <span class="br0">&#123;</span>
+          <span class="co1">//We have no messages queued</span>
+          <span class="kw1">return</span> <span class="kw4">false</span><span class="sy0">;</span>
+       <span class="br0">&#125;</span>
+<span class="br0">&#125;</span>

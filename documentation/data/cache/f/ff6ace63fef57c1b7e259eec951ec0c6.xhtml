@@ -1,0 +1,36 @@
+
+<h1 class="sectionedit1 heading-combo" id="tina4_custom_authentication">Tina4 &amp; Custom Authentication</h1>
+<div class="level1">
+
+<p>
+Tina4 makes use of OpenSLL to assist with various security <strong>$requests</strong> and <strong>$responses</strong>. You can make use to this by adding  <strong>{ { “tokenName” | formToken | raw } }</strong>  within your form tokens. This way you can ensure data between users and the servers are secure. 
+</p>
+
+<p>
+This security method ensures that the Clients <strong>token</strong> authenticates them on a Server, allowing them to continue on your webpage. This is done to avoid any data risk or breaches as the information between the User and the Server is confidential and important.
+</p>
+
+<p>
+This method checks that the token, exact time-stamps and time-zones are exactly accurate to gain access to the Server/Database. 
+</p>
+<pre class="code-container-combo code-container-twig-combo" data-download-link="true" data-src="file.twig">
+<code class="language-twig code-combo code-twig-combo">
+&lt;div class=&quot;form-group&quot;&gt;
+       &lt;div class=&quot;row&quot;&gt;
+            &lt;div class=&quot;col-md-4 col-sm-12&quot;&gt;
+                  &lt;input id=&quot;firstName&quot; type=&quot;name&quot; name=&quot;firstName&quot; placeholder=&quot;Enter your Name&quot; class=&quot;form-control&quot; for=&quot;firstName&quot; &gt;
+           &lt;/div&gt;
+          &lt;div class=&quot;col-md-4 col-sm-12&quot;&gt;
+               &lt;input id=&quot;lastName&quot; type=&quot;name&quot; name=&quot;lastName&quot; placeholder=&quot;Enter your Last Name&quot; class=&quot;form-control&quot; for=&quot;lastName&quot;&gt;
+         &lt;/div&gt;
+     &lt;/div&gt;   
+&lt;/div&gt;
+&lt;div class=&quot;form-group&quot;&gt;
+    &lt;button class=&quot;btn-primary rounded&quot; value=&quot;send&quot; type=&quot;submit&quot; name=&quot;submit&quot;&gt;Send&lt;/button&gt;
+    &lt;button class=&quot;btn-primary rounded&quot; value=&quot;reset&quot; type=&quot;reset&quot; name=&quot;submit&quot;&gt;Reset&lt;/button&gt;
+&lt;/div&gt;
+    {{ &quot;tokenName&quot; | formToken | raw }}
+&lt;/form&gt;</code>
+</pre>
+
+</div>

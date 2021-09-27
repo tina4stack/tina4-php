@@ -1,0 +1,75 @@
+
+<h1 class="sectionedit1 heading-combo" id="orm">ORM</h1>
+<div class="level1">
+
+<p>
+The <a class="link-external link-combo" href="https://en.wikipedia.org/wiki/Object-relational_mapping" rel="noopener" target="target=_blank">ORM</a> in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.
+</p>
+
+<p>
+ORM is used to map object relations and how they interact with each other, for your app/webpage/system.  
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;ORM&quot;,&quot;hid&quot;:&quot;orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-374&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="save_a_record_using_the_orm">Save a record using the ORM</h2>
+<div class="level2">
+
+<p>
+It is required to extend the <strong>\Tina4\ORM</strong> class to make the magic happen.
+</p>
+
+<p>
+<strong> Examples:</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example.php" data-download-link-label="Download orm-example.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+//we need a class extending the ORM
+class User extends \Tina4\ORM { //assumes we have a table user in the database
+    public $id; //primary key because it is first
+    public $name; //some additional data
+}   
+
+$user = (new User());
+$user-&gt;name = &quot;Test Save&quot;;
+$user-&gt;save();
+
+
+//We want the table to be made for us
+class NewTable extends \Tina4\ORM { 
+    //will be created as newtable in the database
+    /**
+    *  @var id integer auto_increment  
+    **/
+    public $id; //primary key because it is first
+    /**
+    *  @var varchar(100) default 'Default Name'
+    **/
+    public $name; //some additional data
+} 
+
+
+$newTable = (new NewTable());
+$newTable-&gt;name = &quot;Test Save&quot;;
+$user-&gt;save();
+
+//How about some thing else
+
+$newTable = (new NewTable('{&quot;name&quot;:&quot;TEST&quot;}'));
+$newTable-&gt;save();
+
+//Or something else
+
+$fields = [&quot;name&quot; =&gt; &quot;Testing&quot;];
+$newTable = (new NewTable($fields));
+$newTable-&gt;save();
+
+//Or something else - request variable should obviously 
+//contain fields that match the class declared
+$newTable = (new NewTable($_REQUEST));
+$newTable-&gt;save();</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Save a record using the ORM&quot;,&quot;hid&quot;:&quot;save_a_record_using_the_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;375-&quot;} -->

@@ -1,0 +1,157 @@
+
+<h1 class="sectionedit1" id="first_steps">First Steps</h1>
+<div class="level1">
+
+<p>
+Please note for Tina4 to smoothly and effectively and all round just work, there are some prerequisites that your system may need:
+</p>
+<ul>
+<li class="level1"><div class="li"> IDE tool</div>
+</li>
+<li class="level1"><div class="li"> PHP 5.4 or higher</div>
+</li>
+<li class="level1"><div class="li"> Docker / if you are using windows</div>
+</li>
+<li class="level1"><div class="li"> Composer</div>
+</li>
+<li class="level1"><div class="li"> OpenSSl</div>
+</li>
+<li class="level1"><div class="li"> Setup .env file</div>
+</li>
+<li class="level1"><div class="li"> Add PHP and OpenSSl to your devices Environmental Variables</div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;First Steps&quot;,&quot;hid&quot;:&quot;first_steps&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-342&quot;} -->
+<h1 class="sectionedit2" id="docker">Docker</h1>
+<div class="level1">
+
+<p>
+<a href="https://www.docker.com/" class="media" title="https://www.docker.com/" rel="ugc nofollow"><img src="/documentation/lib/exe/fetch.php?w=80&amp;tok=cebd79&amp;media=docker.png" class="media" alt="" width="80" /></a>
+</p>
+
+<p>
+Make sure you have a <strong>project folder</strong> to work with first then run the following commands in that folder from the terminal or shell.
+</p>
+
+<p>
+If you have <a href="/documentation/doku.php?id=installing_docker" class="wikilink1" title="installing_docker" data-wiki-id="installing_docker">docker installed</a> already then this is the quickest way to see the magic
+</p>
+
+<p>
+<a href="/documentation/lib/exe/detail.php?id=start&amp;media=linux_logo.jpg" class="media" title="linux_logo.jpg"><img src="/documentation/lib/exe/fetch.php?w=70&amp;tok=51f3ce&amp;media=linux_logo.jpg" class="media" title=" Linux" alt=" Linux" width="70" /></a>   <a href="/documentation/lib/exe/detail.php?id=start&amp;media=mac.jpg" class="media" title="mac.jpg"><img src="/documentation/lib/exe/fetch.php?w=70&amp;tok=52683c&amp;media=mac.jpg" class="media" title=" Mac" alt=" Mac" width="70" /></a>
+</p>
+<pre class="code bash">docker run <span class="re5">-v</span> $<span class="br0">&#40;</span><span class="kw3">pwd</span><span class="br0">&#41;</span>:<span class="sy0">/</span>app tina4stack<span class="sy0">/</span>php composer require tina4stack<span class="sy0">/</span>tina4php
+docker run <span class="re5">-v</span> $<span class="br0">&#40;</span><span class="kw3">pwd</span><span class="br0">&#41;</span>:<span class="sy0">/</span>app tina4stack<span class="sy0">/</span>php composer <span class="kw3">exec</span> tina4 initialize:run
+docker run <span class="re5">-v</span> $<span class="br0">&#40;</span><span class="kw3">pwd</span><span class="br0">&#41;</span>:<span class="sy0">/</span>app -p7145:<span class="nu0">7145</span> tina4stack<span class="sy0">/</span>php composer start  </pre>
+
+<p>
+<a href="/documentation/lib/exe/detail.php?id=start&amp;media=windows_logo.png" class="media" title="windows_logo.png"><img src="/documentation/lib/exe/fetch.php?w=200&amp;tok=8fd63f&amp;media=windows_logo.png" class="media" title=" Windows" alt=" Windows" width="200" /></a>
+</p>
+<pre class="code bash">docker run <span class="re5">-v</span> <span class="sy0">%</span>cd<span class="sy0">%</span>:<span class="sy0">/</span>app tina4stack<span class="sy0">/</span>php composer require tina4stack<span class="sy0">/</span>tina4php
+docker run <span class="re5">-v</span> <span class="sy0">%</span>cd<span class="sy0">%</span>:<span class="sy0">/</span>app tina4stack<span class="sy0">/</span>php composer <span class="kw3">exec</span> tina4 initialize:run
+docker run <span class="re5">-v</span> <span class="sy0">%</span>cd<span class="sy0">%</span>:<span class="sy0">/</span>app -p7145:<span class="nu0">7145</span> tina4stack<span class="sy0">/</span>php composer start  </pre>
+
+<p>
+You should be able to browse to <a href="http://localhost:7145" class="urlextern" title="http://localhost:7145" rel="ugc nofollow">http://localhost:7145</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Docker&quot;,&quot;hid&quot;:&quot;docker&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;343-1287&quot;} -->
+<h2 class="sectionedit3" id="dockerless">Dockerless</h2>
+<div class="level2">
+
+<p>
+We assume you have the following software installed
+</p>
+<ul>
+<li class="level1"><div class="li"> PHP7.4 or greater with the minimum required extensions - <a href="/documentation/doku.php?id=guides:install:php" class="wikilink1" title="guides:install:php" data-wiki-id="guides:install:php">Learn how to install PHP  here</a></div>
+</li>
+<li class="level1"><div class="li"> Composer2 - <a href="/documentation/doku.php?id=guides:install:composer" class="wikilink1" title="guides:install:composer" data-wiki-id="guides:install:composer">Learn how to install composer here</a></div>
+</li>
+<li class="level1"><div class="li"> OpenSSL - - <a href="/documentation/doku.php?id=guides:install:openssl" class="wikilink1" title="guides:install:openssl" data-wiki-id="guides:install:openssl">Learn how to install OpenSSL here</a></div>
+</li>
+</ul>
+
+<p>
+Running the following commands from your project folder will get you started
+</p>
+<pre class="code sh">composer require tina4stack/tina4php
+composer exec tina4 initialize:run
+composer start</pre>
+
+<p>
+You should be able to browse to <a href="http://localhost:7145" class="urlextern" title="http://localhost:7145" rel="ugc nofollow">http://localhost:7145</a>
+</p>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_important plugin_wrap">
+<p>
+Should you experience any problems please visit the <a href="/documentation/doku.php?id=trouble:install" class="wikilink1" title="trouble:install" data-wiki-id="trouble:install">Installation Problems Troubleshooting</a> page.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:5,&quot;range&quot;:&quot;0-&quot;} --><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:6,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+It can sometimes be frustrating to wait for the release. Install the bleeding edge
+</p>
+<pre class="code">  composer require tina4stack/tina4php:dev-master</pre>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} --><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<p>
+Tina4 is at release candidate phase
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:9,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Dockerless&quot;,&quot;hid&quot;:&quot;dockerless&quot;,&quot;codeblockOffset&quot;:2,&quot;secid&quot;:3,&quot;range&quot;:&quot;1288-2280&quot;} -->
+<h1 class="sectionedit10" id="composer">Composer</h1>
+<div class="level1">
+
+<p>
+<a href="https://getcomposer.org/" class="media" title="https://getcomposer.org/" rel="ugc nofollow"><img src="/documentation/lib/exe/fetch.php?w=60&amp;tok=9f139f&amp;media=composer.png" class="media" alt="" width="60" /></a>
+</p>
+
+<p>
+If you have composer already installed, you should be able to run the following from your project folder
+</p>
+<pre class="code bash">composer require tina4stack<span class="sy0">/</span>tina4php
+composer <span class="kw3">exec</span> tina4 initialize:run
+composer start</pre>
+
+<p>
+Please don&#039;t forget to star our repository on Github  <a href="https://github.com/tina4stack/tina4-php" class="urlextern" title="https://github.com/tina4stack/tina4-php" rel="ugc nofollow">https://github.com/tina4stack/tina4-php</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Composer&quot;,&quot;hid&quot;:&quot;composer&quot;,&quot;codeblockOffset&quot;:3,&quot;secid&quot;:10,&quot;range&quot;:&quot;2281-2665&quot;} -->
+<h2 class="sectionedit11" id="key_concepts">Key Concepts</h2>
+<div class="level2">
+
+<p>
+This is 1000 foot overview of what&#039;s included with Tina4
+</p>
+<ul>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:introduction:directories" class="wikilink1" title="tina4:introduction:directories" data-wiki-id="tina4:introduction:directories">Suggested Directory Structure</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:routing" class="wikilink1" title="tina4:routing" data-wiki-id="tina4:routing">Routing</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:database" class="wikilink1" title="tina4:database" data-wiki-id="tina4:database">Database</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:migrations" class="wikilink1" title="tina4:migrations" data-wiki-id="tina4:migrations">Migrations</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:orm" class="wikilink1" title="tina4:orm" data-wiki-id="tina4:orm">ORM</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:templates" class="wikilink1" title="tina4:templates" data-wiki-id="tina4:templates">Templates</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:api" class="wikilink1" title="tina4:api" data-wiki-id="tina4:api">Create an API endpoint</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:openapiswagger" class="wikilink1" title="tina4:openapiswagger" data-wiki-id="tina4:openapiswagger">OpenAPI &amp; Swagger UI</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:modules" class="wikilink1" title="tina4:modules" data-wiki-id="tina4:modules">Create Modules with Tina4</a></div>
+</li>
+<li class="level1"><div class="li"> <a href="/documentation/doku.php?id=tina4:routes:api" class="wikilink1" title="tina4:routes:api" data-wiki-id="tina4:routes:api">API</a></div>
+</li>
+</ul>
+
+<p>
+<a href="https://docs.google.com/forms/d/e/1FAIpQLSdrapVxI-19DapgKKuhtlLyPc99SLg8Re2Lpn3PS_K0M2Rc7w/viewform" class="urlextern" title="https://docs.google.com/forms/d/e/1FAIpQLSdrapVxI-19DapgKKuhtlLyPc99SLg8Re2Lpn3PS_K0M2Rc7w/viewform" rel="ugc nofollow">Join our Slack Channel to participate and receive all the latest builds</a>
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Key Concepts&quot;,&quot;hid&quot;:&quot;key_concepts&quot;,&quot;codeblockOffset&quot;:4,&quot;secid&quot;:11,&quot;range&quot;:&quot;2666-&quot;} -->

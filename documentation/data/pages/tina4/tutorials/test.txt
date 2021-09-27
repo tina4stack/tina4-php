@@ -1,0 +1,68 @@
+<WRAP center round box >
+====== Sidney Ramphalile ======
+
+</WRAP>
+
+
+----
+
+
+
+{{:tina4:tutorials:sidney.jpg?200|}}
+
+
+**Hello, world!** Welcome to my first DokuWiki page. I am learning Markup on Dokuwiki. 8-)
+
+
+----
+
+
+<wrap em>I am also available Here:</wrap> 
+
+[[https://www.linkedin.com/in/sidney-ramphalile/|LinkedIn]]
+
+
+[[https://github.com/SidneyRamphalile|GitHub]]
+
+
+----
+
+
+==== My name is Sidney and here is a little information about me. ====
+===== Hobbies =====
+  * [[Playing the acoustic guitar]]
+  * [[Baking]]
+  * [[Cooking]]
+  * [[Doing Online Courses]]
+  * [[Astronomy]]
+===== Friends In Business=====
+  * **Barco**
+
+{{:tina4:tutorials:barco.jpg?200| Barco}}
+
+  * **Andre**
+
+{{:tina4:tutorials:andre.jpg?200| Andre}}
+
+
+  * **Justin**
+
+{{:tina4:tutorials:justin.jpg?200| Justin}}
+
+
+
+
+
+
+
+<WRAP center round info 60%>
+Below is a Table of Periodic Element names converted to their scientific names and symbols:
+</WRAP>
+
+
+^ Element Name     ^ Scientific Name ^ Symbol           ^
+| Water          | Dihydrogen Monoxide  | H<sub>2</sub>O     |
+| Table Salt     | Sodium Chloride      | NaCl               |
+
+
+

@@ -1,0 +1,75 @@
+{
+    "id": "tina4:tutorials:beginner:beginner:post-form-data",
+    "date": "2021-08-16 12:30:23",
+    "metadata": {
+        "title": "Posting form data",
+        "description": "Posting form data\n\nWhen creating a form for a user to complete, we use the <https:\/\/en.wikipedia.org\/wiki\/POST_(HTTP)> method to secure the data that is sent to  a server\/database. \n\nYou need a form key to post to a Tina4 Post route. This is easy to add to into your <https:\/\/twig.symfony.com\/doc\/3.x\/> or <https:\/\/html.com>HTML form:\n\nIn code the token is also available as :",
+        "date_created": "2021-06-15 11:32:52",
+        "date_modified": "2021-07-06 03:53:07",
+        "age_creation": 62,
+        "age_modification": 41
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1,
+            "andre": 1
+        },
+        "chars_count": 734,
+        "edits_count": 12,
+        "external_links_count": 3,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "internal_links_count": 1,
+        "internal_links_distance": {
+            "avg": 3,
+            "max": 3,
+            "min": 3
+        },
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 4,
+            "combo_link": 4,
+            "combo_code": 3
+        },
+        "words_count": 74
+    },
+    "quality": {
+        "low": false,
+        "scoring": {
+            "score": 20,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 3,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 1,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "3 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Passed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

@@ -1,0 +1,70 @@
+{
+    "id": "tina4:tutorials:exlude-fields-from-rest-api-results",
+    "date": "2021-08-17 11:54:03",
+    "metadata": {
+        "title": "Exclude some fields from being displayed on REST result or query",
+        "description": "Exclude some fields from being displayed on REST result or query\n\nLets say you want to exclude a field from the database. Using SQL statements in your script, you can exclude a record. \n\nHere's an example:",
+        "date_created": "2021-08-04 03:55:36",
+        "date_modified": "2021-08-17 11:54:03",
+        "age_creation": 13,
+        "age_modification": 0
+    },
+    "statistics": {
+        "authors": {
+            "clayton": 1
+        },
+        "chars_count": 726,
+        "edits_count": 3,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 2,
+            "combo_code": 1
+        },
+        "words_count": 86
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 16.75,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 0.75,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "4 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

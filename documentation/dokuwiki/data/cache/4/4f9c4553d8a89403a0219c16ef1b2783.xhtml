@@ -1,0 +1,103 @@
+
+<h1 class="sectionedit1 heading-combo" id="create_a_basic_route">Create a basic route</h1>
+<div class="level1">
+
+<p>
+Every time an User  goes to a link or new page, this can be referred to as they are being directed to a path. With Tina4, creating a route is as easy as naming your route path and including a $response and $request variable as your various functions.
+</p>
+
+<p>
+The route on the default config <strong><a href="http://localhost:7145/starthere" class="urlextern" target="target=_blank" title="http://localhost:7145/starthere" rel="ugc nofollow noopener">http://localhost:7145/starthere</a></strong> would be coded as below.
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+  \Tina4\Get::add(&quot;/starthere&quot;, 
+  function(\Tina4\Response $response, \Tina4\Request $request)
+  {
+      // Put all the code that you want to here
+      return $response(&quot;Hello Mars&quot;);
+  });</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_important plugin_wrap">
+<p>
+The Router object is designed to work with the Response object. It is highly recommended to include the Response object in every route.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+Below are some of the other features available with Routes.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Create a basic route&quot;,&quot;hid&quot;:&quot;create_a_basic_route&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-836&quot;} -->
+<h2 class="sectionedit4 heading-combo" id="route_methods">Route methods</h2>
+<div class="level2">
+
+<p>
+<em class="u">This is one way to add Get route with Tina 4.</em>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Get::add(&quot;/yourstuff&quot;, 
+function(\Tina4\Response $response, \Tina4\Request $request)
+{
+    // Put all the code that you want to here
+    return $response(&quot;Hello Mars&quot;);
+});</code>
+</pre>
+
+<p>
+<em class="u">This is one way to add Post route with Tina 4.</em>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+\Tina4\Post::add(&quot;/yourstuff&quot;, 
+function(\Tina4\Response $response, \Tina4\Request $request)
+{
+    // Put all the code that you want to here
+    return $response(&quot;Hello Mars&quot;);
+});</code>
+</pre>
+
+<p>
+Numerous Route methods are available, based around the common <abbr title="Application Programming Interface">API</abbr> routing methods such as <a class="link-external link-combo" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/GET" rel="noopener" target="target=_blank">GET</a>, <a class="link-external link-combo" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/POST" rel="noopener" target="target=_blank">POST</a>, etc. 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Route methods&quot;,&quot;hid&quot;:&quot;route_methods&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;837-1617&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="including_variables">Including variables</h2>
+<div class="level2">
+
+<p>
+There are three different ways to include variables in Routes, in which the inclusion of the \Tina4\Request &amp; \Tina4\Repsonse object is required. 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Including variables&quot;,&quot;hid&quot;:&quot;including_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1618-1798&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="securing_routes">Securing Routes</h2>
+<div class="level2">
+
+<p>
+Routes can easily be secured to take advantage of the Tina4\Auth object.
+</p>
+
+<p>
+Another method of securing your Routes is annotating them with the “@secure” tag:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+/**
+*@secure
+**/
+&lt;!-- Your Code Here --&gt;</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
+<p>
+For more in depth information about using Routes, please see the <a class="link-internal link-combo" data-wiki-id="tina4:routing" href="/doku.php?id=tina4:routing" title="Routing in Tina4">Routing Reference Section</a>
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Securing Routes&quot;,&quot;hid&quot;:&quot;securing_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;1799-&quot;} -->

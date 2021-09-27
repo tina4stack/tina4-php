@@ -1,0 +1,42 @@
+&lt;?php
+&lt;head&gt; 
+ &lt;script type=&quot;text/javascript&quot; src=&quot;/src/public/js/tina4helper.js&quot;&gt;&lt;/script&gt;
+&lt;/head&gt;
+&nbsp;
+&lt;button onclick=&quot;loadPage('/api/users', 'content')&quot;&gt;
+&lt;div id=&quot;message&quot;&gt;&lt;/div&gt;
+&nbsp;
+&lt;form id=&quot;user&quot; enctype=&quot;multipart/form-data&quot; xmlns=&quot;http://www.w3.org/1999/html&quot;&gt;
+    &lt;div class=&quot;row&quot;&gt;
+        &lt;div class=&quot;form-group col-md-6&quot;&gt;
+            &lt;label for=&quot;forename&quot;&gt;First Name&lt;/label&gt;
+            &lt;input class=&quot;form-control&quot; type=&quot;text&quot; name=&quot;forename&quot; placeholder=&quot;First Name&quot;
+                   value=&quot;{{ data.firstName }}&quot;&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;form-group col-md-6&quot;&gt;
+            &lt;label for=&quot;surname&quot;&gt;Last Name&lt;/label&gt;
+            &lt;input class=&quot;form-control&quot; type=&quot;text&quot; name=&quot;surname&quot; placeholder=&quot;Last Name&quot; value=&quot;{{ data.surname }}&quot;&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;form-group col-md-12&quot;&gt;
+            &lt;label for=&quot;emailAddress&quot;&gt;Email&lt;/label&gt;
+            &lt;input class=&quot;form-control&quot; type=&quot;text&quot; name=&quot;emailAddress&quot; placeholder=&quot;Email Address&quot; value=&quot;{{ data.emailAddress }}&quot;&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;form-group col-md-6&quot;&gt;
+            &lt;label for=&quot;userName&quot;&gt;Username&lt;/label&gt;
+            &lt;input class=&quot;form-control&quot; type=&quot;text&quot; name=&quot;userName&quot; placeholder=&quot;Username&quot; value=&quot;{{ data.userName }}&quot;&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;form-group col-md-6&quot;&gt;
+            &lt;label for=&quot;password&quot;&gt;Password&lt;/label&gt;
+            &lt;input class=&quot;form-control&quot; type=&quot;password&quot; name=&quot;password&quot; placeholder=&quot;Password&quot; value=&quot;&quot;&gt;
+        &lt;/div&gt;
+    {{  &quot;user&quot; | formToken | raw }}
+&lt;/form&gt;
+&nbsp;
+&lt;script&gt;
+    //Prevent form from reloading the page
+    jQuery(document).ready(function() {
+        $(&quot;#user&quot;).on().submit(function(e) {
+            return false;
+        });
+    });
+&lt;/script&gt;

@@ -1,0 +1,17 @@
+====== Add my own filters to twig ======
+If you need to add your own filters in Twig you use the config passed to Tina4Php on running Tina4 in the **index.php** file. 
+
+Here's an example:
+
+<code php>
+<?php
+require "vendor/autoload.php";
+
+$config = \Tina4\Config();
+
+$config->addFilter("myFilter", function ($name) {
+    return str_shuffle($name);
+});
+
+echo (new \Tina4\Tina4Php($config));
+</code>

@@ -1,0 +1,56 @@
+
+<h1 class="sectionedit1 heading-combo" id="docker_installation">Docker installation</h1>
+<div class="level1">
+
+<p>
+Tina4PHP comes with a Docker file configured will all the dependencies you need
+You will first need to <a class="link-external link-combo" href="https://docs.docker.com/get-docker/" rel="noopener" target="target=_blank">install</a> the Docker environment for your operating system before running the following commands 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Docker installation&quot;,&quot;hid&quot;:&quot;docker_installation&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-275&quot;} -->
+<h1 class="sectionedit2 heading-combo" id="whats_in_the_docker">Whats in the docker</h1>
+<div class="level1">
+<ul>
+<li class="level1"><div class="li"> Composer support</div>
+</li>
+<li class="level1"><div class="li"> All the extensions needed to run Tina4Php</div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Whats in the docker&quot;,&quot;hid&quot;:&quot;whats_in_the_docker&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;276-379&quot;} -->
+<h1 class="sectionedit3 heading-combo" id="starting_with_tina4php">Starting with Tina4Php</h1>
+<div class="level1">
+
+<p>
+if you have docker installed already then this is the quickest way to see the magic
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+docker run -v $(pwd):/app tina4stack/php composer require tina4stack/tina4php
+docker run -v $(pwd):/app tina4stack/php composer exec tina4 initialize:run
+docker run -v $(pwd):/app -p7145:7145 tina4stack/php composer start  </code>
+</pre>
+
+<p>
+On windows run the following
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+docker run -v %cd%:/app tina4stack/php composer require tina4stack/tina4php
+docker run -v %cd%:/app tina4stack/php composer exec tina4 initialize:run
+docker run -v %cd%:/app -p7145:7145 tina4stack/php composer start  </code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Starting with Tina4Php&quot;,&quot;hid&quot;:&quot;starting_with_tina4php&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;380-988&quot;} -->
+<h3 class="sectionedit4 heading-combo" id="upgrading">Upgrading</h3>
+<div class="level3">
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+ docker run -v $(pwd):/app -p7145:7145 tina4stack/php composer upgrade   </code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Upgrading&quot;,&quot;hid&quot;:&quot;upgrading&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;989-&quot;} -->

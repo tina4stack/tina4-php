@@ -1,0 +1,16 @@
+====== Debugging Twig Templates ======
+
+Make sure debug is on in your .env file, it should be on by default:
+<code env>
+[ TINA4_DEBUG]
+ TINA4_DEBUG=true
+ </code> 
+
+Use the **dump** command of twig to dump variables:
+<code env>  
+{{ dump(request) }}
+</code>
+
+<WRAP center round info>
+Learn more about [[https://twig.symfony.com/doc/2.x/functions/dump.html|the dump command]] or learn more about [[tina4:basic-debugging|debugging]].
+</WRAP>

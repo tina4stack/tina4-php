@@ -1,0 +1,90 @@
+
+<h1 class="sectionedit1 heading-combo" id="introduction_to_crud_routes">Introduction to CRUD Routes</h1>
+<div class="level1">
+
+<p>
+Restful <abbr title="Application Programming Interface">API</abbr>&#039;s are based on CRUD - CREATE, READ, UPDATE, DELETE actions. 
+</p>
+
+<p>
+A lot of what we do for forms or <abbr title="Application Programming Interface">API</abbr> calls uses just these four actions. 
+</p>
+
+<p>
+In Tina4, you can create scaffolding for a CRUD route using <a class="link-internal link-combo" data-wiki-id="tina4:generatecrud" href="/doku.php?id=tina4:generatecrud" title="Generate Crud Routes">Generate CRUD</a> which is part of ORM. This will create the routes and also a form and grid template for those routes which is useful for building out the Admin section of your site if you&#039;re using Tina4CMS. 
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Introduction to CRUD Routes&quot;,&quot;hid&quot;:&quot;introduction_to_crud_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-481&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="understanding_the_crud_router_lifecycle">Understanding the CRUD Router Lifecycle</h2>
+<div class="level2">
+
+<p>
+a Crud route has a few actions in addition to the CRUD actions above.
+</p>
+<ul>
+<li class="level1"><div class="li"> <strong>form</strong> - Used to generate a blank form. Return the form to be submitted to the create action.</div>
+</li>
+<li class="level1"><div class="li"> <strong>fetch</strong> - Used for editing a form. Return a form to be submitted to the create action.</div>
+</li>
+<li class="level1"><div class="li"> <strong>read</strong> - Reads data for use in the Grid.twig view. Return a dataset to be consumed by the grid with a filter</div>
+</li>
+<li class="level1"><div class="li"> <strong>create</strong> - Creates the record using ORM in the Database. If your form input names match the column names in the table they are matched seamlessly. Any data you want to manipulate should be changed or matched here as required.</div>
+</li>
+<li class="level1"><div class="li"> <strong>afterCreate</strong> - on this action you have the full ORM record with its ID available. You can return it to a grid (which is quite common) or something else. </div>
+</li>
+<li class="level1"><div class="li"> update - an existing record is updated with new information.</div>
+</li>
+<li class="level1"><div class="li"> <strong>afterUpdate</strong> - similar to afterCreate. On this action you have the full ORM record with its ID available. You can return it to a grid (which is quite common) or something else.</div>
+</li>
+<li class="level1"><div class="li"> <strong>delete</strong> - a specific record is deleted. </div>
+</li>
+<li class="level1"><div class="li"> <strong>afterDelete</strong> - You can return data to a Grid i.e. all other records, or something else. </div>
+</li>
+</ul>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<p>
+CRUD route actions are in a Switch statement. If you don&#039;t put a break in actions like form and fetch will  do the same thing.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:4,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Understanding the CRUD Router Lifecycle&quot;,&quot;hid&quot;:&quot;understanding_the_crud_router_lifecycle&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;482-1864&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="how_a_crud_route_knows_what_information_you_want">How a CRUD Route knows what information you want</h2>
+<div class="level2">
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:6,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_tip plugin_wrap" style="width: 100%;">
+<p>
+Crud Routes like are linked to an ORM object in the first line of the Route. This means a CRUD route knows your table&#039;s columns and will interact with correctly directly after you&#039;ve generated the CRUD route.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} -->
+<p>
+Depending on what route you call and if you specify and ID or not, a CRUD route will direct to the correct action.
+</p>
+
+<p>
+<strong>Example</strong> when you send a GET request on the route path i.e. localhost:7145/path crud router will return all the records related to this route.
+</p>
+<pre class="code-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt code-combo">
+ * CRUD Prototype Example
+ * Creates  GET @ /path, /path/{id}, - fetch for whole or for single
+            POST @ /path, /path/{id} - create &amp; update
+            DELETE @ /path/{id} - delete for single</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_important plugin_wrap" style="width: 100%;">
+<p>
+CRUD Routes will answer to POST and GET calls. Because of this it&#039;s important that you don&#039;t duplicate the name in any other routes. It&#039;s a Tina4 convention to keep your CrudRoutes under /api/ to avoid conflicts between routes.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:9,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;How a CRUD Route knows what information you want&quot;,&quot;hid&quot;:&quot;how_a_crud_route_knows_what_information_you_want&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1865-2925&quot;} -->
+<h2 class="sectionedit10 heading-combo" id="related_topics">Related topics</h2>
+<div class="level2">
+
+<p>
+If you want to gain a good understanding of CRUD routes, you should read the sections on <strong><a class="text-danger link-combo" data-wiki-id="tina4:routes:crud:basic-routing" href="/doku.php?id=tina4:routes:crud:basic-routing" title="tina4:routes:crud:basic-routing" rel="nofollow">Basic Routing</a>, </strong><a class="link-internal link-combo" data-wiki-id="tina4:routing" href="/doku.php?id=tina4:routing" title="Routing in Tina4">ROUTES</a><strong>, </strong><a class="link-internal link-combo" data-wiki-id="tina4:orm" href="/doku.php?id=tina4:orm" title="ORM">ORM</a><strong>. We&#039;d also suggest you look at the section on </strong><a class="text-danger link-combo" data-wiki-id="tina4:tina4-js-helper" href="/doku.php?id=tina4:tina4-js-helper" title="tina4:tina4-js-helper" rel="nofollow">tina4helper.js</a><strong> 
+
+</strong><a class="text-danger link-combo" data-wiki-id="tina4:tina4-js-helper" href="/doku.php?id=tina4:tina4-js-helper" title="tina4:tina4-js-helper" rel="nofollow">Tina4helper.js</a>** includes functions that wraps Ajax calls and makes working with forms painless. It has the same language as the Crud router.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Related topics&quot;,&quot;hid&quot;:&quot;related_topics&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:10,&quot;range&quot;:&quot;2926-&quot;} -->

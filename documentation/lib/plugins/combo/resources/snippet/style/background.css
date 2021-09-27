@@ -1,0 +1,44 @@
+.backgrounds {
+    position: absolute !important; /* not in the normal flow */
+    right: 0;
+    bottom: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translate3d(0px, 0px, 0px);
+    transform: translate3d(0px, 0px, 0px);
+    -webkit-transform-style: preserve-3d;
+    transform-style: preserve-3d;
+}
+
+.background {
+    position: absolute !important; /* not in the normal flow */
+    height: 100%;
+    width: 100%;
+    background-size: cover; /* scale the background image proportionally so that its width and height are equal to, or greater than, the width/height of the element. */
+    background-position: center center; /* better for responsive background */
+    /* background-attachment: fixed; !* fixed will attach the background to a fixed position on the page (sane as fixed position) *!*/
+    background-attachment: scroll;
+    /* the background will scroll with the content
+    /* background-attachment: local; !* the background will scroll with the content *!*/
+    /* background-color: #464646; /* the color while the image is loading or the transparent-color if any */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translate3d(0px, 0px, 0px);
+    transform: translate3d(0px, 0px, 0px);
+    -webkit-transform-style: preserve-3d;
+    transform-style: preserve-3d;
+}
+
+/* For a image */
+.background-img {
+    position: absolute !important; /* not in the normal flow */
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}

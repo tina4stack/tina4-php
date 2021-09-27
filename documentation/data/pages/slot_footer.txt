@@ -1,0 +1,7 @@
+---json
+{
+    "canonical":"",
+    "title":"A [[https://combostrap.com/frontmatter|frontmatter]] title shown on the Search Engine Result Pages",
+    "description":"A [[https://combostrap.com/frontmatter|frontmatter]] description shown on the Search Engine Result Pages"
+}
+---

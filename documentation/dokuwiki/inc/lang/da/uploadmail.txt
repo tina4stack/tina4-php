@@ -1,0 +1,11 @@
+En fil blev overført til din DokuWiki. Her er detaljerne:
+
+Fil         : @MEDIA@
+Gammel revision: @OLD@
+Dato        : @DATE@
+Browser     : @BROWSER@
+IP-adresse  : @IPADDRESS@
+Værtsnavn   : @HOSTNAME@
+Størrelse   : @SIZE@
+MIME Type   : @MIME@
+Bruger      : @USER@

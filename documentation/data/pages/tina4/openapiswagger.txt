@@ -1,0 +1,26 @@
+====== OpenAPI & Swagger ======
+
+One of the reasons Tina4 exists is to lift the tedium of creating those nice Swagger UI documents.  Tina4 has opted for an annotation mechanism to describe the API end points. API's are used to secure a user to have access to your source code, network traffic or documentation. OpenAPI is known to be the specification of your interface.
+
+Swagger is used to describe or annotate your OpenAPI and is known to be the tool used to implement the specification you set out in your OpenAPI. It is good practice to annotate your code for future purposes. For example, if someone else were to look at your code or even continue to work on it. 
+
+Below is an example of a simple Swagger annotation which you would add to a Class function. 
+
+<code php>
+<?php
+/**
+* @description My first API
+* @summary Returns list of cars
+* @tags Cars
+*/
+class MyClass extends \Tina4\Data {
+
+      function someFunction() {
+         \\your function here
+      }
+   }
+</code>
+
+<WRAP center round info>
+For more information on **OpenAPI**, click on this [[https://www.openapis.org/about|link]]. For more information on **Swagger**, click on this [[https://swagger.io/solutions/api-documentation/|link]].
+</WRAP>

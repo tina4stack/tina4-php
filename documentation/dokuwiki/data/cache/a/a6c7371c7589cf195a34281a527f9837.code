@@ -1,0 +1,2 @@
+   <span class="re0">$service</span> <span class="sy0">=</span> <span class="br0">&#40;</span><span class="kw2">new</span> Tina4\Service<span class="br0">&#41;</span><span class="sy0">;</span>
+   <span class="re0">$service</span><span class="sy0">-&gt;</span><span class="me1">addProcess</span><span class="br0">&#40;</span><span class="kw2">new</span> TestProcess<span class="br0">&#40;</span><span class="st0">&quot;My Process&quot;</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">;</span>

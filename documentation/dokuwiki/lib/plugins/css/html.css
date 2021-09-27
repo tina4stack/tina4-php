@@ -1,0 +1,10 @@
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+/* Max 100% of the containing container */
+/* Otherwise the image may overflow */
+img, embed, object, video {
+    max-width: 100%;
+}

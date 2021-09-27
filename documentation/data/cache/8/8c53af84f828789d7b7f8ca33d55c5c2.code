@@ -1,0 +1,17 @@
+<span class="kw2">&lt;?php</span>
+&nbsp;
+<span class="co4">/**
+*
+* @description My new api end point
+* @tags items, testing
+*
+**/</span>
+&nbsp;
+\Tina4\Get<span class="sy0">::</span><span class="me2">add</span><span class="br0">&#40;</span><span class="st0">&quot;/api/items&quot;</span><span class="sy0">,</span> <span class="kw2">function</span><span class="br0">&#40;</span>\Tina4\Response <span class="re0">$response</span><span class="br0">&#41;</span> <span class="br0">&#123;</span>
+&nbsp;
+  <span class="re0">$items</span> <span class="sy0">=</span> <span class="br0">&#91;</span><span class="st0">&quot;one&quot;</span><span class="sy0">,</span> <span class="st0">&quot;two&quot;</span><span class="sy0">,</span> <span class="st0">&quot;three&quot;</span><span class="br0">&#93;</span><span class="sy0">;</span>
+&nbsp;
+  <span class="kw1">return</span> <span class="re0">$response</span><span class="br0">&#40;</span><span class="re0">$items</span><span class="sy0">,</span> HTTP_OK<span class="sy0">,</span> APPLICATION_JSON<span class="br0">&#41;</span>
+<span class="br0">&#125;</span><span class="br0">&#41;</span><span class="sy0">;</span>
+&nbsp;
+<span class="sy0">&lt;</span>img src<span class="sy0">=</span><span class="st0">&quot;images/api2.jg&quot;</span>

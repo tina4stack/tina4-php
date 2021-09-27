@@ -1,0 +1,8 @@
+# General Plugin Info do not edit
+base   konsole
+author Fabrice DEJAIGHER pour Chtiland.fr
+email  fabrice@chtiland.com
+date   2016-05-15
+name   Plugin Konsole
+desc   Another terminal plugin with no pre, but div only.
+url    https://www.dokuwiki.org/plugin:konsole

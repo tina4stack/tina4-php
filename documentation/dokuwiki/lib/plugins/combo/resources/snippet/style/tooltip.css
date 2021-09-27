@@ -1,0 +1,12 @@
+.tooltip-inner {
+    text-align:unset;
+}
+.tooltip-inner>p:last-child {
+    margin-bottom: 0.25rem
+}
+.tooltip-inner>h1,.tooltip-inner>h2,.tooltip-inner>h3,.tooltip-inner>h4,.tooltip-inner>h5,.tooltip-inner>h6 {
+    text-transform: capitalize;
+}
+/** same as abbr **/
+span[data-bs-toggle="tooltip"] { text-decoration: underline dotted; }
+span[data-toggle="tooltip"] { text-decoration: underline dotted; }

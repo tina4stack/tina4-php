@@ -1,0 +1,22 @@
+====== Installation ======
+
+The recommended way to install PHP on Mac is with the brew package manager
+
+Follow the instructions https://brew.sh/ to install brew
+
+Then execute the following:
+<code bash>
+brew install php@7.4
+</code>   
+
+===== Docker =====
+
+Running on a Mac with an M1 chip may cause issues if you want to run all the PHP extensions as some may not be compatible. Docker is a solution here.
+<code bash>
+brew install --cask docker
+</code>
+   
+   
+
+
+

@@ -1,0 +1,80 @@
+{
+    "id": "guides:php:install:mac",
+    "date": "2021-07-14 16:19:25",
+    "metadata": {
+        "title": "Installation",
+        "description": "Installation\n\nThe recommended way to install PHP on Mac is with the brew package manager\n\nFollow the instructions <https:\/\/brew.sh\/> to install brew\n\nThen execute the following:\n\nDocker\n\nRunning on a Mac with an M1 chip may cause issues if you want to run all the PHP extensions as some may not be compatible. Docker is a solution here.",
+        "date_created": "2021-03-17 10:15:57",
+        "date_modified": "2021-06-30 07:23:04",
+        "age_creation": 119,
+        "age_modification": 14
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1
+        },
+        "chars_count": 463,
+        "edits_count": 4,
+        "external_links_count": 1,
+        "headers_count": {
+            "h1": 1,
+            "h2": 1
+        },
+        "internal_backlinks_count": 1,
+        "syntax_count": {
+            "combo_headingwiki": 2,
+            "section": 2,
+            "p": 4,
+            "combo_code": 2,
+            "combo_preformatted": 1
+        },
+        "word_section_count": {
+            "avg": 0
+        },
+        "words_count": 60
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 17,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 10,
+                "correct_outline": 3,
+                "correct_word_avg_by_section": 0,
+                "description_present": 0,
+                "edits_count": 1,
+                "internal_backlinks_count": 1,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_by_section_avg_min": "The number of words by section is less than 20",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_by_section_avg_max": "Passed",
+                "words_by_section_avg_min": "Failed",
+                "words_max": "Passed",
+                "words_min": "Passed"
+            }
+        }
+    }
+}

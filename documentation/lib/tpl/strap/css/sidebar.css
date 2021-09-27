@@ -1,0 +1,13 @@
+
+
+
+/* Affix for the sidebar */
+.bs-docs-sidebar.affix {
+    position: fixed;
+    top: 20px;
+    width: 263px;
+}
+
+
+
+

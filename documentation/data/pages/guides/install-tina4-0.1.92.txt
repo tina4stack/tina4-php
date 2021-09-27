@@ -1,0 +1,14 @@
+====== Install Tina4 ======
+Follow the steps below to get Tina4 on your system. Soon you will be able to bring your ideas to life.
+
+Make sure you have the prerequisites installed ([[guides:install:php]], [[guides:install:composer]], [[guides:install:openssl]] & [[guides:install:ide|ide tool]]). 
+
+  * [[guides:tina4:install:windows|Windows]]
+  * [[guides:tina4:install:mac|Mac]]
+  * [[guides:tina4:install:linux|Linux]]
+
+
+<WRAP center round info>
+It can sometimes be frustrating to wait for the release. Install the bleeding edge
+    composer require tina4stack/tina4php:dev-master
+</WRAP>

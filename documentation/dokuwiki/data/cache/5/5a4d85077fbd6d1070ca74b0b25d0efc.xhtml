@@ -1,0 +1,29 @@
+
+<h1 class="sectionedit1 heading-combo" id="exclude_some_fields_from_being_displayed_on_rest_result_or_query">Exclude some fields from being displayed on REST result or query</h1>
+<div class="level1">
+
+<p>
+Lets say you want to exclude a field from the database. Using SQL statements in your script, you can exclude a record. 
+</p>
+
+<p>
+Here&#039;s an example:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+
+class User extends \Tina4\ORM { //assumes we have a table user in the database
+    public $id; //primary key because it is first
+    public $name; //some additional data
+    public $excludeFields = &quot;password,myId&quot;; //fields that must be excluded
+}   
+
+class OtherUser extends \Tina4\ORM { //assumes we have a table user in the database
+    public $id; //primary key because it is first
+    public $name; //some additional data
+    public $excludeFields = [&quot;password&quot;,&quot;myId&quot;];
+}   </code>
+</pre>
+
+</div>

@@ -1,0 +1,62 @@
+
+<h1 class="sectionedit1 heading-combo" id="introducing_tina4_content_management_system">Introducing Tina4 Content Management System</h1>
+<div class="level1">
+
+<p>
+Tina4 <abbr title="Content Management System">CMS</abbr> is a module written with Tina4.  Here is what you get out of the box:
+</p>
+<ul>
+<li class="level1"><div class="li"> Page driven <abbr title="Content Management System">CMS</abbr> - Each page can be a landing for content</div>
+</li>
+<li class="level1"><div class="li"> Articles - Articles can be categorised and displayed on pages</div>
+</li>
+<li class="level1"><div class="li"> Snippets - little <abbr title="HyperText Markup Language">HTML</abbr> pieces you can reuse</div>
+</li>
+<li class="level1"><div class="li"> Article Categories - These double up as menus and categories</div>
+</li>
+</ul>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Introducing Tina4 Content Management System&quot;,&quot;hid&quot;:&quot;introducing_tina4_content_management_system&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-381&quot;} -->
+<h2 class="sectionedit2 heading-combo" id="getting_started">Getting Started</h2>
+<div class="level2">
+
+<p>
+The beauty of working with the Tina4CMS is you can build your own site in a matter of minutes as it only needs a tiny SQLite database to start with and you have all the Tina4 power out of the box.
+</p>
+
+<p>
+Use the following commands to get up and running
+</p>
+<pre class="preformatted-container-combo" data-download-link="true" data-src="file.txt">
+<code class="language-txt preformatted-combo">
+composer require tina4stack/tina4cms
+composer exec tina4 initialize:run
+composer start</code>
+</pre>
+
+<p>
+Once you have that working you need to add into your <strong>index.php</strong> file a database connection, your <strong>index.php</strong> should look as follows:
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="index.php" data-download-link-label="Download index.php">
+<code class="language-php code-combo code-php-combo">
+&lt;?php
+require_once &quot;./vendor/autoload.php&quot;; //Load all the libraries
+  
+//Initialize the database
+global $DBA;
+$DBA = new \Tina4\DataSQLite3(&quot;cms.db&quot;);
+  
+//Create a new config
+$config = new \Tina4\Config();
+  
+//Run the Tina4 engine
+echo new \Tina4\Tina4Php($config);</code>
+</pre>
+
+<p>
+Once this is all running browse to <a class="link-external link-combo" href="https://localhost:7145/cms/login" rel="noopener" target="target=_blank">https://localhost:7145/cms/login</a> to setup your initial user.
+</p>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Getting Started&quot;,&quot;hid&quot;:&quot;getting_started&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;382-&quot;} -->

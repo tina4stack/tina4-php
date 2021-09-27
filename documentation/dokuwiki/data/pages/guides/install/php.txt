@@ -1,0 +1,40 @@
+======  Installing PHP ======
+[[https://www.php.net/|PHP]] is an Open Source general-purpose scripting language used in software/web development. You need to have PHP7.1 or greater installed on the command line. Follow these instructions to install PHP on your system. 
+
+=== Install PHP Instructions ====
+<WRAP info>
+  * [[guides:php:install:windows|Windows]]
+  * [[guides:php:install:mac|Mac]]
+  * [[guides:php:install:linux|Linux]]
+  * [[guides:php:install:docker|Docker]]
+</WRAP>
+
+===== Tina4 Requirements =====
+
+<WRAP center round important 100%>
+[[https://www.php.net/downloads|PHP 7.4]] or greater is recommended. 
+</WRAP>
+
+According to [[https://www.zend.com/blog/php-development-using-php-extensions|zend.com]], extensions are: "specially formed libraries or plug-ins that provides a function that can be used by many applications".
+
+**Extension Directory**
+extension_dir = "ext"
+
+<WRAP center round 100%>
+**Required PHP Modules**
+  * [[https://www.php.net/manual/en/book.curl.php|cURL]]
+  * [[https://www.php.net/manual/en/book.fileinfo.php|fileinfo]]
+  * [[https://www.php.net/manual/en/book.image.php|GD]]
+  * [[https://www.php.net/manual/en/book.intl.php|intl]]
+  * [[https://www.php.net/manual/en/book.mbstring.php|mbstring]]
+  * [[https://www.php.net/manual/en/book.openssl.php|OpenSSL]]
+  * [[https://www.php.net/manual/en/book.soap.php|SOAP]]
+  * [[https://www.php.net/manual/en/book.sqlite3.php|SQLite3]]
+  * [[https://www.php.net/manual/en/book.tidy.php|Tidy]]
+</WRAP>
+
+On Mac etc you can run this command to get all the necessary files: 
+
+<code apt>
+ apt-get install php-curl php-fileinfo php-gd php-intl php-mbstring php-soap php-tidy php-xmlrpc php-xml
+</code>

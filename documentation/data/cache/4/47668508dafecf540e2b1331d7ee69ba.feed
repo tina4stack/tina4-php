@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- generator="FeedCreator 1.8" -->
+<?xml-stylesheet href="https://www.tina4.com/documentation/lib/exe/css.php?s=feed" type="text/css"?>
+<rdf:RDF
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel rdf:about="https://www.tina4.com/documentation/feed.php">
+        <title>This is not a framework tina4</title>
+        <description></description>
+        <link>https://www.tina4.com/documentation/</link>
+        <image rdf:resource="https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico" />
+       <dc:date>2021-06-22T15:31:11+00:00</dc:date>
+        <items>
+            <rdf:Seq>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:api&amp;rev=1615907586&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:auth&amp;rev=1623761332&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:clear-cache&amp;rev=1622134607&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:cms&amp;rev=1623761806&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:database&amp;rev=1622186976&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:debug&amp;rev=1623760376&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:env&amp;rev=1615981785&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:error-pages&amp;rev=1616682660&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:generatecrud&amp;rev=1622187349&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:messenger&amp;rev=1622465513&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:migrations&amp;rev=1622187033&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:modules&amp;rev=1623760309&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:openapiswagger&amp;rev=1623761641&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:orm&amp;rev=1622405517&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:recommendations&amp;rev=1616515282&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:routing&amp;rev=1622186810&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:shape&amp;rev=1623759094&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:slims&amp;rev=1622217587&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:suggested_topics&amp;rev=1623740090&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:swagger&amp;rev=1623685675&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:templates&amp;rev=1623762114&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:test&amp;rev=1622187418&amp;do=diff"/>
+                <rdf:li rdf:resource="https://www.tina4.com/documentation/doku.php?id=tina4:tina4helperjs&amp;rev=1623740103&amp;do=diff"/>
+            </rdf:Seq>
+        </items>
+    </channel>
+    <image rdf:about="https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico">
+        <title>This is not a framework</title>
+        <link>https://www.tina4.com/documentation/</link>
+        <url>https://www.tina4.com/documentation/lib/tpl/dokuwiki/images/favicon.ico</url>
+    </image>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:api&amp;rev=1615907586&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-03-16T17:13:06+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:api</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:api&amp;rev=1615907586&amp;do=diff</link>
+        <description>Create an API Endpoint</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:auth&amp;rev=1623761332&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:48:52+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:auth</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:auth&amp;rev=1623761332&amp;do=diff</link>
+        <description>Custom Auth</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:clear-cache&amp;rev=1622134607&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-27T18:56:47+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:clear-cache</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:clear-cache&amp;rev=1622134607&amp;do=diff</link>
+        <description>Clearing Cache
+
+Tina4 is heavily cached and this leads to blazingly fast loading times. By default, the cache clears every 360 seconds for templates and every 60 seconds on ORM data. While in development you may need to clear cache at times especially if you had routes that delivered 404 content.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:cms&amp;rev=1623761806&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:56:46+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:cms</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:cms&amp;rev=1623761806&amp;do=diff</link>
+        <description>Introducing Tina4 Content Management System
+
+Tina4 CMS is a module written with Tina4.  Here is what you get out of the box:
+
+	*  Page driven CMS - Each page can be a landing for content
+	*  Articles - Articles can be categorised and displayed on pages</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:database&amp;rev=1622186976&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T09:29:36+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:database</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:database&amp;rev=1622186976&amp;do=diff</link>
+        <description>Database in Tina4
+
+Connecting to a Database
+
+There are 3 database engines currently supported, we are happy to add more if required but for now they are:
+
+The database connection is established in a global variable called $DBA in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required. For testing purpose, you can use the SQLite database type below.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:debug&amp;rev=1623760376&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:32:56+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:debug</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:debug&amp;rev=1623760376&amp;do=diff</link>
+        <description>Debugging in Tina4
+
+Debugging is one of the features we like the most in Tina4.  It is on by default.
+
+@todo We need to finish this documentation</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:env&amp;rev=1615981785&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-03-17T13:49:45+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:env</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:env&amp;rev=1615981785&amp;do=diff</link>
+        <description>ENV
+
+Tina4 uses a .env file to setup project constants, a .env will be created for you when the system runs for the first time. If you specify an environment variable on your OS called ENVIRONMENT then .env.ENVIRONMENT will be loaded instead.
+
+Example of a .env file:</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:error-pages&amp;rev=1616682660&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-03-25T16:31:00+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:error-pages</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:error-pages&amp;rev=1616682660&amp;do=diff</link>
+        <description>Custom error Pages
+
+This feature is part of the upcoming 2.0.0 release. It's available in the bleeding edge dev branch of Tina4
+
+You can now customize error pages in Tina4. 
+
+You can drop a twig file with any valid http error code into /public/errors/404.twig</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:generatecrud&amp;rev=1622187349&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T09:35:49+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:generatecrud</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:generatecrud&amp;rev=1622187349&amp;do=diff</link>
+        <description>Generate Crud Routes
+
+Tina4 has a unique way to generate crud routes for you for use in your API.
+
+Let me show you how I create an API route for a Users ORM class.
+
+Create an ORM Class for your Table first if you have not done so yet.
+
+1. To start out create a file in your routes/api directory.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:messenger&amp;rev=1622465513&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-31T14:51:53+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:messenger</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:messenger&amp;rev=1622465513&amp;do=diff</link>
+        <description>Sending email with Tina4 Messenger
+
+Tina4 Messenger can send email using PHP's built-in mail() function or PHPMailer. We recommend PHPMailer if you're going to need encryption, SMTP authentication, attachments or html emails as these features are not supported by mail().</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:migrations&amp;rev=1622187033&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T09:30:33+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:migrations</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:migrations&amp;rev=1622187033&amp;do=diff</link>
+        <description>Migrations in Tina4
+
+Create a table/migration
+
+You want to create a table for the database? Migrations are sequential SQL statements which keep track of your database changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:modules&amp;rev=1623760309&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:31:49+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:modules</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:modules&amp;rev=1623760309&amp;do=diff</link>
+        <description>Tina4 Modules
+
+Develop your system as a normal Tina4 project, when you're done developing it, change your index to have the following code.
+ &lt;?php
+ \Tina4\Module::addModule(&quot;My Module&quot;, &quot;1.0.0&quot;, &quot;tina4cms&quot;, function(\Tina4\Config $config) {
+    global $DBA; //access the database
+    //All your things that need to run when you start
+    
+    if (!$DBA-&gt;tableExists(&quot;someTable&quot;)) {
+      (new \Tina4\Migration(__DIR__.&quot;/migrations&quot;))-&gt;doMigration();
+    }
+    
+    //Add a twig function as Example
+  …</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:openapiswagger&amp;rev=1623761641&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:54:01+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:openapiswagger</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:openapiswagger&amp;rev=1623761641&amp;do=diff</link>
+        <description>Open API &amp; Swagger
+
+One of the reasons Tina4 exists is to lift the tedium of creating those nice Swagger UI documents.  Tina4 has opted for an annotation mechanism to describe the API end points.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:orm&amp;rev=1622405517&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-30T22:11:57+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:orm</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:orm&amp;rev=1622405517&amp;do=diff</link>
+        <description>ORM
+
+Save a record using the ORM
+
+The [ORM](&lt;https://en.wikipedia.org/wiki/Object-relational_mapping&gt;) in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.
+It is required to extend the ``\Tina4\ORM`` class to make the magic happen.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:recommendations&amp;rev=1616515282&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-03-23T18:01:22+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:recommendations</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:recommendations&amp;rev=1616515282&amp;do=diff</link>
+        <description>Recommendations
+
+What to consider ?
+
+If you already have a good work flow up and running then you can skip this bit, 
+however if you do not have an IDE which can do step by step debugging then I'd pause for a while and consider some of 
+the thoughts here.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:routing&amp;rev=1622186810&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T09:26:50+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:routing</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:routing&amp;rev=1622186810&amp;do=diff</link>
+        <description>Routing in Tina4
+
+For the most basic of Routes, please see the How Do I - Beginner section
+
+Simple Syntax
+
+The simple syntax of a Route is as follows
+\Tina4\Method::add(string $routePath, $function)
+
+So the Route to capture the url &lt;https://mywebsite.com/starthere&gt; would be as below. This uses a Get method, with a simple closure function, with the return using the Response object.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:shape&amp;rev=1623759094&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T14:11:34+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:shape</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:shape&amp;rev=1623759094&amp;do=diff</link>
+        <description>Shape HTML
+
+Generate HTML with code</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:slims&amp;rev=1622217587&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T17:59:47+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:slims</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:slims&amp;rev=1622217587&amp;do=diff</link>
+        <description>Shape
+
+Shape is a way to generate valid HTML by using functions.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:suggested_topics&amp;rev=1623740090&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T08:54:50+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:suggested_topics</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:suggested_topics&amp;rev=1623740090&amp;do=diff</link>
+        <description>Suggested Topics
+
+A list of community suggested topics. Make a suggestion on our Slack channel.
+
+TODO
+
+	*  Introduction to Crud Routes
+	*  Debug Tina4 
+	*  Tina4 Auth &amp; Custom Auth
+	*  Custom Error Pages in Tina4
+	*  Making Ajax calls with built-in Tina4 functions
+	*  Joins and hasOne, hasMany relationships in Tina4
+	*  Generating valid HTML using Slims
+	*  Creating Tina4 Modules
+	*  Using Swagger with your Tina4 API
+	*  Dealing with Errors when connecting to the Database
+	*  Using Tina4 Test
+	*…</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:swagger&amp;rev=1623685675&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-14T17:47:55+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:swagger</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:swagger&amp;rev=1623685675&amp;do=diff</link>
+        <description>Swagger UI / Open API
+
+A simple way to annotate routers
+/**
+* @description A description for your end point
+* @tags group1,group2
+**/
+\Tina4\Get:: ...............
+
+
+Browse to &lt;http://localhost:7145/swagger&gt;</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:templates&amp;rev=1623762114&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T15:01:54+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:templates</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:templates&amp;rev=1623762114&amp;do=diff</link>
+        <description>Templates
+
+Basic Hello World in Tina4
+
+Templates in Tina4 are written in Twig. Tina4 exposes some common globals into the twig template so please make note of these, if you are worried about security use the following env config to remove them
+ TINA4_TWIG_GLOBALS=false</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:test&amp;rev=1622187418&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-05-28T09:36:58+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:test</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:test&amp;rev=1622187418&amp;do=diff</link>
+        <description>Tina4 Testing
+
+Tina4 has a built in testing system, to assist with test driven development. It utilizes both composer scripts and phpDoc Comments as part of the testing system.
+
+Declaring a test
+
+Test declarations are included in the phpDoc Comments, and can be included above a function, class or class method. It includes two parts, the test declaration and then a list of tests. A test has two parts, the condition and then the message displayed, should there be a failure.</description>
+    </item>
+    <item rdf:about="https://www.tina4.com/documentation/doku.php?id=tina4:tina4helperjs&amp;rev=1623740103&amp;do=diff">
+        <dc:format>text/html</dc:format>
+        <dc:date>2021-06-15T08:55:03+00:00</dc:date>
+        <dc:creator>Anonymous (anonymous@undisclosed.example.com)</dc:creator>
+        <title>tina4:tina4helperjs</title>
+        <link>https://www.tina4.com/documentation/doku.php?id=tina4:tina4helperjs&amp;rev=1623740103&amp;do=diff</link>
+        <description>Tina4helper.js
+
+Tina4PHP includes a helper library that wraps the Jquery calls needed to do the most common Ajax requests on your page. 
+
+tina4helper.js functions are located in /src/public/js/tina4helper.js
+
+Using loadpage() to load an API route
+
+The loadpage() function in Tina4helper.js makes a Get query to any route you specify. By convention we generally put these routes under /api/ in our routes files. But this will work with any route you specify.</description>
+    </item>
+</rdf:RDF>

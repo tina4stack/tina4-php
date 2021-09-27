@@ -1,0 +1,54 @@
+/**
+ * Taken from the lib\styles\all.css of dokuwiki
+ * to delete the `group` class clearfix that competes
+ * with other plugin such as regex prism
+ */
+
+div.clearer {
+    clear: both;
+    font-size: 0;
+    line-height: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+
+div.no {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+
+.hidden {
+    display: none;
+}
+
+/* image alignment */
+.medialeft {
+    float: left;
+}
+.mediaright {
+    float: right;
+}
+.mediacenter {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* table cell alignment */
+.leftalign   { text-align: left;   }
+.centeralign { text-align: center; }
+.rightalign  { text-align: right;  }
+[dir=rtl] .leftalign   { text-align: left;   }
+[dir=rtl] .centeralign { text-align: center; }
+[dir=rtl] .rightalign  { text-align: right;  }
+
+/* underline */
+em.u {
+    font-style: normal;
+    text-decoration: underline;
+}
+em em.u {
+    font-style: italic;
+}

@@ -1,0 +1,19 @@
+{
+	"name": "saschaleib/dokuwiki-template-ad-hominem",
+	"description": "Renewed template for DokuWiki, based on the original bundled template",
+	"homepage": "https://www.dokuwiki.org/template:ad-hominem",
+	"type": "project",
+	"license": "GPL v2",
+	"require": {
+		"php": ">=7.2",
+		"ext-json": "*",
+		"splitbrain/dokuwiki": ">=2020-07-29"
+	},
+	"config": {
+		"platform": {
+			"php": "7.2"
+		}
+	},
+	"suggest": {},
+	"prefer-stable": true
+}

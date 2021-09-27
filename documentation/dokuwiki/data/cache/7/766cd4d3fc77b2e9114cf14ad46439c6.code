@@ -1,0 +1,1 @@
+<span class="br0">&#40;</span><span class="kw2">new</span> ORMObject<span class="br0">&#40;</span><span class="br0">&#41;</span><span class="br0">&#41;</span><span class="sy0">-&gt;</span><span class="me1">generateCRUD</span><span class="br0">&#40;</span><span class="st0">&quot;/api/objects&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span>

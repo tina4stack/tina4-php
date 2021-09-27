@@ -1,0 +1,71 @@
+{
+    "id": "tina4:debug",
+    "date": "2021-07-10 04:10:16",
+    "metadata": {
+        "title": "Debugging in Tina4",
+        "description": "Debugging in Tina4\n\nDebugging is one of the features we like the most in Tina4.  It is on by default.\n\n@todo We need to finish this documentation",
+        "date_created": "2021-06-15 02:32:43",
+        "date_modified": "2021-06-15 02:32:56",
+        "age_creation": 25,
+        "age_modification": 25
+    },
+    "statistics": {
+        "authors": {
+            "andre": 1
+        },
+        "chars_count": 159,
+        "edits_count": 2,
+        "headers_count": {
+            "h1": 1
+        },
+        "internal_backlinks_count": 2,
+        "syntax_count": {
+            "combo_headingwiki": 1,
+            "section": 1,
+            "p": 2
+        },
+        "words_count": 24
+    },
+    "quality": {
+        "low": true,
+        "failed_mandatory_rules": [
+            "words_min",
+            "internal_links_min"
+        ],
+        "scoring": {
+            "score": 7.5,
+            "scores": {
+                "canonical_present": 0,
+                "correct_content_length": 0,
+                "correct_outline": 3,
+                "description_present": 0,
+                "edits_count": 0.5,
+                "internal_backlinks_count": 2,
+                "internal_links_count": 0,
+                "no_internal_broken_links_count": 2,
+                "title_present": 0
+            }
+        },
+        "rules": {
+            "result": "5 quality rules errors",
+            "info": {
+                "title_present": "Add a title in the frontmatter for 10 points",
+                "description_present": "Add a description in the frontmatter for 8 points",
+                "canonical_present": "Add a canonical in the frontmatter for 5 points",
+                "words_min": "Add 26 words to get 10 points",
+                "internal_links_min": "Add internal links for 1 point each"
+            },
+            "details": {
+                "canonical_present": "Failed",
+                "description_present": "Failed",
+                "internal_backlinks_min": "Passed",
+                "internal_links_broken_max": "Passed",
+                "internal_links_min": "Failed",
+                "outline_structure": "Passed",
+                "title_present": "Failed",
+                "words_max": "Passed",
+                "words_min": "Failed"
+            }
+        }
+    }
+}
