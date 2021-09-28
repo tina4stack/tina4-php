@@ -6,7 +6,7 @@ As an example, if someone else were to look and your code, would they be able to
 
 ===== Annotate a Route =====
 
-You can annotate your [[:tina:routing|Route]]. Check this basic example below.
+You can annotate your [[:tina4:routing|Route]]. Check this basic example below.
 
 **Example:**
 
