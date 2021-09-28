@@ -1,3 +1,0 @@
-docker run <span class="re5">-v</span> $<span class="br0">&#40;</span><span class="kw3">pwd</span><span class="br0">&#41;</span>:<span class="sy0">/</span>app tina4stack<span class="sy0">/</span>php composer require tina4stack<span class="sy0">/</span>tina4php
-docker run <span class="re5">-v</span> $<span class="br0">&#40;</span><span class="kw3">pwd</span><span class="br0">&#41;</span>:<span class="sy0">/</span>app tina4stack<span class="sy0">/</span>php composer <span class="kw3">exec</span> tina4 initialize:run
-docker run <span class="re5">-v</span> $<span class="br0">&#40;</span><span class="kw3">pwd</span><span class="br0">&#41;</span>:<span class="sy0">/</span>app -p7145:<span class="nu0">7145</span> tina4stack<span class="sy0">/</span>php composer start  

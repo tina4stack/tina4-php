@@ -7,7 +7,7 @@
 use ComboStrap\PluginUtility;
 use ComboStrap\TagAttributes;
 
-require_once(__DIR__ . '/../ComboStrap/StringUtility.php');
+require_once(__DIR__ . '/../class/StringUtility.php');
 
 if (!defined('DOKU_INC')) die();
 

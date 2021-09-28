@@ -1,7 +1,0 @@
-a:2:{s:7:"current";a:9:{s:4:"date";a:2:{s:7:"created";i:1630731356;s:8:"modified";i:1630731356;}s:4:"user";s:0:"";s:7:"creator";s:0:"";s:2:"h1";s:27:"Create a basic landing page";s:16:"low_quality_page";b:1;s:5:"title";s:27:"Create a basic landing page";s:11:"description";a:2:{s:15:"tableofcontents";a:1:{i:0;a:4:{s:3:"hid";s:27:"create_a_basic_landing_page";s:5:"title";s:27:"Create a basic landing page";s:4:"type";s:2:"ul";s:5:"level";i:1;}}s:8:"abstract";s:278:"Create a basic landing page
-
-Creating a website has just been made much easier with Tina 4! As an example try the below steps and see how simple it is. 
-
-In your src/templates folder create a twig file called index.twig
-
-Add the HTML elements you wish to see on your page (e.g):";}s:8:"internal";a:2:{s:5:"cache";b:1;s:3:"toc";b:1;}s:8:"relation";a:1:{s:10:"firstimage";s:0:"";}}s:10:"persistent";a:5:{s:4:"date";a:1:{s:7:"created";i:1630731356;}s:4:"user";s:0:"";s:7:"creator";s:0:"";s:2:"h1";s:27:"Create a basic landing page";s:16:"low_quality_page";b:1;}}

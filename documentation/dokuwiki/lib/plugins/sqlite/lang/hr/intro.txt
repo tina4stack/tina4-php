@@ -1,3 +1,0 @@
-====== SQLite Pristup ======
-
-Ovaj ekran Vam omogućava izravan pristup postojećim SQLite bazama. Samo odaberete bazu iz sadržaja i unesite SQL komande.

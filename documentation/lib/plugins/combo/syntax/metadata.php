@@ -6,7 +6,7 @@ use ComboStrap\PluginUtility;
 
 if (!defined('DOKU_INC')) die();
 
-require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
+require_once (__DIR__.'/../class/MetadataUtility.php');
 
 /**
  * Class syntax_plugin_combo_metadata

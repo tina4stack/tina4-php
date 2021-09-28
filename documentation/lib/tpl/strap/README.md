@@ -14,19 +14,18 @@
 ## Features
 
 
-  * [bootstrap 5 integrated](https://combostrap.com/bootstrap)
-  * [Menubar (Top Fixed or not)](http://combostrap.com/menubar)
-  * Dynamic [Layout](http://combostrap.com/layout):
-    * `holy grail`
-    * `median`
-    * `landing`
-  * Dynamic template with [slots](http://combostrap.com/slot):
+  * [bootstrap 5 integrated](http://getbootstrap.com/)
+  * [Menubar (Top Fixed or not)](http://getbootstrap.com/menubar)
+  * Dynamic template with:
     * `Footer` slot
     * `header` slot
     * `Side` slot
     * `sidekick` slot
-  * [Rail bar](http://combostrap.com/railbar) for the actions
-  * [Fast as hell](http://combostrap.com/performance):
+  * Layout:
+    * `holy grail`
+    * `median`
+    * `landing`
+  * Performance:
     * One Stylesheet dependency available globally from CDN
     * All Javascript are served asynchronously
     * Lazy image loading

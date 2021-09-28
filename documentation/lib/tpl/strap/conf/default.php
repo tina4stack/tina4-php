@@ -39,29 +39,23 @@ $conf['gridColumns'] = 12;
 
 $conf['gridColumns'] = 12;
 
+/**
+ * The height of the menu bar when
+ * it's fixed in order to calculate the needed style
+ * @see {@link \ComboStrap\TplUtility::CONF_HEIGHT_FIXED_TOP_MENUBAR}
+ */
+$conf['heightFixedTopMenuBar'] = 0;
 
 $conf['preloadCss'] = 0;
 
 $conf['preloadCss'] = 0;
 
-/**
- * {@link TplUtility::CONF_PRIVATE_RAIL_BAR}
- */
-$conf['privateRailbar'] = 0;
-/**
- * {@link TplUtility::CONF_BREAKPOINT_RAIL_BAR}
- */
-$conf['breakpointRailbar'] = "large";
+$conf['privateToolbar'] = 0;
 
 /**
  * @see {@link TplUtility::CONF_JQUERY_DOKU}
  */
 $conf['jQueryDoku'] = 0;
-
-/**
- * See {@link TplUtility::CONF_DISABLE_BACKEND_JAVASCRIPT}
- */
-$conf["disableBackendJavascript"] = 0;
 
 
 

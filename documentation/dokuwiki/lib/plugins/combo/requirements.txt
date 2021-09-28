@@ -1,4 +1,0 @@
-# additional requirements for this plugin: https://github.com/splitbrain/dokuwiki-travis
-https://github.com/cosmocode/sqlite.git   lib/plugins/sqlite
-https://github.com/michitux/dokuwiki-plugin-move   lib/plugins/move
-https://github.com/alexlehm/dokuwiki-plugin-gtm   lib/plugins/googletagmanager

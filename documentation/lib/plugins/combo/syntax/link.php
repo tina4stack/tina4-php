@@ -1,14 +1,13 @@
 <?php
 
 
-require_once(__DIR__ . "/../ComboStrap/Analytics.php");
-require_once(__DIR__ . "/../ComboStrap/PluginUtility.php");
-require_once(__DIR__ . "/../ComboStrap/LinkUtility.php");
-require_once(__DIR__ . "/../ComboStrap/XhtmlUtility.php");
+require_once(__DIR__ . "/../class/Analytics.php");
+require_once(__DIR__ . "/../class/PluginUtility.php");
+require_once(__DIR__ . "/../class/LinkUtility.php");
+require_once(__DIR__ . "/../class/XhtmlUtility.php");
 
 use ComboStrap\CallStack;
 use ComboStrap\LinkUtility;
-use ComboStrap\ThirdPartyPlugins;
 use ComboStrap\PluginUtility;
 use ComboStrap\Tag;
 use ComboStrap\TagAttributes;
@@ -83,11 +82,6 @@ class syntax_plugin_combo_link extends DokuWiki_Syntax_Plugin
         return array('substition', 'formatting', 'disabled');
     }
 
-    /**
-     * @param string $mode
-     * @return bool
-     * Accepts inside
-     */
     public function accepts($mode)
     {
         /**
@@ -138,14 +132,9 @@ class syntax_plugin_combo_link extends DokuWiki_Syntax_Plugin
     function connectTo($mode)
     {
 
-        if (!$this->getConf(self::CONF_DISABLE_LINK, false)
-            &&
-            $mode !== PluginUtility::getModeFromPluginName(ThirdPartyPlugins::IMAGE_MAPPING_NAME)
-        ) {
-
+        if (!$this->getConf(self::CONF_DISABLE_LINK, false)) {
             $pattern = LinkUtility::ENTRY_PATTERN_SINGLE_LINE;
             $this->Lexer->addEntryPattern($pattern, $mode, PluginUtility::getModeFromTag($this->getPluginComponent()));
-
         }
 
     }

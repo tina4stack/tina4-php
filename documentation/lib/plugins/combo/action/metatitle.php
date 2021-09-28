@@ -1,6 +1,5 @@
 <?php
 
-use ComboStrap\Analytics;
 
 
 /**
@@ -11,6 +10,7 @@ use ComboStrap\Analytics;
 class action_plugin_combo_metatitle extends DokuWiki_Action_Plugin
 {
 
+    const TITLE_META_KEY = "title";
 
     public function register(Doku_Event_Handler $controller)
     {
@@ -26,9 +26,9 @@ class action_plugin_combo_metatitle extends DokuWiki_Action_Plugin
         global $ID;
         global $conf;
         if (defined('DOKU_UNITTEST')) {
-            $title = TestUtility::getMeta($ID, Analytics::TITLE);
+            $title = TestUtility::getMeta($ID, self::TITLE_META_KEY);
         } else {
-            $title = p_get_metadata($ID, Analytics::TITLE);
+            $title = p_get_metadata($ID, self::TITLE_META_KEY);
         }
         if (!empty($title)){
 

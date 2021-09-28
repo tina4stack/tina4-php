@@ -1,7 +1,0 @@
-//src/orm/Match.php
-&lt;?php
-class Match extends \Tina4\ORM
-{
-    public $tableName=&quot;match&quot;;
-    public $primaryKey=&quot;match_key&quot;; //set for primary key
-}

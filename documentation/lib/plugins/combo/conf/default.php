@@ -349,8 +349,3 @@ $conf["enableResendPwdForm"] = 1;
 $conf["enableProfileUpdateForm"] = 1;
 $conf["enableProfileDeleteForm"] = 1;
 
-/**
- * {@link syntax_plugin_combo_comment::CONF_OUTPUT_COMMENT}
- */
-$conf['outputComment'] = 0;
-

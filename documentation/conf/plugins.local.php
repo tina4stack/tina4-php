@@ -7,3 +7,5 @@
  *       enabled by default.
  */
 $plugins['authad'] = 0;
+$plugins['authldap'] = 0;
+$plugins['approve'] = 0;

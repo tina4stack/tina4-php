@@ -1,3 +1,0 @@
-====== SQLite Adgang ======
-
-Dette vindue giver en direkte grænseflade til eksisterende SQLite-databaser. Vælg blot databaser fra indholdsfortegnelsen og indtast dine SQL-kommandoer.

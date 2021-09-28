@@ -1,3 +1,0 @@
-====== Wyszukiwanie ======
-
-Wyniki wyszukiwania. @CREATEPAGEINFO@

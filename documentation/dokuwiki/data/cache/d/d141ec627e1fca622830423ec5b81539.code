@@ -1,5 +1,0 @@
-<span class="kw2">class</span> User <span class="kw2">extends</span> \Tina4\ORM <span class="br0">&#123;</span> <span class="co1">//assumes we have a table user in the database</span>
-    <span class="kw2">public</span> <span class="re0">$tableName</span><span class="sy0">=</span><span class="st0">&quot;my_weird_database_table&quot;</span><span class="sy0">;</span> <span class="co1">//will make sure this object gets data to and from this table    </span>
-    <span class="kw2">public</span> <span class="re0">$id</span><span class="sy0">;</span> <span class="co1">//primary key because it is first</span>
-    <span class="kw2">public</span> <span class="re0">$name</span><span class="sy0">;</span> <span class="co1">//some additional data</span>
-<span class="br0">&#125;</span>

@@ -13,7 +13,7 @@ require_once(__DIR__ . '/../class/TplUtility.php');
  * @group template_strap
  * @group templates
  */
-class configTest extends DokuWikiTest
+class template_strap_conf_test extends DokuWikiTest
 {
 
     const CONF_WITHOUT_DEFAULT = [TplUtility::CONF_FOOTER_SLOT_PAGE_NAME,

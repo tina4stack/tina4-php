@@ -1,3 +1,0 @@
-====== Quản lý đăng ký ======
-
-Trang này cho phép bạn quản lý đăng ký của mình cho trang hiện tại và không gian tên.

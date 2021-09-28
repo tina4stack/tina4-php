@@ -5,6 +5,7 @@ use ComboStrap\LogUtility;
 use ComboStrap\PluginUtility;
 use ComboStrap\Resources;
 use ComboStrap\Site;
+use dokuwiki\Cache\CacheRenderer;
 
 if (!defined('DOKU_INC')) die();
 
@@ -16,6 +17,8 @@ if (!defined('DOKU_INC')) die();
  */
 class action_plugin_combo_snippets extends DokuWiki_Action_Plugin
 {
+
+    const COMBO_CACHE_PREFIX = "combo:cache:";
 
     /**
      * @var bool - to trace if the header output was called
@@ -58,6 +61,11 @@ class action_plugin_combo_snippets extends DokuWiki_Action_Plugin
         $controller->register_hook('DOKUWIKI_DONE', 'BEFORE', $this, 'close', array());
 
 
+        /**
+         * To log the cache used by bar
+         */
+        $controller->register_hook('PARSER_CACHE_USE', 'AFTER', $this, 'barParsed', array());
+
     }
 
     /**
@@ -73,7 +81,7 @@ class action_plugin_combo_snippets extends DokuWiki_Action_Plugin
          * Fighting the fact that in 7.2,
          * there is still a cache
          */
-        PluginUtility::initStaticManager();
+        PluginUtility::initSnippetManager();
 
     }
 
@@ -121,21 +129,23 @@ class action_plugin_combo_snippets extends DokuWiki_Action_Plugin
          */
         $this->headerOutputWasCalled = true;
 
-        $snippetManager= PluginUtility::getSnippetManager();
-        $cacheManager = PluginUtility::getCacheManager();
+        $snippetManager = PluginUtility::getSnippetManager();
 
         /**
          * For each processed bar in the page
          *   * retrieve the snippets from the cache or store the process one
          *   * add the cache information in meta
          */
-        $slots = $cacheManager->getXhtmlRenderCacheSlotResults();
-        foreach ($slots as $slotId => $servedFromCache) {
+        $bars = $snippetManager->getBarsOfPage();
+        foreach ($bars as $barId => $servedFromCache) {
 
+            // Add cache information into the head meta
+            // to test
+            $event->data["meta"][] = array("name" => self::COMBO_CACHE_PREFIX . $barId, "content" => var_export($servedFromCache, true));
 
             // Get or store the data
-            $cache = new \dokuwiki\Cache\Cache($slotId, "snippet");
-            $barFileSystemPath = DokuPath::createPagePathFromPath(DokuPath::PATH_SEPARATOR . $slotId)->getFileSystemPath();
+            $cache = new \dokuwiki\Cache\Cache($barId, "snippet");
+            $barFileSystemPath = DokuPath::createPagePathFromPath(DokuPath::PATH_SEPARATOR . $barId)->getFileSystemPath();
             $dependencies = array(
                 "files" => [
                     $barFileSystemPath,
@@ -151,19 +161,19 @@ class action_plugin_combo_snippets extends DokuWiki_Action_Plugin
 
                 if (!empty($data)) {
                     $snippets = unserialize($data);
-                    $snippetManager->addSnippetsFromCacheForBar($slotId, $snippets);
+                    $snippetManager->addSnippetsFromCacheForBar($barId, $snippets);
 
                     if (Site::debugIsOn()) {
                         LogUtility::log2file("Snippet cache file {$cache->cache} used", LogUtility::LVL_MSG_DEBUG);
                         $event->data['script'][] = array(
                             "type" => "application/json",
                             "_data" => json_encode($snippets),
-                            "class" => "combo-snippet-cache-" . str_replace(":", "-", $slotId));
+                            "class" => "combo-snippet-cache-" . str_replace(":", "-", $barId));
                     }
 
                 }
             } else {
-                $snippets = $snippetManager->getSnippetsForBar($slotId);
+                $snippets = $snippetManager->getSnippetsForBar($barId);
                 if (!empty($snippets)) {
                     $cache->storeCache(serialize($snippets));
                 }
@@ -244,7 +254,24 @@ class action_plugin_combo_snippets extends DokuWiki_Action_Plugin
     }
 
 
+    /**
+     *
+     * @param $event
+     */
+    function barParsed($event)
+    {
+        $data = $event->data;
+        if ($data->mode == "xhtml") {
 
+            /* @var CacheRenderer $data */
+            $pageId = $data->page;
+            $cached = $event->result;
+            PluginUtility::getSnippetManager()->addBar($pageId, $cached);
+
+        }
+
+
+    }
 
 
 }

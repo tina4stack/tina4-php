@@ -1,8 +1,0 @@
-{
-    "4.5.0": {
-        "my-custom-bootstrap": {
-            "file": "my-bootstrap.min.css",
-            "integrity": "sha384-6YMUsimvBMWMU6VPmQwCKP28RrKPSaSaD48Hfabk1yxb5zQZ21XDRL/vljin9SZ3"
-        }
-    }
-}
