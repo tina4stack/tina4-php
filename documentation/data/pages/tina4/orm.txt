@@ -28,15 +28,8 @@ $user->save();
 //We want the table to be made for us
 class NewTable extends \Tina4\ORM {
 
-    //will be created as newtable in the database
-
-    /**
-    *  @var id integer auto_increment  
-    **/
+    //will be created as "newtable" in the database
     public $id; //primary key because it is first
-    /**
-    *  @var varchar(100) default 'Default Name'
-    **/
     public $name; //some additional data
 } 
 
@@ -91,60 +84,53 @@ Tina4 can make use of various types of methods.
 \Tina4\Any::add(...);
 </code>
 
-===== Referencing a table using ORM =====
+===== Reference a table using the ORM =====
 
-To reference a table using ORM, we make use of the **@Table** annotation, which describes the table your record/data exists in. A required attribute of **@Table** is the name of the table.
-
-This is done to provide a sort of hint to the database schema tools. This will serve essential in the initial steps of your project, as you will need to plan and setup your database according to your project requirements.
+To reference a table in your database using Tina4, all you need to do is declare  **$tableName** as a public variable. Below is an example of the code convention:
 
 ** Example:**
 
 <code php orm-example-3.php>
 <?php
 
-/**
- * @User
- * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name="user")
- */
-class User extends \Tina4\ORM { //assumes we have a table "user" in the database
-    public $id; //primary key because it is first
-    public $name; //some additional data
-}
+class Person extends ORM
+{
+    public $tableName = "person"; //--> here we reference the table name in the database
 
-$user = (new User());
-$user->name = "Test Save";
-$user->save();
+    //--> here we reference the columns in our table
+    public $id;
+    public $firstName;
+    public $lastName;
+}
+$person = (new Person());
+$person->name = "Test Save";
+$person->save();
 </code>
 
-Optional attributes you may want to include to reference a table are indexes, unique constraints and schema.
+===== Ensure duplicates are not created in the database using ORM =====
 
-  * Indexes - An index is an on-disk data structure which is associated with a table or a view that speeds up the retrieval of rows or data from the table/database/view.
-
-  * Unique Constraints - This is used in SQL to ensure that no duplicate entries or values are created in your database. In SQL you can use the **UNIQUE** or **PRIMARY KEY** statement to create a constraint. The difference is that you can have many UNIQUE constraints per table but only one PRIMARY KEY constraint per table.
-
-  * Schema -  These are the blueprints of your database which describe your database structure, data types and database constraints.
+To ensure there are no duplicate entries and values created in your database, all you need to do is declare **$primarykey** name as a public variable.
 
 ** Example:**
 
-<code php orm-example-4.php>
+<code php orm-example-3.php>
 <?php
 
-/**
- * @User
- * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name="user",
- *      uniqueConstraints={@UniqueConstraint(name="user_name",columns={"username"})},
- *      indexes={@Index(name="user_id", columns={"name"})}
- *      schema="schema_name"
- * )
- */
-class User extends \Tina4\ORM { //assumes we have a table "user" in the database
-    public $id; //primary key because it is first
-    public $name; //some additional data
-}
+class Person extends ORM
+{
+    public $tableName = "person"; //--> here we reference the table name in the database
+    public primaryKey = "id"; //--> here we include the primary key SQL constraint
 
-$user = (new User());
-$user->name = "Test Save";
-$user->save();
+    //--> here we reference the columns in our table
+    public $id;
+    public $firstName;
+    public $lastName;
+}
+$person = (new Person());
+$person->name = "Test Save";
+$person->save();
 </code>
+
+<WRAP center round info 100%>
+Take a look at [[:tina4:migrations|Migrations]] & [[:tina4:swagger|Swagger]] as it can be used with ORM.
+</WRAP>
