@@ -38,14 +38,14 @@ Perhaps you would like to annotate your[[:tina4:orm|ORM object]]. Check this bas
 * @summary A basic annotation for a Route with a "Hello World" response
 * @tags
 */
-class User extends \Tina4\ORM { //assumes we have a table user in the database
+class Person extends \Tina4\ORM { //assumes we have a table "person" in the database
     public $id; //primary key because it is first
     public $name; //some additional data
 }
 
-$user = (new User());
-$user->name = "Test Save";
-$user->save();
+$person = (new Person());
+$person->name = "Test Save";
+$person->save();
 </code>
 
 ===== Annotation for referencing a table with Swagger =====
@@ -60,19 +60,20 @@ This is done to provide a sort of hint to the database schema tools. This will s
 <?php
 
 /**
- * @User
- * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name="user")
+ * @Person
+ * @description Reference table for Person Class to extend to Tina4 ORM
+ * @Table(name="person")
  */
 class Person extends ORM
 {
-    public $tableName = "person"; //--> here we reference the table name in the database
+    public $tableName = "person"; //--> here we reference the table "person" in the database
 
     //--> here we reference the columns in our table
     public $id;
     public $firstName;
     public $lastName;
 }
+
 $person = (new Person());
 $person->name = "Test Save";
 $person->save();
@@ -84,13 +85,13 @@ The better you annotate, the better it may be for your database Schema and for f
 
 ** Example:**
 
-<code php route-annotation-example-5.php>
+<code php swagger-example-4.php>
 <?php
 
 /**
- * @User
- * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name="user")
+ * @Person
+ * @description Reference table for Person Class to extend to Tina4 ORM
+ * @Table(name="person")
  */
 class Person extends ORM { //the table we want to query
     /**
@@ -102,6 +103,7 @@ class Person extends ORM { //the table we want to query
     **/
     public $name; //some additional data
 }
+
 $person = (new Person());
 $person->name = "Test Save";
 $person->save();
@@ -111,7 +113,7 @@ $person->save();
 
 Your records/data which are represented as public variables can have various optional constraints.
 
-<code php orm-example-2.php>
+<code php swagger-example-2.php>
 <?php
 
 /**
@@ -133,6 +135,7 @@ class Person extends \Tina4\ORM { //assumes we have a table user in the database
     **/
     public $name; //some additional data
 }
+
 $person = (new Person());
 $person->name = "Test Save";
 $person->save();
@@ -150,18 +153,18 @@ This is done to provide a sort of hint to the database schema tools. This will s
 <?php
 
 /**
- * @User
+ * @Person
  * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name="user")
+ * @Table(name="person")
  */
-class User extends \Tina4\ORM { //assumes we have a table "user" in the database
+class Person extends \Tina4\ORM { //assumes we have a table "user" in the database
     public $id; //primary key because it is first
     public $name; //some additional data
 }
 
-$user = (new User());
-$user->name = "Test Save";
-$user->save();
+$person = (new Person());
+$person->name = "Test Save";
+$person->save();
 </code>
 
 === Test ===
