@@ -4,7 +4,7 @@ As mentioned in [[tina4:basic-api|Basic API]], Tina uses [[https://swagger.io/so
 
 As an example, if someone else were to look and your code, would they be able to read it and add/make changes?
 
-===== Annotate a Route =====
+===== Basic Annotation for a Route =====
 
 You can annotate your [[:tina4:routing|Route]]. Check this basic example below.
 
@@ -24,13 +24,13 @@ You can annotate your [[:tina4:routing|Route]]. Check this basic example below.
 });
 </code>
 
-===== Annotate an ORM class or object =====
+===== Basic Annotation for an ORM object or class =====
 
 Perhaps you would like to annotate your[[:tina4:orm|ORM object]]. Check this basic example below.
 
 **Example:**
 
-<code php orm-example.php>
+<code php route-annotation-example-3.php>
 <?php
 
 /**
@@ -48,11 +48,97 @@ $user->name = "Test Save";
 $user->save();
 </code>
 
-===== Annotate an ORM public variable with various optional constraints =====
+===== Annotation for referencing a table with Swagger =====
+
+To reference a table using Swagger, we make use of the **@Table** annotation, which describes the table your record/data exists in. A required attribute of **@Table** is the name of the table.
+
+This is done to provide a sort of hint to the database schema tools. This will serve essential in the initial steps of your project, as you will need to plan and setup your database according to your project requirements.
+
+** Example:**
+
+<code php route-annotation-example-2.php>
+<?php
+
+/**
+ * @User
+ * @description Reference table for User Class to extend to Tina4 ORM
+ * @Table(name="user")
+ */
+class User extends \Tina4\ORM { //assumes we have a table "user" in the database
+    public $id; //primary key because it is first
+    public $name; //some additional data
+}
+
+$user = (new User());
+$user->name = "Test Save";
+$user->save();
+</code>
+
+===== Annotate your ORM objects and its values =====
+
+The better you annotate, the better it may be for your database Schema and for future readability and context of what the code is about.
+
+** Example:**
+
+<code php route-annotation-example-5.php>
+<?php
+
+/**
+ * @User
+ * @description Reference table for User Class to extend to Tina4 ORM
+ * @Table(name="user")
+ */
+class User extends \Tina4\ORM { //the table we want to query
+    /**
+    *  @var id integer auto_increment
+    **/
+    public $id; //primary key because it is first
+    /**
+    *  @var varchar(100) default 'Default Name'
+    **/
+    public $name; //some additional data
+}
+
+$user = (new User());
+$user->name = "Test Save";
+$user->save();
+</code>
+
+=== Test ===
+Next spin up a Web-Server and go to this address in your browsers URL bar to bring up the Swagger UI: 
+
+<code url>
+ http://localhost:(your_port_number)/swagger  
+</code>
+ 
+Once, you spin up a web-server and hit up that address you will see the Swagger UI:
+
+{{ :tina4:api3.png?nolink }}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===== Annotation for an ORM public variable with various optional constraints =====
 
 Your records/data which are represented as public variables can have various optional constraints.
 
-<code php orm-example-2.php>
+<code php route-annotation-example-3.php>
 <?php
 
 /**
@@ -75,40 +161,3 @@ $user = (new User());
 $user->name = "Test Save";
 $user->save();
 </code>
-
-===== Annotation for referencing a table using ORM =====
-
-To reference a table using ORM, we make use of the **@Table** annotation, which describes the table your record/data exists in. A required attribute of **@Table** is the name of the table.
-
-This is done to provide a sort of hint to the database schema tools. This will serve essential in the initial steps of your project, as you will need to plan and setup your database according to your project requirements.
-
-** Example:**
-
-<code php orm-example-3.php>
-<?php
-
-/**
- * @User
- * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name="user")
- */
-class User extends \Tina4\ORM { //assumes we have a table "user" in the database
-    public $id; //primary key because it is first
-    public $name; //some additional data
-}
-
-$user = (new User());
-$user->name = "Test Save";
-$user->save();
-</code>
-
-=== Test ===
-Next spin up a Web-Server and go to this address in your browsers URL bar to bring up the Swagger UI: 
-
-<code url>
- http://localhost:(your_port_number)/swagger  
-</code>
- 
-Once, you spin up a web-server and hit up that address you will see the Swagger UI:
-
-{{ :tina4:api3.png?nolink }} 
