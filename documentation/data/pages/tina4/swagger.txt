@@ -102,10 +102,6 @@ class Person extends ORM { //the table we want to query
     **/
     public $name; //some additional data
 }
-
-{
-
-
 $person = (new Person());
 $person->name = "Test Save";
 $person->save();
