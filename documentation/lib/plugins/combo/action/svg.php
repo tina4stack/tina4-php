@@ -1,7 +1,7 @@
 <?php
 
 
-require_once(__DIR__ . '/../class/CacheMedia.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 use ComboStrap\Dimension;
 use ComboStrap\Identity;
@@ -9,6 +9,7 @@ use ComboStrap\CacheMedia;
 use ComboStrap\DokuPath;
 use ComboStrap\MediaLink;
 use ComboStrap\LogUtility;
+use ComboStrap\PluginUtility;
 use ComboStrap\Resources;
 use ComboStrap\SvgImageLink;
 use ComboStrap\TagAttributes;
@@ -37,6 +38,7 @@ class action_plugin_combo_svg extends DokuWiki_Action_Plugin
          * {@link media_upload()}
          */
         $controller->register_hook('AUTH_ACL_CHECK', 'BEFORE', $this, 'svg_mime');
+
         /**
          * When the parsing of a page starts
          */
@@ -109,7 +111,14 @@ class action_plugin_combo_svg extends DokuWiki_Action_Plugin
         $id = $event->data["media"];
         $pathId = DokuPath::IdToAbsolutePath($id);
         $svgImageLink = SvgImageLink::createMediaLinkFromNonQualifiedPath($pathId, $rev, $tagAttributes);
-        $event->data['file'] = $svgImageLink->getSvgFile();
+        try {
+            $event->data['file'] = $svgImageLink->getSvgFile();
+        } catch (RuntimeException $e) {
+
+            $event->data['file'] = PluginUtility::getResourceBaseUrl()."/images/error-bad-format.svg";
+            $event->data['status'] = 422;
+
+        }
 
 
     }
@@ -132,10 +141,10 @@ class action_plugin_combo_svg extends DokuWiki_Action_Plugin
      */
     public static function allowSvgIfAuthorized()
     {
-        $isadmin = Identity::isAdmin();
+        $isAdmin = Identity::isAdmin();
         $isMember = Identity::isMember("@" . self::CONF_SVG_UPLOAD_GROUP_NAME);
 
-        if ($isadmin || $isMember) {
+        if ($isAdmin || $isMember) {
             /**
              * Enhance the svg mime type
              * {@link getMimeTypes()}

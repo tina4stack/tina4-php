@@ -3,7 +3,6 @@
 
 use ComboStrap\Analytics;
 use ComboStrap\Bootstrap;
-use ComboStrap\Call;
 use ComboStrap\CallStack;
 use ComboStrap\LogUtility;
 use ComboStrap\PluginUtility;
@@ -160,7 +159,7 @@ class syntax_plugin_combo_heading extends DokuWiki_Syntax_Plugin
          * this is a outline
          */
         $parent = $callStack->moveToParent();
-        if ($parent!=false && $parent->getTagName() == syntax_plugin_combo_webcode::TAG){
+        if ($parent != false && $parent->getTagName() == syntax_plugin_combo_webcode::TAG) {
             $parent = $callStack->moveToParent();
         }
         if ($parent != false && $parent->getComponentName() != "section_open") {
@@ -340,6 +339,10 @@ class syntax_plugin_combo_heading extends DokuWiki_Syntax_Plugin
             $renderer->header($tocText, $level, $pos);
             $attributes = syntax_plugin_combo_heading::reduceToFirstOpeningTagAndReturnAttributes($renderer->doc);
             foreach ($attributes as $key => $value) {
+                if ($key === "id" && $tagAttributes->hasAttribute($key)) {
+                    // The id was set in the markup, don't overwrite
+                    continue;
+                }
                 $tagAttributes->addComponentAttributeValue($key, $value);
             }
 

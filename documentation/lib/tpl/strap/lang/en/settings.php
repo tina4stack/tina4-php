@@ -30,13 +30,16 @@ $lang[TplUtility::CONF_REM_SIZE] = '<a href="https://combostrap.com/length/scale
 $lang[TplUtility::CONF_GRID_COLUMNS] = '<a href="https://combostrap.com/dynamic/grid">Dynamic Grid</a> - The number of columns in the grid';
 
 
-$lang[TplUtility::CONF_HEIGHT_FIXED_TOP_MENUBAR] = '<a href="https://combostrap.com/top_menubar">Fixed-top Menubar</a> - The height of the top menu bar in pixel (40N normally)';
-
 $lang['preloadCss'] = '<a href="https://combostrap.com/css#preloadCSS">CSS Optimization</a> - Enable CSS Preloading (!The page rendering will flash - FOUC)';
-$lang['privateToolbar'] = '<a href="https://combostrap.com/toolbar">Toolbar</a> - Enable private toolbar';
+
+
+$lang[TplUtility::CONF_PRIVATE_RAIL_BAR] = '<a href="https://combostrap.com/railbar">Railbar</a> - Enable private railbar';
+$lang[TplUtility::CONF_BREAKPOINT_RAIL_BAR] = '<a href="https://combostrap.com/railbar">Railbar</a> - Breakpoint when the railbar toggle from offcanvas to fixed component';
 
 $lang[TplUtility::CONF_BOOTSTRAP_VERSION_STYLESHEET] = '<a href="https://combostrap.com/bootstrap">Bootstrap</a> - The Bootstrap version and a corresponding stylesheet';
 
 $lang[TplUtility::CONF_JQUERY_DOKU] = '<a href="https://combostrap.com/jquery">Jquery</a> - Use the DokuWiki Jquery (Only valid for Bootstrap 4)';
+
+$lang[TplUtility::CONF_DISABLE_BACKEND_JAVASCRIPT] = '<a href="https://combostrap.com/frontend/optimization">FrontEnd Optimization</a> - Delete backend javascript library for public users';
 
 ?>

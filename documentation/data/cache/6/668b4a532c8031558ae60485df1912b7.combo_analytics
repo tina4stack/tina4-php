@@ -1,13 +1,15 @@
 {
-    "id": "tina4:routing",
-    "date": "2021-09-16 13:00:26",
+    "date": "2021-09-28 21:23:35",
     "metadata": {
-        "title": "Routing in Tina4",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-15T12:57:03+02:00",
+        "date_published": null,
         "description": "Routing in Tina4\n\nPlease see the Create-a-basic-route for more basics on Routes.\n\nFor further information on routing, please click on this <https:\/\/en.wikipedia.org\/wiki\/Routing>.\n\nSimple Syntax\n\nThe simple syntax of a Route is as follows\n\n\n\n\n\nSo the Route to capture the URL <https:\/\/mywebsite.com\/starthere> would be as below. This uses a Get",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-15 12:57:03",
-        "age_creation": 12,
-        "age_modification": 1
+        "h1": "Routing in Tina4",
+        "name": "routing",
+        "path": ":tina4:routing",
+        "title": "Routing in Tina4",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -101,7 +103,7 @@
             "h2": 6,
             "h3": 3
         },
-        "internal_backlinks_count": 8,
+        "internal_backlinks_count": 9,
         "internal_links_count": 3,
         "internal_links_distance": {
             "avg": 0.6666666666666666,
@@ -127,16 +129,16 @@
             "listitem": 6,
             "listcontent": 6
         },
+        "word_count": 569,
         "word_section_count": {
             "avg": 0
-        },
-        "words_count": 569
+        }
     },
     "quality": {
         "message": "No mandatory rules broken",
         "low": false,
         "scoring": {
-            "score": 44,
+            "score": 46,
             "scores": {
                 "canonical_present": 0,
                 "correct_content_length": 10,
@@ -144,8 +146,8 @@
                 "correct_word_avg_by_section": 0,
                 "description_present": 0,
                 "edits_count": 13,
-                "internal_backlinks_count": 8,
-                "internal_links_count": 8,
+                "internal_backlinks_count": 9,
+                "internal_links_count": 9,
                 "no_internal_broken_links_count": 2,
                 "title_present": 0
             }

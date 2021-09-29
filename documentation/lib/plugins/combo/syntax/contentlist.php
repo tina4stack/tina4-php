@@ -4,11 +4,10 @@
 use ComboStrap\Call;
 use ComboStrap\CallStack;
 use ComboStrap\PluginUtility;
-use ComboStrap\StyleUtility;
 use ComboStrap\TagAttributes;
 
-require_once(__DIR__ . '/../class/StyleUtility.php');
-require_once(__DIR__ . '/../class/SnippetManager.php');
+require_once(__DIR__ . '/../ComboStrap/StyleUtility.php');
+require_once(__DIR__ . '/../ComboStrap/SnippetManager.php');
 
 
 /**
@@ -173,7 +172,7 @@ class syntax_plugin_combo_contentlist extends DokuWiki_Syntax_Plugin
                 $callStack = CallStack::createFromHandler($handler);
                 $callStack->moveToPreviousCorrespondingOpeningCall();
                 while ($actualCall = $callStack->next()) {
-                    if($actualCall->getTagName()==syntax_plugin_combo_contentlistitem::DOKU_TAG){
+                    if ($actualCall->getTagName() == syntax_plugin_combo_contentlistitem::DOKU_TAG) {
                         // List item were added by the user
                         break;
                     }

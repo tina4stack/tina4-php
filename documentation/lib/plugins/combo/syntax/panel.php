@@ -13,7 +13,7 @@ if (!defined('DOKU_INC')) {
     die();
 }
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  *

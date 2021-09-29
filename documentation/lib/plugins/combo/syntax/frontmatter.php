@@ -20,11 +20,16 @@
  *
  */
 
+use ComboStrap\Analytics;
+use ComboStrap\CacheManager;
+use ComboStrap\Iso8601Date;
 use ComboStrap\LogUtility;
+use ComboStrap\MediaLink;
 use ComboStrap\Page;
 use ComboStrap\PluginUtility;
+use ComboStrap\Publication;
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 if (!defined('DOKU_INC')) {
     die();
@@ -44,6 +49,37 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
     const STATUS = "status";
     const CANONICAL = "frontmatter";
     const CONF_ENABLE_SECTION_EDITING = 'enableFrontMatterSectionEditing';
+
+    /**
+     * Used in the move plugin
+     * !!! The two last word of the plugin class !!!
+     */
+    const COMPONENT = 'combo_' . self::CANONICAL;
+    const START_TAG = '---json';
+    const END_TAG = '---';
+    const METADATA_IMAGE_CANONICAL = "metadata:image";
+
+    /**
+     * @param $match
+     * @return array|mixed - null if decodage problem, empty array if no json or an associative array
+     */
+    public static function FrontMatterMatchToAssociativeArray($match)
+    {
+        // strip
+        //   from start `---json` + eol = 8
+        //   from end   `---` + eol = 4
+        $jsonString = substr($match, 7, -3);
+
+        // Empty front matter
+        if (trim($jsonString) == "") {
+            self::deleteKnownMetaThatAreNoMorePresent();
+            return [];
+        }
+
+        // Otherwise you get an object ie $arrayFormat-> syntax
+        $arrayFormat = true;
+        return json_decode($jsonString, $arrayFormat);
+    }
 
     /**
      * Syntax Type.
@@ -93,7 +129,7 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
     {
         if ($mode == "base") {
             // only from the top
-            $this->Lexer->addSpecialPattern('---json.*?---', $mode, PluginUtility::getModeFromTag($this->getPluginComponent()));
+            $this->Lexer->addSpecialPattern(self::START_TAG . '.*?' . self::END_TAG, $mode, PluginUtility::getModeFromTag($this->getPluginComponent()));
         }
     }
 
@@ -115,28 +151,45 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
 
         if ($state == DOKU_LEXER_SPECIAL) {
 
-            // strip
-            //   from start `---json` + eol = 8
-            //   from end   `---` + eol = 4
-            $jsonString = substr($match, 7, -3);
 
-            // Empty front matter
-            if (trim($jsonString) == "") {
-                $this->deleteKnownMetaThatAreNoMorePresent();
-                return array(self::STATUS => self::PARSING_STATE_EMPTY);
-            }
+            $jsonArray = self::FrontMatterMatchToAssociativeArray($match);
 
-            // Otherwise you get an object ie $arrayFormat-> syntax
-            $arrayFormat = true;
-            $jsonArray = json_decode($jsonString, $arrayFormat);
 
             $result = [];
             // Decodage problem
             if ($jsonArray == null) {
+
                 $result[self::STATUS] = self::PARSING_STATE_ERROR;
                 $result[PluginUtility::PAYLOAD] = $match;
+
             } else {
+
+                if (sizeof($jsonArray) === 0) {
+                    return array(self::STATUS => self::PARSING_STATE_EMPTY);
+                }
+
                 $result[self::STATUS] = self::PARSING_STATE_SUCCESSFUL;
+                /**
+                 * Published is an alias for date published
+                 */
+                if (isset($jsonArray[Publication::OLD_META_KEY])) {
+                    $jsonArray[Publication::DATE_PUBLISHED] = $jsonArray[Publication::OLD_META_KEY];
+                    unset($jsonArray[Publication::OLD_META_KEY]);
+                }
+                /**
+                 * Add the time part if not present
+                 */
+                if (isset($jsonArray[Publication::DATE_PUBLISHED])) {
+                    $datePublishedString = $jsonArray[Publication::DATE_PUBLISHED];
+                    $datePublished = Iso8601Date::create($datePublishedString);
+                    if (!$datePublished->isValidDateEntry()) {
+                        LogUtility::msg("The published date ($datePublishedString) is not a valid ISO date supported.", LogUtility::LVL_MSG_ERROR, self::CANONICAL);
+                        unset($jsonArray[Publication::DATE_PUBLISHED]);
+                    } else {
+                        $jsonArray[Publication::DATE_PUBLISHED] = "$datePublished";
+                    }
+
+                }
                 $result[PluginUtility::ATTRIBUTES] = $jsonArray;
             }
 
@@ -194,23 +247,31 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
                     return false;
                 }
 
+                $notModifiableMeta = [
+                    Analytics::PATH,
+                    Analytics::DATE_CREATED,
+                    Analytics::DATE_MODIFIED
+                ];
+
                 /** @var renderer_plugin_combo_analytics $renderer */
                 $jsonArray = $data[PluginUtility::ATTRIBUTES];
-                if (array_key_exists("description", $jsonArray)) {
-                    $renderer->setMeta("description", $jsonArray["description"]);
-                }
-                if (array_key_exists(Page::CANONICAL_PROPERTY, $jsonArray)) {
-                    $renderer->setMeta(Page::CANONICAL_PROPERTY, $jsonArray[Page::CANONICAL_PROPERTY]);
-                }
-                if (array_key_exists(Page::TITLE_PROPERTY, $jsonArray)) {
-                    $renderer->setMeta(Page::TITLE_PROPERTY, $jsonArray[Page::TITLE_PROPERTY]);
-                }
-                if (array_key_exists(Page::LOW_QUALITY_PAGE_INDICATOR, $jsonArray)) {
-                    $renderer->setMeta(Page::LOW_QUALITY_PAGE_INDICATOR, $jsonArray[Page::LOW_QUALITY_PAGE_INDICATOR]);
+                foreach ($jsonArray as $key => $value) {
+                    if (!in_array($key, $notModifiableMeta)) {
+
+                        $renderer->setMeta($key, $value);
+                        if ($key === Page::IMAGE_META_PROPERTY) {
+                            $this->updateImageStatistics($value, $renderer);
+                        }
+
+                    } else {
+                        LogUtility::msg("The metadata ($key) cannot be set.", LogUtility::LVL_MSG_ERROR, self::CANONICAL);
+                    }
                 }
                 break;
+
             case "metadata":
 
+                /** @var Doku_Renderer_metadata $renderer */
                 if ($data[self::STATUS] != self::PARSING_STATE_SUCCESSFUL) {
                     return false;
                 }
@@ -261,6 +322,17 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
                             $value = strtolower($value);
                             break;
 
+                        case Page::IMAGE_META_PROPERTY:
+
+                            $imageValues = [];
+                            $this->aggregateImageValues($imageValues, $value);
+                            foreach ($imageValues as $imageValue) {
+                                $media = MediaLink::createFromRenderMatch($imageValue);
+                                $attributes = $media->toCallStackArray();
+                                syntax_plugin_combo_media::registerImageMeta($attributes, $renderer);
+                            }
+                            break;
+
                     }
                     // Set the value persistently
                     p_set_metadata($ID, array($lowerCaseKey => $value));
@@ -281,7 +353,7 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
      * Delete the controlled meta that are no more present if they exists
      * @return bool
      */
-    public
+    static public
     function deleteKnownMetaThatAreNoMorePresent(array $json = array())
     {
         global $ID;
@@ -293,8 +365,18 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
          */
         $managedMeta = [
             Page::CANONICAL_PROPERTY,
-            action_plugin_combo_metatitle::TITLE_META_KEY,
-            syntax_plugin_combo_disqus::META_DISQUS_IDENTIFIER
+            Page::TYPE_META_PROPERTY,
+            Page::IMAGE_META_PROPERTY,
+            Page::COUNTRY_META_PROPERTY,
+            Page::LANG_META_PROPERTY,
+            Analytics::TITLE,
+            syntax_plugin_combo_disqus::META_DISQUS_IDENTIFIER,
+            Publication::OLD_META_KEY,
+            Publication::DATE_PUBLISHED,
+            Analytics::NAME,
+            CacheManager::DATE_CACHE_EXPIRATION_META_KEY,
+            action_plugin_combo_metagoogle::JSON_LD_META_PROPERTY,
+
         ];
         $meta = p_read_metadata($ID);
         foreach ($managedMeta as $metaKey) {
@@ -305,6 +387,30 @@ class syntax_plugin_combo_frontmatter extends DokuWiki_Syntax_Plugin
             }
         }
         return p_save_metadata($ID, $meta);
+    }
+
+    private function updateImageStatistics($value, $renderer)
+    {
+        if(is_array($value)){
+            foreach($value as $subImage){
+                $this->updateImageStatistics($subImage, $renderer);
+            }
+        } else {
+            $media = MediaLink::createFromRenderMatch($value);
+            $attributes = $media->toCallStackArray();
+            syntax_plugin_combo_media::updateStatistics($attributes, $renderer);
+        }
+    }
+
+    private function aggregateImageValues(array &$imageValues, $value)
+    {
+        if (is_array($value)) {
+            foreach ($value as $subImageValue) {
+                $this->aggregateImageValues($imageValues,$subImageValue);
+            }
+        } else {
+            $imageValues[] = $value;
+        }
     }
 
 

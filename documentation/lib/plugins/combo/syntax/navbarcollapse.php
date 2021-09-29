@@ -17,8 +17,8 @@ use ComboStrap\NavBarUtility;
 use ComboStrap\PluginUtility;
 
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
-require_once(__DIR__ . '/../class/NavBarUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/NavBarUtility.php');
 
 
 /**

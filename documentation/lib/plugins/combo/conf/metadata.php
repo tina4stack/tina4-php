@@ -23,7 +23,7 @@ use ComboStrap\UrlManagerBestEndPage;
 /**
  * Load all class via Plugin Utility
  */
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 
 require_once(__DIR__ . '/../syntax/related.php');
@@ -63,7 +63,7 @@ $meta['ActionReaderThird'] = $actionChoices;
 $meta['WeightFactorForSamePageName'] = array('string');
 $meta['WeightFactorForStartPage'] = array('string');
 $meta['WeightFactorForSameNamespace'] = array('string');
-require_once(__DIR__ . '/../class/UrlManagerBestEndPage.php');
+require_once(__DIR__ . '/../ComboStrap/UrlManagerBestEndPage.php');
 $meta[UrlManagerBestEndPage::CONF_MINIMAL_SCORE_FOR_REDIRECT] = array('string');
 
 $meta[action_plugin_combo_metacanonical::CANONICAL_LAST_NAMES_COUNT_CONF] = array('string');
@@ -96,7 +96,7 @@ $meta[syntax_plugin_combo_badge::CONF_DEFAULT_ATTRIBUTES_KEY] = array('string');
 /**
  * Ads
  */
-require_once(__DIR__ . '/../class/AdsUtility.php');
+require_once(__DIR__ . '/../ComboStrap/AdsUtility.php');
 $meta[AdsUtility::CONF_IN_ARTICLE_PLACEHOLDER] = array('onoff');
 
 /**
@@ -112,7 +112,7 @@ $meta[syntax_plugin_combo_file::CONF_FILE_ENABLE] = array('onoff');
 /**
  * Quality (SEO)
  */
-require_once(__DIR__ . '/../class/LowQualityPage.php');
+require_once(__DIR__ . '/../ComboStrap/LowQualityPage.php');
 $meta[LowQualityPage::CONF_LOW_QUALITY_PAGE_PROTECTION_ENABLE] = array('onoff');
 $meta[LowQualityPage::CONF_LOW_QUALITY_PAGE_PROTECTION_MODE] = array('multichoice', '_choices' => array(
     PageProtection::CONF_VALUE_ROBOT,
@@ -213,7 +213,7 @@ $meta[Shadow::CONF_DEFAULT_VALUE] = array('multichoice', '_choices' => array(
 /**
  * Big Svg Lazy load
  */
-require_once(__DIR__ . '/../class/SvgImageLink.php');
+require_once(__DIR__ . '/../ComboStrap/SvgImageLink.php');
 $meta[SvgImageLink::CONF_LAZY_LOAD_ENABLE] = array('onoff');
 
 /**
@@ -307,5 +307,10 @@ $meta[action_plugin_combo_login::CONF_ENABLE_LOGIN_FORM] = array("onoff");
 $meta[action_plugin_combo_resend::CONF_ENABLE_RESEND_PWD_FORM] = array("onoff");
 $meta[action_plugin_combo_profile::CONF_ENABLE_PROFILE_UPDATE_FORM] = array("onoff");
 $meta[action_plugin_combo_profile::CONF_ENABLE_PROFILE_DELETE_FORM] = array("onoff");
+
+/**
+ * Comment
+ */
+$meta[syntax_plugin_combo_comment::CONF_OUTPUT_COMMENT] = array("onoff");
 
 

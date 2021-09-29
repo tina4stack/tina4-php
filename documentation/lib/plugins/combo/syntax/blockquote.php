@@ -19,9 +19,9 @@ if (!defined('DOKU_INC')) {
     die();
 }
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
-require_once(__DIR__ . '/../class/StringUtility.php');
-require_once(__DIR__ . '/../class/Tag.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/StringUtility.php');
+require_once(__DIR__ . '/../ComboStrap/Tag.php');
 
 /**
  * All DokuWiki plugins to extend the parser/rendering mechanism
@@ -227,17 +227,17 @@ class syntax_plugin_combo_blockquote extends DokuWiki_Syntax_Plugin
                                 break;
                         }
                     }
-                    if(
-                        $actualCall->getTagName()==syntax_plugin_combo_link::TAG
-                        && $actualCall->getState()==DOKU_LEXER_ENTER
-                    ){
+                    if (
+                        $actualCall->getTagName() == syntax_plugin_combo_link::TAG
+                        && $actualCall->getState() == DOKU_LEXER_ENTER
+                    ) {
                         $ref = $actualCall->getAttribute(LinkUtility::ATTRIBUTE_REF);
                         if (StringUtility::match($ref, "https:\/\/twitter.com\/[^\/]*\/status\/.*")) {
                             $tweetUrlFound = true;
                         }
                     }
                 }
-                if ($tweetUrlFound){
+                if ($tweetUrlFound) {
                     $context = syntax_plugin_combo_blockquote::TWEET;
                     $type = $context;
                     $openingTag->setType($context);
@@ -263,7 +263,7 @@ class syntax_plugin_combo_blockquote extends DokuWiki_Syntax_Plugin
                 $paragraphAttributes["class"] = "blockquote-text";
                 if ($type == "typo") {
                     $bootstrapVersion = Bootstrap::getBootStrapMajorVersion();
-                    if($bootstrapVersion==Bootstrap::BootStrapFourMajorVersion) {
+                    if ($bootstrapVersion == Bootstrap::BootStrapFourMajorVersion) {
                         // As seen here https://getbootstrap.com/docs/4.0/content/typography/#blockquotes
                         $paragraphAttributes["class"] .= " mb-0";
                         // not on 5 https://getbootstrap.com/docs/5.0/content/typography/#blockquotes
@@ -386,7 +386,7 @@ class syntax_plugin_combo_blockquote extends DokuWiki_Syntax_Plugin
                         case "typo":
 
                             $tagAttributes->addClassName("blockquote");
-                            $cardTags = [syntax_plugin_combo_card::TAG, syntax_plugin_combo_cardcolumns::TAG];
+                            $cardTags = [syntax_plugin_combo_card::TAG, syntax_plugin_combo_masonry::TAG];
                             if (in_array($data[PluginUtility::CONTEXT], $cardTags)) {
                                 // As seen here: https://getbootstrap.com/docs/5.0/components/card/#header-and-footer
                                 // A blockquote in a card
@@ -429,7 +429,9 @@ class syntax_plugin_combo_blockquote extends DokuWiki_Syntax_Plugin
                              * Wrap with column
                              */
                             $context = $data[PluginUtility::CONTEXT];
-                            syntax_plugin_combo_cardcolumns::addColIfBootstrap5AndCardColumns($renderer, $context);
+                            if ($context === syntax_plugin_combo_masonry::TAG) {
+                                syntax_plugin_combo_masonry::addColIfBootstrap5AndCardColumns($renderer, $context);
+                            }
 
                             /**
                              * Starting the card
@@ -473,7 +475,9 @@ class syntax_plugin_combo_blockquote extends DokuWiki_Syntax_Plugin
                      */
                     if ($type == syntax_plugin_combo_card::TAG) {
                         $context = $data[PluginUtility::CONTEXT];
-                        syntax_plugin_combo_cardcolumns::endColIfBootstrap5AnCardColumns($renderer, $context);
+                        if ($context === syntax_plugin_combo_masonry::TAG) {
+                            syntax_plugin_combo_masonry::endColIfBootstrap5AnCardColumns($renderer, $context);
+                        }
                     }
 
                     break;

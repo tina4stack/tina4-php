@@ -12,6 +12,7 @@
 if (!defined('DOKU_INC')) die();
 
 use ComboStrap\Analytics;
+use ComboStrap\FsWikiUtility;
 use ComboStrap\Page;
 use ComboStrap\Sqlite;
 use splitbrain\phpcli\Options;
@@ -19,7 +20,7 @@ use splitbrain\phpcli\Options;
 /**
  * All dependency are loaded in plugin utility
  */
-require_once(__DIR__ . '/class/PluginUtility.php');
+require_once(__DIR__ . '/ComboStrap/PluginUtility.php');
 
 /**
  * The memory of the server 128 is not enough
@@ -132,7 +133,16 @@ class cli_plugin_combo extends DokuWiki_CLI_Plugin
             if (!$fileHandle) $this->fatal("Failed to open $output");
         }
 
-        $pages = $this->findPages($namespaces, $depth);
+        /**
+         * Run as admin to overcome the fact that
+         * anonymous user cannot see all links and backlinks
+         */
+        global $USERINFO;
+        $USERINFO['grps'] = array('admin');
+        global $INPUT;
+        $INPUT->server->set('REMOTE_USER', "cli");
+
+        $pages = FsWikiUtility::getPages($namespaces, $depth);
 
 
         if (!empty($fileHandle)) {
@@ -182,7 +192,7 @@ class cli_plugin_combo extends DokuWiki_CLI_Plugin
                     'h5' => $statistics[Analytics::HEADERS_COUNT]['h5'],
                     'internal_links' => $statistics[Analytics::INTERNAL_LINKS_COUNT],
                     'internal_medias' => $statistics[Analytics::INTERNAL_MEDIAS_COUNT],
-                    'words' => $statistics[Analytics::WORDS_COUNT],
+                    'words' => $statistics[Analytics::WORD_COUNT],
                     'low' => $data[Analytics::QUALITY]['low']
                 );
                 fwrite($fileHandle, implode(",", $row) . PHP_EOL);
@@ -194,67 +204,7 @@ class cli_plugin_combo extends DokuWiki_CLI_Plugin
 
     }
 
-    /**
-     * Find the pages in the tree
-     * @param $namespaces
-     * @param $depth
-     * @return array
-     */
-    private function findPages($namespaces = array(), $depth = 0)
-    {
-        // Run as admin to overcome the fact that
-        // anonymous user cannot set all links and backlinnks
 
-
-        global $conf;
-        $datadir = $conf['datadir'];
-
-        /**
-         * Run as admin to overcome the fact that
-         * anonymous user cannot see all links and backlinnks
-         */
-        global $USERINFO;
-        $USERINFO['grps'] = array('admin');
-        global $INPUT;
-        $INPUT->server->set('REMOTE_USER', "cli");
-
-        $pages = array();
-        foreach ($namespaces as $ns) {
-
-            search(
-                $pages,
-                $datadir,
-                'search_universal',
-                array(
-                    'depth' => $depth,
-                    'listfiles' => true,
-                    'listdirs' => false,
-                    'pagesonly' => true,
-                    'skipacl' => true,
-                    'firsthead' => false,
-                    'meta' => false,
-                ),
-                str_replace(':', '/', $ns)
-            );
-
-            // add the ns start page
-            if ($ns && page_exists($ns)) {
-                $pages[] = array(
-                    'id' => $ns,
-                    'ns' => getNS($ns),
-                    'title' => p_get_first_heading($ns, false),
-                    'size' => filesize(wikiFN($ns)),
-                    'mtime' => filemtime(wikiFN($ns)),
-                    'perm' => 16,
-                    'type' => 'f',
-                    'level' => 0,
-                    'open' => 1,
-                );
-            }
-
-        }
-        return $pages;
-    }
 
     private function syncPages()
     {

@@ -146,7 +146,7 @@ class syntax_plugin_combo_headingwiki extends DokuWiki_Syntax_Plugin
                     while ($actualCall = $callStack->next()) {
                         $content .= $actualCall->getCapturedContent();
                     }
-                    LogUtility::msg("The number of `=` character for a wiki heading is not the same before ($levelFromStartTag) and after ($levelFromMatch) the content ($content).", LogUtility::LVL_MSG_WARNING, syntax_plugin_combo_heading::CANONICAL);
+                    LogUtility::msg("The number of `=` character for a wiki heading is not the same before ($levelFromStartTag) and after ($levelFromMatch) the content ($content).", LogUtility::LVL_MSG_INFO, syntax_plugin_combo_heading::CANONICAL);
                 }
 
                 return $returnedData;

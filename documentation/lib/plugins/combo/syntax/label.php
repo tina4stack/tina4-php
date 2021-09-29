@@ -13,7 +13,7 @@ use ComboStrap\Tag;
 use ComboStrap\TagAttributes;
 
 
-require_once(__DIR__ . '/../class/HeaderUtility.php');
+require_once(__DIR__ . '/../ComboStrap/HeaderUtility.php');
 
 if (!defined('DOKU_INC')) die();
 

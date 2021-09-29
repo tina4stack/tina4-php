@@ -3,13 +3,12 @@
 
 use ComboStrap\Analytics;
 use ComboStrap\LinkUtility;
-use ComboStrap\StringUtility;
-
 use ComboStrap\Page;
+use ComboStrap\StringUtility;
 use dokuwiki\ChangeLog\PageChangeLog;
 
-require_once(__DIR__ . '/../class/LowQualityPage.php');
-require_once(__DIR__ . '/../class/Analytics.php');
+
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 
 /**
@@ -20,7 +19,6 @@ require_once(__DIR__ . '/../class/Analytics.php');
 class renderer_plugin_combo_analytics extends Doku_Renderer
 {
 
-    const DATE_CREATED = 'date_created';
     const PLAINTEXT = 'formatted';
     const RESULT = "result";
     const DESCRIPTION = "description";
@@ -98,7 +96,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
      * that should be {@link  renderer_plugin_combo_analysis::reset()}
      */
     public $stats = array(); // the stats
-    protected $analyticsMetadata = array(); // the metadata
+    protected $metadata = array(); // the metadata in frontmatter
     protected $headerId = 0; // the id of the header on the page (first, second, ...)
 
     /**
@@ -195,7 +193,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
          */
         $text = rawWiki($ID);
         $statExport[Analytics::CHARS_COUNT] = strlen($text);
-        $statExport[Analytics::WORDS_COUNT] = StringUtility::getWordCount($text);
+        $statExport[Analytics::WORD_COUNT] = StringUtility::getWordCount($text);
 
 
         /**
@@ -243,10 +241,10 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
          * A title should be present
          */
         $titleScore = $this->getConf(self::CONF_QUALITY_SCORE_TITLE_PRESENT, 10);
-        if (empty($this->analyticsMetadata[Analytics::TITLE])) {
+        if (empty($this->metadata[Analytics::TITLE])) {
             $ruleResults[self::RULE_TITLE_PRESENT] = self::FAILED;
             $ruleInfo[self::RULE_TITLE_PRESENT] = "Add a title in the frontmatter for {$titleScore} points";
-            $this->analyticsMetadata[Analytics::TITLE] = $dokuWikiMetadata[Analytics::TITLE];
+            $this->metadata[Analytics::TITLE] = $dokuWikiMetadata[Analytics::TITLE];
             $qualityScores[self::RULE_TITLE_PRESENT] = 0;
         } else {
             $qualityScores[self::RULE_TITLE_PRESENT] = $titleScore;
@@ -257,10 +255,10 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
          * A description should be present
          */
         $descScore = $this->getConf(self::CONF_QUALITY_SCORE_DESCRIPTION_PRESENT, 8);
-        if (empty($this->analyticsMetadata[self::DESCRIPTION])) {
+        if (empty($this->metadata[self::DESCRIPTION])) {
             $ruleResults[self::RULE_DESCRIPTION_PRESENT] = self::FAILED;
             $ruleInfo[self::RULE_DESCRIPTION_PRESENT] = "Add a description in the frontmatter for {$descScore} points";
-            $this->analyticsMetadata[self::DESCRIPTION] = $dokuWikiMetadata[self::DESCRIPTION]["abstract"];
+            $this->metadata[self::DESCRIPTION] = $dokuWikiMetadata[self::DESCRIPTION]["abstract"];
             $qualityScores[self::RULE_DESCRIPTION_PRESENT] = 0;
         } else {
             $qualityScores[self::RULE_DESCRIPTION_PRESENT] = $descScore;
@@ -271,7 +269,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
          * A canonical should be present
          */
         $canonicalScore = $this->getConf(self::CONF_QUALITY_SCORE_CANONICAL_PRESENT, 5);
-        if (empty($this->analyticsMetadata[Page::CANONICAL_PROPERTY])) {
+        if (empty($this->metadata[Page::CANONICAL_PROPERTY])) {
             global $conf;
             $root = $conf['start'];
             if ($ID != $root) {
@@ -322,7 +320,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
         $maximalWordCount = 1500;
         $correctContentLength = true;
         $correctLengthScore = $this->getConf(self::CONF_QUALITY_SCORE_CORRECT_CONTENT, 10);
-        $missingWords = $minimalWordCount - $statExport[Analytics::WORDS_COUNT];
+        $missingWords = $minimalWordCount - $statExport[Analytics::WORD_COUNT];
         if ($missingWords > 0) {
             $ruleResults[self::RULE_WORDS_MINIMAL] = self::FAILED;
             $correctContentLength = false;
@@ -330,7 +328,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
         } else {
             $ruleResults[self::RULE_WORDS_MINIMAL] = self::PASSED;
         }
-        $tooMuchWords = $statExport[Analytics::WORDS_COUNT] - $maximalWordCount;
+        $tooMuchWords = $statExport[Analytics::WORD_COUNT] - $maximalWordCount;
         if ($tooMuchWords > 0) {
             $ruleResults[self::RULE_WORDS_MAXIMAL] = self::FAILED;
             $ruleInfo[self::RULE_WORDS_MAXIMAL] = "Delete {$tooMuchWords} words to get {$correctLengthScore} points";
@@ -354,7 +352,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
             $headerCount--; // h1 is supposed to have no words
             if ($headerCount > 0) {
 
-                $avgWordsCountBySection = round($this->stats[Analytics::WORDS_COUNT] / $headerCount);
+                $avgWordsCountBySection = round($this->stats[Analytics::WORD_COUNT] / $headerCount);
                 $statExport['word_section_count']['avg'] = $avgWordsCountBySection;
 
                 /**
@@ -447,8 +445,8 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
         $mediasStats = [
             "total_count" => self::getAndUnset($statExport, Analytics::MEDIAS_COUNT, 0),
             "internal_count" => self::getAndUnset($statExport, Analytics::INTERNAL_MEDIAS_COUNT, 0),
-            "internal_broken_count" => self::getAndUnset($statExport, Analytics::INTERNAL_BROKEN_MEDIAS_COUNT,0),
-            "external_count" => self::getAndUnset($statExport, Analytics::EXTERNAL_MEDIAS_COUNT,0)
+            "internal_broken_count" => self::getAndUnset($statExport, Analytics::INTERNAL_BROKEN_MEDIAS_COUNT, 0),
+            "external_count" => self::getAndUnset($statExport, Analytics::EXTERNAL_MEDIAS_COUNT, 0)
         ];
         $statExport['media'] = $mediasStats;
 
@@ -496,7 +494,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
         /**
          * If the low level is not set manually
          */
-        if (empty($this->analyticsMetadata[Page::LOW_QUALITY_PAGE_INDICATOR])) {
+        if (empty($this->metadata[Page::LOW_QUALITY_PAGE_INDICATOR])) {
             $lowLevel = false;
             $brokenRulesCount = sizeof($mandatoryRulesBroken);
             if ($brokenRulesCount > 0) {
@@ -506,7 +504,7 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
                 $quality["message"] = "No mandatory rules broken";
             }
         } else {
-            $lowLevel = filter_var($this->analyticsMetadata[Page::LOW_QUALITY_PAGE_INDICATOR], FILTER_VALIDATE_BOOLEAN);
+            $lowLevel = filter_var($this->metadata[Page::LOW_QUALITY_PAGE_INDICATOR], FILTER_VALIDATE_BOOLEAN);
         }
         if (!$this->page->isSlot()) {
             $this->page->setLowQualityIndicator($lowLevel);
@@ -534,17 +532,17 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
         /**
          * Metadata
          */
-        $title = $dokuWikiMetadata['title'];
-        $this->analyticsMetadata[Analytics::TITLE] = $title;
-        if ($title != @$dokuWikiMetadata[Analytics::H1]) {
-            $this->analyticsMetadata[Analytics::H1] = $dokuWikiMetadata[Analytics::H1];
+        $page = Page::createPageFromCurrentId();
+        $meta = $page->getMetadataStandard();
+        foreach ($meta as $key => $value) {
+            /**
+             * The metadata may have been set
+             * by frontmatter
+             */
+            if (!isset($this->metadata[$key])) {
+                $this->metadata[$key] = $value;
+            }
         }
-        $timestampCreation = $dokuWikiMetadata['date']['created'];
-        $this->analyticsMetadata[self::DATE_CREATED] = date('Y-m-d h:i:s', $timestampCreation);
-        $timestampModification = $dokuWikiMetadata['date']['modified'];
-        $this->analyticsMetadata[Analytics::DATE_MODIFIED] = date('Y-m-d h:i:s', $timestampModification);
-        $this->analyticsMetadata['age_creation'] = round((time() - $timestampCreation) / 60 / 60 / 24);
-        $this->analyticsMetadata['age_modification'] = round((time() - $timestampModification) / 60 / 60 / 24);
 
 
         /**
@@ -552,9 +550,9 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
          */
         global $ID;
         $finalStats = array();
-        $finalStats["id"] = $ID;
         $finalStats["date"] = date('Y-m-d H:i:s', time());
-        $finalStats['metadata'] = $this->analyticsMetadata;
+        ksort($this->metadata);
+        $finalStats[Analytics::METADATA] = $this->metadata;
         ksort($statExport);
         $finalStats[Analytics::STATISTICS] = $statExport;
         $finalStats[Analytics::QUALITY] = $quality; // Quality after the sort to get them at the end
@@ -751,13 +749,13 @@ class renderer_plugin_combo_analytics extends Doku_Renderer
     public function reset()
     {
         $this->stats = array();
-        $this->analyticsMetadata = array();
+        $this->metadata = array();
         $this->headerId = 0;
     }
 
     public function setMeta($key, $value)
     {
-        $this->analyticsMetadata[$key] = $value;
+        $this->metadata[$key] = $value;
     }
 
 

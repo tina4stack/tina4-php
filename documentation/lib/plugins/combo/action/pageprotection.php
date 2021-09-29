@@ -10,9 +10,9 @@ use ComboStrap\PageProtection;
 use ComboStrap\Publication;
 use ComboStrap\StringUtility;
 
-require_once(__DIR__ . '/../class/LowQualityPage.php');
-require_once(__DIR__ . '/../class/PageProtection.php');
-require_once(__DIR__ . '/../class/DokuPath.php');
+require_once(__DIR__ . '/../ComboStrap/LowQualityPage.php');
+require_once(__DIR__ . '/../ComboStrap/PageProtection.php');
+require_once(__DIR__ . '/../ComboStrap/DokuPath.php');
 
 /**
  *

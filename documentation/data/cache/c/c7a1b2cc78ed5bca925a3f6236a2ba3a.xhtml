@@ -16,11 +16,15 @@ ORM is used to map object relations and how they interact with each other, for y
 <div class="level2">
 
 <p>
-It is required to extend the <strong>\Tina4\ORM</strong> class to make the magic happen.
+To save a record/data to the database using ORM, it is required that you extend the <strong>\Tina4\ORM</strong> class to make the magic happen.
 </p>
 
 <p>
-<strong> Examples:</strong>
+Create your ORM classes and objects in the <strong>\src\ORM</strong> directory.
+</p>
+
+<p>
+<strong> Example:</strong>
 </p>
 <pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example.php" data-download-link-label="Download orm-example.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
@@ -38,15 +42,8 @@ $user-&gt;save();
 //We want the table to be made for us
 class NewTable extends \Tina4\ORM {
 
-    //will be created as newtable in the database
-
-    /**
-    *  @var id integer auto_increment  
-    **/
+    //will be created as &quot;newtable&quot; in the database
     public $id; //primary key because it is first
-    /**
-    *  @var varchar(100) default 'Default Name'
-    **/
     public $name; //some additional data
 } 
 
@@ -70,12 +67,16 @@ $newTable-&gt;save();</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Save a record using the ORM&quot;,&quot;hid&quot;:&quot;save_a_record_using_the_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;375-1630&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Save a record using the ORM&quot;,&quot;hid&quot;:&quot;save_a_record_using_the_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;375-1633&quot;} -->
 <h2 class="sectionedit3 heading-combo" id="other_methods_using_the_orm">Other methods using the ORM</h2>
 <div class="level2">
 
 <p>
-Tina4 can make use of various types of methods:
+Tina4 can make use of various types of methods.
+</p>
+
+<p>
+<strong> Example:</strong>
 </p>
 <pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example-2.php" data-download-link-label="Download orm-example-2.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
@@ -104,7 +105,70 @@ Tina4 can make use of various types of methods:
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Other methods using the ORM&quot;,&quot;hid&quot;:&quot;other_methods_using_the_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;1631-&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Other methods using the ORM&quot;,&quot;hid&quot;:&quot;other_methods_using_the_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;1634-2371&quot;} -->
+<h2 class="sectionedit4 heading-combo" id="reference_a_table_using_the_orm">Reference a table using the ORM</h2>
+<div class="level2">
+
+<p>
+To reference a table in your database using Tina4, all you need to do is declare  <strong>$tableName</strong> as a public variable. Below is an example of the code convention:
+</p>
+
+<p>
+<strong> Example:</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example-3.php" data-download-link-label="Download orm-example-3.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+class Person extends ORM
+{
+    public $tableName = &quot;person&quot;; //--&gt; here we reference the table name in the database
+
+    //--&gt; here we reference the columns in our table
+    public $id;
+    public $firstName;
+    public $lastName;
+}
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Reference a table using the ORM&quot;,&quot;hid&quot;:&quot;reference_a_table_using_the_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;2372-2945&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="ensure_duplicates_are_not_created_in_the_database_using_orm">Ensure duplicates are not created in the database using ORM</h2>
+<div class="level2">
+
+<p>
+To ensure there are no duplicate entries and values created in your database, all you need to do is declare <strong>$primarykey</strong> name as a public variable.
+</p>
+
+<p>
+<strong> Example:</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example-3.php" data-download-link-label="Download orm-example-3.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+class Person extends ORM
+{
+    public $tableName = &quot;person&quot;; //--&gt; here we reference the table name in the database
+    public primaryKey = &quot;id&quot;; //--&gt; here we include the primary key SQL constraint
+
+    //--&gt; here we reference the columns in our table
+    public $id;
+    public $firstName;
+    public $lastName;
+}
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
+</pre>
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:6,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap" style="width: 100%;">
+<p>
+Take a look at <a class="link-internal link-combo" data-wiki-id="tina4:migrations" href="/doku.php?id=tina4:migrations" title="Create a table/migration You want to create a table for the database? Migrations are sequential &lt;https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_1001.htm&gt; which keep track of your database changes. We recommend using migrations especially when you want to apply changes to a running system or when working in a team.">Migrations</a> &amp; <a class="link-internal link-combo" data-wiki-id="tina4:swagger" href="/doku.php?id=tina4:swagger" title="API As mentioned in basic-apiAPI, Tina uses &lt;https://swagger.io/solutions/api-documentation/&gt; &amp; &lt;https://swagger.io/specification/&gt; UI. It is highly recommended to annotate your code for flexibility. As an example, if someone else were to look and your code, would they be able to read it and add/make changes? A simple way to annotate routers:">Swagger</a> as it can be used with ORM.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} -->
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Ensure duplicates are not created in the database using ORM&quot;,&quot;hid&quot;:&quot;ensure_duplicates_are_not_created_in_the_database_using_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;2946-&quot;} -->
 <script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
@@ -295,11 +359,6 @@ Tina4 can make use of various types of methods:
     font-size: 80%;
     font-style: italic;
     text-align: right;
-}
-</style>
-
-<style class="snippet-lqpp-combo">.low-quality-page-combo {
-    text-decoration: none;
 }
 </style>
 

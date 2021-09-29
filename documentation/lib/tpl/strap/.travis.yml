@@ -2,11 +2,9 @@ language: php
 # Taken from OVH
 # https://www.ovh.nl/shared-hosting/persoonlijke-shared-hosting.xml
 php:
+  - "7.4"
   - "7.3"
   - "7.2"
-  - "7.1"
-  - "7.0"
-  - "5.6"
 
 env:
   - DOKUWIKI=stable

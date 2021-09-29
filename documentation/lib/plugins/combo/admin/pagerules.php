@@ -11,9 +11,9 @@ if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
 
 require_once(DOKU_PLUGIN . 'admin.php');
 require_once(DOKU_INC . 'inc/parser/xhtml.php');
-require_once(__DIR__ . '/../class/PageRules.php');
-require_once(__DIR__ . '/../class/PluginUtility.php');
-require_once(__DIR__ . '/../class/Resources.php');
+require_once(__DIR__ . '/../ComboStrap/PageRules.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/Resources.php');
 
 /**
  * The admin pages

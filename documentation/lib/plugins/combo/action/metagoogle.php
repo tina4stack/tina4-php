@@ -7,7 +7,7 @@ use ComboStrap\Site;
 
 if (!defined('DOKU_INC')) die();
 
-require_once(__DIR__ . '/../class/Site.php');
+require_once(__DIR__ . '/../ComboStrap/Site.php');
 
 /**
  *
@@ -28,7 +28,7 @@ class action_plugin_combo_metagoogle extends DokuWiki_Action_Plugin
 
 
     const CANONICAL = "google";
-    const JSON_LD_PROPERTY = "json-ld";
+    const JSON_LD_META_PROPERTY = "json-ld";
     const NEWSARTICLE_SCHEMA_ORG_LOWERCASE = "newsarticle";
     const BLOGPOSTING_SCHEMA_ORG_LOWERCASE = "blogposting";
     const DATE_PUBLISHED_KEY = "datePublished";
@@ -273,7 +273,7 @@ class action_plugin_combo_metagoogle extends DokuWiki_Action_Plugin
         /**
          * Do we have extra ld-json properties
          */
-        $extraLdJson = $page->getMetadata(self::JSON_LD_PROPERTY);
+        $extraLdJson = $page->getMetadata(self::JSON_LD_META_PROPERTY);
         if (!empty($extraLdJson)) {
             $ldJson = array_merge($ldJson, $extraLdJson);
         }

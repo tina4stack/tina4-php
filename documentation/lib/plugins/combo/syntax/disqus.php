@@ -5,7 +5,7 @@ use ComboStrap\MetadataUtility;
 use ComboStrap\PluginUtility;
 use ComboStrap\Page;
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * Disqus integration

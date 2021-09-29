@@ -6,13 +6,12 @@
 
 use ComboStrap\CallStack;
 use ComboStrap\Icon;
+use ComboStrap\LogUtility;
 use ComboStrap\PluginUtility;
-use ComboStrap\Tag;
 use ComboStrap\TagAttributes;
 
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
-require_once(__DIR__ . '/../class/Icon.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * All DokuWiki plugins to extend the parser/rendering mechanism
@@ -32,6 +31,7 @@ require_once(__DIR__ . '/../class/Icon.php');
 class syntax_plugin_combo_icon extends DokuWiki_Syntax_Plugin
 {
     const TAG = "icon";
+    const CANONICAL = self::TAG;
 
 
     /**
@@ -179,7 +179,16 @@ class syntax_plugin_combo_icon extends DokuWiki_Syntax_Plugin
 
                         case DOKU_LEXER_SPECIAL:
                             $tagAttribute = TagAttributes::createFromCallStackArray($data[PluginUtility::ATTRIBUTES]);
-                            $renderer->doc .= Icon::renderIconByAttributes($tagAttribute);
+                            try {
+                                $renderer->doc .= Icon::renderIconByAttributes($tagAttribute);
+                            } catch (Exception $e){
+                                $errorClass = syntax_plugin_combo_media::SVG_RENDERING_ERROR_CLASS;
+                                $message = "Icon ({$tagAttribute->getValue("name")}). Error while rendering: {$e->getMessage()}";
+                                $renderer->doc .= "<span class=\"text-alert $errorClass\">" . hsc($message) . "</span>";
+                                if(!PluginUtility::isTest()) {
+                                    LogUtility::msg($message, LogUtility::LVL_MSG_WARNING, self::CANONICAL);
+                                }
+                            }
                             break;
                         case DOKU_LEXER_ENTER:
                             /**

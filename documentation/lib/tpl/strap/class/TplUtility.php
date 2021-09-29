@@ -14,6 +14,9 @@ namespace ComboStrap;
 
 use Doku_Event;
 use dokuwiki\Extension\Event;
+use dokuwiki\Menu\PageMenu;
+use dokuwiki\Menu\SiteMenu;
+use dokuwiki\Menu\UserMenu;
 use dokuwiki\plugin\config\core\Configuration;
 use dokuwiki\plugin\config\core\Writer;
 use Exception;
@@ -43,8 +46,6 @@ class TplUtility
 
     const CONF_FOOTER_SLOT_PAGE_NAME = "footerSlotPageName";
 
-    const CONF_HEIGHT_FIXED_TOP_NAVBAR_OLD = 'heightFixedTopNavbar';
-    const CONF_HEIGHT_FIXED_TOP_MENUBAR = 'heightFixedTopMenuBar';
 
     /**
      * @deprecated for  {@link TplUtility::CONF_BOOTSTRAP_VERSION_STYLESHEET}
@@ -95,6 +96,41 @@ class TplUtility
      * @deprecated see {@link TplUtility::CONF_FOOTER_SLOT_PAGE_NAME}
      */
     const CONF_FOOTER_OLD = "footerbar";
+
+    /**
+     * Disable the javascript of Dokuwiki
+     * if public
+     * https://combostrap.com/frontend/optimization
+     */
+    const CONF_DISABLE_BACKEND_JAVASCRIPT = "disableBackendJavascript";
+
+    /**
+     * A parameter switch to allows the update
+     * of conf in test
+     */
+    const COMBO_TEST_UPDATE = "combo_update_conf";
+
+    /**
+     * Do we show the rail bar for anonymous user
+     */
+    const CONF_PRIVATE_RAIL_BAR = "privateRailbar";
+
+    /**
+     * When do we toggle from offcanvas to fixed railbar
+     */
+    const CONF_BREAKPOINT_RAIL_BAR = "breakpointRailbar";
+
+    /**
+     * Breakpoint naming
+     */
+    const BREAKPOINT_EXTRA_SMALL_NAME = "extra-small";
+    const BREAKPOINT_SMALL_NAME = "small";
+    const BREAKPOINT_MEDIUM_NAME = "medium";
+    const BREAKPOINT_LARGE_NAME = "large";
+    const BREAKPOINT_EXTRA_LARGE_NAME = "extra-large";
+    const BREAKPOINT_EXTRA_EXTRA_LARGE_NAME = "extra-extra-large";
+    const BREAKPOINT_NEVER_NAME = "never";
+
     /**
      * @var array|null
      */
@@ -157,51 +193,6 @@ class TplUtility
     }
 
     /**
-     *
-     * Return the padding top in pixel that must be applied when using a top bar
-     * @return int
-     */
-    public static function getPaddingTop()
-    {
-        // The padding top for the top fix bar
-        $paddingTop = 0;
-        $heightTopBar = self::getTopFixedHeightForMenuBar();
-        if ($heightTopBar != 0) {
-            $paddingTop = $heightTopBar + 10;
-        }
-        return $paddingTop;
-    }
-
-
-    /**
-     * When using a topbar, all header and top element should
-     * get this style in order to navigate correctly
-     * @return string
-     * As the top-nav-bar is fix, the two below values must be equal to the navbar offset
-     * in order to get a correct navigation to the anchor
-     * See http://stackoverflow.com/questions/17181355/boostrap-using-fixed-navbar-and-anchor-tags-to-jump-to-sections
-     */
-    public static function getHeadStyleNodeForFixedTopNavbar()
-    {
-        $headStyle = "";
-        $heightTopBar = self::getTopFixedHeightForMenuBar();
-        if ($heightTopBar !== 0) {
-            $paddingTop = 2 * $heightTopBar + 10; // + 10 to get the message area not below the topnavbar
-            $marginTop = -2 * $heightTopBar;
-            $topHeaderStyle = "padding-top:{$paddingTop}px;margin-top:{$marginTop}px;z-index:-1";
-
-            $headStyle = <<<EOF
-<style class="snippet-top-menubar-combo">
-    main > h1, main > h2, main > h3, main > h4, main > h5, #dokuwiki__top {
-    $topHeaderStyle
-    }
-</style>
-EOF;
-        }
-        return $headStyle;
-    }
-
-    /**
      * @param string $text add a comment into the HTML page
      */
     private static function addAsHtmlComment($text)
@@ -233,13 +224,6 @@ EOF;
         return self::getTemplateInfo()["strap"];
     }
 
-    /**
-     * ???
-     */
-    public static function setHttpHeader()
-    {
-        header('X-UA-Compatible: IE=edge');
-    }
 
     public static function registerHeaderHandler()
     {
@@ -347,7 +331,7 @@ EOF;
      * debug information in the form of
      * an HTML comment
      */
-    public static function renderBar($barName)
+    public static function renderSlot($barName)
     {
 
         if (class_exists("ComboStrap\Page")) {
@@ -365,14 +349,6 @@ EOF;
         return self::getBootStrapVersion()[0];
     }
 
-    public static function getTopFixedHeightForMenuBar()
-    {
-        $height = tpl_getConf(self::CONF_HEIGHT_FIXED_TOP_MENUBAR, null);
-        if ($height == null) {
-            $height = tpl_getConf(self::CONF_HEIGHT_FIXED_TOP_NAVBAR_OLD, 0);
-        }
-        return $height;
-    }
 
     public static function getSideKickSlotPageName()
     {
@@ -419,42 +395,45 @@ EOF;
     {
 
         /**
-         * Hack to avoid updating during test request
+         * Hack to avoid updating during {@link \TestRequest}
+         * when not asked
+         * Because the test request environment is wiped out only on the class level,
+         * the class / test function needs to specifically say that it's open
+         * to the modification of the configuration
          */
-        if (defined('DOKU_UNITTEST')) {
-            global $_REQUEST;
-            if (isset($_REQUEST["id"])) {
-                /**
-                 * This hack resolves two problems
-                 *
-                 * First one
-                 * this is a test request
-                 * the local.php file has a the `DOKU_TMP_DATA`
-                 * constant in the file and updating the file
-                 * with this method will then update the value of savedir to DOKU_TMP_DATA
-                 * we get then the error
-                 * The datadir ('pages') at DOKU_TMP_DATA/pages is not found
-                 *
-                 *
-                 * Second one
-                 * if in a php test unit, we send a php request two times
-                 * the headers have been already send and the
-                 * {@link msg()} function will send them
-                 * causing the {@link TplUtility::outputBufferShouldBeEmpty() output buffer check} to fail
-                 */
-                global $MSG_shown;
-                if (isset($MSG_shown) || headers_sent()) {
-                    return false;
-                } else {
-                    return true;
-                }
+        global $_REQUEST;
+        if (defined('DOKU_UNITTEST') && !isset($_REQUEST[self::COMBO_TEST_UPDATE])) {
+
+            /**
+             * This hack resolves two problems
+             *
+             * First one
+             * this is a test request
+             * the local.php file has a the `DOKU_TMP_DATA`
+             * constant in the file and updating the file
+             * with this method will then update the value of savedir to DOKU_TMP_DATA
+             * we get then the error
+             * The datadir ('pages') at DOKU_TMP_DATA/pages is not found
+             *
+             *
+             * Second one
+             * if in a php test unit, we send a php request two times
+             * the headers have been already send and the
+             * {@link msg()} function will send them
+             * causing the {@link TplUtility::outputBufferShouldBeEmpty() output buffer check} to fail
+             */
+            global $MSG_shown;
+            if (isset($MSG_shown) || headers_sent()) {
+                return false;
+            } else {
+                return true;
             }
+
         }
 
 
         $configuration = new Configuration();
         $settings = $configuration->getSettings();
-
 
         $key = "tpl____strap____" . $key;
         if (isset($settings[$key])) {
@@ -481,7 +460,16 @@ EOF;
             }
 
         } else {
-            TplUtility::msg("The configuration ($key) is unknown and was therefore not change to ($value)");
+
+            /**
+             * When we run test,
+             * strap is not always the active template
+             * and therefore the configurations are not loaded
+             */
+            global $conf;
+            if ($conf['template'] == TplUtility::TEMPLATE_NAME) {
+                TplUtility::msg("The configuration ($key) is unknown and was therefore not change to ($value)");
+            }
         }
 
         return false;
@@ -558,11 +546,123 @@ EOF;
         }
     }
 
-    public static function getStrapVersion()
+
+    /**
+     * @return string
+     * Railbar items can add snippet in the head
+     * And should then be could before the HTML output
+     *
+     * In Google Material Design, they call it a
+     * navigational drawer
+     * https://material.io/components/navigation-drawer
+     */
+    public static function getRailBar()
     {
+
+        if (tpl_getConf(TplUtility::CONF_PRIVATE_RAIL_BAR) === 1 && empty($_SERVER['REMOTE_USER'])) {
+            return "";
+        }
+        $breakpoint = tpl_getConf(TplUtility::CONF_BREAKPOINT_RAIL_BAR, TplUtility::BREAKPOINT_LARGE_NAME);
+
+        $bootstrapBreakpoint = "";
+        switch($breakpoint){
+            case TplUtility::BREAKPOINT_EXTRA_SMALL_NAME:
+                $bootstrapBreakpoint = "xs";
+                break;
+            case TplUtility::BREAKPOINT_SMALL_NAME:
+                $bootstrapBreakpoint = "sm";
+                break;
+            case TplUtility::BREAKPOINT_MEDIUM_NAME:
+                $bootstrapBreakpoint = "md";
+                break;
+            case TplUtility::BREAKPOINT_LARGE_NAME:
+                $bootstrapBreakpoint = "lg";
+                break;
+            case TplUtility::BREAKPOINT_EXTRA_LARGE_NAME:
+                $bootstrapBreakpoint = "xl";
+                break;
+            case TplUtility::BREAKPOINT_EXTRA_EXTRA_LARGE_NAME:
+                $bootstrapBreakpoint = "xxl";
+                break;
+        }
+
+        $classOffCanvas="";
+        $classFixed="";
+        if(!empty($bootstrapBreakpoint)){
+            $classOffCanvas="class=\"d-$bootstrapBreakpoint-none\"";
+            $classFixed="class=\"d-none d-$bootstrapBreakpoint-flex\"";
+        }
+
+        $railBarListItems = TplUtility::getRailBarListItems();
+        $railBarOffCanvas = <<<EOF
+<div id="railbar-offcanvas-wrapper" $classOffCanvas>
+    <button id="railbar-offcanvas-open" class="btn" type="button" data-bs-toggle="offcanvas"
+            data-bs-target="#railbar-offcanvas" aria-controls="railbar-offcanvas">
+    </button>
+
+    <div id="railbar-offcanvas" class="offcanvas offcanvas-end" tabindex="-1"
+         aria-labelledby="offcanvas-label"
+         style="visibility: hidden;" aria-hidden="true">
+         <h5 class="d-none" id="offcanvas-label">Railbar</h5>
+        <!-- Pseudo relative element  https://stackoverflow.com/questions/6040005/relatively-position-an-element-without-it-taking-up-space-in-document-flow -->
+        <div style="position: relative; width: 0; height: 0">
+            <button id="railbar-offcanvas-close" class="btn" type="button" data-bs-dismiss="offcanvas"
+                    aria-label="Close">
+            </button>
+        </div>
+        <div id="railbar-offcanvas-body" class="offcanvas-body" style="align-items: center;display: flex;">
+            $railBarListItems
+        </div>
+    </div>
+</div>
+EOF;
+
+        if($breakpoint!=TplUtility::BREAKPOINT_NEVER_NAME) {
+            $railBarFixed = <<<EOF
+<div id="railbar-fixed" style="z-index: 1030;" $classFixed>
+    <div class="tools">
+        $railBarListItems
+    </div>
+</div>
+EOF;
+            return <<<EOF
+$railBarOffCanvas
+$railBarFixed
+EOF;
+        } else {
+
+            return $railBarOffCanvas;
+
+        }
+
 
     }
 
+    /**
+     *
+     * https://material.io/components/navigation-rail|Navigation rail
+     * @return string - the ul part of the railbar
+     */
+    public
+    static function getRailBarListItems()
+    {
+        $liUserTools = (new UserMenu())->getListItems('action');
+        $liPageTools = (new PageMenu())->getListItems();
+        $liSiteTools = (new SiteMenu())->getListItems('action');
+        // FYI: The below code outputs all menu in mobile (in another HTML layout)
+        // echo (new \dokuwiki\Menu\MobileMenu())->getDropdown($lang['tools']);
+        return <<<EOF
+<ul class="railbar">
+    <li><a href="#" style="height: 19px;line-height: 17px;text-align: left;font-weight:bold"><span>User</span><svg style="height:19px"></svg></a></li>
+    $liUserTools
+    <li><a href="#" style="height: 19px;line-height: 17px;text-align: left;font-weight:bold"><span>Page</span><svg style="height:19px"></svg></a></li>
+    $liPageTools
+    <li><a href="#" style="height: 19px;line-height: 17px;text-align: left;font-weight:bold"><span>Website</span><svg style="height:19px"></svg></a></li>
+    $liSiteTools
+</ul>
+EOF;
+
+    }
 
     /**
      * Hierarchical breadcrumbs
@@ -1026,12 +1126,41 @@ EOF;
 
                 case "script":
 
+                    /**
+                     * Do we delete the dokuwiki javascript ?
+                     */
+                    $scriptToDeletes = [];
+                    if (empty($_SERVER['REMOTE_USER']) && tpl_getConf(TplUtility::CONF_DISABLE_BACKEND_JAVASCRIPT, 0)) {
+                        $scriptToDeletes = [
+                            //'JSINFO', Don't delete Jsinfo !! It contains metadata information (that is used to get context)
+                            'js.php'
+                        ];
+                        if (TplUtility::getBootStrapMajorVersion() == "5") {
+                            // bs 5 does not depends on jquery
+                            $scriptToDeletes[] = "jquery.php";
+                        }
+                    }
+
+                    /**
+                     * The new script array
+                     */
                     $newScriptData = array();
                     // A variable to hold the Jquery scripts
                     // jquery-migrate, jquery, jquery-ui ou jquery.php
                     // see https://www.dokuwiki.org/config:jquerycdn
                     $jqueryDokuScripts = array();
                     foreach ($headerData as $scriptData) {
+
+                        foreach ($scriptToDeletes as $scriptToDelete) {
+                            if (isset($scriptData["_data"]) && !empty($scriptData["_data"])) {
+                                $haystack = $scriptData["_data"];
+                            } else {
+                                $haystack = $scriptData["src"];
+                            }
+                            if (preg_match("/$scriptToDelete/i", $haystack)) {
+                                continue 2;
+                            }
+                        }
 
                         $critical = false;
                         if (isset($scriptData["critical"])) {
@@ -1092,17 +1221,21 @@ EOF;
                             $newScriptData[] = $bootstrapHeaders[$headerType]['js'];
                         }
                     } else {
-                        // We take the Jqueries of doku
+
                         // There is no JQuery in 5
-                        $newScriptData = array_merge($jqueryDokuScripts, $newScriptData); // js
                         // We had the js of Bootstrap (bundle with popper)
-                        $newScriptData[] = $bootstrapHeaders[$headerType]['js'];
+                        // Add Jquery before the js.php
+                        $newScriptData = array_merge($jqueryDokuScripts, $newScriptData); // js
+                        // Then add at the top of the top (first of the first) bootstrap
+                        // Why ? Because Jquery should be last to be able to see the missing icon
+                        // https://stackoverflow.com/questions/17367736/jquery-ui-dialog-missing-close-icon
+                        $newScriptData = array_merge([$bootstrapHeaders[$headerType]['js']], $newScriptData);
+
                     }
 
 
                     $newHeaderTypes[$headerType] = $newScriptData;
                     break;
-                default:
                 case "meta":
                     $newHeaderData = array();
                     foreach ($headerData as $metaData) {
@@ -1110,7 +1243,7 @@ EOF;
                         // Name may change
                         // https://www.w3.org/TR/html4/struct/global.html#edef-META
                         if (!key_exists("content", $metaData)) {
-                            $message = "The head meta (" . print_r($metaData, true) . ") does not have a content property";
+                            $message = "Strap - The head meta (" . print_r($metaData, true) . ") does not have a content property";
                             msg($message, -1, "", "", MSG_ADMINS_ONLY);
                             if (defined('DOKU_UNITTEST')
                             ) {
@@ -1119,7 +1252,7 @@ EOF;
                         } else {
                             $content = $metaData["content"];
                             if (empty($content)) {
-                                $messageEmpty = "The below head meta has an empty content property (" . print_r($metaData, true) . ")";
+                                $messageEmpty = "Strap - the below head meta has an empty content property (" . print_r($metaData, true) . ")";
                                 msg($messageEmpty, -1, "", "", MSG_ADMINS_ONLY);
                                 if (defined('DOKU_UNITTEST')
                                 ) {
@@ -1132,10 +1265,18 @@ EOF;
                     }
                     $newHeaderTypes[$headerType] = $newHeaderData;
                     break;
+                case "noscript": // https://github.com/ComboStrap/dokuwiki-plugin-gtm/blob/master/action.php#L32
                 case "style":
                     $newHeaderTypes[$headerType] = $headerData;
                     break;
-
+                default:
+                    $message = "Strap - The header type ($headerType) is unknown and was not controlled.";
+                    $newHeaderTypes[$headerType] = $headerData;
+                    msg($message, -1, "", "", MSG_ADMINS_ONLY);
+                    if (defined('DOKU_UNITTEST')
+                    ) {
+                        throw new \RuntimeException($message);
+                    }
             }
         }
 
@@ -1165,10 +1306,10 @@ EOF;
 
         // Icon Png
         $possibleLocation = array(':wiki:favicon-32x32.png', ':favicon-32x32.png', 'images/favicon-32x32.png');
-        $return .= '<link rel="icon" type="image/png" sizes="32x32" href="' . tpl_getMediaFile($possibleLocation, $fallback = true) . '">';
+        $return .= '<link rel="icon" type="image/png" sizes="32x32" href="' . tpl_getMediaFile($possibleLocation, $fallback = true) . '"/>';
 
         $possibleLocation = array(':wiki:favicon-16x16.png', ':favicon-16x16.png', 'images/favicon-16x16.png');
-        $return .= '<link rel="icon" type="image/png" sizes="16x16" href="' . tpl_getMediaFile($possibleLocation, $fallback = true) . '">';
+        $return .= '<link rel="icon" type="image/png" sizes="16x16" href="' . tpl_getMediaFile($possibleLocation, $fallback = true) . '"/>';
 
         // Apple touch icon
         $possibleLocation = array(':wiki:apple-touch-icon.png', ':apple-touch-icon.png', 'images/apple-touch-icon.png');
@@ -1318,7 +1459,7 @@ EOF;
         return $html_output;
     }
 
-    static function getHeader()
+    static function getPageHeader()
     {
 
         $navBarPageName = TplUtility::getHeaderSlotPageName();

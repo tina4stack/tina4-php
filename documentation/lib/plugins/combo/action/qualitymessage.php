@@ -2,18 +2,15 @@
 
 use ComboStrap\Analytics;
 use ComboStrap\Identity;
-use ComboStrap\LogUtility;
 use ComboStrap\Message;
 use ComboStrap\Page;
-use ComboStrap\PagesIndex;
 use ComboStrap\PluginUtility;
 
 if (!defined('DOKU_INC')) die();
 if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
 
 
-require_once(__DIR__ . '/../class/Page.php');
-require_once(__DIR__ . '/../class/Message.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  *

@@ -17,10 +17,10 @@ jobs:
 #            language: php
 #            php: "8.0"
 #            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
-#        -   if: branch =~ ^main
-#            language: php
-#            php: "7.4"
-#            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
+        -   if: branch =~ ^main
+            language: php
+            php: "7.4"
+            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
         -   language: php
             php: "7.3"
             env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
@@ -28,10 +28,6 @@ jobs:
             language: php
             env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
             php: "7.2"
-        -   if: branch =~ ^main
-            language: php
-            env: DOKUWIKI=stable # the last version of dokuwiki (master = dev, old-stable = previous)
-            php: "7.1"
 
 
 before_script:

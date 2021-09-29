@@ -14,7 +14,7 @@ use ComboStrap\Snippet;
 use dokuwiki\Menu\Item\Login;
 
 if (!defined('DOKU_INC')) die();
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * Class action_plugin_combo_login

@@ -11,8 +11,8 @@ use ComboStrap\StringUtility;
 
 if (!defined('DOKU_INC')) die();
 
-require_once(__DIR__ . '/../class/Site.php');
-require_once(__DIR__ . '/../class/RasterImageLink.php');
+require_once(__DIR__ . '/../ComboStrap/Site.php');
+require_once(__DIR__ . '/../ComboStrap/RasterImageLink.php');
 
 /**
  *

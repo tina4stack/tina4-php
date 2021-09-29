@@ -1,13 +1,15 @@
 {
-    "id": "tina4:env",
-    "date": "2021-09-16 18:27:21",
+    "date": "2021-09-27 10:02:02",
     "metadata": {
-        "title": "ENV",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-08T14:05:46+02:00",
+        "date_published": null,
         "description": "ENV\n\nWhen you're doing your magic, you will find that variables and constants are important components. There will be constants, variables and spells that you don't want exposed (e.g. contact numbers, domain manes, email addresses, passwords and URLS).",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-08 02:05:46",
-        "age_creation": 12,
-        "age_modification": 8
+        "h1": "ENV",
+        "name": "env",
+        "path": ":tina4:env",
+        "title": "ENV",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -53,7 +55,7 @@
             "combo_code": 2,
             "wrap_divwrap": 1
         },
-        "words_count": 219
+        "word_count": 219
     },
     "quality": {
         "message": "1 mandatory rules broken.",

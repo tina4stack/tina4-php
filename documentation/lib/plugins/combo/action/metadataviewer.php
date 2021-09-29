@@ -1,15 +1,12 @@
 <?php
 
-use ComboStrap\ArrayUtility;
 use ComboStrap\MetadataUtility;
-use ComboStrap\PluginUtility;
 
 if (!defined('DOKU_INC')) die();
 if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
 
-require_once (__DIR__.'/../class/PluginUtility.php');
-require_once (__DIR__.'/../class/ArrayUtility.php');
-require_once (__DIR__.'/../class/MetadataUtility.php');
+require_once (__DIR__.'/../ComboStrap/PluginUtility.php');
+
 
 /**
  *

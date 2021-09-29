@@ -1,12 +1,14 @@
 <?php
 
 use ComboStrap\PluginUtility;
-use ComboStrap\Snippet;
 
 if (!defined('DOKU_INC')) die();
 
 /**
  * Add the heading numbering snippet
+ *
+ * Page on DokuWiki
+ * https://www.dokuwiki.org/tips:numbered_headings
  */
 class action_plugin_combo_outlinenumbering extends DokuWiki_Action_Plugin
 {

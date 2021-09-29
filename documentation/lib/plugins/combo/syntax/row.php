@@ -21,7 +21,7 @@ if (!defined('DOKU_INC')) {
     die();
 }
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * The {@link https://combostrap.com/row row} of a {@link https://combostrap.com/grid grid}
@@ -465,13 +465,6 @@ class syntax_plugin_combo_row extends DokuWiki_Syntax_Plugin
                     $context = $data[PluginUtility::CONTEXT];
                     $tagClass = self::TAG . "-" . $context;
 
-                    if (!$hadClassAttribute) {
-                        /**
-                         * when wrapping, there will be a space between the cells
-                         * on the y axis
-                         */
-                        $attributes->addClassName("gy-3");
-                    }
                     switch ($context) {
                         case self::CONTAINED_CONTEXT:
                             /**
@@ -480,6 +473,13 @@ class syntax_plugin_combo_row extends DokuWiki_Syntax_Plugin
                             if (!$hadClassAttribute) {
                                 $attributes->addClassName("justify-content-center");
                                 $attributes->addClassName("align-items-center");
+                                if (Bootstrap::getBootStrapMajorVersion() === Bootstrap::BootStrapFiveMajorVersion) {
+                                    $attributes->addClassName("g-0");
+                                } else {
+                                    // https://getbootstrap.com/docs/4.3/layout/grid/#no-gutters
+                                    $attributes->addClassName("no-gutters");
+                                }
+
                             }
                             /**
                              * p children should be flex

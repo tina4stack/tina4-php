@@ -3,7 +3,7 @@
 
 use ComboStrap\CallStack;
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * Because of the automatic processing of p paragraph via {@link \dokuwiki\Parsing\Handler\Block::process()}

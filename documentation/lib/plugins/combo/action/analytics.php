@@ -17,8 +17,8 @@ use ComboStrap\Sqlite;
  *
  */
 
-require_once(__DIR__ . '/../class/' . 'Analytics.php');
-require_once(__DIR__ . '/../class/' . 'AnalyticsMenuItem.php');
+
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * Class action_plugin_combo_analytics

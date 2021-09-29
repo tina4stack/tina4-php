@@ -5576,3 +5576,6 @@
 2021-09-23T23:19:28+02:00 - warning - ComboStrap - security - HTTP Headers have already ben sent. We couldn't add the CSP security header - 127.0.0.1 - tina4:down-the-rabbit-hole
 2021-09-23T23:21:40+02:00 - warning - ComboStrap - security - HTTP Headers have already ben sent. We couldn't add the CSP security header - 127.0.0.1 - tina4:down-the-rabbit-hole
 2021-09-27T09:49:31+02:00 - warning - ComboStrap - image - The width and height has been set on the image (wiki:logo.png) but we don't support yet cropping. Set only the width or the height (0x250) - ::1 - tina4:api
+2021-09-28T12:31:01+02:00 - warning - ComboStrap - image - The width and height has been set on the image (wiki:logo.png) but we don't support yet cropping. Set only the width or the height (0x250) - 127.0.0.1 - start
+2021-09-28T21:23:34+02:00 - warning - ComboStrap - image - The width and height has been set on the image (wiki:logo.png) but we don't support yet cropping. Set only the width or the height (0x250) - 127.0.0.1 - tina4:swagger
+2021-09-29T08:04:34+02:00 - warning - ComboStrap - image - The width and height has been set on the image (wiki:logo.png) but we don't support yet cropping. Set only the width or the height (0x250) - 127.0.0.1 - first-steps

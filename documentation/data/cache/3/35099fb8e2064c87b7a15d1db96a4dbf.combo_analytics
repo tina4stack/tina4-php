@@ -1,13 +1,15 @@
 {
-    "id": "tina4:migrations",
-    "date": "2021-09-15 15:24:35",
+    "date": "2021-09-28 18:18:47",
     "metadata": {
-        "title": "Migrations in Tina4",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-14T17:29:48+02:00",
+        "date_published": null,
         "description": "Migrations in Tina4\n\nCreate a table\/migration\n\nYou want to create a table for the database? Migrations are sequential <https:\/\/docs.oracle.com\/cd\/B19306_01\/server.102\/b14200\/statements_1001.htm> which keep track of your database changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-14 05:29:48",
-        "age_creation": 11,
-        "age_modification": 1
+        "h1": "Migrations in Tina4",
+        "name": "migrations",
+        "path": ":tina4:migrations",
+        "title": "Migrations in Tina4",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -39,12 +41,18 @@
             "h1": 1,
             "h2": 1
         },
-        "internal_backlinks_count": 5,
+        "internal_backlinks_count": 6,
         "internal_links_count": 1,
         "internal_links_distance": {
             "avg": 0,
             "max": 0,
             "min": 0
+        },
+        "media": {
+            "total_count": 1,
+            "internal_count": 1,
+            "internal_broken_count": 0,
+            "external_count": 0
         },
         "syntax_count": {
             "combo_headingwiki": 2,
@@ -60,15 +68,16 @@
             "listcontent": 4,
             "combo_media": 1
         },
+        "word_count": 160,
         "word_section_count": {
             "avg": 0
-        },
-        "words_count": 160
+        }
     },
     "quality": {
+        "message": "No mandatory rules broken",
         "low": false,
         "scoring": {
-            "score": 31,
+            "score": 33,
             "scores": {
                 "canonical_present": 0,
                 "correct_content_length": 10,
@@ -76,8 +85,8 @@
                 "correct_word_avg_by_section": 0,
                 "description_present": 0,
                 "edits_count": 6,
-                "internal_backlinks_count": 5,
-                "internal_links_count": 5,
+                "internal_backlinks_count": 6,
+                "internal_links_count": 6,
                 "no_internal_broken_links_count": 2,
                 "title_present": 0
             }

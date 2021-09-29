@@ -1,5 +1,5 @@
 {
-    "date": "2021-09-27 09:51:31",
+    "date": "2021-09-28 21:06:18",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
         "date_modified": "2021-09-11T23:03:28+02:00",
@@ -18,23 +18,47 @@
             "barco": 1,
             "matthew": 1
         },
-        "chars_count": 2354,
+        "chars_count": 3760,
         "edits_count": 23,
         "external_links_count": 1,
         "formatted": {
             "1": {
                 "len": 10
             },
-            "0": 20,
+            "0": 75,
             "2": {
+                "len": 8
+            },
+            "3": {
+                "len": 9
+            },
+            "4": {
+                "len": 9
+            },
+            "5": {
                 "len": 10
+            },
+            "6": {
+                "len": 9
+            },
+            "7": {
+                "len": 11
+            },
+            "8": {
+                "len": 9
             }
         },
         "headers_count": {
             "h1": 1,
-            "h2": 2
+            "h2": 4
         },
-        "internal_backlinks_count": 7,
+        "internal_backlinks_count": 8,
+        "internal_links_count": 2,
+        "internal_links_distance": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        },
         "media": {
             "total_count": 0,
             "internal_count": 0,
@@ -42,26 +66,24 @@
             "external_count": 0
         },
         "syntax_count": {
-            "combo_headingwiki": 3,
-            "section": 3,
-            "p": 5,
-            "combo_link": 1,
-            "strong": 2,
-            "combo_code": 2
+            "combo_headingwiki": 5,
+            "section": 5,
+            "p": 12,
+            "combo_link": 3,
+            "strong": 8,
+            "combo_code": 4,
+            "wrap_divwrap": 1
         },
-        "word_count": 211,
+        "word_count": 368,
         "word_section_count": {
             "avg": 0
         }
     },
     "quality": {
-        "message": "1 mandatory rules broken.",
-        "low": true,
-        "failed_mandatory_rules": [
-            "internal_links_min"
-        ],
+        "message": "No mandatory rules broken",
+        "low": false,
         "scoring": {
-            "score": 27.75,
+            "score": 36.75,
             "scores": {
                 "canonical_present": 0,
                 "correct_content_length": 10,
@@ -69,27 +91,26 @@
                 "correct_word_avg_by_section": 0,
                 "description_present": 0,
                 "edits_count": 5.75,
-                "internal_backlinks_count": 7,
-                "internal_links_count": 0,
+                "internal_backlinks_count": 8,
+                "internal_links_count": 8,
                 "no_internal_broken_links_count": 2,
                 "title_present": 0
             }
         },
         "rules": {
-            "result": "5 quality rules errors",
+            "result": "4 quality rules errors",
             "info": {
                 "title_present": "Add a title in the frontmatter for 10 points",
                 "description_present": "Add a description in the frontmatter for 8 points",
                 "canonical_present": "Add a canonical in the frontmatter for 5 points",
-                "words_by_section_avg_min": "The number of words by section is less than 20",
-                "internal_links_min": "Add internal links for 1 point each"
+                "words_by_section_avg_min": "The number of words by section is less than 20"
             },
             "details": {
                 "canonical_present": "Failed",
                 "description_present": "Failed",
                 "internal_backlinks_min": "Passed",
                 "internal_links_broken_max": "Passed",
-                "internal_links_min": "Failed",
+                "internal_links_min": "Passed",
                 "outline_structure": "Passed",
                 "title_present": "Failed",
                 "words_by_section_avg_max": "Passed",

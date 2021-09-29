@@ -9,10 +9,10 @@ if (!defined('DOKU_INC')) die();
 if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
 
 
-require_once(__DIR__ . '/../class/PageRules.php');
-require_once(__DIR__ . '/../class/Page.php');
+require_once(__DIR__ . '/../ComboStrap/PageRules.php');
+require_once(__DIR__ . '/../ComboStrap/Page.php');
 require_once(__DIR__ . '/urlmanager.php');
-require_once(__DIR__ . '/../class/Message.php');
+require_once(__DIR__ . '/../ComboStrap/Message.php');
 
 /**
  *

@@ -42,11 +42,18 @@ $meta[TplUtility::CONF_REM_SIZE] = array('string');
 
 $meta[TplUtility::CONF_GRID_COLUMNS] = array('multichoice', '_choices' => array('12', '16'));
 
-$meta[TplUtility::CONF_HEIGHT_FIXED_TOP_MENUBAR] = array('string');
-
 $meta['preloadCss'] = array('onoff');
 
-$meta['privateToolbar'] = array('onoff');
+$meta[TplUtility::CONF_PRIVATE_RAIL_BAR] = array('onoff');
+$meta[TplUtility::CONF_BREAKPOINT_RAIL_BAR] = array('multichoice', '_choices' => array(
+    TplUtility::BREAKPOINT_EXTRA_SMALL_NAME,
+    TplUtility::BREAKPOINT_SMALL_NAME,
+    TplUtility::BREAKPOINT_MEDIUM_NAME,
+    TplUtility::BREAKPOINT_LARGE_NAME,
+    TplUtility::BREAKPOINT_EXTRA_LARGE_NAME,
+    TplUtility::BREAKPOINT_EXTRA_EXTRA_LARGE_NAME,
+    TplUtility::BREAKPOINT_NEVER_NAME
+));
 
 
 // $meta[TplUtility::CONF_BOOTSTRAP_VERSION] = array('multichoice', '_choices' => array('4.4.1', '4.5.0', '5.0.1'));
@@ -56,5 +63,7 @@ $cssFiles = TplUtility::getStylesheetsForMetadataConfiguration();
 $meta[TplUtility::CONF_BOOTSTRAP_VERSION_STYLESHEET] = array('multichoice', '_choices' => $cssFiles);
 
 $meta[TplUtility::CONF_JQUERY_DOKU] = array('onoff');
+
+$meta[TplUtility::CONF_DISABLE_BACKEND_JAVASCRIPT] = array('onoff');
 
 ?>

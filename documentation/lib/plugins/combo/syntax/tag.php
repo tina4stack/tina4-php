@@ -4,7 +4,7 @@
 use ComboStrap\Tag;
 use ComboStrap\PluginUtility;
 
-require_once(__DIR__ . '/../class/Tag.php');
+require_once(__DIR__ . '/../ComboStrap/Tag.php');
 
 /**
  * Just a node to test the {@link Tag} context

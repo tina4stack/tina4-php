@@ -6,7 +6,7 @@ use ComboStrap\PluginUtility;
 use ComboStrap\Prism;
 use ComboStrap\TagAttributes;
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * Overwrite {@link \dokuwiki\Parsing\ParserMode\Preformatted}

@@ -15,11 +15,11 @@ if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
 // Needed to get the redirection manager
 // require_once(DOKU_PLUGIN . 'action.php');
 
-require_once(__DIR__ . '/../class/PageRules.php');
-require_once(__DIR__ . '/../class/Page.php');
-require_once(__DIR__ . '/../class/UrlUtility.php');
-require_once(__DIR__ . '/../class/Sqlite.php');
-require_once(__DIR__ . '/../class/UrlManagerBestEndPage.php');
+require_once(__DIR__ . '/../ComboStrap/PageRules.php');
+require_once(__DIR__ . '/../ComboStrap/Page.php');
+require_once(__DIR__ . '/../ComboStrap/UrlUtility.php');
+require_once(__DIR__ . '/../ComboStrap/Sqlite.php');
+require_once(__DIR__ . '/../ComboStrap/UrlManagerBestEndPage.php');
 require_once(__DIR__ . '/urlmessage.php');
 
 /**

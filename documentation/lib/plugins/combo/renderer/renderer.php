@@ -9,12 +9,12 @@ use ComboStrap\TableUtility;
 use ComboStrap\TocUtility;
 
 
-require_once(__DIR__ . '/../class/FsWikiUtility.php');
-require_once(__DIR__ . '/../class/TableUtility.php');
-require_once(__DIR__ . '/../class/TocUtility.php');
-require_once(__DIR__ . '/../class/AdsUtility.php');
-require_once(__DIR__ . '/../class/XhtmlUtility.php');
-require_once(__DIR__ . '/../class/BreadcrumbHierarchical.php');
+require_once(__DIR__ . '/../ComboStrap/FsWikiUtility.php');
+require_once(__DIR__ . '/../ComboStrap/TableUtility.php');
+require_once(__DIR__ . '/../ComboStrap/TocUtility.php');
+require_once(__DIR__ . '/../ComboStrap/AdsUtility.php');
+require_once(__DIR__ . '/../ComboStrap/XhtmlUtility.php');
+require_once(__DIR__ . '/../ComboStrap/BreadcrumbHierarchical.php');
 
 /**
  * Class renderer_plugin_combo_renderer

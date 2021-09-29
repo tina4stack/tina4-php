@@ -2,14 +2,15 @@
 
 
 use ComboStrap\Analytics;
+use ComboStrap\CallStack;
 use ComboStrap\DokuPath;
 use ComboStrap\LogUtility;
 use ComboStrap\MediaLink;
 use ComboStrap\PluginUtility;
-use ComboStrap\Tag;
+use ComboStrap\ThirdPartyPlugins;
 
 
-if (!defined('DOKU_INC')) die();
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 
 /**
@@ -21,6 +22,9 @@ if (!defined('DOKU_INC')) die();
  *
  *
  * It can be a internal / external media
+ *
+ * See:
+ * https://developers.google.com/search/docs/advanced/guidelines/google-images
  */
 class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
 {
@@ -34,12 +38,6 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
      */
     const COMPONENT = 'combo_' . self::TAG;
 
-    /**
-     * The attribute that defines if the image is the first image in
-     * the component
-     *
-     */
-    const IS_FIRST_IMAGE_KEY = "isFirstImage";
 
     /**
      * Found at {@link \dokuwiki\Parsing\ParserMode\Media}
@@ -50,6 +48,34 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
      * Enable or disable the image
      */
     const CONF_IMAGE_ENABLE = "imageEnable";
+
+    /**
+     * Svg Rendering error
+     */
+    const SVG_RENDERING_ERROR_CLASS = "combo-svg-rendering-error";
+
+
+    /**
+     * @param $attributes
+     * @param renderer_plugin_combo_analytics $renderer
+     */
+    public static function updateStatistics($attributes, renderer_plugin_combo_analytics $renderer)
+    {
+        $media = MediaLink::createFromCallStackArray($attributes);
+        $renderer->stats[Analytics::MEDIAS_COUNT]++;
+        $scheme = $media->getScheme();
+        switch ($scheme) {
+            case DokuPath::LOCAL_SCHEME:
+                $renderer->stats[Analytics::INTERNAL_MEDIAS_COUNT]++;
+                if (!$media->exists()) {
+                    $renderer->stats[Analytics::INTERNAL_BROKEN_MEDIAS_COUNT]++;
+                }
+                break;
+            case DokuPath::INTERNET_SCHEME:
+                $renderer->stats[Analytics::EXTERNAL_MEDIAS_COUNT]++;
+                break;
+        }
+    }
 
 
     function getType()
@@ -104,7 +130,9 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
         }
 
         if ($enable) {
-            $this->Lexer->addSpecialPattern(self::MEDIA_PATTERN, $mode, PluginUtility::getModeFromTag($this->getPluginComponent()));
+            if ($mode !== PluginUtility::getModeFromPluginName(ThirdPartyPlugins::IMAGE_MAPPING_NAME)) {
+                $this->Lexer->addSpecialPattern(self::MEDIA_PATTERN, $mode, PluginUtility::getModeFromTag($this->getPluginComponent()));
+            }
         }
     }
 
@@ -117,13 +145,19 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
 
             // As this is a container, this cannot happens but yeah, now, you know
             case DOKU_LEXER_SPECIAL :
+
                 $media = MediaLink::createFromRenderMatch($match);
                 $attributes = $media->toCallStackArray();
-                $tag = new Tag(self::TAG, $attributes, $state, $handler);
-                $parent = $tag->getParent();
+
+                $callStack = CallStack::createFromHandler($handler);
+
+                /**
+                 * Parent
+                 */
+                $parent = $callStack->moveToParent();
                 $parentTag = "";
                 if (!empty($parent)) {
-                    $parentTag = $parent->getName();
+                    $parentTag = $parent->getTagName();
                     if ($parentTag == syntax_plugin_combo_link::TAG) {
                         /**
                          * The image is in a link, we don't want another link
@@ -132,12 +166,11 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
                         $attributes[MediaLink::LINKING_KEY] = MediaLink::LINKING_NOLINK_VALUE;
                     }
                 }
-                $isFirstSibling = $tag->isFirstMeaningFullSibling();
+
                 return array(
                     PluginUtility::STATE => $state,
                     PluginUtility::ATTRIBUTES => $attributes,
-                    PluginUtility::CONTEXT => $parentTag,
-                    self::IS_FIRST_IMAGE_KEY => $isFirstSibling
+                    PluginUtility::CONTEXT => $parentTag
                 );
 
 
@@ -159,7 +192,6 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
     function render($format, Doku_Renderer $renderer, $data)
     {
 
-        $attributes = $data[PluginUtility::ATTRIBUTES];
         switch ($format) {
 
             case 'xhtml':
@@ -169,7 +201,7 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
                 $media = MediaLink::createFromCallStackArray($attributes);
                 if ($media->getScheme() == DokuPath::LOCAL_SCHEME) {
                     $media = MediaLink::createFromCallStackArray($attributes, $renderer->date_at);
-                    if ($media->isImage()) {
+                    if ($media->isImage() || $media->getExtension() === "svg") {
                         /**
                          * We don't support crop
                          */
@@ -183,7 +215,16 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
                             }
                         }
                         if (!$crop) {
-                            $renderer->doc .= $media->renderMediaTagWithLink();
+                            try {
+                                $renderer->doc .= $media->renderMediaTagWithLink();
+                            } catch (RuntimeException $e) {
+                                $errorClass = self::SVG_RENDERING_ERROR_CLASS;
+                                $message = "Media ({$media->getPath()}). Error while rendering: {$e->getMessage()}";
+                                $renderer->doc .= "<span class=\"text-alert $errorClass\">" . hsc($message) . "</span>";
+                                if(!PluginUtility::isTest()) {
+                                    LogUtility::msg($message, LogUtility::LVL_MSG_WARNING, MediaLink::CANONICAL);
+                                }
+                            }
                             return true;
                         }
                     }
@@ -228,6 +269,7 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
                  * Keep track of the metadata
                  * @var Doku_Renderer_metadata $renderer
                  */
+                $attributes = $data[PluginUtility::ATTRIBUTES];
                 self::registerImageMeta($attributes, $renderer);
                 return true;
 
@@ -238,20 +280,7 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
                  * @var renderer_plugin_combo_analytics $renderer
                  */
                 $attributes = $data[PluginUtility::ATTRIBUTES];
-                $media = MediaLink::createFromCallStackArray($attributes);
-                $renderer->stats[Analytics::MEDIAS_COUNT]++;
-                $scheme = $media->getScheme();
-                switch($scheme){
-                    case DokuPath::LOCAL_SCHEME:
-                        $renderer->stats[Analytics::INTERNAL_MEDIAS_COUNT]++;
-                        if(!$media->exists()){
-                            $renderer->stats[Analytics::INTERNAL_BROKEN_MEDIAS_COUNT]++;
-                        }
-                        break;
-                    case DokuPath::INTERNET_SCHEME:
-                        $renderer->stats[Analytics::EXTERNAL_MEDIAS_COUNT]++;
-                        break;
-                }
+                self::updateStatistics($attributes, $renderer);
                 return true;
 
         }
@@ -260,6 +289,9 @@ class syntax_plugin_combo_media extends DokuWiki_Syntax_Plugin
     }
 
     /**
+     * Update the index for the move plugin
+     * and {@link Page::FIRST_IMAGE_META_RELATION}
+     *
      * @param array $attributes
      * @param Doku_Renderer_metadata $renderer
      */

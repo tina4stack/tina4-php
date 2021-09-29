@@ -96,6 +96,7 @@ class syntax_plugin_vshare extends DokuWiki_Syntax_Plugin {
                     }
                     break;
                 case 'start':
+                case 'st': // for microsoftstream.com
                 case 'end':
                 case 'chapter_id': //for twitch.tv
                 case 'initial_time':

@@ -16,7 +16,7 @@ use ComboStrap\PluginUtility;
 use ComboStrap\TagAttributes;
 
 
-require_once(__DIR__ . '/../class/PluginUtility.php');
+require_once(__DIR__ . '/../ComboStrap/PluginUtility.php');
 
 /**
  * The {@link https://combostrap.com/column column} of a {@link https://combostrap.com/grid grid}
