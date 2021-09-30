@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -9,7 +8,6 @@
 use Phpfastcache\CacheManager;
 use Phpfastcache\Config\ConfigurationOption;
 use Tina4\Debug;
-use Tina4\HTMLElement;
 use Tina4\Module;
 
 //TINA4 CONSTANTS
@@ -155,7 +153,7 @@ if (!defined("TINA4_TOKEN_MINUTES")) {
 }
 
 //Initialize Secrets
-//(new \Tina4\Auth());
+(new \Tina4\Auth());
 
 if (!defined("TINA4_ALLOW_ORIGINS")) {
     define("TINA4_ALLOW_ORIGINS", ["*"]);

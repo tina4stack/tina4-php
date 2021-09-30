@@ -4,8 +4,7 @@
     "license": "MIT",
     "autoload": {
         "files": [
-            "Tina4/Functions.php",
-            "Tina4/Initialize.php"
+            "Tina4/Functions.php"
         ],
         "classmap": [
             "Helpers/",

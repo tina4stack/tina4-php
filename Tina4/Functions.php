@@ -91,3 +91,13 @@ function redirect(string $url, $statusCode = 303)
         die();
     }
 }
+
+
+/**
+ * Initialize function loads the library for use
+ */
+function Initialize() {
+    if (file_exists("./Tina4/Initialize.php")) {
+        require_once "./Tina4/Initialize.php";
+    }
+}
