@@ -92,7 +92,6 @@ function redirect(string $url, $statusCode = 303)
     }
 }
 
-
 /**
  * Initialize function loads the library for use
  */
