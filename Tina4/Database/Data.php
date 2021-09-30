@@ -65,6 +65,11 @@ class Data
                 if ($dbName[0] === "_" || $dbName === "cache" || $dbName === "auth") {
                     continue;
                 }
+
+                if (!defined("TINA4_DATABASE_TYPES")) {
+                    \Tina4\Initialize();
+                }
+
                 if (is_object($GLOBAL) && in_array(get_class($GLOBAL), TINA4_DATABASE_TYPES)) {
                     Debug::message("Adding {$dbName}");
                     $this->{$dbName} = $GLOBAL;
