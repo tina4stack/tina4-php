@@ -113,18 +113,40 @@ To ensure there are no duplicate entries and values created in your database, al
 
 ** Example:**
 
-<code php orm-example-3.php>
+<code php orm-example-4.php>
 <?php
 
 class Person extends ORM
 {
     public $tableName = "person"; //--> here we reference the table name in the database
-    public primaryKey = "id"; //--> here we include the primary key SQL constraint
+    public $primaryKey = "id"; //--> here we include the primary key SQL constraint
 
     //--> here we reference the columns in our table
     public $id;
     public $firstName;
     public $lastName;
+}
+$person = (new Person());
+$person->name = "Test Save";
+$person->save();
+</code>
+
+===== Inline constraints using ORM =====
+
+You can use make use of constraints within your ORM script.
+
+<code php orm-example-5.php>
+<?php
+
+class Person extends ORM
+{
+    public $tableName = "person"; //--> here we reference the table name in the database
+    public $primaryKey = "id"; //--> here we include the primary key SQL constraint
+
+    //--> here we reference the columns in our table
+    public $id (int not null default);
+    public $firstName (varchar 100 not null);
+    public $lastName (varchar 100 not null);
 }
 $person = (new Person());
 $person->name = "Test Save";
