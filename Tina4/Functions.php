@@ -98,5 +98,7 @@ function redirect(string $url, $statusCode = 303)
 function Initialize() {
     if (file_exists("./Tina4/Initialize.php")) {
         require_once "./Tina4/Initialize.php";
+    } else {
+        require_once __DIR__."/Initialize.php";
     }
 }
