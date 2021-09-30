@@ -126,7 +126,6 @@ if (!defined("DATA_NO_SQL")) {
     define("DATA_NO_SQL", "ERR001");
 }
 
-
 //Initialize the ENV
 if (!defined("TINA4_DEBUG_LEVEL")) {
     define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);
@@ -156,7 +155,7 @@ if (!defined("TINA4_TOKEN_MINUTES")) {
 }
 
 //Initialize Secrets
-(new \Tina4\Auth());
+//(new \Tina4\Auth());
 
 
 if (!defined("TINA4_ALLOW_ORIGINS")) {
