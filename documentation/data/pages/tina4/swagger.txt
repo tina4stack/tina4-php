@@ -61,7 +61,7 @@ This is done to provide a sort of hint to the database schema tools. This will s
 
 /**
  * @Person
- * @description Reference table for Person Class to extend to Tina4 ORM
+ * @description Reference table for Person Class to extend to Tina4 ORM using Swagger ORM annotation
  * @Table(name="person")
  */
 class Person extends ORM
@@ -90,7 +90,7 @@ The better you annotate, the better it may be for your database Schema and for f
 
 /**
  * @Person
- * @description Reference table for Person Class to extend to Tina4 ORM
+ * @description Reference table for Person Class to extend to Tina4 ORM using Swagger ORM annotation
  * @Table(name="person")
  */
 class Person extends ORM { //the table we want to query
@@ -109,7 +109,7 @@ $person->name = "Test Save";
 $person->save();
 </code>
 
-===== Annotate an ORM public variable with optional constraints =====
+===== Annotate an ORM public variable with optional constraints using Swagger =====
 
 Your records/data which are represented as public variables can have various optional constraints.
 
@@ -117,7 +117,7 @@ Your records/data which are represented as public variables can have various opt
 <?php
 
 /**
-* @description An example of a basic ORM annotation
+* @description An example of a basic Swagger ORM annotation
 * @summary A basic annotation for a Route with a "Hello World" response
 * @tags
 */
@@ -141,7 +141,7 @@ $person->name = "Test Save";
 $person->save();
 </code>
 
-===== Annotation for referencing a table Swagger =====
+===== Annotation for referencing a table with Swagger =====
 
 To reference a table using Swagger, we make use of the **@Table** annotation, which describes the table your record/data exists in. A required attribute of **@Table** is the name of the table.
 
