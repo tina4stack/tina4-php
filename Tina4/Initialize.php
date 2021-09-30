@@ -157,7 +157,6 @@ if (!defined("TINA4_TOKEN_MINUTES")) {
 //Initialize Secrets
 //(new \Tina4\Auth());
 
-
 if (!defined("TINA4_ALLOW_ORIGINS")) {
     define("TINA4_ALLOW_ORIGINS", ["*"]);
 }
