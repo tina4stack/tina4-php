@@ -3,11 +3,11 @@ require_once "vendor/autoload.php";
 
 
 $config = new \Tina4\Config(function (\Tina4\Config $config) {
-    global $DBA;
+/*    global $DBA;
 
     $DBA = new \Tina4\DataSQLite3("data.db");
 
-
+*/
 });
 
 
