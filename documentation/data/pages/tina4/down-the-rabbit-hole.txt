@@ -19,7 +19,7 @@
 
 <slide color="#154360"> 
   <background opacity="0.2">{{:tina4:slides_003.png?nolink}}</background>
-  <heading d2>Test for Composer</heading>
+  <heading d2>Test PHP</heading>
   <text lead font-size="h4">In your IDE terminal or power shell, run the following command:</text>
   <code bash>php -v</code>
   <text lead font-size="h4">And it's result:</text>
@@ -29,6 +29,7 @@
     Zend Engine v3.4.0, Copyright (c) Zend Technologies
     with Zend OPcache v7.4.20, Copyright (c), by Zend Technologies
   </code>
+  <heading d2>Test for Composer</heading>
   <text lead font-size="h4">In your IDE terminal or power shell, run the following command:</text>
   <code bash>
    composer -V
@@ -44,17 +45,17 @@
   <code bash>openssl version</code>
   <text lead font-size="h3">And it's result:</text>
   <code bash>OpenSSL 1.1.1k  25 Mar 2021</code>
- <heading d2>Test for Git</heading>
- <text lead font-size="h3">In your IDE terminal or power shell, run the following command:</text>
- <code bash>git --version</code>
- <text lead font-size="h3">And it's result:</text>
- <code bash>git version 2.32.0</code>
+  <heading d2>Test for Git</heading>
+  <text lead font-size="h3">In your IDE terminal or power shell, run the following command:</text>
+  <code bash>git --version</code>
+  <text lead font-size="h3">And it's result:</text>
+  <code bash>git version 2.32.0</code>
 </slide>
 
 <slide color=" #154360 "> 
-   <background opacity="0.2">{{:tina4:slides_005.png?nolink}}</background>
-    <heading d2 text-align="center" >The first jump - what did we learn</heading>
-    <text lead font-size="h4">Often getting up and running and coding can be more difficult than the actual coding. Deploying your application after you have coded it can also be more challenging than the  work that you did to write the application.</text>
+  <background opacity="0.2">{{:tina4:slides_005.png?nolink}}</background>
+  <heading d2 text-align="center" >The first jump - what did we learn</heading>
+  <text lead font-size="h4">Often getting up and running and coding can be more difficult than the actual coding. Deploying your application after you have coded it can also be more challenging than the  work that you did to write the application.</text>
 {{ :wiki:bunny2.jpg?nolink&128&float=end|}}
 
   * We  should have the basics now to start developing in PHP
@@ -64,47 +65,47 @@
 </slide>
 
 <slide color=" #154360 "> 
-    <background opacity="0.2">{{:tina4:slides_006.png?nolink}}</background>
-    <heading d2 text-align="center" >One meter down </heading>
-    <text lead font-size="h3" >I'm assuming you have never seen PHP code before , I am hopeful if you have some concept of what a website is and what is HTML.  All you need to know right now is that websites are **TEXT**!  That's it, all a web server does is send text to the browser which interprets it into the pretty websites you see every day. As a programmer you need to know how to put that text in the right sequence, so it makes it look great.</text>
-    <heading d2 text-align="center" >Our first PHP program</heading>
-    <text lead font-size="h4" >Before we get to far down this hole, lets make sure you're organised. We recommend making a folder on the root of one of your home folder called **projects**. Inside projects, you can create other folders as a way to track your progress. In your **projects** folder make a folder called **tina4example1** and open the folder as a project in your IDE or editor.</text>
-       <heading d2 text-align="center" >Example 1</heading>
-       <text lead font-size="h3" >Add this code to a file called test.php</text>
-       <code php projects/tina4example1/test.php>
-       <?php
+  <background opacity="0.2">{{:tina4:slides_006.png?nolink}}</background>
+  <heading d2 text-align="center" >One meter down </heading>
+  <text lead font-size="h3" >I'm assuming you have never seen PHP code before , I am hopeful if you have some concept of what a website is and what is HTML.  All you need to know right now is that websites are **TEXT**!  That's it, all a web server does is send text to the browser which interprets it into the pretty websites you see every day. As a programmer you need to know how to put that text in the right sequence, so it makes it look great.</text>
+  <heading d2 text-align="center" >Our first PHP program</heading>
+  <text lead font-size="h4" >Before we get to far down this hole, lets make sure you're organised. We recommend making a folder on the root of one of your home folder called **projects**. Inside projects, you can create other folders as a way to track your progress. In your **projects** folder make a folder called **tina4example1** and open the folder as a project in your IDE or editor.</text>
+  <heading d2 text-align="center" >Example 1</heading>
+  <text lead font-size="h3" >Add this code to a file called test.php</text>
+  <code php projects/tina4example1/test.php>
+  <?php
 
-       echo "This is just text!";
-       </code>
-       <text  lead font-size="h3" >Now you need to run the code to see what it does. Open up a terminal in the example folder, spin up a web-server by executing the following command:</text>
-       <code bash>php test.php</code>
-       <text lead font-size="h4" >You should get an output similar to the following:</text>
-       <code shell>
-       Microsoft Windows [Version 10.0.19043.1083]
-       (c) Microsoft Corporation. All rights reserved.
-       D:\projects\tina4examples\example1>php test.php
-       This is just text!
-       D:\projects\tina4examples\example1>
-       </code>
-       <text lead font-size="h3">Now we would like to get it running as a website, and we can do it very easily using the built-in webservice of PHP!</text>
-       <code bash>php -S localhost:8080 test.php</code>
-       <text lead font-size="h3">As you can see you should get a link which you can click on and view in your browser.</text>
-       <code shell>
-       D:\projects\tina4examples\example1>php -S localhost:8080 test.php
-       [Sat Jul 10 11:19:38 2021] PHP 7.4.13 Development Server (http://localhost:8080) started
-       </code>
-       <text lead font-size="h3">You have just created a website. Feel free to edit the test.php file and add other **echo** statements to see what happens, below are some examples.</text>
-       <code php projects/tina4example1/test.php>
-       <?php
-       echo "This is just text!";
+  echo "This is just text!";
+  </code>
+  <text  lead font-size="h3" >Now you need to run the code to see what it does. Open up a terminal in the example folder, spin up a web-server by executing the following command:</text>
+  <code bash>php test.php</code>
+  <text lead font-size="h4" >You should get an output similar to the following:</text>
+  <code shell>
+  Microsoft Windows [Version 10.0.19043.1083]
+  (c) Microsoft Corporation. All rights reserved.
+  D:\projects\tina4examples\example1>php test.php
+  This is just text!
+  D:\projects\tina4examples\example1>
+  </code>
+  <text lead font-size="h3">Now we would like to get it running as a website, and we can do it very easily using the built-in webservice of PHP!</text>
+  <code bash>php -S localhost:8080 test.php</code>
+  <text lead font-size="h3">As you can see you should get a link which you can click on and view in your browser.</text>
+  <code shell>
+  D:\projects\tina4examples\example1>php -S localhost:8080 test.php
+  [Sat Jul 10 11:19:38 2021] PHP 7.4.13 Development Server (http://localhost:8080) started
+  </code>
+  <text lead font-size="h3">You have just created a website. Feel free to edit the test.php file and add other **echo** statements to see what happens, below are some examples.</text>
+  <code php projects/tina4example1/test.php>
+  <?php
+  echo "This is just text!";
 
-       echo "<h1>A header tag </h1>";
+  echo "<h1>A header tag </h1>";
 
-       //This is how you make comments, notice it won't appear when you refresh your browser
-       echo "<hr>";
+  //This is how you make comments, notice it won't appear when you refresh your browser
+  echo "<hr>";
 
-       echo "<button onclick=\"alert('Made you click!')\">Click Me</button>";
-       </code>
+  echo "<button onclick=\"alert('Made you click!')\">Click Me</button>";
+  </code>
 </slide>
 
 <slide color=" #154360 " text-align="center"> 

@@ -113,7 +113,7 @@ $person->save();
 
 Your records/data which are represented as public variables can have various optional constraints.
 
-<code php swagger-example-2.php>
+<code php swagger-example-5.php>
 <?php
 
 /**
