@@ -29,7 +29,7 @@
     Zend Engine v3.4.0, Copyright (c) Zend Technologies
     with Zend OPcache v7.4.20, Copyright (c), by Zend Technologies
   </code>
-  <heading d2>Test for Composer</heading>
+  <heading d2>Test Composer</heading>
   <text lead font-size="h4">In your IDE terminal or power shell, run the following command:</text>
   <code bash>
    composer -V
@@ -40,7 +40,7 @@
 
 <slide color=" #154360 "> 
   <background opacity="0.2">{{:tina4:slides_004.png?nolink}}</background>
-  <heading d2>Test for OpenSSL</heading>
+  <heading d2>Test OpenSSL</heading>
   <text lead font-size="h3">In your IDE terminal or power shell, run the following command:</text>
   <code bash>openssl version</code>
   <text lead font-size="h3">And it's result:</text>
