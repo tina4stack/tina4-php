@@ -289,9 +289,7 @@ if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
             Debug::message("Could not create " . DIRECTORY_SEPARATOR . "cache");
         }
     }
-}
 
-if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
     if (empty($cache)) {
         //Setup caching options
         try {
