@@ -2,7 +2,43 @@
 
 The [[https://en.wikipedia.org/wiki/Object-relational_mapping|ORM]] in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.
 
-ORM is used to map object relations and how they interact with each other, for your app/webpage/system.  
+ORM is used to map object relations and how they interact with each other, for your app/webpage/system.
+
+===== Map a Database Table =====
+
+In Tina4 we map Database tables using an ORM class in the /src/orm directory.
+
+We assume that there is a table “user” in the database. See the migrations section if you have not created the table yet.
+
+<code php orm-exampl-1.php>
+<?php
+
+//we need a class extending the ORM
+
+class User extends \Tina4\ORM {
+    public $id; //primary key because it is first
+    public $name; //some additional data
+}
+</code>
+
+If you want, you can also map table names to classes with more friendly names by specifying the table name. This is particularly useful when you're building plugins by adding Tina4 into existing code.
+
+Also note that I'm explicitly defining the primary key below.
+
+<code php orm-exampl-2.php>
+<?php
+
+//we need a class extending the ORM
+class Clients extends \Tina4\ORM {
+    public $tableName = "tblclients";
+    public $primaryKey = "id";
+
+    public $id; //primary key because it is first
+    public $name; //some additional data
+}
+</code>
+
+Tina4 is smart in picking up table names that match your class name.
 
 ===== Save a record using the ORM =====
 
@@ -12,36 +48,45 @@ Create your ORM classes and objects in the **\src\ORM** directory.
 
 ** Example:**
 
-<code php orm-example.php>
+<code php orm-example-4.php>
 <?php
 
 //we need a class extending the ORM
 class User extends \Tina4\ORM { //assumes we have a table user in the database
     public $id; //primary key because it is first
     public $name; //some additional data
-}   
+}
 
 $user = (new User());
 $user->name = "Test Save";
 $user->save();
 
+
 //We want the table to be made for us
 class NewTable extends \Tina4\ORM {
-
-    //will be created as "newtable" in the database
+    //will be created as newtable in the database
+    /**
+    *  @var id integer auto_increment
+    **/
     public $id; //primary key because it is first
+    /**
+    *  @var varchar(100) default 'Default Name'
+    **/
     public $name; //some additional data
-} 
+}
+
 
 $newTable = (new NewTable());
 $newTable->name = "Test Save";
-$user->save();
+$userTable->save();
 
-//How about something else?
+//How about something else
+
 $newTable = (new NewTable('{"name":"TEST"}'));
 $newTable->save();
 
-//Or maybe something more different?
+//Or something else
+
 $fields = ["name" => "Testing"];
 $newTable = (new NewTable($fields));
 $newTable->save();
@@ -50,6 +95,39 @@ $newTable->save();
 //contain fields that match the class declared
 $newTable = (new NewTable($_REQUEST));
 $newTable->save();
+</code>
+
+===== Load a record using the ORM =====
+The load method of ORM allows you to select and update records. It returns false if there are no records matched.
+As you'll see, you add the where part of a select statement into the load() method.
+
+<code  php orm-load-example.php>
+//Assuming we've got a record for Bob that we want to select
+//Let's update the user's name
+
+$user = (new User());
+$user->load("name = 'Bob' ");
+
+if ($user != false) //check if we have a record
+{
+   $user->name = "Bobbey"
+}
+
+$user->save();
+
+
+//Let's do a more elegant load
+
+if (($user = (new User())->load("name = 'Bobbey' "))
+{
+  //The user exists do some checks here
+}
+else
+{
+  //The user does not exist, let's insert it
+  $user = (new User()) //create a new record like we did in our first example
+  $user->name = "Bobbey";
+}
 </code>
 
 ===== Other methods using the ORM =====
@@ -154,5 +232,5 @@ $person->save();
 </code>
 
 <WRAP center round info 100%>
-Take a look at [[:tina4:migrations|Migrations]] & [[:tina4:swagger|Swagger]] as it can be used with ORM.
+Take a look at [[:tina4:migrations|Migrations]], [[:tina4:swagger|Swagger]] or [[tina4:tutorials:save-date-to-database|Saving Local Dates]] as it can be used with ORM.
 </WRAP>
