@@ -42,7 +42,7 @@ class DataMongoDb implements Database
         }
 
         $connectionString = "mongodb://" . $this->hostName . ":" . $this->port;
-        if (!empty($username)) {
+        if (!empty($this->username)) {
             $connectionString = "mongodb://{$this->username}:{$this->password}@" . $this->hostName . ":" . $this->port;
         }
 
