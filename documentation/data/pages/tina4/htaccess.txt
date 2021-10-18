@@ -1,0 +1,60 @@
+====== HTACCESS ======
+
+When installing Tina4 and run the initialize command you will notice that a **.htaccess** file was created into your project directory.
+
+===== What is HTACCESS? =====
+
+An **.htaccess** is a distribution configuration file. The abbreviation means Hypertext Access file. It allows you set dependencies in your project so the configuration you setup which is applied throughout the project.
+
+===== Why HTACCESS? =====
+
+We make use of the **.htaccess** file if we are using what is known as shared hosting, thus the **.htaccess** file allows us to make changes and protocols when connecting to a server.
+
+You can have more than one **.htaccess**
+
+===== What can HTACCESS ne used for? =====
+<WRAP center info>
+ * Customize error pages
+ * Redirects
+ * Setting HTTP headers
+ * Redirect User based on IP
+ * Error page customization
+ * Including MIME types
+</WRAP>
+
+**Example:**
+<code htaccess htaccess-1.htaccess>
+DirectoryIndex index.php
+RewriteEngine On
+# Some hosts may require you to use the `RewriteBase` directive.
+# If you need to use the `RewriteBase` directive, it should be the
+# absolute physical path to the directory that contains this htaccess file.
+
+#Block access to .env and other files
+<Files ~ ".env">
+Order Allow,Deny
+Deny from all
+Satisfy all
+</Files>
+
+<Files ~ "^.*\.([Hh][Tt][Aa])">
+Order allow,deny
+Deny from all
+Satisfy all
+</Files>
+
+#Disable the 3 lines below for just to http
+RewriteCond %{HTTPS} !=on
+RewriteCond %{REQUEST_URI} !^/.well-known/.*$ [NC]
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301,NE]
+
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+#Add ability to get the authorization headers on the webserver
+SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
+</code>
+
+Another reason is that the **.htaccess** file allows you to edit a webpages configuration, without the need to edit server configuration files.

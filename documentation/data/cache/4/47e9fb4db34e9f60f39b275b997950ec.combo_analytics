@@ -1,14 +1,14 @@
 {
-    "date": "2021-09-21 22:57:07",
+    "date": "2021-10-01 14:10:10",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
         "date_modified": "2021-09-21T22:21:05+02:00",
         "date_published": null,
-        "description": "Generate HTML with Shape\nHTML\nHTML Language called Shape where you write code to make HTML. We can define the client-side image map using HTML Shape. Using this method, you can output HTML elements with PHP. \n\nInstallation\n\nPut a file named composer.json at the root of your project, containing your project dependencies:",
+        "description": "Shape\n\nShape is a way to generate valid HTML by using functions.\n\nHTML Language called Shape where you write code to make HTML. We can define the client-side image map using HTML Shape. Using this method, you can output HTML elements with PHP. \n\nInstallation",
         "h1": "=====",
         "name": "shape",
         "path": ":tina4:shape",
-        "title": "Generate HTML with Shape",
+        "title": "Shape",
         "type": "article"
     },
     "statistics": {
@@ -17,7 +17,7 @@
             "": 1,
             "andre": 1
         },
-        "chars_count": 3050,
+        "chars_count": 3142,
         "edits_count": 11,
         "formatted": {
             "1": {
@@ -38,7 +38,7 @@
             "h4": 1,
             "h5": 1
         },
-        "internal_backlinks_count": 1,
+        "internal_backlinks_count": 2,
         "linebreak": 1,
         "media": {
             "total_count": 0,
@@ -49,12 +49,12 @@
         "syntax_count": {
             "combo_headingwiki": 10,
             "section": 14,
-            "p": 10,
+            "p": 11,
             "combo_code": 7,
             "strong": 3,
             "combo_heading": 4
         },
-        "word_count": 259,
+        "word_count": 274,
         "word_section_count": {
             "avg": 0
         }
@@ -66,7 +66,7 @@
             "internal_links_min"
         ],
         "scoring": {
-            "score": 18.75,
+            "score": 19.75,
             "scores": {
                 "canonical_present": 0,
                 "correct_content_length": 10,
@@ -74,7 +74,7 @@
                 "correct_word_avg_by_section": 0,
                 "description_present": 0,
                 "edits_count": 2.75,
-                "internal_backlinks_count": 1,
+                "internal_backlinks_count": 2,
                 "internal_links_count": 0,
                 "no_internal_broken_links_count": 2,
                 "title_present": 0

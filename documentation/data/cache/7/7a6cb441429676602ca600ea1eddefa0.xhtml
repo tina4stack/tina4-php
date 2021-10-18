@@ -63,13 +63,13 @@ docker run -v $(pwd):/app -p7145:7145 tina4stack/php composer start  </code>
 In your IDE command line, try this piece of code and hit enter:
 </p>
 <pre class="command-line code-container-combo code-container-bash-combo" data-prompt="#" data-download-link="true" data-src="file.bash">
-<code class="language-bash code-combo code-bash-combo">docker run -v %cd%:/app tina4stack/php composer require tina4stack/tina4php
-docker run -v %cd%:/app tina4stack/php composer exec tina4 initialize:run
-docker run -v %cd%:/app -p7145:7145 tina4stack/php composer start  </code>
+<code class="language-bash code-combo code-bash-combo">docker run -v cd:/app tina4stack/php composer require tina4stack/tina4php
+docker run -v cd:/app tina4stack/php composer exec tina4 initialize:run
+docker run -v cd:/app -p7145:7145 tina4stack/php composer start</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Docker&quot;,&quot;hid&quot;:&quot;docker&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;1152-1947&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Docker&quot;,&quot;hid&quot;:&quot;docker&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;1152-1939&quot;} -->
 <h2 class="sectionedit5 heading-combo" id="composer">Composer</h2>
 <div class="level2">
 
@@ -87,7 +87,7 @@ composer start</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Composer&quot;,&quot;hid&quot;:&quot;composer&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1948-2172&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Composer&quot;,&quot;hid&quot;:&quot;composer&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1940-2164&quot;} -->
 <h2 class="sectionedit6 heading-combo" id="what_s_in_the_box">What's in the box?</h2>
 <div class="level2">
 
@@ -103,7 +103,7 @@ This is 1000 foot overview of what&#039;s included with Tina4
 </li>
 <li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:migrations" href="/doku.php?id=tina4:migrations" title="Create a table/migration You want to create a table for the database? Migrations are sequential &lt;https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_1001.htm&gt; which keep track of your database changes. We recommend using migrations especially when you want to apply changes to a running system or when working in a team.">Migrations</a></div>
 </li>
-<li class="level1"><div class="li"> <a class="link-internal low-quality-page-combo link-combo" data-wiki-id="tina4:orm" href="/doku.php?id=tina4:orm" title="The &lt;https://en.wikipedia.org/wiki/Object-relational_mapping&gt; in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.  is used to map object relations and how they interact with each other, for your app/webpage/system. (LQPP)">ORM</a></div>
+<li class="level1"><div class="li"> <a class="link-internal link-combo" data-wiki-id="tina4:orm" href="/doku.php?id=tina4:orm" title="The &lt;https://en.wikipedia.org/wiki/Object-relational_mapping&gt; in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.  is used to map object relations and how they interact with each other, for your app/webpage/system.">ORM</a></div>
 </li>
 <li class="level1"><div class="li"> <a class="link-internal low-quality-page-combo link-combo" data-wiki-id="tina4:templates" href="/doku.php?id=tina4:templates" title="Basic Hello World in Tina4  in Tina4 are written in &lt;https://twig.symfony.com/doc/3.x/&gt;. Tina4 exposes some common globals into the twig template so please make note of these, if you are worried security use the following env config to remove them The globals map as follows: (LQPP)">Templates</a></div>
 </li>
@@ -118,7 +118,7 @@ This is 1000 foot overview of what&#039;s included with Tina4
 </ul>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;What&#039;s in the box?&quot;,&quot;hid&quot;:&quot;what_s_in_the_box&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;2173-2656&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;What&#039;s in the box?&quot;,&quot;hid&quot;:&quot;what_s_in_the_box&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;2165-2648&quot;} -->
 <h2 class="sectionedit7 heading-combo" id="how_do_i_learn_to_work_with_tina4">How do I learn to work with Tina4?</h2>
 <div class="level2">
 
@@ -135,7 +135,7 @@ This is 1000 foot overview of what&#039;s included with Tina4
 </p>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;How do I learn to work with Tina4?&quot;,&quot;hid&quot;:&quot;how_do_i_learn_to_work_with_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;2657-&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;How do I learn to work with Tina4?&quot;,&quot;hid&quot;:&quot;how_do_i_learn_to_work_with_tina4&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;2649-&quot;} -->
 <script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/lozad@1.16.0/dist/lozad.min.js" integrity="sha256-mOFREFhqmHeQbXpK2lp4nA3qooVgACfh88fpJftLBbc=" crossorigin="anonymous" class="snippet-lozad-combo"></script>

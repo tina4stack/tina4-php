@@ -1,10 +1,10 @@
 {
-    "date": "2021-09-28 21:18:06",
+    "date": "2021-09-30 03:09:57",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
-        "date_modified": "2021-09-14T11:59:17+02:00",
+        "date_modified": "2021-09-29T10:12:24+02:00",
         "date_published": null,
-        "description": "Swagger UI \/ Open API\nAPI\nAs mentioned in basic-apiAPI, Tina uses <https:\/\/swagger.io\/solutions\/api-documentation\/> & <https:\/\/swagger.io\/specification\/> UI. It is highly recommended you annotate your code for flexibility.\n\nAs an example, if someone else were to look and your code, would they be able to read it and add\/make changes?\n\nAnnotate a Route",
+        "description": "Swagger UI \/ Open API\nAPI\nAs mentioned in basic-apiAPI, Tina uses <https:\/\/swagger.io\/solutions\/api-documentation\/> & <https:\/\/swagger.io\/specification\/> UI. It is highly recommended you annotate your code for flexibility.\n\nAs an example, if someone else were to look and your code, would they be able to read it and add\/make changes?\n\nBasic Annotation for a Route",
         "h1": "Swagger UI \/ Open API",
         "name": "swagger",
         "path": ":tina4:swagger",
@@ -17,14 +17,14 @@
             "": 1,
             "andre": 1
         },
-        "chars_count": 3343,
-        "edits_count": 7,
+        "chars_count": 5478,
+        "edits_count": 8,
         "external_links_count": 2,
         "formatted": {
             "1": {
                 "len": 8
             },
-            "0": 37,
+            "0": 67,
             "2": {
                 "len": 8
             },
@@ -36,15 +36,27 @@
             },
             "5": {
                 "len": 9
+            },
+            "6": {
+                "len": 9
+            },
+            "7": {
+                "len": 6
+            },
+            "8": {
+                "len": 6
+            },
+            "9": {
+                "len": 9
             }
         },
         "headers_count": {
             "h1": 1,
-            "h2": 4,
+            "h2": 6,
             "h4": 1
         },
         "internal_backlinks_count": 3,
-        "internal_links_count": 3,
+        "internal_links_count": 5,
         "internal_links_distance": {
             "avg": 0,
             "max": 0,
@@ -57,15 +69,16 @@
             "external_count": 0
         },
         "syntax_count": {
-            "combo_headingwiki": 6,
-            "section": 6,
-            "p": 13,
-            "combo_link": 5,
-            "strong": 5,
-            "combo_code": 5,
-            "combo_media": 1
+            "combo_headingwiki": 8,
+            "section": 8,
+            "p": 19,
+            "combo_link": 7,
+            "strong": 9,
+            "combo_code": 7,
+            "combo_media": 1,
+            "wrap_divwrap": 1
         },
-        "word_count": 351,
+        "word_count": 579,
         "word_section_count": {
             "avg": 0
         }
@@ -74,14 +87,14 @@
         "message": "No mandatory rules broken",
         "low": false,
         "scoring": {
-            "score": 19.75,
+            "score": 20,
             "scores": {
                 "canonical_present": 0,
                 "correct_content_length": 10,
                 "correct_outline": 0,
                 "correct_word_avg_by_section": 0,
                 "description_present": 0,
-                "edits_count": 1.75,
+                "edits_count": 2,
                 "internal_backlinks_count": 3,
                 "internal_links_count": 3,
                 "no_internal_broken_links_count": 2,
@@ -94,7 +107,7 @@
                 "title_present": "Add a title in the frontmatter for 10 points",
                 "description_present": "Add a description in the frontmatter for 8 points",
                 "canonical_present": "Add a canonical in the frontmatter for 5 points",
-                "outline_structure": "The 5 header (h4) has a level bigger than its precedent (2)",
+                "outline_structure": "The 7 header (h4) has a level bigger than its precedent (2)",
                 "words_by_section_avg_min": "The number of words by section is less than 20"
             },
             "details": {

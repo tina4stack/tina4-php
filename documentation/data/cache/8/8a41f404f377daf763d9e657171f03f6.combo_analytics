@@ -1,13 +1,15 @@
 {
-    "id": "tina4:suggested_topics",
-    "date": "2021-09-11 23:08:12",
+    "date": "2021-09-30 03:09:49",
     "metadata": {
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-11T23:08:11+02:00",
+        "date_published": null,
+        "description": "Suggested Topics\n\nA list of community suggested topics. Make a suggestion on our Slack channel.\n\nTODO\n\n\t*  introduction\n\t*  debug \n\t*  auth\n\t*  error-pages\n\t*  connection-errors\n\t*  database\n\t*  shapeHTML\n\t*  modules\n\t*  swaggerAPI\n\t*  Annotation_for_referencing_a_table_with_Swagger\n\t*  connection-errors\n\t*  test\n\t*  messenger\n\t*  apiAPI\n\t*  apiAPI\n\t*  apiAPI\n\t*  other_methods_using_the_orm -- There's a lot about mapping but not so much about load, delete, select, hasOne, hasMany, softDelete, Au\u2026",
+        "h1": "Suggested Topics",
+        "name": "suggested_topics",
+        "path": ":tina4:suggested_topics",
         "title": "Suggested Topics",
-        "description": "Suggested Topics\n\nA list of community suggested topics. Make a suggestion on our Slack channel.\n\nTODO\n\n\t*  introduction\n\t*  debug \n\t*  auth\n\t*  error-pages\n\t*  connection-errors\n\t*  database\n\t*  slimsHTML\n\t*  modules\n\t*  swaggerAPI\n\t*  connection-errors\n\t*  test\n\t*  messenger\n\t*  apiAPI\n\t*  apiAPI\n\t*  apiAPI\n\t*  other_methods_using_the_orm -- There's a lot about mapping but not so much about load, delete, select, hasOne, hasMany, softDelete, Auto Generate Primary key, Auto Generate ORM files, et\u2026",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-11 11:08:11",
-        "age_creation": 8,
-        "age_modification": 0
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -16,18 +18,24 @@
             "barco": 1,
             "cris": 1
         },
-        "chars_count": 1537,
+        "chars_count": 1660,
         "edits_count": 39,
         "headers_count": {
             "h1": 1,
             "h2": 2
         },
         "internal_backlinks_count": 1,
-        "internal_links_count": 20,
+        "internal_links_count": 21,
         "internal_links_distance": {
-            "avg": 0.25,
+            "avg": 0.23809523809523808,
             "max": 2,
             "min": 0
+        },
+        "media": {
+            "total_count": 0,
+            "internal_count": 0,
+            "internal_broken_count": 0,
+            "external_count": 0
         },
         "syntax_count": {
             "combo_headingwiki": 3,
@@ -35,17 +43,18 @@
             "wrap_divwrap": 1,
             "p": 2,
             "listu": 2,
-            "listitem": 20,
-            "listcontent": 20,
-            "combo_link": 20,
+            "listitem": 21,
+            "listcontent": 21,
+            "combo_link": 21,
             "iframe": 1
         },
+        "word_count": 152,
         "word_section_count": {
             "avg": 0
-        },
-        "words_count": 143
+        }
     },
     "quality": {
+        "message": "No mandatory rules broken",
         "low": false,
         "scoring": {
             "score": 26.75,

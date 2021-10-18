@@ -1,13 +1,15 @@
 {
-    "id": "tina4:tutorials:beginner",
-    "date": "2021-09-17 09:48:05",
+    "date": "2021-10-01 17:23:01",
     "metadata": {
-        "title": "How Do I? - Beginner",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-04T06:55:56+02:00",
+        "date_published": null,
         "description": "How Do I? - Beginner\n\n\t*  initialize-a-tina4-project\n\t*  create-a-landing-page\n\t*  create-a-basic-route\n\t*  debug-twig-template\n\t*  let-a-class-use-the-database\n\t*  connect-to-database\n\t*  write-an-update-or-insert-statement \n\t*  post-form-data\n\t*  migrationless",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-04 06:55:56",
-        "age_creation": 13,
-        "age_modification": 13
+        "h1": "How Do I? - Beginner",
+        "name": "beginner",
+        "path": ":tina4:tutorials:beginner",
+        "title": "How Do I? - Beginner",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -40,7 +42,7 @@
             "listcontent": 9,
             "combo_link": 9
         },
-        "words_count": 44
+        "word_count": 44
     },
     "quality": {
         "message": "1 mandatory rules broken.",

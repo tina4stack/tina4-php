@@ -1,0 +1,13 @@
+====== HTACCESS ======
+
+When installing Tina4 and run the initialize command you will notice that a **.htaccess** file was created into your project directory.
+
+===== What is HTACCESS? =====
+
+An **.htaccess** is a distribution configuration file. It allows you set dependencies in your project so the configuration you setup which is applied throughout the project.
+
+You can have more than one **.htaccess** file in case you would like a particular directory to be configured differently.
+
+**Example:**
+
+<code

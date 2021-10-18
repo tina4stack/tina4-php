@@ -12,7 +12,7 @@ As an example, if someone else were to look and your code, would they be able to
 
 </div>
 <!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Swagger UI \/ Open API &quot;,&quot;hid&quot;:&quot;swagger_ui_open_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:1,&quot;range&quot;:&quot;1-384&quot;} -->
-<h2 class="sectionedit2 heading-combo" id="annotate_a_route">Annotate a Route</h2>
+<h2 class="sectionedit2 heading-combo" id="basic_annotation_for_a_route">Basic Annotation for a Route</h2>
 <div class="level2">
 
 <p>
@@ -22,7 +22,7 @@ You can annotate your <a class="link-internal link-combo" data-wiki-id="tina4:ro
 <p>
 <strong>Example:</strong>
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="route-annotation-example.php" data-download-link-label="Download route-annotation-example.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="swagger-example.php" data-download-link-label="Download swagger-example.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
 /**
@@ -37,8 +37,8 @@ You can annotate your <a class="link-internal link-combo" data-wiki-id="tina4:ro
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotate a Route&quot;,&quot;hid&quot;:&quot;annotate_a_route&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;385-869&quot;} -->
-<h2 class="sectionedit3 heading-combo" id="annotate_an_orm_class_or_object">Annotate an ORM class or object</h2>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Basic Annotation for a Route&quot;,&quot;hid&quot;:&quot;basic_annotation_for_a_route&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:2,&quot;range&quot;:&quot;385-872&quot;} -->
+<h2 class="sectionedit3 heading-combo" id="basic_annotation_for_an_orm_object_or_class">Basic Annotation for an ORM object or class</h2>
 <div class="level2">
 
 <p>
@@ -48,7 +48,7 @@ Perhaps you would like to annotate your<a class="link-internal link-combo" data-
 <p>
 <strong>Example:</strong>
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example.php" data-download-link-label="Download orm-example.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="swagger-example-2.php" data-download-link-label="Download swagger-example-2.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
 /**
@@ -56,33 +56,76 @@ Perhaps you would like to annotate your<a class="link-internal link-combo" data-
 * @summary A basic annotation for a Route with a &quot;Hello World&quot; response
 * @tags
 */
-class User extends \Tina4\ORM { //assumes we have a table user in the database
+class Person extends \Tina4\ORM { //assumes we have a table &quot;person&quot; in the database
     public $id; //primary key because it is first
     public $name; //some additional data
 }
 
-$user = (new User());
-$user-&gt;name = &quot;Test Save&quot;;
-$user-&gt;save();</code>
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotate an ORM class or object&quot;,&quot;hid&quot;:&quot;annotate_an_orm_class_or_object&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;870-1446&quot;} -->
-<h2 class="sectionedit4 heading-combo" id="annotate_an_orm_public_variable_with_various_optional_constraints">Annotate an ORM public variable with various optional constraints</h2>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Basic Annotation for an ORM object or class&quot;,&quot;hid&quot;:&quot;basic_annotation_for_an_orm_object_or_class&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:3,&quot;range&quot;:&quot;873-1481&quot;} -->
+<h2 class="sectionedit4 heading-combo" id="annotation_for_referencing_a_table_with_swagger">Annotation for referencing a table with Swagger</h2>
 <div class="level2">
 
 <p>
-Your records/data which are represented as public variables can have various optional constraints.
+To reference a table using Swagger, we make use of the <strong>@Table</strong> annotation, which describes the table your record/data exists in. A required attribute of <strong>@Table</strong> is the name of the table.
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="orm-example-2.php" data-download-link-label="Download orm-example-2.php">
+
+<p>
+This is done to provide a sort of hint to the database schema tools. This will serve essential in the initial steps of your project, as you will need to plan and setup your database according to your project requirements.
+</p>
+
+<p>
+<strong> Example:</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="swagger-example-3.php" data-download-link-label="Download swagger-example-3.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
 /**
-* @description An example of a basic ORM annotation
-* @summary A basic annotation for a Route with a &quot;Hello World&quot; response
-* @tags
-*/
-class User extends \Tina4\ORM { //assumes we have a table user in the database
+ * @Person
+ * @description Reference table for Person Class to extend to Tina4 ORM using Swagger ORM annotation
+ * @Table(name=&quot;person&quot;)
+ */
+class Person extends ORM
+{
+    public $tableName = &quot;person&quot;; //--&gt; here we reference the table &quot;person&quot; in the database
+
+    //--&gt; here we reference the columns in our table
+    public $id;
+    public $firstName;
+    public $lastName;
+}
+
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotation for referencing a table with Swagger&quot;,&quot;hid&quot;:&quot;annotation_for_referencing_a_table_with_swagger&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;1482-2478&quot;} -->
+<h2 class="sectionedit5 heading-combo" id="annotate_your_orm_objects_and_its_values">Annotate your ORM objects and its values</h2>
+<div class="level2">
+
+<p>
+The better you annotate, the better it may be for your database Schema and for future readability and context of what the code is about.
+</p>
+
+<p>
+<strong> Example:</strong>
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="swagger-example-4.php" data-download-link-label="Download swagger-example-4.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+/**
+ * @Person
+ * @description Reference table for Person Class to extend to Tina4 ORM using Swagger ORM annotation
+ * @Table(name=&quot;person&quot;)
+ */
+class Person extends ORM { //the table we want to query
     /**
     *  @var id integer auto_increment
     **/
@@ -93,18 +136,54 @@ class User extends \Tina4\ORM { //assumes we have a table user in the database
     public $name; //some additional data
 }
 
-$user = (new User());
-$user-&gt;name = &quot;Test Save&quot;;
-$user-&gt;save();</code>
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotate an ORM public variable with various optional constraints&quot;,&quot;hid&quot;:&quot;annotate_an_orm_public_variable_with_various_optional_constraints&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;1447-2164&quot;} -->
-<h2 class="sectionedit5 heading-combo" id="annotation_for_referencing_a_table_using_orm">Annotation for referencing a table using ORM</h2>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotate your ORM objects and its values&quot;,&quot;hid&quot;:&quot;annotate_your_orm_objects_and_its_values&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;2479-3219&quot;} -->
+<h2 class="sectionedit6 heading-combo" id="annotate_an_orm_public_variable_with_optional_constraints_using_swagger">Annotate an ORM public variable with optional constraints using Swagger</h2>
 <div class="level2">
 
 <p>
-To reference a table using ORM, we make use of the <strong>@Table</strong> annotation, which describes the table your record/data exists in. A required attribute of <strong>@Table</strong> is the name of the table.
+Your records/data which are represented as public variables can have various optional constraints.
+</p>
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="swagger-example-5.php" data-download-link-label="Download swagger-example-5.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
+
+/**
+* @description An example of a basic Swagger ORM annotation
+* @summary A basic annotation for a Route with a &quot;Hello World&quot; response
+* @tags
+*/
+class Person extends \Tina4\ORM { //assumes we have a table user in the database
+
+    public $tableName = &quot;person&quot;; //--&gt; here we reference the table name in the database
+    public primaryKey = &quot;id&quot;; //--&gt; here we include the primary key SQL constraint
+
+    /**
+    *  @var id integer auto_increment
+    **/
+    public $id; //primary key because it is first
+    /**
+    *  @var varchar(100) default 'Default Name'
+    **/
+    public $name; //some additional data
+}
+
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
+</pre>
+
+</div>
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotate an ORM public variable with optional constraints using Swagger&quot;,&quot;hid&quot;:&quot;annotate_an_orm_public_variable_with_optional_constraints_using_swagger&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;3220-4139&quot;} -->
+<h2 class="sectionedit7 heading-combo" id="annotation_for_referencing_a_table_with_swagger1">Annotation for referencing a table with Swagger</h2>
+<div class="level2">
+
+<p>
+To reference a table using Swagger, we make use of the <strong>@Table</strong> annotation, which describes the table your record/data exists in. A required attribute of <strong>@Table</strong> is the name of the table.
 </p>
 
 <p>
@@ -118,18 +197,18 @@ This is done to provide a sort of hint to the database schema tools. This will s
 <code class="language-php code-combo code-php-combo">&lt;?php
 
 /**
- * @User
+ * @Person
  * @description Reference table for User Class to extend to Tina4 ORM
- * @Table(name=&quot;user&quot;)
+ * @Table(name=&quot;person&quot;)
  */
-class User extends \Tina4\ORM { //assumes we have a table &quot;user&quot; in the database
+class Person extends \Tina4\ORM { //assumes we have a table &quot;user&quot; in the database
     public $id; //primary key because it is first
     public $name; //some additional data
 }
 
-$user = (new User());
-$user-&gt;name = &quot;Test Save&quot;;
-$user-&gt;save();</code>
+$person = (new Person());
+$person-&gt;name = &quot;Test Save&quot;;
+$person-&gt;save();</code>
 </pre>
 
 </div>
@@ -151,9 +230,13 @@ Once, you spin up a web-server and hit up that address you will see the Swagger 
 <p>
 <img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1916px" data-srcset="http://localhost:8800/lib/exe/fetch.php?w=355&amp;h=100&amp;tok=cc60f7&amp;media=tina4:api3.png 355w, http://localhost:8800/lib/exe/fetch.php?w=556&amp;h=157&amp;tok=ea6e70&amp;media=tina4:api3.png 556w, http://localhost:8800/lib/exe/fetch.php?w=748&amp;h=212&amp;tok=50ffdc&amp;media=tina4:api3.png 748w, http://localhost:8800/lib/exe/fetch.php?w=972&amp;h=275&amp;tok=abd8dd&amp;media=tina4:api3.png 972w, http://localhost:8800/lib/exe/fetch.php?media=tina4:api3.png 1916w" data-placeholder-background="#cbf1ea" src="http://localhost:8800/lib/exe/fetch.php?media=tina4:api3.png" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxOTE2IDU0Mic+PC9zdmc+" height="542" width="1916"/>
 </p>
-
+<!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:8,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap" style="width: 100%;">
+<p>
+Take a look at <a class="link-internal link-combo" data-wiki-id="tina4:migrations" href="/doku.php?id=tina4:migrations" title="Create a table/migration You want to create a table for the database? Migrations are sequential &lt;https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_1001.htm&gt; which keep track of your database changes. We recommend using migrations especially when you want to apply changes to a running system or when working in a team.">Migrations</a> &amp; <a class="link-internal link-combo" data-wiki-id="tina4:orm" href="/doku.php?id=tina4:orm" title="The &lt;https://en.wikipedia.org/wiki/Object-relational_mapping&gt; in Tina4 tries to be as light as possible on coding, the basic form uses the object name to map to the table and assumes the first public variable you declare is the primary key.  is used to map object relations and how they interact with each other, for your app/webpage/system.">ORM</a> as it can be used with Swagger.
+</p>
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:9,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotation for referencing a table using ORM&quot;,&quot;hid&quot;:&quot;annotation_for_referencing_a_table_using_orm&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;2165-&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Annotation for referencing a table with Swagger&quot;,&quot;hid&quot;:&quot;annotation_for_referencing_a_table_with_swagger1&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;4140-&quot;} -->
 <script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
@@ -392,6 +475,11 @@ Once, you spin up a web-server and hit up that address you will see the Swagger 
     font-size: 80%;
     font-style: italic;
     text-align: right;
+}
+</style>
+
+<style class="snippet-lqpp-combo">.low-quality-page-combo {
+    text-decoration: none;
 }
 </style>
 

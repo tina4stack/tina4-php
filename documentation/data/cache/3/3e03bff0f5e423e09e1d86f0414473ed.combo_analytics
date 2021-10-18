@@ -1,13 +1,15 @@
 {
-    "id": "tina4:basic-website",
-    "date": "2021-09-16 13:58:07",
+    "date": "2021-10-02 11:48:24",
     "metadata": {
-        "title": "Basic Website with Tina4",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-04T06:55:56+02:00",
+        "date_published": null,
         "description": "Basic Website with Tina4\n\n\n\nTina4 uses <https:\/\/twig.symfony.com\/doc\/3.x\/> template engine, so creating a website is one of the easiest things you can do.\n\n\nStart off by creating an index.twig file in the src\/templates folder.  If you hit up the default URL <http:\/\/localhost:7145> then you will see a blank page.",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-04 06:55:56",
-        "age_creation": 12,
-        "age_modification": 12
+        "h1": "Basic Website with Tina4",
+        "name": "basic-website",
+        "path": ":tina4:basic-website",
+        "title": "Basic Website with Tina4",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -50,7 +52,7 @@
             "combo_code": 4,
             "combo_media": 1
         },
-        "words_count": 274
+        "word_count": 274
     },
     "quality": {
         "message": "1 mandatory rules broken.",

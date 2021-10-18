@@ -1,6 +1,8 @@
 ====== Migrations in Tina4 ======
 ===== Create a table/migration =====
-You want to create a table for the database? Migrations are sequential [[https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_1001.htm|SQL statements]] which keep track of your [[tina4:database|database]] changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.
+Want to create a table for your database? Migrations are sequential [[https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_1001.htm|SQL statements]] which keep track of your [[tina4:database|database]] changes.  We recommend using migrations especially when you want to apply changes to a running system or when working in a team.
+
+Each time you run a migration, it will generate all the tables required for your database
 
 **Windows**
    c:\projectfolder\migrations\

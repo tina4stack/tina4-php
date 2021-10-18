@@ -1,13 +1,15 @@
 {
-    "id": "tina4:basic-debugging",
-    "date": "2021-09-12 22:31:03",
+    "date": "2021-10-03 11:00:10",
     "metadata": {
-        "title": "Debugging",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-04T06:55:56+02:00",
+        "date_published": null,
         "description": "Debugging\n\nA topic that is probably not covered enough. If you do not have debugging working in your IDE environment then you are sadly wasting a lot of your own time.  A debugger allows you to step through problem code and figure out what is going wrong without adding all those die(), var_dump() and print_r() statements.",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-04 06:55:56",
-        "age_creation": 9,
-        "age_modification": 9
+        "h1": "Debugging",
+        "name": "basic-debugging",
+        "path": ":tina4:basic-debugging",
+        "title": "Debugging",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -32,6 +34,12 @@
         },
         "internal_backlinks_count": 2,
         "linebreak": 1,
+        "media": {
+            "total_count": 4,
+            "internal_count": 4,
+            "internal_broken_count": 0,
+            "external_count": 0
+        },
         "syntax_count": {
             "combo_headingwiki": 3,
             "section": 3,
@@ -46,12 +54,13 @@
             "listitem": 2,
             "listcontent": 2
         },
+        "word_count": 325,
         "word_section_count": {
             "avg": 0
-        },
-        "words_count": 325
+        }
     },
     "quality": {
+        "message": "1 mandatory rules broken.",
         "low": true,
         "failed_mandatory_rules": [
             "internal_links_min"

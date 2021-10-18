@@ -1,5 +1,5 @@
 {
-    "date": "2021-09-27 09:50:00",
+    "date": "2021-10-03 15:15:12",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
         "date_modified": "2021-09-22T19:36:50+02:00",
@@ -17,7 +17,7 @@
             "": 1,
             "andre": 1
         },
-        "chars_count": 7667,
+        "chars_count": 7522,
         "edits_count": 88,
         "external_links_count": 3,
         "formatted": {
@@ -55,11 +55,11 @@
             "external_count": 0
         },
         "syntax_count": {
-            "p": 30,
+            "p": 31,
             "combo_media": 3,
             "combo_slide": 6,
             "combo_background": 6,
-            "combo_heading": 11,
+            "combo_heading": 12,
             "bootswrapper_text": 23,
             "listu": 2,
             "listitem": 7,

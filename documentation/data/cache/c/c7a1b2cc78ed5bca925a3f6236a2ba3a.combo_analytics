@@ -1,5 +1,5 @@
 {
-    "date": "2021-09-28 21:06:18",
+    "date": "2021-10-12 11:35:16",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
         "date_modified": "2021-09-11T23:03:28+02:00",
@@ -18,7 +18,7 @@
             "barco": 1,
             "matthew": 1
         },
-        "chars_count": 3760,
+        "chars_count": 6401,
         "edits_count": 23,
         "external_links_count": 1,
         "formatted": {
@@ -50,13 +50,13 @@
         },
         "headers_count": {
             "h1": 1,
-            "h2": 4
+            "h2": 7
         },
         "internal_backlinks_count": 8,
-        "internal_links_count": 2,
+        "internal_links_count": 3,
         "internal_links_distance": {
-            "avg": 0,
-            "max": 0,
+            "avg": 0.3333333333333333,
+            "max": 1,
             "min": 0
         },
         "media": {
@@ -66,15 +66,15 @@
             "external_count": 0
         },
         "syntax_count": {
-            "combo_headingwiki": 5,
-            "section": 5,
-            "p": 12,
-            "combo_link": 3,
+            "combo_headingwiki": 8,
+            "section": 8,
+            "p": 19,
+            "combo_link": 4,
+            "combo_code": 8,
             "strong": 8,
-            "combo_code": 4,
             "wrap_divwrap": 1
         },
-        "word_count": 368,
+        "word_count": 673,
         "word_section_count": {
             "avg": 0
         }

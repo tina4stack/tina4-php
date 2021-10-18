@@ -1,13 +1,15 @@
 {
-    "id": "tina4:tutorials:save-date-to-database",
-    "date": "2021-09-16 13:53:14",
+    "date": "2021-10-06 09:47:13",
     "metadata": {
-        "title": "Save Dates to Database",
+        "date_created": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-09-15T19:40:02+02:00",
+        "date_published": null,
         "description": "Save Dates to Database\n\nYour database should be set correctly in your index.php file.\n\nFrom here you can save dates into an orm object like this:\n\nAny dates that you return from the ORM will follow your localization date format set in index.php I.e. d\/m\/Y",
-        "date_created": "2021-09-04 06:55:56",
-        "date_modified": "2021-09-15 07:40:02",
-        "age_creation": 12,
-        "age_modification": 1
+        "h1": "Save Dates to Database",
+        "name": "save-date-to-database",
+        "path": ":tina4:tutorials:save-date-to-database",
+        "title": "Save Dates to Database",
+        "type": "article"
     },
     "statistics": {
         "authors": {
@@ -19,7 +21,7 @@
         "headers_count": {
             "h1": 1
         },
-        "internal_backlinks_count": 1,
+        "internal_backlinks_count": 2,
         "internal_links_count": 2,
         "internal_links_distance": {
             "avg": 1,
@@ -39,7 +41,7 @@
             "combo_link": 2,
             "combo_code": 1
         },
-        "words_count": 44
+        "word_count": 44
     },
     "quality": {
         "message": "1 mandatory rules broken.",
@@ -48,15 +50,15 @@
             "words_min"
         ],
         "scoring": {
-            "score": 8.25,
+            "score": 10.25,
             "scores": {
                 "canonical_present": 0,
                 "correct_content_length": 0,
                 "correct_outline": 3,
                 "description_present": 0,
                 "edits_count": 1.25,
-                "internal_backlinks_count": 1,
-                "internal_links_count": 1,
+                "internal_backlinks_count": 2,
+                "internal_links_count": 2,
                 "no_internal_broken_links_count": 2,
                 "title_present": 0
             }

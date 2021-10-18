@@ -15,6 +15,8 @@ Please note, this adds the necessary scripts to your composer.json file and will
 </div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/toolbar/prism-toolbar.min.js" class="snippet-prism-combo"></script>
@@ -31,7 +33,39 @@ Please note, this adds the necessary scripts to your composer.json file and will
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/autoloader/prism-autoloader.min.js" class="snippet-prism-autoloader-combo"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+<script class="snippet-popover-combo">window.addEventListener('load', function () {
+    let namespace = "-bs"
+    let version = 5;
+    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
+        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        jQuery(`[data${namespace}-toggle="popover"]`).popover();
+    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
+        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
+            .forEach(el => {
+                new bootstrap.Popover(el);
+                // to not navigate on a anchor
+                el.onclick = (event => event.preventDefault());
+            });
+    }
+});
+</script>
+
+<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
+    anchors.options = {
+        placement: 'right',
+        icon: '#',
+        class: 'anchor-combo'
+    };
+    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
+});
+</script>
 
 <script class="snippet-prism-combo">document.addEventListener('DOMContentLoaded', (event) => {
 
@@ -144,49 +178,6 @@ Please note, this adds the necessary scripts to your composer.json file and will
 
 });</script>
 
-<script class="snippet-popover-combo">window.addEventListener('load', function () {
-    let namespace = "-bs"
-    let version = 5;
-    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
-        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
-        if (version < 5) {
-            namespace = "";
-        }
-        jQuery(`[data${namespace}-toggle="popover"]`).popover();
-    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
-        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
-        if (version < 5) {
-            namespace = "";
-        }
-        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
-            .forEach(el => {
-                new bootstrap.Popover(el);
-                // to not navigate on a anchor
-                el.onclick = (event => event.preventDefault());
-            });
-    }
-});
-</script>
-
-<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
-    anchors.options = {
-        placement: 'right',
-        icon: '#',
-        class: 'anchor-combo'
-    };
-    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
-});
-</script>
-
-<style class="snippet-lqpp-combo">.low-quality-page-combo {
-    text-decoration: none;
-}
-</style>
-
-<style class="snippet-prism-combo">/* no margin at the bottom / to close to the next paragraph */
-.code-toolbar { margin-bottom: 1rem }
-</style>
-
 <style class="snippet-historical-breadcrumb-combo">.historical-breadcrumb li {
     margin-bottom: 0.5rem;
 }
@@ -215,4 +206,13 @@ Please note, this adds the necessary scripts to your composer.json file and will
     font-style: italic;
     text-align: right;
 }
+</style>
+
+<style class="snippet-lqpp-combo">.low-quality-page-combo {
+    text-decoration: none;
+}
+</style>
+
+<style class="snippet-prism-combo">/* no margin at the bottom / to close to the next paragraph */
+.code-toolbar { margin-bottom: 1rem }
 </style>

@@ -1,8 +1,8 @@
 {
-    "date": "2021-09-28 12:31:17",
+    "date": "2021-10-12 11:35:11",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
-        "date_modified": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-10-03T15:11:30+02:00",
         "date_published": null,
         "description": "First Steps\n\nGet up and running quickly with Docker if you want to preview Tina4 quickly without adding additional dependencies to your operating system.\nPlease take a look at the  Setting up your Environment section to get all the prerequisites required for Tina4.",
         "h1": "First Steps",
@@ -19,7 +19,7 @@
             "cris": 1,
             "barco": 1
         },
-        "chars_count": 3145,
+        "chars_count": 3137,
         "edits_count": 151,
         "external_links_count": 5,
         "formatted": {

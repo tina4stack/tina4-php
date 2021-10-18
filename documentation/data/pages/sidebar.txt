@@ -34,6 +34,7 @@
   * [[tina4:auth|Tina4 Auth & Custom Auth]]
   * [[tina4:test|Tina4 Test]]
   * [[tina4:cms|CMS]]
+  * [[tina4:htaccess|Htacess file]]
 
 **Troubleshooting**
   * [[trouble:install|Installation Problems]]

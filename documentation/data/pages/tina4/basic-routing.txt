@@ -19,10 +19,11 @@ You can use either .twig or .html extensions. The html extension will cause the 
 
 The folders are simply suggested folders where you can place php files to manage your routing.  Any php file place in the routing folder and sub folders will automatically be parsed and run when Tina4 is hit up.
 
-Try placing the following code in a php file of your choice in the routes folder
+Try placing the following code in a php file of your choice in the routes folder.
 
 <code php src/routes/someroute.php>
 <?php
+
 \Tina4\Get::add ("/test/route", function(\Tina4\Response $response, \Tina4\Request $request) {
     return $response ("Hello World!", HTTP_OK, TEXT_HTML);
 });
