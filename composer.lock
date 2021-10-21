@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "089eb9e60ca63ca6cb25e58a8e70ba5c",
+    "content-hash": "84f7bb4cb9d1c798facf6cb9a5a7822d",
     "packages": [
         {
             "name": "coyl/git",
@@ -859,16 +859,16 @@
         },
         {
             "name": "tina4stack/tina4php-database",
-            "version": "dev-main",
+            "version": "v1.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-database.git",
-                "reference": "16b0f7abaaa0767ea11a2779aeeb05a4e10d7ee0"
+                "reference": "7f628b08a413a187f88ebb715dbab54ea4cded3b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/16b0f7abaaa0767ea11a2779aeeb05a4e10d7ee0",
-                "reference": "16b0f7abaaa0767ea11a2779aeeb05a4e10d7ee0",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/7f628b08a413a187f88ebb715dbab54ea4cded3b",
+                "reference": "7f628b08a413a187f88ebb715dbab54ea4cded3b",
                 "shasum": ""
             },
             "require": {
@@ -880,7 +880,6 @@
                 "phpunit/phpunit": "^9",
                 "roave/security-advisories": "dev-latest"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "files": [
@@ -908,9 +907,9 @@
             "description": "Tina4 PHP Database Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-database/issues",
-                "source": "https://github.com/tina4stack/tina4php-database/tree/main"
+                "source": "https://github.com/tina4stack/tina4php-database/tree/v1.0.1"
             },
-            "time": "2021-10-20T14:54:13+00:00"
+            "time": "2021-10-20T17:40:51+00:00"
         },
         {
             "name": "tina4stack/tina4php-debug",
@@ -4099,9 +4098,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "tina4stack/tina4php-database": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
