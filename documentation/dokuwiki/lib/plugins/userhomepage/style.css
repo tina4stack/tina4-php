@@ -1,0 +1,9 @@
+/********************************************************************
+Screen Styles for the Userhomepage Plugin (additional to all.css)
+********************************************************************/
+
+a.uhp_private,a.uhp_public { padding-left:19px !important; }
+a.uhp_private { background:url(images/ns.png) no-repeat left; }
+a.uhp_public { background:url(images/user.png) no-repeat left; }
+a.uhp_fa i.fa-user-secret,
+a.uhp_fa i.fa-user { padding: 0 5px 0 2px !important; }

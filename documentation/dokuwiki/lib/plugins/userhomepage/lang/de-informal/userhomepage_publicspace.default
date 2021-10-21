@@ -1,0 +1,12 @@
+====== @NAME@ (@USER@) - Öffentliche Namespace ======
+Dieser Namespace ''//@TARGETPUBLICNS@:*//'' kann, wie der Name schon sagt, **von jedem gelesen, aber nur vom Besitzer bearbeitet werden** (oder einem Administrator).
+  * Du kannst dich selbst vorstellen, Links zu Deinen Beiträgen in diesem Wiki erstellen, eine Geschichte erzählen oder Deine anderen Arbeiten präsentieren
+  * Denke an die [[wp>http://de.wikipedia.org/wiki/Netiquette|Netiquette]] ;-)
+  * Um eine Seite in Deinem öffentlichen Namespace zu erstellen, benutzen Sie einfach die normale Link-Syntax __ohne Angabe eines Namespace__:
+<code>[[beispielseite 1]]
+[[beispiel 2|Meine Beispielseite 2]]</code>
+  * Um einen Unter-Namespace zu erstellen, gib einfach die vollständige Position einer neuen Seite an:
+<code>[[@TARGETPRIVATENS@:<zu-erstellender-unter-namespace>:beispiel 3]]</code>
+
+Du kannst diesen Absatz (abgesehen vom Titel der Seite) nun gerne löschen.\\
+Los, schreib etwas! :-D

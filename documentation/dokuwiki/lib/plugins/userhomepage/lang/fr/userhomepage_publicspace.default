@@ -1,0 +1,12 @@
+====== @NAME@ (@USER@) - Espace Publique ======
+Cette espace de nom publique ''//@TARGETPUBLICNS@:*//'', comme son nom l'indique, **est accessible à tous en lecture mais vous seul pouvez modifier son contenu** (ou un super-utilisateur)...
+  * Vous pouvez vous présenter, raconter une histoire ou présenter vos travaux personnels (même sans lien avec ce wiki)
+  * Pensez à la [[wpfr>http://fr.wikipedia.org/wiki/N%C3%A9tiquette|nétiquette]] ;-)
+  * Pour créer une page au sein de cet espace publique, utilisez simplement la syntaxe de lien __sans aucun espace de nom__ :
+<code>[[page exemple 1]]
+[[exemple2|Ma page exemple2]]</code>
+  * Pour créer un sous-espace de nom, il suffit d'indiquer une nouvelle page avec son emplacement complet :
+<code>[[@TARGETPUBLICNS@:<sous-espace_à_créer>:exemple3]]</code>
+
+Vous pouvez évidement supprimer ce paragraphe (sauf le titre)...\\
+A vos claviers ! :-D

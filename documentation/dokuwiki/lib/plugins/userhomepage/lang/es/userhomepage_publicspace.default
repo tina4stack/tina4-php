@@ -1,0 +1,12 @@
+====== @NAME@ (@USER@) - Espacio de nombres público ======
+Esté espacio de nombres público ''//@TARGETPUBLICNS@:*//'', como indica su nombre,  **puede ser leída por cualquier persona, pero solo tú puedes editar su contenido** (o un superusuario)...
+  * Puede presentarse, añadir enlaces a sus contribuciones en este wiki, contar una historia o presentar sus otros trabajos.
+  * Piensa en cumplir la normas de [[wp>Etiquette_in_technology|Netiqueta]] ;-).
+  * Para crear una página dentro de este espacio de nombres público, solo tiene que utilizar la sintaxis normal de enlace __sin ningún espacio de nombres__:\\
+<code>[[Ejemplo 1]]
+[[Ejemplo 2|Mi página de ejemplo 2]]</code>
+  * Para crear un subespacio de nombres, solo tiene que indicar la posición completa de la nueva página:
+<code>[[@TARGETPUBLICNS@:<subespacio_de_nombres_a_crear>:ejemplo 3]]</code>
+
+No dude en eliminar este párrafo (además del título)...\\
+Ahora, ¡escriba algo! :-D

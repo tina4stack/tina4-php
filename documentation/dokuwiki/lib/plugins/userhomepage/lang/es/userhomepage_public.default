@@ -1,0 +1,10 @@
+====== @NAME@ (@USER@) - Página pública ======
+Esta página pública ''//@TARGETPUBLICPAGE@.txt//'', como indica su nombre, **puede ser leída por cualquier persona, pero solo tú la puedes editar** (o un superusuario)...
+  * Puede presentarse, añadir enlaces a sus contribuciones en este wiki, contar una historia o presentar sus otros trabajos.
+  * Piensa en cumplir la normas de [[wp>Etiquette_in_technology|Netiqueta]] ;-).
+Limitaciones:
+  * No se puede crear cualquier otra página en este espacio de nombres ''//@TARGETPUBLICNS@//''.
+  * Sólo un superusuario puede añadir una foto.
+
+No dude en eliminar este párrafo (además del título)...\\
+Ahora, ¡escriba algo! :-D

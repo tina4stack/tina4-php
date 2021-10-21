@@ -1,0 +1,10 @@
+====== @NAME@ (@USER@) - Private Space ======
+This namespace ''//@TARGETPRIVATENS@:*//'' and it's content (pages, images, ...) is **reserved for your own usage** (only superusers can also access to it)...
+  * To create a page inside this private space, simply use the standard link syntax __without any namespace__ :
+<code>[[example page 1]]
+[[example 2|My example page 2]]</code>
+  * To create a sub-namespace, simply indicate the new page's full position :
+<code>[[@TARGETPRIVATENS@:<sub-namespace_to_create>:example 3]]</code>
+
+Feel free to remove this paragraph (beside the title)...\\
+Now, write something! :-D

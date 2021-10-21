@@ -1,0 +1,10 @@
+====== @NAME@ (@USER@) - Espace Privé ======
+Cet espace de nom ''//@TARGETPRIVATENS@:*//'' et son contenu (pages, images, ...) **vous est réservé** (seul un super-utilisateur peut y accéder)...
+  * Pour créer une page au sein de cet espace réservé, utilisez simplement la syntaxe de lien __sans aucun espace de nom__ :
+<code>[[page exemple 1]]
+[[exemple2|Ma page exemple2]]</code>
+  * Pour créer un sous-espace de nom, il suffit d'indiquer une nouvelle page avec son emplacement complet :
+<code>[[@TARGETPRIVATENS@:<sous-espace_à_créer>:exemple3]]</code>
+
+Vous pouvez évidement supprimer ce paragraphe (sauf le titre)...\\
+A vos claviers! :-D

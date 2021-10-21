@@ -1,0 +1,10 @@
+====== @NAME@ (@USER@) - Öffentliche Seite ======
+Diese öffentliche Seite ''//@TARGETPUBLICPAGE@.txt//'' kann, wie der Name schon sagt, **von jedem gelesen, aber nur vom Besitzer bearbeitet werden** (oder einem Administrator).
+  * Sie können sich selbst vorstellen, Links zu Ihren Beiträgen in diesem Wiki erstellen, eine Geschichte erzählen oder Ihre anderen Arbeiten präsentieren
+  * Denken Sie an die [[wp>http://de.wikipedia.org/wiki/Netiquette|Netiquette]] ;-)
+Beschränkungen:
+  * Sie können keine anderen Seiten in diesem Namespace ''//@TARGETPUBLICNS@//'' erstellen
+  * Nur ein Administrator kann ein Bild hinzufügen
+
+Sie können diesen Absatz (abgesehen vom Titel der Seite) nun gerne löschen.\\
+Los, schreiben Sie etwas! :-D

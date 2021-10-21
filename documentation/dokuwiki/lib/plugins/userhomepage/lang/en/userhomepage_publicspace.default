@@ -1,0 +1,12 @@
+====== @NAME@ (@USER@) - Public Space ======
+This public namespace ''//@TARGETPUBLICNS@:*//'', as stated by it's name,  **can be read by anyone but only you can edit it's content** (or a superuser)...
+  * You can introduce yourself, add links to your contributions in this wiki, tell a story or present your other works
+  * Think about [[wp>http://en.wikipedia.org/wiki/Etiquette_in_technology|netiquette]] ;-)
+  * To create a page inside this public space, simply use the standard link syntax __without any namespace__ :
+<code>[[example page 1]]
+[[example 2|My example page 2]]</code>
+  * To create a sub-namespace, simply indicate the new page's full position :
+<code>[[@TARGETPUBLICNS@:<sub-namespace_to_create>:example 3]]</code>
+
+Feel free to remove this paragraph (beside the title)...\\
+Now, write something! :-D

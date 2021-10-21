@@ -1,0 +1,7 @@
+base     userhomepage
+author   Simon DELAGE
+email    sdelage@gmail.com
+date     2020-08-16
+name     User Homepage
+desc     Automatically create user's private namespace and/or public page and redirects users to private namespace on login.
+url      https://www.dokuwiki.org/plugin:userhomepage

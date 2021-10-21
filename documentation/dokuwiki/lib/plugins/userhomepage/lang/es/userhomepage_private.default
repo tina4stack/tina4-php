@@ -1,0 +1,10 @@
+====== @NAME@ (@USER@) - Espacio privado ======
+Este espacio de nombres ''//@TARGETPRIVATENS@://'' y su contenido (páginas, imágenes, ...) esta **reservado para su propio uso** (solo los superusuarios pueden acceder también a él)...
+  * Para crear una página dentro de este espacio privado, solo tiene que utilizar la sintaxis normal de enlace __sin ningún espacio de nombres__:\\
+<code>[[Ejemplo 1]]
+[[Ejemplo 2|Mi página de ejemplo 2]]</code>
+  * Para crear un subespacio de nombres, solo tiene que indicar la posición completa de la nueva página:
+<code>[[@TARGETPRIVATENS@:<subespacio_de_nombres_a_crear>:ejemplo 3]]</code>
+
+No dude en eliminar este párrafo (además del título)...\\
+Ahora, ¡escriba algo! :-D
