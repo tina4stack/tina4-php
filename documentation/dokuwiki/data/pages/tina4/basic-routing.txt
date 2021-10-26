@@ -21,7 +21,7 @@ The folders are simply suggested folders where you can place php files to manage
 
 Try placing the following code in a php file of your choice in the routes folder.
 
-<code php src/routes/someroute.php>
+<code php someroute1.php>
 <?php
 
 \Tina4\Get::add ("/test/route", function(\Tina4\Response $response, \Tina4\Request $request) {
@@ -42,24 +42,27 @@ Hit up [[http://localhost:7145/test/route]] in your Web Browser ( e.g. FireFox, 
 ===== Various Routing Examples =====
 \\
 A route with inline parameters can be composed as follows
-<code php src/routes/someroute.php>
+<code php someroute2.php>
 <?php
+
 \Tina4\Get::add ("/test/route/{name}",function($name, \Tina4\Response $response, \Tina4\Request $request) {
   return $response ("Hello {$name}!", HTTP_OK, TEXT_HTML);
 });
 </code>  
 
 **A POST ROUTE looks as follows and will need a FORM KEY token to accept POSTS to it for CORS prevention**
-<code php src/routes/someroute.php>
+<code php someroute3.php>
 <?php
+
 \Tina4\Post::add ("/test/post", function(\Tina4\Response $response, \Tina4\Request $request) {
     return $response ["Hello, [$request->param["someInput"]}!", HTTP_OK, TEXT_HTML);
 });
 </code>
 
 ** Routing directly to a class **
-<code php src/routes/someroute.php>
+<code php someroute4.php>
 <?php
+
 \Tina4\Get::add("/test", ["TestClass", "someRouter"]);
    
 class TestClass

@@ -10,21 +10,21 @@ For further information on **routing**, please click on this [[https://en.wikipe
 
 The simple syntax of a **Route** is as follows
 \\
-<code php>
+<code php exampleroute1.php>
 <?php
 
-  \Tina4\Method::add(string $routePath, $function)
+\Tina4\Method::add(string $routePath, $function)
 </code>
 \\ 
 So the **Route** to capture the URL https://mywebsite.com/starthere would be as below. This uses a **Get** method, with a simple closure function, with the return using the Response object.
 \\
-<code php>
+<code php exampleroute2.php>
 <?php
 
-  \Tina4\Get::add("/starthere", function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Put all the code that you want to here
-      return $response("Hello Mars", HTTP_OK, TEXT_HTML);
-  });
+\Tina4\Get::add("/starthere", function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Put all the code that you want to here
+  return $response("Hello Mars", HTTP_OK, TEXT_HTML);
+});
 </code>
 
 ===== Route Methods =====
@@ -43,12 +43,12 @@ A further route is introduced which encapsulates all the above routes and interc
 
 <WRAP center round tip 100%>
 So by using the **Get** & **Post** method we get two unique Routes.
-<code php>
+<code php exampleroute3.php>
 <?php
 
-Get::add("/starthere", $function)
+Get::add("/starthere", $function) //--> this will retrieve data sent back and forth between your device and servers
 ||
-Post::add("/starthere", $function) 
+Post::add("/starthere", $function) //--> this secures the retrieved data sent back and forth between your device and servers
 </code>
 </WRAP>
 
@@ -62,26 +62,26 @@ Post::add("/starthere", $function)
 
 **mywebsite.com/starthere/3** will return 3
 \\
-<code php>
+<code php exampleroute4.php>
 <?php
 
-  \Tina4\Get::add("/starthere/{variable1}", function($variable1, \Tina4\Response $response, \Tina4\Request $request) {
-      // Use the variables in your code or as the response
-      return $response($variable1, HTTP_OK, TEXT_HTML);
-  });
+\Tina4\Get::add("/starthere/{variable1}", function($variable1, \Tina4\Response $response, \Tina4\Request $request) {
+  // Use the variables in your code or as the response
+  return $response($variable1, HTTP_OK, TEXT_HTML);
+});
 </code>
 \\ 
 **mywebsite.com/starthere/3/nextlevel/5** will return 15
 \\
-<code php>  
+<code php exampleroute5.php>
 <?php
 
-    \Tina4\Get::add("/starthere/{variable1}/nextlevel/{variable2}", 
-    function($variable1, $variable2, \Tina4\Response $response, \Tina4\Request $request)) {
-      // Use the variables in your code or as the response
-      $product = $variable1 * $variable2;
-      return $response($product, HTTP_OK, TEXT_HTML);
-  });
+\Tina4\Get::add("/starthere/{variable1}/nextlevel/{variable2}",
+function($variable1, $variable2, \Tina4\Response $response, \Tina4\Request $request)) {
+  // Use the variables in your code or as the response
+  $product = $variable1 * $variable2;
+  return $response($product, HTTP_OK, TEXT_HTML);
+});
  </code>
 \\ 
 <WRAP center round alert 100%>
@@ -92,49 +92,50 @@ WARNING: Two routes with the same method, **mywebsite.com/starthere/{variable1}*
 
 **Variables** can also be included as query parameters in the url. The Request object packages these up into the params array. So mywebsite.com/starthere?variable1=3&variable2=5 will return 15
 \\
-<code php>
+<code php exampleroute6.php>
 <?php
 
-  \Tina4\Get::add("/starthere", function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Variables are available from the params array
-      $variable1 = $request->params["variable1"];
-      $variable2 = $request->params["variable2"];
-      
-      $product = $variable1 * $variable2;
-      return $response($product, HTTP_OK, TEXT_HTML);
-  });
+\Tina4\Get::add("/starthere", function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Variables are available from the params array
+  $variable1 = $request->params["variable1"];
+  $variable2 = $request->params["variable2"];
+
+  $product = $variable1 * $variable2;
+  return $response($product, HTTP_OK, TEXT_HTML);
+});
  </code>
 \\
 ==== Form data ====
 
 Data posted from a form to a Post Route can be accessed from the Request data object. So a form submitted with two fields of a person's name "Joe" "Smith" will return "Hello Joe Smith"
 \\
-<code php>
+<code php exampleroute7.php>
 <?php
-  \Tina4\Post::add("/endhere", function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Variables are available from the params array
-      $firstName = $request->data->firstName;
-      $lastName = $request->data->lastName;
-      
-      $message = "Hello ". $firstName . " ". $lastName;
-      return $response($message, HTTP_OK, TEXT_HTML);
-  });
+
+\Tina4\Post::add("/endhere", function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Variables are available from the params array
+  $firstName = $request->data->firstName;
+  $lastName = $request->data->lastName;
+
+  $message = "Hello ". $firstName . " ". $lastName;
+  return $response($message, HTTP_OK, TEXT_HTML);
+});
 </code> 
 \\
 ===== Securing Routes =====
 
 Tina4 makes use of phpDoc blocks through the Annotation class. This in combination with the Auth class allows us to secure routes with a single line of code. The **@secure** enables the Tina4\Auth class, which will now require at least a formToken, or can even make use of custom Bearer tokens.
 \\
-<code php>
+<code php exampleroute8.php>
 <?php
 
-  /**
-  * @secure
-  **/
-  \Tina4\Get::add("/starthere", function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Put all the code that you want to here
-      return $response("Hello Mars", HTTP_OK, TEXT_HTML);
-  });
+/**
+* @secure
+**/
+\Tina4\Get::add("/starthere", function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Put all the code that you want to here
+  return $response("Hello Mars", HTTP_OK, TEXT_HTML);
+});
 </code>
 \\
 <WRAP center info 100%>
@@ -143,12 +144,8 @@ For more information on **Tina4 Security**, please see the [[tina4:auth|Referenc
 
 ===== The Response Object =====
 
-The response object is an integral part of a Route. The Route object takes three parameters. Basic syntax is 
-\\
-<code php>
-  $response($content, $httpCode, $contentType)
-</code>  
-\\
+The response object is an integral part of a Route. The Route object takes three parameters. Basic syntax is ** $response($content, $httpCode, $contentType)**.
+
 The return from the Response object will always be a string, if the $content is an array or object it will be converted to a JSON or XML response.
 
 The httpCode is a standard HTTP Response Status Code.
@@ -167,31 +164,34 @@ This documentation is for Ruth, the legacy route mechanism. Please only use to m
 
 The basic syntax for Ruth Routes bear much resemblance to current Tina Routes.
 
-<code php>
+<code php exampleroute9.php>
 <?php
-   Ruth::addRoute(TINA4_GET, "/hello/world", function(){
-      echo "Hello World!";
-   });
+
+Ruth::addRoute(TINA4_GET, "/hello/world", function(){
+  echo "Hello World!";
+});
 </code>
 \\
 And also includes Path variables
 \\
-<code php>
+<code php exampleroute10.php>
 <?php
-   Ruth::addRoute(TINA4_GET, "/content/{name}", function($name){
-      echo "OK {$name}!";
-   });
+
+Ruth::addRoute(TINA4_GET, "/content/{name}", function($name){
+  echo "OK {$name}!";
+});
 </code>  
 \\
 Ruth can also be used much like Tina, taking advantage of the Request and Response objects
 \\
-<code php>
+<code php exampleroute11.php>
 <?php
-   Ruth::get("/hello/world", function(\Tina4\Response $response, \Tina4\Request $request) {
-       return $response ("Hello World!", HTTP_OK, TEXT_HTML);
-   });
-    
-   Ruth::get("/hello/{name}", function($name, \Tina4\Response $response, \Tina4\Request $request) {
-       return $response ("Hello {$name}!", HTTP_OK, TEXT_HTML);
-   });
+
+Ruth::get("/hello/world", function(\Tina4\Response $response, \Tina4\Request $request) {
+   return $response ("Hello World!", HTTP_OK, TEXT_HTML);
+});
+
+Ruth::get("/hello/{name}", function($name, \Tina4\Response $response, \Tina4\Request $request) {
+   return $response ("Hello {$name}!", HTTP_OK, TEXT_HTML);
+});
 </code>

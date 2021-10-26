@@ -1,5 +1,5 @@
 {
-    "date": "2021-10-03 09:02:11",
+    "date": "2021-10-26 10:54:47",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
         "date_modified": "2021-09-21T22:15:12+02:00",
@@ -17,7 +17,7 @@
             "": 1,
             "andre": 1
         },
-        "chars_count": 2595,
+        "chars_count": 2597,
         "edits_count": 22,
         "external_links_count": 6,
         "formatted": {
@@ -58,7 +58,7 @@
             "wrap_divwrap": 1,
             "combo_code": 5
         },
-        "word_count": 243,
+        "word_count": 242,
         "word_section_count": {
             "avg": 0
         }

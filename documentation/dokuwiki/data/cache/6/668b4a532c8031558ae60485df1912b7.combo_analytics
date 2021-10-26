@@ -1,5 +1,5 @@
 {
-    "date": "2021-09-29 10:56:57",
+    "date": "2021-10-26 12:29:51",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
         "date_modified": "2021-09-15T12:57:03+02:00",
@@ -20,14 +20,14 @@
             "andre": 1,
             "barco": 1
         },
-        "chars_count": 6684,
+        "chars_count": 6863,
         "edits_count": 52,
         "external_links_count": 3,
         "formatted": {
             "1": {
                 "len": 6
             },
-            "0": 257,
+            "0": 302,
             "2": {
                 "len": 7
             },
@@ -92,9 +92,12 @@
                 "len": 14
             },
             "23": {
-                "len": 9
+                "len": 45
             },
             "24": {
+                "len": 9
+            },
+            "25": {
                 "len": 12
             }
         },
@@ -110,7 +113,7 @@
             "max": 2,
             "min": 0
         },
-        "linebreak": 19,
+        "linebreak": 17,
         "media": {
             "total_count": 0,
             "internal_count": 0,
@@ -122,14 +125,14 @@
             "section": 10,
             "p": 29,
             "combo_link": 5,
-            "strong": 25,
+            "strong": 26,
             "wrap_divwrap": 6,
-            "combo_code": 12,
+            "combo_code": 11,
             "listu": 2,
             "listitem": 6,
             "listcontent": 6
         },
-        "word_count": 569,
+        "word_count": 607,
         "word_section_count": {
             "avg": 0
         }

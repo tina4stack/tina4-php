@@ -7,7 +7,7 @@ Please see the <a class="link-internal link-combo" data-wiki-id="tina4:tutorials
 </p>
 <!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:2,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_info plugin_wrap" style="width: 100%;">
 <p>
-For further information on <strong>routing</strong>, please click on this <a class="link-external link-combo" href="https://en.wikipedia.org/wiki/Routing" rel="noopener" target="target=_blank">link</a>.
+For further information on <strong>routing</strong>, please click on this <a class="link-external link-combo" href="https://en.wikipedia.org/wiki/Routing" rel="nofollow ugc">link</a>.
 </p>
 </div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:3,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
@@ -20,30 +20,30 @@ The simple syntax of a <strong>Route</strong> is as follows
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute1.php" data-download-link-label="Download exampleroute1.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
-  \Tina4\Method::add(string $routePath, $function)</code>
+\Tina4\Method::add(string $routePath, $function)</code>
 </pre>
 
 <p>
 <br/>
 
-So the <strong>Route</strong> to capture the <abbr title="Uniform Resource Locator">URL</abbr> <a href="https://mywebsite.com/starthere" class="urlextern" target="target=_blank" title="https://mywebsite.com/starthere" rel="ugc nofollow noopener">https://mywebsite.com/starthere</a> would be as below. This uses a <strong>Get</strong> method, with a simple closure function, with the return using the Response object.
+So the <strong>Route</strong> to capture the <abbr title="Uniform Resource Locator">URL</abbr> <a href="https://mywebsite.com/starthere" class="urlextern" title="https://mywebsite.com/starthere" rel="ugc nofollow">https://mywebsite.com/starthere</a> would be as below. This uses a <strong>Get</strong> method, with a simple closure function, with the return using the Response object.
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute2.php" data-download-link-label="Download exampleroute2.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
-  \Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Put all the code that you want to here
-      return $response(&quot;Hello Mars&quot;, HTTP_OK, TEXT_HTML);
-  });</code>
+\Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Put all the code that you want to here
+  return $response(&quot;Hello Mars&quot;, HTTP_OK, TEXT_HTML);
+});</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Simple Syntax&quot;,&quot;hid&quot;:&quot;simple_syntax&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;300-884&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Simple Syntax&quot;,&quot;hid&quot;:&quot;simple_syntax&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:4,&quot;range&quot;:&quot;300-906&quot;} -->
 <h2 class="sectionedit5 heading-combo" id="route_methods">Route Methods</h2>
 <div class="level2">
 
@@ -74,25 +74,25 @@ A further route is introduced which encapsulates all the above routes and interc
 <p>
 So by using the <strong>Get</strong> &amp; <strong>Post</strong> method we get two unique Routes.
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute3.php" data-download-link-label="Download exampleroute3.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
-Get::add(&quot;/starthere&quot;, $function)
+Get::add(&quot;/starthere&quot;, $function) //--&gt; this will retrieve data sent back and forth between your device and servers
 ||
-Post::add(&quot;/starthere&quot;, $function) </code>
+Post::add(&quot;/starthere&quot;, $function) //--&gt; this secures the retrieved data sent back and forth between your device and servers</code>
 </pre>
 </div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:7,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Route Methods&quot;,&quot;hid&quot;:&quot;route_methods&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;885-1525&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Route Methods&quot;,&quot;hid&quot;:&quot;route_methods&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;907-1736&quot;} -->
 <h2 class="sectionedit8 heading-combo" id="including_variables">Including Variables</h2>
 <div class="level2">
 
 <p>
-<strong><a class="link-external link-combo" href="https://en.wikipedia.org/wiki/Variable_(computer_science)" rel="noopener" target="target=_blank">Variables</a></strong> can be included in three different ways.
+<strong><a class="link-external link-combo" href="https://en.wikipedia.org/wiki/Variable_(computer_science)" rel="nofollow ugc">Variables</a></strong> can be included in three different ways.
 </p>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Including Variables&quot;,&quot;hid&quot;:&quot;including_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;1526-1676&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Including Variables&quot;,&quot;hid&quot;:&quot;including_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;1737-1887&quot;} -->
 <h3 class="sectionedit9 heading-combo" id="path_variables">Path variables</h3>
 <div class="level3">
 
@@ -105,13 +105,13 @@ Post::add(&quot;/starthere&quot;, $function) </code>
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute4.php" data-download-link-label="Download exampleroute4.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
-  \Tina4\Get::add(&quot;/starthere/{variable1}&quot;, function($variable1, \Tina4\Response $response, \Tina4\Request $request) {
-      // Use the variables in your code or as the response
-      return $response($variable1, HTTP_OK, TEXT_HTML);
-  });</code>
+\Tina4\Get::add(&quot;/starthere/{variable1}&quot;, function($variable1, \Tina4\Response $response, \Tina4\Request $request) {
+  // Use the variables in your code or as the response
+  return $response($variable1, HTTP_OK, TEXT_HTML);
+});</code>
 </pre>
 
 <p>
@@ -121,16 +121,15 @@ Post::add(&quot;/starthere&quot;, $function) </code>
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
-<code class="language-php code-combo code-php-combo">  
-&lt;?php
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute5.php" data-download-link-label="Download exampleroute5.php">
+<code class="language-php code-combo code-php-combo">&lt;?php
 
-    \Tina4\Get::add(&quot;/starthere/{variable1}/nextlevel/{variable2}&quot;, 
-    function($variable1, $variable2, \Tina4\Response $response, \Tina4\Request $request)) {
-      // Use the variables in your code or as the response
-      $product = $variable1 * $variable2;
-      return $response($product, HTTP_OK, TEXT_HTML);
-  });
+\Tina4\Get::add(&quot;/starthere/{variable1}/nextlevel/{variable2}&quot;,
+function($variable1, $variable2, \Tina4\Response $response, \Tina4\Request $request)) {
+  // Use the variables in your code or as the response
+  $product = $variable1 * $variable2;
+  return $response($product, HTTP_OK, TEXT_HTML);
+});
  </code>
 </pre>
 
@@ -144,7 +143,7 @@ WARNING: Two routes with the same method, <strong>mywebsite.com/starthere/{varia
 </p>
 </div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:11,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Path variables&quot;,&quot;hid&quot;:&quot;path_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;1677-2978&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Path variables&quot;,&quot;hid&quot;:&quot;path_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;1888-3188&quot;} -->
 <h3 class="sectionedit12 heading-combo" id="inline_variables">Inline Variables</h3>
 <div class="level3">
 
@@ -153,17 +152,17 @@ WARNING: Two routes with the same method, <strong>mywebsite.com/starthere/{varia
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute6.php" data-download-link-label="Download exampleroute6.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
-  \Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Variables are available from the params array
-      $variable1 = $request-&gt;params[&quot;variable1&quot;];
-      $variable2 = $request-&gt;params[&quot;variable2&quot;];
-      
-      $product = $variable1 * $variable2;
-      return $response($product, HTTP_OK, TEXT_HTML);
-  });
+\Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Variables are available from the params array
+  $variable1 = $request-&gt;params[&quot;variable1&quot;];
+  $variable2 = $request-&gt;params[&quot;variable2&quot;];
+
+  $product = $variable1 * $variable2;
+  return $response($product, HTTP_OK, TEXT_HTML);
+});
  </code>
 </pre>
 
@@ -173,7 +172,7 @@ WARNING: Two routes with the same method, <strong>mywebsite.com/starthere/{varia
 </p>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Inline Variables&quot;,&quot;hid&quot;:&quot;inline_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:12,&quot;range&quot;:&quot;2979-3591&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Inline Variables&quot;,&quot;hid&quot;:&quot;inline_variables&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:12,&quot;range&quot;:&quot;3189-3789&quot;} -->
 <h3 class="sectionedit13 heading-combo" id="form_data">Form data</h3>
 <div class="level3">
 
@@ -182,16 +181,17 @@ Data posted from a form to a Post Route can be accessed from the Request data ob
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute7.php" data-download-link-label="Download exampleroute7.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
-  \Tina4\Post::add(&quot;/endhere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Variables are available from the params array
-      $firstName = $request-&gt;data-&gt;firstName;
-      $lastName = $request-&gt;data-&gt;lastName;
-      
-      $message = &quot;Hello &quot;. $firstName . &quot; &quot;. $lastName;
-      return $response($message, HTTP_OK, TEXT_HTML);
-  });</code>
+
+\Tina4\Post::add(&quot;/endhere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Variables are available from the params array
+  $firstName = $request-&gt;data-&gt;firstName;
+  $lastName = $request-&gt;data-&gt;lastName;
+
+  $message = &quot;Hello &quot;. $firstName . &quot; &quot;. $lastName;
+  return $response($message, HTTP_OK, TEXT_HTML);
+});</code>
 </pre>
 
 <p>
@@ -200,7 +200,7 @@ Data posted from a form to a Post Route can be accessed from the Request data ob
 </p>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Form data&quot;,&quot;hid&quot;:&quot;form_data&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:13,&quot;range&quot;:&quot;3592-4191&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Form data&quot;,&quot;hid&quot;:&quot;form_data&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:13,&quot;range&quot;:&quot;3790-4378&quot;} -->
 <h2 class="sectionedit14 heading-combo" id="securing_routes">Securing Routes</h2>
 <div class="level2">
 
@@ -209,16 +209,16 @@ Tina4 makes use of phpDoc blocks through the Annotation class. This in combinati
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute8.php" data-download-link-label="Download exampleroute8.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
 
-  /**
-  * @secure
-  **/
-  \Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
-      // Put all the code that you want to here
-      return $response(&quot;Hello Mars&quot;, HTTP_OK, TEXT_HTML);
-  });</code>
+/**
+* @secure
+**/
+\Tina4\Get::add(&quot;/starthere&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+  // Put all the code that you want to here
+  return $response(&quot;Hello Mars&quot;, HTTP_OK, TEXT_HTML);
+});</code>
 </pre>
 
 <p>
@@ -231,22 +231,15 @@ For more information on <strong>Tina4 Security</strong>, please see the <a class
 </p>
 </div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:16,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Securing Routes&quot;,&quot;hid&quot;:&quot;securing_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:14,&quot;range&quot;:&quot;4192-4917&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Securing Routes&quot;,&quot;hid&quot;:&quot;securing_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:14,&quot;range&quot;:&quot;4379-5104&quot;} -->
 <h2 class="sectionedit17 heading-combo" id="the_response_object">The Response Object</h2>
 <div class="level2">
 
 <p>
-The response object is an integral part of a Route. The Route object takes three parameters. Basic syntax is 
-<br/>
-
+The response object is an integral part of a Route. The Route object takes three parameters. Basic syntax is <strong> $response($content, $httpCode, $contentType)</strong>.
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
-<code class="language-php code-combo code-php-combo">  $response($content, $httpCode, $contentType)</code>
-</pre>
 
 <p>
-<br/>
-
 The return from the Response object will always be a string, if the $content is an array or object it will be converted to a JSON or XML response.
 </p>
 
@@ -263,7 +256,7 @@ It is highly recommended to ALWAYS set both the <strong>$httpCode</strong> and t
 </p>
 </div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:19,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;The Response Object&quot;,&quot;hid&quot;:&quot;the_response_object&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:17,&quot;range&quot;:&quot;4918-5690&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;The Response Object&quot;,&quot;hid&quot;:&quot;the_response_object&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:17,&quot;range&quot;:&quot;5105-5854&quot;} -->
 <h2 class="sectionedit20 heading-combo" id="ruth_-_legacy_routes">Ruth - Legacy Routes</h2>
 <div class="level2">
 <!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:21,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap" style="width: 100%;">
@@ -274,11 +267,12 @@ This documentation is for Ruth, the legacy route mechanism. Please only use to m
 <p>
 The basic syntax for Ruth Routes bear much resemblance to current Tina Routes.
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute9.php" data-download-link-label="Download exampleroute9.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
-   Ruth::addRoute(TINA4_GET, &quot;/hello/world&quot;, function(){
-      echo &quot;Hello World!&quot;;
-   });</code>
+
+Ruth::addRoute(TINA4_GET, &quot;/hello/world&quot;, function(){
+  echo &quot;Hello World!&quot;;
+});</code>
 </pre>
 
 <p>
@@ -288,11 +282,12 @@ And also includes Path variables
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute10.php" data-download-link-label="Download exampleroute10.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
-   Ruth::addRoute(TINA4_GET, &quot;/content/{name}&quot;, function($name){
-      echo &quot;OK {$name}!&quot;;
-   });</code>
+
+Ruth::addRoute(TINA4_GET, &quot;/content/{name}&quot;, function($name){
+  echo &quot;OK {$name}!&quot;;
+});</code>
 </pre>
 
 <p>
@@ -302,16 +297,235 @@ Ruth can also be used much like Tina, taking advantage of the Request and Respon
 <br/>
 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="exampleroute11.php" data-download-link-label="Download exampleroute11.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
-   Ruth::get(&quot;/hello/world&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
-       return $response (&quot;Hello World!&quot;, HTTP_OK, TEXT_HTML);
-   });
-    
-   Ruth::get(&quot;/hello/{name}&quot;, function($name, \Tina4\Response $response, \Tina4\Request $request) {
-       return $response (&quot;Hello {$name}!&quot;, HTTP_OK, TEXT_HTML);
-   });</code>
+
+Ruth::get(&quot;/hello/world&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
+   return $response (&quot;Hello World!&quot;, HTTP_OK, TEXT_HTML);
+});
+
+Ruth::get(&quot;/hello/{name}&quot;, function($name, \Tina4\Response $response, \Tina4\Request $request) {
+   return $response (&quot;Hello {$name}!&quot;, HTTP_OK, TEXT_HTML);
+});</code>
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Ruth - Legacy Routes&quot;,&quot;hid&quot;:&quot;ruth_-_legacy_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:20,&quot;range&quot;:&quot;5691-&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Ruth - Legacy Routes&quot;,&quot;hid&quot;:&quot;ruth_-_legacy_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:20,&quot;range&quot;:&quot;5855-&quot;} -->
+<script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/toolbar/prism-toolbar.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/normalize-whitespace/prism-normalize-whitespace.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/show-language/prism-show-language.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/command-line/prism-command-line.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/line-numbers/prism-line-numbers.min.js" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/download-button/prism-download-button.min.js" integrity="sha512-rGJwSZEEYPBQjqYxrdg6Ug/6i763XQogKx+N/GF1rCGvfmhIlIUFxCjc4FmEdCu5dvovqxHsoe3IPMKP+KlgNQ==" crossorigin="anonymous" class="snippet-prism-combo"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//plugins/autoloader/prism-autoloader.min.js" class="snippet-prism-autoloader-combo"></script>
+
+<script class="snippet-popover-combo">window.addEventListener('load', function () {
+    let namespace = "-bs"
+    let version = 5;
+    if (typeof jQuery != 'undefined' && typeof jQuery.fn.tooltip.constructor.VERSION !== 'undefined') {
+        version = parseInt(jQuery.fn.tooltip.constructor.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        jQuery(`[data${namespace}-toggle="popover"]`).popover();
+    } else if (typeof bootstrap.Popover.VERSION !== 'undefined') {
+        version = parseInt(bootstrap.Popover.VERSION.substr(0, 1), 10);
+        if (version < 5) {
+            namespace = "";
+        }
+        document.querySelectorAll(`[data${namespace}-toggle="popover"]`)
+            .forEach(el => {
+                new bootstrap.Popover(el);
+                // to not navigate on a anchor
+                el.onclick = (event => event.preventDefault());
+            });
+    }
+});
+</script>
+
+<script class="snippet-anchor-combo">document.addEventListener('DOMContentLoaded', (event) => {
+    anchors.options = {
+        placement: 'right',
+        icon: '#',
+        class: 'anchor-combo'
+    };
+    anchors.add("main > h2").add("main > h3").add("main > h4").add("main > h5").add("main > h6");
+});
+</script>
+
+<script class="snippet-prism-combo">document.addEventListener('DOMContentLoaded', (event) => {
+
+    if (typeof self === 'undefined' || !self.Prism || !self.document) {
+        return;
+    }
+
+    // Loading the css from https://cdnjs.com/libraries/prism
+    const head = document.querySelector('head');
+    const baseCdn = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0/";
+    const stylesheets = [
+        ["themes/prism-tomorrow.min.css", "sha512-vswe+cgvic/XBoF1OcM/TeJ2FW0OofqAVdCZiEYkd6dwGXthvkSFWOoGGJgS2CW70VK5dQM5Oh+7ne47s74VTg=="],
+        ["plugins/toolbar/prism-toolbar.min.css","sha512-DSAA0ziYwggOJ3QyWFZhIaU8bSwQLyfnyIrmShRLBdJMtiYKT7Ju35ujBCZ6ApK3HURt34p2xNo+KX9ebQNEPQ=="],
+        /*https://prismjs.com/plugins/command-line/*/
+        ["plugins/command-line/prism-command-line.min.css","sha512-4Y1uID1tEWeqDdbb7452znwjRVwseCy9kK9BNA7Sv4PlMroQzYRznkoWTfRURSADM/SbfZSbv/iW5sNpzSbsYg=="],
+        /*https://prismjs.com/plugins/line-numbers/*/
+        ["plugins/line-numbers/prism-line-numbers.min.css","sha512-cbQXwDFK7lj2Fqfkuxbo5iD1dSbLlJGXGpfTDqbggqjHJeyzx88I3rfwjS38WJag/ihH7lzuGlGHpDBymLirZQ=="]
+    ];
+
+    stylesheets.forEach(stylesheet => {
+            let link = document.createElement('link');
+            link.rel="stylesheet"
+            link.href=baseCdn+"/"+stylesheet[0];
+            link.integrity=stylesheet[1];
+            link.crossOrigin="anonymous";
+            head.append(link);
+        }
+    )
+
+
+    Prism.plugins.NormalizeWhitespace.setDefaults({
+        'remove-trailing': true,
+        'remove-indent': true,
+        'left-trim': true,
+        'right-trim': true,
+    });
+
+    if (!Prism.plugins.toolbar) {
+        console.warn('Copy to Clipboard plugin loaded before Toolbar plugin.');
+
+        return;
+    }
+
+    let ClipboardJS = window.ClipboardJS || undefined;
+
+    if (!ClipboardJS && typeof require === 'function') {
+        ClipboardJS = require('clipboard');
+    }
+
+    const callbacks = [];
+
+    if (!ClipboardJS) {
+        const script = document.createElement('script');
+        const head = document.querySelector('head');
+
+        script.onload = function() {
+            ClipboardJS = window.ClipboardJS;
+
+            if (ClipboardJS) {
+                while (callbacks.length) {
+                    callbacks.pop()();
+                }
+            }
+        };
+
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.0/clipboard.min.js';
+        head.appendChild(script);
+    }
+
+    Prism.plugins.toolbar.registerButton('copy-to-clipboard', function (env) {
+        var linkCopy = document.createElement('button');
+        linkCopy.textContent = 'Copy';
+        linkCopy.setAttribute('type', 'button');
+
+        var element = env.element;
+
+        if (!ClipboardJS) {
+            callbacks.push(registerClipboard);
+        } else {
+            registerClipboard();
+        }
+
+        return linkCopy;
+
+        function registerClipboard() {
+            var clip = new ClipboardJS(linkCopy, {
+                'text': function () {
+                    return element.textContent;
+                }
+            });
+
+            clip.on('success', function() {
+                linkCopy.textContent = 'Copied!';
+
+                resetText();
+            });
+            clip.on('error', function () {
+                linkCopy.textContent = 'Press Ctrl+C to copy';
+
+                resetText();
+            });
+        }
+
+        function resetText() {
+            setTimeout(function () {
+                linkCopy.textContent = 'Copy';
+            }, 5000);
+        }
+    });
+
+});</script>
+
+<style class="snippet-historical-breadcrumb-combo">.historical-breadcrumb li {
+    margin-bottom: 0.5rem;
+}
+.historical-breadcrumb a {
+    text-decoration: none;
+}
+.historical-breadcrumb-home {
+    max-width: fit-content;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    margin-bottom: 1rem;
+    padding:0.5rem;
+    text-align: center;
+    border-radius: calc(.3rem - 1px);
+    background-color: #f0f0f0;
+}
+.historical-breadcrumb-home::before {
+    content:'Actual: '
+}
+</style>
+
+<style class="snippet-message-combo">/*Message*/
+.combo-message > .signature {
+    font-size: 80%;
+    font-style: italic;
+    text-align: right;
+}
+</style>
+
+<style class="snippet-lqpp-combo">.low-quality-page-combo {
+    text-decoration: none;
+}
+</style>
+
+<style class="snippet-link-combo">
+a.link-external:not(.btn) {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAABdklEQVR4AWMgAVRo1zY3rGk41rC+rqvCBCJWBpPM4WoomLHtdtuv/t9Lfk263TtrQ0t7Oj9cbzZDc/W6s/8T7khD+P+F/8bv29PZlswJVVBu0vPuVZyNYHFZbmAqE1SR0cbjXR6pjGBO58am962Ta3e3ftqy6B5LCcMasOj7gInrm9jBzI4vTX+bfjT/7/4/p/w/zFXybUmt71u4wJzGfxP/t/xvA+KaP2XnQSKVFpWPav/U/6+HKJjz++OVJUDp1n9N/+r+19QyMCz1mPC/8X/X/26Igrn3GiUeL5n/v+F/8//6/9NOMTC0hDUDefP/L4MoOL6ickVeSQ1QqAGooPdBJE/lnloge/fhixBHftFd9bLkR83/+n/1QAXVP8qX1Pyv/L/s/12f/4xQNz8s3Pa/6X/Vvzqgour/5f/r/q//f2fmLy54WP7lfJN74eMSoKIyoNFz/5/+9ar+Px9aZL3Xfjvz7aO3/96+eLvsnSVE7CPhOAYA9nvIX0UoNU8AAAAASUVORK5CYII=);
+    background-repeat: no-repeat;
+    background-position: 0 center;
+    padding: 0 0 0 18px;
+}
+
+a.link-mail:not(.btn) {
+    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAABOUlEQVR4AaXJMWoUUQDG8f/33ltldyZB3E2xaCAxIQREFKwD2lhb6QmsxMIL6BlU8AhCjmBADdqlWLyACKZKF7LZmUzmzXwiSMTKwl/7478Jng9OXa5fviRzwTS5/j40OcHo2fSofH10tUcXHVg9q54cj3kleOnRj/uHh3e+FVgCbK2drX/dn5xuogAD8uqnyfXZRi3J+tXN2uxj2WwkEgFw0vnW3srmwbU2K2uat2fvi/ObSbII0Kl3VL+9O975PPXEOwe7sb8dZXfqSGB6YWm89Wb+dF+jt+3K3ZoeYUDwwgOjK14wV7tHNXhYUvgEqzUhQeegZVcsSOYBRFeCIXN3ggBoiYYTJBOJIHmhhiWEEHzwl3ycIhjxm5y1nO8FYoJbj268A0D8ISAWj0HQyEOE+Zuwasy//ATU93+97E8p8AAAAABJRU5ErkJggg==);
+    background-repeat: no-repeat;
+    background-position: 0 center;
+    padding: 0 0 0 18px;
+}
+
+</style>
+
+<style class="snippet-prism-combo">/* no margin at the bottom / to close to the next paragraph */
+.code-toolbar { margin-bottom: 1rem }
+</style>

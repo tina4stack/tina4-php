@@ -32,10 +32,16 @@ Here's an example of what you would include in your header twig file:
 </head>
 </code>
 
+Now create a **snippets** folder inside the **src/templates** directory. Inside the **snippets** directory we can create our twig templates which we have included inside the index.php file (e.g. header,body,footer)
+
 Here's an example of what you would include in your body twig file:
 <code twig src/templates/snippets/body.twig>
 <body>
 <div class="container-fluid text-center">
+    <div class="col-lg-12 col-sm-6 bg-dark text-white ">
+        <h1>Welcome...</h1>
+        <h1>This is my website</h1>
+    </div>
     <div class="row">
         <div class="container">
             <div class="row">
@@ -80,7 +86,7 @@ Here's an example of what you would include in your body twig file:
 Here's an example of what you would include in your footer twig file:
 <code twig src/templates/snippets/footer.twig>
 <div class="row">
-    <div class="col bg-dark text-white fixed-bottom">
+    <div class="col bg-dark text-white fixed-bottom text-center">
         <p class="foot">Copyright ©
             <script>document.write(new Date().getFullYear())</script>  <!-- gets current year -->
             Your Site. All Rights Reserved
@@ -89,7 +95,6 @@ Here's an example of what you would include in your footer twig file:
 </div>
 </code>
 \\
-
 Spin up a Web-Server and your page should look something like this as an example:
 \\
 \\

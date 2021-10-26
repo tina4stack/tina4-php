@@ -48,11 +48,8 @@ Now that the <abbr title="Application Programming Interface">API</abbr> files ha
 </p>
 
 <p>
-It is <strong>IMPORTANT</strong> to ensure that the paths are correct:
+It is <strong>IMPORTANT</strong> to ensure that the paths are correct : <strong>“/api/characters”</strong>
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
-<code class="language-php code-combo code-php-combo">&quot;/api/characters&quot;</code>
-</pre>
 <!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:6,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
 <p>
 To know more about Routing go to the <a class="link-internal link-combo" data-wiki-id="tina4:routing" href="/doku.php?id=tina4:routing" title="Please see the Create-a-basic-route for more basics on Routes. For further information on routing, please click on this &lt;https://en.wikipedia.org/wiki/Routing&gt;. Simple Syntax The simple syntax of a Route is as follows   So the Route to capture the URL &lt;https://mywebsite.com/starthere&gt; would be as below. This uses a Get">Routing</a> page.
@@ -66,8 +63,9 @@ To know more about Routing go to the <a class="link-internal link-combo" data-wi
 <p>
 This is how to create a Get route with a response and request using TIna4. 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="basic-api1.php" data-download-link-label="Download basic-api1.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
+
 \Tina4\Get::add(&quot;/api/cars&quot;, function (\Tina4\Response $response, \Tina4\Request $request) {
 
     $cars = [&quot;Rolls Royce&quot;, &quot;Aston Martin&quot;, &quot;Bugatti&quot;];
@@ -84,8 +82,9 @@ return $response ($cars, HTTP_OK, APPLICATION_JSON);
 <p>
 This is how to create a Post route with a response and request using TIna4. 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="basic-api2.php" data-download-link-label="Download basic-api2.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
+
 \Tina4\Post::add(&quot;/api/characters&quot;, function (\Tina4\Response $response, \Tina4\Request $request) {
     $characters = [&quot;Clancy Gilroy&quot;, &quot;Peter Griffin&quot;, &quot;Broden Kelly&quot;];
 return $response ($characters, HTTP_OK, APPLICATION_JSON);
@@ -100,8 +99,9 @@ return $response ($characters, HTTP_OK, APPLICATION_JSON);
 <p>
 Other methods you may need to use include: 
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="basic-api3.php" data-download-link-label="Download basic-api3.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
+
 //Other methods you can test
 \Tina4\Post::add(...);
 
@@ -116,15 +116,16 @@ Other methods you may need to use include:
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2 - Define routes&quot;,&quot;hid&quot;:&quot;step_2_-_define_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1463-2838&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 2 - Define routes&quot;,&quot;hid&quot;:&quot;step_2_-_define_routes&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:5,&quot;range&quot;:&quot;1463-2871&quot;} -->
 <h1 class="sectionedit8 heading-combo" id="step_3_-_annotate_api">Step 3 - Annotate <abbr title="Application Programming Interface">API</abbr></h1>
 <div class="level1">
 
 <p>
 It is useful to add comments to your scripts for future use (e.g. if someone else has to work on your code). Now we will need to annotate the end point we created. This will be a description of the end point which will be used in Swagger. Its as easy as adding the following lines above the end point you created:
 </p>
-<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="file.php">
+<pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="basic-api4.php" data-download-link-label="Download basic-api4.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
+
 /**
 * @description My first API
 * @summary Returns list of cars
@@ -139,7 +140,7 @@ return $response ($cars, HTTP_OK, APPLICATION_JSON);
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3 - Annotate API &quot;,&quot;hid&quot;:&quot;step_3_-_annotate_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;2839-3503&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 3 - Annotate API &quot;,&quot;hid&quot;:&quot;step_3_-_annotate_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;2872-3552&quot;} -->
 <h1 class="sectionedit9 heading-combo" id="step_4_test_api">Step 4  Test <abbr title="Application Programming Interface">API</abbr></h1>
 <div class="level1">
 
@@ -178,13 +179,17 @@ Next click on the <abbr title="Application Programming Interface">API</abbr> and
 Thereafter, click on the execute button and you will see the following responses in the browser:
 </p>
 
+<p>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, 547px" data-srcset="http://localhost:8800/lib/exe/fetch.php?w=355&amp;h=27&amp;tok=87d857&amp;media=tina4:api5.png 355w, http://localhost:8800/lib/exe/fetch.php?w=547&amp;h=41&amp;tok=5abc1f&amp;media=tina4:api5.png 547w" data-placeholder-background="#cbf1ea" src="http://localhost:8800/lib/exe/fetch.php?media=tina4:api5.png" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA1NDcgNDEnPjwvc3ZnPg==" height="41" width="547" style="width:auto;max-height:41px"/>
+</p>
+
 </div>
 
 <h5 class="heading-combo" id="get_method_result">Get Method Result</h5>
 <div class="level5">
 
 <p>
-<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1415px" data-srcset="http://localhost:8800/lib/exe/fetch.php?w=355&amp;h=27&amp;tok=87d857&amp;media=tina4:api5.png 355w, http://localhost:8800/lib/exe/fetch.php?w=556&amp;h=42&amp;tok=e3a901&amp;media=tina4:api5.png 556w, http://localhost:8800/lib/exe/fetch.php?w=748&amp;h=56&amp;tok=7c2bb6&amp;media=tina4:api5.png 748w, http://localhost:8800/lib/exe/fetch.php?w=972&amp;h=73&amp;tok=965e03&amp;media=tina4:api5.png 972w, http://localhost:8800/lib/exe/fetch.php?media=tina4:api5.png 1415w" data-placeholder-background="#cbf1ea" src="http://localhost:8800/lib/exe/fetch.php?media=tina4:api5.png" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNDE1IDEwNic+PC9zdmc+" height="106" width="1415" x0400="true"/>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1630px" data-srcset="http://localhost:8800/lib/exe/fetch.php?w=355&amp;h=122&amp;tok=9364b3&amp;media=tina4:api6.png 355w, http://localhost:8800/lib/exe/fetch.php?w=556&amp;h=191&amp;tok=966eb4&amp;media=tina4:api6.png 556w, http://localhost:8800/lib/exe/fetch.php?w=748&amp;h=257&amp;tok=43cdf4&amp;media=tina4:api6.png 748w, http://localhost:8800/lib/exe/fetch.php?w=972&amp;h=335&amp;tok=018efc&amp;media=tina4:api6.png 972w, http://localhost:8800/lib/exe/fetch.php?media=tina4:api6.png 1630w" data-placeholder-background="#cbf1ea" src="http://localhost:8800/lib/exe/fetch.php?media=tina4:api6.png" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxNjMwIDU2MSc+PC9zdmc+" height="561" width="1630" x0400="true"/>
 </p>
 
 </div>
@@ -193,26 +198,30 @@ Thereafter, click on the execute button and you will see the following responses
 <div class="level5">
 
 <p>
-<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1162px" data-srcset="http://localhost:8800/lib/exe/fetch.php?w=355&amp;h=122&amp;tok=9364b3&amp;media=tina4:api6.png 355w, http://localhost:8800/lib/exe/fetch.php?w=556&amp;h=191&amp;tok=966eb4&amp;media=tina4:api6.png 556w, http://localhost:8800/lib/exe/fetch.php?w=748&amp;h=257&amp;tok=43cdf4&amp;media=tina4:api6.png 748w, http://localhost:8800/lib/exe/fetch.php?w=972&amp;h=335&amp;tok=018efc&amp;media=tina4:api6.png 972w, http://localhost:8800/lib/exe/fetch.php?w=1162&amp;h=400&amp;tok=1ba78b&amp;media=tina4:api6.png 1162w" data-placeholder-background="#cbf1ea" src="http://localhost:8800/lib/exe/fetch.php?media=tina4:api6.png" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMTYyIDQwMCc+PC9zdmc+" height="400" width="1162" style="width:auto;max-height:400px"/>
+<img class="img-fluid lazy-raster-combo lazy-combo mx-auto d-block raster-combo" data-sizes="(max-width: 375px) and (min-resolution:288dpi) 118px, (max-width: 375px) and (min-resolution:192dpi) 177px, (max-width: 375px) and (min-resolution:96dpi) 355px, (max-width: 576px) and (min-resolution:288dpi) 185px, (max-width: 576px) and (min-resolution:192dpi) 278px, (max-width: 576px) and (min-resolution:96dpi) 556px, (max-width: 768px) and (min-resolution:288dpi) 249px, (max-width: 768px) and (min-resolution:192dpi) 374px, (max-width: 768px) and (min-resolution:96dpi) 748px, (max-width: 992px) and (min-resolution:288dpi) 324px, (max-width: 992px) and (min-resolution:192dpi) 486px, (max-width: 992px) and (min-resolution:96dpi) 972px, 1122px" data-srcset="http://localhost:8800/lib/exe/fetch.php?w=355&amp;h=127&amp;tok=7aa446&amp;media=tina4:api7.png 355w, http://localhost:8800/lib/exe/fetch.php?w=556&amp;h=198&amp;tok=4cb1f9&amp;media=tina4:api7.png 556w, http://localhost:8800/lib/exe/fetch.php?w=748&amp;h=267&amp;tok=7ecc98&amp;media=tina4:api7.png 748w, http://localhost:8800/lib/exe/fetch.php?w=972&amp;h=347&amp;tok=26b02e&amp;media=tina4:api7.png 972w, http://localhost:8800/lib/exe/fetch.php?w=1122&amp;h=400&amp;tok=efceca&amp;media=tina4:api7.png 1122w" data-placeholder-background="#cbf1ea" src="http://localhost:8800/lib/exe/fetch.php?media=tina4:api7.png" srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMTIyIDQwMCc+PC9zdmc+" height="400" width="1122" style="width:auto;max-height:400px"/>
 <br/>
 
 <br/>
 
-You just created a basic <abbr title="Application Programming Interface">API</abbr> using Tina4. You are on your way to becoming a serious Code Ninja or Kunoichi. Please reach out to the developers if you have any questions or suggestions. 
+You just created a basic <abbr title="Application Programming Interface">API</abbr> using Tina4. You are on your way to becoming a serious Code Ninja or Kunoichi.
+</p>
+
+<p>
+You will notice that the <strong>Get</strong> method retrieved the information, whereas the <strong>Post</strong> method gave a 403 Forbidden error.
+</p>
+
+<p>
+Please reach out to the developers if you have any questions or suggestions.
 <br/>
 
 </p>
 <!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:10,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
 <p>
-For more information on <abbr title="Application Programming Interface">API</abbr>&#039;s please look at <a class="link-external link-combo" href="https://www.freecodecamp.org/news/what-is-an-api-in-english-please-b880a3214a82/" rel="nofollow ugc">FreeCodeCamp</a> or <a class="link-external link-combo" href="https://www.howtogeek.com/343877/what-is-an-api/" rel="nofollow ugc">HowToGeek</a>.
+For more information on how to secure your <abbr title="Application Programming Interface">API</abbr>&#039;s, please click on <a class="link-internal low-quality-page-combo link-combo" data-wiki-id="tina4:tutorials:secure_api_endpoint" href="/doku.php?id=tina4:tutorials:secure_api_endpoint" title="Securing your API End Point is as easy as adding @secure to your annotation. Please take a look at the example below: (LQPP)">link</a>. For more information on <abbr title="Application Programming Interface">API</abbr>&#039;s please look at <a class="link-external link-combo" href="https://www.freecodecamp.org/news/what-is-an-api-in-english-please-b880a3214a82/" rel="nofollow ugc">FreeCodeCamp</a> or <a class="link-external link-combo" href="https://www.howtogeek.com/343877/what-is-an-api/" rel="nofollow ugc">HowToGeek</a>.
 </p>
-</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:11,&quot;range&quot;:&quot;0-&quot;} --><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_start&quot;,&quot;secid&quot;:12,&quot;range&quot;:&quot;0-&quot;} --><div class="wrap_center wrap_round wrap_info plugin_wrap">
-<p>
-For more information on how to secure your <abbr title="Application Programming Interface">API</abbr>&#039;s, please click on <a class="link-internal low-quality-page-combo link-combo" data-wiki-id="tina4:tutorials:secure_api_endpoint" href="/doku.php?id=tina4:tutorials:secure_api_endpoint" title="Securing your API End Point is as easy as adding @secure to your annotation. Please take a look at the example below: (LQPP)">link</a>.
-</p>
-</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:13,&quot;range&quot;:&quot;0-&quot;} -->
+</div><!-- EDIT{&quot;target&quot;:&quot;plugin_wrap_end&quot;,&quot;secid&quot;:11,&quot;range&quot;:&quot;0-&quot;} -->
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4  Test API &quot;,&quot;hid&quot;:&quot;step_4_test_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;3504-&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Step 4  Test API &quot;,&quot;hid&quot;:&quot;step_4_test_api&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:9,&quot;range&quot;:&quot;3553-&quot;} -->
 <script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>

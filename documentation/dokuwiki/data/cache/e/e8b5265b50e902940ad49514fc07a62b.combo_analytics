@@ -1,8 +1,8 @@
 {
-    "date": "2021-10-02 12:05:45",
+    "date": "2021-10-26 11:50:44",
     "metadata": {
         "date_created": "2021-09-04T06:55:56+02:00",
-        "date_modified": "2021-09-04T06:55:56+02:00",
+        "date_modified": "2021-10-26T11:50:35+02:00",
         "date_published": null,
         "description": "Creating API 's With Tina4\nAPI\n\n\n\n\n\n\n\nFollow the steps below if you need to create an API end point to define the interactions between multiple software. This will be required as your application, system or webpage will require multiple interactive systems communicating with each other. Your",
         "h1": "Step 4  Test API",
@@ -16,19 +16,28 @@
             "clayton": 1,
             "andre": 1
         },
-        "chars_count": 4917,
+        "chars_count": 5054,
         "edits_count": 27,
         "external_links_count": 3,
         "formatted": {
             "1": {
                 "len": 11
             },
-            "0": 29,
+            "0": 51,
             "2": {
                 "len": 9
             },
             "3": {
                 "len": 9
+            },
+            "4": {
+                "len": 15
+            },
+            "5": {
+                "len": 3
+            },
+            "6": {
+                "len": 4
             }
         },
         "headers_count": {
@@ -45,24 +54,23 @@
         },
         "linebreak": 6,
         "media": {
-            "total_count": 5,
-            "internal_count": 5,
+            "total_count": 6,
+            "internal_count": 6,
             "internal_broken_count": 0,
             "external_count": 0
         },
         "syntax_count": {
             "combo_headingwiki": 10,
             "section": 10,
-            "p": 25,
+            "p": 27,
             "iframe": 1,
-            "wrap_divwrap": 4,
-            "strong": 3,
+            "wrap_divwrap": 3,
+            "strong": 6,
             "combo_link": 5,
-            "combo_code": 6,
-            "combo_media": 5,
-            "combo_preformatted": 1
+            "combo_code": 5,
+            "combo_media": 6
         },
-        "word_count": 526,
+        "word_count": 545,
         "word_section_count": {
             "avg": 0
         }

@@ -1,6 +1,6 @@
 ====== Creating API's With Tina4 ======
 \\
-{{url>https://www.youtube.com/embed/LP5hVFh2lDQ | 560,315 noscroll noborder centred}Creating API's With Tina4}}
+{{url>https://www.youtube.com/embed/LP5hVFh2lDQ | 500,315 noscroll noborder centred}Creating API's With Tina4}}
 \\
 \\
 Follow the steps below if you need to create an API end point to define the interactions between multiple software. This will be required as your application, system or webpage will require multiple interactive systems communicating with each other. Your API will provide the instructions on how these systems interact with each other. It handles things just as your HTTP requests, web applications, information and specifications. 
@@ -23,11 +23,7 @@ Create 2 directories inside the API folder and name it "cars" and "characters". 
 
 Now that the API files has been created, we must define our Routes. There are various methods which can be used.  
 
-It is **IMPORTANT** to ensure that the paths are correct:
-
-<code php>
-"/api/characters"
-</code>
+It is **IMPORTANT** to ensure that the paths are correct : **"/api/characters"**
 
 <WRAP center round info>
 To know more about Routing go to the [[tina4:routing|Routing]] page.
@@ -37,8 +33,9 @@ To know more about Routing go to the [[tina4:routing|Routing]] page.
 
 This is how to create a Get route with a response and request using TIna4. 
 
-<code php>
+<code php basic-api1.php>
 <?php
+
 \Tina4\Get::add("/api/cars", function (\Tina4\Response $response, \Tina4\Request $request) {
 
     $cars = ["Rolls Royce", "Aston Martin", "Bugatti"];
@@ -51,8 +48,9 @@ return $response ($cars, HTTP_OK, APPLICATION_JSON);
 
 This is how to create a Post route with a response and request using TIna4. 
 
-<code php>
+<code php basic-api2.php>
 <?php
+
 \Tina4\Post::add("/api/characters", function (\Tina4\Response $response, \Tina4\Request $request) {
     $characters = ["Clancy Gilroy", "Peter Griffin", "Broden Kelly"];
 return $response ($characters, HTTP_OK, APPLICATION_JSON);
@@ -63,8 +61,9 @@ return $response ($characters, HTTP_OK, APPLICATION_JSON);
 
 Other methods you may need to use include: 
 
-<code php>
+<code php basic-api3.php>
 <?php
+
 //Other methods you can test
 \Tina4\Post::add(...);
 
@@ -81,8 +80,9 @@ Other methods you may need to use include:
 ====== Step 3 - Annotate API ======
 It is useful to add comments to your scripts for future use (e.g. if someone else has to work on your code). Now we will need to annotate the end point we created. This will be a description of the end point which will be used in Swagger. Its as easy as adding the following lines above the end point you created:
 
-<code php>
+<code php basic-api4.php>
 <?php
+
 /**
 * @description My first API
 * @summary Returns list of cars
@@ -116,20 +116,21 @@ Next click on the API and then click on "Try It Out" button:
 {{  :tina4:api4.png?nolink&0x41  }}
 
 Thereafter, click on the execute button and you will see the following responses in the browser:
+
+{{  :tina4:api5.png?nolink&0x41  }}
+
 == Get Method Result ==
-{{  tina4:api5.png?nolink&x0400  }}
+{{  tina4:api6.png?nolink&x0400  }}
 == Post Method Result ==        
-{{  :tina4:api6.png?nolink&0x400  }}    
+{{  :tina4:api7.png?nolink&0x400  }}
 \\
 \\
-You just created a basic API using Tina4. You are on your way to becoming a serious Code Ninja or Kunoichi. Please reach out to the developers if you have any questions or suggestions. 
+You just created a basic API using Tina4. You are on your way to becoming a serious Code Ninja or Kunoichi.
+
+You will notice that the **Get** method retrieved the information, whereas the **Post** method gave a 403 Forbidden error.
+
+Please reach out to the developers if you have any questions or suggestions.
 \\
 <WRAP center round info>
-For more information on API's please look at [[https://www.freecodecamp.org/news/what-is-an-api-in-english-please-b880a3214a82/ | FreeCodeCamp]] or [[https://www.howtogeek.com/343877/what-is-an-api/ | HowToGeek]].
+For more information on how to secure your API's, please click on [[tina4:tutorials:secure_api_endpoint/ | link]]. For more information on API's please look at [[https://www.freecodecamp.org/news/what-is-an-api-in-english-please-b880a3214a82/ | FreeCodeCamp]] or [[https://www.howtogeek.com/343877/what-is-an-api/ | HowToGeek]].
 </WRAP>
-
-<WRAP center round info>
-For more information on how to secure your API's, please click on [[tina4:tutorials:secure_api_endpoint/ | link]].
-</WRAP>
-
-                                  

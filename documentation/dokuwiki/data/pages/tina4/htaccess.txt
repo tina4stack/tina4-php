@@ -62,4 +62,4 @@ RewriteRule ^(.*)$ index.php [QSA,L]
 SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 </code>
 
-Another reason is that the **.htaccess** file allows you to edit a webpages configuration, without the need to edit server configuration files.
+Another reason is that the **.htaccess** file allows you to edit runa webpages configuration, without the need to edit server configuration files.

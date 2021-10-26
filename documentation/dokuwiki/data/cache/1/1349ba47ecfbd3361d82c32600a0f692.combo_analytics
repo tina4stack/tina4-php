@@ -1,8 +1,8 @@
 {
-    "date": "2021-10-21 18:48:28",
+    "date": "2021-10-21 20:06:56",
     "metadata": {
         "date_created": "2021-10-18T08:55:15+02:00",
-        "date_modified": "2021-10-21T17:30:24+02:00",
+        "date_modified": "2021-10-21T18:50:26+02:00",
         "date_published": null,
         "description": "HTACCESS\n\nWhen installing Tina4 and run the initialize command you will notice that a .htaccess file was created into your project directory.\n\nWhat is HTACCESS?\n\nAn .htaccess is a distribution configuration file. The abbreviation means Hypertext Access file. It allows you set dependencies in your project so the configuration you setup which is applied throughout the project.",
         "h1": "HTACCESS",
@@ -13,7 +13,7 @@
     },
     "statistics": {
         "authors": [],
-        "chars_count": 1957,
+        "chars_count": 1947,
         "edits_count": 1,
         "formatted": {
             "1": {

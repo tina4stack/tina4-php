@@ -45,10 +45,11 @@ The folders are simply suggested folders where you can place php files to manage
 </p>
 
 <p>
-Try placing the following code in a php file of your choice in the routes folder
+Try placing the following code in a php file of your choice in the routes folder.
 </p>
 <pre class="code-container-combo code-container-php-combo" data-download-link="true" data-src="src/routes/someroute.php" data-download-link-label="Download src/routes/someroute.php">
 <code class="language-php code-combo code-php-combo">&lt;?php
+
 \Tina4\Get::add (&quot;/test/route&quot;, function(\Tina4\Response $response, \Tina4\Request $request) {
     return $response (&quot;Hello World!&quot;, HTTP_OK, TEXT_HTML);
 });</code>
@@ -59,7 +60,7 @@ Now lets test it by spinning up a built in web-server
 </p>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Coded Routing in src\/routes with subfolders&quot;,&quot;hid&quot;:&quot;coded_routing_in_src_routes_with_subfolders&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;827-1443&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Coded Routing in src\/routes with subfolders&quot;,&quot;hid&quot;:&quot;coded_routing_in_src_routes_with_subfolders&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:6,&quot;range&quot;:&quot;827-1445&quot;} -->
 <h2 class="sectionedit7 heading-combo" id="spinning_up_a_web-server">Spinning Up A Web-Server</h2>
 <div class="level2">
 
@@ -75,7 +76,7 @@ Hit up <a class="link-external link-combo" href="http://localhost:7145/test/rout
 </p>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Spinning Up A Web-Server&quot;,&quot;hid&quot;:&quot;spinning_up_a_web-server&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1444-1647&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Spinning Up A Web-Server&quot;,&quot;hid&quot;:&quot;spinning_up_a_web-server&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:7,&quot;range&quot;:&quot;1446-1649&quot;} -->
 <h2 class="sectionedit8 heading-combo" id="various_routing_examples">Various Routing Examples</h2>
 <div class="level2">
 
@@ -117,7 +118,7 @@ class TestClass
 </pre>
 
 </div>
-<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Various Routing Examples&quot;,&quot;hid&quot;:&quot;various_routing_examples&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;1648-&quot;} -->
+<!-- EDIT{&quot;target&quot;:&quot;section&quot;,&quot;name&quot;:&quot;Various Routing Examples&quot;,&quot;hid&quot;:&quot;various_routing_examples&quot;,&quot;codeblockOffset&quot;:0,&quot;secid&quot;:8,&quot;range&quot;:&quot;1650-&quot;} -->
 <script src="https://cdn.jsdelivr.net/npm/anchor-js@4.3.0/anchor.min.js" integrity="sha256-LGOWMG4g6/zc0chji4hZP1d8RxR2bPvXMzl/7oPZqjs=" crossorigin="anonymous" class="snippet-anchor-combo"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0//components/prism-core.min.js" class="snippet-prism-combo"></script>

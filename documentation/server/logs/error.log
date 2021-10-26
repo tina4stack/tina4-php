@@ -194,7 +194,28 @@ pm_winnt:notice] [pid 10764:tid 740] AH00354: Child: Starting 24 worker threads.
 [Thu Oct 21 18:47:18.687233 2021] [mpm_winnt:notice] [pid 4116:tid 624] AH00456: Apache Lounge VS16 Server built: Oct  2 2020 10:45:47
 [Thu Oct 21 18:47:18.687233 2021] [core:notice] [pid 4116:tid 624] AH00094: Command line: 'mapache.exe -d C:/dokuwiki/server'
 [Thu Oct 21 18:47:18.687233 2021] [mpm_winnt:notice] [pid 4116:tid 624] AH00418: Parent: Created child process 2456
-[Thu Oct 21 18:47:19.705860 2021] [mpm_winnt:notice] [pid 2456:tid 532] AH00354: Child: Starting 24 worker threads.
+Apache server shutdown initiated...
+pm_winnt:notice] [pid 2456:tid 532] AH00354: Child: Starting 24 worker threads.
 [Thu Oct 21 19:12:34.308686 2021] [authz_core:error] [pid 2456:tid 864] [client 127.0.0.1:52011] AH01630: client denied by server configuration: C:/dokuwiki/dokuwiki/data/dont-panic-if-you-see-this-in-your-logs-it-means-your-directory-permissions-are-correct.png, referer: http://localhost:8800/doku.php?id=tina4:htaccess&do=admin
 [Thu Oct 21 19:12:34.340688 2021] [authz_core:error] [pid 2456:tid 856] [client 127.0.0.1:52014] AH01630: client denied by server configuration: C:/dokuwiki/dokuwiki/data/dont-panic-if-you-see-this-in-your-logs-it-means-your-directory-permissions-are-correct.png, referer: http://localhost:8800/doku.php?id=tina4:htaccess&do=admin
 [Thu Oct 21 19:25:04.188222 2021] [authz_core:error] [pid 2456:tid 872] [client 127.0.0.1:52193] AH01630: client denied by server configuration: C:/dokuwiki/dokuwiki/data/dont-panic-if-you-see-this-in-your-logs-it-means-your-directory-permissions-are-correct.png, referer: http://localhost:8800/doku.php?id=tina4:htaccess&do=admin
+[Thu Oct 21 19:54:22.396034 2021] [mpm_winnt:notice] [pid 4116:tid 624] AH00422: Parent: Received shutdown signal -- Shutting down the server.
+[Thu Oct 21 19:54:24.798669 2021] [mpm_winnt:notice] [pid 2456:tid 532] AH00364: Child: All worker threads have exited.
+[Thu Oct 21 20:05:36.470137 2021] [core:warn] [pid 11196:tid 552] AH00098: pid file C:/dokuwiki/server/logs/httpd.pid overwritten -- Unclean shutdown of previous Apache run?
+[Thu Oct 21 20:05:36.693609 2021] [mpm_winnt:notice] [pid 11196:tid 552] AH00455: Apache/2.4.46 (Win32) PHP/7.4.12 configured -- resuming normal operations
+[Thu Oct 21 20:05:36.693609 2021] [mpm_winnt:notice] [pid 11196:tid 552] AH00456: Apache Lounge VS16 Server built: Oct  2 2020 10:45:47
+[Thu Oct 21 20:05:36.693609 2021] [core:notice] [pid 11196:tid 552] AH00094: Command line: 'mapache.exe -d C:/dokuwiki/server'
+[Thu Oct 21 20:05:36.703842 2021] [mpm_winnt:notice] [pid 11196:tid 552] AH00418: Parent: Created child process 6776
+Apache server shutdown initiated...
+pm_winnt:notice] [pid 6776:tid 620] AH00354: Child: Starting 24 worker threads.
+[Thu Oct 21 20:07:41.298302 2021] [mpm_winnt:notice] [pid 11196:tid 552] AH00422: Parent: Received shutdown signal -- Shutting down the server.
+[Thu Oct 21 20:07:44.131434 2021] [mpm_winnt:notice] [pid 6776:tid 620] AH00364: Child: All worker threads have exited.
+[Tue Oct 26 10:53:58.947130 2021] [core:warn] [pid 6564:tid 560] AH00098: pid file C:/dokuwiki/server/logs/httpd.pid overwritten -- Unclean shutdown of previous Apache run?
+[Tue Oct 26 10:53:59.361400 2021] [mpm_winnt:notice] [pid 6564:tid 560] AH00455: Apache/2.4.46 (Win32) PHP/7.4.12 configured -- resuming normal operations
+[Tue Oct 26 10:53:59.361400 2021] [mpm_winnt:notice] [pid 6564:tid 560] AH00456: Apache Lounge VS16 Server built: Oct  2 2020 10:45:47
+[Tue Oct 26 10:53:59.361400 2021] [core:notice] [pid 6564:tid 560] AH00094: Command line: 'mapache.exe -d C:/dokuwiki/server'
+[Tue Oct 26 10:53:59.365026 2021] [mpm_winnt:notice] [pid 6564:tid 560] AH00418: Parent: Created child process 6308
+Apache server shutdown initiated...
+pm_winnt:notice] [pid 6308:tid 704] AH00354: Child: Starting 24 worker threads.
+[Tue Oct 26 12:32:55.956536 2021] [mpm_winnt:notice] [pid 6564:tid 560] AH00422: Parent: Received shutdown signal -- Shutting down the server.
+[Tue Oct 26 12:32:58.010693 2021] [mpm_winnt:notice] [pid 6308:tid 704] AH00364: Child: All worker threads have exited.
