@@ -27,7 +27,9 @@ class Response
     {
         if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"])) {
             $contentType = $_SERVER["CONTENT_TYPE"];
-        } elseif (empty($contentType)) {
+        }
+
+        if (empty($contentType)) {
             $contentType = TEXT_HTML;
         }
 
@@ -35,24 +37,23 @@ class Response
             switch ($contentType) {
                 case APPLICATION_XML:
                     $content = XMLResponse::generateValidXmlFromArray($content);
-                    break;
+                break;
                 case APPLICATION_JSON:
                 default:
-                    if (is_object($content) && $content instanceof HTMLElement) {
+                    if ($content instanceof HTMLElement) {
                         $content .= "";
                     }
 
-                    //Try determine the  content type
+                    //Try to determine the  content type
                     if (!is_string($content) && (is_object($content) || is_array($content))) {
                         $contentType = APPLICATION_JSON;
                         $content = json_encode($content, JSON_THROW_ON_ERROR);
-                    } else {
-                        $contentType = TEXT_HTML;
                     }
 
-                    break;
+                break;
             }
         }
+
         return ["contentType" => "Content-Type: {$contentType}", "content" => $content, "httpCode" => $httpCode];
     }
 

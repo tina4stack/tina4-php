@@ -369,8 +369,6 @@ class SQL implements \JsonSerializable
         } else {
             $records = ["error" => "No database connection or ORM specified"];
         }
-
-
         return $records;
     }
 

@@ -46,6 +46,9 @@ trait Utility
             case "mp4":
                 $mimeType = "video/mp4";
                 break;
+            case "ogg":
+                $mimeType = "audio/ogg";
+                break;
             default:
                 $mimeType = "text/html";
                 break;
