@@ -31,7 +31,7 @@ class XMLResponse
      * @param $node_name
      * @return string
      */
-    private static function generateXmlFromArray($array, $nodeName): string
+    public static function generateXmlFromArray($array, $nodeName): string
     {
         $xml = '';
         if (is_array($array) || is_object($array)) {
