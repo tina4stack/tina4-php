@@ -52,7 +52,7 @@ class XMLResponse
         $xml  = str_replace('<node>', '', $xml);
         $xml  = str_replace('</node>', '', $xml);
 
-        return '<?xml version="1.0" encoding="UTF-8" ?>'.$xml;
+        return $xml;
     }
 
     /**
