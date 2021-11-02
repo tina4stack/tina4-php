@@ -49,6 +49,7 @@ class XMLResponse
             $xml = $array;
         }
 
+        //Nodes are the xml wrappers for unknown objects or arrays
         $xml  = str_replace('<node>', '', $xml);
         $xml  = str_replace('</node>', '', $xml);
 
