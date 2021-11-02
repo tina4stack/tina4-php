@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Tina4 - This is not a 4ramework.
  * Copy-right 2007 - current Tina4
@@ -111,7 +110,7 @@ class DataSQLite3 implements DataBase
     {
 
         //check for one liners and reserved methods in sqlite3
-        if (strpos($sql,"pragma") === false) {
+        if (strpos($sql, "pragma") === false) {
             $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
             $sql .= " limit {$offSet},{$noOfRecords}";
         } else {
