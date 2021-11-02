@@ -45,6 +45,8 @@ class XMLResponse
     {
         if (!self::isValidXml($array) && (is_object($array) || is_array($array))) {
             $xml  = self::generateXmlFromArray($array, $nodeName);
+        } else {
+            $xml = $array;
         }
 
         $xml  = str_replace('<node>', '', $xml);
