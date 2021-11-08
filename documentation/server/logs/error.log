@@ -219,3 +219,16 @@ Apache server shutdown initiated...
 pm_winnt:notice] [pid 6308:tid 704] AH00354: Child: Starting 24 worker threads.
 [Tue Oct 26 12:32:55.956536 2021] [mpm_winnt:notice] [pid 6564:tid 560] AH00422: Parent: Received shutdown signal -- Shutting down the server.
 [Tue Oct 26 12:32:58.010693 2021] [mpm_winnt:notice] [pid 6308:tid 704] AH00364: Child: All worker threads have exited.
+[Tue Nov 02 10:10:12.015543 2021] [core:warn] [pid 10992:tid 548] AH00098: pid file C:/projects/tina4-php/documentation/server/logs/httpd.pid overwritten -- Unclean shutdown of previous Apache run?
+[Tue Nov 02 10:10:12.709157 2021] [mpm_winnt:notice] [pid 10992:tid 548] AH00455: Apache/2.4.46 (Win32) PHP/7.4.12 configured -- resuming normal operations
+[Tue Nov 02 10:10:12.709157 2021] [mpm_winnt:notice] [pid 10992:tid 548] AH00456: Apache Lounge VS16 Server built: Oct  2 2020 10:45:47
+[Tue Nov 02 10:10:12.709157 2021] [core:notice] [pid 10992:tid 548] AH00094: Command line: 'mapache.exe -d C:/projects/tina4-php/documentation/server'
+[Tue Nov 02 10:10:12.713157 2021] [mpm_winnt:notice] [pid 10992:tid 548] AH00418: Parent: Created child process 11744
+Apache server shutdown initiated...
+pm_winnt:notice] [pid 11744:tid 644] AH00354: Child: Starting 24 worker threads.
+[Tue Nov 02 10:10:14.267663 2021] [core:alert] [pid 11744:tid 916] [client 127.0.0.1:55089] C:/projects/tina4-php/.htaccess: DirectoryIndex not allowed here
+[Tue Nov 02 10:10:32.053933 2021] [core:alert] [pid 11744:tid 912] [client 127.0.0.1:55094] C:/projects/tina4-php/.htaccess: DirectoryIndex not allowed here
+[Tue Nov 02 10:10:39.460483 2021] [core:alert] [pid 11744:tid 912] [client 127.0.0.1:55095] C:/projects/tina4-php/.htaccess: DirectoryIndex not allowed here
+[Tue Nov 02 10:10:46.233449 2021] [mpm_winnt:notice] [pid 10992:tid 548] AH00422: Parent: Received shutdown signal -- Shutting down the server.
+[Tue Nov 02 10:10:48.247381 2021] [mpm_winnt:notice] [pid 11744:tid 644] AH00364: Child: All worker threads have exited.
+[Tue Nov 02 10:10:48.303602 2021] [mpm_winnt:notice] [pid 10992:tid 548] AH00430: Parent: Child process 11744 exited successfully.

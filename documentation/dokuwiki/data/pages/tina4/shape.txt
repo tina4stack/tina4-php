@@ -16,7 +16,7 @@ Each HTML tag has an opening underscore prefix, HTML tag element and a closing u
 ==== Normal Tag ====
 Here's an example of a normal paragraph tag using the HTML Shape method: 
 
-<code php>
+<code php shapeexample1.php>
 <?php
 
 require_once "vendor/autoload.php";
@@ -25,21 +25,21 @@ echo _p("Hello"); //-->this will be output as <p>Hello</p> . We stipulated what 
 </code>
 
 ==== Tag with Attributes ====
-Here's an example of a div and attribute tag using the HTML Shape method: 
+Here's an example of a div and attribute tag using the HTML Shape method:
 
-<code php>
+<code php shapeexample2.php>
 <?php
 
 require_once "vendor/autoload.php";
 
-echo _div(["class" => "form-group"], "Testing"); //-->this will be output as <div class="form-group">Testing</div>. We first stipulate the class, thereafter we stipulated what the content must be. 
+echo _div(["class" => "form-group"], "Testing"); //-->this will be output as <div class="form-group">Testing</div>. We first stipulate the class, thereafter we stipulated what the content must be.
 </code>
 
 ==== Nesting of tags ====
 
-If you think of unordered lists or select tags, somethings can become easier to code due to **nesting**. 
+If you think of unordered lists or select tags, somethings can become easier to code due to **nesting**.
 
-<code php>
+<code php shapeexample3.php>
 <?php
 
 require_once "vendor/autoload.php";
@@ -64,17 +64,17 @@ $select = _select (["name" => "choose"], $options);
 
 You can manipulate a tag's content by targeting the tags id attribute:
 
-<code php>
+<code php shapeexample4.php>
 <?php
 
-$tag = $html->byId("someId"); //-->The id tag that you want to search for and manipulate. 
+$tag = $html->byId("someId"); //-->The id tag that you want to search for and manipulate.
 </code>
 
 ===== Set the HTML of a tag =====
 
 You can change the HTML tag type using the following convention:
 
-<code php>
+<code php shapeexmple5.php>
 <?php
 
 require_once "vendor/autoload.php";
@@ -84,7 +84,7 @@ $tag->html(_p("Changed HTML")); //-->Target the tag you want to manipulate
 
 ==== Example ====
 
-<code php>
+<code php shapeexample6.php>
 <?php
 require_once "vendor/autoload.php";
 
@@ -124,17 +124,14 @@ This will be the results:
 
 ====== **=====** ======
 
-<heading h2 >Hello World! H2</heading> 
+<heading h2 >Hello World! H2</heading>
 
-<heading h3 color="red">Hello</heading> 
+<heading h3 color="red">Hello</heading>
 
-<heading h4 >Hello World! H4</heading> 
+<heading h4 >Hello World! H4</heading>
 
-<heading h5 >Hello World! H5</heading> 
+<heading h5 >Hello World! H5</heading>
 
 * One
 \\
 * Two
-
-
-
