@@ -463,7 +463,11 @@ class ORM implements \JsonSerializable
         //@todo this next piece needs to standardize the errors from the different database sources - perhaps with a getNoneError on the database abstraction
         if ($exists->error->getErrorMessage() === "" || $exists->error->getErrorMessage() === "None" || $exists->error->getErrorMessage() === "no more rows available" || $exists->error->getErrorMessage() === "unknown error") {
             if ($exists->noOfRecords === 0) { //insert
-                $getLastId = ((string)($this->{$this->primaryKey}) === "");
+                if (strpos($this->primaryKey, ",") !== false) {
+                    $getLastId = false;
+                }    else {
+                    $getLastId = ((string)($this->{$this->primaryKey}) === "");
+                }
                 $sqlStatement = $this->generateInsertSQL($tableData, $tableName);
             } else {  //update
                 $sqlStatement = $this->generateUpdateSQL($tableData, $primaryCheck, $tableName);
