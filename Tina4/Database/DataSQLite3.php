@@ -46,7 +46,6 @@ class DataSQLite3 implements DataBase
 
         $sql = $params[0];
 
-
         $preparedQuery = $this->dbh->prepare($sql);
 
         $error = $this->error();
@@ -108,7 +107,6 @@ class DataSQLite3 implements DataBase
      */
     public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
-
         //check for one liners and reserved methods in sqlite3
         if (strpos($sql, "pragma") === false) {
             $countRecords = $this->dbh->querySingle("select count(*) as count from (" . $sql . ")");
@@ -193,6 +191,7 @@ class DataSQLite3 implements DataBase
     public function startTransaction(): string
     {
         //No transactions for sqlite
+
         return "Resource id #0";
     }
 
@@ -204,6 +203,7 @@ class DataSQLite3 implements DataBase
     public function autoCommit(bool $onState = false): void
     {
         //SQlite3 has no commits
+
     }
 
     /**
