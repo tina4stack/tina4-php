@@ -105,7 +105,7 @@ class DataSQLite3 implements DataBase
      * @param array $fieldMapping
      * @return DataResult
      */
-    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
+    public function fetch($sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
         //check for one liners and reserved methods in sqlite3
         if (strpos($sql, "pragma") === false) {

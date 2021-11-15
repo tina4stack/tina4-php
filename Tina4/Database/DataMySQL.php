@@ -106,7 +106,7 @@ class DataMySQL implements DataBase
      * @param array $fieldMapping Mapped Fields
      * @return null|DataResult
      */
-    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
+    public function fetch($sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
     {
         $initialSQL = $sql;
 

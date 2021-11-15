@@ -101,7 +101,7 @@ class DataMongoDb implements Database
         return in_array($tableName, $collectionNames);
     }
 
-    public function fetch(string $sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
+    public function fetch($sql = "", int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): DataResult
     {
         $statement = $this->parseSQLToNoSQL($sql);
 
