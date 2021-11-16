@@ -11,7 +11,9 @@ use Tina4\Debug;
 use Tina4\Module;
 
 //TINA4 CONSTANTS
-const TINA4_DATABASE_TYPES = ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb"];
+if (!defined("TINA4_DATABASE_TYPES")) {
+    define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb"]);
+}
 
 //Get the sub folders etc using the data class
 (new \Tina4\Data());
@@ -72,13 +74,29 @@ if (!defined("HTTP_NOT_IMPLEMENTED")) {
     define("HTTP_NOT_IMPLEMENTED", 501);
 }
 
-const TINA4_POST = "POST";
-const TINA4_GET = "GET";
-const TINA4_ANY = "ANY";
-const TINA4_PUT = "PUT";
-const TINA4_PATCH = "PATCH";
-const TINA4_DELETE = "DELETE";
+if (!defined("TINA4_POST")) {
+    define("TINA4_POST", "POST");
+}
 
+if (!defined("TINA4_GET")) {
+    define("TINA4_GET", "GET");
+}
+
+if (!defined("TINA4_ANY")) {
+    define("TINA4_ANY", "ANY");
+}
+
+if (!defined("TINA4_PUT")) {
+    define("TINA4_PUT", "PUT");
+}
+
+if (!defined("TINA4_PATCH")) {
+    define("TINA4_PATCH", "PATCH");
+}
+
+if (!defined("TINA4_DELETE")) {
+    define("TINA4_DELETE", "DELETE");
+}
 
 if (!defined("TEXT_HTML")) {
     define("TEXT_HTML", "text/html");
@@ -128,8 +146,8 @@ if (!defined("DATA_NO_SQL")) {
 if (!defined("TINA4_DEBUG_LEVEL")) {
     define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);
 }
-\Tina4\Debug::$logLevel = TINA4_DEBUG_LEVEL;
 
+Debug::$logLevel = TINA4_DEBUG_LEVEL;
 Debug::message("Project Root: " . TINA4_PROJECT_ROOT);
 Debug::message("Document Root: " . TINA4_DOCUMENT_ROOT);
 Debug::message("SubFolder: " . TINA4_SUB_FOLDER);
@@ -165,50 +183,53 @@ if (!defined("TINA4_ALLOW_ORIGINS")) {
  * Autoloader
  * @param $class
  */
-function tina4_auto_loader($class)
-{
-    if (!defined("TINA4_DOCUMENT_ROOT")) {
-        define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"]);
-    }
-
-    if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
-        if (defined("TINA4_INCLUDE_LOCATIONS")) {
-            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getTemplateFolders()));
-        } else {
-            define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src" . DIRECTORY_SEPARATOR . "app", "src" . DIRECTORY_SEPARATOR . "objects", "src" . DIRECTORY_SEPARATOR . "orm", "src" . DIRECTORY_SEPARATOR . "services"], Module::getIncludeFolders()));
+if (!function_exists("tina4_auto_loader")) {
+    function tina4_auto_loader($class)
+    {
+        if (!defined("TINA4_DOCUMENT_ROOT")) {
+            define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"]);
         }
-    }
 
-    $root = __DIR__;
-
-    $class = explode("\\", $class);
-    $class = $class[count($class) - 1];
-
-    $found = false;
-    if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
-        foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $lid => $location) {
-            if (file_exists($location . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                require_once $location . DIRECTORY_SEPARATOR . "{$class}.php";
-                $found = true;
-                break;
-            } elseif (file_exists(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
-                require_once TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
-                $found = true;
-                break;
+        if (!defined("TINA4_INCLUDE_LOCATIONS_INTERNAL")) {
+            if (defined("TINA4_INCLUDE_LOCATIONS")) {
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(TINA4_INCLUDE_LOCATIONS, Module::getTemplateFolders()));
             } else {
-                autoLoadFolders(TINA4_DOCUMENT_ROOT, $location, $class);
+                define("TINA4_INCLUDE_LOCATIONS_INTERNAL", array_merge(["src" . DIRECTORY_SEPARATOR . "app", "src" . DIRECTORY_SEPARATOR . "objects", "src" . DIRECTORY_SEPARATOR . "orm", "src" . DIRECTORY_SEPARATOR . "services"], Module::getIncludeFolders()));
+            }
+        }
+
+        $root = __DIR__;
+
+        $class = explode("\\", $class);
+        $class = $class[count($class) - 1];
+
+        $found = false;
+        if (defined("TINA4_INCLUDE_LOCATIONS_INTERNAL") && is_array(TINA4_INCLUDE_LOCATIONS_INTERNAL)) {
+            foreach (TINA4_INCLUDE_LOCATIONS_INTERNAL as $lid => $location) {
+                if (file_exists($location . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once $location . DIRECTORY_SEPARATOR . "{$class}.php";
+                    $found = true;
+                    break;
+                } elseif (file_exists(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php")) {
+                    require_once TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "{$location}" . DIRECTORY_SEPARATOR . "{$class}.php";
+                    $found = true;
+                    break;
+                } else {
+                    autoLoadFolders(TINA4_DOCUMENT_ROOT, $location, $class);
+                }
+            }
+        }
+
+        if (!$found) {
+            $fileName = (string)($root) . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
+
+            if (file_exists($fileName)) {
+                require_once $fileName;
             }
         }
     }
-
-    if (!$found) {
-        $fileName = (string)($root) . DIRECTORY_SEPARATOR . str_replace("_", DIRECTORY_SEPARATOR, $class) . ".php";
-
-        if (file_exists($fileName)) {
-            require_once $fileName;
-        }
-    }
 }
+
 
 /**
  * Recursive include
@@ -216,23 +237,24 @@ function tina4_auto_loader($class)
  * @param $location
  * @param $class
  */
-function autoLoadFolders($documentRoot, $location, $class)
-{
-    if (is_dir($documentRoot . $location)) {
-        $subFolders = scandir($documentRoot . $location);
-        foreach ($subFolders as $id => $file) {
-            if (is_dir(realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file)) && $file !== "." && $file !== "..") {
-                $fileName = realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file . DIRECTORY_SEPARATOR . "{$class}.php");
-                if (file_exists($fileName)) {
-                    require_once $fileName;
-                } else {
-                    autoLoadFolders($documentRoot, $location . DIRECTORY_SEPARATOR . $file, $class);
+if (!function_exists("autoLoadFolders")) {
+    function autoLoadFolders($documentRoot, $location, $class)
+    {
+        if (is_dir($documentRoot . $location)) {
+            $subFolders = scandir($documentRoot . $location);
+            foreach ($subFolders as $id => $file) {
+                if (is_dir(realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file)) && $file !== "." && $file !== "..") {
+                    $fileName = realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file . DIRECTORY_SEPARATOR . "{$class}.php");
+                    if (file_exists($fileName)) {
+                        require_once $fileName;
+                    } else {
+                        autoLoadFolders($documentRoot, $location . DIRECTORY_SEPARATOR . $file, $class);
+                    }
                 }
             }
         }
     }
 }
-
 
 //Initialize the Error handling
 //We only want to fiddle with the defaults if we are developing
