@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "84f7bb4cb9d1c798facf6cb9a5a7822d",
+    "content-hash": "cd9c1d76dda065e655aa103fc2eed9d0",
     "packages": [
         {
             "name": "coyl/git",
@@ -1004,6 +1004,51 @@
                 "source": "https://github.com/tina4stack/tina4php-env/tree/v2.0.4"
             },
             "time": "2021-08-07T14:17:44+00:00"
+        },
+        {
+            "name": "tina4stack/tina4php-orm",
+            "version": "v1.0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4php-orm.git",
+                "reference": "17d6358cc2191654d96d1b60000a60046d240ded"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/17d6358cc2191654d96d1b60000a60046d240ded",
+                "reference": "17d6358cc2191654d96d1b60000a60046d240ded",
+                "shasum": ""
+            },
+            "require": {
+                "tina4stack/tina4php-database": "^1.0"
+            },
+            "require-dev": {
+                "overtrue/phplint": "^2.0",
+                "phpunit/phpunit": "^9",
+                "roave/security-advisories": "dev-latest",
+                "tina4stack/tina4php-firebird": "^1.0.1"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "Tina4/"
+                ],
+                "psr-4": {
+                    "Tina4\\": [
+                        "Tina4/"
+                    ]
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 ORM Module",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4php-orm/issues",
+                "source": "https://github.com/tina4stack/tina4php-orm/tree/v1.0.1"
+            },
+            "time": "2021-11-20T17:11:20+00:00"
         },
         {
             "name": "tina4stack/tina4php-shape",
@@ -4107,5 +4152,5 @@
         "ext-curl": "*"
     },
     "platform-dev": [],
-    "plugin-api-version": "2.0.0"
+    "plugin-api-version": "2.1.0"
 }

@@ -25,7 +25,6 @@
                 "Tina4/Core/",
                 "Tina4/Database/",
                 "Tina4/Messaging/",
-                "Tina4/ORM/",
                 "Tina4/Reporting/",
                 "Tina4/Routing/",
                 "Tina4/Security/",
@@ -46,7 +45,8 @@
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
         "mpdf/mpdf": "^8.0",
-        "tina4stack/tina4php-database": "^1.0"
+        "tina4stack/tina4php-database": "^1.0",
+        "tina4stack/tina4php-orm": "^1.0"
     },
     "bin": [
         "bin/tina4",
