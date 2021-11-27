@@ -15,7 +15,11 @@ namespace Tina4;
 class Service extends Data
 {
     private $sleepTime = 5;
-    private $servicePath;
+    /***
+     * Name of the file to store the serialized service in
+     * @var false|string
+     */
+    private $serviceSaveFilename;
 
     /**
      * Service constructor
@@ -23,7 +27,7 @@ class Service extends Data
     function __construct()
     {
         parent::__construct();
-        $this->servicePath = TINA4_DOCUMENT_ROOT . "cache" . DIRECTORY_SEPARATOR . "services";
+        $this->serviceSaveFilename = TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "services.data";
     }
 
     /**
@@ -32,13 +36,13 @@ class Service extends Data
      */
     public function addProcess(\Tina4\Process $process)
     {
-        if (file_exists($this->servicePath)) {
-            $services = unserialize(file_get_contents($this->servicePath));
+        if (file_exists($this->serviceSaveFilename)) {
+            $services = unserialize(file_get_contents($this->serviceSaveFilename));
         } else {
             $services = [];
         }
         $services[$process->name] = $process;
-        file_put_contents($this->servicePath, serialize($services));
+        file_put_contents($this->serviceSaveFilename, serialize($services));
     }
 
     /**
@@ -47,15 +51,15 @@ class Service extends Data
      */
     public function removeProcess(string $name)
     {
-        if (file_exists($this->servicePath)) {
-            $services = unserialize(file_get_contents($this->servicePath));
+        if (file_exists($this->serviceSaveFilename)) {
+            $services = unserialize(file_get_contents($this->serviceSaveFilename));
         } else {
             $services = [];
         }
 
         if (isset($services[$name])) {
             unset($services[$name]);
-            file_put_contents($this->servicePath, serialize($services));
+            file_put_contents($this->serviceSaveFilename, serialize($services));
         }
     }
 
@@ -65,8 +69,8 @@ class Service extends Data
      */
     public function getProcesses()
     {
-        if (file_exists($this->servicePath)) {
-            $services = unserialize(file_get_contents($this->servicePath));
+        if (file_exists($this->serviceSaveFilename)) {
+            $services = unserialize(file_get_contents($this->serviceSaveFilename));
         } else {
             $services = [];
         }

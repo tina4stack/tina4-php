@@ -53,7 +53,13 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             return $internalTwig->render(basename($fileName), $data);
         } else {
             if (!is_file($fileNameString)) {
+
                 $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
+
+                if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR )) {
+                    mkdir("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true);
+                }
+
                 file_put_contents($fileName, $fileNameString);
             }
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
