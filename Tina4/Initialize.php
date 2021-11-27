@@ -285,10 +285,10 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUME
 
 //Copy the bin folder if the vendor one has changed
 if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
-    $tina4Checksum = md5(file_get_contents(TINA4_PROJECT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4"));
+    $tina4Checksum = md5(file_get_contents(TINA4_PROJECT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4").file_get_contents(TINA4_PROJECT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4service"));
     $destChecksum = "";
     if (file_exists(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4")) {
-        $destChecksum = md5(file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4"));
+        $destChecksum = md5(file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4").file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4service"));
     }
 
     if ($tina4Checksum !== $destChecksum) {
