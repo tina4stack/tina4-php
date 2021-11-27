@@ -43,45 +43,51 @@ while (TRUE && !file_exists($stopFileName)) {
         foreach ($processes as $id => $process) {
             try {
                 if (get_class($process) !== "__PHP_Incomplete_Class") {
-                    //How to know we are not on server?
-                    if (TINA4_DEBUG) {
-                        \Tina4\Debug::message("Running {$process->name}", TINA4_LOG_INFO);
+                    try {
+                        //How to know we are not on server?
+                        if (TINA4_DEBUG) {
+                            \Tina4\Debug::message("Running {$process->name}", TINA4_LOG_INFO);
 
-                        $reflection = new \ReflectionClass(get_class($process));
-                        $code = file_get_contents($reflection->getFileName());
-                        $code = str_replace('<?php', '', $code);
-                        $aliasNumber = rand(1000, 9999);
+                            $reflection = new \ReflectionClass(get_class($process));
+                            $code = file_get_contents($reflection->getFileName());
+                            $code = str_replace('<?php', '', $code);
+                            $aliasNumber = rand(1000, 9999);
 
 
-                        if (isset($settings[$process->name]) && $settings[$process->name]["hash"] == md5($code)) {
-                            $aliasNumber = $settings[$process->name]["instance"];
+                            if (isset($settings[$process->name]) && $settings[$process->name]["hash"] == md5($code)) {
+                                $aliasNumber = $settings[$process->name]["instance"];
+                            } else {
+                                $settings[$process->name]["hash"] = md5($code);
+                                $settings[$process->name]["instance"] = $aliasNumber;
+
+                                //Works when name space is used
+                                $className = explode(DIRECTORY_SEPARATOR, get_class($process));
+                                $className = $className[count($className) - 1];
+
+                                $code = str_replace($className, $className . $aliasNumber, $code);
+                                //Load new class
+                                \Tina4\Debug::message(date("Y-m-d H:i:s") . " Reloading code for service {$className} \n{$code}", TINA4_LOG_DEBUG);
+                                eval($code);
+                            }
+
+                            eval('$runner = new ' . get_class($process) . $aliasNumber . "('{$process->name}');");
+                            if ($runner->canRun()) {
+                                \Tina4\Debug::message(date("Y-m-d H:i:s") . " Running {$process->name}", TINA4_LOG_DEBUG);
+                                $runner->run();
+                            }
+                            unset ($runner);
+                            $runner = null;
                         } else {
-                            $settings[$process->name]["hash"] = md5($code);
-                            $settings[$process->name]["instance"] = $aliasNumber;
-
-                            //Works when name space is used
-                            $className = explode(DIRECTORY_SEPARATOR, get_class($process));
-                            $className = $className[count($className) - 1];
-
-                            $code = str_replace($className, $className . $aliasNumber, $code);
-                            //Load new class
-                            \Tina4\Debug::message(date("Y-m-d H:i:s") . " Reloading code for service {$className} \n{$code}", TINA4_LOG_DEBUG);
-                            eval($code);
+                            if ($process->canRun()) {
+                                \Tina4\Debug::message(date("Y-m-d H:i:s") . " Running {$process->name}");
+                                $process->run();
+                            }
+                            unset($process);
                         }
-
-                        eval('$runner = new ' . get_class($process) . $aliasNumber . "('{$process->name}');");
-                        if ($runner->canRun()) {
-                            \Tina4\Debug::message(date("Y-m-d H:i:s") . " Running {$process->name}", TINA4_LOG_DEBUG);
-                            $runner->run();
-                        }
-                        unset ($runner);
-                        $runner = null;
-                    } else {
-                        if ($process->canRun()) {
-                            \Tina4\Debug::message(date("Y-m-d H:i:s") . " Running {$process->name}");
-                            $process->run();
-                        }
-                        unset($process);
+                    }
+                        catch (\Exception $exception)
+                    {
+                        \Tina4\Debug::message("Exception happened in service:\n".$exception->getMessage());
                     }
 
                     gc_collect_cycles();
