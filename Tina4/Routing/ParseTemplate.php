@@ -14,6 +14,8 @@ namespace Tina4;
  */
 class ParseTemplate
 {
+    use Utility;
+
     public $content;
     public $httpCode = HTTP_OK;
     public $headers = [];
@@ -93,7 +95,7 @@ class ParseTemplate
                 if (file_exists($testFile)) {
                     $found = true;
                     $realFileName = $testFile;
-                    $mimeType = Utility::getMimeType($fileName);
+                    $mimeType = self::getMimeType($fileName);
                     break;
                 }
                 if ($found) {
