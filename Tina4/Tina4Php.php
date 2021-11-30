@@ -66,7 +66,7 @@ class Tina4Php extends Data
                 $includeLocation = TINA4_DOCUMENT_ROOT . $includeLocation;
             }
             if (file_exists($includeLocation)) {
-                \Tina4\Utility::includeDirectory($includeLocation);
+                self::includeDirectory($includeLocation);
             }
         }
 
@@ -75,7 +75,7 @@ class Tina4Php extends Data
                 $includeLocation = TINA4_DOCUMENT_ROOT . $includeLocation;
             }
             if (file_exists($includeLocation)) {
-                \Tina4\Utility::includeDirectory($includeLocation);
+                self::includeDirectory($includeLocation);
             }
         }
 
