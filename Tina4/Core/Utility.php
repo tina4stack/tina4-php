@@ -152,7 +152,7 @@ trait Utility
      * @param string $databaseFormat
      * @return bool
      */
-    public function isDate(?string $dateString, string $databaseFormat): bool
+    final public function isDate(?string $dateString, string $databaseFormat): bool
     {
         if ($dateString === null)
         {
@@ -162,7 +162,7 @@ trait Utility
         if (is_array($dateString) || is_object($dateString)) {
             return false;
         }
-        if (substr($dateString, -1, 1) === "Z") {
+        if ($dateString[strlen($dateString) - 1] === "Z") {
             $dateParts = explode("T", $dateString);
         } else {
             $dateParts = explode(" ", $dateString);
@@ -178,7 +178,7 @@ trait Utility
      * @param string $outputFormat Output of the date in the specified format
      * @return string The resulting formatted date
      */
-    public function formatDate(?string $dateString, string $databaseFormat, string $outputFormat): ?string
+    final public function formatDate(?string $dateString, string $databaseFormat, string $outputFormat): ?string
     {
         //Hacky fix for weird dates?
         $dateString = str_replace(".000000", "", $dateString);
@@ -221,7 +221,7 @@ trait Utility
      *
      *   assert(null) === false,"Check if binary returns false"
      */
-    public function isBinary(?string $string): bool
+    final public function isBinary(?string $string): bool
     {
         //immediately return back binary if we can get an image size
         if ($string === null || is_numeric($string) || empty($string)) {
@@ -245,7 +245,7 @@ trait Utility
      * @param string $name A field name or object name with underscores
      * @return string Camel case version of the input
      */
-    public function camelCase(string $name): string
+    final public function camelCase(string $name): string
     {
         $fieldName = "";
         $name = strtolower($name);
@@ -266,7 +266,7 @@ trait Utility
      * Get the trace for a debug point used in ORM
      * @return array
      */
-    public function getDebugBackTrace(): array
+    final public function getDebugBackTrace(): array
     {
         $debug = debug_backtrace();
         $trace = [];
@@ -303,7 +303,7 @@ trait Utility
      * @param string $filter A filter for the type of files - *.php for example
      * @return array An array of the filenames
      */
-    public function getFiles(string $target, string $filter = "*"): array
+    final public function getFiles(string $target, string $filter = "*"): array
     {
         $result = [];
         if (is_dir($target)) {
@@ -326,7 +326,7 @@ trait Utility
      * @param string $url URL to be cleaned that may contain "?"
      * @return mixed Part of the URL before the "?" if it existed
      */
-    public function cleanURL(string $url): string
+    final public function cleanURL(string $url): string
     {
         $url = explode("?", $url, 2);
 
@@ -344,7 +344,7 @@ trait Utility
      * @param bool $push Should the commit be pushed to the repository
      * @todo finish this implementation
      */
-    public function initGit(bool $gitEnabled, string $gitMessage, bool $push = false): void
+    final public function initGit(bool $gitEnabled, string $gitMessage, bool $push = false): void
     {
         global $GIT;
         if ($gitEnabled) {
