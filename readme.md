@@ -5,11 +5,22 @@ very quickly.
 
 The premise of the project is to make you the developer and PHP, the heroes!
 
-**Beta Testing**
-
-[Join our Slack Channel to participate and receive all the latest builds](https://docs.google.com/forms/d/e/1FAIpQLSdrapVxI-19DapgKKuhtlLyPc99SLg8Re2Lpn3PS_K0M2Rc7w/viewform)
-
 **News**
+
+*December 6, 2021* - Breaking updates, you need to include the database drivers as you require them now.
+The ORM and database modules are all extracted into their own packagist modules.
+The ORM and database metadata work now using a more uniform mechanism. The service module now
+is created under bin and tina4service and tina4 bin executables are replaced when their checksums change.
+
+Database support table
+
+| Database      | Composer Command |
+| ----------- | ----------- |
+| Sqlite3      |  ```composer require tina4stack/tina4php-sqlite3```       |
+| ODBC   | ```composer require tina4stack/tina4php-odbc```        |
+| MySQL   | ```composer require tina4stack/tina4php-mysql ```        |
+| Firebird   | ```composer require tina4stack/tina4php-firebird```        |
+| MongoDB   | ```composer require tina4stack/tina4php-mongodb```        |
 
 *June 13, 2021* - Adding docker support
 
