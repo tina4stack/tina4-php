@@ -41,10 +41,10 @@
         "scssphp/scssphp": "^1.5.2",
         "ext-json": "*",
         "ext-curl": "*",
+        "mpdf/mpdf": "^8.0",
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
-        "mpdf/mpdf": "^8.0",
         "tina4stack/tina4php-database": "^1.0",
         "tina4stack/tina4php-orm": "^1.0"
     },
