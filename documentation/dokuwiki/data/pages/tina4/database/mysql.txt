@@ -1,13 +1,11 @@
 ====== Connecting to Mysql ====== 
 The database connection is established in a global variable called **$DBA** in the index.php file for convenience, you could put it anywhere as long as it is global and required before any database functionality is required. 
 
-<WRAP center round info 100%>
-For a custom database hostname and port use the following format in your ENV file:
-<code env>
-DB_NAME=10.248.228.22/3306:databasename
-</code>
-</WRAP>
+To install the MySQL driver for your system simply run this command in your terminal:
 
+<code bash sqldriver.bash>
+composer require tina4stack/tina4php-mysql
+</code>
 
 ==== For MySQL database type: ====
 
@@ -22,6 +20,14 @@ $DBA = new \Tina4\DataMySQL(
     DB_USERNAME, DB_PASSWORD, 
     "d/m/Y");
 </file>
+
+<WRAP center round info 100%>
+For a custom database hostname and port use the following format in your ENV file:
+<code env>
+DB_NAME=10.248.228.22/3306:databasename
+</code>
+</WRAP>
+
 
 <WRAP center round info 100%>
 Note the Date Format which should be in your localized format. Tina4 will transpile your dates for you depending on your Database Engine's preferred date format.
