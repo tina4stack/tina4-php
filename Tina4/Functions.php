@@ -43,7 +43,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             }
             $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
             return $internalTwig->render($renderFile, $data);
-        } elseif (strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR || strlen($fileName) > 1 && $fileName[0] === "/") {
+        } elseif ((strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR) || (strlen($fileName) > 1 && $fileName[0] === "/")) {
             $fileName = substr($fileName, 1);
         }
 
@@ -57,7 +57,9 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
                 $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
 
                 if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR )) {
-                    mkdir("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true);
+                    if (!mkdir($concurrentDirectory = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true) && !is_dir($concurrentDirectory)) {
+                        //throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                    }
                 }
 
                 file_put_contents($fileName, $fileNameString);
@@ -76,7 +78,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
  * @param integer $statusCode Code of status
  * @example examples\exampleTina4PHPRedirect.php
  */
-function redirect(string $url, $statusCode = 303)
+function redirect(string $url, int $statusCode = 303): void
 {
     //Define URL to test from parsed string
     $testURL = parse_url($url);

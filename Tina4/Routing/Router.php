@@ -325,7 +325,7 @@ class Router extends Data
 
                 $requestHeaders = getallheaders();
                 if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
-                    if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken($requestHeaders["Authorization"])) {
+                    if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken(urldecode($requestHeaders["Authorization"]))) {
                         //call closure with & without params
                         $this->config->setAuthentication(null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
