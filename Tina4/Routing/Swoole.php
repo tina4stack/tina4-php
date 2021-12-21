@@ -14,9 +14,9 @@ class Swoole
      * @param array $events array ["on" => $method]
      * @param int $workers
      */
-    public function __construct(int $port, array $events, int $workers=10)
+    public function __construct(int $port, array $events, $daemonize=false, int $workers=10)
     {
-        $this->server = new \Swoole\Server("0.0.0.0", $port, $daemonize=false, SWOOLE_BASE, SWOOLE_SOCK_TCP);
+        $this->server = new \Swoole\Server("0.0.0.0", $port, SWOOLE_BASE, SWOOLE_SOCK_TCP);
         $this->server->set([
             'worker_num' => $workers,   // The number of worker processes
             'daemonize' => $daemonize, // Whether to start as a daemon process
