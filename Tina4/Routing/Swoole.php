@@ -12,9 +12,10 @@ class Swoole
     /**
      * @param int $port
      * @param array $events array ["on" => $method]
+     * @param bool $daemonize
      * @param int $workers
      */
-    public function __construct(int $port, array $events, $daemonize=false, int $workers=10)
+    public function __construct(int $port, array $events, bool $daemonize=false, int $workers=10)
     {
         $this->server = new \Swoole\Server("0.0.0.0", $port, SWOOLE_BASE, SWOOLE_SOCK_TCP);
         $this->server->set([
