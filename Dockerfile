@@ -4,6 +4,9 @@ RUN apt-get update && apt-get install -y \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
         libpng-dev \
+        libssl-dev \
+        libcurl4-openssl-dev \
+        libpcre3-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd
 RUN apt-get install -y libicu-dev libcurl4-openssl-dev && docker-php-ext-install curl
@@ -11,6 +14,8 @@ RUN docker-php-ext-install intl
 RUN apt-get install -y libtidy-dev && docker-php-ext-install tidy
 RUN apt-get install -y libxml2-dev && docker-php-ext-install soap
 RUN apt-get install -y libzip-dev && docker-php-ext-install zip
+RUN apt-get install -y libzip-dev && docker-php-ext-install bcmath
+RUN apt-get install -y libzip-dev && docker-php-ext-install opcache
 #install firebird extension and firebird support
 RUN apt-get install -y firebird-dev
 RUN git clone https://github.com/FirebirdSQL/php-firebird.git
@@ -23,8 +28,11 @@ RUN echo "extension=interbase.so" > /usr/local/etc/php/conf.d/docker-php-ext-int
 #install mongodb support
 RUN pecl install mongodb
 RUN echo "extension=mongodb.so" > /usr/local/etc/php/conf.d/docker-php-ext-mongodb.ini
+#install swoole
+RUN pecl install openswoole
+RUN echo "extension=openswoole.so" > /usr/local/etc/php/conf.d/docker-php-ext-openswoole.ini
+#install composer
 RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-RUN php -r "if (hash_file('sha384', 'composer-setup.php') === '756890a4488ce9024fc62c56153228907f1545c228516cbf63f885e036d37e9a59d27d63f46af1d4d07ee0f76181c7d3') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
 RUN php composer-setup.php
 RUN php -r "unlink('composer-setup.php');"
 RUN mv composer.phar /usr/local/bin/composer

@@ -214,6 +214,14 @@ class Tina4Php extends Data
                 $result = (new Migration())->createMigration($_REQUEST["description"], $_REQUEST["sql"]);
                 return $response($result, HTTP_OK, TEXT_HTML);
             });
+
+            Route::get("/phpinfo", function(Response $response){
+                ob_start();
+                phpinfo();
+                $data = ob_get_contents();
+                ob_clean();
+                return $response($data, HTTP_OK, TEXT_HTML);
+            });
         }
 
         \Tina4\Route::get('/swagger/json.json', function (\Tina4\Response $response) use ($tina4Php) {
