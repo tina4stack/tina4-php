@@ -28,10 +28,28 @@ class Swoole
         }
     }
 
+    /**
+     * Add Listener service
+     * @param int $port
+     * @param array $events
+     */
     public function addListener(int $port, array $events) {
-        $listener = $this->server->listen("0.0.0.0", $port, SWOOLE_TCP);
-        foreach ($events as $event => $callback) {
-            $listener->on($event, $callback);
+        if (!empty($this->server)) {
+            $listener = $this->server->listen("0.0.0.0", $port, SWOOLE_TCP);
+            foreach ($events as $event => $callback) {
+                $listener->on($event, $callback);
+            }
+        }
+    }
+
+    /**
+     * Add swoole table name
+     * @param $tableName
+     * @param $table
+     */
+    public function addTable($tableName, $table) {
+        if (!empty($this->server)) {
+            $this->server->{$tableName} = $table;
         }
     }
 
@@ -39,7 +57,9 @@ class Swoole
      * Starts the swoole server
      */
     public function start() {
-        $this->server->start();
+        if (!empty($this->server)) {
+            $this->server->start();
+        }
     }
 
 }
