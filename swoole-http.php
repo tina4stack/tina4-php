@@ -3,6 +3,11 @@ use Tina4\Router;
 require_once "vendor/autoload.php";
 define("TINA4_SUPPRESS", true);
 
+//Other defines to set here would be
+//TINA4_PROJECT_ROOT - where is the project living
+//TINA4_DOCUMENT_ROOT - where is the server document root
+//TINA4_SUB_FOLDER - is this running under a sub url
+
 $events = [];
 $events["Request"] = static function(\Swoole\Http\Request $request, \Swoole\Http\Response $response)
 {
