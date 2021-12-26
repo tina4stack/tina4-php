@@ -20,8 +20,45 @@ class Request
     public $server = null;
     public $session = null;
     public $files = null;
-    public function __construct($rawRequest)
+    public function __construct($rawRequest, $customRequest=null)
     {
+        if (!empty($customRequest->get)) {
+            foreach ($customRequest->get as $key => $value) {
+                $_REQUEST[$key] = $value;
+                $_GET[$key] = $value;
+            }
+        }
+
+        if (!empty($customRequest->post))
+        {
+            foreach ($customRequest->post as $key => $value) {
+                $_REQUEST[$key] = $value;
+                $_POST[$key] = $value;
+            }
+        }
+        if (!empty($customRequest->files)) {
+            foreach ($customRequest->files as $key => $value) {
+                $_FILES[$key] = $value;
+            }
+        }
+
+        if (!empty($customRequest->cookie)) {
+            foreach ($customRequest->cookie as $key => $value) {
+                $_COOKIE[$key] = $value;
+            }
+        }
+
+        if (!empty($customRequest->server)) {
+            foreach ($customRequest->server as $key => $value) {
+                $_SERVER[strtoupper($key)] = $value;
+            }
+
+            //hack for getting the swoole server header
+            if (!empty($customRequest->header["host"])) {
+                $_SERVER["HTTP_HOST"] = $customRequest->header["host"];
+            }
+        }
+
         Debug::message($rawRequest, TINA4_LOG_DEBUG);
         $this->data = (object)[];
         if (!empty($_REQUEST)) {

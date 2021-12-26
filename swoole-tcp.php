@@ -15,6 +15,6 @@ $events["close"] = function() {
     echo "closed";
 };
 
-$swoole = new \Tina4\Swoole(40000, $events);
+$swoole = new \Tina4\Swoole(40000, $events, "tcp");
 $swoole->addListener(40001, $events);
 $swoole->start();

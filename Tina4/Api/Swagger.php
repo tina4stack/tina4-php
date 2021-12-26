@@ -107,7 +107,7 @@ class Swagger implements \JsonSerializable
                                 $properties = (object)[];
                                 if ($fields !== null) {
                                     foreach ($fields as $field) {
-                                        $properties->{$field["field"]} = (object)["type" => $field["type"]];
+                                        $properties->{$field->fieldName} = (object)["type" => $field->dataType];
                                     }
                                 }
                                 $example["properties"] = $properties;

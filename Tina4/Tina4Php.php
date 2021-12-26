@@ -304,8 +304,6 @@ class Tina4Php extends Data
             }
         }
 
-
-
         return $content;
     }
 
