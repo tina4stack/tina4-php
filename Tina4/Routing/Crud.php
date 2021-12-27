@@ -143,6 +143,23 @@ class Crud
         );
     }
 
+    public static function getObjects(Request $request) {
+        $objects = [];
+        if (!empty($request->data)) {
+            if (is_array($request->data) && isset($request->data[0]) && is_object($request->data[0])) {
+                foreach ($request->data as $key => $object) {
+                   $objects[] = $object;
+                }
+            } else {
+                $objects[] = $request->data;
+            }
+        } else {
+            $objects[] = $request->params;
+        }
+
+        return $objects;
+    }
+
     /**
      * CRUD ROUTING FOR DATATABLES
      * @param $path
@@ -172,14 +189,19 @@ class Crud
         Route::post(
             $path,
             function (Response $response, Request $request) use ($object, $function) {
-                if (!empty($request->data)) {
-                    $object->create($request->data);
-                } else {
-                    $object->create($request->params);
+                $postData = self::getObjects($request);
+                $jsonResult = [];
+                foreach ($postData as $inputObject) {
+                    $object->create($inputObject);
+                    $function("create", $object, null, $request);
+                    $object->save();
+                    $jsonResult[] = $function("afterCreate", $object, null, $request);
                 }
-                $function("create", $object, null, $request);
-                $object->save();
-                $jsonResult = $function("afterCreate", $object, null, $request);
+
+                if (count($jsonResult) === 1) {
+                    $jsonResult = $jsonResult[0];
+                }
+
                 return $response($jsonResult, HTTP_OK);
             }
         );
