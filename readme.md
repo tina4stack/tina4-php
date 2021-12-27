@@ -7,6 +7,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*December 26,2021* - Fixes for Swagger Examples using new DataField & HTTP Swoole example
+
 *December 21,2021* - Added Openswoole to the docker image and some examples of using TCP service
 
 *December 6, 2021* - Breaking updates, you need to include the database drivers as you require them now.
@@ -313,6 +315,7 @@ function add ($a,$b) {
 ### Change Log
 
 ```
+2021-12-26 Fixes for swagger & http openswoole example
 2021-12-21 Added openswoole to the docker image & example of use
 2021-12-06 Version 2.0.0 released with database modules and orm separated out for better support
 2021-06-13 Added docker support and better logging

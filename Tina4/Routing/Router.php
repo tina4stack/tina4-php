@@ -32,10 +32,15 @@ class Router extends Data
      * @param string|null $method
      * @param string|null $url
      * @param Config|null $config
-     * @return RouterResponse
-     * @throws \Twig\Error\LoaderError
+     * @param array $customHeaders Used with different webservers when running headless
+     * @param null $customRequest
+     * @return RouterResponse|null
+     * @throws LoaderError
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
+     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws \ReflectionException
      */
-    final public function resolveRoute(?string $method, ?string $url, ?Config $config): ?RouterResponse
+    final public function resolveRoute(?string $method, ?string $url, ?Config $config, array $customHeaders=[], $customRequest=null): ?RouterResponse
     {
 
         $this->config = $config;
@@ -84,7 +89,7 @@ class Router extends Data
         }
 
         //THIRD ROUTING
-        if ($routerResponse = $this->handleRoutes($method, $url)) {
+        if ($routerResponse = $this->handleRoutes($method, $url, $customHeaders, $customRequest)) {
             if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
                 $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, "");
             }
@@ -298,7 +303,16 @@ class Router extends Data
         return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName, "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
     }
 
-    public function handleRoutes($method, $url): ?RouterResponse
+    /**
+     * Handles the routes
+     * @param $method
+     * @param $url
+     * @param array $customHeaders
+     * @param null $customRequest
+     * @return RouterResponse|null
+     * @throws \ReflectionException
+     */
+    public function handleRoutes($method, $url, array $customHeaders=[], $customRequest=null): ?RouterResponse
     {
         Debug::message("Looking in routes for {$method} - {$url}", TINA4_LOG_DEBUG);
         global $arrRoutes;
@@ -321,10 +335,19 @@ class Router extends Data
                 $doc = $reflection->getDocComment();
                 preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
 
-                $params = $this->getParams($response, $route["inlineParamsToRequest"]);
+                $params = $this->getParams($response, $route["inlineParamsToRequest"], $customRequest);
 
-                $requestHeaders = getallheaders();
+                if (function_exists("getallheaders")) {
+                    $requestHeaders = getallheaders();
+                }  else {
+                    $requestHeaders = $customHeaders;
+                }
                 if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
+                    if ($this->config->getAuthentication() === null) {
+                        $auth = new Auth();
+                        $this->config->setAuthentication($auth);
+                    }
+
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken(urldecode($requestHeaders["Authorization"]))) {
                         //call closure with & without params
                         $this->config->setAuthentication(null); //clear the auth
@@ -336,6 +359,10 @@ class Router extends Data
 
                 if ($result === null) {
                     if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
+                        if ($this->config->getAuthentication() === null) {
+                            $auth = new Auth();
+                            $this->config->setAuthentication($auth);
+                        }
                         //Check for the formToken request variable
                         if (!$this->config->getAuthentication()->validToken($_REQUEST["formToken"])) {
                             return new RouterResponse("", HTTP_FORBIDDEN, $headers);
@@ -423,11 +450,12 @@ class Router extends Data
      * Get the params
      * @param $response
      * @param false $inlineToRequest
+     * @param bool $customRequest
      * @return array
      */
-    public function getParams($response, $inlineToRequest = false): array
+    public function getParams($response, $inlineToRequest = false, $customRequest=false): array
     {
-        $request = new Request(file_get_contents("php://input"));
+        $request = new Request(file_get_contents("php://input"), $customRequest);
 
         if ($inlineToRequest) { //Pull the inlineParams into the request by resetting the params
             $request->inlineParams = $this->params;
