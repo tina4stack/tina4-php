@@ -55,9 +55,10 @@ class Auth extends Data
 
         //Check security
 
-        if (!file_exists($this->documentRoot . "secrets")) {
+        if (!file_exists($this->documentRoot . "secrets/private.key")) {
             $this->generateSecureKeys();
         }
+
 
         if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess")) {
             file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
@@ -107,18 +108,20 @@ class Auth extends Data
      */
     public function generateSecureKeys(): bool
     {
+
         Debug::message("Generating Auth keys - {$this->documentRoot}secrets");
-        if (file_exists($this->documentRoot . DIRECTORY_SEPARATOR . "secrets")) {
+        if (file_exists($this->documentRoot . "secrets/private.key")) {
             Debug::message("Secrets folder exists already, please remove");
             return false;
         }
 
-        if (!mkdir($concurrentDirectory = $this->documentRoot . DIRECTORY_SEPARATOR . "secrets") && !is_dir($concurrentDirectory)) {
+        if (!file_exists($this->documentRoot . "secrets") && !mkdir($concurrentDirectory = $this->documentRoot . DIRECTORY_SEPARATOR . "secrets") && !is_dir($concurrentDirectory)) {
             throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
         }
-        `ssh-keygen -t rsa -b 1024 -m PEM -f secrets/private.key -q -N ""`;
-        `chmod 600 secrets/private.key`;
-        `openssl rsa -in secrets/private.key -pubout -outform PEM -out secrets/public.pub`;
+
+        `ssh-keygen -t rsa -b 1024 -m PEM -f {$this->documentRoot}secrets/private.key -q -N ""`;
+        `chmod 600 {$this->documentRoot}secrets/private.key`;
+        `openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub`;
         if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore")) {
             file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore", "*");
         }
