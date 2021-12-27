@@ -280,7 +280,10 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUME
             }
         }
     }
-    copy(TINA4_PROJECT_ROOT . ".htaccess", TINA4_DOCUMENT_ROOT . ".htaccess");
+
+    if (file_exists(TINA4_PROJECT_ROOT . ".htaccess")) {
+        copy(TINA4_PROJECT_ROOT . ".htaccess", TINA4_DOCUMENT_ROOT . ".htaccess");
+    }
 }
 
 //Copy the bin folder if the vendor one has changed
@@ -298,7 +301,9 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
 
 //Add the icon file for making it look pretty""
 if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
-    copy(TINA4_PROJECT_ROOT . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
+    if (file_exists(TINA4_PROJECT_ROOT . "favicon.ico")) {
+        copy(TINA4_PROJECT_ROOT . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
+    }
 }
 
 //Initialize the Cache
