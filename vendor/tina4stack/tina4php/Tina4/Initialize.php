@@ -148,9 +148,9 @@ if (!defined("TINA4_DEBUG_LEVEL")) {
 }
 
 Debug::$logLevel = TINA4_DEBUG_LEVEL;
-Debug::message("Project Root: " . TINA4_PROJECT_ROOT);
-Debug::message("Document Root: " . TINA4_DOCUMENT_ROOT);
-Debug::message("SubFolder: " . TINA4_SUB_FOLDER);
+Debug::$logLevel = ("Project Root: " . TINA4_PROJECT_ROOT);
+Debug::$logLevel = ("Document Root: " . TINA4_DOCUMENT_ROOT);
+Debug::$logLevel = ("SubFolder: " . TINA4_SUB_FOLDER);
 
 if (!defined("TINA4_DEBUG")) {
     define("TINA4_DEBUG", false);

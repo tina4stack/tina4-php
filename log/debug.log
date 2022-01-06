@@ -102,3 +102,205 @@
 2022-01-06 08:22:17: URL Last Resort GET - /images/404.png
 2022-01-06 08:22:17: TINA4 Filename: /images/404.png
 2022-01-06 08:22:17: Looking for file H:\Test\tina4-php\src\public\images\404.png
+2022-01-06 08:55:44: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:55:44: Document Root: H:\Test\tina4-php\
+2022-01-06 08:55:44: SubFolder: 
+2022-01-06 08:55:44: GET - /
+2022-01-06 08:55:44: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:55:44: Looking in routes for GET - /
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /test/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /api/cars/
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /migrate/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /migrations/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /migration/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /cache/clear/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /migrate/create/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /migrations/create/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /migration/create/
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /phpinfo/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching // -> /swagger/json.json/
+2022-01-06 08:55:44: URL Last Resort GET - /index
+2022-01-06 08:55:44: TINA4 Filename: /index
+2022-01-06 08:55:44: Looking for file H:\Test\tina4-php\src\templates\index.twig
+2022-01-06 08:55:44: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:55:44: Document Root: H:\Test\tina4-php\
+2022-01-06 08:55:44: SubFolder: 
+2022-01-06 08:55:44: GET - /css/stylesheet.css
+2022-01-06 08:55:44: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:55:44: Looking in routes for GET - /css/stylesheet.css
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /test/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /api/cars/
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /migrate/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /migrations/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /migration/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /cache/clear/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /migrate/create/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /migrations/create/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /migration/create/
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> POST
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /phpinfo/
+2022-01-06 08:55:44: Method match GET -> GET
+2022-01-06 08:55:44: Matching /css/stylesheet.css/ -> /swagger/json.json/
+2022-01-06 08:55:44: URL Last Resort GET - /css/stylesheet.css
+2022-01-06 08:55:44: TINA4 Filename: /css/stylesheet.css
+2022-01-06 08:55:44: Looking for file css/stylesheet.css
+2022-01-06 08:55:44: Returning File not found css/stylesheet.css
+2022-01-06 08:55:47: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:55:47: Document Root: H:\Test\tina4-php\
+2022-01-06 08:55:47: SubFolder: 
+2022-01-06 08:55:47: POST - /api/characters
+2022-01-06 08:55:47: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:55:47: Looking in routes for POST - /api/characters
+2022-01-06 08:55:47: Method match POST -> GET
+2022-01-06 08:55:47: Method match POST -> GET
+2022-01-06 08:55:47: Method match POST -> POST
+2022-01-06 08:55:47: Matching /api/characters/ -> /api/characters/
+2022-01-06 08:55:47: Matching /api/characters/ with /api/characters/
+2022-01-06 08:55:47: testForm=1&formToken=eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJmb3JtTmFtZSI6bnVsbCwiZXhwaXJlcyI6MTY0MTQ1OTk0NH0.h3hOeGqUG3hfQpKhArhJxs171zkTXQilzOecfZpDb_0u50xbAASeJn69T4IhoAzLD2nQEHJYtmgaoJJ8mV8g0MHp-1kGWd-DSknG6MSo4EnKblhzv2Z-I1JZ6KHeLtrwa2qgtU4OK7CvOsMD-Yq2w9Rp8QyAYWA6NH-ZT7xdnpI
+2022-01-06 08:55:47: Validating token
+2022-01-06 08:55:47: Getting token payload
+2022-01-06 08:55:52: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:55:52: Document Root: H:\Test\tina4-php\
+2022-01-06 08:55:52: SubFolder: 
+2022-01-06 08:55:52: GET - /
+2022-01-06 08:55:52: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:55:52: Looking in routes for GET - /
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /test/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /api/cars/
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /migrate/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /migrations/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /migration/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /cache/clear/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /migrate/create/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /migrations/create/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /migration/create/
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /phpinfo/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching // -> /swagger/json.json/
+2022-01-06 08:55:52: URL Last Resort GET - /index
+2022-01-06 08:55:52: TINA4 Filename: /index
+2022-01-06 08:55:52: Looking for file H:\Test\tina4-php\src\templates\index.twig
+2022-01-06 08:55:52: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:55:52: Document Root: H:\Test\tina4-php\
+2022-01-06 08:55:52: SubFolder: 
+2022-01-06 08:55:52: GET - /css/stylesheet.css
+2022-01-06 08:55:52: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:55:52: Looking in routes for GET - /css/stylesheet.css
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /test/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /api/cars/
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /migrate/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /migrations/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /migration/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /cache/clear/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /migrate/create/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /migrations/create/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /migration/create/
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> POST
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /phpinfo/
+2022-01-06 08:55:52: Method match GET -> GET
+2022-01-06 08:55:52: Matching /css/stylesheet.css/ -> /swagger/json.json/
+2022-01-06 08:55:52: URL Last Resort GET - /css/stylesheet.css
+2022-01-06 08:55:52: TINA4 Filename: /css/stylesheet.css
+2022-01-06 08:55:52: Looking for file css/stylesheet.css
+2022-01-06 08:55:52: Returning File not found css/stylesheet.css
+2022-01-06 08:56:04: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:56:04: Document Root: H:\Test\tina4-php\
+2022-01-06 08:56:04: SubFolder: 
+2022-01-06 08:56:04: GET - /test
+2022-01-06 08:56:04: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:56:04: Looking in routes for GET - /test
+2022-01-06 08:56:04: Method match GET -> GET
+2022-01-06 08:56:04: Matching /test/ -> /test/
+2022-01-06 08:56:04: Matching /test/ with /test/
+2022-01-06 08:56:04: 
+2022-01-06 08:56:05: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:56:05: Document Root: H:\Test\tina4-php\
+2022-01-06 08:56:05: SubFolder: 
+2022-01-06 08:56:05: GET - /css/stylesheet.css
+2022-01-06 08:56:05: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:56:05: Looking in routes for GET - /css/stylesheet.css
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /test/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /api/cars/
+2022-01-06 08:56:05: Method match GET -> POST
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /migrate/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /migrations/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /migration/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /cache/clear/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /migrate/create/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /migrations/create/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /migration/create/
+2022-01-06 08:56:05: Method match GET -> POST
+2022-01-06 08:56:05: Method match GET -> POST
+2022-01-06 08:56:05: Method match GET -> POST
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /phpinfo/
+2022-01-06 08:56:05: Method match GET -> GET
+2022-01-06 08:56:05: Matching /css/stylesheet.css/ -> /swagger/json.json/
+2022-01-06 08:56:05: URL Last Resort GET - /css/stylesheet.css
+2022-01-06 08:56:05: TINA4 Filename: /css/stylesheet.css
+2022-01-06 08:56:05: Looking for file css/stylesheet.css
+2022-01-06 08:56:05: Returning File not found css/stylesheet.css
