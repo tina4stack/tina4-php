@@ -1,0 +1,6 @@
+/.idea/
+/tina4-php-debug.iml
+/vendor/
+/tests/junit.xml
+/log/
+/phpmetrics/

@@ -1,5 +1,0 @@
-\Tina4\Get::add(&quot;/login&quot;, function (\Tina4\Response $response, \Tina4\Request $request){
-&nbsp;
-    return $response (\Tina4\renderTemplate(&quot;screens/login.twig&quot;, [&quot;request&quot; =&gt; $request-&gt;params]), HTTP_OK, TEXT_HTML);
-&nbsp;
-});

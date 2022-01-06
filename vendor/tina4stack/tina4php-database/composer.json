@@ -1,0 +1,43 @@
+{
+  "name": "tina4stack/tina4php-database",
+  "description": "Tina4 PHP Database Module",
+  "license": "MIT",
+  "autoload": {
+    "files": [
+      "Tina4/constants.php",
+      "Tina4/Interfaces/DataBase.php",
+      "Tina4/Interfaces/DataBaseMetaData.php",
+      "Tina4/DataBaseCore.php",
+      "Tina4/DataError.php",
+      "Tina4/DataField.php",
+      "Tina4/DataRecord.php",
+      "Tina4/DataResult.php",
+      "Tina4/SQL.php"
+    ],
+    "classmap": [
+      "Tina4/"
+    ],
+    "psr-4": {
+      "Tina4\\": [
+        "Tina4/"
+      ]
+    }
+  },
+  "require-dev": {
+    "roave/security-advisories": "dev-latest",
+    "phpunit/phpunit": "^9",
+    "overtrue/phplint": "^2.0"
+  },
+  "scripts": {
+    "test": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml",
+    "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
+    "start": "php -S localhost:7146 index.php"
+  },
+  "config": {
+    "process-timeout": 0
+  },
+  "require": {
+    "ext-json": "*",
+    "tina4stack/tina4php-debug": "^2.0"
+  }
+}

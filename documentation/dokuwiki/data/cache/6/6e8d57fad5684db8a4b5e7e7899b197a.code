@@ -1,6 +1,0 @@
-<span class="kw2">&lt;?php</span>
-&nbsp;
-<span class="kw2">global</span> <span class="re0">$DBA</span><span class="sy0">;</span>
-&nbsp;
-<span class="co1">//Firebird </span>
-<span class="re0">$DBA</span> <span class="sy0">=</span> <span class="kw2">new</span> \Tina4\DataFirebird<span class="br0">&#40;</span><span class="st0">&quot;localhost:/home/database/FIREBIRD.DB&quot;</span><span class="sy0">,</span> <span class="st0">&quot;sysdba&quot;</span><span class="sy0">,</span> <span class="st0">&quot;masterkey&quot;</span><span class="br0">&#41;</span><span class="sy0">;</span>

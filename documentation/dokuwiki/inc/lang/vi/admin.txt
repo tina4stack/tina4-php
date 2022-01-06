@@ -1,3 +1,0 @@
-====== Quản lý ======
-
-Dưới đây bạn có thể tìm thấy một danh sách các tác vụ quản lý có sẵn trong DokuWiki.

@@ -1,4 +1,0 @@
-<span class="sc2">&lt;<a href="http://december.com/html/4/element/form.html"><span class="kw2">form</span></a> <span class="kw3">action</span><span class="sy0">=</span><span class="st0">&quot;/post-route&quot;</span> <span class="kw3">method</span><span class="sy0">=</span><span class="st0">&quot;post&quot;</span>&gt;</span>
-   <span class="sc2">&lt;<a href="http://december.com/html/4/element/button.html"><span class="kw2">button</span></a>&gt;</span>Submit<span class="sc2">&lt;<span class="sy0">/</span><a href="http://december.com/html/4/element/button.html"><span class="kw2">button</span></a>&gt;</span>
-   {{ &quot;reason for token&quot; | formToken | raw }}
-<span class="sc2">&lt;<span class="sy0">/</span><a href="http://december.com/html/4/element/form.html"><span class="kw2">form</span></a>&gt;</span>

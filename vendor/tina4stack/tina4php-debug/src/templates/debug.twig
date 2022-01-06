@@ -1,0 +1,70 @@
+<html>
+<body>
+<style>
+    h5 {
+        background: lightblue;
+        margin: 0px;
+        padding: 5px;
+        color: darkorchid;
+
+    }
+
+    .body {
+        display: block;
+        margin: 0;
+    }
+
+    .debugLog {
+        font-family: Helvetica;
+        position: relative;
+        left: 0px;
+        width: 100%;
+        background: white;
+        padding: 0px;
+        border: 2px solid deepskyblue;
+        margin: 0px;
+    }
+
+    .debugLog pre {
+        padding-left: 5px;
+    }
+
+    .code {
+        border: 1px solid red;
+        background: ghostwhite;
+        padding: 2px;
+        margin: 10px;
+    }
+
+    .code .lineNo {
+        background: white;
+        padding: 1px;
+    }
+
+    .code .selected {
+        background: yellow;
+        display: inline-block;
+        padding: 0px;
+        width: 100%;
+    }
+
+    .error {
+        display: block;
+        color: whitesmoke;
+        background: lightsteelblue;
+        padding: 10px;
+        margin: 0;
+    }
+</style>
+<div class="debugLog">
+    <h5>Error Log - You will see this message because .env contains <b style="color:darkblue">TINA4_DEBUG=true</b>,
+        please make sure this setting is off in production</h5>
+    {% for error in errors %}
+        <span class="error">{{ error.time }}: {{ error.message | raw }} in {{ error.file }} ({{ error.line }}) <a href="phpstorm://{{ error.file }}:{{ error.line }}">Edit</a></span>
+        <pre class="code">
+{{ error.codeSnippet| raw }}
+        </pre>
+    {% endfor %}
+</div>
+</body>
+</html>

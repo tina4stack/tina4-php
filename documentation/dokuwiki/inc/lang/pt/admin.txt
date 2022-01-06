@@ -1,3 +1,0 @@
-====== Administração ======
-
-Abaixo você pode encontrar uma lista de tarefas de administrativas disponíveis no DokuWiki.

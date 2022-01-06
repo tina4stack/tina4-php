@@ -1,6 +1,0 @@
----json
-{
-    "canonical":"",
-    "title":"A [[https://tina4.com/dokuwiki?id=first-steps|Tina4]] Tina4 - This is not a Framework.",
-}
----

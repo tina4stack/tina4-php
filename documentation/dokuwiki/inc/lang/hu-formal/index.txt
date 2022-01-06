@@ -1,3 +1,0 @@
-====== Oldaltérkép (tartalom) ======
-
-Az összes elérhető oldal [[doku>hu:namespaces|névterek]] szerint rendezett oldaltérképe.

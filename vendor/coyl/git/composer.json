@@ -1,0 +1,33 @@
+{
+    "name": "coyl/git",
+    "description": "PHP library for manipulations on git repository. Based on kbjr/Git.php and it's forks",
+
+    "keywords": [
+        "git",
+        "php-git",
+        "git-client"
+    ],
+
+    "homepage": "https://github.com/coyl/Git.php",
+    "type": "library",
+
+    "authors": [
+        {
+            "name": "Vasil coylOne Kulakov",
+            "email": "iam@vasiliy.pro",
+            "homepage": "http://github.com/coyl"
+        }
+    ],
+
+    "autoload": {
+        "psr-4": { "": "src/" }
+    },
+
+    "require": {
+        "php": ">=5.4"
+    },
+
+    "require-dev": {
+        "phpunit/phpunit": "~3.7.0"
+    }
+}

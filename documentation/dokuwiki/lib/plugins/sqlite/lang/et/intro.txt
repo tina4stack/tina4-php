@@ -1,3 +1,0 @@
-====== SQLite Access ====== 
-
-See vaade laseb sul vahetult liidestuda olemasolevate SQLite andmebaasidega. Lihtsalt vali sisukorrast andmebaasid ning sisesta oma SQL käsud.

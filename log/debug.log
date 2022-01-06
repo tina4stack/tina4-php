@@ -1,0 +1,104 @@
+2022-01-06 08:19:48: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:19:48: Document Root: H:\Test\tina4-php\
+2022-01-06 08:19:48: SubFolder: 
+2022-01-06 08:19:48: Generating Auth keys - H:\Test\tina4-php\secrets
+2022-01-06 08:19:48: Server running on http://localhost:7145
+2022-01-06 08:21:06: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:21:06: Document Root: H:\Test\tina4-php\
+2022-01-06 08:21:06: SubFolder: 
+2022-01-06 08:21:06: GET - /
+2022-01-06 08:21:06: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:21:06: Looking in routes for GET - /
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /migrate/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /migrations/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /migration/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /cache/clear/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /migrate/create/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /migrations/create/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /migration/create/
+2022-01-06 08:21:06: Method match GET -> POST
+2022-01-06 08:21:06: Method match GET -> POST
+2022-01-06 08:21:06: Method match GET -> POST
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /phpinfo/
+2022-01-06 08:21:06: Method match GET -> GET
+2022-01-06 08:21:06: Matching // -> /swagger/json.json/
+2022-01-06 08:21:06: URL Last Resort GET - /index
+2022-01-06 08:21:06: TINA4 Filename: /index
+2022-01-06 08:21:06: Looking for file index
+2022-01-06 08:21:06: Returning File not found index
+2022-01-06 08:21:06: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:21:06: Document Root: H:\Test\tina4-php\
+2022-01-06 08:21:06: SubFolder: 
+2022-01-06 08:21:06: GET - /src/public/images/404.png
+2022-01-06 08:21:06: Calling static trait method Tina4\Utility::getMimeType is deprecated, it should only be called on a class using the trait
+[H:\Test\tina4-php\vendor\tina4stack\tina4php\Tina4\Routing\Router.php:174]
+2022-01-06 08:21:06: GET - H:\Test\tina4-php\src\public\images\404.png
+2022-01-06 08:22:17: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:22:17: Document Root: H:\Test\tina4-php\
+2022-01-06 08:22:17: SubFolder: 
+2022-01-06 08:22:17: GET - /
+2022-01-06 08:22:17: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:22:17: Looking in routes for GET - /
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /migrate/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /migrations/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /migration/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /cache/clear/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /migrate/create/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /migrations/create/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /migration/create/
+2022-01-06 08:22:17: Method match GET -> POST
+2022-01-06 08:22:17: Method match GET -> POST
+2022-01-06 08:22:17: Method match GET -> POST
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /phpinfo/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching // -> /swagger/json.json/
+2022-01-06 08:22:17: URL Last Resort GET - /index
+2022-01-06 08:22:17: TINA4 Filename: /index
+2022-01-06 08:22:17: Looking for file index
+2022-01-06 08:22:17: Returning File not found index
+2022-01-06 08:22:17: Project Root: H:\Test\tina4-php\vendor\tina4stack\tina4php\
+2022-01-06 08:22:17: Document Root: H:\Test\tina4-php\
+2022-01-06 08:22:17: SubFolder: 
+2022-01-06 08:22:17: GET - /images/404.png
+2022-01-06 08:22:17: TINA4: Twig Paths - Array(    [0] => src\templates    [1] => src\public    [2] => src\assets    [3] => src\templates\snippets)
+2022-01-06 08:22:17: Looking in routes for GET - /images/404.png
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /migrate/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /migrations/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /migration/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /cache/clear/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /migrate/create/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /migrations/create/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /migration/create/
+2022-01-06 08:22:17: Method match GET -> POST
+2022-01-06 08:22:17: Method match GET -> POST
+2022-01-06 08:22:17: Method match GET -> POST
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /phpinfo/
+2022-01-06 08:22:17: Method match GET -> GET
+2022-01-06 08:22:17: Matching /images/404.png/ -> /swagger/json.json/
+2022-01-06 08:22:17: URL Last Resort GET - /images/404.png
+2022-01-06 08:22:17: TINA4 Filename: /images/404.png
+2022-01-06 08:22:17: Looking for file H:\Test\tina4-php\src\public\images\404.png

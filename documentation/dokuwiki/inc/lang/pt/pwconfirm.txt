@@ -1,9 +1,0 @@
-Olá @FULLNAME@!
-
-Alguém solicitou uma nova senha para o seu perfil @TITLE@ em @DOKUWIKIURL@
-
-Se não foi você que solicitou então ignore esta mensagem.
-
-Senão, para confirmar o pedido, siga este link:
-
-@CONFIRM@

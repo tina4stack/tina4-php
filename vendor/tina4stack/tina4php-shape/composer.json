@@ -1,0 +1,32 @@
+{
+  "name": "tina4stack/tina4php-shape",
+  "description": "Tina4 PHP HTML Shape Language",
+  "license": "MIT",
+  "autoload": {
+    "files": [
+      "Tina4/HTMLElement.php",
+      "Tina4/Initialize.php"
+    ],
+    "classmap": [
+      "Tina4/"
+    ],
+    "psr-4": {
+      "Tina4\\": [
+        "Tina4/"
+      ]
+    }
+  },
+  "require-dev": {
+    "roave/security-advisories": "dev-latest",
+    "phpunit/phpunit": "^9",
+    "overtrue/phplint": "^2.0"
+  },
+  "scripts": {
+    "test": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml",
+    "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
+    "start": "php -S localhost:7146 index.php"
+  },
+  "config": {
+    "process-timeout": 0
+  }
+}

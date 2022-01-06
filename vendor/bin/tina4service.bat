@@ -1,0 +1,4 @@
+@ECHO OFF
+setlocal DISABLEDELAYEDEXPANSION
+SET BIN_TARGET=%~dp0/tina4service
+php "%BIN_TARGET%" %*

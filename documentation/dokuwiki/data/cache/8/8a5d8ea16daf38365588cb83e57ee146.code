@@ -1,6 +1,0 @@
-<span class="br0">&#91;</span>Email<span class="br0">&#93;</span>
-SMTP_USERNAME<span class="sy0">=</span><span class="st0">&quot;hello@example.com&quot;</span>
-SMTP_PASSWORD<span class="sy0">=</span><span class="st0">&quot;your-mail-password&quot;</span>
-SMTP_HOST<span class="sy0">=</span><span class="st0">&quot;mail.example.com&quot;</span>
-SMTP_PORT<span class="sy0">=</span><span class="nu0">587</span>
-SMTP_USE_PHPMAILER<span class="sy0">=</span><span class="kw4">true</span>

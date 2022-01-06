@@ -1,3 +1,0 @@
-  composer require tina4stack<span class="sy0">/</span>tina4php
-  composer <span class="kw3">exec</span> tina4 initialize:run
-  composer start

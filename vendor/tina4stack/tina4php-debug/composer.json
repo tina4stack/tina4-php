@@ -1,0 +1,31 @@
+{
+  "name": "tina4stack/tina4php-debug",
+  "description": "Tina4 PHP Debug Functionality",
+  "license": "MIT",
+  "autoload": {
+    "files": [
+      "Tina4/Initialize.php"
+    ],
+    "classmap": [
+      "Tina4/"
+    ],
+    "psr-4": {
+      "Tina4\\": [
+        "Tina4/"
+      ]
+    }
+  },
+  "require-dev": {
+    "roave/security-advisories": "dev-latest",
+    "phpunit/phpunit": "^9",
+    "overtrue/phplint": "^2.0"
+  },
+  "scripts": {
+    "test": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml",
+    "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4"
+  },
+  "require": {
+    "psr/log": "^1.1",
+    "twig/twig": "^3.3"
+  }
+}

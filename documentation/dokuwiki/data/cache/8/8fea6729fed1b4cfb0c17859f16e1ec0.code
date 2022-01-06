@@ -1,8 +1,0 @@
-zend_extension<span class="sy0">=</span>xdebug<span class="sy0">.</span>so
-xdebug<span class="sy0">.</span>remote_autostart <span class="sy0">=</span> <span class="nu0">1</span>
-xdebug<span class="sy0">.</span>remote_enable <span class="sy0">=</span> <span class="nu0">1</span>
-xdebug<span class="sy0">.</span>remote_handler <span class="sy0">=</span> dbgp
-xdebug<span class="sy0">.</span>remote_host <span class="sy0">=</span> 127<span class="sy0">.</span>0<span class="sy0">.</span>0<span class="sy0">.</span>1
-xdebug<span class="sy0">.</span>remote_log <span class="sy0">=</span> <span class="sy0">/</span>tmp<span class="sy0">/</span>xdebug_remote<span class="sy0">.</span><a href="http://www.php.net/log"><span class="kw3">log</span></a>
-xdebug<span class="sy0">.</span>remote_mode <span class="sy0">=</span> req
-xdebug<span class="sy0">.</span>remote_port <span class="sy0">=</span> <span class="nu0">9005</span> <span class="co2">#if you want to change the port you can change </span>
