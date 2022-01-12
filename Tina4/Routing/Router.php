@@ -342,7 +342,8 @@ class Router extends Data
                 }  else {
                     $requestHeaders = $customHeaders;
                 }
-                if (in_array("secure", $annotations[1], true) || isset($requestHeaders["Authorization"])) {
+
+                if (in_array("secure", $annotations[1], true) || (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
                     if ($this->config->getAuthentication() === null) {
                         $auth = new Auth();
                         $this->config->setAuthentication($auth);
