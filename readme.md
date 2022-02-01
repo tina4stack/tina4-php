@@ -7,6 +7,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*February 1, 2022 - Added docker support for Postgres & MySQL
+
 *December 26,2021* - Fixes for Swagger Examples using new DataField & HTTP Swoole example
 
 *December 21,2021* - Added Openswoole to the docker image and some examples of using TCP service
@@ -25,6 +27,8 @@ Database support table
 | MySQL   | ```composer require tina4stack/tina4php-mysql ```        |
 | Firebird   | ```composer require tina4stack/tina4php-firebird```        |
 | MongoDB   | ```composer require tina4stack/tina4php-mongodb```        |
+| PostgreSQL   | ```composer require tina4stack/tina4php-postgresql```        |
+
 
 *June 13, 2021* - Adding docker support
 
@@ -342,6 +346,12 @@ docker run --rm -v %cd%:/data phpdoc/phpdoc:3 -d Tina4
 
 ```
 docker build . -t tina4stack/php
+```
+
+### Deploy the docker
+
+```
+ docker push tina4stack/php
 ```
 ### Jquery validate cheat sheet
 https://gist.github.com/rhacker/3550309

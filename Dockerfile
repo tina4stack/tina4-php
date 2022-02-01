@@ -14,8 +14,17 @@ RUN docker-php-ext-install intl
 RUN apt-get install -y libtidy-dev && docker-php-ext-install tidy
 RUN apt-get install -y libxml2-dev && docker-php-ext-install soap
 RUN apt-get install -y libzip-dev && docker-php-ext-install zip
-RUN apt-get install -y libzip-dev && docker-php-ext-install bcmath
-RUN apt-get install -y libzip-dev && docker-php-ext-install opcache
+RUN docker-php-ext-install bcmath
+RUN docker-php-ext-install opcache
+
+#install postgres
+RUN apt-get install -y libpq-dev \
+    && docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
+    && docker-php-ext-install pdo pdo_pgsql pgsql
+
+#install mysql
+RUN docker-php-ext-install mysqli
+
 #install firebird extension and firebird support
 RUN apt-get install -y firebird-dev
 RUN git clone https://github.com/FirebirdSQL/php-firebird.git
