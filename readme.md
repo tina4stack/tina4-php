@@ -7,7 +7,7 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
-*February 1, 2022 - Added docker support for Postgres & MySQL
+*February 1, 2022* - Added docker support for Postgres & MySQL
 
 *December 26,2021* - Fixes for Swagger Examples using new DataField & HTTP Swoole example
 
