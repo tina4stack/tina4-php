@@ -64,7 +64,7 @@ class Migration extends Data
                 . "passed integer default 0,"
                 . "primary key (migration_id))";
 
-            if (get_class($this->DBA) === "Tina4\Postgresql") {
+            if (get_class($this->DBA) === "Tina4\DataPostgresql") {
                 $sql = str_replace("blob", "bytea", $sql);
             }
             $this->DBA->exec($sql);
