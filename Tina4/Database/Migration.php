@@ -56,12 +56,18 @@ class Migration extends Data
         $this->DBA->autoCommit(false);
 
         if (!$this->DBA->tableExists("tina4_migration")) {
-            $this->DBA->exec("create table tina4_migration ("
+
+            $sql = "create table tina4_migration ("
                 . "migration_id varchar (14) not null,"
                 . "description varchar (1000) default '',"
                 . "content blob,"
                 . "passed integer default 0,"
-                . "primary key (migration_id))");
+                . "primary key (migration_id))";
+
+            if (get_class($this->DBA) === "Tina4\Postgresql") {
+                $sql = str_replace("blob", "bytea", $sql);
+            }
+            $this->DBA->exec($sql);
             $this->DBA->commit();
         }
     }
@@ -140,7 +146,7 @@ class Migration extends Data
                 $transId = $this->DBA->startTransaction();
 
                 $sqlInsert = "insert into tina4_migration (migration_id, description, content, passed)
-                                values ('{$migrationId}', '{$description}', ?, 0)";
+                                values ('{$migrationId}', '{$description}', ".$this->DBA->getQueryParam("1", 1).", 0)";
 
 
                 $this->DBA->exec($sqlInsert, substr($content, 0, 10000));
@@ -152,7 +158,7 @@ class Migration extends Data
                     $runsql = true;
                 } elseif ($record->passed === "1" || $record->passed == 1) {
                     //Update the migration with the latest copy
-                    $sqlUpdate = "update tina4_migration set content =? where migration_id = '{$migrationId}'";
+                    $sqlUpdate = "update tina4_migration set content = ".$this->DBA->getQueryParam("1", 1)." where migration_id = '{$migrationId}'";
                     $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
                     $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
                     $runsql = false;
