@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "476d1812433526acb425d10abe80d7b0",
+    "content-hash": "adc62ee4f7135b3e69560c76f06b5be8",
     "packages": [
         {
             "name": "coyl/git",
@@ -899,14 +899,14 @@
                     "Tina4/DataResult.php",
                     "Tina4/SQL.php"
                 ],
-                "classmap": [
-                    "Tina4/"
-                ],
                 "psr-4": {
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                }
+                },
+                "classmap": [
+                    "Tina4/"
+                ]
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
