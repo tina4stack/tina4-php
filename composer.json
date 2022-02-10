@@ -45,8 +45,8 @@
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
-        "tina4stack/tina4php-database": "^1.0",
-        "tina4stack/tina4php-orm": "^1.0"
+        "tina4stack/tina4php-database": "^2.0",
+        "tina4stack/tina4php-orm": "^2.0"
     },
     "bin": [
         "bin/tina4",
@@ -72,6 +72,6 @@
         "roave/security-advisories": "dev-latest",
         "phpunit/phpunit": "^9",
         "overtrue/phplint": "^2.0",
-        "tina4stack/tina4php-sqlite3": "^v1.0.1"
+        "tina4stack/tina4php-sqlite3": "^v2.0.0"
     }
 }
