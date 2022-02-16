@@ -428,3 +428,12 @@ function openReport(sreport){
         window.alert("Sorry , unable to print a report according to your selection!");
     }
 }
+
+function getRoute(loadURL, callback) {
+    $.ajax({
+        method: 'GET',
+        url: loadURL,
+    }).done(function (data) {
+        callback(data);
+    });
+}
