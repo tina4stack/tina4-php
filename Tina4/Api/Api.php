@@ -32,7 +32,9 @@ class Api
      */
     public function __construct(?string $baseURL, string $authHeader = "")
     {
-        $this->baseURL = $baseURL;
+        if (!empty($baseURL)) {
+            $this->baseURL = $baseURL;
+        }
         $this->authHeader = $authHeader;
     }
 
@@ -42,13 +44,15 @@ class Api
      * @param string $requestType
      * @param string|null $body
      * @param string $contentType
+     * @param array $customHeaders
+     * @param array $curlOptions
      * @return array|mixed
      * tests tina4
      *   assert ("/book")['docs'][0]['name'] === "The Fellowship Of The Ring", "API Get request"
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
      *   assert is_array("/book") === true, "This is not an array"
      */
-    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*", $customHeaders=[]): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*", $customHeaders=[], $curlOptions=[]): array
     {
         try {
             $headers = [];
@@ -74,9 +78,16 @@ class Api
             curl_setopt($curlRequest, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($curlRequest, CURLOPT_FOLLOWLOCATION, 1);
 
+            if (!empty($curlOptions)) {
+                foreach ($curlOptions as $option => $optionValue) {
+                    curl_setopt($curlRequest, $option, $optionValue);
+                }
+            }
+
             if (!empty($body)) {
                 curl_setopt($curlRequest, CURLOPT_POSTFIELDS, $body);
             }
+
             $curlResult = curl_exec($curlRequest); //execute the Curl request
             $curlInfo = curl_getinfo($curlRequest); //Assign the response to a variable
             $curlError = curl_error($curlRequest);
