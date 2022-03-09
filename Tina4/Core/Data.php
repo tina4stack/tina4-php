@@ -17,6 +17,7 @@ use Composer\Autoload\ClassLoader;
 class Data
 {
 
+    /** @var \Tina4\DataBase $DBA */
     public $DBA;
     public $cache;
     public $projectRoot;
