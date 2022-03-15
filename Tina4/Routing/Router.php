@@ -17,6 +17,7 @@ use Twig\Error\LoaderError;
 class Router extends Data
 {
     use Utility;
+
     /**
      * @var string Used to check if path matches route path in matchPath()
      */
@@ -171,7 +172,7 @@ class Router extends Data
             return false;
         }
         $fileName = preg_replace('#/+#', '/', $fileName);
-        $mimeType = Utility::getMimeType($fileName);
+        $mimeType = self::getMimeType($fileName);
 
         if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
             return $this->rangeDownload($fileName);
