@@ -32,8 +32,8 @@ class Request
         if (!empty($customRequest->post))
         {
             foreach ($customRequest->post as $key => $value) {
-                $_REQUEST[$key] = $value;
-                $_POST[$key] = $value;
+                $_REQUEST[$key] = filter_var($value, FILTER_SANITIZE_STRING);
+                $_POST[$key] = filter_var($value, FILTER_SANITIZE_STRING);
             }
         }
         if (!empty($customRequest->files)) {
@@ -63,6 +63,9 @@ class Request
         $this->data = (object)[];
         if (!empty($_REQUEST)) {
             $this->params = $_REQUEST;
+            foreach ($this->params as $key => $value) {
+                $this->params[$key] = filter_var($value, FILTER_SANITIZE_STRING);
+            }
         }
 
         if (!empty($_FILES)) {
@@ -85,7 +88,7 @@ class Request
             }
         } else {
             foreach ($_REQUEST as $key => $value) {
-                $this->data->{$key} = $value;
+                $this->data->{$key} = filter_var($value, FILTER_SANITIZE_STRING);
             }
         }
     }
