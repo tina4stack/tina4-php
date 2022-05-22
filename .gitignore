@@ -46,3 +46,4 @@ test.db
 /test.db-wal
 /TINA4_DOCUMENT_ROOT/log/debug.log
 /bin/services.data
+/build/

@@ -56,6 +56,7 @@
         "tina4": "@php bin/tina4",
         "tina4service": "tina4service",
         "test": "@tina4 tests:run",
+        "phplint": "vendor/bin/phplint",
         "test:verbose": "@tina4 tests:verbose",
         "initialize": "@tina4 initialize:run",
         "initialise": "@tina4 initialize:run",
@@ -63,7 +64,8 @@
         "start": "@tina4 webservice:run",
         "start-service": "@tina4service",
         "run-tests": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml -v",
-        "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4"
+        "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
+        "lint": "@phplint --exclude=vendor"
     },
     "config": {
         "process-timeout": 0
