@@ -20,6 +20,18 @@ class Request
     public $server = null;
     public $session = null;
     public $files = null;
+
+    function filterValue($value, $filter) {
+        if (is_array($value)) {
+            foreach($value as $vkey => $vvalue) {
+                $value[$vkey] = $this->filterValue($vvalue, $filter);
+            }
+        } else {
+            $value = filter_var($value, $filter);
+        }
+        return $value;
+    }
+
     public function __construct($rawRequest, $customRequest=null)
     {
         if (!empty($customRequest->get)) {
@@ -32,8 +44,8 @@ class Request
         if (!empty($customRequest->post))
         {
             foreach ($customRequest->post as $key => $value) {
-                $_REQUEST[$key] = filter_var($value, FILTER_SANITIZE_STRING);
-                $_POST[$key] = filter_var($value, FILTER_SANITIZE_STRING);
+                $_REQUEST[$key] = $this->filterValue($value, FILTER_SANITIZE_STRING);
+                $_POST[$key] = $this->filterValue($value, FILTER_SANITIZE_STRING);
             }
         }
         if (!empty($customRequest->files)) {
@@ -64,7 +76,7 @@ class Request
         if (!empty($_REQUEST)) {
             $this->params = $_REQUEST;
             foreach ($this->params as $key => $value) {
-                $this->params[$key] = filter_var($value, FILTER_SANITIZE_STRING);
+                $this->params[$key] = $this->filterValue($value, FILTER_SANITIZE_STRING);
             }
         }
 
@@ -82,13 +94,12 @@ class Request
 
         if (!empty($rawRequest)) {
             $this->data = json_decode($rawRequest, false, 512);
-    //pass raw request anyway
             if ($this->data === null && $rawRequest !== '') {
                 $this->data = $rawRequest;
             }
         } else {
             foreach ($_REQUEST as $key => $value) {
-                $this->data->{$key} = filter_var($value, FILTER_SANITIZE_STRING);
+                $this->data->{$key} = $this->filterValue($value, FILTER_SANITIZE_STRING);
             }
         }
     }
