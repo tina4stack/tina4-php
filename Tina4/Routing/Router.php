@@ -361,13 +361,11 @@ class Router extends Data
                         $route["routePath"] = str_replace("/form", "", $route["routePath"]);
                         $route["routePath"] = str_replace("/{id}", "", $route["routePath"]);
                         \Tina4\Debug::message("Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
-                        if ($this->config->getAuthentication()->validToken($_REQUEST["formToken"])
+                        if ($route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"])
                             && $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"] === $route["routePath"])
                         {
                             $this->config->setAuthentication(null); //clear the auth
                             $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                        } else {
-                            return new RouterResponse("", HTTP_FORBIDDEN, $headers);
                         }
                     }
                 }
