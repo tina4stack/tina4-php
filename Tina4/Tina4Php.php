@@ -243,7 +243,13 @@ class Tina4Php extends Data
         //Test for SCSS and existing default.css, only compile if it does not exist
         if (TINA4_DEBUG || !file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css")) {
             $scssContent = "";
+            $usedPaths = [];
             foreach (TINA4_SCSS_LOCATIONS as $lId => $scssLocation) {
+                $realPath = realpath($scssLocation);
+                if (in_array($realPath, $usedPaths)) {
+                    continue;
+                }
+                $usedPaths[] = $realPath;
                 $scssFiles = $this->getFiles($scssLocation, ".scss");
                 foreach ($scssFiles as $fId => $file) {
                     $scssContent .= file_get_contents($file);
