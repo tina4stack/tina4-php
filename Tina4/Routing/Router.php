@@ -345,6 +345,7 @@ class Router extends Data
                 }
 
                 if (in_array("secure", $annotations[1], true) || (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
+
                     if ($this->config->getAuthentication() === null) {
                         $auth = new Auth();
                         $this->config->setAuthentication($auth);
@@ -355,7 +356,19 @@ class Router extends Data
                         $this->config->setAuthentication(null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
                     } else {
-                        return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                        //Fail over to formToken, but payload must match the route
+                        //CRUD fix for built in values of form & {id}
+                        $route["routePath"] = str_replace("/form", "", $route["routePath"]);
+                        $route["routePath"] = str_replace("/{id}", "", $route["routePath"]);
+                        \Tina4\Debug::message("Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
+                        if ($this->config->getAuthentication()->validToken($_REQUEST["formToken"])
+                            && $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"] === $route["routePath"])
+                        {
+                            $this->config->setAuthentication(null); //clear the auth
+                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        } else {
+                            return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                        }
                     }
                 }
 

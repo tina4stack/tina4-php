@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b14ef1ce68398293a7e0cc31472ebcb9",
+    "content-hash": "b6d4f9097e391b2889534db793a5c414",
     "packages": [
         {
             "name": "coyl/git",
@@ -664,16 +664,16 @@
         },
         {
             "name": "scssphp/scssphp",
-            "version": "v1.10.2",
+            "version": "v1.10.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/scssphp/scssphp.git",
-                "reference": "387f4f4abf5d99f16be16314c5ab856f81c82f46"
+                "reference": "0f1e1516ed2412ad43e42a6a319e77624ba1f713"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/scssphp/scssphp/zipball/387f4f4abf5d99f16be16314c5ab856f81c82f46",
-                "reference": "387f4f4abf5d99f16be16314c5ab856f81c82f46",
+                "url": "https://api.github.com/repos/scssphp/scssphp/zipball/0f1e1516ed2412ad43e42a6a319e77624ba1f713",
+                "reference": "0f1e1516ed2412ad43e42a6a319e77624ba1f713",
                 "shasum": ""
             },
             "require": {
@@ -732,9 +732,9 @@
             ],
             "support": {
                 "issues": "https://github.com/scssphp/scssphp/issues",
-                "source": "https://github.com/scssphp/scssphp/tree/v1.10.2"
+                "source": "https://github.com/scssphp/scssphp/tree/v1.10.3"
             },
-            "time": "2022-03-02T21:15:09+00:00"
+            "time": "2022-05-16T07:22:18+00:00"
         },
         {
             "name": "setasign/fpdi",
@@ -1123,16 +1123,16 @@
         },
         {
             "name": "tina4stack/tina4php-orm",
-            "version": "v2.0.0",
+            "version": "v2.0.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-orm.git",
-                "reference": "f44480dbdf0920c37988d41a59b3e400a8d07f31"
+                "reference": "b0d505726ddd2deb0b7957bc3a06baf84f0b3991"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/f44480dbdf0920c37988d41a59b3e400a8d07f31",
-                "reference": "f44480dbdf0920c37988d41a59b3e400a8d07f31",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/b0d505726ddd2deb0b7957bc3a06baf84f0b3991",
+                "reference": "b0d505726ddd2deb0b7957bc3a06baf84f0b3991",
                 "shasum": ""
             },
             "require-dev": {
@@ -1159,9 +1159,9 @@
             "description": "Tina4 ORM Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-orm/issues",
-                "source": "https://github.com/tina4stack/tina4php-orm/tree/v2.0.0"
+                "source": "https://github.com/tina4stack/tina4php-orm/tree/v2.0.3"
             },
-            "time": "2022-02-10T07:33:05+00:00"
+            "time": "2022-05-22T08:23:31+00:00"
         },
         {
             "name": "tina4stack/tina4php-shape",
@@ -1210,16 +1210,16 @@
         },
         {
             "name": "twig/twig",
-            "version": "v3.3.10",
+            "version": "v3.4.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/twigphp/Twig.git",
-                "reference": "8442df056c51b706793adf80a9fd363406dd3674"
+                "reference": "e939eae92386b69b49cfa4599dd9bead6bf4a342"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/twigphp/Twig/zipball/8442df056c51b706793adf80a9fd363406dd3674",
-                "reference": "8442df056c51b706793adf80a9fd363406dd3674",
+                "url": "https://api.github.com/repos/twigphp/Twig/zipball/e939eae92386b69b49cfa4599dd9bead6bf4a342",
+                "reference": "e939eae92386b69b49cfa4599dd9bead6bf4a342",
                 "shasum": ""
             },
             "require": {
@@ -1234,7 +1234,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-master": "3.3-dev"
+                    "dev-master": "3.4-dev"
                 }
             },
             "autoload": {
@@ -1270,7 +1270,7 @@
             ],
             "support": {
                 "issues": "https://github.com/twigphp/Twig/issues",
-                "source": "https://github.com/twigphp/Twig/tree/v3.3.10"
+                "source": "https://github.com/twigphp/Twig/tree/v3.4.1"
             },
             "funding": [
                 {
@@ -1282,7 +1282,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2022-04-06T06:47:41+00:00"
+            "time": "2022-05-17T05:48:52+00:00"
         }
     ],
     "packages-dev": [
@@ -2335,12 +2335,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/Roave/SecurityAdvisories.git",
-                "reference": "576d0458fe9635731c50be2ed74febec4edc08d8"
+                "reference": "c491d086242983f784b8af91cbb9de43d3374971"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/576d0458fe9635731c50be2ed74febec4edc08d8",
-                "reference": "576d0458fe9635731c50be2ed74febec4edc08d8",
+                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/c491d086242983f784b8af91cbb9de43d3374971",
+                "reference": "c491d086242983f784b8af91cbb9de43d3374971",
                 "shasum": ""
             },
             "conflict": {
@@ -2373,11 +2373,12 @@
                 "bolt/core": "<=4.2",
                 "bottelet/flarepoint": "<2.2.1",
                 "brightlocal/phpwhois": "<=4.2.5",
+                "brotkrueml/codehighlight": "<2.7",
                 "buddypress/buddypress": "<7.2.1",
                 "bugsnag/bugsnag-laravel": ">=2,<2.0.2",
                 "bytefury/crater": "<6.0.2",
                 "cachethq/cachet": "<2.5.1",
-                "cakephp/cakephp": "<4.0.6",
+                "cakephp/cakephp": "<3.10.3|>=4,<4.0.6",
                 "cardgate/magento2": "<2.0.33",
                 "cart2quote/module-quotation": ">=4.1.6,<=4.4.5|>=5,<5.4.4",
                 "cartalyst/sentry": "<=2.1.6",
@@ -2392,14 +2393,16 @@
                 "concrete5/concrete5": "<9",
                 "concrete5/core": "<8.5.7",
                 "contao-components/mediaelement": ">=2.14.2,<2.21.1",
+                "contao/contao": ">=4,<4.4.56|>=4.5,<4.9.18|>=4.10,<4.11.7|>=4.13,<4.13.3",
                 "contao/core": ">=2,<3.5.39",
-                "contao/core-bundle": "<4.9.18|>=4.10,<4.11.7|= 4.10.0",
+                "contao/core-bundle": "<4.9.18|>=4.10,<4.11.7|>=4.13,<4.13.3|= 4.10.0",
                 "contao/listing-bundle": ">=4,<4.4.8",
                 "contao/managed-edition": "<=1.5",
                 "craftcms/cms": "<3.7.29",
                 "croogo/croogo": "<3.0.7",
                 "cuyz/valinor": ">=0.5,<0.7",
                 "czproject/git-php": "<4.0.3",
+                "darylldoyle/safe-svg": "<1.9.10",
                 "datadog/dd-trace": ">=0.30,<0.30.2",
                 "david-garcia/phpwhois": "<=4.3.1",
                 "derhansen/sf_event_mgt": "<4.3.1|>=5,<5.1.1",
@@ -2432,17 +2435,17 @@
                 "ezsystems/ezplatform": "<=1.13.6|>=2,<=2.5.24",
                 "ezsystems/ezplatform-admin-ui": ">=1.3,<1.3.5|>=1.4,<1.4.6|>=1.5,<1.5.27",
                 "ezsystems/ezplatform-admin-ui-assets": ">=4,<4.2.1|>=5,<5.0.1|>=5.1,<5.1.1",
-                "ezsystems/ezplatform-kernel": "<=1.2.5|>=1.3,<1.3.12",
+                "ezsystems/ezplatform-kernel": "<=1.2.5|>=1.3,<1.3.17",
                 "ezsystems/ezplatform-rest": ">=1.2,<=1.2.2|>=1.3,<1.3.8",
                 "ezsystems/ezplatform-richtext": ">=2.3,<=2.3.7",
                 "ezsystems/ezplatform-user": ">=1,<1.0.1",
-                "ezsystems/ezpublish-kernel": "<=6.13.8.1|>=7,<7.5.26",
+                "ezsystems/ezpublish-kernel": "<=6.13.8.1|>=7,<7.5.28",
                 "ezsystems/ezpublish-legacy": "<=2017.12.7.3|>=2018.6,<=2019.3.5.1",
                 "ezsystems/platform-ui-assets-bundle": ">=4.2,<4.2.3",
                 "ezsystems/repository-forms": ">=2.3,<2.3.2.1",
                 "ezyang/htmlpurifier": "<4.1.1",
                 "facade/ignition": "<1.16.15|>=2,<2.4.2|>=2.5,<2.5.2",
-                "facturascripts/facturascripts": "<2022.4",
+                "facturascripts/facturascripts": "<2022.6",
                 "feehi/cms": "<=2.1.1",
                 "feehi/feehicms": "<=0.1.3",
                 "fenom/fenom": "<=2.12.1",
@@ -2481,6 +2484,7 @@
                 "hjue/justwriting": "<=1",
                 "hov/jobfair": "<1.0.13|>=2,<2.0.2",
                 "hyn/multi-tenant": ">=5.6,<5.7.2",
+                "ibexa/core": ">=4,<4.0.5|>=4.1,<4.1.2",
                 "ibexa/post-install": "<=1.0.4",
                 "icecoder/icecoder": "<=8.1",
                 "illuminate/auth": ">=4,<4.0.99|>=4.1,<=4.1.31|>=4.2,<=4.2.22|>=5,<=5.0.35|>=5.1,<=5.1.46|>=5.2,<=5.2.45|>=5.3,<=5.3.31|>=5.4,<=5.4.36|>=5.5,<5.5.10",
@@ -2525,6 +2529,7 @@
                 "livewire/livewire": ">2.2.4,<2.2.6",
                 "lms/routes": "<2.1.1",
                 "localizationteam/l10nmgr": "<7.4|>=8,<8.7|>=9,<9.2",
+                "luyadev/yii-helpers": "<1.2.1",
                 "magento/community-edition": ">=2,<2.2.10|>=2.3,<2.3.3",
                 "magento/magento1ce": "<1.9.4.3",
                 "magento/magento1ee": ">=1,<1.14.4.3",
@@ -2542,6 +2547,7 @@
                 "mustache/mustache": ">=2,<2.14.1",
                 "namshi/jose": "<2.2",
                 "neoan3-apps/template": "<1.1.1",
+                "neorazorx/facturascripts": "<2022.4",
                 "neos/flow": ">=1,<1.0.4|>=1.1,<1.1.1|>=2,<2.0.1|>=2.3,<2.3.16|>=3,<3.0.12|>=3.1,<3.1.10|>=3.2,<3.2.13|>=3.3,<3.3.13|>=4,<4.0.6",
                 "neos/form": ">=1.2,<4.3.3|>=5,<5.0.9|>=5.1,<5.1.3",
                 "neos/neos": ">=1.1,<1.1.3|>=1.2,<1.2.13|>=2,<2.0.4|>=2.3,<2.9.99|>=3,<3.0.20|>=3.1,<3.1.18|>=3.2,<3.2.14|>=3.3,<3.3.23|>=4,<4.0.17|>=4.1,<4.1.16|>=4.2,<4.2.12|>=4.3,<4.3.3",
@@ -2610,7 +2616,7 @@
                 "pusher/pusher-php-server": "<2.2.1",
                 "pwweb/laravel-core": "<=0.3.6-beta",
                 "rainlab/debugbar-plugin": "<3.1",
-                "remdex/livehelperchat": "<3.96",
+                "remdex/livehelperchat": "<3.99",
                 "rmccue/requests": ">=1.6,<1.8",
                 "robrichards/xmlseclibs": "<3.0.4",
                 "rudloff/alltube": "<3.0.3",
@@ -2623,7 +2629,7 @@
                 "shopware/core": "<=6.4.9",
                 "shopware/platform": "<=6.4.9",
                 "shopware/production": "<=6.3.5.2",
-                "shopware/shopware": "<5.7.7",
+                "shopware/shopware": "<5.7.9",
                 "shopware/storefront": "<=6.4.8.1",
                 "showdoc/showdoc": "<2.10.4",
                 "silverstripe/admin": ">=1,<1.8.1",
@@ -2757,10 +2763,10 @@
                 "zendframework/zend-crypt": ">=2,<2.4.9|>=2.5,<2.5.2",
                 "zendframework/zend-db": ">=2,<2.0.99|>=2.1,<2.1.99|>=2.2,<2.2.10|>=2.3,<2.3.5",
                 "zendframework/zend-developer-tools": ">=1.2.2,<1.2.3",
-                "zendframework/zend-diactoros": ">=1,<1.8.4",
-                "zendframework/zend-feed": ">=1,<2.10.3",
+                "zendframework/zend-diactoros": "<1.8.4",
+                "zendframework/zend-feed": "<2.10.3",
                 "zendframework/zend-form": ">=2,<2.2.7|>=2.3,<2.3.1",
-                "zendframework/zend-http": ">=1,<2.8.1",
+                "zendframework/zend-http": "<2.8.1",
                 "zendframework/zend-json": ">=2.1,<2.1.6|>=2.2,<2.2.6",
                 "zendframework/zend-ldap": ">=2,<2.0.99|>=2.1,<2.1.99|>=2.2,<2.2.8|>=2.3,<2.3.3",
                 "zendframework/zend-mail": ">=2,<2.4.11|>=2.5,<2.7.2",
@@ -2812,7 +2818,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2022-04-27T21:04:28+00:00"
+            "time": "2022-05-16T08:10:11+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -4691,6 +4697,51 @@
             "time": "2021-07-28T10:34:58+00:00"
         },
         {
+            "name": "tina4stack/tina4php-sqlite3",
+            "version": "v2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4php-sqlite3.git",
+                "reference": "df48bd7b40fc1ea5850607c20dbab535151bd4a3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-sqlite3/zipball/df48bd7b40fc1ea5850607c20dbab535151bd4a3",
+                "reference": "df48bd7b40fc1ea5850607c20dbab535151bd4a3",
+                "shasum": ""
+            },
+            "require": {
+                "ext-sqlite3": "*",
+                "tina4stack/tina4php-database": "^2.0"
+            },
+            "require-dev": {
+                "overtrue/phplint": "^2.0",
+                "phpunit/phpunit": "^9",
+                "roave/security-advisories": "dev-latest"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Tina4\\": [
+                        "Tina4/"
+                    ]
+                },
+                "classmap": [
+                    "Tina4/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 PHP Sqlite3 Database Driver",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4php-sqlite3/issues",
+                "source": "https://github.com/tina4stack/tina4php-sqlite3/tree/v2.0.0"
+            },
+            "time": "2022-02-10T05:57:28+00:00"
+        },
+        {
             "name": "webmozart/assert",
             "version": "1.10.0",
             "source": {
@@ -4761,5 +4812,5 @@
         "ext-curl": "*"
     },
     "platform-dev": [],
-    "plugin-api-version": "2.0.0"
+    "plugin-api-version": "2.1.0"
 }

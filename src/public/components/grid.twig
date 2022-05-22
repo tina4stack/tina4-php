@@ -18,7 +18,7 @@
         $(document).ready(function () {
             {{ gridId }}Grid = $('#{{ gridId }}Grid').DataTable({
                 dom: '<"row"<"col-md-6"B><"col-md-4"f><"col-md-2"l>><rtip>',
-                ajax: '{{ baseUrl }}{{ apiPath }}',
+                ajax: '{{ baseUrl }}{{ apiPath }}?formToken={% verbatim %}{{ formToken ("{% endverbatim %}{{ apiPath}}{% verbatim %}") }}{% endverbatim %}',
                 columns: [
                     {% for column in tableColumnMappings %}
                     {"data": "{{ column }}"},
@@ -27,8 +27,8 @@
                         "mRender": function (data, type, row) {
                             let html = '';
                             //loadForm parameters: api to retrieve modal form, target div id to load form to, row data, title of
-                            html += '<button class="btn btn-primary small-button" onclick="showForm(\'edit\',\'{{ baseUrl }}{{ apiPath }}/' + row.{{ primaryKey }} + '\')">Edit</button>';
-                            html += ' <button class="btn btn-danger small-button" onclick="if (confirm(\'Delete {{ objectName }} record ?\')) { showForm(\'delete\',\'{{ baseUrl }}{{ apiPath }}/' + row.{{ primaryKey }} + '?formToken={% verbatim %}{{ formToken }}{% endverbatim %}\');}">Del</button>';
+                            html += '<button class="btn btn-primary small-button" onclick="showForm(\'edit\',\'{{ baseUrl }}{{ apiPath }}/' + row.{{ primaryKey }} + '?formToken={% verbatim %}{{ formToken ("{% endverbatim %}{{ apiPath}}{% verbatim %}") }}{% endverbatim %}\')">Edit</button>';
+                            html += ' <button class="btn btn-danger small-button" onclick="if (confirm(\'Delete {{ objectName }} record ?\')) { showForm(\'delete\',\'{{ baseUrl }}{{ apiPath }}/' + row.{{ primaryKey }} + '?formToken={% verbatim %}{{ formToken ("{% endverbatim %}{{ apiPath}}{% verbatim %}") }}{% endverbatim %}\');}">Del</button>';
                             return html;
 
                         },
@@ -45,7 +45,7 @@
                         text: 'Create',
                         action: function (e, dt, node, config) {
                             let data = {};
-                            showForm('create', '{{ baseUrl }}{{ apiPath }}/form');
+                            showForm('create', '{{ baseUrl }}{{ apiPath }}/form?formToken={% verbatim %}{{ formToken ("{% endverbatim %}{{ apiPath}}{% verbatim %}") }}{% endverbatim %}');
                         }
                     },
                     'copy', 'excel', 'pdf', 'print'

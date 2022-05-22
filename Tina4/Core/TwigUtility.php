@@ -83,9 +83,7 @@ class TwigUtility
                 $config->setAuthentication($auth);
             }
 
-            if ($auth !== null) {
-                $twig->addGlobal('formToken', $config->getAuthentication()->getToken());
-            }
+
 
 
             if (defined("TINA4_TWIG_GLOBALS") && TINA4_TWIG_GLOBALS) {
@@ -111,6 +109,14 @@ class TwigUtility
             //Add form Token
 
             if ($auth !== null) {
+                $twig->addGlobal('formToken', $config->getAuthentication()->getToken());
+
+                $function = new TwigFunction("formToken", function($payload) use ($auth) {
+                    return $auth->getToken(["payload" => $payload]);
+                });
+
+                $twig->addFunction($function);
+
                 $filter = new TwigFilter("formToken", function ($payload) use ($auth) {
                     if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
                         return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";

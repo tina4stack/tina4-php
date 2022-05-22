@@ -85,13 +85,13 @@ class Crud
                         ["class" => $groupClass],
                         _label(["for" => $formInput->name], $formInput->label),
                         _input(["class" => $inputClass,
-                                "type" => $formInput->type,
-                                "name" => $formInput->name,
-                                "id" => $formInput->name,
-                                "placeholder" => $formInput->placeHolder,
-                                "value" => $formInput->value,
-                                "required" => $formInput->required,
-                                "_" => $formInput->javascript])
+                            "type" => $formInput->type,
+                            "name" => $formInput->name,
+                            "id" => $formInput->name,
+                            "placeholder" => $formInput->placeHolder,
+                            "value" => $formInput->value,
+                            "required" => $formInput->required,
+                            "_" => $formInput->javascript])
                     )
                 );
             } elseif ($formInput->type == "select") {
@@ -111,10 +111,10 @@ class Crud
                     _label(["for" => $formInput->name], $formInput->label),
                     _select(
                         ["class" => $inputClass,
-                        "name" => $formInput->name,
-                        "id" => $formInput->name,
-                        "required" => $formInput->required,
-                        "_" => $formInput->javascript],
+                            "name" => $formInput->name,
+                            "id" => $formInput->name,
+                            "required" => $formInput->required,
+                            "_" => $formInput->javascript],
                         $options
                     )
                 ));
@@ -126,13 +126,13 @@ class Crud
                     _img(["src" => "data:image/png;base64," . $formInput->value, "class" => $imageClass]),
                     _br(),
                     _input([
-                            "type" => "file",
-                            "name" => $formInput->name,
-                            "id" => $formInput->name,
-                            "placeholder" => $formInput->placeHolder,
-                            "value" => $formInput->value,
-                            "required" => $formInput->required,
-                            "_" => $formInput->javascript])
+                        "type" => "file",
+                        "name" => $formInput->name,
+                        "id" => $formInput->name,
+                        "placeholder" => $formInput->placeHolder,
+                        "value" => $formInput->value,
+                        "required" => $formInput->required,
+                        "_" => $formInput->javascript])
                 ));
             }
         }
@@ -148,7 +148,7 @@ class Crud
         if (!empty($request->data)) {
             if (is_array($request->data) && isset($request->data[0]) && is_object($request->data[0])) {
                 foreach ($request->data as $key => $object) {
-                   $objects[] = $object;
+                    $objects[] = $object;
                 }
             } else {
                 $objects[] = $request->data;
@@ -174,6 +174,7 @@ class Crud
         /**
          * @description  {$path} CRUD
          * @tags CRUD
+         * @secure
          */
         Route::get(
             $path . "/form",
@@ -209,6 +210,7 @@ class Crud
         /**
          * @description  {$path} CRUD
          * @tags CRUD
+         * @secure
          */
         Route::get(
             $path,
@@ -223,6 +225,7 @@ class Crud
         /**
          * @description  {$path} CRUD
          * @tags CRUD
+         * @secure
          */
         Route::get(
             $path . "/{id}",
@@ -241,6 +244,7 @@ class Crud
         /**
          * @description  {$path} CRUD
          * @tags CRUD
+         * @secure
          */
         Route::post(
             $path . "/{id}",
@@ -262,6 +266,7 @@ class Crud
         /**
          * @description  {$path} CRUD
          * @tags CRUD
+         * @secure
          */
         Route::delete(
             $path . "/{id}",
