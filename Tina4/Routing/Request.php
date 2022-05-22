@@ -21,7 +21,14 @@ class Request
     public $session = null;
     public $files = null;
 
-    function filterValue($value, $filter) {
+    /**
+     * Filter value
+     * @param $value
+     * @param $filter
+     * @return mixed
+     */
+    final function filterValue($value, $filter)
+    {
         if (is_array($value)) {
             foreach($value as $vkey => $vvalue) {
                 $value[$vkey] = $this->filterValue($vvalue, $filter);
