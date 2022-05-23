@@ -37,13 +37,19 @@ class Migration extends Data
     private $delimit = ";";
 
     /**
+     * Flag this to run the root migrations after the database specific ones have run
+     * @var bool
+     */
+    private $runRootMigrations = false;
+
+    /**
      * Constructor for Migrations
      * The path is relative to your web folder.
      *
      * @param String $migrationPath relative path to your web folder
      * @param String $delim A delimiter to say how your SQL is run
      */
-    public function __construct($migrationPath = "./migrations", $delim = ";")
+    public function __construct(string $migrationPath = "./migrations", string $delim = ";")
     {
         parent::__construct();
         $this->delimit = $delim;
@@ -52,6 +58,17 @@ class Migration extends Data
         if ($this->DBA === null) {
             die("Please make sure you have a global \$DBA connection in your index.php");
         }
+
+        //check to see if there are database specific migrations
+        if (method_exists($this->DBA, "getShortName") && file_exists($this->migrationPath . "/" . $this->DBA->getShortName())) {
+            $this->migrationPath .= "/" . $this->DBA->getShortName();
+            $this->runRootMigrations = true;
+        } else {
+            \Tina4\Debug::message("Please upgrade the database driver to include getShortName for migrations ", TINA4_LOG_DEBUG);
+        }
+
+        \Tina4\Debug::message("Migration path: ".$this->migrationPath, TINA4_LOG_DEBUG);
+
         //Turn off auto commits so we can roll back
         $this->DBA->autoCommit(false);
 
@@ -81,7 +98,7 @@ class Migration extends Data
      *
      * DO NOT USE COMMIT STATEMENTS IN YOUR MIGRATIONS , RATHER BREAK THINGS UP INTO SMALLER LOGICAL PIECES
      */
-    public function doMigration(): string
+    final public function doMigration(): string
     {
         $result = "";
         if (!file_exists($this->migrationPath)) {
@@ -93,7 +110,7 @@ class Migration extends Data
 
 
         $result .= "<pre>";
-        $result .= "<span style=\"color:green;\">STARTING Migrations ....</span>\n";
+        $result .= "<span style=\"color:green;\">STARTING Migrations ($this->migrationPath)....</span>\n";
 
         $error = false;
         restore_error_handler();
@@ -120,7 +137,7 @@ class Migration extends Data
             /*  Check that first 14 characters do not contain '_' (word separator)
              *  If so, only get first part for id
              */
-            if (strpos($migrationId, "_") !== false) {
+            if (str_contains($migrationId, "_")) {
                 $migrationText = explode("_", $migrationId);
                 $migrationId = $migrationText[0];
                 unset($migrationText[0]);
@@ -152,17 +169,15 @@ class Migration extends Data
                 $this->DBA->exec($sqlInsert, substr($content, 0, 10000));
                 $this->DBA->commit($transId);
                 $runsql = true;
-            } else {
-                if ($record->passed === "0" || $record->passed === "" || $record->passed == 0) {
-                    $result .= "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
-                    $runsql = true;
-                } elseif ($record->passed === "1" || $record->passed == 1) {
-                    //Update the migration with the latest copy
-                    $sqlUpdate = "update tina4_migration set content = ".$this->DBA->getQueryParam("1", 1)." where migration_id = '{$migrationId}'";
-                    $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
-                    $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
-                    $runsql = false;
-                }
+            } else if ($record->passed === "0" || $record->passed === "" || $record->passed == 0) {
+                $result .= "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
+                $runsql = true;
+            } elseif ($record->passed === "1" || $record->passed == 1) {
+                //Update the migration with the latest copy
+                $sqlUpdate = "update tina4_migration set content = ".$this->DBA->getQueryParam("1", 1)." where migration_id = '{$migrationId}'";
+                $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
+                $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
+                $runsql = false;
             }
 
             if ($runsql) {
@@ -218,6 +233,14 @@ class Migration extends Data
         }
         error_reporting(E_ALL);
         $result .= "</pre>";
+
+        if ($this->runRootMigrations) {
+            //get rid of the database path
+            $this->migrationPath = str_replace("/".$this->DBA->getShortName(), "", $this->migrationPath);
+            $this->runRootMigrations = false;
+            $result .= $this->doMigration();
+
+        }
 
         return $result;
     }

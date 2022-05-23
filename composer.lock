@@ -975,16 +975,16 @@
         },
         {
             "name": "tina4stack/tina4php-database",
-            "version": "v2.0.1",
+            "version": "v2.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-database.git",
-                "reference": "5d1167f79f782beec2a1b4357ac1b3b4b045b8b5"
+                "reference": "c8487cb12da834740280ab4a679cd1dd4eb8bbad"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/5d1167f79f782beec2a1b4357ac1b3b4b045b8b5",
-                "reference": "5d1167f79f782beec2a1b4357ac1b3b4b045b8b5",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/c8487cb12da834740280ab4a679cd1dd4eb8bbad",
+                "reference": "c8487cb12da834740280ab4a679cd1dd4eb8bbad",
                 "shasum": ""
             },
             "require": {
@@ -1025,9 +1025,9 @@
             "description": "Tina4 PHP Database Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-database/issues",
-                "source": "https://github.com/tina4stack/tina4php-database/tree/v2.0.1"
+                "source": "https://github.com/tina4stack/tina4php-database/tree/v2.0.2"
             },
-            "time": "2022-04-06T12:58:00+00:00"
+            "time": "2022-05-23T18:40:21+00:00"
         },
         {
             "name": "tina4stack/tina4php-debug",
@@ -4698,16 +4698,16 @@
         },
         {
             "name": "tina4stack/tina4php-sqlite3",
-            "version": "v2.0.0",
+            "version": "v2.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-sqlite3.git",
-                "reference": "df48bd7b40fc1ea5850607c20dbab535151bd4a3"
+                "reference": "4fd489a35826de1e0032f7aee2043db1612282ec"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-sqlite3/zipball/df48bd7b40fc1ea5850607c20dbab535151bd4a3",
-                "reference": "df48bd7b40fc1ea5850607c20dbab535151bd4a3",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-sqlite3/zipball/4fd489a35826de1e0032f7aee2043db1612282ec",
+                "reference": "4fd489a35826de1e0032f7aee2043db1612282ec",
                 "shasum": ""
             },
             "require": {
@@ -4737,9 +4737,9 @@
             "description": "Tina4 PHP Sqlite3 Database Driver",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-sqlite3/issues",
-                "source": "https://github.com/tina4stack/tina4php-sqlite3/tree/v2.0.0"
+                "source": "https://github.com/tina4stack/tina4php-sqlite3/tree/v2.0.1"
             },
-            "time": "2022-02-10T05:57:28+00:00"
+            "time": "2022-05-23T18:46:59+00:00"
         },
         {
             "name": "webmozart/assert",
