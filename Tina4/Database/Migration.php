@@ -137,7 +137,7 @@ class Migration extends Data
             /*  Check that first 14 characters do not contain '_' (word separator)
              *  If so, only get first part for id
              */
-            if (str_contains($migrationId, "_")) {
+            if (strpos($migrationId, "_") !== false) {
                 $migrationText = explode("_", $migrationId);
                 $migrationId = $migrationText[0];
                 unset($migrationText[0]);
