@@ -360,7 +360,7 @@ class Router extends Data
                         //CRUD fix for built in values of form & {id}
                         $route["routePath"] = str_replace("/form", "", $route["routePath"]);
                         $route["routePath"] = str_replace("/{id}", "", $route["routePath"]);
-                        if ($route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"])
+                        if (isset($_REQUEST["formToken"]) && $route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"])
                             && $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"] === $route["routePath"])
                         {
                             \Tina4\Debug::message("Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
