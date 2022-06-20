@@ -46,7 +46,8 @@
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
         "tina4stack/tina4php-database": "^2.0",
-        "tina4stack/tina4php-orm": "^2.0"
+        "tina4stack/tina4php-orm": "^2.0",
+        "ext-openssl": "*"
     },
     "bin": [
         "bin/tina4",
