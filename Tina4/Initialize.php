@@ -276,7 +276,7 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUME
         $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(TINA4_DOCUMENT_ROOT . $folder)) {
-                \Tina4\Utility::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
             }
         }
     }
@@ -295,7 +295,7 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
     }
 
     if ($tina4Checksum !== $destChecksum) {
-        \Tina4\Utility::recurseCopy(TINA4_PROJECT_ROOT . "bin", TINA4_DOCUMENT_ROOT . "bin");
+        \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . "bin", TINA4_DOCUMENT_ROOT . "bin");
     }
 }
 
