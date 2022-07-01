@@ -24,17 +24,16 @@ class Request
     /**
      * Filter value
      * @param $value
-     * @param $filter
      * @return mixed
      */
-    final function filterValue($value, $filter)
+    final function filterValue($value)
     {
         if (is_array($value)) {
-            foreach($value as $vkey => $vvalue) {
-                $value[$vkey] = $this->filterValue($vvalue, $filter);
+            foreach($value as $vKey => $vValue) {
+                $value[$vKey] = htmlspecialchars($vValue, ENT_NOQUOTES);
             }
         } else {
-            $value = filter_var($value, $filter);
+            $value = htmlspecialchars($value, ENT_NOQUOTES);
         }
         return $value;
     }
@@ -51,8 +50,8 @@ class Request
         if (!empty($customRequest->post))
         {
             foreach ($customRequest->post as $key => $value) {
-                $_REQUEST[$key] = $this->filterValue($value, FILTER_SANITIZE_STRING);
-                $_POST[$key] = $this->filterValue($value, FILTER_SANITIZE_STRING);
+                $_REQUEST[$key] = $this->filterValue($value);
+                $_POST[$key] = $this->filterValue($value);
             }
         }
         if (!empty($customRequest->files)) {
@@ -83,7 +82,7 @@ class Request
         if (!empty($_REQUEST)) {
             $this->params = $_REQUEST;
             foreach ($this->params as $key => $value) {
-                $this->params[$key] = $this->filterValue($value, FILTER_SANITIZE_STRING);
+                $this->params[$key] = $this->filterValue($value);
             }
         }
 
@@ -106,7 +105,7 @@ class Request
             }
         } else {
             foreach ($_REQUEST as $key => $value) {
-                $this->data->{$key} = $this->filterValue($value, FILTER_SANITIZE_STRING);
+                $this->data->{$key} = $this->filterValue($value);
             }
         }
     }
