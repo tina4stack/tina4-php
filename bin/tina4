@@ -18,7 +18,8 @@ if (empty($rootPath)) {
 }
 
 require_once "{$rootPath}vendor/autoload.php";
-define("TINA4_SUPPRESS", true);
+
+const TINA4_SUPPRESS = true;
 
 
 if (file_exists($rootPath . "index.php")) {
@@ -369,7 +370,7 @@ class [CLASS_NAME] extends \Tina4\ORM
     return ["index" => $nextIndex, "prompt" => $prompt];
 }];
 
-$menus[] = ["id" => 5, "name" => "webservice", "show" => false, "description" => "Runs webservice", "commandLine" => ["options" => ["run"]], "menuCode" => static function ($index, $input) use ($argv) {
+addMenu($menus, "webservice", "Runs webservice", static function ($index, $input) use ($argv) {
     $port = $argv[2] ?? "7145";
     \Tina4\Debug::message("Server running on http://localhost:{$port}");
     if (strpos(php_uname(), "Linux") !== false) {
@@ -378,7 +379,8 @@ $menus[] = ["id" => 5, "name" => "webservice", "show" => false, "description" =>
         `php -S localhost:{$port} index.php`;
     }
 
-}];
+}, true,  ["options" => ["run"]]);
+
 
 /**
  * Menus are created and have a function "menuCode" which takes on the following inputs ($index, $input, $options)
@@ -389,6 +391,11 @@ $menus[] = ["id" => 5, "name" => "webservice", "show" => false, "description" =>
  * return ["index" => 0, "prompt" => ""];
  * }];
  */
+
+function addMenu(&$menus, $name,  $description , $menuCode, $canShow=true, $commandLineOptions=[]) : void
+{
+    $menus[] = ["id" => count($menus)+1, "name" => $name, "menuCode" => $menuCode, "show" => $canShow, "description" => $description, "commandLine" => $commandLineOptions];
+}
 
 
 /**

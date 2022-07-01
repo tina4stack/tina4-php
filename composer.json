@@ -65,7 +65,7 @@
         "start": "@tina4 webservice:run",
         "start-service": "@tina4service",
         "run-tests": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml -v",
-        "phpmetrics": "phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
+        "phpmetrics": "./vendor/bin/phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
         "lint": "@phplint --exclude=vendor"
     },
     "config": {
@@ -75,6 +75,7 @@
         "roave/security-advisories": "dev-latest",
         "phpunit/phpunit": "^9",
         "overtrue/phplint": "^2.0",
-        "tina4stack/tina4php-sqlite3": "^2.0"
+        "tina4stack/tina4php-sqlite3": "^2.0",
+        "phpmetrics/phpmetrics": "^2.8"
     }
 }
