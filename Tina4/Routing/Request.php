@@ -30,7 +30,11 @@ class Request
     {
         if (is_array($value)) {
             foreach($value as $vKey => $vValue) {
-                $value[$vKey] = htmlspecialchars($vValue, ENT_NOQUOTES);
+                if (is_array($vValue)) {
+                    $value[$vKey] = $this->filterValue($vValue);
+                } else {
+                    $value[$vKey] = htmlspecialchars($vValue, ENT_NOQUOTES);
+                }
             }
         } else {
             $value = htmlspecialchars($value, ENT_NOQUOTES);
