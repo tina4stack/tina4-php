@@ -72,7 +72,6 @@ class Data
                 }
 
                 if (is_object($GLOBAL) && in_array(get_class($GLOBAL), TINA4_DATABASE_TYPES)) {
-                    Debug::message("Adding {$dbName}");
                     $this->{$dbName} = $GLOBAL;
                 }
             }

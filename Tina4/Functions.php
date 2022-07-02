@@ -77,7 +77,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             return $exception->getFile() . " (" . $exception->getLine() . ") " . $exception->getMessage();
         }
     } else {
-
+        return Utilities::renderErrorTemplate(HTTP_NOT_FOUND);
     }
 }
 
