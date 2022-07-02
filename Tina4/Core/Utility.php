@@ -371,4 +371,18 @@ trait Utility
             }
         }
     }
+
+    /**
+     * Renders an error template
+     * @param $httpCode
+     * @return string|void
+     */
+    final static function renderErrorTemplate ($httpCode) {
+        $paths = [TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $httpCode . ".twig", TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $httpCode . ".twig"];
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                return \Tina4\renderTemplate($path);
+            }
+        }
+    }
 }

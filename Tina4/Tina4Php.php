@@ -273,6 +273,14 @@ class Tina4Php extends Data
         }
     }
 
+    /**
+     * @throws \Twig\Error\SyntaxError
+     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws \ReflectionException
+     * @throws \Twig\Error\RuntimeError
+     * @throws LoaderError
+     * @throws \Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException
+     */
     public function __toString(): string
     {
         if (!isset($_SERVER["REQUEST_METHOD"])) {
@@ -295,18 +303,10 @@ class Tina4Php extends Data
             http_response_code($routerResponse->httpCode);
             if ($routerResponse->content === "") {
                 //try give back a response based on the error code - first templates then public
-                if (file_exists(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig")) {
-                    $content = \Tina4\renderTemplate(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig");
-                }
-
-                if (file_exists(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig")) {
-                    $content = \Tina4\renderTemplate(TINA4_DOCUMENT_ROOT . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "errors" . DIRECTORY_SEPARATOR . $routerResponse->httpCode . ".twig");
-                }
+                $content = Utilities::renderErrorTemplate($routerResponse->httpCode);
             } else {
                 $content = $routerResponse->content;
             }
-        } else {
-            $content = "";
         }
 
         if (TINA4_DEBUG) {

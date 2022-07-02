@@ -21,54 +21,63 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
         define("TINA4_DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR);
     }
 
-    $fileName = str_replace(TINA4_DOCUMENT_ROOT, "", $fileNameString);
-    try {
-        global $twig;
+    if (!empty($fileNameString)) {
+        $fileName = str_replace(TINA4_DOCUMENT_ROOT, "", $fileNameString);
+    } else {
+        $fileName = null;
+    }
 
-        if (empty($twig)) {
-            TwigUtility::initTwig();
-        }
+    if (!empty($fileName)) {
+        try {
+            global $twig;
 
-        $internalTwig = clone $twig;
-
-        if (is_file($fileNameString)) {
-            $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
-            if ($location === "") {
-                $location = $newPath;
+            if (empty($twig)) {
+                TwigUtility::initTwig();
             }
-            $renderFile = str_replace($location, "", $fileName);
 
-            if ($renderFile[0] === DIRECTORY_SEPARATOR) {
-                $renderFile = substr($renderFile, 1);
-            }
-            $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
-            return $internalTwig->render($renderFile, $data);
-        } elseif ((strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR) || (strlen($fileName) > 1 && $fileName[0] === "/")) {
-            $fileName = substr($fileName, 1);
-        }
+            $internalTwig = clone $twig;
 
-        if ($internalTwig->getLoader()->exists($fileName)) {
-            return $internalTwig->render($fileName, $data);
-        } elseif ($internalTwig->getLoader()->exists(basename($fileName))) {
-            return $internalTwig->render(basename($fileName), $data);
-        } else {
-            if (!is_file($fileNameString)) {
-
-                $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
-
-                if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR )) {
-                    if (!mkdir($concurrentDirectory = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true) && !is_dir($concurrentDirectory)) {
-                        //throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
-                    }
+            if (is_file($fileNameString)) {
+                $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
+                if ($location === "") {
+                    $location = $newPath;
                 }
+                $renderFile = str_replace($location, "", $fileName);
 
-                file_put_contents($fileName, $fileNameString);
+                if ($renderFile[0] === DIRECTORY_SEPARATOR) {
+                    $renderFile = substr($renderFile, 1);
+                }
+                $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
+                return $internalTwig->render($renderFile, $data);
+            } elseif ((strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR) || (strlen($fileName) > 1 && $fileName[0] === "/")) {
+                $fileName = substr($fileName, 1);
             }
-            $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
-            return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
+
+            if ($internalTwig->getLoader()->exists($fileName)) {
+                return $internalTwig->render($fileName, $data);
+            } elseif ($internalTwig->getLoader()->exists(basename($fileName))) {
+                return $internalTwig->render(basename($fileName), $data);
+            } else {
+                if (!is_file($fileNameString)) {
+
+                    $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
+
+                    if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR)) {
+                        if (!mkdir($concurrentDirectory = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true) && !is_dir($concurrentDirectory)) {
+                            //throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                        }
+                    }
+
+                    file_put_contents($fileName, $fileNameString);
+                }
+                $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
+                return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
+            }
+        } catch (\Exception $exception) {
+            return $exception->getFile() . " (" . $exception->getLine() . ") " . $exception->getMessage();
         }
-    } catch (\Exception $exception) {
-        return $exception->getFile() . " (" . $exception->getLine() . ") " . $exception->getMessage();
+    } else {
+
     }
 }
 
