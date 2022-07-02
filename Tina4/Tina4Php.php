@@ -28,12 +28,13 @@ class Tina4Php extends Data
         if (!isset($config)) {
             $config = new \Tina4\Config();
         }
+
         //Get all the include folders
         if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
                 define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(TINA4_TEMPLATE_LOCATIONS, \Tina4\Module::getTemplateFolders()));
             } else {
-                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["src" . DIRECTORY_SEPARATOR . "templates", "src" . DIRECTORY_SEPARATOR . "public", "src" . DIRECTORY_SEPARATOR . "assets", "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "snippets"], \Tina4\Module::getTemplateFolders()));
+                define("TINA4_TEMPLATE_LOCATIONS_INTERNAL", array_merge(["cache", "src" . DIRECTORY_SEPARATOR . "templates", "src" . DIRECTORY_SEPARATOR . "public", "src" . DIRECTORY_SEPARATOR . "assets", "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "snippets"], \Tina4\Module::getTemplateFolders()));
             }
         }
 
