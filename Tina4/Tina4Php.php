@@ -255,14 +255,21 @@ class Tina4Php extends Data
                     $scssContent .= file_get_contents($file);
                 }
             }
-            $scss = new Compiler();
-            $scssDefault = $scss->compileString($scssContent)->getCss();
-            if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
-                if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
-                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+
+            try {
+                $scss = new Compiler();
+                $scssDefault = $scss->compileString($scssContent)->getCss();
+                if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
+                    if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
+                        throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                    }
+                    file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css", $scssDefault);
                 }
-                file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css", $scssDefault);
+            } catch (\Exception $exception)
+            {
+                Debug::message("Could not build default.css ".$exception->getMessage(), TINA4_LOG_ERROR);
             }
+
         }
     }
 
