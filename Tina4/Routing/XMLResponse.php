@@ -52,16 +52,16 @@ class XMLResponse
             if (self::isValidXml($content)) {
                 $xml = $content;
             }
-               else {
-                   $xml = "<errors>";
-                   libxml_use_internal_errors(true);
-                   simplexml_load_string($content);
-                   $errors = libxml_get_errors();
-                   foreach ($errors as $error) {
-                       $xml .= "<error>{$error->message}</error>";
-                   }
-                   $xml .= "</errors>";
-               }
+            else {
+                $xml = "<errors>";
+                libxml_use_internal_errors(true);
+                simplexml_load_string($content);
+                $errors = libxml_get_errors();
+                foreach ($errors as $error) {
+                    $xml .= "<error>{$error->message}</error>";
+                }
+                $xml .= "</errors>";
+            }
         }
 
         return $xml;
@@ -86,7 +86,9 @@ class XMLResponse
                 $xml .= '<' . $key . '>' . self::generateXmlFromArray($value, $nodeName) . '</' . $keyName[0] . '>';
             }
         } else {
-            $xml = htmlspecialchars($array, ENT_QUOTES);
+            if (!empty($array)) {
+                $xml = htmlspecialchars($array, ENT_QUOTES);
+            }
         }
         return $xml;
     }
