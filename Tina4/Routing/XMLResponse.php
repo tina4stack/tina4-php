@@ -21,7 +21,7 @@ class XMLResponse
         if (empty($content)) {
             return false;
         }
-        //html go to hell!
+
         if (stripos($content, '<!DOCTYPE html>') !== false) {
             return false;
         }
@@ -37,21 +37,32 @@ class XMLResponse
 
     /**
      * Initializes the XML header
-     * @param array $array
-     * @param string $node_name
+     * @param string|object|array $content
+     * @param string $nodeName
      * @return string
      */
-    public static function generateValidXmlFromArray($array, $nodeName = 'node'): string
+    public static function generateValidXmlFromArray($content, $nodeName = 'node'): string
     {
-        if (!self::isValidXml($array) && (is_object($array) || is_array($array))) {
-            $xml  = self::generateXmlFromArray($array, $nodeName);
+        if ((is_object($content) || is_array($content))) {
+            $xml  = self::generateXmlFromArray($content, $nodeName);
+            //Nodes are the xml wrappers for unknown objects or arrays
+            $xml  = str_replace('<node>', '', $xml);
+            $xml  = str_replace('</node>', '', $xml);
         } else {
-            $xml = $array;
+            if (self::isValidXml($content)) {
+                $xml = $content;
+            }
+               else {
+                   $xml = "<errors>";
+                   libxml_use_internal_errors(true);
+                   simplexml_load_string($content);
+                   $errors = libxml_get_errors();
+                   foreach ($errors as $error) {
+                       $xml .= "<error>{$error->message}</error>";
+                   }
+                   $xml .= "</errors>";
+               }
         }
-
-        //Nodes are the xml wrappers for unknown objects or arrays
-        $xml  = str_replace('<node>', '', $xml);
-        $xml  = str_replace('</node>', '', $xml);
 
         return $xml;
     }
@@ -59,7 +70,7 @@ class XMLResponse
     /**
      * Creates XML from an array
      * @param $array
-     * @param $node_name
+     * @param $nodeName
      * @return string
      */
     public static function generateXmlFromArray($array, $nodeName): string
