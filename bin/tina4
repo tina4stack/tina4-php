@@ -2,6 +2,7 @@
 <?php
 $replacePath = $argv[0]; //used to figure out where we're running
 global $rootPath;
+global $projectRoot;
 global $session; //store things here you want to reuse
 $session = [];
 
@@ -11,6 +12,8 @@ foreach (get_included_files() as $id => $file) {
         break;
     }
 }
+
+$projectRoot = str_replace(DIRECTORY_SEPARATOR . "bin", "", __DIR__);
 
 if (empty($rootPath)) {
     $rootPath = str_replace("vendor" . DIRECTORY_SEPARATOR . "tina4stack" . DIRECTORY_SEPARATOR . "tina4php" . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4", "", __FILE__);
@@ -70,6 +73,7 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
     }
 
     global $rootPath;
+    global $projectRoot;
     if ($input === "0") { //Menu Option 0 - Exit
         return ["index" => 0, "prompt" => ""];
     }
@@ -86,17 +90,17 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
         case 1:
             if ($input === "" || strtolower($input) === "y") {
                 if (!file_exists($rootPath . DIRECTORY_SEPARATOR . "index.php")) {
-                    if (!file_exists(TINA4_DOCUMENT_ROOT . "src")) {
+                    if (!file_exists($rootPath . "src")) {
                         $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
                         foreach ($foldersToCopy as $id => $folder) {
-                            if (!file_exists(TINA4_DOCUMENT_ROOT . $folder)) {
-                                \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                            if (!file_exists($rootPath. DIRECTORY_SEPARATOR . $folder)) {
+                                \Tina4\Utilities::recurseCopy($projectRoot .DIRECTORY_SEPARATOR. $folder, $rootPath.DIRECTORY_SEPARATOR . $folder);
                             }
                         }
                     }
 
-                    if (file_exists(TINA4_DOCUMENT_ROOT . ".htaccess")) {
-                        $htaccessContent = file_get_contents(TINA4_DOCUMENT_ROOT.".htaccess");
+                    if (file_exists($rootPath . DIRECTORY_SEPARATOR.".htaccess")) {
+                        $htaccessContent = file_get_contents($rootPath.DIRECTORY_SEPARATOR.".htaccess");
                         if (strpos($htaccessContent, "#Block access") === false) {
                             $htaccessContent .= '#Block access to .env and other files
 <Files ~ ".env">
@@ -124,9 +128,9 @@ RewriteRule ^(.*)$ index.php [QSA,L]
 #Add ability to get the authorization headers on the webserver
 SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0';
                         }
-                        file_put_contents(TINA4_DOCUMENT_ROOT.".htaccess", $htaccessContent);
+                        file_put_contents($rootPath.DIRECTORY_SEPARATOR.".htaccess", $htaccessContent);
                     } else {
-                        copy(TINA4_PROJECT_ROOT . ".htaccess", TINA4_DOCUMENT_ROOT . ".htaccess");
+                        copy($projectRoot . DIRECTORY_SEPARATOR.".htaccess", $rootPath . DIRECTORY_SEPARATOR.".htaccess");
                     }
 
                     $nextIndex = 0;
