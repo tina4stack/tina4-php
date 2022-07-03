@@ -81,7 +81,9 @@ class XMLResponse
                 if (is_numeric($key)) {
                     $key = $nodeName;
                 }
-                $xml .= '<' . $key . '>' . self::generateXmlFromArray($value, $nodeName) . '</' . $key . '>';
+                //Allows for xml attributes, strips out for the closing key
+                $keyName = explode(" ", $key, 2);
+                $xml .= '<' . $key . '>' . self::generateXmlFromArray($value, $nodeName) . '</' . $keyName[0] . '>';
             }
         } else {
             $xml = htmlspecialchars($array, ENT_QUOTES);
