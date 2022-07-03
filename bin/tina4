@@ -86,6 +86,19 @@ $menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.ph
         case 1:
             if ($input === "" || strtolower($input) === "y") {
                 if (!file_exists($rootPath . DIRECTORY_SEPARATOR . "index.php")) {
+                    if (!file_exists(TINA4_DOCUMENT_ROOT . "src")) {
+                        $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
+                        foreach ($foldersToCopy as $id => $folder) {
+                            if (!file_exists(TINA4_DOCUMENT_ROOT . $folder)) {
+                                \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                            }
+                        }
+                    }
+
+                    if (file_exists(TINA4_PROJECT_ROOT . ".htaccess")) {
+                        copy(TINA4_PROJECT_ROOT . ".htaccess", TINA4_DOCUMENT_ROOT . ".htaccess");
+                    }
+
                     $nextIndex = 0;
                     $prompt = "";
                     $indexContent = '<?php' . PHP_EOL . 'require_once "./vendor/autoload.php";' . PHP_EOL . '$config = new \Tina4\Config();'.PHP_EOL.'\Tina4\Initialize();'. PHP_EOL . 'echo new \Tina4\Tina4Php($config);';
