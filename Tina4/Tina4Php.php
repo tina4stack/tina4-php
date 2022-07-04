@@ -318,7 +318,11 @@ class Tina4Php extends Data
             }
         }
 
-        return $content;
+        if (!empty($content)) {
+            return $content;
+        } else {
+            return "";
+        }
     }
 
     /**

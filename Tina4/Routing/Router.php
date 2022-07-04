@@ -345,7 +345,6 @@ class Router extends Data
                 }
 
                 if (in_array("secure", $annotations[1], true) || (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
-
                     if ($this->config->getAuthentication() === null) {
                         $auth = new Auth();
                         $this->config->setAuthentication($auth);
@@ -366,6 +365,10 @@ class Router extends Data
                             \Tina4\Debug::message("Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
                             $this->config->setAuthentication(null); //clear the auth
                             $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        } else {
+                            if ($route["method"] === TINA4_GET) {
+                                return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                            }
                         }
                     }
                 }

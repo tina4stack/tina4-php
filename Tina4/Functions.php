@@ -8,6 +8,8 @@
 
 namespace Tina4;
 
+use Twig\TwigFunction;
+
 /**
  * Render a twig file or string
  * @param $fileNameString
@@ -119,4 +121,18 @@ function Initialize() {
     } else {
         require_once __DIR__."/Initialize.php";
     }
+}
+
+/**
+ * Generates an auth token easily
+ * @param $payload
+ * @param $auth
+ * @return string
+ */
+function getFormToken($payload, $auth=null): string
+{
+    if (empty($auth)) {
+        $auth = new Auth();
+    }
+    return $auth->getToken(["payload" => $payload]);
 }
