@@ -53,6 +53,24 @@
                 ]
             });
         });
+        var selected{{ gridId }} = null;
+
+        {{ gridId }}Grid.on('select', function (e, dt, type, indexes) {
+            selected{{ gridId }} = {{ gridId }}Grid.rows(indexes).data().toArray()[0];
+            console.log('{{ gridId }}Grid', selected{{ gridId }});
+        });
+
+        {{ gridId }}Grid.on('search', function () {
+            console.log ('Searching aborted');
+            //fix to prevent datatables from crashing searches on large data sets
+            if (typeof $ !== "undefined" && $.fn.dataTable) {
+                let allSettings = $($.fn.dataTable.tables()).DataTable().settings();
+                for (let i = 0, settings; (settings = allSettings[i]); ++i) {
+                    if (settings.jqXHR)
+                        settings.jqXHR.abort();
+                }
+            }
+        });
     </script>
     <div id="form"></div>
     <div id="message"></div>
