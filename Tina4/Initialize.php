@@ -12,7 +12,7 @@ use Tina4\Module;
 
 //TINA4 CONSTANTS
 if (!defined("TINA4_DATABASE_TYPES")) {
-    define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb", "Tina4\DataPostgresql"]);
+    define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb", "Tina4\DataPostgresql", "Tina4\DataMSSQL"]);
 }
 
 //Get the sub folders etc using the data class
