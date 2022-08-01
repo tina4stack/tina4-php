@@ -47,3 +47,6 @@ test.db
 /TINA4_DOCUMENT_ROOT/log/debug.log
 /bin/services.data
 /build/
+/data2.db
+/data2.db-shm
+/data2.db-wal
