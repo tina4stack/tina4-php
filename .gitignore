@@ -50,3 +50,4 @@ test.db
 /data2.db
 /data2.db-shm
 /data2.db-wal
+/src/templates/api/testme/

@@ -39,7 +39,18 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
 
             $internalTwig = clone $twig;
 
-            if (is_file($fileNameString)) {
+            $canContinue = false;
+            if (!empty($openBaseDirs) && in_array(dirname(realpath($fileName)), $openBaseDirs)) {
+                $canContinue = true;
+            }
+
+            //No need to check for files either if we have the template
+            if ($internalTwig->getLoader()->exists($fileName)) {
+                $canContinue = false;
+            }
+
+            if ($canContinue && is_file($fileNameString)) {
+
                 $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
                 if ($location === "") {
                     $location = $newPath;
@@ -60,7 +71,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             } elseif ($internalTwig->getLoader()->exists(basename($fileName))) {
                 return $internalTwig->render(basename($fileName), $data);
             } else {
-                if (!is_file($fileNameString)) {
+                if (!$canContinue || !is_file($fileNameString)) {
 
                     $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
 
@@ -73,6 +84,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
                     file_put_contents($fileName, $fileNameString);
                 }
                 $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
+
                 return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
             }
         } catch (\Exception $exception) {

@@ -25,7 +25,11 @@ class TwigUtility
 
         //Twig initialization
         if (empty($twig)) {
-            $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
+            if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL") && !empty(TINA4_TEMPLATE_LOCATIONS_INTERNAL)) {
+                $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
+            } else {
+                $twigPaths = ["cache", "src" . DIRECTORY_SEPARATOR . "templates", "src" . DIRECTORY_SEPARATOR . "public", "src" . DIRECTORY_SEPARATOR . "assets", "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "snippets"];
+            }
 
             Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_LOG_DEBUG);
 

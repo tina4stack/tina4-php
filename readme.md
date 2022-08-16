@@ -20,15 +20,15 @@ is created under bin and tina4service and tina4 bin executables are replaced whe
 
 Database support table
 
-| Database      | Composer Command |
-| ----------- | ----------- |
-| Sqlite3      |  ```composer require tina4stack/tina4php-sqlite3```       |
-| ODBC   | ```composer require tina4stack/tina4php-odbc```        |
-| MySQL   | ```composer require tina4stack/tina4php-mysql ```        |
-| Firebird   | ```composer require tina4stack/tina4php-firebird```        |
-| MongoDB   | ```composer require tina4stack/tina4php-mongodb```        |
-| PostgreSQL   | ```composer require tina4stack/tina4php-postgresql```        |
-
+| Database   | Composer Command                                      |
+|------------|-------------------------------------------------------|
+| Sqlite3    | ```composer require tina4stack/tina4php-sqlite3```    |
+| ODBC       | ```composer require tina4stack/tina4php-odbc```       |
+| MySQL      | ```composer require tina4stack/tina4php-mysql```     |
+| Firebird   | ```composer require tina4stack/tina4php-firebird```   |
+| MongoDB    | ```composer require tina4stack/tina4php-mongodb```    |
+| PostgreSQL | ```composer require tina4stack/tina4php-postgresql``` |
+| MSSQL      | ```composer require tina4stack/tina4php-mssql```      |
 
 *June 13, 2021* - Adding docker support
 
