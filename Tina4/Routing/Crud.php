@@ -148,6 +148,11 @@ class Crud
         );
     }
 
+    /**
+     * Get data objects from the request to the ORM object
+     * @param Request $request
+     * @return array
+     */
     public static function getObjects(Request $request)
     {
         $objects = [];
@@ -222,7 +227,7 @@ class Crud
         Route::get(
             $path,
             function (Response $response, Request $request) use ($object, $function) {
-                $filter = Crud::getDataTablesFilter("t.");
+                $filter = Crud::getDataTablesFilter("t.", $object);
                 $jsonResult = $function("read", new $object(), $filter, $request);
 
                 return $response($jsonResult, HTTP_OK);
@@ -302,7 +307,7 @@ class Crud
      * @param ORM|null $ORM
      * @return array
      */
-    public static function getDataTablesFilter(string $tablePrefix = "", $ORM = null): array
+    public static function getDataTablesFilter(string $tablePrefix = "", ORM $ORM = null): array
     {
         $request = $_REQUEST;
 

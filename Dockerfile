@@ -1,4 +1,9 @@
-FROM php:7.4-cli
+FROM php:7.4-cli-buster
+
+RUN apt-get update \
+    && apt-get install -y apt-transport-https gnupg2 libpng-dev libzip-dev nano unzip unixodbc  \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN apt-get update && apt-get install -y openssl aptitude git
 RUN apt-get update && apt-get install -y \
         libfreetype6-dev \
@@ -37,6 +42,26 @@ RUN echo "extension=interbase.so" > /usr/local/etc/php/conf.d/docker-php-ext-int
 #install mongodb support
 RUN pecl install mongodb
 RUN echo "extension=mongodb.so" > /usr/local/etc/php/conf.d/docker-php-ext-mongodb.ini
+
+# Install mssql support
+# Install prerequisites for the sqlsrv and pdo_sqlsrv PHP extensions.
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql17 mssql-tools unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Retrieve the script used to install PHP extensions from the source container.
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/install-php-extensions
+
+RUN chmod uga+x /usr/bin/install-php-extensions \
+    && sync \
+    && install-php-extensions bcmath exif gd imagick intl opcache pcntl pcov pdo_sqlsrv redis sqlsrv
+
+
+# Retrieve the script used to install PHP extensions from the source container.
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/install-php-extension
+
 #install swoole
 RUN pecl install openswoole
 RUN echo "extension=openswoole.so" > /usr/local/etc/php/conf.d/docker-php-ext-openswoole.ini
