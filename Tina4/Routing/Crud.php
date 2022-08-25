@@ -302,7 +302,7 @@ class Crud
      * @param ORM|null $ORM
      * @return array
      */
-    public static function getDataTablesFilter(string $tablePrefix = "", ORM $ORM = null): array
+    public static function getDataTablesFilter(string $tablePrefix = "", $ORM = null): array
     {
         $request = $_REQUEST;
 
