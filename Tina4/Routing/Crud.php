@@ -60,6 +60,7 @@ class Crud
         if (empty($label) && !empty($placeHolder)) {
             $label = $placeHolder;
         }
+
         return (object)["name" => $name, "placeHolder" => $placeHolder, "label" => $label, "value" => $value, "type" => $type, "required" => $required, "javascript" => $javascript, "options" => $lookupData];
     }
 
@@ -69,8 +70,12 @@ class Crud
      * @param $formInputs
      * @param int $noOfColumns
      * @param string $formName
+     * @param string $formMethod
+     * @param null $formAction
      * @param string $groupClass
      * @param string $inputClass
+     * @param string $columnClass
+     * @param string $imageClass
      * @return string
      */
     public static function generateForm($formInputs, $noOfColumns = 1, $formName = "data", $formMethod = "post", $formAction = null, $groupClass = "form-group", $inputClass = "form-control", $columnClass = "col-md-", $imageClass = "img-thumbnail rounded mx-auto ")
@@ -143,7 +148,8 @@ class Crud
         );
     }
 
-    public static function getObjects(Request $request) {
+    public static function getObjects(Request $request)
+    {
         $objects = [];
         if (!empty($request->data)) {
             if (is_array($request->data) && isset($request->data[0]) && is_object($request->data[0])) {
@@ -180,6 +186,7 @@ class Crud
             $path . "/form",
             function (Response $response, Request $request) use ($object, $function) {
                 $htmlResult = $function("form", $object, null, $request);
+
                 return $response($htmlResult, HTTP_OK);
             }
         );
@@ -217,6 +224,7 @@ class Crud
             function (Response $response, Request $request) use ($object, $function) {
                 $filter = Crud::getDataTablesFilter("t.");
                 $jsonResult = $function("read", new $object(), $filter, $request);
+
                 return $response($jsonResult, HTTP_OK);
             }
         );
@@ -259,6 +267,7 @@ class Crud
                 $function("update", $object, null, $request);
                 $object->save();
                 $jsonResult = $function("afterUpdate", $object, null, $request);
+
                 return $response($jsonResult, HTTP_OK);
             }
         );
@@ -281,6 +290,7 @@ class Crud
                     $object->save();
                 }
                 $jsonResult = $function("afterDelete", $object, null, $request);
+
                 return $response($jsonResult, HTTP_OK);
             }
         );
@@ -289,12 +299,16 @@ class Crud
     /**
      * Returns an array of dataTables style filters for use in your queries
      * @param string $tablePrefix
+     * @param ORM|null $ORM
      * @return array
      */
-    public static function getDataTablesFilter(string $tablePrefix = ""): array
+    public static function getDataTablesFilter(string $tablePrefix = "", ORM $ORM = null): array
     {
-        $ORM = new ORM();
         $request = $_REQUEST;
+
+        if (empty($ORM)) {
+            $ORM = new ORM();
+        }
 
         if (!empty($request["columns"])) {
             $columns = $request["columns"];
@@ -310,7 +324,7 @@ class Crud
             $search = $request["search"];
 
             foreach ($columns as $id => $column) {
-                $columnName = $ORM->getFieldName($column["data"]);
+                $columnName = $ORM->getFieldName($column["data"], $ORM->fieldMapping);
 
                 if (($column["searchable"] == "true") && !empty($search["value"])) {
                     //Add each searchable column to array
@@ -339,7 +353,7 @@ class Crud
         $ordering = null;
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
-                $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"]);
+                $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"], $ORM->fieldMapping);
                 $ordering[] = $tablePrefix . $columnName . " " . $orderEntry["dir"];
             }
         }
@@ -357,10 +371,10 @@ class Crud
             //Concatenate row columns into a single searchable string
 
             //Check for type of database
-            if (!empty($ORM->DBA) && get_class($ORM->DBA) === "Tina4\DataMySQL") {
-                //Mysql
+            if (!empty($ORM->DBA) && in_array(get_class($ORM->DBA), ["Tina4\DataMySQL", "Tina4\DataMSSQL"])) {
+                //Mysql, MSSQL
                 foreach ($listOfColumnNames as $id => $listColumn) {
-                    $listOfColumnNames[$id] = "case when ($listColumn is null) then '' else $listColumn end";
+                    $listOfColumnNames[$id] = "case when ({$listColumn} is null) then '' else {$listColumn} end";
                 }
 
                 $columnsToSearch = "concat(" . join(",'',", $listOfColumnNames) . ")";
