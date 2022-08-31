@@ -81,7 +81,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
                         }
                     }
 
-                    file_put_contents($fileName, $fileNameString);
+                    file_put_contents($fileName, file_get_contents($fileNameString));
                 }
                 $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
 
