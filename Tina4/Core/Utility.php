@@ -247,19 +247,12 @@ trait Utility
      */
     final public function camelCase(string $name): string
     {
-        $fieldName = "";
-        $name = strtolower($name);
-        for ($i = 0, $iMax = strlen($name); $i < $iMax; $i++) {
-            if ($name[$i] === "_") {
-                $i++;
-                if ($i < strlen($name)) {
-                    $fieldName .= strtoupper($name[$i]);
-                }
-            } else {
-                $fieldName .= $name[$i];
-            }
+        // Check if name contains underscores, if so make it lower case and replace underscores with spaces
+        if (strpos($name,'_')){
+            $name = str_replace('_', ' ', strtolower($name));
         }
-        return $fieldName;
+
+        return lcfirst(str_replace(' ', '', ucwords($name)));
     }
 
     /**
