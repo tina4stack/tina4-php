@@ -227,7 +227,7 @@ class Crud
         Route::get(
             $path,
             function (Response $response, Request $request) use ($object, $function) {
-                $filter = Crud::getDataTablesFilter("t.", $object);
+                $filter = Crud::getDataTablesFilter("t.", new $object());
                 $jsonResult = $function("read", new $object(), $filter, $request);
 
                 return $response($jsonResult, HTTP_OK);
