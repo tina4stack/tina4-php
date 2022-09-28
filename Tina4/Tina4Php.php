@@ -253,12 +253,18 @@ class Tina4Php extends Data
                 $usedPaths[] = $realPath;
                 $scssFiles = $this->getFiles($scssLocation, ".scss");
                 foreach ($scssFiles as $fId => $file) {
+                    // ignore files that start with an underscore, as they are likely imported in the SCSS files in specific places using @import
+                    $pathParts = pathinfo($file);
+                    if (strpos($pathParts['filename'], '_') === 0) continue; 
                     $scssContent .= file_get_contents($file);
                 }
             }
 
             try {
                 $scss = new Compiler();
+                foreach ($usedPaths as $uId => $scssLocation) {
+                    $scss->setImportPaths($scssLocation);
+                }
                 $scssDefault = $scss->compileString($scssContent)->getCss();
                 if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
                     if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
