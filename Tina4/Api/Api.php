@@ -18,10 +18,16 @@ class Api
      * @var string|null Base url for the Api
      */
     public $baseURL;
+
     /**
      * @var string Auth header , normally basic auth or token auth
      */
     public $authHeader;
+
+    /**
+     * @var bool Set to true to ignore SSL validation
+     */
+    public $ignoreSSLValidation;
 
     /**
      * API constructor.
@@ -30,12 +36,15 @@ class Api
      * @tests tina4
      *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
      */
-    public function __construct(?string $baseURL, string $authHeader = "")
+    public function __construct(?string $baseURL="", string $authHeader = "")
     {
         if (!empty($baseURL)) {
             $this->baseURL = $baseURL;
         }
-        $this->authHeader = $authHeader;
+
+        if (!empty($authHeader)) {
+            $this->authHeader = $authHeader;
+        }
     }
 
     /**
@@ -72,6 +81,15 @@ class Api
             }
 
             $curlRequest = curl_init($this->baseURL . $restService);
+
+            if ($this->ignoreSSLValidation) {
+                curl_setopt($curlRequest, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($curlRequest, CURLOPT_SSL_VERIFYHOST, false);
+            }
+              else {
+                  curl_setopt($curlRequest, CURLOPT_SSL_VERIFYPEER, true);
+                  curl_setopt($curlRequest, CURLOPT_SSL_VERIFYHOST, true);
+              }
 
             curl_setopt($curlRequest, CURLOPT_CUSTOMREQUEST, $requestType);
             curl_setopt($curlRequest, CURLOPT_RETURNTRANSFER, true);
