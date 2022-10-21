@@ -104,9 +104,15 @@ class Router extends Data
 
         //GO THROUGH ALL THE TEMPLATE INCLUDE LOCATIONS AND SEE IF WE CAN FIND SOMETHING
         Debug::message("URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
-
-
         $parseFile = new ParseTemplate($url);
+
+        //TRY FIND THE TINA4 DOCUMENTATION
+        if (TINA4_DEBUG) {
+            if (empty($parseFile->content) && $parseFile->httpCode === HTTP_NOT_FOUND) {
+                $url = "documentation/index";
+                $parseFile = new ParseTemplate($url);
+            }
+        }
 
         $this->createCacheResponse($url, $parseFile->httpCode, $parseFile->content, $parseFile->headers, $parseFile->fileName);
         return new RouterResponse($parseFile->content, $parseFile->httpCode, $parseFile->headers);
@@ -393,6 +399,7 @@ class Router extends Data
                         return new RouterResponse("", HTTP_FORBIDDEN, $headers);
                     }
                 }
+
 
                 //check for an empty result
                 if ($result === null && !is_array($result) && !is_object($result)) {
