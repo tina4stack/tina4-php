@@ -62,6 +62,14 @@ class Tina4Php extends Data
             }
         }
 
+        if (!defined("TINA4_SCSS_SPLIT_CSS_INTERNAL")) {
+            if (defined("TINA4_SCSS_SPLIT_CSS")) {
+                define("TINA4_SCSS_SPLIT_CSS_INTERNAL", false);
+            } else {
+                define("TINA4_SCSS_SPLIT_CSS", false);
+            }
+        }
+
         foreach (TINA4_ROUTE_LOCATIONS_INTERNAL as $includeId => $includeLocation) {
             if (!file_exists($includeLocation)) { //Modules have absolute paths
                 $includeLocation = TINA4_DOCUMENT_ROOT . $includeLocation;
@@ -242,8 +250,8 @@ class Tina4Php extends Data
     public function initCSS(): void
     {
         //Test for SCSS and existing default.css, only compile if it does not exist
-        if (TINA4_DEBUG || !file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css")) {
-            $scssContent = "";
+        if (TINA4_DEBUG || (!TINA4_SCSS_SPLIT_CSS && !file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css"))) {
+            $scssContent = [];
             $usedPaths = [];
             foreach (TINA4_SCSS_LOCATIONS as $lId => $scssLocation) {
                 $realPath = realpath($scssLocation);
@@ -255,26 +263,42 @@ class Tina4Php extends Data
                 foreach ($scssFiles as $fId => $file) {
                     // ignore files that start with an underscore, as they are likely imported in the SCSS files in specific places using @import
                     $pathParts = pathinfo($file);
-                    if (strpos($pathParts['filename'], '_') === 0) continue; 
-                    $scssContent .= file_get_contents($file);
+                    if (strpos($pathParts['filename'], '_') === 0) continue;
+                    $scssContent[$pathParts['filename']] = file_get_contents($file);
                 }
             }
 
             try {
-                $scss = new Compiler();
+                $scss_compiler = new Compiler();
                 foreach ($usedPaths as $uId => $scssLocation) {
-                    $scss->setImportPaths($scssLocation);
+                    $scss_compiler->setImportPaths($scssLocation);
                 }
-                $scssDefault = $scss->compileString($scssContent)->getCss();
-                if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
-                    if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
-                        throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                if (!TINA4_SCSS_SPLIT_CSS) {
+                    Debug::message('Creating CSS file: default.css' );
+                    $scssDefault = $scss_compiler->compileString(implode(" ", $scssContent))->getCss();
+                    if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
+                        if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
+                            throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                        }
+                        file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css", $scssDefault);
                     }
-                    file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . "default.css", $scssDefault);
+                } else {
+                    // Split the SCSS into seperate CSS files
+                    foreach($scssContent as $filename => $scss) {
+                        $outputname = trim($filename).".css";
+                        Debug::message('Creating CSS file:' . $outputname );
+                        $scssDefault = $scss_compiler->compileString($scss)->getCss();
+                        if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
+                            if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
+                                throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                            }
+                            file_put_contents($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css" . DIRECTORY_SEPARATOR . $outputname, $scssDefault);
+                        }
+                    }
                 }
             } catch (\Exception $exception)
             {
-                Debug::message("Could not build default.css ".$exception->getMessage(), TINA4_LOG_ERROR);
+                Debug::message("Could not build css ".$exception->getMessage(), TINA4_LOG_ERROR);
             }
 
         }
