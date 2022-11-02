@@ -108,7 +108,7 @@ class Router extends Data
 
         //TRY FIND THE TINA4 DOCUMENTATION
         if (TINA4_DEBUG) {
-            if (empty($parseFile->content) && $parseFile->httpCode === HTTP_NOT_FOUND) {
+            if (empty($parseFile->content) && $parseFile->httpCode === HTTP_NOT_FOUND && $url === "/index") {
                 $url = "documentation/index";
                 $parseFile = new ParseTemplate($url);
             }

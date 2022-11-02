@@ -39,18 +39,14 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
 
             $internalTwig = clone $twig;
 
-            $canContinue = false;
-            if (!empty($openBaseDirs) && in_array(dirname(realpath($fileName)), $openBaseDirs)) {
-                $canContinue = true;
-            }
-
             //No need to check for files either if we have the template
             if ($internalTwig->getLoader()->exists($fileName)) {
                 $canContinue = false;
+            } else {
+                $canContinue = true;
             }
 
             if ($canContinue && is_file($fileNameString)) {
-
                 $newPath = dirname($fileName) . DIRECTORY_SEPARATOR;
                 if ($location === "") {
                     $location = $newPath;

@@ -59,6 +59,7 @@
         "tina4service": "tina4service",
         "test": "@tina4 tests:run",
         "phplint": "vendor/bin/phplint",
+        "watcher": "vendor/bin/php-watcher",
         "test:verbose": "@tina4 tests:verbose",
         "initialize": "@tina4 initialize:run",
         "initialise": "@tina4 initialize:run",
@@ -77,6 +78,7 @@
         "phpunit/phpunit": "^9",
         "overtrue/phplint": "^2.0",
         "tina4stack/tina4php-sqlite3": "^2.0",
-        "phpmetrics/phpmetrics": "^2.8"
+        "phpmetrics/phpmetrics": "^2.8",
+        "seregazhuk/php-watcher": "^0.5.2"
     }
 }

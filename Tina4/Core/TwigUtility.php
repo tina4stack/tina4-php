@@ -68,6 +68,15 @@ class TwigUtility
                 $twig->addFunction($dumpFunction);
             }
 
+            $includeCode = new TwigFunction("include_code", function($fileName) {
+                $fileName = "./src/templates/documentation/".$fileName;
+                if (file_exists($fileName)) {
+                    return file_get_contents($fileName);
+                }
+            });
+
+            $twig->addFunction($includeCode);
+
             $twig->addGlobal('Tina4', new Caller());
             if (isset($_SERVER["HTTP_HOST"])) {
                 $twig->addGlobal('url', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]");
