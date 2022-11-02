@@ -62,7 +62,9 @@
         </div>
     </nav>
 </header>
+<div id="submenu"><!-- --></div>
 <div class="container">
+
 
     <h1>Home</h1>
 
@@ -114,5 +116,72 @@ echo "Hello World";
     hljs.addPlugin(new CopyButtonPlugin());
     hljs.highlightAll();
 </script>
+<style type="text/css">
+
+    #submenu {
+        float: right;
+        margin: 1em 0;
+        padding: 10px;
+        background: #fcfaf0;
+        border: 2px solid #E0D8B7;
+        border-radius: 1em;
+        font-size: 11px;
+    }
+    #submenu ol {
+        margin: 0;
+        padding: 0 0 0 30px;
+    }
+
+</style>
+<script type="text/javascript">
+
+    // Original JavaScript code by Chirp Internet: chirpinternet.eu
+    // Please acknowledge use of this code by including this header.
+
+    buildMenu = (function(targetId, headingTag) {
+        var target = document.getElementById(targetId);
+        var headings = document.getElementsByTagName(headingTag || "h2");
+
+        if(headings.length > 1) {
+            // construct an ordered list of links
+            var menuList = document.createElement("OL");
+            for(var i=0; i < headings.length; i++) {
+                var anchorName = "";
+                if(headings[i].id) {
+                    anchorName = headings[i].id;
+                } else {
+                    anchorName = "section_" + i;
+                    headings[i].setAttribute("id", anchorName);
+                }
+
+                var headingText = headings[i].firstChild.nodeValue
+
+                //headings[i].firstChild.nodeValue = (i+1) + ". " + headingText;
+
+                var menuLink = document.createElement("A");
+                menuLink.setAttribute("href", "#" + anchorName);
+                menuLink.appendChild(document.createTextNode(headingText));
+
+                var listItem = document.createElement("LI");
+                listItem.appendChild(menuLink);
+
+                menuList.appendChild(listItem);
+            }
+
+            // remove all nodes from inside target element
+            while(target.hasChildNodes()) target.removeChild(target.firstChild);
+
+            // insert our generated menu into the target element
+            target.appendChild(menuList);
+        } else {
+            // remove the target element from the DOM
+            target.parentNode.removeChild(target);
+        }
+    });
+
+    buildMenu("submenu", "h1");
+
+</script>
+
 </body>
 </html>
