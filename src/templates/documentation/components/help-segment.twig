@@ -1,0 +1,27 @@
+<div class="help-segment">
+    <h2>{{ title }}</h2>
+    <p>
+        {{ introduction }}
+    </p>
+    <ul class="list-unstyled help-requirements">
+        <li>Requirements
+            <ul>
+                {% for requirement in requirements %}
+                    <li>{{ requirement | raw }}</li>
+                {% endfor %}
+            </ul>
+        </li>
+    </ul>
+    <p>
+        {{ content }}
+    </p>
+    <ul class="list-unstyled help-knowledge">
+        <li>Knowledge
+            <ul>
+                {% for tip in tips %}
+                <li>{{ tip | raw}}</li>
+                {% endfor %}
+            </ul>
+        </li>
+    </ul>
+</div>

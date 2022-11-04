@@ -96,9 +96,6 @@ class TwigUtility
                 $config->setAuthentication($auth);
             }
 
-
-
-
             if (defined("TINA4_TWIG_GLOBALS") && TINA4_TWIG_GLOBALS) {
                 if (isset($_COOKIE) && !empty($_COOKIE)) {
                     $twig->addGlobal('cookie', $_COOKIE);
@@ -170,20 +167,20 @@ class TwigUtility
      */
     public static function addTwigMethods(Config $config, Environment $twig): bool
     {
-        if ($config !== null && !empty($config->getTwigGlobals())) {
+        if (!empty($config->getTwigGlobals())) {
             foreach ($config->getTwigGlobals() as $name => $method) {
                 $twig->addGlobal($name, $method);
             }
         }
 
-        if ($config !== null && !empty($config->getTwigFilters())) {
+        if (!empty($config->getTwigFilters())) {
             foreach ($config->getTwigFilters() as $name => $method) {
                 $filter = new TwigFilter($name, $method);
                 $twig->addFilter($filter);
             }
         }
 
-        if ($config !== null && !empty($config->getTwigFunctions())) {
+        if (!empty($config->getTwigFunctions())) {
             foreach ($config->getTwigFunctions() as $name => $method) {
                 $function = new TwigFunction($name, $method);
                 $twig->addFunction($function);

@@ -156,6 +156,10 @@ if (!defined("TINA4_DEBUG")) {
     define("TINA4_DEBUG", false);
 }
 
+if (!defined("TINA4_CACHE_ON")) {
+    define("TINA4_CACHE_ON", false);
+}
+
 if (TINA4_DEBUG) {
     error_reporting(E_ALL);
 }

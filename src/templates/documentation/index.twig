@@ -53,7 +53,7 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
                 <div class="navbar-nav">
-                    <a class="nav-link" aria-current="page" href="#">Home</a>
+                    <a class="nav-link" aria-current="page" href="#section_0">Home</a>
                     <a class="nav-link" href="#getting-started">Getting Started</a>
                     <a class="nav-link" href="#templates">Templates</a>
                     <a class="nav-link" href="#advanced">Advanced</a>
@@ -70,44 +70,12 @@
 
     <h1>Getting Started</h1>
 
-    <div class="help-segment">
-        <h2>Basic Web Site</h2>
-        <p>
-            Tina4 implements TWIG templating out of the box so all your html files end with the tig extension.  Using twig allows you to use includes and therefore simplifies implementing web pages.
-        </p>
-        <ul class="list-unstyled help-requirements">
-            <li>Requirements
-                <ul>
-                    <li>HTML</li>
-                    <li>Twig</li>
-                </ul>
-            </li>
-        </ul>
-        <p>
-            Under <code>src/templates</code> create a file called <code>index.twig</code>
-            <code><pre>{{ include_code("examples/basic-website.twig"| raw) }}</pre></code>
-            Click on the <a href="http://localhost:7145">http://localhost:7145</a> to see the site, once you have replaced the default site you can get your documentation here <a href="http://localhost:7145/documentation">http://localhost:7145/documentation</a>
-        </p>
-        <ul class="list-unstyled help-knowledge">
-            <li>Knowledge
-                <ul>
-                    <li>Tina4 templates are located under <code>src/templates</code></li>
-                    <li>Routing is created dynamically, for example a file called <code>src/templates/contact-us.twig</code> will be accessible at <a href="/contact-us">http://localhost:7145/contact-us</a></li>
-                    <li>Use {% verbatim %}<code>{% include "filename.twig" %}{% endverbatim %}</code> to include a file</li>
-                </ul>
-            </li>
-        </ul>
-    </div>
+    {% include "documentation/getting-started/basic-website.twig" %}
 
 
     <h1>Templates</h1>
 
     <h1>Advanced</h1>
-
-
-    <pre><code class="language-php">$a = "Hello!";
-echo "Hello World";
-</code></pre>
 
 
 </div>
@@ -126,6 +94,7 @@ echo "Hello World";
         border: 2px solid #E0D8B7;
         border-radius: 1em;
         font-size: 11px;
+        margin: 10px;
     }
     #submenu ol {
         margin: 0;

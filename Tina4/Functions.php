@@ -33,7 +33,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
         try {
             global $twig;
 
-            if (empty($twig)) {
+            if ($twig === null) {
                 TwigUtility::initTwig();
             }
 
@@ -58,31 +58,35 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
                 }
                 $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . $newPath);
                 return $internalTwig->render($renderFile, $data);
-            } elseif ((strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR) || (strlen($fileName) > 1 && $fileName[0] === "/")) {
+            }
+
+            if ((strlen($fileName) > 1 && $fileName[0] === DIRECTORY_SEPARATOR) || (strlen($fileName) > 1 && $fileName[0] === "/")) {
                 $fileName = substr($fileName, 1);
             }
 
             if ($internalTwig->getLoader()->exists($fileName)) {
                 return $internalTwig->render($fileName, $data);
-            } elseif ($internalTwig->getLoader()->exists(basename($fileName))) {
-                return $internalTwig->render(basename($fileName), $data);
-            } else {
-                if (!$canContinue || !is_file($fileNameString)) {
-
-                    $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
-
-                    if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR)) {
-                        if (!mkdir($concurrentDirectory = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true) && !is_dir($concurrentDirectory)) {
-                            //throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
-                        }
-                    }
-
-                    file_put_contents($fileName, file_get_contents($fileNameString));
-                }
-                $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
-
-                return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
             }
+
+            if ($internalTwig->getLoader()->exists(basename($fileName))) {
+                return $internalTwig->render(basename($fileName), $data);
+            }
+
+            if (!$canContinue || !is_file($fileNameString)) {
+
+                $fileName = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR . "template" . md5($fileNameString) . ".twig";
+
+                if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR) && !mkdir($concurrentDirectory = "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true) && !is_dir($concurrentDirectory)) {
+                    \Tina4\Debug::message("Could not create cache folder {$concurrentDirectory}", TINA4_LOG_CRITICAL);
+                }
+
+                //Make a cache from a twig template string
+                file_put_contents($fileName, $fileNameString);
+
+            }
+            $internalTwig->getLoader()->addPath(TINA4_DOCUMENT_ROOT . "cache");
+
+            return $internalTwig->render("template" . md5($fileNameString) . ".twig", $data);
         } catch (\Exception $exception) {
 
             return $exception->getFile() . " (" . $exception->getLine() . ") " . $exception->getMessage();
@@ -104,26 +108,27 @@ function redirect(string $url, int $statusCode = 303): void
     $testURL = parse_url($url);
 
     //Check if test URL contains a scheme (http or https) or if it contains a host name
-    if ((!isset($testURL["scheme"]) || $testURL["scheme"] == "") && (!isset($testURL["host"]) || $testURL["host"] == "")) {
+    if ((!isset($testURL["scheme"]) || $testURL["scheme"] === "") && (!isset($testURL["host"]) || $testURL["host"] === "")) {
         //Check if the current page uses an alias and if the parsed URL string is an absolute URL
-        if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] != "" && substr($url, 0, 1) === '/') {
+        if (isset($_SERVER["CONTEXT_PREFIX"]) && $_SERVER["CONTEXT_PREFIX"] !== "" && substr($url, 0, 1) === '/') {
             //Append the prefix to the absolute path
             header('Location: ' . $_SERVER["CONTEXT_PREFIX"] . $url, true, $statusCode);
             die();
-        } else {
-            header('Location: ' . $url, true, $statusCode);
-            die();
         }
-    } else {
+
         header('Location: ' . $url, true, $statusCode);
         die();
     }
+
+    header('Location: ' . $url, true, $statusCode);
+    die();
 }
 
 /**
  * Initialize function loads the library for use
  */
-function Initialize() {
+function Initialize(): void
+{
     if (file_exists("./Tina4/Initialize.php")) {
         require_once "./Tina4/Initialize.php";
     } else {
