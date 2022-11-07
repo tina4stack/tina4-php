@@ -1,0 +1,36 @@
+.help-segment {
+  .help-requirements {
+    margin: 10pt;
+    float: right;
+    border-radius: 10pt;
+    border: 1px solid lightslategray;
+    padding: 5pt;
+
+    ul {
+      list-style-type: square;
+      list-style-position: inside;
+      padding: 0;
+      min-width: 100pt;
+    }
+  }
+
+  .help-knowledge {
+    border-radius: 10pt;
+    border: 1px solid lightslategray;
+    padding: 10pt 20pt 20pt;
+    ul {
+      list-style-type: square;
+      list-style-position: inside;
+      padding: 0;
+    }
+  }
+}
+
+.help-navigation {
+  p {
+    margin-bottom: 0;
+    a {
+      display: inline-block;
+    }
+  }
+}

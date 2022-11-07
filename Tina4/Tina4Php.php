@@ -247,7 +247,7 @@ class Tina4Php extends Data
             $usedPaths = [];
             foreach (TINA4_SCSS_LOCATIONS as $lId => $scssLocation) {
                 $realPath = realpath($scssLocation);
-                if (in_array($realPath, $usedPaths)) {
+                if (in_array($realPath, $usedPaths, true)) {
                     continue;
                 }
                 $usedPaths[] = $realPath;

@@ -32,11 +32,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/languages/scss.min.js"
             integrity="sha512-B6B6/6JDIq5g2jqojrEdCrUCY3rZPLEg4i9tpyF+A+u/8k3/7iPF9WAdQi2it/SvdVUPMNQI5cRT8jMBySQDfg=="
             crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/languages/bash.min.js"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://unpkg.com/highlightjs-copy/dist/highlightjs-copy.min.js"></script>
-    <link
-            rel="stylesheet"
-            href="https://unpkg.com/highlightjs-copy/dist/highlightjs-copy.min.css"
-    />
+    <link rel="stylesheet" href="https://unpkg.com/highlightjs-copy/dist/highlightjs-copy.min.css" />
+    <link rel="stylesheet" href="/src/templates/documentation/default.css" />
+
+
 </head>
 <body>
 <header>
@@ -67,10 +70,26 @@
 
 
     <h1>Home</h1>
+    <p>
+        Installing Tina4 should be very simple and straight forward, if you're finding the process too complicated consider reaching out for some help.
+    </p>
+    <p>
+        We recommend running the docker to get started:
+    </p>
+    <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
+
 
     <h1>Getting Started</h1>
 
-    {% include "documentation/getting-started/basic-website.twig" %}
+    <nav class="help-navigation">
+        <p><a href="#getting-started-running-from-docker">Running from Docker </a> - Get up and running fast </p>
+        <p><a href="#getting-started-basic-website">Basic Website </a> - Using Twig templates to make pages </p>
+        <p><a href="#getting-started-get-route"> Get Route </a> - A basic Get route to fetch information </p>
+        <p><a href="#getting-started-post-route"> Post Route </a> - A basic Post route to capture information </p>
+    </nav>
+
+
+    {% include "documentation/getting-started/basic-website.twig" with {anchor: '#getting-started-basic-website'} %}
 
 
     <h1>Templates</h1>

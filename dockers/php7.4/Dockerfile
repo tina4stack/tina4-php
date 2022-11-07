@@ -1,4 +1,4 @@
-FROM php:7.4-cli-buster
+FROM --platform=linux/amd64 php:7.4-cli-buster
 
 RUN apt-get update \
     && apt-get install -y apt-transport-https gnupg2 libpng-dev libzip-dev nano unzip unixodbc  \
@@ -39,6 +39,7 @@ RUN CPPFLAGS=-I/usr/include/firebird ./configure
 RUN make
 RUN make install
 RUN echo "extension=interbase.so" > /usr/local/etc/php/conf.d/docker-php-ext-interbase.ini
+
 #install mongodb support
 RUN pecl install mongodb
 RUN echo "extension=mongodb.so" > /usr/local/etc/php/conf.d/docker-php-ext-mongodb.ini

@@ -1,10 +1,10 @@
-<div class="help-segment">
+<div id="{{ anchor }}" class="help-segment">
     <h2>{{ title }}</h2>
     <p>
         {{ introduction }}
     </p>
     <ul class="list-unstyled help-requirements">
-        <li>Requirements
+        <li>Skill sets
             <ul>
                 {% for requirement in requirements %}
                     <li>{{ requirement | raw }}</li>
@@ -16,7 +16,7 @@
         {{ content }}
     </p>
     <ul class="list-unstyled help-knowledge">
-        <li>Knowledge
+        <li>Handy Insights
             <ul>
                 {% for tip in tips %}
                 <li>{{ tip | raw}}</li>
