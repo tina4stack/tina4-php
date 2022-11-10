@@ -1,0 +1,18 @@
+{% set title = 'Running from Docker' %}
+
+{% set introduction %}
+Some text about dockers on different platforms
+{% endset %}
+
+{% set requirements = ['Docker', 'Bash'] %}
+
+{% set content %}
+    <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
+{% endset %}
+
+{% set tips = [
+
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}

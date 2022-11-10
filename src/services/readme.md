@@ -7,6 +7,7 @@ class TestProcess extends \Tina4\Process implements \Tina4\ProcessInterface
 
     public function canRun(): bool
     {
+        
         // TODO: Implement canRun() method.
         return true;
     }
