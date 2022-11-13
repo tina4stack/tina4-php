@@ -7,16 +7,18 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*November 13, 2022* - Added PHP8.1 to docker & documentation
+
 *February 1, 2022* - Added docker support for Postgres & MySQL
 
-*December 26,2021* - Fixes for Swagger Examples using new DataField & HTTP Swoole example
+*December 26, 2021* - Fixes for Swagger Examples using new DataField & HTTP Swoole example
 
-*December 21,2021* - Added Openswoole to the docker image and some examples of using TCP service
+*December 21, 2021* - Added Openswoole to the docker image and some examples of using TCP service
 
 *December 6, 2021* - Breaking updates, you need to include the database drivers as you require them now.
 The ORM and database modules are all extracted into their own packagist modules.
 The ORM and database metadata work now using a more uniform mechanism. The service module now
-is created under bin and tina4service and tina4 bin executables are replaced when their checksums change.
+is created under bin and tina4 service and tina4 bin executables are replaced when their checksums change.
 
 Database support table
 
@@ -24,7 +26,7 @@ Database support table
 |------------|-------------------------------------------------------|
 | Sqlite3    | ```composer require tina4stack/tina4php-sqlite3```    |
 | ODBC       | ```composer require tina4stack/tina4php-odbc```       |
-| MySQL      | ```composer require tina4stack/tina4php-mysql```     |
+| MySQL      | ```composer require tina4stack/tina4php-mysql```      |
 | Firebird   | ```composer require tina4stack/tina4php-firebird```   |
 | MongoDB    | ```composer require tina4stack/tina4php-mongodb```    |
 | PostgreSQL | ```composer require tina4stack/tina4php-postgresql``` |
@@ -58,7 +60,7 @@ things to be documented. PHP 8.0 is not in a good place for database use from wh
 
 ### Installing ###
 
-*PHP 8.0 is not a stable candidate yet, for example some database functionlity is not completely supported*
+*PHP 8.0 is not a stable candidate yet, for example some database functionality is not completely supported*
 
 - Install PHP7.3 >  make sure the following extensions are enabled php_fileinfo, mbstring, curl.
 - Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly
@@ -164,13 +166,13 @@ The folder layout is as follows and can be overridden by defining PHP constants 
 
 #### .Env Configuration
 
-Tina4 uses a .env file to setup project constants, a .env will be created for you when the system runs for the first
+Tina4 uses a .env file to set up project constants, a .env will be created for you when the system runs for the first
 time. If you specify an environment variable on your OS called ENVIRONMENT then .env.ENVIRONMENT will be loaded instead.
 
 ```bash
 [Section]           <-- Group section
 MY_VAR=Test         <-- Example declaration, no quotes required or escaping, quotes will be treated as part of the variable
-# A commment        <-- This is a comment
+# A comment        <-- This is a comment
 [Another Section]
 VERSION=1.0.0
 ```
@@ -181,7 +183,7 @@ example of how it should look.
 ### Example of Routing
 
 Creating API end points and routers in Tina4 is simple as indicated below. If you are adding swagger annotations, simply
-hitup the /swagger end point to see the OpenApi rendering.
+hit up the /swagger end point to see the OpenApi rendering.
 
 ```php
 /**
@@ -355,3 +357,7 @@ docker build . -t tina4stack/php:7.4
 ```
 ### Jquery validate cheat sheet
 https://gist.github.com/rhacker/3550309
+
+### Todo
+- Add health check
+- Add GUID for each request, flow through to the rest of the code
