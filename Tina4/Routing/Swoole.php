@@ -24,7 +24,7 @@ class Swoole
 
         switch ($type) {
             case "tcp":
-                $this->server = new \Swoole\Server("0.0.0.0", $port, SWOOLE_BASE, SWOOLE_SOCK_TCP);
+                $this->server = new \Swoole\Server("0.0.0.0", $port);
                 if (!empty($params)) {
                     $this->server->set($params);
                 } else {
@@ -59,7 +59,7 @@ class Swoole
     public function addListener(int $port, array $events)
     {
         if (!empty($this->server) && $this->type === "tcp") {
-            $listener = $this->server->listen("0.0.0.0", $port, SWOOLE_TCP);
+            $listener = $this->server->listen("0.0.0.0", $port);
             foreach ($events as $event => $callback) {
                 $listener->on($event, $callback);
             }
