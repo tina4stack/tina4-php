@@ -1,0 +1,12 @@
+#Get the PHP version
+docker run tina4stack/php -v
+
+#Get a list of PHP modules
+docker run tina4stack/php -m
+
+#Run a different PHP version
+docker run tina4stack/php:7.4 -v
+docker run tina4stack/php:8.1 -v
+
+#Run a script with the PHP docker
+docker run tina4stack/php test.php

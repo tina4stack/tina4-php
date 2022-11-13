@@ -18,6 +18,8 @@
             integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
             crossorigin="anonymous"></script>
 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/js/fontawesome.min.js" integrity="sha512-j3gF1rYV2kvAKJ0Jo5CdgLgSYS7QYmBVVUjduXdoeBkc4NFV4aSRTi+Rodkiy9ht7ZYEwF+s09S43Z1Y+ujUkA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <!-- Hilight js -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/styles/a11y-dark.min.css"
@@ -55,9 +57,9 @@
             <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
                 <div class="navbar-nav">
                     <a class="nav-link" aria-current="page" href="#section_0">Home</a>
-                    <a class="nav-link" href="#getting-started">Getting Started</a>
-                    <a class="nav-link" href="#templates">Templates</a>
-                    <a class="nav-link" href="#advanced">Advanced</a>
+                    <a class="nav-link" href="#section_1">Getting Started</a>
+                    <a class="nav-link" href="#section_2">Templates</a>
+                    <a class="nav-link" href="#section_3">Advanced</a>
                 </div>
             </div>
         </div>
@@ -67,11 +69,15 @@
 <div class="container">
     <h1>Home</h1>
     <p>
-        Installing Tina4 should be very simple and straight forward, if you're finding the process too complicated consider reaching out for some help.
+        Installing Tina4 should be very simple and straight forward, if you're finding the process too complicated consider reaching out for some help on our Slack channel.
     </p>
     <p>
-        We recommend running the docker to get started:
+        First download the <a target="_blank" href="https://www.docker.com">docker desktop</a> environment and run the following commands based on your operating system:
     </p>
+    <h4><i class="fa-brands fa-windows"></i> Windows</h4>
+    <pre><code>{{ include_code("examples/run-from-docker-win.twig"| raw) }}</code></pre>
+
+    <h4><i class="fa-brands fa-linux"></i> </i> Linux / <i class="fa-brands fa-apple"></i> MacOS</h4>
     <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
 
     <h1>Getting Started</h1>
@@ -79,13 +85,19 @@
     <nav class="help-navigation">
         <p><a href="#getting-started-running-from-docker">Running from Docker </a> - Get up and running fast </p>
         <p><a href="#getting-started-basic-website">Basic Website </a> - Using Twig templates to make pages </p>
+        <p><a href="#getting-started-tina4-php">Tina4 PHP </a> - Using Tina4 PHP  </p>
         <p><a href="#getting-started-get-route"> Get Route </a> - A basic Get route to fetch information </p>
         <p><a href="#getting-started-post-route"> Post Route </a> - A basic Post route to capture information </p>
+        <p><a href="#getting-started-api-documentation"> API </a> - Documenting an API using annotations </p>
+        <p><a href="#getting-started-migrations"> Migrations </a> - Keeping track of your database changes </p>
+        <p><a href="#getting-started-security"> Security </a> - Using and initializing the Authentication module </p>
     </nav>
 
 
     {% include "documentation/getting-started/running-from-docker.twig" with {anchor: 'getting-started-running-from-docker'} %}
     {% include "documentation/getting-started/basic-website.twig" with {anchor: 'getting-started-basic-website'} %}
+    {% include "documentation/getting-started/tina4-php.twig" with {anchor: 'getting-started-tina4-php'} %}
+
 
 
     <h1>Templates</h1>

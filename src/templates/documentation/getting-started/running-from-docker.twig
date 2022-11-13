@@ -1,17 +1,23 @@
 {% set title = 'Running from Docker' %}
 
 {% set introduction %}
-Some text about dockers on different platforms
+Dockers are a consistent way of running the same software environment on different operating systems.
 {% endset %}
 
 {% set requirements = ['Docker', 'Bash'] %}
 
 {% set content %}
+    <h4><i class="fa-brands fa-windows"></i> Windows</h4>
+    <pre><code>{{ include_code("examples/run-from-docker-win.twig"| raw) }}</code></pre>
+
+    <h4><i class="fa-brands fa-linux"></i> Linux / <i class="fa-brands fa-apple"></i> MacOS</h4>
     <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
 {% endset %}
 
 {% set tips = [
-
+    'Download the docker desktop from <a target="_blank" href="https://www.docker.com">here</a>',
+    'On windows you may need to restart your Docker Desktop if your computer sleeps',
+    'The -v switch mounts the PHP application from your local folder to the <code>/app</code> folder where it runs'
 ]
 %}
 

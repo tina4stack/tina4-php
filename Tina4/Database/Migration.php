@@ -56,36 +56,39 @@ class Migration extends Data
         $this->migrationPath = $migrationPath;
 
         if ($this->DBA === null) {
-            die("Please make sure you have a global \$DBA connection in your index.php");
-        }
-
-        //check to see if there are database specific migrations
-        if (method_exists($this->DBA, "getShortName") && file_exists($this->migrationPath . "/" . $this->DBA->getShortName())) {
-            $this->migrationPath .= "/" . $this->DBA->getShortName();
-            $this->runRootMigrations = true;
-        } else {
-            \Tina4\Debug::message("Please upgrade the database driver to include getShortName for migrations ", TINA4_LOG_DEBUG);
+            echo "Please make sure you have a global \$DBA connection in your index.php\n";
         }
 
         \Tina4\Debug::message("Migration path: ".$this->migrationPath, TINA4_LOG_DEBUG);
 
-        //Turn off auto commits so we can roll back
-        $this->DBA->autoCommit(false);
-
-        if (!$this->DBA->tableExists("tina4_migration")) {
-
-            $sql = "create table tina4_migration ("
-                . "migration_id varchar (14) not null,"
-                . "description varchar (1000) default '',"
-                . "content blob,"
-                . "passed integer default 0,"
-                . "primary key (migration_id))";
-
-            if (get_class($this->DBA) === "Tina4\DataPostgresql") {
-                $sql = str_replace("blob", "bytea", $sql);
+        //Only run this if the database connection exists
+        if ($this->DBA !== null) {
+            //check to see if there are database specific migrations
+            if (method_exists($this->DBA, "getShortName") && file_exists($this->migrationPath . "/" . $this->DBA->getShortName())) {
+                $this->migrationPath .= "/" . $this->DBA->getShortName();
+                $this->runRootMigrations = true;
+            } else {
+                \Tina4\Debug::message("Please upgrade the database driver to include getShortName method for migrations", TINA4_LOG_DEBUG);
             }
-            $this->DBA->exec($sql);
-            $this->DBA->commit();
+
+            //Turn off auto commits so we can roll back
+            $this->DBA->autoCommit(false);
+
+            if (!$this->DBA->tableExists("tina4_migration")) {
+
+                $sql = "create table tina4_migration ("
+                    . "migration_id varchar (14) not null,"
+                    . "description varchar (1000) default '',"
+                    . "content blob,"
+                    . "passed integer default 0,"
+                    . "primary key (migration_id))";
+
+                if (get_class($this->DBA) === "Tina4\DataPostgresql") {
+                    $sql = str_replace("blob", "bytea", $sql);
+                }
+                $this->DBA->exec($sql);
+                $this->DBA->commit();
+            }
         }
     }
 
@@ -112,7 +115,6 @@ class Migration extends Data
         $result .= "<pre>";
         $result .= "<span style=\"color:green;\">STARTING Migrations ($this->migrationPath)....</span>\n";
 
-        $error = false;
         restore_error_handler();
         error_reporting(0);
 
@@ -157,7 +159,7 @@ class Migration extends Data
 
             $content = file_get_contents($this->migrationPath . "/" . $entry);
 
-            $runsql = false;
+            $runSql = false;
             if (empty($record)) {
                 $result .= "<span style=\"color:orange;\">RUNNING:\"{$migrationId} {$description}\" ...</span>\n";
                 $transId = $this->DBA->startTransaction();
@@ -168,19 +170,19 @@ class Migration extends Data
 
                 $this->DBA->exec($sqlInsert, substr($content, 0, 10000));
                 $this->DBA->commit($transId);
-                $runsql = true;
+                $runSql = true;
             } else if ($record->passed === "0" || $record->passed === "" || $record->passed == 0) {
                 $result .= "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
-                $runsql = true;
+                $runSql = true;
             } elseif ($record->passed === "1" || $record->passed == 1) {
                 //Update the migration with the latest copy
                 $sqlUpdate = "update tina4_migration set content = ".$this->DBA->getQueryParam("1", 1)." where migration_id = '{$migrationId}'";
                 $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
                 $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
-                $runsql = false;
+                $runSql = false;
             }
 
-            if ($runsql) {
+            if ($runSql) {
                 $transId = $this->DBA->startTransaction();
                 //before exploding the content, see if it is a stored procedure, trigger or view.
                 if (stripos($content, "create trigger") === false && stripos($content, "create procedure") === false && stripos($content, "create view") === false) {
@@ -253,13 +255,11 @@ class Migration extends Data
      * @param bool $noDateStamp
      * @return string
      */
-    public function createMigration($description, $content, $noDateStamp = false): string
+    public function createMigration(string $description, string $content, bool $noDateStamp = false): string
     {
         if (!empty($description) && !empty($content)) {
-            if (!file_exists($this->migrationPath)) {
-                if (!mkdir($concurrentDirectory = $this->migrationPath, 0755, true) && !is_dir($concurrentDirectory)) {
-                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
-                }
+            if (!file_exists($this->migrationPath) && !mkdir($concurrentDirectory = $this->migrationPath, 0755, true) && !is_dir($concurrentDirectory)) {
+                throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
             }
 
             $description = str_replace(" ", "_", $description);
