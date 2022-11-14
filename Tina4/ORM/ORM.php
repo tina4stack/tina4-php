@@ -1001,7 +1001,7 @@ class ORM implements \JsonSerializable
      * @param string $filter The criteria of what you are searching for to load e.g. "id = 2"
      * @param string $tableName Name of the table
      * @param array $fieldMapping Array of field mapping for the table
-     * @return ORM|bool True on success, false on failure to load
+     * @return ORM|bool ORM object on success, false on failure to load
      * @throws Exception Error on failure
      * @example examples\exampleORMLoadData.php for loading table row data
      */
