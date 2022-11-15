@@ -28,6 +28,8 @@ class Router extends Data
      */
     private $config;
 
+    private $GUID;
+
     /**
      * Resolves to a route that is registered in code and returns the result from that code
      * @param string|null $method
@@ -43,7 +45,7 @@ class Router extends Data
      */
     final public function resolveRoute(?string $method, ?string $url, ?Config $config, array $customHeaders=[], $customRequest=null): ?RouterResponse
     {
-
+        $this->GUID = $this->getGUID();
         $this->config = $config;
         if ($url === "") {
             return null;
@@ -52,19 +54,18 @@ class Router extends Data
         $url = $this->cleanURL($url);
         $cacheResult = $this->getCacheResponse($url);
         if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
-            Debug::message("Got cached result for $url", TINA4_LOG_DEBUG);
+            Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
             return new RouterResponse($cacheResult["content"], $cacheResult["httpCode"], $cacheResult["headers"]);
         }
-        Debug::message("{$method} - {$url}", TINA4_LOG_DEBUG);
+        Debug::message("$this->GUID {$method} - {$url}", TINA4_LOG_DEBUG);
         //Clean the URL
 
         $content = "Page not found";
         $responseCode = HTTP_NOT_FOUND;
-        $headers = ["Content-Type: " . TEXT_HTML];
 
         //FIRST OPTIONS
         if ($routerResponse = $this->handleOptionsMethod($method)) {
-            Debug::message("OPTIONS - " . $url, TINA4_LOG_DEBUG);
+            Debug::message("$this->GUID OPTIONS - " . $url, TINA4_LOG_DEBUG);
             return $routerResponse;
         }
 
@@ -73,7 +74,7 @@ class Router extends Data
         if ($method === TINA4_GET) {
             $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
-                Debug::message("GET - " . $fileName, TINA4_LOG_DEBUG);
+                Debug::message("$this->GUID GET - " . $fileName, TINA4_LOG_DEBUG);
                 if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
                     $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
                 }
@@ -103,14 +104,14 @@ class Router extends Data
         }
 
         //GO THROUGH ALL THE TEMPLATE INCLUDE LOCATIONS AND SEE IF WE CAN FIND SOMETHING
-        Debug::message("URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
-        $parseFile = new ParseTemplate($url);
+        Debug::message("$this->GUID URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
+        $parseFile = new ParseTemplate($url, "", $this->GUID);
 
         //TRY FIND THE TINA4 DOCUMENTATION
         if (TINA4_DEBUG) {
             if (empty($parseFile->content) && $parseFile->httpCode === HTTP_NOT_FOUND && $url === "/index") {
                 $url = "documentation/index";
-                $parseFile = new ParseTemplate($url);
+                $parseFile = new ParseTemplate($url, "", $this->GUID);
             }
         }
 
@@ -155,6 +156,7 @@ class Router extends Data
             } else {
                 $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
             }
+            $headers[] = ('Tina4-Debug: '.$this->GUID);
             $headers[] = ('Vary: Origin');
             $headers[] = ('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
             $headers[] = ('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -185,6 +187,7 @@ class Router extends Data
         }
 
         $headers[] = ('Content-Type: ' . $mimeType);
+        $headers[] = ('Tina4-Debug: '.$this->GUID);
         $headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
         $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
@@ -321,15 +324,16 @@ class Router extends Data
      */
     public function handleRoutes($method, $url, array $customHeaders=[], $customRequest=null): ?RouterResponse
     {
-        Debug::message("Looking in routes for {$method} - {$url}", TINA4_LOG_DEBUG);
+        Debug::message("$this->GUID Looking in routes for {$method} - {$url}", TINA4_LOG_DEBUG);
         global $arrRoutes;
         $response = new Response();
         $headers = [];
+        $headers[] = "Tina4Debug: $this->GUID";
         //iterate through the routes
 
         foreach ($arrRoutes as $rid => $route) {
             $result = null;
-            Debug::message("Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
+            Debug::message("$this->GUID Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
             if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
                 //Look to see if we are a secure route
                 if (!empty($route["class"])) {
@@ -368,7 +372,7 @@ class Router extends Data
                         if (isset($_REQUEST["formToken"]) && $route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"])
                             && $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"] === $route["routePath"])
                         {
-                            \Tina4\Debug::message("Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
+                            \Tina4\Debug::message("$this->GUID Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
                             $this->config->setAuthentication(null); //clear the auth
                             $result = $this->getRouteResult($route["class"], $route["function"], $params);
                         } else {
@@ -409,7 +413,6 @@ class Router extends Data
                     $content = $result["content"];
                     $httpCode = $result["httpCode"];
 
-
                     return new RouterResponse($content, $httpCode, $headers);
                 }
 
@@ -430,7 +433,7 @@ class Router extends Data
         $url .= "/";
         $routePath .= "/";
 
-        Debug::message("Matching {$url} -> {$routePath}", TINA4_LOG_DEBUG);
+        Debug::message("$this->GUID Matching {$url} -> {$routePath}", TINA4_LOG_DEBUG);
         preg_match_all($this->pathMatchExpression, $url, $matchesPath);
         preg_match_all($this->pathMatchExpression, $routePath, $matchesRoute);
         $matching = true;
@@ -460,7 +463,7 @@ class Router extends Data
         }
 
         if ($matching) {
-            Debug::message("Matching {$url} with {$routePath}", TINA4_LOG_DEBUG);
+            Debug::message("$this->GUID Matching {$url} with {$routePath}", TINA4_LOG_DEBUG);
             $this->params = $variables;
         } else {
             $matching = false;

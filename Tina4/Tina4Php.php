@@ -245,7 +245,7 @@ class Tina4Php extends Data
 
     /**
      * Initialize the CSS
-     * @throws CompilerException
+     * @throws CompilerException|\ScssPhp\ScssPhp\Exception\SassException
      */
     public function initCSS(): void
     {

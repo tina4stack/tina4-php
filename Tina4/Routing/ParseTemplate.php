@@ -29,20 +29,20 @@ class ParseTemplate
     private $subFolder;
     private $definedVariables;
     private $evals = [];
+    private $GUID;
 
     /**
      * ParseTemplate constructor.
-     * @param $root
      * @param string $fileName Name of the file
      * @param string $definedVariables
-     * @param string $subFolder
      * @throws \Exception Error on failure
      */
-    public function __construct($fileName, $definedVariables = "")
+    public function __construct($fileName, $definedVariables = "", $guid="")
     {
+        $this->GUID = $guid;
         $fileName = preg_replace('#/+#', '/', $fileName);
         if (TINA4_DEBUG) {
-            Debug::message("TINA4 Filename: " . $fileName, TINA4_LOG_DEBUG);
+            Debug::message("$this->GUID TINA4 Filename: " . $fileName, TINA4_LOG_DEBUG);
         }
         if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
@@ -61,9 +61,9 @@ class ParseTemplate
      * @return false|mixed|string
      * @throws \Exception Error on failure
      */
-    public function parseFile(string $fileName)
+    final public function parseFile(string $fileName)
     {
-        if ($fileName === null || $fileName === "") {
+        if ($fileName === "") {
             return "";
         }
         //Trim off the first char if /
@@ -83,22 +83,21 @@ class ParseTemplate
 
         $realFileName = $fileName;
         $found = false;
+        $mimeType = TEXT_HTML;
         foreach ($this->locations as $lid => $location) {
             foreach ($possibleFiles as $id => $parseFileName) {
-                if (is_array($location)) { //@todo refactor
-                    if (isset($location["path"])) {
-                        $location = $location["path"];
-                    }
+
+                //@todo refactor
+                if (is_array($location) && isset($location["path"])) {
+                    $location = $location["path"];
                 }
-                $testFile = realpath($this->root . $location . DIRECTORY_SEPARATOR . $parseFileName);
+
+                $testFile = ($this->root . $location . DIRECTORY_SEPARATOR . $parseFileName);
                 $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
                 if (file_exists($testFile)) {
                     $found = true;
                     $realFileName = $testFile;
-                    $mimeType = self::getMimeType($fileName);
-                    break;
-                }
-                if ($found) {
+                    $mimeType = self::getMimeType($testFile);
                     break;
                 }
             }
@@ -109,7 +108,7 @@ class ParseTemplate
 
         $ext = pathinfo($realFileName, PATHINFO_EXTENSION);
 
-        Debug::message("Looking for file " . $realFileName, TINA4_LOG_DEBUG);
+        Debug::message("$this->GUID Looking for file " . $realFileName, TINA4_LOG_DEBUG);
         if (file_exists($realFileName)) {
             $this->httpCode = HTTP_OK;
             //Render a twig file if the extension is twig
@@ -118,12 +117,14 @@ class ParseTemplate
                     $_SESSION["renderData"] = [];
                 }
                 $this->headers[] = "Content-Type: " . TEXT_HTML;
+                $this->headers[] = "Tina4-Debug: ".$this->GUID;
 
                 $this->fileName = $realFileName;
                 $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
             } else {
                 $this->headers[] = "Content-Type: " . $mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
+                $this->headers[] = "Tina4-Debug: ".$this->GUID;
                 $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
 
                 $this->fileName = $realFileName;
@@ -133,7 +134,8 @@ class ParseTemplate
                 $content = $this->parseVariables($content);
             }
         } else {
-            Debug::message("Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+            Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+            $this->headers[] = "Tina4-Debug: ".$this->GUID;
             $this->httpCode = HTTP_NOT_FOUND;
             $content = "";
             $this->fileName = "";
