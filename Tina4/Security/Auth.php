@@ -124,23 +124,34 @@ class Auth extends Data
         //`openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub`;
 
         $keys = openssl_pkey_new(array('digest_alg' => 'sha256', 'private_key_bits' => 1024,'private_key_type' => OPENSSL_KEYTYPE_RSA));
-        $public_key_pem = openssl_pkey_get_details($keys)['key'];
-        openssl_pkey_export($keys, $private_key_pem);
 
-        if (!file_exists($this->documentRoot . "secrets")){
-            mkdir($this->documentRoot . 'secrets');
-        }
+        if (!empty($keys)) {
+            $public_key_pem = openssl_pkey_get_details($keys)['key'];
+            openssl_pkey_export($keys, $private_key_pem);
 
-        //write keys to files #1
-        file_put_contents($this->documentRoot . 'secrets/' . 'public.pub', $public_key_pem);
-        file_put_contents($this->documentRoot . 'secrets/' . 'private.key', $private_key_pem);
+            if (!file_exists($this->documentRoot . "secrets")) {
+                mkdir($this->documentRoot . 'secrets');
+            }
 
-        if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore")) {
-            file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore", "*");
-        }
+            //write keys to files #1
+            file_put_contents($this->documentRoot . 'secrets/' . 'public.pub', $public_key_pem);
+            file_put_contents($this->documentRoot . 'secrets/' . 'private.key', $private_key_pem);
 
-        if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess")) {
-            file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
+            if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore")) {
+                file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".gitignore", "*");
+            }
+
+            if (!file_exists($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess")) {
+                file_put_contents($this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
+            }
+        } else {
+            \Tina4\Debug::message("Could not generate Secrets folder the code way", TINA4_LOG_NOTICE);
+            if (!file_exists($this->documentRoot . "secrets")) {
+                mkdir($this->documentRoot . 'secrets');
+            }
+            `ssh-keygen -t rsa -b 1024 -m PEM -f {$this->documentRoot}secrets/private.key -q -N ""`;
+            `chmod 600 {$this->documentRoot}secrets/private.key`;
+            `openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub`;
         }
 
         return true;
