@@ -64,7 +64,7 @@ class Api
      * @tips
      * @code-example
      */
-    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "*/*", $customHeaders=[], $curlOptions=[]): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "*/*", $customHeaders=[], $curlOptions=[]): array
     {
         try {
             $headers = [];
@@ -75,7 +75,7 @@ class Api
                 $headers[] = $this->authHeader;
             }
 
-            if (!empty($body)) {
+            if (!empty($body) && !empty($contentType)) {
                 $headers[] = "Content-Type: " . $contentType;
             }
 
@@ -89,10 +89,10 @@ class Api
                 curl_setopt($curlRequest, CURLOPT_SSL_VERIFYPEER, false);
                 curl_setopt($curlRequest, CURLOPT_SSL_VERIFYHOST, false);
             }
-              else {
-                  curl_setopt($curlRequest, CURLOPT_SSL_VERIFYPEER, true);
-                  curl_setopt($curlRequest, CURLOPT_SSL_VERIFYHOST, true);
-              }
+            else {
+                curl_setopt($curlRequest, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($curlRequest, CURLOPT_SSL_VERIFYHOST, 2);
+            }
 
             curl_setopt($curlRequest, CURLOPT_CUSTOMREQUEST, $requestType);
             curl_setopt($curlRequest, CURLOPT_RETURNTRANSFER, true);
