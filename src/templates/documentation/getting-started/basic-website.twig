@@ -7,9 +7,22 @@ Tina4 implements TWIG templating out of the box so all your html files should en
 {% set requirements = ['HTML', 'Twig'] %}
 
 {% set content %}
-Under <code>src/templates</code> create a file called <code>index.twig</code>
-<pre><code>{{ include_code("examples/basic-website.twig"| raw) }}</code></pre>
-Click on the <a href="http://localhost:7145">http://localhost:7145</a> to see the site, once you have replaced the default site you can get your documentation here <a href="http://localhost:7145/documentation">http://localhost:7145/documentation</a>
+<h5>Hello world Example!</h5>
+<p>
+    Under <code>src/templates</code> create a file called <code>index.twig</code>
+    <pre><code>{{ include_code("examples/basic-website.twig"| raw) }}</code></pre>
+    Click on the <a href="http://localhost:7145">http://localhost:7145</a> to see the site, once you have replaced the default site you can get your documentation here <a href="http://localhost:7145/documentation">http://localhost:7145/documentation</a>
+</p>
+<h5>Using a base template with inheritance on twig</h5>
+<p>
+    Under <code>src/templates</code> create a file called <code>base.twig</code> Notice the use of blocks in Twig, we will use those to inject content
+    <pre><code>{{ include_code("examples/basic-website-base.twig"| raw) }}</code></pre>
+</p>
+<p>
+    Under <code>src/templates</code> create a file called <code>index.twig</code> The code in this file will inherit the structure of <code>base.twig</code>. Use the blocks to inject your changes.
+<pre><code>{{ include_code("examples/basic-website-base-example.twig"| raw) }}</code></pre>
+</p>
+
 {% endset %}
 
 {% set tips = [

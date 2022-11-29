@@ -82,34 +82,39 @@
 
     <h2>What's in the box</h2>
     <ul>
-        <li>Environment Variables</li>
-        <li>Open API using Swagger UI</li>
-        <li></li>
+        <li><b>Environment Variables</b> - Applications need constant variables or flags which can be used globally in the code</li>
+        <li><b>Secured routing with JWT tokens</b> - JWT tokens are encrypted tokens with a payload which holds information about whether the tokens are still valid and who they're meant for, essentially securing the transfer of data between third part applications</li>
+        <li><b>Annotated routes with Open API and built in Swagger UI</b> - External developers who want to work with APIs you've built need an easy place to test your APIs and Open API and Swagger UI are very easy to create in Tina4</li>
+        <li><b>Database ORM supporting CRUD generation</b> - Store data in well known database engines with support for MySQL, MSSQL, Firebird, Postgres, SQlite3 and ODBC. Quickly build CRUD screens for updating core data</li>
+        <li><b>Auto-routed Twig templating</b> - Twig is a template engine which works out of the box in Tina4 with useful ways to add your own functionality to twig</li>
+        <li><b>Shape HTML </b> - HTML DOM as code using object orientation to keep things tidy</li>
+        <li><b>Built in webserver</b> - Use native PHP for a basic webserver when developing or wrapped with Swoole for a production ready Asynchronous native PHP webserver</li>
     </ul>
 
     <h1>Getting Started</h1>
 
     <nav class="help-navigation">
         <p><a href="#getting-started-running-from-docker">Running from Docker </a> - Get up and running fast </p>
-        <p><a href="#getting-started-basic-website">Basic Website </a> - Using Twig templates to make pages </p>
+        <p><a href="#getting-started-basic-website">Basic Website </a> - Using built in Twig engine and Twig templates to make pages </p>
         <p><a href="#getting-started-tina4-php">Tina4 PHP </a> - Using Tina4 PHP  </p>
         <p><a href="#getting-started-debugging"> Debugging </a> - How does debugging work? </p>
         <p><a href="#getting-started-environment-variables">Environment variables </a> - Configuring your environment variables using .env  </p>
         <p><a href="#getting-started-routing"> Routing </a> - How does routing work? </p>
+        <p><a href="#getting-started-secure-routing"> Securing your routes </a> - How does security work with JWT? </p>
+        <p><a href="#getting-started-annotating-open-api"> Annotating routes </a> - Using Open API with Swagger UI? </p>
+        <p><a href="#getting-started-forms-capturing-data"> Forms </a> - Capturing data from your webpage </p>
         <p><a href="#getting-started-database-connections">Databases </a> - Connecting to a database  </p>
-        <p><a href="#getting-started-api-documentation"> API </a> - Documenting for Open API using annotations </p>
         <p><a href="#getting-started-api-requests"> API Requests </a> - Working with 3rd party APIs </p>
         <p><a href="#getting-started-migrations"> Migrations </a> - Keeping track of your database changes </p>
         <p><a href="#getting-started-security"> Security </a> - Using and initializing the Authentication module </p>
         <p><a href="#getting-started-orm">ORM </a> - Object relational mapping  </p>
+        <p><a href="#getting-started-orm">Functional Testing </a> - Annotated tests as you code out your methods  </p>
     </nav>
 
-
-    {% include "documentation/getting-started/running-from-docker.twig" with {anchor: 'getting-started-running-from-docker'} %}
-    {% include "documentation/getting-started/basic-website.twig" with {anchor: 'getting-started-basic-website'} %}
-    {% include "documentation/getting-started/tina4-php.twig" with {anchor: 'getting-started-tina4-php'} %}
-
-
+    {% include "documentation/getting-started/running-from-docker.twig" with { anchor: 'getting-started-running-from-docker' } %}
+    {% include "documentation/getting-started/basic-website.twig" with { anchor: 'getting-started-basic-website' } %}
+    {% include "documentation/getting-started/tina4-php.twig" with { anchor: 'getting-started-tina4-php' } %}
+    {% include "documentation/getting-started/environment-variables.twig" with { anchor: 'getting-started-environment-variables' } %}
 
     <h1>Templates</h1>
 
