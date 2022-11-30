@@ -22,9 +22,14 @@ RewriteCond %{HTTPS} !=on
 RewriteCond %{REQUEST_URI} !^/.well-known/.*$ [NC]
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301,NE]
 
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d [OR]
+RewriteCond %{REQUEST_URI} ^/src/public/ [NC]
+RewriteRule ^ - [L]
 
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{DOCUMENT_ROOT}/src/public/$1 -f
+RewriteRule ^(.*)$ src/public/$1 [L]
+
 RewriteRule ^(.*)$ index.php [QSA,L]
 
 #Add ability to get the authorization headers on the webserver

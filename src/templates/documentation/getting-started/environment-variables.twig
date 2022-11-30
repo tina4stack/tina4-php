@@ -11,6 +11,10 @@
     <p>The following is an example of an <code>.env</code> file based on the auto-generated one which Tina4 creates when you do an initialize.
     <pre><code>{{ include_code("examples/environment-variables-example.twig"| raw) }}</code></pre>
     </p>
+    <h5>Using the environment variables with code</h5>
+    <p>Use the <code>$_ENV</code> global to reference any value in the <code>.env</code> file.
+    <pre><code>{{ include_code("examples/environment-variables-example-use.twig"| raw) }}</code></pre>
+    </p>
 {% endset %}
 
 {% set tips = [

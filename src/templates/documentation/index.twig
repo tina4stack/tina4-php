@@ -46,7 +46,7 @@
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
-                <img src="/src/public/images/logo.png" alt="" width="30" height="24"
+                <img src="/images/logo.png" alt="" width="30" height="24"
                      class="d-inline-block align-text-top">
                 Tina4
             </a>
@@ -80,7 +80,7 @@
     <h4><i class="fa-brands fa-linux"></i> </i> Linux / <i class="fa-brands fa-apple"></i> MacOS</h4>
     <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
 
-    <h2>What's in the box</h2>
+    <h2>What's in the box?</h2>
     <ul>
         <li><b>Environment Variables</b> - Applications need constant variables or flags which can be used globally in the code</li>
         <li><b>Secured routing with JWT tokens</b> - JWT tokens are encrypted tokens with a payload which holds information about whether the tokens are still valid and who they're meant for, essentially securing the transfer of data between third part applications</li>
@@ -90,6 +90,14 @@
         <li><b>Shape HTML </b> - HTML DOM as code using object orientation to keep things tidy</li>
         <li><b>Built in webserver</b> - Use native PHP for a basic webserver when developing or wrapped with Swoole for a production ready Asynchronous native PHP webserver</li>
     </ul>
+
+    <h2>Auto-loading</h2>
+    <p>Tina4 is designed to load and build files that are stored in the src folder without you having to include them. How does this work?</p>
+    <ul>
+        <li><b>composer.json</b> - The autoloader section and psr-4 section load files under the <code>/src</code> folder</li>
+        <li><b>tina4_auto_loader</b> - A method which overwrites the built in PHP autoloader to load files under the <code>/src</code> folder</li>
+    </ul>
+
 
     <h1>Getting Started</h1>
 

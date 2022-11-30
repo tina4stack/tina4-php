@@ -28,7 +28,8 @@ Tina4 implements TWIG templating out of the box so all your html files should en
 {% set tips = [
     'Tina4 templates are located under <code>src/templates</code>',
     'Routing is created dynamically, for example a file called <code>src/templates/contact-us.twig</code> will be accessible at <a href="/contact-us">http://localhost:7145/contact-us</a>',
-    'Use <code>{% include "filename.twig" %}</code> to include a file, the include path is relative to the <code>src/templates</code> folder'
+    'Use <code>{% include "filename.twig" %}</code> to include a file, the include path is relative to the <code>src/templates</code> folder',
+    'The <code>{{ formToken }}</code> Twig variable outputs a form token'
 ]
 %}
 

@@ -1,0 +1,14 @@
+// You could put this file in the app folder as SaveFile.php
+class SaveFile {
+
+    private $filePath;
+
+    final function __construct() {
+        $this->filePath = $_ENV["FILE_PATH"]; //in .env declared as FILE_PATH=/home/files
+    }
+
+    final function saveFile(string $fileName, string $content)
+    {
+        file_put_contents($this->filePath.DIRECTORY_SEPARATOR.$fileName, $content);
+    }
+}

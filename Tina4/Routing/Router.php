@@ -72,7 +72,7 @@ class Router extends Data
         //SECOND STATIC FILES - ONLY GET
 
         if ($method === TINA4_GET) {
-            $fileName = realpath(TINA4_DOCUMENT_ROOT . $url); //The most obvious request
+            $fileName = realpath(TINA4_DOCUMENT_ROOT . PATH_SEPARATOR."src".PATH_SEPARATOR."public".$url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("$this->GUID GET - " . $fileName, TINA4_LOG_DEBUG);
                 if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {

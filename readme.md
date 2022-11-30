@@ -361,3 +361,8 @@ https://gist.github.com/rhacker/3550309
 ### Todo
 - Add health check
 - Add GUID for each request, flow through to the rest of the code
+
+### If homebrew breaks after running a pecl install ext for some reason - zsh: killed     php 
+```
+sudo chown -R "$(id -un)":"$(id -gn)" /opt/homebrew
+```

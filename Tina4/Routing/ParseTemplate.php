@@ -83,7 +83,7 @@ class ParseTemplate
 
         $realFileName = $fileName;
         $found = false;
-        $mimeType = TEXT_HTML;
+        $mimeType = self::getMimeType($fileName);
         foreach ($this->locations as $lid => $location) {
             foreach ($possibleFiles as $id => $parseFileName) {
 
