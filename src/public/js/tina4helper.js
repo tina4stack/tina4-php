@@ -1,3 +1,10 @@
+/**
+ * Sends an http request
+ * @param url
+ * @param request
+ * @param method
+ * @param callback
+ */
 function sendRequest (url, request, method, callback) {
     if (url === undefined) {
         url = "";
@@ -29,18 +36,21 @@ function sendRequest (url, request, method, callback) {
     }
 }
 
+/**
+ * Gets form data based on a form Id
+ * @param formName
+ * @returns {FormData}
+ */
 function getFormData(formName) {
     let data = new FormData();
     let elements = document.querySelectorAll("#" + formName + " select, #" + formName + " input, #" + formName + " textarea");
-    console.log(elements);
     for (let ie = 0; ie < elements.length; ie++ )
     {
         let element = elements[ie];
-        console.log('Element',element.name);
         if (element.name) {
             if (element.type === 'file') {
                 console.log('Adding File', element.name);
-                for (i = 0; i < element.files.length; i++) {
+                for (let i = 0; i < element.files.length; i++) {
                     let fileData = element.files[i];
                     let elementName = element.name;
                     if (fileData !== undefined) {
@@ -55,7 +65,7 @@ function getFormData(formName) {
                     data.append(element.name, element.value)
                 } else {
                     if (element.type !== 'radio') {
-                        data.append(element.name, 0)
+                        data.append(element.name, "0")
                     }
                 }
             } else {
@@ -69,35 +79,46 @@ function getFormData(formName) {
     return data;
 }
 
-
-function loadPage(loadURL, targetDiv) {
-    if (targetDiv === undefined) targetDiv = 'content';
+/**
+ * Loads a page to a target html element
+ * @param loadURL
+ * @param targetElement
+ */
+function loadPage(loadURL, targetElement) {
+    if (targetElement === undefined) targetElement = 'content';
     console.log('LOADING', loadURL);
-    $.ajax({
-        method: 'GET',
-        url: loadURL,
-    }).done(function (data) {
-        $('#' + targetDiv).html(data);
+    sendRequest(loadURL, null, "GET", function(data) {
+        if (document.getElementById('#' + targetElement) !== null) {
+            document.getElementById('#' + targetElement).innerHTML = data;
+        } else {
+            console.log('TINA4 - define targetElement for postUrl', data);
+        }
     });
 }
 
-function showForm(action, loadURL, targetDiv) {
-    console.log(action, loadURL, targetDiv);
-    if (targetDiv === undefined) targetDiv = 'form';
+/**
+ * Shows a form from a URL in a target html element
+ * @param action
+ * @param loadURL
+ * @param targetElement
+ */
+function showForm(action, loadURL, targetElement) {
+    console.log(action, loadURL, targetElement);
+    if (targetElement === undefined) targetElement = 'form';
 
-    if (action == 'create') action = 'GET';
-    if (action == 'edit') action = 'GET';
-    if (action == 'delete') action = 'DELETE';
+    if (action === 'create') action = 'GET';
+    if (action === 'edit') action = 'GET';
+    if (action === 'delete') action = 'DELETE';
 
-    $.ajax({
-        method: action,
-        url: loadURL
-    }).done(function (data) {
-        //console.log (data);
+    sendRequest(loadURL, null, action, function(data) {
         if (data.message !== undefined) {
-            $('#' + targetDiv).html(data.message);
+            document.getElementById('#' + targetElement).innerHTML = (data.message);
         } else {
-            $('#' + targetDiv).html(data);
+            if (document.getElementById('#' + targetElement) !== null) {
+                document.getElementById('#' + targetElement).innerHTML = data;
+            } else {
+                console.log('TINA4 - define targetElement for showForm', data);
+            }
         }
     });
 }
@@ -106,28 +127,34 @@ function showForm(action, loadURL, targetDiv) {
  * Post URL posts data to a specific url
  * @param url
  * @param data
- * @param targetDiv
+ * @param targetElement
  */
-function postUrl(url, data, targetDiv) {
+function postUrl(url, data, targetElement) {
     sendRequest(url, data, 'POST', function(data) {
         if (data.message !== undefined) {
-            document.getElementById('#' + targetDiv).innerHTML = (data.message);
+            document.getElementById('#' + targetElement).innerHTML = (data.message);
         } else {
-            if (document.getElementById('#' + targetDiv) !== null) {
-                document.getElementById('#' + targetDiv).innerHTML = data;
+            if (document.getElementById('#' + targetElement) !== null) {
+                document.getElementById('#' + targetElement).innerHTML = data;
             } else {
-                console.log('TINA4 - define targetDiv for postUrl', data);
+                console.log('TINA4 - define targetElement for postUrl', data);
             }
         }
     });
 }
 
-function saveForm(formName, targetURL, targetDiv) {
-    if (targetDiv === undefined) targetDiv = 'message';
+/**
+ * Saves a form to a POST end point
+ * @param formName
+ * @param targetURL
+ * @param targetElement
+ */
+function saveForm(formName, targetURL, targetElement) {
+    if (targetElement === undefined) targetElement = 'message';
     //compile a data model
     let data = getFormData(formName);
 
-    postUrl(targetURL, data, targetDiv);
+    postUrl(targetURL, data, targetElement);
 }
 
 function showMessage(message) {
