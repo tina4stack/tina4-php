@@ -22,6 +22,9 @@ RUN apt-get install -y libzip-dev && docker-php-ext-install zip
 RUN docker-php-ext-install bcmath
 RUN docker-php-ext-install opcache
 
+RUN pecl install xdebug-3.1.5
+RUN docker-php-ext-enable xdebug
+
 #install postgres
 RUN apt-get install -y libpq-dev \
     && docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \

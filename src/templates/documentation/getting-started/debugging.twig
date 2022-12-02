@@ -1,0 +1,22 @@
+{% set title = 'Debugging with PHP' %}
+
+{% set introduction %}
+    Debugging is important in troubleshooting what is going on with your software.  There are a number of good methods to figure out what is happening them, in Tina4 we have a <code>Debug</code> class which helps with that.
+    The most efficient way to debug your application is using step by step debugging in an IDE supporting PHP debugging.  The most comprehensive debugging extension for PHP is probably xdebug.
+{% endset %}
+
+{% set requirements = ['Bash', 'Command', 'PHP'] %}
+
+{% set content %}
+    <h5>Main headers</h5>
+    <p>Some text about something
+    <pre><code>{{ include_code("examples/some-twig-file-with-code-in-it.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    'Find out where to edit your php.ini file by running <code>php -i | grep php.ini</code> from the command line'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
