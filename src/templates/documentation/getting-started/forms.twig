@@ -1,0 +1,28 @@
+{% set title = 'Forms with Tina4' %}
+
+{% set introduction %}
+    One of the most common tasks besides displaying information in a website is capturing data from a form.  Let's have a look how we can do this in Tina4.
+{% endset %}
+
+{% set requirements = ['HTML', 'PHP', 'Twig'] %}
+
+{% set content %}
+    <h5>Processing Form using Twig</h5>
+    <p>In the code below we have an example of a form in a twig template dumping the variables that have been passed in the inputs, if you save the content below in the <code>src/templates</code> folder as
+        <code>contact.twig</code> you can access it at <a href="/contact">here</a>.
+    <pre><code>{{ include_code("examples/forms-twig-example.twig"| raw) }}</code></pre>
+    </p>
+    In the <code>src/app</code> folder add a the content below to a file called <code>Contact.php</code> which will facilitate the processing of your form information
+    <p>
+    <pre><code>{{ include_code("examples/forms-twig-class.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    'Notice the use of the <code>formToken</code> input, this is required for all forms to be submitted',
+    'Use <code>{{ "token information" | formToken | raw  }}</code> to create the hidden input automatically',
+    '<code>Tina4.call</code> is a twig function to access your PHP code from twig, it takes on three params, <code>classname, method, array of variables</code>'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}

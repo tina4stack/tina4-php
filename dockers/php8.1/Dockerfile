@@ -23,7 +23,7 @@ RUN docker-php-ext-install bcmath
 RUN docker-php-ext-install opcache
 
 RUN pecl install xdebug-3.1.5
-RUN echo -e "zend_extension=xdebug\nxdebug.mode=debug\nxdebug.start_with_request=yes\n" > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+RUN echo -e "zend_extension=xdebug\nxdebug.mode=develop,debug\nxdebug.start_with_request=yes\n" > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 
 
 #install postgres

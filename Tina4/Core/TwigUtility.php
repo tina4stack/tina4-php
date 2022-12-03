@@ -106,7 +106,11 @@ class TwigUtility
                 }
 
                 if (isset($_REQUEST) && !empty($_REQUEST)) {
-                    $twig->addGlobal('request', $_REQUEST);
+                    if (isset($_REQUEST["formToken"]) && $auth->validToken($_REQUEST["formToken"]) ) {
+                        $twig->addGlobal('request', $_REQUEST);
+                    } else {
+                        $twig->addGlobal('request', ['error' => 'Missing form token']);
+                    }
                 }
 
                 if (isset($_SERVER) && !empty($_SERVER)) {

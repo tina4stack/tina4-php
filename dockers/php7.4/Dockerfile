@@ -22,8 +22,12 @@ RUN apt-get install -y libzip-dev && docker-php-ext-install zip
 RUN docker-php-ext-install bcmath
 RUN docker-php-ext-install opcache
 
+#install mongodb support
+RUN pecl install mongodb
+RUN echo "extension=mongodb" > /usr/local/etc/php/conf.d/docker-php-ext-mongodb.ini
+
 RUN pecl install xdebug-3.1.5
-RUN echo -e "zend_extension=xdebug\nxdebug.mode=debug\nxdebug.start_with_request=yes\n" > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+RUN echo -e "zend_extension=xdebug\nxdebug.mode=develop,debug\nxdebug.start_with_request=yes\n" > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 
 #install postgres
 RUN apt-get install -y libpq-dev \
@@ -43,9 +47,7 @@ RUN make
 RUN make install
 RUN echo "extension=interbase.so" > /usr/local/etc/php/conf.d/docker-php-ext-interbase.ini
 
-#install mongodb support
-RUN pecl install mongodb
-RUN echo "extension=mongodb.so" > /usr/local/etc/php/conf.d/docker-php-ext-mongodb.ini
+
 
 # Install mssql support
 # Install prerequisites for the sqlsrv and pdo_sqlsrv PHP extensions.

@@ -4,17 +4,29 @@
     float: right;
     border-radius: 10pt;
     border: 1px solid lightslategray;
-    padding: 5pt;
+    padding: 0;
 
-    ul {
+    .header {
+      min-width: fit-content;
+      border-radius: 10pt 10pt 0 0;
+      position: relative;
+      display: block;
+      background: lightblue;
+      text-align: center;
+      margin: auto;
+    }
+
+    ul{
       list-style-type: square;
       list-style-position: inside;
-      padding: 0;
+      padding: 2pt;
       min-width: 100pt;
+
     }
   }
 
   .help-knowledge {
+    background: #d5f3cd;
     border-radius: 10pt;
     border: 1px solid lightslategray;
     padding: 10pt 20pt 20pt;
@@ -33,4 +45,8 @@
       display: inline-block;
     }
   }
+}
+
+img {
+  margin-bottom: 1rem;
 }
