@@ -23,7 +23,8 @@ RUN docker-php-ext-install bcmath
 RUN docker-php-ext-install opcache
 
 RUN pecl install xdebug-3.1.5
-RUN docker-php-ext-enable xdebug
+RUN echo -e "zend_extension=xdebug\nxdebug.mode=debug\nxdebug.start_with_request=yes\n" > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+
 
 #install postgres
 RUN apt-get install -y libpq-dev \
@@ -77,6 +78,7 @@ RUN mv composer.phar /usr/local/bin/composer
 #install wine for the report engine
 RUN dpkg --add-architecture i386 && apt-get update && apt-get install wine32 -y
 RUN apt-get install wine -y
+RUN docker-php-ext-enable xdebug
 WORKDIR /app
 
 

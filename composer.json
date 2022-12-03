@@ -56,6 +56,7 @@
     ],
     "scripts": {
         "tina4": "@php bin/tina4",
+        "tina4-debug": "@php -dxdebug.mode=debug -dxdebug.client_host=host.docker.internal -dxdebug.client_port=9004 -dxdebug.start_with_request=yes bin/tina4",
         "tina4service": "tina4service",
         "test": "@tina4 tests:run",
         "phplint": "vendor/bin/phplint",
@@ -63,6 +64,7 @@
         "test:verbose": "@tina4 tests:verbose",
         "initialize": "@tina4 initialize:run",
         "initialise": "@tina4 initialize:run",
+        "debug": "@tina4-debug webservice:run",
         "begin": "@tina4 initialize:run",
         "start": "@tina4 webservice:run",
         "start-service": "@tina4service",

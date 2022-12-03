@@ -8,6 +8,8 @@
 
 namespace Tina4;
 
+use Phpfastcache\Exceptions\PhpfastcacheInvalidArgumentException;
+use Psr\Cache\InvalidArgumentException;
 use Twig\Error\LoaderError;
 
 /**
@@ -72,6 +74,8 @@ class Router extends Data
         //SECOND STATIC FILES - ONLY GET
 
         if ($method === TINA4_GET) {
+
+
             $fileName = realpath(TINA4_DOCUMENT_ROOT . PATH_SEPARATOR."src".PATH_SEPARATOR."public".$url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("$this->GUID GET - " . $fileName, TINA4_LOG_DEBUG);
@@ -302,6 +306,8 @@ class Router extends Data
      * @param $headers
      * @param $fileName
      * @return bool
+     * @throws PhpfastcacheInvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public function createCacheResponse($url, $httpCode, $content, $headers, $fileName): bool
     {
@@ -404,7 +410,6 @@ class Router extends Data
                     }
                 }
 
-
                 //check for an empty result
                 if ($result === null && !is_array($result) && !is_object($result)) {
                     return new RouterResponse("", HTTP_OK);
@@ -475,11 +480,11 @@ class Router extends Data
     /**
      * Get the params
      * @param $response
-     * @param false $inlineToRequest
-     * @param bool $customRequest
+     * @param $inlineToRequest
+     * @param $customRequest
      * @return array
      */
-    public function getParams($response, $inlineToRequest = false, $customRequest=false): array
+    public function getParams($response, $inlineToRequest = null, $customRequest=null): array
     {
         $request = new Request(file_get_contents("php://input"), $customRequest);
 

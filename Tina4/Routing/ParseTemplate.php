@@ -121,12 +121,22 @@ class ParseTemplate
 
                 $this->fileName = $realFileName;
                 $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
-            } else {
+            }
+            else //we are only going to allow php files to run in debug mode
+            if ($ext === "php" && TINA4_DEBUG) {
+                Debug::message("$this->GUID RUNNING SCRIPT DIRECTLY ".$realFileName, TINA4_LOG_CRITICAL);
+                ob_start();
+                include $realFileName;
+                $content = ob_get_contents();
+                ob_clean();
+            }
+            else {
+                Debug::message("$this->GUID Found ".$realFileName, TINA4_LOG_DEBUG);
+
                 $this->headers[] = "Content-Type: " . $mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
                 $this->headers[] = "Tina4-Debug: ".$this->GUID;
                 $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
-
                 $this->fileName = $realFileName;
                 $content = file_get_contents($realFileName);
                 $content = $this->parseSnippets($content);

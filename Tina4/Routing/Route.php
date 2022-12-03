@@ -84,7 +84,7 @@ class Route implements RouteCore
 
     /**
      * PUT route
-     * @param $routePath
+     * @param string $routePath
      * @param $function
      */
     public static function put(string $routePath, $function): void
@@ -95,7 +95,7 @@ class Route implements RouteCore
 
     /**
      * POST route
-     * @param $routePath
+     * @param string $routePath
      * @param $function
      */
     public static function post(string $routePath, $function): void
@@ -106,7 +106,7 @@ class Route implements RouteCore
 
     /**
      * PATCH route
-     * @param $routePath
+     * @param string $routePath
      * @param $function
      */
     public static function patch(string $routePath, $function): void
@@ -117,7 +117,7 @@ class Route implements RouteCore
 
     /**
      * DELETE route
-     * @param $routePath
+     * @param string $routePath
      * @param $function
      */
     public static function delete(string $routePath, $function): void
@@ -128,7 +128,7 @@ class Route implements RouteCore
 
     /**
      * ANY route - All methods
-     * @param $routePath
+     * @param string $routePath
      * @param $function
      */
     public static function any(string $routePath, $function): void
