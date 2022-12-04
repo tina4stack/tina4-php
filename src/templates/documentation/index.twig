@@ -42,33 +42,38 @@
     <link rel="stylesheet" href="/src/templates/documentation/default.css" />
 </head>
 <body>
-<header>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">
-                <img src="/images/logo.png" alt="" width="30" height="24"
-                     class="d-inline-block align-text-top">
-                Tina4
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup"
-                    aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
-                <div class="navbar-nav">
-                    <a class="nav-link" aria-current="page" href="#section_0">Home</a>
-                    <a class="nav-link" href="#section_1">Getting Started</a>
-                    <a class="nav-link" href="#section_2">Templates</a>
-                    <a class="nav-link" href="#section_3">Advanced</a>
-                    <a class="nav-link" href="#section_4">Contributing</a>
-                </div>
-            </div>
-        </div>
+<div class="side-nav">
+    <a href="https://tina4.com"><img class="logo" src="/images/logo.png" alt="Tina4 Logo" width="220px"></a>
+    <nav class="help-navigation">
+        <h5>Introduction</h5>
+        <p><a href="#home">Home </a> - Introduction </p>
+        <hr>
+        <h5>Getting Started</h5>
+        <p><a href="#getting-started-running-from-docker">Running from Docker </a> - Quick start </p>
+        <p><a href="#getting-started-basic-website">Basic Website </a> - Using Twig </p>
+        <p><a href="#getting-started-tina4-php">Tina4 PHP </a> - Using Tina4 PHP  </p>
+        <p><a href="#getting-started-debugging"> Debugging </a> - How does debugging work? </p>
+        <p><a href="#getting-started-environment-variables">Environment variables </a> - Global environment in .env  </p>
+        <p><a href="#getting-started-forms-capturing-data"> Forms </a> - Capturing data from your webpage </p>
+        <p><a href="#getting-started-routing"> Routing </a> - How does routing work? </p>
+        <p><a href="#getting-started-secure-routing"> Securing your routes </a> - How does security work with JWT? </p>
+        <p><a href="#getting-started-annotating-open-api"> Annotating routes </a> - Using Open API with Swagger UI? </p>
+        <p><a href="#getting-started-database-connections">Databases </a> - Connecting to a database  </p>
+        <p><a href="#getting-started-api-requests"> API Requests </a> - Working with 3rd party APIs </p>
+        <p><a href="#getting-started-migrations"> Migrations </a> - Keeping track of your database changes </p>
+        <p><a href="#getting-started-security"> Security </a> - Using the Authentication module </p>
+        <p><a href="#getting-started-orm">ORM </a> - Object relational mapping  </p>
+        <p><a href="#getting-started-orm">Functional Testing </a> - Annotated testing while you code  </p>
+        <hr>
+        <h5>Templates</h5>
+
+        <h5>Advanced</h5>
+
+        <h5>Contributing</h5>
     </nav>
-</header>
-<div id="submenu"><!-- --></div>
+</div>
 <div class="container">
-    <h1>Home</h1>
+    <h1 id="home">Introduction</h1>
     <p>
         Installing Tina4 should be very simple and straight forward, if you're finding the process too complicated consider reaching out for some help on our Slack channel.
     </p>
@@ -100,26 +105,7 @@
     </ul>
 
 
-    <h1>Getting Started</h1>
-
-    <nav class="help-navigation">
-        <p><a href="#getting-started-running-from-docker">Running from Docker </a> - Get up and running fast </p>
-        <p><a href="#getting-started-basic-website">Basic Website </a> - Using built in Twig engine and Twig templates to make pages </p>
-        <p><a href="#getting-started-tina4-php">Tina4 PHP </a> - Using Tina4 PHP  </p>
-        <p><a href="#getting-started-debugging"> Debugging </a> - How does debugging work? </p>
-        <p><a href="#getting-started-environment-variables">Environment variables </a> - Configuring your environment variables using .env  </p>
-        <p><a href="#getting-started-forms-capturing-data"> Forms </a> - Capturing data from your webpage </p>
-        <p><a href="#getting-started-routing"> Routing </a> - How does routing work? </p>
-        <p><a href="#getting-started-secure-routing"> Securing your routes </a> - How does security work with JWT? </p>
-        <p><a href="#getting-started-annotating-open-api"> Annotating routes </a> - Using Open API with Swagger UI? </p>
-        <p><a href="#getting-started-database-connections">Databases </a> - Connecting to a database  </p>
-        <p><a href="#getting-started-api-requests"> API Requests </a> - Working with 3rd party APIs </p>
-        <p><a href="#getting-started-migrations"> Migrations </a> - Keeping track of your database changes </p>
-        <p><a href="#getting-started-security"> Security </a> - Using and initializing the Authentication module </p>
-        <p><a href="#getting-started-orm">ORM </a> - Object relational mapping  </p>
-        <p><a href="#getting-started-orm">Functional Testing </a> - Annotated tests as you code out your methods  </p>
-    </nav>
-
+    <h2>Getting Started</h2>
     {% include "documentation/getting-started/running-from-docker.twig" with { anchor: 'getting-started-running-from-docker' } %}
     {% include "documentation/getting-started/basic-website.twig" with { anchor: 'getting-started-basic-website' } %}
     {% include "documentation/getting-started/tina4-php.twig" with { anchor: 'getting-started-tina4-php' } %}
@@ -127,83 +113,17 @@
     {% include "documentation/getting-started/environment-variables.twig" with { anchor: 'getting-started-environment-variables' } %}
     {% include "documentation/getting-started/forms.twig" with { anchor: 'getting-started-forms-capturing-data' } %}
 
-    <h1>Templates</h1>
+    <h2>Templates</h2>
 
-    <h1>Advanced</h1>
+    <h2>Advanced</h2>
 
-    <h1>Contributing</h1>
+    <h2>Contributing</h2>
     <a href="https://loom.com/invite/6a3f0227ce5e4123909a853d07d35612">Making videos on Loom</a>
 
 </div>
 <script>
     hljs.addPlugin(new CopyButtonPlugin());
     hljs.highlightAll();
-</script>
-<style type="text/css">
-
-    #submenu {
-        float: right;
-        margin: 1em 0;
-        padding: 10px;
-        background: #fcfaf0;
-        border: 2px solid #E0D8B7;
-        border-radius: 1em;
-        font-size: 11px;
-        margin: 10px;
-    }
-    #submenu ol {
-        margin: 0;
-        padding: 0 0 0 30px;
-    }
-
-</style>
-<script type="text/javascript">
-
-    // Original JavaScript code by Chirp Internet: chirpinternet.eu
-    // Please acknowledge use of this code by including this header.
-
-    buildMenu = (function(targetId, headingTag) {
-        var target = document.getElementById(targetId);
-        var headings = document.getElementsByTagName(headingTag || "h2");
-
-        if(headings.length > 1) {
-            // construct an ordered list of links
-            var menuList = document.createElement("OL");
-            for(var i=0; i < headings.length; i++) {
-                var anchorName = "";
-                if(headings[i].id) {
-                    anchorName = headings[i].id;
-                } else {
-                    anchorName = "section_" + i;
-                    headings[i].setAttribute("id", anchorName);
-                }
-
-                var headingText = headings[i].firstChild.nodeValue
-
-                //headings[i].firstChild.nodeValue = (i+1) + ". " + headingText;
-
-                var menuLink = document.createElement("A");
-                menuLink.setAttribute("href", "#" + anchorName);
-                menuLink.appendChild(document.createTextNode(headingText));
-
-                var listItem = document.createElement("LI");
-                listItem.appendChild(menuLink);
-
-                menuList.appendChild(listItem);
-            }
-
-            // remove all nodes from inside target element
-            while(target.hasChildNodes()) target.removeChild(target.firstChild);
-
-            // insert our generated menu into the target element
-            target.appendChild(menuList);
-        } else {
-            // remove the target element from the DOM
-            target.parentNode.removeChild(target);
-        }
-    });
-
-    buildMenu("submenu", "h1");
 </script>
 </body>
 </html>

@@ -73,6 +73,8 @@ class TwigUtility
                 if (file_exists($fileName)) {
                     return file_get_contents($fileName);
                 }
+
+                return "";
             });
 
             $twig->addFunction($includeCode);
@@ -109,7 +111,7 @@ class TwigUtility
                     if (isset($_REQUEST["formToken"]) && $auth->validToken($_REQUEST["formToken"]) ) {
                         $twig->addGlobal('request', $_REQUEST);
                     } else {
-                        $twig->addGlobal('request', ['error' => 'Missing form token']);
+                        $twig->addGlobal('request', $_GET);
                     }
                 }
 

@@ -1,0 +1,8 @@
+/**
+* @description Save contact information
+*/
+\Tina4\Post::add("/submit", function(\Tina4\Response  $response, \Tina4\Request  $request) {
+    $message = (new Contact())->saveContact($request->params["fullName"], $request->params["email"]);
+
+    \Tina4\redirect("/contact?message=".$message."&formToken=".\Tina4\getFormToken(""));
+});

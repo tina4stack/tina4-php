@@ -50,3 +50,48 @@
 img {
   margin-bottom: 1rem;
 }
+
+
+
+$mediaMaxWidth: 1260px;
+$mediaBp1Width: 960px;
+$mediaMinWidth: 480px;
+
+@media (max-width: $mediaMinWidth) {
+  .side-nav {
+     h5, hr {
+       display: none;
+     }
+     padding: 10pt;
+     padding-top: 0;
+     width: 100vw;
+     font-size: 10pt;
+  }
+  .logo {
+      width: 120pt;
+  }
+  .container {
+    font-size: 10pt;
+  }
+}
+
+@media (min-width: $mediaMinWidth) {
+  .logo {
+    float: right;
+    width: 120pt;
+  }
+  .side-nav {
+    position: fixed;
+    left:0;
+    width: 26vw;
+    padding: 10pt;
+    padding-top: 0;
+    margin: 0;
+  }
+  .container {
+    position: absolute;
+    left: 26vw !important;
+    width: 65vw;
+    padding-left: 0;
+  }
+}

@@ -1,20 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Basic Website</title>
+    <title>Form Example</title>
 </head>
 <body>
-<form method="post">
+<form method="post" action="/submit">
     <input type="text" name="fullName" placeholder="Full Name">
     <input type="text" name="email" placeholder="Email">
     <input type="hidden" name="formToken" value="{{ formToken }}">
     <button>Submit</button>
-
     <p>
-        {{ Tina4.call("Contact", "saveContact", [request.fullName, request.email]) }}
+        {{ request.message }}
     </p>
-
-    {{ dump(request) }}
 </form>
 </body>
 </html>
