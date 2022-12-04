@@ -86,6 +86,8 @@
     <h4><i class="fa-brands fa-linux"></i> </i> Linux / <i class="fa-brands fa-apple"></i> MacOS</h4>
     <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
 
+    <p>The docker environment contains an <code>/app</code> folder which where your application will be served from.  The command above is mounting the current working directory into the <code>/app</code> folder and then executing PHP on that folder to run the application. Theoretically you could run any PHP application with the Tina4 docker environment.</p>
+
     <h2>What's in the box?</h2>
     <ul>
         <li><b>Environment Variables</b> - Applications need constant variables or flags which can be used globally in the code</li>
