@@ -1,0 +1,4 @@
+//Notice how we are now returning the HTTP header code and content type
+\Tina4\Get::add('/api/cars/{carId}', function($carId, \Tina4\Response $response) {
+    return $response("You have chosen car $carId", HTTP_OK, TEXT_HTML);
+});

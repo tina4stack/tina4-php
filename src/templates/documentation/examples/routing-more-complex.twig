@@ -1,0 +1,10 @@
+//Get route with multiple inline params, substitute page and topic with any values you want
+\Tina4\Get::add('/api/{page}/content/{topic}', function($page, $topic, \Tina4\Response $response) {
+    return $response("This route is trying to load page: $page with topic: $topic");
+});
+
+//A GET route with inline params passed to the request object
+\Tina4\Route::get("/test/{one}", function (\Tina4\Response $response, \Tina4\Request $request ){
+    print_r ($request->inlineParams);
+});
+

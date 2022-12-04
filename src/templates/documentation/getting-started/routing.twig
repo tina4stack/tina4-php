@@ -1,0 +1,38 @@
+{% set title = 'Routing in a nutshell' %}
+
+{% set introduction %}
+You may be used to setting up routes from within .htaccess files or just using plain PHP files to render your web pages.  Tina4 makes this process easy in the form of a number of static classes to represent the different route types.
+Unlike other frameworks we are not doing dependency injection on the routing methods, as a standard inline variables are passed first followed by a response and request object. Consider the following examples:
+{% endset %}
+
+{% set requirements = ['Routing', 'Web Standards', 'Anonymous Methods'] %}
+
+{% set content %}
+    <h5>The basic GET Router</h5>
+    <p>The code below illustrates how to create a basic GET router called <code>/hello/world</code>.  Routes are stored in php files in the <code>src/routes</code> folder by default although this is not mandatory but suggested so you can find things easily.
+        You can also put the routing files in sub folders under the routes folder to create more organisation in your project. Put the following code example in <code>src/routes/example.php</code>.
+    <pre><code>{{ include_code("examples/routing-basic-get.twig"| raw) }}</code></pre>
+    You can now browse to <a href="/hello/world" target="_blank">/hello/world</a> in your browser to see the response.
+    </p>
+    <h5>A GET route with inline params</h5>
+    <p>Sometimes part of the route needs to be parameters for example when implementing an API end point: <code>/api/cars/1</code>. The 1 in this example could be substituted by a different number to retrieve a different car.
+        Let's have a look at how we approach this by pasting this code example in your <code>example.php</code> file:
+    <pre><code>{{ include_code("examples/routing-basic-inline.twig"| raw) }}</code></pre>
+    As before you can see the results by clicking on the following links:  <a href="/api/cars/1" target="_blank">/api/cars/1</a> or <a href="/api/cars/2" target="_blank">/api/cars/2</a>
+    </p>
+    <h5>More complex examples, try them out yourself to see how they behave</h5>
+    <p>Here are some examples of different ways of working with routes:
+    <pre><code>{{ include_code("examples/routing-more-complex.twig"| raw) }}</code></pre>
+
+    </p>
+{% endset %}
+
+{% set tips = [
+    'Create sub folders in the <code>src/routes</code> folder to organise your routing better',
+    'POST routes are always secured by <code>formToken</code>',
+    'Inline params are enclosed in curly braces and are passed to the route method in the same order they appear in the path',
+    'You do not have to return a response object, but this does make it more difficult for Tina4 to understand the content you are returning'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
