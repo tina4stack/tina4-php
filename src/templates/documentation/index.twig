@@ -56,6 +56,7 @@
         <p><a href="#getting-started-environment-variables">Environment variables </a> - Global environment in .env  </p>
         <p><a href="#getting-started-forms-capturing-data"> Forms </a> - Capturing data from your webpage </p>
         <p><a href="#getting-started-routing"> Routing </a> - How does routing work? </p>
+        <p><a href="#getting-started-twig"> Twig </a> - How to extend with Tina4 </p>
         <p><a href="#getting-started-secure-routing"> Securing your routes </a> - How does security work with JWT? </p>
         <p><a href="#getting-started-annotating-open-api"> Annotating routes </a> - Using Open API with Swagger UI? </p>
         <p><a href="#getting-started-database-connections">Databases </a> - Connecting to a database  </p>
@@ -103,7 +104,7 @@
     <p>Tina4 is designed to load and build files that are stored in the src folder without you having to include them. How does this work?</p>
     <ul>
         <li><b>composer.json</b> - The autoloader section and psr-4 section load files under the <code>/src</code> folder</li>
-        <li><b>tina4_auto_loader</b> - A method which overwrites the built in PHP autoloader to load files under the <code>/src</code> folder</li>
+        <li><b>tina4_auto_loader</b> - A method which overwrites the built-in PHP autoloader to load files under the <code>/src</code> folder</li>
     </ul>
 
 
@@ -115,6 +116,8 @@
     {% include "documentation/getting-started/environment-variables.twig" with { anchor: 'getting-started-environment-variables' } %}
     {% include "documentation/getting-started/forms.twig" with { anchor: 'getting-started-forms-capturing-data' } %}
     {% include "documentation/getting-started/routing.twig" with { anchor: 'getting-started-routing' } %}
+    {% include "documentation/getting-started/twig.twig" with { anchor: 'getting-started-twig' } %}
+
 
     <h2>Templates</h2>
 

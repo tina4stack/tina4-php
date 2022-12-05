@@ -1,0 +1,21 @@
+{% set title = 'Shape - Html as code' %}
+
+{% set introduction %}
+
+{% endset %}
+
+{% set requirements = ['HTML'] %}
+
+{% set content %}
+    <h5>Main headers</h5>
+    <p>Some text about something
+    <pre><code>{{ include_code("examples/some-twig-file-with-code-in-it.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    ''
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
