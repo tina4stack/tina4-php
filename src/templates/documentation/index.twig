@@ -42,39 +42,94 @@
     <link rel="stylesheet" href="/src/templates/documentation/default.css" />
 </head>
 <body>
-<div class="side-nav">
-    <a href="https://tina4.com"><img class="logo" src="/images/logo.png" alt="Tina4 Logo" width="220px"></a>
-    <nav class="help-navigation">
-        <h5>Introduction</h5>
-        <p><a href="#home">Home </a> - Introduction </p>
+<div class="main-container">
+<nav id="sidenav-1" class="sidenav" data-mdb-hidden="false">
+    <div class="nav-header">
+    <a class="logo" href="https://tina4.com"><img class="logo-img"  src="/images/logo.png" alt="Tina4 Logo"  width="220px" ></a>
+    <button onclick=hamburger() class="hamburger-button" ><img class="hamburger" src="/images/burger.svg" ></button>
+    </div>
+    <div class="help-navigation" id="help-nav">
+        <div class="mobile-logo"> </div>
         <hr>
-        <h5>Getting Started</h5>
-        <p><a href="#getting-started-running-from-docker">Running from Docker </a> - Quick start </p>
-        <p><a href="#getting-started-basic-website">Basic Website </a> - Using Twig </p>
-        <p><a href="#getting-started-tina4-php">Tina4 PHP </a> - Using Tina4 PHP  </p>
-        <p><a href="#getting-started-debugging"> Debugging </a> - How does debugging work? </p>
-        <p><a href="#getting-started-environment-variables">Environment variables </a> - Global environment in .env  </p>
-        <p><a href="#getting-started-forms-capturing-data"> Forms </a> - Capturing data from your webpage </p>
-        <p><a href="#getting-started-routing"> Routing </a> - How does routing work? </p>
-        <p><a href="#getting-started-twig"> Twig </a> - How to extend with Tina4 </p>
-        <p><a href="#getting-started-secure-routing"> Securing your routes </a> - How does security work with JWT? </p>
-        <p><a href="#getting-started-annotating-open-api"> Annotating routes </a> - Using Open API with Swagger UI? </p>
-        <p><a href="#getting-started-database-connections">Databases </a> - Connecting to a database  </p>
-        <p><a href="#getting-started-api-requests"> API Requests </a> - Working with 3rd party APIs </p>
-        <p><a href="#getting-started-migrations"> Migrations </a> - Keeping track of your database changes </p>
-        <p><a href="#getting-started-security"> Security </a> - Using the Authentication module </p>
-        <p><a href="#getting-started-orm">ORM </a> - Object relational mapping  </p>
-        <p><a href="#getting-started-functional-testing">Functional Testing </a> - Annotated testing while you code  </p>
+
+        <div class="accordion accordion-flush" id="accordionFlushExample">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="flush-headingOne">
+                    <button  class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseOne" aria-expanded="false" aria-controls="flush-collapseOne">
+                        <h5>Introduction</h5>
+                    </button>
+                </h2>
+                <div id="flush-collapseOne" class="accordion-collapse collapse" aria-labelledby="flush-headingOne" data-bs-parent="#accordionFlushExample">
+                    <div class="accordion-body"> <span><a href="#home">Running from Docker </a><p> Introduction </p></span> </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="flush-headingTwo">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseTwo" aria-expanded="false" aria-controls="flush-collapseTwo">
+                        <h5>Getting Started</h5>
+                    </button>
+                </h2>
+                <div id="flush-collapseTwo" class="accordion-collapse collapse" aria-labelledby="flush-headingTwo" data-bs-parent="#accordionFlushExample">
+                    <div class="accordion-body">
+                        <span><a onclick="hamburger()" href="#getting-started-running-from-docker">Running from Docker </a><p>  Quick start </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-basic-website">Basic Website </a><p>  Using Twig </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-tina4-php">Tina4 PHP </a><p>  Using Tina4 PHP  </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-debugging"> Debugging </a><p>  How does debugging work? </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-environment-variables">Environment variables </a> <p>  Global environment in .env  </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-forms-capturing-data"> Forms </a> <p>  Capturing data from your webpage </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-routing"> Routing </a> <p>  How does routing work? </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-twig"> Twig </a><p>  How to extend with Tina4 </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-secure-routing"> Securing your routes </a><p>  How does security work with JWT? </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-annotating-open-api"> Annotating routes </a><p>  Using Open API with Swagger UI? </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-database-connections">Databases </a><p>  Connecting to a database  </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-api-requests"> API Requests </a><p>  Working with 3rd party APIs </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-migrations"> Migrations </a><p>  Keeping track of your database changes </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-security"> Security </a><p>  Using the Authentication module </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-orm">ORM </a><p>  Object relational mapping  </p></span>
+                        <span><a onclick="hamburger()" href="#getting-started-functional-testing">Functional Testing </a><p>  Annotated testing while you code  </p></span></div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="flush-headingThree">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseThree" aria-expanded="false" aria-controls="flush-collapseThree">
+                        <h5>How do I ?</h5>
+                    </button>
+                </h2>
+                <div id="flush-collapseThree" class="accordion-collapse collapse" aria-labelledby="flush-headingThree" data-bs-parent="#accordionFlushExample">
+                    <div class="accordion-body">
+                        <span><a onclick="hamburger()" href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
+                    </div>
+                </div>
+            </div>
+
+
         <hr>
-        <h5>How do I ?</h5>
-        <p><a href="#how-do-i-render-a-twig-file">Render a Twig file? </a> </p>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="flush-headingFour">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseFour" aria-expanded="false" aria-controls="flush-collapseFour">
+                    <h5>Advanced</h5>
+                </button>
+            </h2>
+            <div id="flush-collapseFour" class="accordion-collapse collapse" aria-labelledby="flush-headingFour" data-bs-parent="#accordionFlushExample">
+                <div class="accordion-body"> <span><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span></div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="flush-headingFive">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapseFive" aria-expanded="false" aria-controls="flush-collapseFive">
+                    <h5>Contributing</h5>
+                </button>
+            </h2>
+            <div id="flush-collapseFive" class="accordion-collapse collapse" aria-labelledby="flush-headingFive" data-bs-parent="#accordionFlushExample">
+                <div class="accordion-body"> <span><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span></div>
+            </div>
+        </div>
+        </div>
+    </div>
+</nav>
+<div class="container " >
 
-        <h5>Advanced</h5>
-
-        <h5>Contributing</h5>
-    </nav>
-</div>
-<div class="container">
+    <div class="wrapper">
     <h1 id="home">Introduction</h1>
     <p>
         Installing Tina4 should be very simple and straight forward, if you're finding the process too complicated consider reaching out for some help on our Slack channel.
@@ -127,11 +182,24 @@
 
     <h2>Contributing</h2>
     <a href="https://loom.com/invite/6a3f0227ce5e4123909a853d07d35612">Making videos on Loom</a>
-
+    </div>
 </div>
 <script>
     hljs.addPlugin(new CopyButtonPlugin());
     hljs.highlightAll();
+
+    function hamburger(){
+        if (document.getElementById("help-nav").style.display === "flex"){
+            document.getElementById("help-nav").style.display = "none";
+        }else{
+            document.getElementById("help-nav").style.display= "flex";
+        }
+
+
+
+    }
 </script>
+</div>
 </body>
 </html>
+

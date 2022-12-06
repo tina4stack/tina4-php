@@ -31,49 +31,195 @@
   list-style-position: inside;
   padding: 0;
 }
-.help-navigation p {
-  margin-bottom: 0;
+.main-container {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  flex-direction: row;
 }
-.help-navigation p a {
+.hamburger-button {
+  display: none;
+}
+.accordion-item {
+  width: 100% !important;
+}
+.accordion-button:focus {
+  outline: 0 !important;
+  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0) !important;
+}
+.sidenav {
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  overflow-y: scroll;
+}
+.sidenav::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  background-color: transparent;
+}
+.sidenav::-webkit-scrollbar {
+  width: 6px;
+  height: 10px;
+  background-color: transparent;
+}
+.sidenav::-webkit-scrollbar-button {
+  width: 0px;
+  height: 0px;
+}
+.sidenav::-webkit-scrollbar-thumb {
+  border-radius: 12px;
+  box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.3);
+  background-color: #006883;
+}
+.sidenav .wrapper {
+  width: 100%;
+  margin: 10px;
+}
+.sidenav .help-navigation span {
+  margin-top: 5px;
+  margin-bottom: 5px;
+  word-wrap: break-word;
+}
+.sidenav .help-navigation span a {
+  text-decoration: none;
+  font-weight: bold;
   display: inline-block;
+  font-size: 16px;
+  color: #5399ba;
+}
+.sidenav .help-navigation span p {
+  font-size: 14px;
 }
 img {
   margin-bottom: 1rem;
+  margin-left: 11px;
 }
-@media (max-width: 480px) {
-  .side-nav {
+.container {
+  width: 100%;
+  height: 100%;
+  overflow-y: scroll;
+  max-width: none !important;
+  padding: 20px;
+}
+.container::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  background-color: transparent;
+}
+.container::-webkit-scrollbar {
+  width: 6px;
+  height: 10px;
+  background-color: transparent;
+}
+.container::-webkit-scrollbar-button {
+  width: 0px;
+  height: 0px;
+}
+.container::-webkit-scrollbar-thumb {
+  border-radius: 12px;
+  box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.3);
+  background-color: #006883;
+}
+@media (max-width: 800px) {
+  .nav-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .main-container {
+    flex-direction: column;
+  }
+  .mobile-logo {
+    background-image: url("/images/logo.png");
+    width: 100%;
+    background-repeat: no-repeat;
+    background-size: cover;
+    min-height: 150px;
+    background-position: center;
+  }
+  .accordion {
+    width: 250px;
+  }
+  .hamburger {
+    display: flex;
+    width: 60px;
+    margin-bottom: unset;
+    padding: unset;
+  }
+  .hamburger-button {
+    border: none;
+    display: flex;
+    width: fit-content;
+    height: fit-content;
+    margin-right: 20px;
+    margin-top: 2px;
+    background-color: white;
+  }
+  .sidenav {
     padding: 10pt;
     padding-top: 0;
-    width: 100vw;
     font-size: 10pt;
-  }
-  .side-nav h5, .side-nav hr {
-    display: none;
-  }
-  .logo {
-    width: 120pt;
-  }
-  .container {
-    font-size: 10pt;
-  }
-}
-@media (min-width: 480px) {
-  .logo {
-    float: right;
-    width: 120pt;
-  }
-  .side-nav {
-    position: fixed;
     left: 0;
-    width: 26vw;
+    width: 100%;
     padding: 10pt;
     padding-top: 0;
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+  }
+  .sidenav .help-navigation {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    bottom: 0px;
+    background-color: white;
+    height: 100vh;
+    z-index: 99999;
+    transition-property: width;
+    transition-duration: 2s;
+    transition-timing-function: ease-in-out;
+    transition-delay: 1s;
+  }
+  .sidenav .help-navigation span a {
+    text-decoration: none;
+    font-weight: bold;
+    display: inline-block;
+    font-size: 16px;
+    color: #5399ba;
+  }
+  .sidenav .help-navigation span p {
+    font-size: 14px;
+  }
+  .logo {
+    justify-content: left;
+    width: 120pt;
+    display: flex;
   }
   .container {
-    position: absolute;
-    left: 26vw !important;
-    width: 65vw;
-    padding-left: 0;
+    font-size: 10pt;
+    width: 100% !important;
+  }
+}
+@media (min-width: 2500px) {
+  .logo-img {
+    width: 260px;
+  }
+  .sidenav {
+    width: 450px;
+  }
+  .help-navigation span a {
+    text-decoration: none;
+    font-weight: bold;
+    display: inline-block;
+    font-size: 20px !important;
+    color: #5399ba;
+  }
+  .help-navigation span p {
+    font-size: 17px !important;
   }
 }
