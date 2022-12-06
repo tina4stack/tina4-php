@@ -1,0 +1,12 @@
+//Example of a GET router rendering a Twig file with some variables
+\Tina4\Get::add("/render/file", function(\Tina4\Response $response, \Tina4\Request $request){
+
+    $html = \Tina4\renderTemplate("render.twig", ["variables" => ["one" => "One", "two" => "Two"]]);
+    return $response ($html);
+});
+
+//Example of rendering a Twig template from a text string
+\Tina4\Get::add("/render/text", function(\Tina4\Response $response, \Tina4\Request $request){
+    $html = \Tina4\renderTemplate("I am a twig template {{ variables.one }} {{ variables.two }}", ["variables" => ["one" => "One", "two" => "Two"]]);
+    return $response ($html);
+});

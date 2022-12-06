@@ -1,20 +1,21 @@
 {% set title = 'How do I render a Twig file?' %}
 
 {% set introduction %}
-    Im having trouble with rendering a Twig file from a custom GET router,How do i solve this?
+    Im having trouble with rendering a Twig file from a custom GET router, How do I solve this?
 {% endset %}
 
 {% set requirements = ['Requirement 1', 'Requirement 2', 'Requirement 3'] %}
 
 {% set content %}
-    <h5>Main headers</h5>
-    <p>Some text about something
-    <pre><code>{{ include_code("examples/some-twig-file-with-code-in-it.twig"| raw) }}</code></pre>
+    <h5>Rendering Twig files</h5>
+    <p>Twig files can be rendered by using the built in Tina4 function <code>\Tina4\renderTemplate()</code>.  Below are some examples of using this method.
+    <pre><code>{{ include_code("examples/how-do-i-rendering-twig-file.twig"| raw) }}</code></pre>
     </p>
 {% endset %}
 
 {% set tips = [
-    'Some useful stuff about the help section which may open doors to new things or just clarify obscure things'
+    'You can pass a Twig template string to <code>\Tina4\renderTemplate()</code> to be rendered',
+    'Templates are cached automatically so you may have to run <a href="/cache/clear">/cache/clear</a> to refresh if <code>/cache/clear</code>'
 ]
 %}
 
