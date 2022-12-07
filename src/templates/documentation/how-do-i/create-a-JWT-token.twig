@@ -1,0 +1,21 @@
+{% set title = 'How do i create a JWT token' %}
+
+{% set introduction %}
+    How do I generate a JWT token from my form?
+{% endset %}
+
+{% set requirements = ['Requirement 1', 'Requirement 2', 'Requirement 3'] %}
+
+{% set content %}
+    <h5>Create JWT tokens</h5>
+    <p>Some text about something
+        <pre><code>{{ include_code("examples/some-twig-file-with-code-in-it.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    'Some useful stuff about the help section which may open doors to new things or just clarify obscure things'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
