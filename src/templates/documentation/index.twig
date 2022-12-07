@@ -243,10 +243,10 @@
          * Opening and closing of the hamburger menu
          */
         function hamburger() {
-            if (document.getElementById("help-nav").style.display === "flex" && window.matchMedia("(max-width: 800px)").matches) {
+            if (document.getElementById("help-nav").style.display === "inline" && window.screen.width <= 800) {
                 document.getElementById("help-nav").style.display = "none";
-            } else {
-                document.getElementById("help-nav").style.display = "flex";
+            } else{
+                document.getElementById("help-nav").style.display = "inline";
             }
         }
         /**
@@ -257,6 +257,7 @@
                 document.getElementById("help-nav").style.display = "inline";
             } else{
                 document.getElementById("help-nav").style.display = "none"
+
             }
         };
         window.addEventListener("resize", limitFunc);

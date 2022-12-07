@@ -100,7 +100,7 @@
     a {
       text-decoration: none;
       font-weight: bold;
-      display: inline-block;
+      display: inline;
       font-size: 16px;
       color: #5399ba;
     }
@@ -112,6 +112,7 @@
 img {
   margin-bottom: 1rem;
   margin-left: 11px;
+
 }
 .container {
   width: 100%;
@@ -143,6 +144,10 @@ $mediaMaxWidth: 1260px;
 $mediaBp1Width: 800px;
 $mediaMinWidth: 480px;
 @media (max-width: $mediaBp1Width) {
+  img {
+    margin-left:unset;
+  }
+
   .nav-header{
     display: flex;
     flex-direction: row;
@@ -154,10 +159,11 @@ $mediaMinWidth: 480px;
   }
   .mobile-logo{
     background-image: url("/images/logo.png");
-    width: 100%;
+    width: 193px;
+    margin-left: 17px;
     background-repeat: no-repeat;
     background-size: cover;
-    min-height: 150px;
+    min-height: 142px;
     background-position: center;
   }
 
@@ -265,7 +271,7 @@ $mediaMinWidth: 480px;
       a {
         text-decoration: none;
         font-weight: bold;
-        display: inline-block;
+        display: inline;
         font-size: 20px !important;
         color: #5399ba;
       }
