@@ -50,39 +50,39 @@
     <nav id="sidenav-1" class="sidenav" data-mdb-hidden="false">
         <div class="nav-header">
             <a class="logo" href="https://tina4.com"><img class="logo-img" src="/images/logo.png" alt="Tina4 Logo"
-                                                          width="220px"></a>
+                                                          width="200px"></a>
             <button onclick=hamburger() class="hamburger-button"><img class="hamburger" src="/images/burger.svg">
             </button>
         </div>
         <div class="help-navigation" id="help-nav">
-            <div class="mobile-logo"></div>
+            <div class="mobile-logo"  href="https://tina4.com"></div>
 
 
-            <div class="accordion accordion-flush" id="accordionFlushParent">
+            <div class="accordion accordion-flush" id="DocsParent">
                 <div class="accordion-item">
-                    <h2 class="accordion-header" id="flush-headingOne">
+                    <h2 class="accordion-header" id="Introduction">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#flush-collapseOne" aria-expanded="false"
-                                aria-controls="flush-collapseOne">
+                                data-bs-target="#CollapseIntroduction" aria-expanded="false"
+                                aria-controls="CollapseIntroduction">
                             <h5>Introduction</h5>
                         </button>
                     </h2>
-                    <div id="flush-collapseOne" class="accordion-collapse collapse" aria-labelledby="flush-headingOne"
-                         data-bs-parent="#accordionFlushParent">
+                    <div id="CollapseIntroduction" class="accordion-collapse collapse" aria-labelledby="Introduction"
+                         data-bs-parent="#DocsParent">
                         <div class="accordion-body"><span><a href="#home">Running from Docker </a><p> Introduction </p></span>
                         </div>
                     </div>
                 </div>
                 <div class="accordion-item">
-                    <h2 class="accordion-header" id="flush-headingX">
+                    <h2 class="accordion-header" id="GettingStarted">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#flush-collapseX" aria-expanded="false"
-                                aria-controls="flush-collapseX">
+                                data-bs-target="#collapseGettingStarted" aria-expanded="false"
+                                aria-controls="collapseGettingStarted">
                             <h5>Getting Started</h5>
                         </button>
                     </h2>
-                    <div id="flush-collapseX" class="accordion-collapse collapse" aria-labelledby="flush-headingX"
-                         data-bs-parent="#accordionFlushParent">
+                    <div id="collapseGettingStarted" class="accordion-collapse collapse" aria-labelledby="GettingStarted"
+                         data-bs-parent="#DocsParent">
                         <div class="accordion-body">
                             <span><a href="#getting-started-running-from-docker">Running from Docker </a><p>  Quick start </p></span>
                             <span><a href="#getting-started-basic-website">Basic Website </a><p>  Using Twig </p></span>
@@ -104,15 +104,15 @@
                     </div>
                 </div>
                 <div class="accordion-item">
-                    <h2 class="accordion-header" id="flush-headingThree">
+                    <h2 class="accordion-header" id="HowDoI">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#flush-collapseThree" aria-expanded="false"
-                                aria-controls="flush-collapseThree">
+                                data-bs-target="#collapseHowDoI" aria-expanded="false"
+                                aria-controls="collapseHowDoI">
                             <h5>How do I ?</h5>
                         </button>
                     </h2>
-                    <div id="flush-collapseThree" class="accordion-collapse collapse"
-                         aria-labelledby="flush-headingThree" data-bs-parent="#accordionFlushParent">
+                    <div id="collapseHowDoI" class="accordion-collapse collapse"
+                         aria-labelledby="HowDoI" data-bs-parent="#DocsParent">
                         <div class="accordion-body">
                             <span><a onclick="hamburger()"
                                      href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
@@ -120,29 +120,29 @@
                     </div>
                 </div>
                 <div class="accordion-item">
-                    <h2 class="accordion-header" id="flush-headingFour">
+                    <h2 class="accordion-header" id="Advanced">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#flush-collapseFour" aria-expanded="false"
-                                aria-controls="flush-collapseFour">
+                                data-bs-target="#collapseAdvanced" aria-expanded="false"
+                                aria-controls="collapseAdvanced">
                             <h5>Advanced</h5>
                         </button>
                     </h2>
-                    <div id="flush-collapseFour" class="accordion-collapse collapse" aria-labelledby="flush-headingFour"
-                         data-bs-parent="#accordionFlushParent">
+                    <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="Advanced"
+                         data-bs-parent="#DocsParent">
                         <div class="accordion-body"><span><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
                         </div>
                     </div>
                 </div>
                 <div class="accordion-item">
-                    <h2 class="accordion-header" id="flush-headingFive">
+                    <h2 class="accordion-header" id="Contributing">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#flush-collapseFive" aria-expanded="false"
-                                aria-controls="flush-collapseFive">
+                                data-bs-target="#collapseContributing" aria-expanded="false"
+                                aria-controls="collapseContributing">
                             <h5>Contributing</h5>
                         </button>
                     </h2>
-                    <div id="flush-collapseFive" class="accordion-collapse collapse" aria-labelledby="flush-headingFive"
-                         data-bs-parent="#accordionFlushExample">
+                    <div id="collapseContributing" class="accordion-collapse collapse" aria-labelledby="Contributing"
+                         data-bs-parent="#DocsParent">
                         <div class="accordion-body"><span><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
                         </div>
                     </div>
@@ -210,7 +210,6 @@
                 </li>
             </ul>
 
-
             <h2>Getting Started</h2>
             {% include "documentation/getting-started/running-from-docker.twig" with { anchor: 'getting-started-running-from-docker' } %}
             {% include "documentation/getting-started/basic-website.twig" with { anchor: 'getting-started-basic-website' } %}
@@ -223,8 +222,6 @@
 
             <h2>How Do I ?</h2>
             {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'how-do-i-render-a-twig-file' } %}
-
-
             <h2>Advanced</h2>
 
             <h2>Contributing</h2>
@@ -246,13 +243,26 @@
          * Opening and closing of the hamburger menu
          */
         function hamburger() {
-            if (document.getElementById("help-nav").style.display === "flex") {
+            if (document.getElementById("help-nav").style.display === "flex" && window.matchMedia("(max-width: 800px)").matches) {
                 document.getElementById("help-nav").style.display = "none";
             } else {
                 document.getElementById("help-nav").style.display = "flex";
             }
         }
-
+        /**
+         * Closes and opens the sidebar depending on resolution using Event listener
+         */
+        let limitFunc = function(){
+            if (window.screen.width>=800){
+                document.getElementById("help-nav").style.display = "inline";
+            } else{
+                document.getElementById("help-nav").style.display = "none"
+            }
+        };
+        window.addEventListener("resize", limitFunc);
+        /**
+         * runs function when corresponding tag is pressed,Applied to all Nav links
+         */
         $(document).ready(function() {
             $('.accordion-body span a').click(function() {
                hamburger();
