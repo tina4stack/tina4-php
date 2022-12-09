@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!--suppress HtmlUnknownTarget, HtmlUnknownAnchorTarget -->
 <html lang="en">
 <head>
     <title>Tina4 Documentation</title>
@@ -51,7 +52,7 @@
         <div class="nav-header">
             <a class="logo" href="https://tina4.com"><img class="logo-img" src="/images/logo.png" alt="Tina4 Logo"
                                                           width="200px"></a>
-            <button onclick=hamburger() class="hamburger-button"><img class="hamburger" src="/images/burger.svg">
+            <button onclick=hamburger() class="hamburger-button"><img class="hamburger" alt="hamburger" src="/images/burger.svg">
             </button>
         </div>
         <div class="help-navigation" id="help-nav">
@@ -64,12 +65,13 @@
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#CollapseIntroduction" aria-expanded="false"
                                 aria-controls="CollapseIntroduction">
-                            <h5>Introduction</h5>
+                            Introduction
                         </button>
                     </h2>
                     <div id="CollapseIntroduction" class="accordion-collapse collapse" aria-labelledby="Introduction"
                          data-bs-parent="#DocsParent">
-                        <div class="accordion-body"><span><a href="#home">Running from Docker </a><p> Introduction </p></span>
+                        <div class="accordion-body">
+                            <p><a href="#home">Running from Docker </a><br/><span> Introduction </span></p>
                         </div>
                     </div>
                 </div>
@@ -78,28 +80,28 @@
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#collapseGettingStarted" aria-expanded="false"
                                 aria-controls="collapseGettingStarted">
-                            <h5>Getting Started</h5>
+                            Getting Started
                         </button>
                     </h2>
                     <div id="collapseGettingStarted" class="accordion-collapse collapse" aria-labelledby="GettingStarted"
                          data-bs-parent="#DocsParent">
                         <div class="accordion-body">
-                            <span><a href="#getting-started-running-from-docker">Running from Docker </a><p>  Quick start </p></span>
-                            <span><a href="#getting-started-basic-website">Basic Website </a><p>  Using Twig </p></span>
-                            <span><a href="#getting-started-tina4-php">Tina4 PHP </a><p>  Using Tina4 PHP  </p></span>
-                            <span><a href="#getting-started-debugging"> Debugging </a><p>  How does debugging work? </p></span>
-                            <span><a href="#getting-started-environment-variables">Environment variables </a> <p>  Global environment in .env  </p></span>
-                            <span><a href="#getting-started-forms-capturing-data"> Forms </a> <p>  Capturing data from your webpage </p></span>
-                            <span><a href="#getting-started-routing"> Routing </a> <p>  How does routing work? </p></span>
-                            <span><a href="#getting-started-twig"> Twig </a><p>  How to extend with Tina4 </p></span>
-                            <span><a href="#getting-started-secure-routing"> Securing your routes </a><p>  How does security work with JWT? </p></span>
-                            <span><a href="#getting-started-annotating-open-api"> Annotating routes </a><p>  Using Open API with Swagger UI? </p></span>
-                            <span><a href="#getting-started-database-connections">Databases </a><p>  Connecting to a database  </p></span>
-                            <span><a href="#getting-started-api-requests"> API Requests </a><p>  Working with 3rd party APIs </p></span>
-                            <span><a href="#getting-started-migrations"> Migrations </a><p>  Keeping track of your database changes </p></span>
-                            <span><a href="#getting-started-security"> Security </a><p>  Using the Authentication module </p></span>
-                            <span><a href="#getting-started-orm">ORM </a><p>  Object relational mapping  </p></span>
-                            <span><a href="#getting-started-functional-testing">Functional Testing </a><p>  Annotated testing while you code  </p></span>
+                            <p><a href="#getting-started-running-from-docker">Running from Docker </a><br/><span>  Quick start </span></p>
+                            <p><a href="#getting-started-basic-website">Basic Website </a><br/><span>  Using Twig </span></p>
+                            <p><a href="#getting-started-tina4-php">Tina4 PHP </a><br/><span>  Using Tina4 PHP  </span></p>
+                            <p><a href="#getting-started-debugging"> Debugging </a><br/><span>  How does debugging work? </span></p>
+                            <p><a href="#getting-started-environment-variables">Environment variables </a><br/><span>  Global environment in .env  </span></p>
+                            <p><a href="#getting-started-forms-capturing-data"> Forms </a><br/><span>  Capturing data from your webpage </span></p>
+                            <p><a href="#getting-started-routing"> Routing </a><br/><span>  How does routing work? </span></p>
+                            <p><a href="#getting-started-twig"> Twig </a><br/><span>  How to extend with Tina4 </span></p>
+                            <p><a href="#getting-started-secure-routing"> Securing your routes </a><br/><span>  How does security work with JWT? </span></p>
+                            <p><a href="#getting-started-annotating-open-api"> Annotating routes </a><br/><span>  Using Open API with Swagger UI? </span></p>
+                            <p><a href="#getting-started-database-connections">Databases </a><br/><span>  Connecting to a database  </span></p>
+                            <p><a href="#getting-started-api-requests"> API Requests </a><br/><span>  Working with 3rd party APIs </span></p>
+                            <p><a href="#getting-started-migrations"> Migrations </a><br/><span>  Keeping track of your database changes </span></p>
+                            <p><a href="#getting-started-security"> Security </a><br/><span>  Using the Authentication module </span></p>
+                            <p><a href="#getting-started-orm">ORM </a><br/><span>  Object relational mapping  </span></p>
+                            <p><a href="#getting-started-functional-testing">Functional Testing </a><br/><span>  Annotated testing while you code  </span></p>
                         </div>
                     </div>
                 </div>
@@ -108,14 +110,15 @@
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#collapseHowDoI" aria-expanded="false"
                                 aria-controls="collapseHowDoI">
-                            <h5>How do I ?</h5>
+                            How do I ?
                         </button>
                     </h2>
                     <div id="collapseHowDoI" class="accordion-collapse collapse"
                          aria-labelledby="HowDoI" data-bs-parent="#DocsParent">
                         <div class="accordion-body">
-                            <span><a onclick="hamburger()"
-                                     href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
+                            <p><a href="#How-do-i-render-a-twig-file">Render a Twig file?</a><br/><span>  Quick Guide  </span></p>
+                            <p><a href="#How-do-i-create-a-JWT-token">Create a JWT token?</a><br/><span>  JSON Web Token  </span></p>
+                            <p><a href="#Send-a-email">Send a email?</a><br/><span>  Tina4 email function  </span></p>
                         </div>
                     </div>
                 </div>
@@ -124,12 +127,12 @@
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#collapseAdvanced" aria-expanded="false"
                                 aria-controls="collapseAdvanced">
-                            <h5>Advanced</h5>
+                            Advanced
                         </button>
                     </h2>
                     <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="Advanced"
                          data-bs-parent="#DocsParent">
-                        <div class="accordion-body"><span><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
+                        <div class="accordion-body"><p><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></p>
                         </div>
                     </div>
                 </div>
@@ -138,12 +141,32 @@
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#collapseContributing" aria-expanded="false"
                                 aria-controls="collapseContributing">
-                            <h5>Contributing</h5>
+                            Contributing
                         </button>
                     </h2>
                     <div id="collapseContributing" class="accordion-collapse collapse" aria-labelledby="Contributing"
                          data-bs-parent="#DocsParent">
-                        <div class="accordion-body"><span><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></span>
+                        <div class="accordion-body"><p><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="Environment">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#collapseEnvironment" aria-expanded="false"
+                                aria-controls="collapseEnvironment">
+                            Set up<br/>environment
+                        </button>
+                    </h2>
+                    <div id="collapseEnvironment" class="accordion-collapse collapse" aria-labelledby="Environment"
+                         data-bs-parent="#DocsParent">
+                        <div class="accordion-body">
+                            <p><a href="#install-php">Install PHP</a><br/><span>  How to install PHP  </span></p>
+                            <p><a href="#install-composer">Install Composer</a><br/><span>  How to install Composer  </span></p>
+                            <p><a href="#install-an-IDE">Install an IDE</a><br/><span>  Best IDE for Tina4  </span></p>
+                            <p><a href="#install-openSSL">Install openSSL</a><br/><span>  How to install openSSL </span></p>
+                            <p><a href="#setup-Env">Setup a .env file</a><br/><span>  How to set up the .env file  </span></p>
+                            <p><a href="#recommended">Recommendations</a><br/><span> What else is recommended by Tina4 </span></p>
                         </div>
                     </div>
                 </div>
@@ -164,7 +187,7 @@
             <h4><i class="fa-brands fa-windows"></i> Windows</h4>
             <pre><code>{{ include_code("examples/run-from-docker-win.twig"| raw) }}</code></pre>
 
-            <h4><i class="fa-brands fa-linux"></i> </i> Linux / <i class="fa-brands fa-apple"></i> MacOS</h4>
+            <h4><i class="fa-brands fa-linux"></i> Linux / <i class="fa-brands fa-apple"></i> MacOS</h4>
             <pre><code>{{ include_code("examples/run-from-docker.twig"| raw) }}</code></pre>
 
             <p>The docker environment contains an <code>/app</code> folder which where your application will be served
@@ -222,10 +245,20 @@
 
             <h2>How Do I ?</h2>
             {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'how-do-i-render-a-twig-file' } %}
+            {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'How-do-i-create-a-JWT-token' } %}
+            {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'Send-a-email' } %}
+            {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'Send-a-email' } %}
             <h2>Advanced</h2>
 
             <h2>Contributing</h2>
             <a href="https://loom.com/invite/6a3f0227ce5e4123909a853d07d35612">Making videos on Loom</a>
+            Set up code environment
+            {% include "documentation/Environment/install-php.twig" with { anchor: 'install-php' } %}
+            {% include "documentation/Environment/install-composer.twig" with { anchor: 'install-composer' } %}
+            {% include "documentation/Environment/install-an-IDE.twig" with { anchor: 'install-an-IDE' } %}
+            {% include "documentation/Environment/install-php.twig" with { anchor: 'install-php' } %}
+            {% include "documentation/Environment/setup-Env.twig" with { anchor: 'setup-Env' } %}
+            {% include "documentation/Environment/recommended.twig" with { anchor: 'recommended' } %}
         </div>
     </div>
     <script>
