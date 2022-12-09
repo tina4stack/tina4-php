@@ -131,6 +131,7 @@ class ParseTemplate
                 ob_clean();
             }
             else {
+
                 Debug::message("$this->GUID Found ".$realFileName, TINA4_LOG_DEBUG);
 
                 $this->headers[] = "Content-Type: " . $mimeType;
@@ -138,10 +139,18 @@ class ParseTemplate
                 $this->headers[] = "Tina4-Debug: ".$this->GUID;
                 $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
                 $this->fileName = $realFileName;
-                $content = file_get_contents($realFileName);
-                $content = $this->parseSnippets($content);
-                $content = $this->parseCalls($content);
-                $content = $this->parseVariables($content);
+                if (!is_dir($realFileName)) {
+                    $content = file_get_contents($realFileName);
+                    $content = $this->parseSnippets($content);
+                    $content = $this->parseCalls($content);
+                    $content = $this->parseVariables($content);
+                } else {
+                    Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+                    $this->headers[] = "Tina4-Debug: ".$this->GUID;
+                    $this->httpCode = HTTP_NOT_FOUND;
+                    $content = "";
+                    $this->fileName = "";
+                }
             }
         } else {
             Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
@@ -149,6 +158,7 @@ class ParseTemplate
             $this->httpCode = HTTP_NOT_FOUND;
             $content = "";
             $this->fileName = "";
+            //Mobile application TINA4_APP
             if (defined("TINA4_APP")) {
                 $content = file_get_contents("./" . TINA4_APP);
                 $this->httpCode = HTTP_OK;
