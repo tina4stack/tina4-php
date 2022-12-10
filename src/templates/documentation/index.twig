@@ -116,9 +116,9 @@
                     <div id="collapseHowDoI" class="accordion-collapse collapse"
                          aria-labelledby="HowDoI" data-bs-parent="#DocsParent">
                         <div class="accordion-body">
-                            <p><a href="#How-do-i-render-a-twig-file">Render a Twig file?</a><br/><span>  Quick Guide  </span></p>
-                            <p><a href="#How-do-i-create-a-JWT-token">Create a JWT token?</a><br/><span>  JSON Web Token  </span></p>
-                            <p><a href="#Send-a-email">Send a email?</a><br/><span>  Tina4 email function  </span></p>
+                            <p><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a><br/><span>  Quick Guide  </span></p>
+                            <p><a href="#how-do-i-create-a-jwt-token">Create a JWT token?</a><br/><span>  JSON Web Token  </span></p>
+                            <p><a href="#send-an-email">Send a email?</a><br/><span>  Tina4 email function  </span></p>
                         </div>
                     </div>
                 </div>
@@ -163,9 +163,8 @@
                         <div class="accordion-body">
                             <p><a href="#install-php">Install PHP</a><br/><span>  How to install PHP  </span></p>
                             <p><a href="#install-composer">Install Composer</a><br/><span>  How to install Composer  </span></p>
-                            <p><a href="#install-an-IDE">Install an IDE</a><br/><span>  Best IDE for Tina4  </span></p>
-                            <p><a href="#install-openSSL">Install openSSL</a><br/><span>  How to install openSSL </span></p>
-                            <p><a href="#setup-Env">Setup a .env file</a><br/><span>  How to set up the .env file  </span></p>
+                            <p><a href="#install-an-ide">Install an IDE</a><br/><span>  Best IDE for Tina4  </span></p>
+                            <p><a href="#install-openssl">Install openSSL</a><br/><span>  How to install open SSL </span></p>
                             <p><a href="#recommended">Recommendations</a><br/><span> What else is recommended by Tina4 </span></p>
                         </div>
                     </div>
@@ -245,9 +244,8 @@
 
             <h2>How Do I ?</h2>
             {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'how-do-i-render-a-twig-file' } %}
-            {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'How-do-i-create-a-JWT-token' } %}
-            {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'Send-a-email' } %}
-            {% include "documentation/how-do-i/render-a-twig-file.twig" with { anchor: 'Send-a-email' } %}
+            {% include "documentation/how-do-i/create-a-jwt-token.twig" with { anchor: 'how-do-i-create-a-jwt-token' } %}
+            {% include "documentation/how-do-i/send-an-email.twig" with { anchor: 'send-a-email' } %}
             <h2>Advanced</h2>
 
             <h2>Contributing</h2>
@@ -255,9 +253,8 @@
             Set up code environment
             {% include "documentation/Environment/install-php.twig" with { anchor: 'install-php' } %}
             {% include "documentation/Environment/install-composer.twig" with { anchor: 'install-composer' } %}
-            {% include "documentation/Environment/install-an-IDE.twig" with { anchor: 'install-an-IDE' } %}
-            {% include "documentation/Environment/install-php.twig" with { anchor: 'install-php' } %}
-            {% include "documentation/Environment/setup-Env.twig" with { anchor: 'setup-Env' } %}
+            {% include "documentation/Environment/install-an-ide.twig" with { anchor: 'install-an-ide' } %}
+            {% include "documentation/Environment/install-openssl.twig" with { anchor: 'install-openssl' } %}
             {% include "documentation/Environment/recommended.twig" with { anchor: 'recommended' } %}
         </div>
     </div>

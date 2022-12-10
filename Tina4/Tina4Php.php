@@ -234,7 +234,11 @@ class Tina4Php extends Data
 
             Route::get("/xdebuginfo", function(Response $response){
                 ob_start();
-                xdebug_info();
+                if (function_exists("xdebug_info")) {
+                    xdebug_info();
+                } else {
+                    echo "Xdebug extension is not installed.";
+                }
                 $data = ob_get_contents();
                 ob_clean();
                 return $response($data, HTTP_OK, TEXT_HTML);
