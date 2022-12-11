@@ -1,0 +1,33 @@
+{% set cars = getCars('*') %}
+{{ dump(cars) }}
+
+{# Result
+Array
+(
+    [0] => BMW
+    [1] => Toyota
+    [2] => Honda
+)
+#}
+
+{% set cars = getCars('0') %}
+{{ dump(cars) }}
+{# Result
+Array
+(
+    [0] => BMW
+)
+#}
+
+{{ 4 | beep }}
+
+{#  Result
+beep beep beep beep
+#}
+
+{{ MY_GLOBAL }}
+
+{#  Result
+IT WORKS!
+#}
+

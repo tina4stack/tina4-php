@@ -1,0 +1,23 @@
+class Store
+{
+    /**
+     * Gets some cars
+     * @param string $default
+     * @return string[]
+     */
+    final public function getCars(string $default="*") : array
+    {
+        $cars =  ["0" => "BMW", "1" => "Toyota", "2" => "Honda"];
+
+        if ($default === "*") {
+            return $cars;
+        }
+
+        if (is_numeric($default))  {
+            return ["0" => $cars[$default]];
+        }
+
+        return [];
+    }
+
+}

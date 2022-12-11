@@ -58,11 +58,11 @@ class Config
     /**
      * Adds a twig global function
      * @param $globalName
-     * @param $function
+     * @param $constant
      */
-    public function addTwigGlobal(string $globalName, $function): void
+    public function addTwigGlobal(string $globalName, $constant): void
     {
-        $this->twigGlobals[$globalName] = $function;
+        $this->twigGlobals[$globalName] = $constant;
     }
 
 
