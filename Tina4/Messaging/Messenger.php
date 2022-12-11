@@ -15,9 +15,9 @@ namespace Tina4;
 class Messenger
 {
     /**
-     * @var MessengerSettings
+     * @var ?MessengerSettings
      */
-    private $settings;
+    private ?MessengerSettings $settings;
 
     /**
      * Messenger constructor.
@@ -25,7 +25,7 @@ class Messenger
      */
     public function __construct(MessengerSettings $settings = null)
     {
-        if (!empty($settings)) {
+        if ($settings !== null) {
             $this->settings = $settings;
         } else {
             $this->settings = new MessengerSettings();
@@ -38,12 +38,12 @@ class Messenger
      * The sendMail function takes on a number of params and sends and email to a receipient.
      *
      * @param mixed $recipients array This can be a String or Array, the String should be ; delimited email@test.com;emai2@test2.com or  ["name" => "Test", "email" => "email@email.com"]
-     * @param $subject string The subject for the email
+     * @param string $subject  The subject for the email
      * @param mixed $message array/string The message to send to the Receipient - can be ["template" => "twigFile", "data" => Array or Object]
-     * @param $fromName string The name of the person sending the message
-     * @param $fromAddress string The address of the person sending the message
-     * @param $attachments array An Array of file paths to be attached in the form array ["name" => "File Description", "path" => "/path/to/file" ]
-     * @param $bcc array
+     * @param string $fromName  The name of the person sending the message
+     * @param string $fromAddress  The address of the person sending the message
+     * @param ?array $attachments An Array of file paths to be attached in the form array ["name" => "File Description", "path" => "/path/to/file" ]
+     * @param ?array $bcc
      * @return Boolean true, false
      * @throws \Twig\Error\LoaderError
      */
@@ -72,13 +72,15 @@ class Messenger
             foreach ($recipients as $id => $recipient) {
                 $tempRecipients[] = "{$recipient["name"]}<{$recipient["email"]}>";
             }
-            $recipients = join(",", $tempRecipients);
+            $recipients = implode(",", $tempRecipients);
         }
 
 
         try {
             if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool")) {
-                mkdir($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool", 0755, true);
+                if (!mkdir($concurrentDirectory = $_SERVER["DOCUMENT_ROOT"] . "/messenger/spool", 0755, true) && !is_dir($concurrentDirectory)) {
+                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                }
             }
             file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml", $headers . $message);
 
@@ -95,79 +97,74 @@ class Messenger
                 ini_set("sendmail_from", $fromAddress);
 
                 $mailSent = @mail($recipients, $subject, $message, $headers);
+            } else if (!class_exists("PHPMailer\PHPMailer\PHPMailer")) {
+                Debug::message("Install PHP Mailer for emailing to work\ncomposer require phpmailer/phpmailer", TINA4_LOG_ERROR);
+                if (!empty($_SERVER)) {
+                    die("<h3>Install PHP Mailer for emailing to work</h3><pre>composer require phpmailer/phpmailer</pre>");
+                }
+
+                die("Install PHP Mailer - <pre><code>composer require phpmailer/phpmailer</code></pre>");
             } else {
-                //Check if class exists
-                if (!class_exists("PHPMailer\PHPMailer\PHPMailer")) {
-                    if (!empty($_SERVER)) {
-                        Debug::message("Install PHP Mailer for emailing to work\ncomposer require phpmailer/phpmailer", TINA4_LOG_ERROR);
-                        die("<h3>Install PHP Mailer for emailing to work</h3><pre>composer require phpmailer/phpmailer</pre>");
+                $phpMailer = new \PHPMailer\PHPMailer\PHPMailer(true);
+                try {
+                    ob_start();
+                    //Server settings
+                    if (TINA4_DEBUG) {
+                        $phpMailer->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_LOWLEVEL;                      // Enable verbose debug output
+                    }
+                    $phpMailer->isSMTP();                                            // Send using SMTP
+                    $phpMailer->Host = $this->settings->smtpServer;                    // Set the SMTP server to send through
+
+                    if (!empty($this->settings->smtpUsername)) {
+                        $phpMailer->SMTPAuth = true;                                   // Enable SMTP authentication
+                        $phpMailer->Username = $this->settings->smtpUsername;                     // SMTP username
+                        $phpMailer->Password = $this->settings->smtpPassword;                               // SMTP password
                     } else {
-                        Debug::message("Install PHP Mailer for emailing to work\ncomposer require phpmailer/phpmailer", TINA4_LOG_ERROR);
-                        die("Install PHP Mailer - composer require phpmailer/phpmailer");
+                        Debug::message("SMTP server is insecure", TINA4_LOG_WARNING);
                     }
-                } else {
-                    $phpMailer = new \PHPMailer\PHPMailer\PHPMailer(true);
-                    try {
-                        ob_start();
-                        //Server settings
-                        if (TINA4_DEBUG) {
-                            $phpMailer->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_LOWLEVEL;                      // Enable verbose debug output
-                        }
-                        $phpMailer->isSMTP();                                            // Send using SMTP
-                        $phpMailer->Host = $this->settings->smtpServer;                    // Set the SMTP server to send through
 
-                        if (!empty($this->settings->smtpUsername)) {
-                            $phpMailer->SMTPAuth = true;                                   // Enable SMTP authentication
-                            $phpMailer->Username = $this->settings->smtpUsername;                     // SMTP username
-                            $phpMailer->Password = $this->settings->smtpPassword;                               // SMTP password
-                        } else {
-                            Debug::message("SMTP server is insecure", TINA4_LOG_WARNING);
-                        }
+                    $phpMailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
+                    $phpMailer->Port = $this->settings->smtpPort;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
+                    $phpMailer->SMTPOptions = [
+                        'ssl' => [
+                            'verify_peer' => false,
+                            'verify_peer_name' => false,
+                            'allow_self_signed' => true
+                        ]
+                    ];
 
-                        $phpMailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
-                        $phpMailer->Port = $this->settings->smtpPort;                                    // TCP port to connect to, use 465 for `PHPMailer::ENCRYPTION_SMTPS` above
-                        $phpMailer->SMTPOptions = [
-                            'ssl' => [
-                                'verify_peer' => false,
-                                'verify_peer_name' => false,
-                                'allow_self_signed' => true
-                            ]
-                        ];
+                    //Recipients
+                    $phpMailer->setFrom($fromAddress, $fromName);
 
-                        //Recipients
-                        $phpMailer->setFrom($fromAddress, $fromName);
-
-                        foreach ($recipients as $id => $recipient) {
-                            $phpMailer->addAddress($recipient["email"], $recipient["name"]);     // Add a recipient
-                        }
-
-                        $phpMailer->addReplyTo($fromAddress, $fromName);
-
-                        if (!empty($bcc)) {
-                            foreach ($bcc as $id => $recipient) {
-                                $phpMailer->addBCC($recipient["email"], $recipient["name"]);     // Add a BCC recipient
-                            }
-                        }
-
-                        if (!empty($attachments)) {
-                            foreach ($attachments as $id => $attachment) {
-                                $phpMailer->addAttachment($attachment["path"], $attachment["name"]);
-                            }
-                        }
-                        // Content
-                        $phpMailer->isHTML(true);                                  // Set email format to HTML
-                        $phpMailer->Subject = $subject;
-                        $phpMailer->Body = $message;
-                        $phpMailer->AltBody = str_replace("<br>", "\n", strip_tags($message, "<br>"));
-
-                        $mailSent = $phpMailer->send();
-                        $messageLog = ob_get_contents();
-                        ob_end_clean();
-                        Debug::message("Message results" . $messageLog, TINA4_LOG_DEBUG);
-                    } catch (\Exception $e) {
-                        $mailSent = false;
-                        Debug::message("Messenger Error:" . $e->getMessage());
+                    foreach ($recipients as $id => $recipient) {
+                        $phpMailer->addAddress($recipient["email"], $recipient["name"]);     // Add a recipient
                     }
+
+                    $phpMailer->addReplyTo($fromAddress, $fromName);
+
+                    if (!empty($bcc)) {
+                        foreach ($bcc as $id => $recipient) {
+                            $phpMailer->addBCC($recipient["email"], $recipient["name"]);     // Add a BCC recipient
+                        }
+                    }
+
+                    if (!empty($attachments)) {
+                        foreach ($attachments as $id => $attachment) {
+                            $phpMailer->addAttachment($attachment["path"], $attachment["name"]);
+                        }
+                    }
+                    // Content
+                    $phpMailer->isHTML(true);                                  // Set email format to HTML
+                    $phpMailer->Subject = $subject;
+                    $phpMailer->Body = $message;
+                    $phpMailer->AltBody = str_replace("<br>", "\n", strip_tags($message, "<br>"));
+
+                    $mailSent = $phpMailer->send();
+                    $messageLog = ob_get_clean();
+                    Debug::message("Message results" . $messageLog, TINA4_LOG_DEBUG);
+                } catch (\Exception $e) {
+                    $mailSent = false;
+                    Debug::message("Messenger Error:" . $e->getMessage());
                 }
             }
         } catch (\Exception $e) {
@@ -208,8 +205,7 @@ class Messenger
             }
         }
 
-        $multipart = '';
-        $multipart .= "{$boundary_alt}{$eol}";
+        $multipart = "{$boundary_alt}{$eol}";
         $multipart .= "Content-Type: text/plain; charset=UTF-8{$eol}{$eol}{$eol}";
         $multipart .= "{$boundary_alt}{$eol}";
         $multipart .= "Content-Type: text/html; charset=UTF-8{$eol}{$eol}";
@@ -274,10 +270,10 @@ class Messenger
     final public function sendSMS(string $mobileNo, string $message = "", string $countryPrefix = "27"): bool
     {
         $cellphone = $this->formatMobile($mobileNo, $countryPrefix);
-        $curl = curl_init($this->settings->bulkSMSURL);
+        $curl = curl_init($this->settings->bulkSMSUrl);
         curl_setopt($curl, CURLOPT_POST, 1);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, 'concat_text_sms_max_parts=4&allow_concat_text_sms=1&username=' . $this->bulkSMSUsername . '&password=' . $this->bulkSMSPassword . '&message=' . $message . '&msisdn=' . $cellphone);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, 'concat_text_sms_max_parts=4&allow_concat_text_sms=1&username=' . $this->settings->bulkSMSUsername . '&password=' . $this->settings->bulkSMSPassword . '&message=' . $message . '&msisdn=' . $cellphone);
         $request = curl_exec($curl);
         curl_close($curl);
         return stripos($request, "IN_PROGRESS") !== false;
@@ -291,19 +287,19 @@ class Messenger
      */
     final public function formatMobile(string $mobileNo, string $countryPrefix = "27") : string
     {
-        $ilen = strlen($mobileNo);
+        $iLength = strlen($mobileNo);
         $tempMobileNo = '';
         $i = 0;
-        while ($i < $ilen) {
-            $val = substr($mobileNo, $i, 1);
+        while ($i < $iLength) {
+            $val = $mobileNo[$i];
             if (is_numeric($val)) {
-                $tempMobileNo = $tempMobileNo . substr($mobileNo, $i, 1);
+                $tempMobileNo .= $mobileNo[$i];
             }
             $i++;
         }
 
         $tempMobileNo = trim($tempMobileNo);
-        if (substr($tempMobileNo, 0, 1) === "0") {
+        if ($tempMobileNo[0] === "0") {
             $tempMobileNo = substr_replace($tempMobileNo, $countryPrefix, 0, 1);
         } elseif (strlen($tempMobileNo) < 11) {
             $tempMobileNo = $countryPrefix . $tempMobileNo;
@@ -311,8 +307,8 @@ class Messenger
 
         if ((strlen($tempMobileNo) < 11) || (strlen($tempMobileNo) > 11)) {
             return "Failed";
-        } else {
-            return $tempMobileNo;
         }
+
+        return $tempMobileNo;
     }
 }
