@@ -52,3 +52,4 @@ test.db
 /data2.db-wal
 /src/templates/api/testme/
 /src/app/Store.php
+/src/orm/Something.php

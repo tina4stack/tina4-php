@@ -1,6 +1,9 @@
 <?php
 require_once "vendor/autoload.php";
 
+global $DBA;
+$DBA = new \Tina4\DataSQLite3("test.db");
+
 $config = new \Tina4\Config(function (\Tina4\Config $config) {
     //Filter in Twig: {{ beep | 2 }}
     $config->addTwigFilter("beep", function($times = 1) {

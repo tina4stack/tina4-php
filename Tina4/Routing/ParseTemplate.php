@@ -123,17 +123,23 @@ class ParseTemplate
                 $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
             }
             else //we are only going to allow php files to run in debug mode
-            if ($ext === "php" && TINA4_DEBUG) {
+            if ($ext === "php") {
                 Debug::message("$this->GUID RUNNING SCRIPT DIRECTLY ".$realFileName, TINA4_LOG_CRITICAL);
-                ob_start();
-                include $realFileName;
-                $content = ob_get_contents();
-                ob_clean();
+                if (TINA4_DEBUG) {
+                    ob_start();
+                    include $realFileName;
+                    $content = ob_get_contents();
+                    ob_clean();
+                } else {
+                    Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+                    $this->headers[] = "Tina4-Debug: ".$this->GUID;
+                    $this->httpCode = HTTP_NOT_FOUND;
+                    $content = "";
+                    $this->fileName = "";
+                }
             }
             else {
-
                 Debug::message("$this->GUID Found ".$realFileName, TINA4_LOG_DEBUG);
-
                 $this->headers[] = "Content-Type: " . $mimeType;
                 $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
                 $this->headers[] = "Tina4-Debug: ".$this->GUID;
