@@ -30,6 +30,21 @@ class Api
     public $ignoreSSLValidation;
 
     /**
+     * @var array An array of custom headers to make things happen!
+     */
+    private $customHeaders;
+
+    /**
+     * @var string Username for basic auth
+     */
+    private $username;
+
+    /**
+     * @var string Password for basic auth
+     */
+    private $password;
+
+    /**
      * API constructor.
      * @param ?string $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
@@ -45,6 +60,26 @@ class Api
         if (!empty($authHeader)) {
             $this->authHeader = $authHeader;
         }
+    }
+
+    /**
+     * Adds custom headers for use in the request
+     * @param $headers
+     * @return void
+     */
+    public function addCustomHeaders($headers) {
+        $this->customHeaders = $headers;
+    }
+
+    /**
+     * Sets the username and password for basic auth
+     * @param $username
+     * @param $password
+     * @return void
+     */
+    public function setUsernamePassword($username, $password) {
+        $this->username = $username;
+        $this->password = $password;
     }
 
     /**
@@ -72,11 +107,19 @@ class Api
             $headers[] = "Accept-Charset: utf-8, *;q=0.8";
 
             if (!empty($this->authHeader)) {
-                $headers[] = $this->authHeader;
+                $headers = array_merge ($headers, explode(",", $this->authHeader));
+            }
+
+            if (!empty($this->username) && !empty($this->password)) {
+                $headers[] = "Authorization: Basic " . base64_encode("{$this->username}:{$this->password}");
             }
 
             if (!empty($body) && !empty($contentType)) {
                 $headers[] = "Content-Type: " . $contentType;
+            }
+
+            if (!empty($this->customHeaders)) {
+                $headers = array_merge ($headers, $this->customHeaders);
             }
 
             if (!empty($customHeaders)) {

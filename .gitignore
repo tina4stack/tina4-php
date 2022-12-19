@@ -53,3 +53,5 @@ test.db
 /src/templates/api/testme/
 /src/app/Store.php
 /src/orm/Something.php
+/src/scss/test.scss
+/src/scss/hello.scss
