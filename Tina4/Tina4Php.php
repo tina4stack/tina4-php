@@ -312,11 +312,15 @@ class Tina4Php extends Data
                 }
             } catch (\Exception $exception)
             {
-                Debug::message("Could not build css ".$exception->getMessage(), TINA4_LOG_ERROR);
+                $message =  $this->clean($exception->getMessage());
+
+                Debug::message("Could not build css on ".$message, TINA4_LOG_ERROR);
             }
 
         }
     }
+
+
 
     /**
      * @throws \Twig\Error\SyntaxError
