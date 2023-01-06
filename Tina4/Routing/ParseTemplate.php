@@ -83,13 +83,11 @@ class ParseTemplate
             $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName . "/index.twig", $fileName . "/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
             $possibleFiles = array_unique($possibleFiles);
         } else {
+            $possibleFiles = [$fileName];
             if (defined("TINA4_APP_DOCUMENT_ROOT")) {
                 if (!defined("TINA4_APP_INDEX")) {
                     define("TINA4_APP_INDEX", $fileName . ".html");
                 }
-                $possibleFiles = [$fileName . ".html"];
-            } else {
-                $possibleFiles = [$fileName];
             }
         }
 
