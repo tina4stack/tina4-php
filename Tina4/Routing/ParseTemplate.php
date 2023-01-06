@@ -47,6 +47,11 @@ class ParseTemplate
         if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
         }
+
+        if (defined("TINA4_APP_DOCUMENT_ROOT")) {
+            $this->locations = array_merge($this->locations, [$_ENV["TINA4_APP_DOCUMENT_ROOT"]]);
+        }
+
         //set the working folder for the site
         $this->root = TINA4_DOCUMENT_ROOT;
         $this->subFolder = TINA4_SUB_FOLDER;
@@ -74,11 +79,18 @@ class ParseTemplate
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
 
 
-        if (empty($ext)) {
+        if (empty($ext) && (!defined("TINA4_APP_DOCUMENT_ROOT") && !defined("TINA4_APP_INDEX"))) {
             $possibleFiles = [$fileName . ".html", $fileName . ".twig", $fileName . "/index.twig", $fileName . "/index.html", str_replace("/index", "", $fileName) . ".twig", str_replace("/index", "", $fileName) . ".html"];
             $possibleFiles = array_unique($possibleFiles);
         } else {
-            $possibleFiles = [$fileName];
+            if (defined("TINA4_APP_DOCUMENT_ROOT")) {
+                if (!defined("TINA4_APP_INDEX")) {
+                    define("TINA4_APP_INDEX", $fileName . ".html");
+                }
+                $possibleFiles = [$fileName . ".html"];
+            } else {
+                $possibleFiles = [$fileName];
+            }
         }
 
         $realFileName = $fileName;
@@ -123,41 +135,41 @@ class ParseTemplate
                 $content = renderTemplate($realFileName, $_SESSION["renderData"], $location);
             }
             else //we are only going to allow php files to run in debug mode
-            if ($ext === "php") {
-                Debug::message("$this->GUID RUNNING SCRIPT DIRECTLY ".$realFileName, TINA4_LOG_CRITICAL);
-                if (TINA4_DEBUG) {
-                    ob_start();
-                    include $realFileName;
-                    $content = ob_get_contents();
-                    ob_clean();
-                } else {
-                    Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
-                    $this->headers[] = "Tina4-Debug: ".$this->GUID;
-                    $this->httpCode = HTTP_NOT_FOUND;
-                    $content = "";
-                    $this->fileName = "";
+                if ($ext === "php") {
+                    Debug::message("$this->GUID RUNNING SCRIPT DIRECTLY ".$realFileName, TINA4_LOG_CRITICAL);
+                    if (TINA4_DEBUG) {
+                        ob_start();
+                        include $realFileName;
+                        $content = ob_get_contents();
+                        ob_clean();
+                    } else {
+                        Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+                        $this->headers[] = "Tina4-Debug: ".$this->GUID;
+                        $this->httpCode = HTTP_NOT_FOUND;
+                        $content = "";
+                        $this->fileName = "";
+                    }
                 }
-            }
-            else {
-                Debug::message("$this->GUID Found ".$realFileName, TINA4_LOG_DEBUG);
-                $this->headers[] = "Content-Type: " . $mimeType;
-                $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
-                $this->headers[] = "Tina4-Debug: ".$this->GUID;
-                $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
-                $this->fileName = $realFileName;
-                if (!is_dir($realFileName)) {
-                    $content = file_get_contents($realFileName);
-                    $content = $this->parseSnippets($content);
-                    $content = $this->parseCalls($content);
-                    $content = $this->parseVariables($content);
-                } else {
-                    Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+                else {
+                    Debug::message("$this->GUID Found ".$realFileName, TINA4_LOG_DEBUG);
+                    $this->headers[] = "Content-Type: " . $mimeType;
+                    $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
                     $this->headers[] = "Tina4-Debug: ".$this->GUID;
-                    $this->httpCode = HTTP_NOT_FOUND;
-                    $content = "";
-                    $this->fileName = "";
+                    $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+                    $this->fileName = $realFileName;
+                    if (!is_dir($realFileName)) {
+                        $content = file_get_contents($realFileName);
+                        $content = $this->parseSnippets($content);
+                        $content = $this->parseCalls($content);
+                        $content = $this->parseVariables($content);
+                    } else {
+                        Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
+                        $this->headers[] = "Tina4-Debug: ".$this->GUID;
+                        $this->httpCode = HTTP_NOT_FOUND;
+                        $content = "";
+                        $this->fileName = "";
+                    }
                 }
-            }
         } else {
             Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
             $this->headers[] = "Tina4-Debug: ".$this->GUID;
@@ -165,8 +177,8 @@ class ParseTemplate
             $content = "";
             $this->fileName = "";
             //Mobile application TINA4_APP
-            if (defined("TINA4_APP")) {
-                $content = file_get_contents("./" . TINA4_APP);
+            if (defined("TINA4_APP_DOCUMENT_ROOT")) {
+                $content = file_get_contents("./" . $_ENV["TINA4_APP_DOCUMENT_ROOT"].DIRECTORY_SEPARATOR.$_ENV["TINA4_APP_INDEX"]);
                 $this->httpCode = HTTP_OK;
             }
         }
