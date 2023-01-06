@@ -981,16 +981,16 @@
         },
         {
             "name": "tina4stack/tina4php-database",
-            "version": "v2.0.4",
+            "version": "v2.0.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-database.git",
-                "reference": "1f66e3c6943522c93083a4a0609e925ca17c08eb"
+                "reference": "8bf556d10d922f9df949afb63c669b3ee2548c03"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/1f66e3c6943522c93083a4a0609e925ca17c08eb",
-                "reference": "1f66e3c6943522c93083a4a0609e925ca17c08eb",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/8bf556d10d922f9df949afb63c669b3ee2548c03",
+                "reference": "8bf556d10d922f9df949afb63c669b3ee2548c03",
                 "shasum": ""
             },
             "require": {
@@ -1031,9 +1031,9 @@
             "description": "Tina4 PHP Database Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-database/issues",
-                "source": "https://github.com/tina4stack/tina4php-database/tree/v2.0.4"
+                "source": "https://github.com/tina4stack/tina4php-database/tree/v2.0.5"
             },
-            "time": "2022-08-25T11:38:46+00:00"
+            "time": "2022-12-21T14:58:27+00:00"
         },
         {
             "name": "tina4stack/tina4php-debug",
@@ -1129,16 +1129,16 @@
         },
         {
             "name": "tina4stack/tina4php-orm",
-            "version": "v2.0.9",
+            "version": "v2.0.10",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-orm.git",
-                "reference": "d53efc59a0195bf235418ebb925bdc092a3f124f"
+                "reference": "7d7b00402a47237f38cf83bbcc4070226df2370b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/d53efc59a0195bf235418ebb925bdc092a3f124f",
-                "reference": "d53efc59a0195bf235418ebb925bdc092a3f124f",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/7d7b00402a47237f38cf83bbcc4070226df2370b",
+                "reference": "7d7b00402a47237f38cf83bbcc4070226df2370b",
                 "shasum": ""
             },
             "require-dev": {
@@ -1165,9 +1165,9 @@
             "description": "Tina4 ORM Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-orm/issues",
-                "source": "https://github.com/tina4stack/tina4php-orm/tree/v2.0.9"
+                "source": "https://github.com/tina4stack/tina4php-orm/tree/v2.0.10"
             },
-            "time": "2022-10-10T12:11:43+00:00"
+            "time": "2022-12-21T14:38:00+00:00"
         },
         {
             "name": "tina4stack/tina4php-shape",
@@ -2186,12 +2186,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/Roave/SecurityAdvisories.git",
-                "reference": "ae56b0972de9f8ab3a86e47aac977ce048ecdaeb"
+                "reference": "58046a3fc3555eda6567a2bdae7195be6aa9babe"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/ae56b0972de9f8ab3a86e47aac977ce048ecdaeb",
-                "reference": "ae56b0972de9f8ab3a86e47aac977ce048ecdaeb",
+                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/58046a3fc3555eda6567a2bdae7195be6aa9babe",
+                "reference": "58046a3fc3555eda6567a2bdae7195be6aa9babe",
                 "shasum": ""
             },
             "conflict": {
@@ -2658,7 +2658,7 @@
                 "yiisoft/yii2-bootstrap": "<2.0.4",
                 "yiisoft/yii2-dev": "<2.0.43",
                 "yiisoft/yii2-elasticsearch": "<2.0.5",
-                "yiisoft/yii2-gii": "<2.0.4",
+                "yiisoft/yii2-gii": "<=2.2.4",
                 "yiisoft/yii2-jui": "<2.0.4",
                 "yiisoft/yii2-redis": "<2.0.8",
                 "yikesinc/yikes-inc-easy-mailchimp-extender": "<6.8.6",
@@ -2725,7 +2725,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2022-12-19T22:05:01+00:00"
+            "time": "2022-12-21T06:05:00+00:00"
         },
         {
             "name": "sebastian/cli-parser",
