@@ -103,7 +103,7 @@ class Request
         }
 
         if (!empty($rawRequest)) {
-            $this->data = json_decode($rawRequest, false, 512);
+            $this->data = json_decode(utf8_decode($rawRequest), false, 512);
             if ($this->data === null && $rawRequest !== '') {
                 $this->data = $rawRequest;
             }
