@@ -32,4 +32,8 @@ try {
 
 \Tina4\Initialize();
 
+//print_r ($DBA->fetch("select sum(id) from test where id = ?", [1])->asArray());
+
+//print_r ((new Test())->select("sum(id)")->where("id = ?", [1])->asArray());
+
 echo new \Tina4\Tina4Php($config);

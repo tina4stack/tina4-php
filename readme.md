@@ -31,6 +31,7 @@ Database support table
 | MongoDB    | ```composer require tina4stack/tina4php-mongodb```    |
 | PostgreSQL | ```composer require tina4stack/tina4php-postgresql``` |
 | MSSQL      | ```composer require tina4stack/tina4php-mssql```      |
+| PDO        | ```composer require tina4stack/tina4php-pdo```        |
 
 *June 13, 2021* - Adding docker support
 

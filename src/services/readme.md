@@ -19,7 +19,11 @@ class TestProcess extends \Tina4\Process implements \Tina4\ProcessInterface
     }
 }
 
+//Add this to a router to add to service runner example /start-service
 $service = new \Tina4\Service();
 $service->addProcess(new TestProcess("My Process"));
+
+//Add this to a router to remove from service runner /stop-service/{processName}
+$service->removeProcess("My Process");
 
 ```
