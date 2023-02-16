@@ -83,7 +83,12 @@ class Service extends Data
      */
     public function getSleepTime(): int
     {
+        // Override sleep time default with env set time
+        if(isset($_ENV["TINA4_SERVICE_TIME"])){
+            $this->sleepTime = $_ENV["TINA4_SERVICE_TIME"];
+        }
         \Tina4\Debug::message("Process Sleep Time: {$this->sleepTime}", TINA4_LOG_DEBUG);
+        
         return $this->sleepTime;
     }
 }
