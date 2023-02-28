@@ -92,6 +92,9 @@ class Auth extends Data
         //make sure the session is started
         if (!$this->configured && session_status() === PHP_SESSION_NONE) {
             $this->configured = true;
+            if (TINA4_CACHE_ON) {
+                session_cache_limiter(false);
+            }
             session_start();
         } else {
             $this->configured = true;
