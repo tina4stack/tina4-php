@@ -379,7 +379,6 @@ class Router extends Data
                             $route["routePath"] = substr_replace($route["routePath"], '', strrpos($route["routePath"], '/form'), 5);
                         }
 
-                        $route["routePath"] = str_replace("/form", "", $route["routePath"]);
                         $route["routePath"] = str_replace("/{id}", "", $route["routePath"]);
 
                         if (isset($_REQUEST["formToken"]) && $route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"])
