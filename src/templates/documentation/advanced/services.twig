@@ -1,0 +1,39 @@
+{% set title = 'Services' %}
+
+{% set introduction %}
+    Tina4 supports a synchronous process queue system. The service is easily run from the command line using a composer script.
+    Processes can be registered and removed from anywhere in your process code or from a web applicatioin running on the
+    same server.
+{% endset %}
+
+{% set requirements = ['Services', 'Routing'] %}
+
+{% set content %}
+    <h5>Starting the service runner</h5>
+    <p>The service runner is started from the command line using a composer script.
+        <pre><code>{{ include_code("examples/advanced-start-service-runner.twig"| raw) }}</code></pre>
+    </p>
+
+    <h5>Registering and removing processes</h5>
+    <p>Adding and removing processes can be inserted anywhere in running Tina4 code, both in the process class, or an
+    associated website running alongside the service.
+    <pre><code>{{ include_code("examples/advanced-register-remove-process.twig"| raw) }}</code></pre>
+    </p>
+
+    <h5>Building a process</h5>
+    <p>The ProcessInterface determines that at least two methods must be included. After each pause, the service runner
+    will loop through all processes. It first tests if the canRun method returns true, then runs the process.
+    <pre><code>{{ include_code("examples/advanced-build-process.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    'As the process code is instantiated at each run, properties in the process class do not persist',
+    'There is a $session array variable defined in the service runner which can be used to persist values',
+    'Both the vendor autoloader, and Tina4 code are called in the service runner, allowing access to the full Tina4 environment',
+    'Setting the TINA4_SERVICE_TIME to an integer in the env file, will override the default 5 second pause to the number of seconds desired',
+    'Active processes are stored in the bin/services.data file in your Tina4 project'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
