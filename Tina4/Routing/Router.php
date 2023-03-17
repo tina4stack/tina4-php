@@ -372,9 +372,15 @@ class Router extends Data
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
                     } else {
                         //Fail over to formToken, but payload must match the route
-                        //CRUD fix for built in values of form & {id}
-                        $route["routePath"] = str_replace("/form", "", $route["routePath"]);
+                        //CRUD fix for built-in values of form & {id}
+
+                        //Ensure the replaced '/form' is at the end of the route path when removing
+                        if(str_ends_with($route["routePath"], '/form')) {
+                            $route["routePath"] = substr_replace($route["routePath"], '', strrpos($route["routePath"], '/form'), 5);
+                        }
+
                         $route["routePath"] = str_replace("/{id}", "", $route["routePath"]);
+
                         if (isset($_REQUEST["formToken"]) && $route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"])
                             && $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"] === $route["routePath"])
                         {
