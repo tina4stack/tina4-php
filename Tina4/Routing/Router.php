@@ -375,7 +375,7 @@ class Router extends Data
                         //CRUD fix for built-in values of form & {id}
 
                         //Ensure the replaced '/form' is at the end of the route path when removing
-                        if(str_ends_with($route["routePath"], '/form')) {
+                        if(substr($route["routePath"], -5,5) == '/form') {
                             $route["routePath"] = substr_replace($route["routePath"], '', strrpos($route["routePath"], '/form'), 5);
                         }
 
