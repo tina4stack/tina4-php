@@ -32,6 +32,27 @@ class Router extends Data
 
     private $GUID;
 
+
+    /**
+     * Add CORS headers to the response
+     * @param $headers
+     * @return mixed
+     */
+    final public function addCORS($headers) {
+        if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
+            $headers[] = ('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
+        } else {
+            $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
+        }
+
+        $headers[] = ('Vary: Origin');
+        $headers[] = ('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
+        $headers[] = ('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+        $headers[] = ('Access-Control-Allow-Credentials: True');
+
+        return $headers;
+    }
+
     /**
      * Resolves to a route that is registered in code and returns the result from that code
      * @param string|null $method
@@ -71,16 +92,15 @@ class Router extends Data
             return $routerResponse;
         }
 
+
         //SECOND STATIC FILES - ONLY GET
 
         if ($method === TINA4_GET) {
-
-
             $fileName = realpath(TINA4_DOCUMENT_ROOT . PATH_SEPARATOR."src".PATH_SEPARATOR."public".$url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("$this->GUID GET - " . $fileName, TINA4_LOG_DEBUG);
                 if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
-                    $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, $fileName);
+                    $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), $fileName);
                 }
                 return $routerResponse;
             }
@@ -97,7 +117,7 @@ class Router extends Data
         //THIRD ROUTING
         if ($routerResponse = $this->handleRoutes($method, $url, $customHeaders, $customRequest)) {
             if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
-                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $routerResponse->headers, "");
+                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), "");
             }
             return $routerResponse;
         }
@@ -119,8 +139,8 @@ class Router extends Data
             }
         }
 
-        $this->createCacheResponse($url, $parseFile->httpCode, $parseFile->content, $parseFile->headers, $parseFile->fileName);
-        return new RouterResponse($parseFile->content, $parseFile->httpCode, $parseFile->headers);
+        $this->createCacheResponse($url, $parseFile->httpCode, $parseFile->content, $this->addCORS($parseFile->headers), $parseFile->fileName);
+        return new RouterResponse($parseFile->content, $parseFile->httpCode, $this->addCORS($parseFile->headers));
     }
 
     /**
@@ -155,16 +175,8 @@ class Router extends Data
 
         $headers = [];
         if (in_array("*", TINA4_ALLOW_ORIGINS) || (array_key_exists("HTTP_ORIGIN", $_SERVER) && in_array($_SERVER["HTTP_ORIGIN"], TINA4_ALLOW_ORIGINS))) {
-            if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
-                $headers[] = ('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
-            } else {
-                $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
-            }
+            $headers = $this->addCORS($headers);
             $headers[] = ('Tina4-Debug: '.$this->GUID);
-            $headers[] = ('Vary: Origin');
-            $headers[] = ('Access-Control-Allow-Methods: GET, PUT, POST, PATCH, DELETE, OPTIONS');
-            $headers[] = ('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-            $headers[] = ('Access-Control-Allow-Credentials: true');
             $httpCode = HTTP_OK;
         } else {
             $httpCode = HTTP_METHOD_NOT_ALLOWED;
