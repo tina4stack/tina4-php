@@ -132,7 +132,7 @@
                     </h2>
                     <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="Advanced"
                          data-bs-parent="#DocsParent">
-                        <div class="accordion-body"><p><a href="#how-do-i-render-a-twig-file">Render a Twig file?</a></p>
+                        <div class="accordion-body"><p><a href="#advanced-services">Services</a><br/><span>  Synchronous Process Queue  </span></p>
                         </div>
                     </div>
                 </div>
@@ -247,7 +247,7 @@
             {% include "documentation/how-do-i/create-a-jwt-token.twig" with { anchor: 'how-do-i-create-a-jwt-token' } %}
             {% include "documentation/how-do-i/send-an-email.twig" with { anchor: 'send-a-email' } %}
             <h2>Advanced</h2>
-
+            {% include "documentation/advanced/services.twig" with { anchor: 'advanced-services' } %}
             <h2>Contributing</h2>
             <a href="https://loom.com/invite/6a3f0227ce5e4123909a853d07d35612">Making videos on Loom</a>
             <h2>Setup Environment</h2>

@@ -1,0 +1,18 @@
+class TestProcess extends \Tina4\Process implements \Tina4\ProcessInterface
+{
+    public $name = "My Service";
+
+    public function canRun(): bool
+    {
+        if ($myCondition == true){
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public function run(): void
+    {
+        echo "If the canRun() method returned true, this code will run";
+    }
+}
