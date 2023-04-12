@@ -39,10 +39,11 @@ class Router extends Data
      * @return mixed
      */
     final public function addCORS($headers) {
-        if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
-            $headers[] = ('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]);
-        } else {
+        if (defined("TINA4_ALLOW_ORIGINS")) {
             $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
+        } else
+        if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
+            $headers[] = ('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]); //strict to the domain caller
         }
 
         $headers[] = ('Vary: Origin');
