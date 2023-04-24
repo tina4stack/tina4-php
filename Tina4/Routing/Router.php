@@ -41,9 +41,6 @@ class Router extends Data
     final public function addCORS($headers) {
         if (defined("TINA4_ALLOW_ORIGINS")) {
             $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
-        } else
-        if (array_key_exists("HTTP_ORIGIN", $_SERVER)) {
-            $headers[] = ('Access-Control-Allow-Origin: ' . $_SERVER["HTTP_ORIGIN"]); //strict to the domain caller
         }
 
         $headers[] = ('Vary: Origin');
@@ -332,6 +329,37 @@ class Router extends Data
         return (new Cache())->set($key, ["url" => $url, "fileName" => $fileName, "httpCode" => $httpCode, "content" => $content, "headers" => $headers], 360);
     }
 
+
+    /**
+     * Get all variations of X headers
+     * @param $headers
+     * @return array
+     */
+    function getXHeaders($headers): array
+    {
+        //regex for BLAH-X BLAH_X
+        $xHeaders = [];
+        foreach ($_SERVER as $headerName => $headerValue)
+        {
+            if (stripos($headerName, "X") !== false) {
+                $re = '/.*X[\_|\-](.*)/i';
+                preg_match_all($re, $headerName, $matches, PREG_SET_ORDER, 0);
+
+                if (count($matches) > 0)
+                {
+                    if (isset($matches[0][1]))
+                    {
+                        $headerName = str_replace("\r", "", str_replace("\n", "", $matches[0][1]));
+                        $xHeaders[] = "X-".$headerName.":".$headerValue;
+                        $xHeaders[] = "X_".$headerName.":".$headerValue;
+                    }
+
+                }
+            }
+        }
+        return array_merge($xHeaders, $headers);
+    }
+
     /**
      * Handles the routes
      * @param $method
@@ -408,6 +436,8 @@ class Router extends Data
                     }
                 }
 
+
+
                 if ($result === null) {
                     if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
                         if ($this->config->getAuthentication() === null) {
@@ -436,6 +466,16 @@ class Router extends Data
                     $headers[] = $result["contentType"];
                     $content = $result["content"];
                     $httpCode = $result["httpCode"];
+
+                    //Find X Headers and add to the $headers variable TINA4_RETURN_X_HEADERS=true which is default
+                    if (defined("TINA4_RETURN_X_HEADERS") && TINA4_RETURN_X_HEADERS) {
+
+                        $headers = $this->getXHeaders($headers);
+                    }
+
+                    if (!empty($result["customHeaders"]) && is_array($result["customHeaders"])) {
+                        $headers = array_merge($headers, $result["customHeaders"]);
+                    }
 
                     return new RouterResponse($content, $httpCode, $headers);
                 }
@@ -527,6 +567,9 @@ class Router extends Data
      */
     public function getRouteResult($class, $method, $params): ?array
     {
+
+        ;
+
         if (!empty($class)) {
             $methodCheck = new \ReflectionMethod($class, $method);
             if ($methodCheck->isStatic()) {

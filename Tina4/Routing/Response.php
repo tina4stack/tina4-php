@@ -23,7 +23,7 @@ class Response
      * @throws \JsonException
      * @example examples\exampleRouteGetAdd.php For simple response
      */
-    public function __invoke($content, int $httpCode = 200, $contentType = null): ?array
+    public function __invoke($content, int $httpCode = 200, $contentType = null, $customHeaders = []): ?array
     {
         if (empty($contentType) && !empty($_SERVER) && isset($_SERVER["CONTENT_TYPE"])) {
             $contentType = $_SERVER["CONTENT_TYPE"];
@@ -54,7 +54,7 @@ class Response
             }
         }
 
-        return ["contentType" => "Content-Type: {$contentType}", "content" => $content, "httpCode" => $httpCode];
+        return ["contentType" => "Content-Type: {$contentType}", "content" => $content, "httpCode" => $httpCode, "customHeaders" => $customHeaders];
     }
 
 }

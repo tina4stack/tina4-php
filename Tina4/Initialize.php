@@ -147,6 +147,10 @@ if (!defined("TINA4_DEBUG_LEVEL")) {
     define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);
 }
 
+if (!defined( "TINA4_RETURN_X_HEADERS")) {
+    define("TINA4_RETURN_X_HEADERS", true);
+}
+
 Debug::$logLevel = TINA4_DEBUG_LEVEL;
 Debug::message("Project Root: " . TINA4_PROJECT_ROOT);
 Debug::message("Document Root: " . TINA4_DOCUMENT_ROOT);
