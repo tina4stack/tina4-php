@@ -88,8 +88,8 @@ function loadPage(loadURL, targetElement) {
     if (targetElement === undefined) targetElement = 'content';
     console.log('LOADING', loadURL);
     sendRequest(loadURL, null, "GET", function(data) {
-        if (document.getElementById('#' + targetElement) !== null) {
-            document.getElementById('#' + targetElement).innerHTML = data;
+        if (document.getElementById(targetElement) !== null) {
+            document.getElementById(targetElement).innerHTML = data;
         } else {
             console.log('TINA4 - define targetElement for postUrl', data);
         }
@@ -112,10 +112,10 @@ function showForm(action, loadURL, targetElement) {
 
     sendRequest(loadURL, null, action, function(data) {
         if (data.message !== undefined) {
-            document.getElementById('#' + targetElement).innerHTML = (data.message);
+            document.getElementById(targetElement).innerHTML = (data.message);
         } else {
-            if (document.getElementById('#' + targetElement) !== null) {
-                document.getElementById('#' + targetElement).innerHTML = data;
+            if (document.getElementById(targetElement) !== null) {
+                document.getElementById(targetElement).innerHTML = data;
             } else {
                 console.log('TINA4 - define targetElement for showForm', data);
             }
@@ -132,10 +132,10 @@ function showForm(action, loadURL, targetElement) {
 function postUrl(url, data, targetElement) {
     sendRequest(url, data, 'POST', function(data) {
         if (data.message !== undefined) {
-            document.getElementById('#' + targetElement).innerHTML = (data.message);
+            document.getElementById(targetElement).innerHTML = (data.message);
         } else {
-            if (document.getElementById('#' + targetElement) !== null) {
-                document.getElementById('#' + targetElement).innerHTML = data;
+            if (document.getElementById(targetElement) !== null) {
+                document.getElementById(targetElement).innerHTML = data;
             } else {
                 console.log('TINA4 - define targetElement for postUrl', data);
             }

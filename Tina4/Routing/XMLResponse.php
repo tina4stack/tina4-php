@@ -41,13 +41,14 @@ class XMLResponse
      * @param string $nodeName
      * @return string
      */
-    public static function generateValidXmlFromArray($content, $nodeName = 'node'): string
+    public static function generateValidXmlFromArray($content, $nodeName = 'value'): string
     {
         if ((is_object($content) || is_array($content))) {
-            $xml  = self::generateXmlFromArray($content, $nodeName);
+            $xml  = self::generateXmlFromArray($content, $nodeName, is_object($content) ? get_class($content): "Array");
+
             //Nodes are the xml wrappers for unknown objects or arrays
-            $xml  = str_replace('<node>', '', $xml);
-            $xml  = str_replace('</node>', '', $xml);
+            //$xml  = str_replace('<'.$nodeName.'>', '', $xml);
+            //$xml  = str_replace('</'.$nodeName.'>', '', $xml);
         } else {
             if (self::isValidXml($content)) {
                 $xml = $content;
@@ -71,15 +72,16 @@ class XMLResponse
      * Creates XML from an array
      * @param $array
      * @param $nodeName
+     * @param null $className
      * @return string
      */
-    public static function generateXmlFromArray($array, $nodeName): string
+    public static function generateXmlFromArray($array, $nodeName, $className=null): string
     {
         $xml = '';
         if (is_array($array) || is_object($array)) {
             foreach ($array as $key => $value) {
                 if (is_numeric($key)) {
-                    $key = $nodeName;
+                    $key = $nodeName." id=\"{$key}\"";
                 }
                 //Allows for xml attributes, strips out for the closing key
                 $keyName = explode(" ", $key, 2);
@@ -89,6 +91,11 @@ class XMLResponse
             if (!empty($array)) {
                 $xml = htmlspecialchars($array, ENT_QUOTES);
             }
+        }
+
+        if (!empty($className))
+        {
+            $xml = '<?xml version="1.0" encoding="UTF-8"?>'."<$className>$xml</$className>";
         }
         return $xml;
     }
