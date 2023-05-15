@@ -1,0 +1,44 @@
+{% set title = 'Modules' %}
+
+{% set introduction %}
+    To expand one's application and make code reusable for other developers, Tina4 has a module system built in to easily
+    allow expansion, by including other Tina4 modules. To allow modules to be universally used between all Tina4 projects,
+    the will need to be built to certain standards.
+{% endset %}
+
+{% set requirements = ['Modules', 'Composer'] %}
+
+{% set content %}
+    <h5>Building the module</h5>
+    <p>The module should be built as a normal Tina4 application. Should it be planned to make the module available to the
+        wider public, it is important to build the module to certain standards.
+    </p>
+
+    <h5>Add a loadModule file to the module</h5>
+    <p>A file, loadModule.php should be created in the root of the module. The example below has commented out the config
+        inclusion for brevity.
+    <pre><code>{{ include_code("examples/advanced-modules-loadModule.twig"| raw) }}</code></pre>
+    </p>
+
+    <h5>Changes to the Module composer.json file</h5>
+    <p>To enable the module to be included in a Tina4 project, a name and description needs to be added to the module composer.json file.
+        It is important to note, that the name given is important, as that name needs to be carried through to the project.
+    <pre><code>{{ include_code("examples/advanced-modules-composer.twig"| raw) }}</code></pre>
+    </p>
+
+    <h5>Changes to the Project composer.json file</h5>
+    <p>To enable the module to be included in a Tina4 project, the module needs to be required in the project composer.json file.
+        The name required, is the same name added to the module composer.json file. Depending on how the module is packaged, it
+        might be needed, to add information related to the repository. The example below includes the dev branch of a github repository.
+    <pre><code>{{ include_code("examples/advanced-modules-composer-project.twig"| raw) }}</code></pre>
+    </p>
+    <p>Run composer upgrade to get the module to download into the vendor folder.</p>
+{% endset %}
+
+{% set tips = [
+    'The Tina4 Module White paper, is an attempt to create a set of standards, allowing modules to be universally available to all Tina4 projects. Currently this working document is available from the Discord Server',
+    'While namespaces will protect class and variable conflicts, this does not protect against route naming, and care does need to be taken.'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
