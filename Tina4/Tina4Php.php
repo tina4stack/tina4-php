@@ -300,7 +300,7 @@ class Tina4Php extends Data
                     // Split the SCSS into seperate CSS files
                     foreach($scssContent as $filename => $scss) {
                         $outputname = trim($filename).".css";
-                        Debug::message('Creating CSS file:' . $outputname );
+                        Debug::message('Creating CSS file:' . $outputname, TINA4_LOG_DEBUG );
                         $scssDefault = $scss_compiler->compileString($scss)->getCss();
                         if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
                             if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
