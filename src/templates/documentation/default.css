@@ -247,3 +247,20 @@ img {
     font-size: 17px !important;
   }
 }
+code {
+  background-color: #ced4da;
+  padding: 2px;
+}
+table {
+  border: 1px solid black;
+}
+table th {
+  border-bottom: 2px solid black;
+  border-right: 1px solid black;
+  padding: 2px;
+}
+table td {
+  padding: 2px;
+  border-right: 1px solid black;
+  border-bottom: 1px solid darkgray;
+}

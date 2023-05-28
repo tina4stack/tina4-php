@@ -283,7 +283,25 @@ $mediaMinWidth: 480px;
 
 }
 
+code {
+  background-color: #ced4da;
+  padding: 2px;
+}
 
+table {
+  border: 1px solid black;
+  th {
+      border-bottom: 2px solid black;
+      border-right: 1px solid black ;
+      padding: 2px;
+  }
+  td {
+    padding: 2px;
+    border-right: 1px solid black ;
+    border-bottom: 1px solid darkgray ;
+
+  }
+}
 
 
 
