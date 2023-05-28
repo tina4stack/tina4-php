@@ -1,0 +1,16 @@
+/**
+* @secure
+*/
+\Tina4\Get::add('/hello/world', function(\Tina4\Response $response, \Tina4\Request $request) {
+    $array = ["test" => ["one" => "1", "two" => "2"], "test2" => ["one", "two", "three"]];
+    return $response($array, HTTP_OK);
+});
+
+/**
+* @secure
+*/
+\Tina4\Post::add('/hello/world', function(\Tina4\Response $response, \Tina4\Request $request) {
+    $payload = (new \Tina4\Auth())->getPayload($request->data["formToken"]);
+    $array = ["test" => ["one" => "1", "two" => "2"], "test2" => ["one", "two", "three"]];
+    return $response($array, HTTP_OK);
+});
