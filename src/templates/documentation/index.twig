@@ -132,7 +132,9 @@
                     </h2>
                     <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="Advanced"
                          data-bs-parent="#DocsParent">
-                        <div class="accordion-body"><p><a href="#advanced-services">Services</a><br/><span>  Synchronous Process Queue  </span></p>
+                        <div class="accordion-body">
+                            <p><a href="#advanced-modules">Modules</a></p>
+                            <p><a href="#advanced-services">Services</a></p>
                         </div>
                     </div>
                 </div>
@@ -255,15 +257,16 @@
             {% include "documentation/how-do-i/create-a-jwt-token.twig" with { anchor: 'how-do-i-create-a-jwt-token' } %}
             {% include "documentation/how-do-i/send-an-email.twig" with { anchor: 'send-a-email' } %}
             <h2>Advanced</h2>
+            {% include "documentation/advanced/modules.twig" with { anchor: 'advanced-modules' } %}
             {% include "documentation/advanced/services.twig" with { anchor: 'advanced-services' } %}
             <h2>Contributing</h2>
             <a href="https://loom.com/invite/6a3f0227ce5e4123909a853d07d35612">Making videos on Loom</a>
             <h2>Setup Environment</h2>
-            {% include "documentation/Environment/install-php.twig" with { anchor: 'install-php' } %}
-            {% include "documentation/Environment/install-composer.twig" with { anchor: 'install-composer' } %}
-            {% include "documentation/Environment/install-an-ide.twig" with { anchor: 'install-an-ide' } %}
-            {% include "documentation/Environment/install-openssl.twig" with { anchor: 'install-openssl' } %}
-            {% include "documentation/Environment/recommended.twig" with { anchor: 'recommended' } %}
+            {% include "documentation/environment/install-php.twig" with { anchor: 'install-php' } %}
+            {% include "documentation/environment/install-composer.twig" with { anchor: 'install-composer' } %}
+            {% include "documentation/environment/install-an-ide.twig" with { anchor: 'install-an-ide' } %}
+            {% include "documentation/environment/install-openssl.twig" with { anchor: 'install-openssl' } %}
+            {% include "documentation/environment/recommended.twig" with { anchor: 'recommended' } %}
         </div>
     </div>
     <script>
