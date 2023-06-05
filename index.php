@@ -1,8 +1,11 @@
 <?php
 require_once "vendor/autoload.php";
+\Tina4\Initialize();
 
 global $DBA;
 $DBA = new \Tina4\DataSQLite3("test.db");
+
+
 
 $config = new \Tina4\Config(function (\Tina4\Config $config) {
     //Filter in Twig: {{ beep | 2 }}
@@ -30,7 +33,6 @@ try {
     echo "Failed to compile documentation css";
 }
 
-\Tina4\Initialize();
 
 //print_r ($DBA->fetch("select sum(id) from test where id = ?", [1])->asArray());
 

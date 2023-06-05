@@ -1,0 +1,18 @@
+//Example 1
+$test = new Test();
+$test->load("id = ?", [1]); //prevents SQL injection
+
+echo $test->id;
+
+//Example 2
+$test = new Test();
+$test->id = 1;
+$test->load();
+
+echo $test->id;
+
+//Example 3, not recommended if using variables because of injection
+$test = new Test();
+$test->load("id = 1");
+
+echo $test->id;
