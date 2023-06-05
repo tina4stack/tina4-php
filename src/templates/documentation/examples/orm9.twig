@@ -1,0 +1,8 @@
+//Saving content to a blob field in the table
+$test->saveBlob("content", "Loads of content");
+
+//Saving a file like an image to a blob field in the table
+$test->saveFile("image", "/path/to/file.jpg");
+
+//Getting records from the database
+$tests = (new Test())->select();

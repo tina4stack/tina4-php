@@ -307,7 +307,7 @@ $menus[] = ["id" => 3, "name" => "database", "description" => "Create database c
     return ["index" => $nextIndex, "prompt" => $prompt];
 }];
 
-$menus[] = ["id" => 4, "name" => "orm", "description" => "Create orm objects", "menuCode" => static function ($index, $input) {
+$menus[] = ["id" => 4, "name" => "orm", "description" => "Create ORM objects", "menuCode" => static function ($index, $input) {
 
     global $DBA;
     global $session;
@@ -354,54 +354,62 @@ $menus[] = ["id" => 4, "name" => "orm", "description" => "Create orm objects", "
                 break;
             case 2:
                 $nextIndex = -1;
+                //we are skipping the index 1 step
+                $no = 0;
+                foreach ($database as $table => $fields) {
+                    $no++;
+                    if ($no == $input || $input == "all") {
+                        $session["tableData"][] = ["table" => $table, "fields" => $fields];
+                    }
+                }
 
-                if ($input === "y") {
-                    $record = new \Tina4\DataRecord();
-                    foreach ($session["tableData"] as $id => $data) {
-                        $className = ucwords($record->getObjectName($data["table"]));
 
-                        $fields = [];
-                        $fieldMapping = [];
-                        $primaryKey = "";
-                        foreach ($data["fields"] as $fid => $field) {
-                            if ($fid == 0 || $field->isPrimaryKey === 1) {
-                                $primaryKey = $field->fieldName;
-                            }
-                            $fieldMapping [] = '"' . $record->getObjectName($field->fieldName) . '" => "' . $field->fieldName . '"';
-                            $fields[] = "\tpublic \$" . $record->getObjectName($field->fieldName) . ";";
+                $record = new \Tina4\DataRecord();
+                foreach ($session["tableData"] as $id => $data) {
+                    $className = ucwords($record->getObjectName($data["table"]));
+
+                    $fields = [];
+                    $fieldMapping = [];
+                    $primaryKey = "";
+                    foreach ($data["fields"] as $fid => $field) {
+                        if ($fid == 0 || $field->isPrimaryKey === 1) {
+                            $primaryKey = $field->fieldName;
                         }
+                        $fieldMapping [] = '"' . $record->getObjectName($field->fieldName) . '" => "' . $field->fieldName . '"';
+                        $fields[] = "\tpublic \$" . $record->getObjectName($field->fieldName) . ";";
+                    }
 
                         $definition = '<?php
 class [CLASS_NAME] extends \Tina4\ORM
 {
     public $tableName="[TABLE_NAME]";
     public $primaryKey="[PRIMARY_KEY]"; //set for primary key
-    public $fieldMapping = [[FIELD_MAPPING]];
-    //public $softDelete=true; //uncomment for soft deletes in crud
+    //public $fieldMapping = [[FIELD_MAPPING]];
+    //public $genPrimaryKey=false; //set to true if you want to set the primary key
+    //public $ignoreFields = []; //fields to ignore in CRUD
+    //public $softDelete=true; //uncomment for soft deletes in crud 
     
 [FIELDS]
 }';
 
-                        $fileName = $rootPath . "src" . DIRECTORY_SEPARATOR . "orm" . DIRECTORY_SEPARATOR . $className . ".php";
+                    $fileName = $rootPath . "src" . DIRECTORY_SEPARATOR . "orm" . DIRECTORY_SEPARATOR . $className . ".php";
 
-                        echo "Creating object in {$fileName} {$className}\n";
-                        if (!file_exists($fileName)) {
-                            $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);
-                            $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
-                            $definition = str_replace("[CLASS_NAME]", $className, $definition);
-                            $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
-                            $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
-                            file_put_contents($fileName, $definition);
-                        }
+                    echo "Creating object in {$fileName} {$className}\n";
+                    if (!file_exists($fileName)) {
+                        $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);
+                        $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
+                        $definition = str_replace("[CLASS_NAME]", $className, $definition);
+                        $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
+                        $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
+                        file_put_contents($fileName, $definition);
                     }
-                    $prompt = "Done, press Enter to continue!";
-                } else {
-                    $prompt = "Press Enter to continue, no object created!";
                 }
+                $prompt = "Done, press Enter to continue!";
+
                 $session["tableData"] = null;
                 break;
             default:
-                $nextIndex = 1;
+                $nextIndex = 2;
                 $no = 0;
                 foreach ($database as $table => $fields) {
                     $no++;

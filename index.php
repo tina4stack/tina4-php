@@ -34,7 +34,6 @@ try {
 }
 
 
-
 //print_r ($DBA->fetch("select sum(id) from test where id = ?", [1])->asArray());
 
 //print_r ((new Test())->select("sum(id)")->where("id = ?", [1])->asArray());

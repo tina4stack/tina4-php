@@ -1,0 +1,14 @@
+//Example 1
+$test = new Test();
+$test->id = 1;
+$test->load();
+$test->delete();
+
+//Example 2
+$test = new Test();
+$test->delete("id = 1");
+
+//Example 3
+$test = new Test();
+$test->delete("id = ?", [1]);
+
