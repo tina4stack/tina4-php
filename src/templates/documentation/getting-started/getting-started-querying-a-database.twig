@@ -1,0 +1,29 @@
+{% set title = 'Querying a database' %}
+
+{% set introduction %}
+    Tina4 offers a number of ways to query a database once a connection has been established.  It is important to understand the thoughts behind how the data is stored.
+    If your data does not conform there are ways to get around this, but it is best to follow the conventions.
+    <ul>
+        <li>We assume that the database tables are in singular form, person vs persons</li>
+        <li>We assume that the database field naming convention is snake case and lowercase</li>
+        <li>We assume that the data should be presented in such a way that it can be used in PHP in the camel case form</li>
+    </ul>
+{% endset %}
+
+{% set requirements = ['Requirement 1', 'Requirement 2', 'Requirement 3'] %}
+
+{% set content %}
+    <h5>Main headers</h5>
+    <p>Some text about something
+    <pre><code>{{ include_code("examples/some-twig-file-with-code-in-it.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    'All queries to a database are automatically paginated, the default pagination size is 10 records per page',
+    'Results keys are returned in the original field form and camel case to conform to coding requirements in PHP',
+
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}
