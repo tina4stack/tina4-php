@@ -454,7 +454,14 @@ class Router extends Data
                     } elseif (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
                         $this->config->setAuthentication(null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
-                    } else {
+                    } elseif (!empty($this->config->getAuthentication())) {
+                        if ($this->config->getAuthentication()->validToken(json_encode($_REQUEST))) {
+                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        } else {
+                            return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                        }
+                    }
+                    else {
                         return new RouterResponse("", HTTP_FORBIDDEN, $headers);
                     }
                 }
