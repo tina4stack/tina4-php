@@ -20,6 +20,8 @@ class Request
     public $server = null;
     public $session = null;
     public $files = null;
+    public $headers = null;
+    public $rawRequest = null;
 
     /**
      * Filter value
@@ -44,6 +46,8 @@ class Request
 
     public function __construct($rawRequest, $customRequest=null)
     {
+        $this->rawRequest = $rawRequest;
+
         if (!empty($customRequest->get)) {
             foreach ($customRequest->get as $key => $value) {
                 $_REQUEST[$key] = $value;
@@ -88,6 +92,11 @@ class Request
             foreach ($this->params as $key => $value) {
                 $this->params[$key] = $this->filterValue($value);
             }
+        }
+
+        $requestHeaders = getallheaders();
+        if (!empty($requestHeaders)) {
+            $this->headers = $requestHeaders;
         }
 
         if (!empty($_FILES)) {
