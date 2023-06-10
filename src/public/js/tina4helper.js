@@ -49,7 +49,6 @@ function getFormData(formName) {
         let element = elements[ie];
         if (element.name) {
             if (element.type === 'file') {
-                console.log('Adding File', element.name);
                 for (let i = 0; i < element.files.length; i++) {
                     let fileData = element.files[i];
                     let elementName = element.name;
@@ -88,25 +87,35 @@ function handleHtmlData(data, targetElement) {
     //Strip out the scripts
     const parser = new DOMParser();
     const htmlData = parser.parseFromString(data, 'text/html');
-    const body = htmlData.querySelector('body');
+    const body = htmlData.querySelector('*');
     const scripts = body.querySelectorAll('script');
     // remove the script tags
     body.querySelectorAll('script').forEach(script => script.remove());
 
     if (targetElement !== null) {
         document.getElementById(targetElement).replaceChildren(...body.children);
+        if (scripts) {
+            scripts.forEach(script => {
+                console.log(script);
+                const newScript = document.createElement("script");
+                newScript.type = 'text/javascript';
+                newScript.async = true;
+                newScript.textContent = script.innerText;
+                document.getElementById(targetElement).append(newScript);
+            });
+        }
     } else {
+        if (scripts) {
+            scripts.forEach(script => {
+                const newScript = document.createElement("script");
+                newScript.type = 'text/javascript';
+                newScript.async = true;
+                newScript.textContent = script.innerText;
+                document.body.append(newScript);
+            });
+        }
+
         return body.innerHTML;
-    }
-    // if there were any script tags add them back and run them
-    if (scripts) {
-        scripts.forEach(script => {
-            const newScript = document.createElement("script");
-            newScript.type = 'text/javascript';
-            newScript.async = true;
-            newScript.textContent = script.innerText;
-            document.getElementById(targetElement).append(newScript)
-        });
     }
 
     return '';
@@ -119,9 +128,8 @@ function handleHtmlData(data, targetElement) {
  */
 function loadPage(loadURL, targetElement) {
     if (targetElement === undefined) targetElement = 'content';
-    console.log('LOADING', loadURL);
+    console.log('LOADING PAGE', loadURL);
     sendRequest(loadURL, null, "GET", function(data) {
-        console.log('Data', data);
         if (document.getElementById(targetElement) !== null) {
             handleHtmlData (data, targetElement);
         } else {
@@ -145,9 +153,8 @@ function showForm(action, loadURL, targetElement) {
     if (action === 'delete') action = 'DELETE';
 
     sendRequest(loadURL, null, action, function(data) {
-        console.log('Data', data);
         if (data.message !== undefined) {
-            document.getElementById(targetElement).innerHTML = (data.message);
+            handleHtmlData ((data.message), targetElement);
         } else {
             if (document.getElementById(targetElement) !== null) {
                 handleHtmlData (data, targetElement);
@@ -167,7 +174,7 @@ function showForm(action, loadURL, targetElement) {
 function postUrl(url, data, targetElement) {
     sendRequest(url, data, 'POST', function(data) {
         if (data.message !== undefined) {
-            document.getElementById(targetElement).innerHTML = (data.message);
+            handleHtmlData ((data.message), targetElement);
         } else {
             if (document.getElementById(targetElement) !== null) {
                 handleHtmlData (data, targetElement);
