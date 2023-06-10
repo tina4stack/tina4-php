@@ -96,7 +96,6 @@ function handleHtmlData(data, targetElement) {
         document.getElementById(targetElement).replaceChildren(...body.children);
         if (scripts) {
             scripts.forEach(script => {
-                console.log(script);
                 const newScript = document.createElement("script");
                 newScript.type = 'text/javascript';
                 newScript.async = true;
