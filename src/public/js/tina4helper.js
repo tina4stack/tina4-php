@@ -144,7 +144,6 @@ function loadPage(loadURL, targetElement) {
  * @param targetElement
  */
 function showForm(action, loadURL, targetElement) {
-    console.log(action, loadURL, targetElement);
     if (targetElement === undefined) targetElement = 'form';
 
     if (action === 'create') action = 'GET';
