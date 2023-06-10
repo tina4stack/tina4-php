@@ -98,7 +98,7 @@ trait Utility
             while (false !== ($file = readdir($dir))) {
                 if (($file !== '.') && ($file !== '..')) {
                     if (is_dir($src . DIRECTORY_SEPARATOR . $file)) {
-                        self::recurseCopy($src . DIRECTORY_SEPARATOR . $file, $dst . DIRECTORY_SEPARATOR . $file);
+                        self::recurseCopy($src . DIRECTORY_SEPARATOR . $file, $dst . DIRECTORY_SEPARATOR . $file, $force);
                     } else {
                         if (!file_exists($dst . DIRECTORY_SEPARATOR . $file) || $force) {
                             copy($src . DIRECTORY_SEPARATOR . $file, $dst . DIRECTORY_SEPARATOR . $file);
