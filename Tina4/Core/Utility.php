@@ -86,8 +86,9 @@ trait Utility
      * Recursively copy the files from one place to another
      * @param string $src Absolute directory path to copy from
      * @param string $dst Absolute directory path to copy to
+     * @param bool $force Force the copy even if the file exists
      */
-    public static function recurseCopy(string $src, string $dst): void
+    public static function recurseCopy(string $src, string $dst, bool $force=True): void
     {
         if (file_exists($src)) {
             $dir = opendir($src);
@@ -96,10 +97,14 @@ trait Utility
             }
             while (false !== ($file = readdir($dir))) {
                 if (($file !== '.') && ($file !== '..')) {
-                    if (is_dir($src . '/' . $file)) {
-                        self::recurseCopy($src . '/' . $file, $dst . '/' . $file);
+                    if (is_dir($src . DIRECTORY_SEPARATOR . $file)) {
+                        self::recurseCopy($src . DIRECTORY_SEPARATOR . $file, $dst . DIRECTORY_SEPARATOR . $file, $force);
                     } else {
-                        copy($src . '/' . $file, $dst . '/' . $file);
+                        if (!file_exists($dst . DIRECTORY_SEPARATOR . $file) || $force) {
+                            copy($src . DIRECTORY_SEPARATOR . $file, $dst . DIRECTORY_SEPARATOR . $file);
+                        } else {
+                            \Tina4\Debug::message("File exists {$dst} {$file}", TINA4_LOG_NOTICE);
+                        }
                     }
                 }
             }
@@ -131,7 +136,7 @@ trait Utility
             }
             if ($fileName !== "." && $fileName !== ".." && is_dir($path . "/" . $fileName)) {
                 $html = '<li data-jstree=\'{"icon":"//img.icons8.com/metro/26/000000/folder-invoices.png"}\'>' . $fileName;
-                $html .= self::iterateDirectory($path . "/" . $fileName, $relativePath, $event);
+                $html .= self::iterateDirectory($path . DIRECTORY_SEPARATOR . $fileName, $relativePath, $event);
                 $html .= "</li>";
                 $dirItems[] = $html;
             } else {
@@ -176,7 +181,7 @@ trait Utility
      * @param string|null $dateString Date input
      * @param string $databaseFormat Format in date format of PHP
      * @param string $outputFormat Output of the date in the specified format
-     * @return string The resulting formatted date
+     * @return string|null The resulting formatted date
      */
     final public function formatDate(?string $dateString, string $databaseFormat, string $outputFormat): ?string
     {
