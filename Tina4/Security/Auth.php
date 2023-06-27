@@ -127,7 +127,7 @@ class Auth extends Data
         //`chmod 600 {$this->documentRoot}secrets/private.key`;
         //`openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub`;
 
-        $keys = openssl_pkey_new(array('digest_alg' => 'sha256', 'private_key_bits' => 1024,'private_key_type' => OPENSSL_KEYTYPE_RSA));
+        $keys = openssl_pkey_new(array('digest_alg' => 'sha256', 'private_key_bits' => 2048,'private_key_type' => OPENSSL_KEYTYPE_RSA));
 
         if (!empty($keys)) {
             $public_key_pem = openssl_pkey_get_details($keys)['key'];
