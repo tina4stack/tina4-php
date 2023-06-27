@@ -99,7 +99,7 @@ class Api
      * @tips
      * @code-example
      */
-    final public function sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "*/*", $customHeaders=[], $curlOptions=[]): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "application/json", $customHeaders=[], $curlOptions=[]): array
     {
         try {
             $headers = [];
@@ -149,6 +149,9 @@ class Api
             }
 
             if (!empty($body)) {
+                if ((is_object($body) || is_array($body)) && $contentType === "application/json" ) {
+                    $body = json_encode($body);
+                }
                 curl_setopt($curlRequest, CURLOPT_POSTFIELDS, $body);
             }
 
