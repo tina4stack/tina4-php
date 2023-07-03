@@ -148,7 +148,7 @@ docker run -v $(pwd):/app -p7145:7145 tina4stack/php:latest composer start
 On a different port like 8080 for example
 
 ```
-docker run -v $(pwd):/app --p8080:8080 tina4stack/php:latest composer start 8080
+docker run -v $(pwd):/app -p8080:8080 tina4stack/php:latest composer start 8080
 ```
 
 ### Quick Reference ###
