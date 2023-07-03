@@ -15,9 +15,6 @@ if (!defined("TINA4_DATABASE_TYPES")) {
     define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb", "Tina4\DataPostgresql", "Tina4\DataMSSQL"]);
 }
 
-//Get the sub folders etc using the data class
-(new \Tina4\Data());
-
 if (!defined("HTTP_OK")) {
     define("HTTP_OK", 200);
 }
