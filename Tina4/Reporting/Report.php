@@ -384,13 +384,15 @@ class Report extends \Tina4\Data
     /**
      * Generates a report
      * @param $sql
-     * @param $groupBy
-     * @param $lookup
-     * @param $calculation
-     * @param $excludedFields
+     * @param array|null $groupBy
+     * @param array|null $lookup
+     * @param array $calculation
+     * @param array $excludedFields
+     * @param int $limit
      * @return $this
      */
-    public function generate($sql, $groupBy=null, $lookup=null, $calculation=null, $excludedFields=null, $limit=500) {
+    public function generate($sql, array $groupBy = null, array $lookup = null, array $calculation = null, $excludedFields=null, int $limit = 500)
+    {
         $data = $this->DBA->fetch($sql, $limit);
 
         $fields = $data->fields;

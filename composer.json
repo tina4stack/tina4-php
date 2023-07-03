@@ -39,7 +39,6 @@
         "phpfastcache/phpfastcache": "^8.0.5",
         "coyl/git": "^0.1.7",
         "scssphp/scssphp": "^1.5.2",
-        "mpdf/mpdf": "^8.0",
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
@@ -81,6 +80,7 @@
         "phpunit/phpunit": "^9",
         "overtrue/phplint": "^2.0",
         "tina4stack/tina4php-sqlite3": "^2.0",
-        "phpmetrics/phpmetrics": "^2.8"
+        "phpmetrics/phpmetrics": "^2.8",
+        "mpdf/mpdf": "^8.1"
     }
 }
