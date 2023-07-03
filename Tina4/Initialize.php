@@ -278,16 +278,17 @@ $arrRoutes = [];
 //Add the .htaccess file for redirecting things & copy the default src structure
 if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUMENT_ROOT . "src")) {
     if (!file_exists(TINA4_DOCUMENT_ROOT . "src")) {
+
         $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
         foreach ($foldersToCopy as $id => $folder) {
             if (!file_exists(TINA4_DOCUMENT_ROOT . $folder)) {
-                \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . $folder, TINA4_DOCUMENT_ROOT . $folder);
             }
         }
     }
 
-    if (file_exists(TINA4_PROJECT_ROOT . ".htaccess")) {
-        copy(TINA4_PROJECT_ROOT . ".htaccess", TINA4_DOCUMENT_ROOT . ".htaccess");
+    if (file_exists(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . ".htaccess")) {
+        copy(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR. ".htaccess", TINA4_DOCUMENT_ROOT . ".htaccess");
     }
 }
 
@@ -309,9 +310,9 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
 }
 
 //Add the icon file for making it look pretty""
-if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
-    if (file_exists(TINA4_PROJECT_ROOT . "favicon.ico")) {
-        copy(TINA4_PROJECT_ROOT . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
+if (!file_exists(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico")) {
+    if (file_exists(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico")) {
+        copy(TINA4_PROJECT_ROOT. DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
     }
 }
 
