@@ -298,8 +298,12 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUME
 if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
     $tina4Checksum = md5(file_get_contents(TINA4_PROJECT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4").file_get_contents(TINA4_PROJECT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4service"));
     $destChecksum = "";
+
     if (file_exists(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4")) {
-        $destChecksum = md5(file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4").file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4service"));
+        $checkContent = file_exists(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4") ? file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4") : "";
+        $checkContent .= file_exists(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4service") ? file_get_contents(TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "tina4service") : "";
+
+        $destChecksum = md5($checkContent);
     }
 
     if ($tina4Checksum !== $destChecksum) {

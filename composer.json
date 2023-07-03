@@ -22,13 +22,13 @@
             "Tina4\\": [
                 "Tina4/",
                 "Tina4/Api/",
-                "Tina4/Core/",
+                "Tina4/Config/",
                 "Tina4/Database/",
                 "Tina4/Messaging/",
-                "Tina4/Reporting/",
                 "Tina4/Routing/",
                 "Tina4/Security/",
-                "Tina4/Service/"
+                "Tina4/Service/",
+                "Tina4/Twig"
             ]
         }
     },
@@ -49,7 +49,8 @@
         "ext-libxml": "*",
         "ext-json": "*",
         "ext-curl": "*",
-        "ext-fileinfo": "*"
+        "ext-fileinfo": "*",
+        "tina4stack/tina4php-core": "^2.0"
     },
     "bin": [
         "bin/tina4",
