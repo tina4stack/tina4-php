@@ -81,7 +81,6 @@
         "phpunit/phpunit": "^9",
         "overtrue/phplint": "^2.0",
         "tina4stack/tina4php-sqlite3": "^2.0",
-        "phpmetrics/phpmetrics": "^2.8",
-        "mpdf/mpdf": "^8.1"
+        "phpmetrics/phpmetrics": "^2.8"
     }
 }
