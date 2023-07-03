@@ -616,16 +616,16 @@
         },
         {
             "name": "tina4stack/tina4php-core",
-            "version": "v2.0.2",
+            "version": "v2.0.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-core.git",
-                "reference": "6885d796f7e88df2cc47757e5d8aae3815f334fa"
+                "reference": "4bc4eb16752e8f5456b7522dbe468049d697c034"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/6885d796f7e88df2cc47757e5d8aae3815f334fa",
-                "reference": "6885d796f7e88df2cc47757e5d8aae3815f334fa",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/4bc4eb16752e8f5456b7522dbe468049d697c034",
+                "reference": "4bc4eb16752e8f5456b7522dbe468049d697c034",
                 "shasum": ""
             },
             "require-dev": {
@@ -636,6 +636,9 @@
             },
             "type": "library",
             "autoload": {
+                "files": [
+                    "Tina4/Functions.php"
+                ],
                 "psr-4": {
                     "Tina4\\": [
                         "Tina4/"
@@ -652,9 +655,9 @@
             "description": "Tina4 PHP Core Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-core/issues",
-                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.2"
+                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.3"
             },
-            "time": "2023-07-03T18:46:58+00:00"
+            "time": "2023-07-03T19:16:36+00:00"
         },
         {
             "name": "tina4stack/tina4php-database",
