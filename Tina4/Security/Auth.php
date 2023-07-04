@@ -164,13 +164,14 @@ class Auth extends Data
     /**
      * Gets an auth token for validating against secure URLS for the session
      * @param array $payLoad
+     * @param int $expiresInDays
      * @param string $privateKey
      * @param string $encryption
      * @return string
      * @tests tina4
      *   assert $this->getPayload($this->getToken(["name" => "tina4"])) === ["name" => "tina4"],"Return back the token"
      */
-    public function getToken(array $payLoad = [], string $privateKey = "", string $encryption = JWT::ALGORITHM_RS256): string
+    public function getToken(array $payLoad = [], int $expiresInDays=0, string $privateKey = "", string $encryption = JWT::ALGORITHM_RS256): string
     {
         $this->initSession();
 
@@ -185,11 +186,18 @@ class Auth extends Data
                 $payLoad = ["value" => $payLoad];
             }
 
+            if ($expiresInDays !== 0) {
+                $payLoad["expires"] = time() + $expiresInDays * 24 * 60 * 60;
+            } else
             if (!isset($payLoad["expires"])) { //take care of expires if the user forgets to set it
                 $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
             }
         } else {
-            $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
+            if ($expiresInDays !== 0) {
+                $payLoad["expires"] = time() + $expiresInDays * 24 * 60 * 60;
+            } else {
+                $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
+            }
         }
 
         $tokenDecoded = new TokenDecoded($payLoad);

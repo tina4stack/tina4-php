@@ -455,7 +455,7 @@ class Router extends Data
                         $this->config->setAuthentication(null); //clear the auth
                         $result = $this->getRouteResult($route["class"], $route["function"], $params);
                     } elseif (!empty($this->config->getAuthentication())) {
-                        if ($this->config->getAuthentication()->validToken(json_encode($_REQUEST))) {
+                        if ($url === "/git/deploy" || $this->config->getAuthentication()->validToken(json_encode($_REQUEST))) {
                             $result = $this->getRouteResult($route["class"], $route["function"], $params);
                         } else {
                             return new RouterResponse("", HTTP_FORBIDDEN, $headers);

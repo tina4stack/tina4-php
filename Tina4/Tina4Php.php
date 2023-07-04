@@ -174,6 +174,15 @@ class Tina4Php extends Data
             return $response("OK");
         });
 
+        /**
+         * @secure
+         */
+        Route::post("/git/deploy", function (Response $response, Request $request) use ($tina4Php) {
+
+            return (new GitDeploy())->deploy($response, $request);
+        });
+
+
         //Some routes only are available with debugging
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
             Route::get("/migrate/create|/migrations/create|/migration/create", function (Response $response) {
