@@ -16,7 +16,7 @@ foreach (get_included_files() as $id => $file) {
 $projectRoot = str_replace(DIRECTORY_SEPARATOR . "bin", "", __DIR__);
 
 if (empty($rootPath)) {
-    $rootPath = str_replace("vendor" . DIRECTORY_SEPARATOR . "tina4stack" . DIRECTORY_SEPARATOR . "tina4php" . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4", "", __FILE__);
+    $rootPath = str_replace("vendor" . DIRECTORY_SEPARATOR . "tina4stack" . DIRECTORY_SEPARATOR . "tina4php-core" . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4", "", __FILE__);
     $rootPath = str_replace("bin" . DIRECTORY_SEPARATOR . "tina4", "", $rootPath);
 }
 

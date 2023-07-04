@@ -7,6 +7,8 @@ The premise of the project is to make you the developer and PHP, the heroes!
 
 **News**
 
+*July 4, 2022* - Added Threading to Events & Triggers 
+
 *November 13, 2022* - Added PHP8.1 to docker & documentation
 
 *February 1, 2022* - Added docker support for Postgres & MySQL
@@ -319,9 +321,51 @@ function add ($a,$b) {
 
 ```
 
+### Triggers and Events
+
+Tina4Php supports a very limited threading or triggering of events using popen to execute and "thread" out triggered code.
+There are some caveats as the code cannot have comments in and only simple variables can be used. Other than that almost anything can be accomplished.
+
+#### Example of a trigger and it firing:
+
+```php
+//Example of the triggered event, notice the sleep timer which should shut down most code on windows or linux making PHP wait for the result.
+
+\Tina4\Event::onTrigger("me", static function($name, $sleep=1, $hello="OK"){
+    $iCount = 0;
+    while ($iCount < 10) {
+        file_put_contents("./log/event.log", "Hello {$name} {$hello}!\n", FILE_APPEND);
+        sleep($sleep);
+        $iCount++;
+    }
+});
+```
+
+Here the trigger is fired on 2 routes, hit each one up in your browser to see the output in the event.log
+
+```php
+\Tina4\Get::add("/test", function(\Tina4\Response $response){
+    
+    \Tina4\Event::trigger("me", ["Again", 1, "Moo!"]);
+
+    return $response("OK!");
+});
+
+\Tina4\Get::add("/test/slow", function(\Tina4\Response $response){
+
+    \Tina4\Event::trigger("me", ["Hello", 3]);
+
+    return $response("OK!");
+});
+```
+
+The output to the event.log file should happen asynchronously whilst the routes return back immediately to the user browsing.
+
+
 ### Change Log
 
 ```
+2023-07-04 Numerous fixes plus event & trigger threading on windows and linux
 2021-12-26 Fixes for swagger & http openswoole example
 2021-12-21 Added openswoole to the docker image & example of use
 2021-12-06 Version 2.0.0 released with database modules and orm separated out for better support

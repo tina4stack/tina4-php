@@ -72,3 +72,4 @@ test.db
 /bin/reportengine
 /bin/reportengine.exe
 /bin/settings.json
+/log/event.log
