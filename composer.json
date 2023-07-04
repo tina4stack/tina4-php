@@ -4,7 +4,8 @@
     "license": "MIT",
     "autoload": {
         "files": [
-            "Tina4/Functions.php"
+            "Tina4/Functions.php",
+            "Tina4/Initialize.php"
         ],
         "classmap": [
             "Helpers/",
@@ -22,13 +23,13 @@
             "Tina4\\": [
                 "Tina4/",
                 "Tina4/Api/",
-                "Tina4/Core/",
+                "Tina4/Config/",
                 "Tina4/Database/",
                 "Tina4/Messaging/",
-                "Tina4/Reporting/",
                 "Tina4/Routing/",
                 "Tina4/Security/",
-                "Tina4/Service/"
+                "Tina4/Service/",
+                "Tina4/Twig"
             ]
         }
     },
@@ -48,12 +49,9 @@
         "ext-libxml": "*",
         "ext-json": "*",
         "ext-curl": "*",
-        "ext-fileinfo": "*"
+        "ext-fileinfo": "*",
+        "tina4stack/tina4php-core": "^2.0"
     },
-    "bin": [
-        "bin/tina4",
-        "bin/tina4service"
-    ],
     "scripts": {
         "tina4": "@php bin/tina4",
         "tina4-debug": "@php -dxdebug.mode=debug -dxdebug.client_host=host.docker.internal -dxdebug.client_port=9004 -dxdebug.start_with_request=yes bin/tina4",
@@ -81,6 +79,6 @@
         "overtrue/phplint": "^2.0",
         "tina4stack/tina4php-sqlite3": "^2.0",
         "phpmetrics/phpmetrics": "^2.8",
-        "mpdf/mpdf": "^8.1"
+        "tina4stack/tina4php-reports": "dev-main"
     }
 }

@@ -8,8 +8,6 @@
 
 namespace Tina4;
 
-use Twig\TwigFunction;
-
 /**
  * Render a twig file or string
  * @param $fileNameString
@@ -124,17 +122,6 @@ function redirect(string $url, int $statusCode = 303): void
     die();
 }
 
-/**
- * Initialize function loads the library for use
- */
-function Initialize(): void
-{
-    if (file_exists("./Tina4/Initialize.php")) {
-        require_once "./Tina4/Initialize.php";
-    } else {
-        require_once __DIR__."/Initialize.php";
-    }
-}
 
 /**
  * Generates an auth token easily
@@ -147,5 +134,5 @@ function getFormToken($payload, $auth=null): string
     if (empty($auth)) {
         $auth = new Auth();
     }
-    return $auth->getToken(["payload" => $payload]);
+    return $auth->getToken(compact('payload'));
 }

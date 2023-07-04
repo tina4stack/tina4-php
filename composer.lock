@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3fbf1fca2d85bcd382a18250005c09d0",
+    "content-hash": "99b2a6e89dff20a56695ab103ebf86f1",
     "packages": [
         {
             "name": "coyl/git",
@@ -613,6 +613,55 @@
                 }
             ],
             "time": "2022-11-03T14:55:06+00:00"
+        },
+        {
+            "name": "tina4stack/tina4php-core",
+            "version": "v2.0.6",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4php-core.git",
+                "reference": "d70bcc37e99ef04f8da8f396b5d7cf8004bf3eab"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/d70bcc37e99ef04f8da8f396b5d7cf8004bf3eab",
+                "reference": "d70bcc37e99ef04f8da8f396b5d7cf8004bf3eab",
+                "shasum": ""
+            },
+            "require-dev": {
+                "overtrue/phplint": "^2.0",
+                "phpmetrics/phpmetrics": "^2.8",
+                "phpunit/phpunit": "^9",
+                "tina4stack/tina4php-debug": "^2.0"
+            },
+            "bin": [
+                "bin/tina4",
+                "bin/tina4service"
+            ],
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "Tina4/Functions.php"
+                ],
+                "psr-4": {
+                    "Tina4\\": [
+                        "Tina4/"
+                    ]
+                },
+                "classmap": [
+                    "Tina4/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 PHP Core Functionality",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4php-core/issues",
+                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.6"
+            },
+            "time": "2023-07-03T20:22:12+00:00"
         },
         {
             "name": "tina4stack/tina4php-database",
@@ -4658,6 +4707,56 @@
             "time": "2021-07-28T10:34:58+00:00"
         },
         {
+            "name": "tina4stack/tina4php-reports",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4php-reports.git",
+                "reference": "152b27377f4dca8bc9d956812cd30bb0d465ceb3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-reports/zipball/152b27377f4dca8bc9d956812cd30bb0d465ceb3",
+                "reference": "152b27377f4dca8bc9d956812cd30bb0d465ceb3",
+                "shasum": ""
+            },
+            "require": {
+                "mpdf/mpdf": "^8.1",
+                "tina4stack/tina4php-core": "^2.0"
+            },
+            "require-dev": {
+                "overtrue/phplint": "^2.0",
+                "phpmetrics/phpmetrics": "^2.8",
+                "phpunit/phpunit": "^9",
+                "tina4stack/tina4php-debug": "^2.0"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "Tina4/Initialize.php"
+                ],
+                "psr-4": {
+                    "Tina4\\": [
+                        "Tina4/"
+                    ]
+                },
+                "classmap": [
+                    "Tina4/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 PHP Reporting Functionality",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4php-reports/issues",
+                "source": "https://github.com/tina4stack/tina4php-reports/tree/v2.0.0"
+            },
+            "time": "2023-07-03T19:41:33+00:00"
+        },
+        {
             "name": "tina4stack/tina4php-sqlite3",
             "version": "v2.0.4",
             "source": {
@@ -4706,7 +4805,8 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
-        "roave/security-advisories": 20
+        "roave/security-advisories": 20,
+        "tina4stack/tina4php-reports": 20
     },
     "prefer-stable": false,
     "prefer-lowest": false,

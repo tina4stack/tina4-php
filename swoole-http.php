@@ -1,5 +1,7 @@
 <?php
+
 use Tina4\Router;
+
 require_once "vendor/autoload.php";
 define("TINA4_SUPPRESS", true);
 
@@ -12,7 +14,7 @@ $events = [];
 $events["Request"] = static function(\Swoole\Http\Request $request, \Swoole\Http\Response $response)
 {
     //create config
-    $config = new \Tina4\Config(function (\Tina4\Config $config) {
+    $config = new \Tina4\Config(static function (\Tina4\Config\Config $config) {
             global $DBA;
             $DBA = new \Tina4\DataSQLite3("test.db");
     });
