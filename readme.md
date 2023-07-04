@@ -313,7 +313,7 @@ There are some caveats as the code cannot have comments in and only simple varia
 ```php
 //Example of the triggered event, notice the sleep timer which should shut down most code on windows or linux making PHP wait for the result.
 
-\Tina4\Event::onTrigger("me", static function($name, $sleep=1, $hello="OK"){
+\Tina4\Thread::addTrigger("me", static function($name, $sleep=1, $hello="OK"){
     $iCount = 0;
     while ($iCount < 10) {
         file_put_contents("./log/event.log", "Hello {$name} {$hello}!\n", FILE_APPEND);
@@ -328,14 +328,14 @@ Here the trigger is fired on 2 routes, hit each one up in your browser to see th
 ```php
 \Tina4\Get::add("/test", function(\Tina4\Response $response){
     
-    \Tina4\Event::trigger("me", ["Again", 1, "Moo!"]);
+    \Tina4\Thread::trigger("me", ["Again", 1, "Moo!"]);
 
     return $response("OK!");
 });
 
 \Tina4\Get::add("/test/slow", function(\Tina4\Response $response){
 
-    \Tina4\Event::trigger("me", ["Hello", 3]);
+    \Tina4\Thread::trigger("me", ["Hello", 3]);
 
     return $response("OK!");
 });

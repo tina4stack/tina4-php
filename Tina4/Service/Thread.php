@@ -12,7 +12,7 @@ namespace Tina4;
  * This handles triggering and creating of events in a system
  * @package Tina4
  */
-class Event
+class Thread
 {
 
     /**
@@ -85,6 +85,18 @@ class Event
                 \Tina4\Debug::message("Event ".$eventName." fired with handle ".$handle, TINA4_LOG_NOTICE);
             }
         }
+    }
+
+    /**
+     * Runs a threaded method
+     * @param string $eventName
+     * @param array $params
+     * @return void
+     * @throws \ReflectionException
+     */
+    public static function run (string $eventName, array $params = []): void
+    {
+        self::trigger($eventName, $params);
     }
 
     /**
