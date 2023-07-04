@@ -1,23 +1,48 @@
-## Tina4 - This is Not A Framework ##
-
+![](/branding/SVG/Logos/tina4-logo-transparent.svg)
 Tina4 is a light-weight routing and twig based templating system which allows you to write websites and API applications
-very quickly.
+very quickly. Currently, the full deployment is under 8mb in size, and we are aiming at being the PHP framework with the smallest carbon footprint.
+Due to the nature of the code being very compact and all functionality engineered from the ground up we trust you will find it a pleasant experience.
+
+Join us on [Discord](https://discord.gg/UUkRq7sgSU) to be part of the journey.
 
 The premise of the project is to make you the developer and PHP, the heroes!
 
-**News**
+### Installing ###
 
-*July 4, 2022* - Added Threading to Events & Triggers 
+We are currently testing on latest PHP 8.2, please report any issues you may find.
 
-*November 13, 2022* - Added PHP8.1 to docker & documentation
+- Install PHP7.4 >  make sure the following extensions are enabled: fileinfo, mbstring, curl, gd, xml.
+- Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly
+- Create a project folder where you want to work
+- In your project folder terminal / console
 
-*February 1, 2022* - Added docker support for Postgres & MySQL
+#### Install with composer from terminal
+```bash
+composer require tina4stack/tina4php
+```
 
-*December 26, 2021* - Fixes for Swagger Examples using new DataField & HTTP Swoole example
+#### Begin your Tina4 project using
 
-*December 21, 2021* - Added Openswoole to the docker image and some examples of using TCP service
+```bash
+composer exec tina4 initialize:run
+```
 
-*December 6, 2021* - Breaking updates, you need to include the database drivers as you require them now.
+#### Spin up a web server with PHP in your terminal in the project folder
+
+```bash
+composer start
+````
+
+Hit up http://localhost:7145 in your browser, you should see the documentation page
+
+If you want to run the webservice on a specific port
+
+```
+composer start 8080
+```
+
+### Database support
+
 The ORM and database modules are all extracted into their own packagist modules.
 The ORM and database metadata work now using a more uniform mechanism. The service module now
 is created under bin and tina4 service and tina4 bin executables are replaced when their checksums change.
@@ -35,64 +60,18 @@ Database support table
 | MSSQL      | ```composer require tina4stack/tina4php-mssql```      |
 | PDO        | ```composer require tina4stack/tina4php-pdo```        |
 
-*June 13, 2021* - Adding docker support
-
-*May 27, 2021* - Some fixes on caching, introduced TINA4_CACHED_ROUTES
-
-*March 21, 2021* - This marks the release of a major update to the routing, it has been fully refactored and optimized.
-Also updates to the debugging and modules make things much better for development.
-
-*February 15, 2021* - Routing in large projects seems to be really messy and finding stuff is a pain. To this end you
-can now direct your routing to class methods, they still behave the same as the anonymous methods but now make more
-sense for grouping functionality. Also added back in, the ability to generate ORM objects directly from your database
-using the command line tool.
-
-*December 28, 2020* - We are getting close to a release point, there are still a number of bugs to be fixed though and
-things to be documented. PHP 8.0 is not in a good place for database use from what we've tested.
-
 **Features**
 
-- Auto templating
+- Auto templating with TWIG
 - Auto inclusions & project structure
-- Annotations for quick Swagger documentation & security
-- Annotations for tests, write unit tests as you code
-- Simple ORM
-- Object Orientated HTML
+- Open API Annotations for quick Swagger documentation & security
+- Annotation driven testing, write unit tests as you code
+- Tina4 ORM
 - Service Runner
-- Modular Programming
+- Async triggers and events
+- Out of the box support for Swoole
+- Modular programming, each project is a potential module.
 
-### Installing ###
-
-*PHP 8.0 is not a stable candidate yet, for example some database functionality is not completely supported*
-
-- Install PHP7.3 >  make sure the following extensions are enabled php_fileinfo, mbstring, curl.
-- Install Composer * Windows users must install openssl so that the JWT keys will be generated correctly
-- Create a project folder where you want to work
-- In your project folder terminal / console
-
-```bash
-composer require tina4stack/tina4php
-```
-
-#### Begin your Tina4 project using
-
-```bash
-composer exec tina4 initialize:run
-```
-
-#### Spin up a web server with PHP in your terminal in the project folder
-
-```bash
-composer start
-````
-
-Hit up http://localhost:7145 in your browser, you should see the 404 error
-
-If you want to run the webservice on a specific port
-
-```
-composer start 8080
-```
 
 #### Run tests
 
@@ -362,27 +341,6 @@ Here the trigger is fired on 2 routes, hit each one up in your browser to see th
 The output to the event.log file should happen asynchronously whilst the routes return back immediately to the user browsing.
 
 
-### Change Log
-
-```
-2023-07-04 Numerous fixes plus event & trigger threading on windows and linux
-2021-12-26 Fixes for swagger & http openswoole example
-2021-12-21 Added openswoole to the docker image & example of use
-2021-12-06 Version 2.0.0 released with database modules and orm separated out for better support
-2021-06-13 Added docker support and better logging
-2021-03-21 Refactored routing, added better debugging, release candidate now in action
-2021-03-05 Added foreign table support to ORM, minor fixes and improvements to testing & annotations, auto migrations on objects
-2021-02-21 Added ability to configure database connections via vendor/tina4/bin
-2021-02-15 New! Routes can now be directed to Class methods, ORM generation available in tina4
-2021-02-13 Fixes for Firebird database engine released
-2021-01-10 SCSS building added
-2020-12-28 MySQL fixes on error debugging
-2020-12-25 Added named param binding for SQLite3
-2020-12-19 Added Annotations for Unit Testing
-2020-12-14 Fixes for MySQL not handling saving of nulls in bind_params
-2020-12-08 Fixes for MySQL & ORM saving
-2020-12-08 Fixes for isBinary under Utilities
-```
 ### PhpDocs
 
 ```
