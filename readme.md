@@ -1,4 +1,5 @@
-![](/branding/SVG/Logos/tina4-logo-transparent.svg)
+<img src="branding/SVG/Logos/tina4-logo-transparent.svg" width="300">
+
 Tina4 is a light-weight routing and twig based templating system which allows you to write websites and API applications
 very quickly. Currently, the full deployment is under 8mb in size, and we are aiming at being the PHP framework with the smallest carbon footprint.
 Due to the nature of the code being very compact and all functionality engineered from the ground up we trust you will find it a pleasant experience.
@@ -6,6 +7,8 @@ Due to the nature of the code being very compact and all functionality engineere
 Join us on [Discord](https://discord.gg/UUkRq7sgSU) to be part of the journey.
 
 The premise of the project is to make you the developer and PHP, the heroes!
+
+[![PHP Composer](https://github.com/tina4stack/tina4-php/actions/workflows/php.yml/badge.svg)](https://github.com/tina4stack/tina4-php/actions/workflows/php.yml)
 
 ### Installing ###
 
