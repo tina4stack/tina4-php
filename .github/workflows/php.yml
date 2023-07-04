@@ -30,7 +30,7 @@ jobs:
         run: composer install --prefer-dist --no-progress --no-suggest
 
       - name: Initialize framework
-        run: composer exec initialize:run
+        run: composer exec tina4 initialize:run
 
       # Add a test script to composer.json, for instance: "test": "vendor/bin/phpunit"
       # Docs: https://getcomposer.org/doc/articles/scripts.md
