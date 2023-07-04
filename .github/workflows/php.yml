@@ -36,4 +36,4 @@ jobs:
       # Docs: https://getcomposer.org/doc/articles/scripts.md
 
       - name: Run test suite
-        run: bin/tina4 tests:run
+        run: composer exec tina4 tests:run tina4
