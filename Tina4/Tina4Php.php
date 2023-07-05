@@ -306,7 +306,7 @@ class Tina4Php extends Data
                     $scss_compiler->setImportPaths($scssLocation);
                 }
                 if (!TINA4_SCSS_SPLIT_CSS) {
-                    Debug::message('Creating CSS file: default.css' );
+                    Debug::message('Creating CSS file: default.css', TINA4_DEBUG );
                     $scssDefault = $scss_compiler->compileString(implode(" ", $scssContent))->getCss();
                     if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
                         if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {
