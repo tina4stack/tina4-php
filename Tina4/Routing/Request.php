@@ -101,6 +101,9 @@ class Request
 
         if (!empty($requestHeaders)) {
             $this->headers = $requestHeaders;
+            foreach ($this->headers as $header => $headerValue) {
+                $this->headers[strtolower($header)] = $headerValue;
+            }
         }
 
         if (!empty($_FILES)) {
