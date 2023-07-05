@@ -8,6 +8,8 @@
 
 namespace Tina4;
 
+use ReflectionException;
+
 /**
  * This handles triggering and creating of events in a system
  * @package Tina4
@@ -17,7 +19,7 @@ class Thread
 
     /**
      * Figures out the code by reading the source file
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     public static function closureDump(\Closure $c, $name="someMethod") : string
     {
@@ -47,7 +49,7 @@ class Thread
         $code .= '){';
         $lines = file($reflection->getFileName());
         for($l = $reflection->getStartLine(); $l < $reflection->getEndLine(); $l++) {
-            if ($lines[$l] == "});") {
+            if (trim($lines[$l]) == "});") {
                 $code .= "};";
             } else {
                 $code .= $lines[$l];
@@ -60,27 +62,31 @@ class Thread
      * Adds and event with it's description
      * @param string $eventName
      * @param array $params
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     public static function trigger(string $eventName, array $params = []): void
     {
         global $TINA4_EVENTS;
         global $TINA4_EVENTS_DETAIL;
+
         $debugTrace = debug_backtrace();
         $TINA4_EVENTS_DETAIL[$eventName]["event"] = ["params" => $params, "debug" => $debugTrace[0]];
         if (isset($TINA4_EVENTS[$eventName])) {
             //ignore_user_abort(true);
             foreach ($TINA4_EVENTS[$eventName] as $id => $method) {
-                $code = self::closureDump($method, $eventName);
+                $methodName = str_replace("-", "_", $eventName);
+                $code = self::closureDump($method, $methodName);
+                $vars = [];
                 foreach ($params as $param) {
                     $vars[] = var_export($param, TRUE);
                 }
-                $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; '.$code.$eventName.'('.join(',', $vars).');';
+                $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; '.$code.$methodName.'('.join(',', $vars).');';
 
+                Debug::message('start /B php -r "' .$code. '"', TINA4_LOG_DEBUG);
                 if (isWindows()) {
-                    pclose($handle = popen('start /B php -r "' . $code . '"', 'r'));
+                    pclose($handle = popen('start /B php -dxdebug.mode=off -r "' . $code . '"', 'r'));
                 } else {
-                    pclose($handle = popen('php -r "' . $code . '" > /dev/null & ', 'r'));
+                    pclose($handle = popen('php -dxdebug.mode=off -r "' . $code . '" > /dev/null & ', 'r'));
                 }
                 \Tina4\Debug::message("Event ".$eventName." fired with handle ".$handle, TINA4_LOG_NOTICE);
             }
@@ -92,7 +98,7 @@ class Thread
      * @param string $eventName
      * @param array $params
      * @return void
-     * @throws \ReflectionException
+     * @throws ReflectionException
      */
     public static function run (string $eventName, array $params = []): void
     {

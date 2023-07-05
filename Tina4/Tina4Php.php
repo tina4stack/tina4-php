@@ -174,14 +174,23 @@ class Tina4Php extends Data
             return $response("OK");
         });
 
+        //run the deploy in a thread
+        Thread::onTrigger("tina4-run-deploy", static function () {
+            \Tina4\Debug::message("Running deploy");
+            (new \Tina4\GitDeploy())->doDeploy();
+        });
+
         /**
          * @secure
          */
         Route::post("/git/deploy", function (Response $response, Request $request) use ($tina4Php) {
+            if ((new GitDeploy())->validateHook($response, $request))
+            {
+                Thread::trigger("tina4-run-deploy", []);
 
-            return (new GitDeploy())->deploy($response, $request);
+            }
+            return $response("OK");
         });
-
 
         //Some routes only are available with debugging
         if (defined("TINA4_DEBUG") && TINA4_DEBUG) {

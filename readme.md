@@ -356,6 +356,7 @@ Additionally, you can specify directories from your repository to be included in
 Make sure you give permissions to git on the system you deploy to if you work with a private repository.
 ```
 [DEPLOYMENT]
+GIT_TINA4_PROJECT_ROOT=.
 GIT_BRANCH=master
 GIT_REPOSITORY=https://github.com/tina4stack/tina4-php.git
 GIT_SECRET=0123456789
