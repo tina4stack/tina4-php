@@ -36,32 +36,13 @@ class GitDeploy
         if (!empty($_ENV["GIT_REPOSITORY"])) {
             //Make sure branch matches the branch specified in the GIT_BRANCH
 
-            if (!isset($request->data->action)) {
-                return false;
-            }
+            if ($request->headers["X-GitHub-Event"] !== "push") {
 
-            if ($request->data->action !== "completed")
-            {
-                return false;
-            }
-
-            if (!isset($request->data->workflow_run))
-            {
-                return false;
-            }
-
-            if (!isset($request->data->workflow_run->status))
-            {
-                return false;
-            }
-
-            if ($request->data->workflow_run->status !== "completed" && $request->data->workflow_run->conclusion !== "success")
-            {
                 return false;
             }
 
             //check the branch && event
-            if ($request->data->workflow_run->head_branch !== $_ENV["GIT_BRANCH"] || $request->data->workflow_run->event !== "push") {
+            if ($request->data->ref !== "refs/heads/".$_ENV["GIT_BRANCH"]) {
                 Debug::message("Got a git event but not a push or not the right branch", TINA4_LOG_INFO);
                 return false;
             }
