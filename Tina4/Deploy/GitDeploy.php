@@ -35,7 +35,7 @@ class GitDeploy
 
         if (!empty($_ENV["GIT_REPOSITORY"])) {
             //Make sure branch matches the branch specified in the GIT_BRANCH
-            if (!isset($request->data->workflow_run) && $request->data->action === "completed" && $request->data->workflow_run->status !== "completed")
+            if (!isset($request->data->workflow_run) && $request->data->action !== "completed" && $request->data->workflow_run->status !== "completed")
             {
                 return false;
             }
