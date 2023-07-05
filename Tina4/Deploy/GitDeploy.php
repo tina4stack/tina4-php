@@ -190,7 +190,7 @@ class GitDeploy
         }
 
         $path = explode("\n", $path);
-        Debug::message("Found git at {$path[0]}");
+        Debug::message("Found $binary at {$path[0]}");
         return '"'.$path[0].'"' ?? "";
     }
 }
