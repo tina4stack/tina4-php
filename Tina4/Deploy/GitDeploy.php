@@ -40,7 +40,17 @@ class GitDeploy
                 return false;
             }
 
-            if (!isset($request->data->workflow_run)  && $request->data->workflow_run->status !== "completed")
+            if (!isset($request->data->workflow_run))
+            {
+                return false;
+            }
+
+            if (!isset($request->data->workflow_run->status))
+            {
+                return false;
+            }
+
+            if ($request->data->workflow_run->status !== "completed")
             {
                 return false;
             }
