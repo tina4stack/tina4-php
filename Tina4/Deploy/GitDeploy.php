@@ -88,9 +88,12 @@ class GitDeploy
 
         // run composer install
         $currentDir = getcwd();
+        echo $currentDir."\n";
         chdir($stagingPath);
 
         `{$gitBinary} checkout {$branch}`;
+
+        echo "{$gitBinary} checkout {$branch}\n";
 
         //Make sure if this lands under a webserver that everything is blocked
         file_put_contents($projectRoot.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
@@ -110,8 +113,6 @@ class GitDeploy
         //check for lock file and autoloader
         if (is_file($projectRoot.DIRECTORY_SEPARATOR."composer.lock") && is_file($projectRoot.DIRECTORY_SEPARATOR."vendor".DIRECTORY_SEPARATOR."autoload.php")) {
             //@todo Run inbuilt tests or other, if fails then don't deploy
-
-
             //get back to where we should be
             chdir($currentDir);
 
