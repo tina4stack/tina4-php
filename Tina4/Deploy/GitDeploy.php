@@ -91,7 +91,9 @@ class GitDeploy
         echo $currentDir."\n";
         chdir($stagingPath);
 
+        `{$gitBinary} pull origin {$branch}`;
         `{$gitBinary} checkout {$branch}`;
+
 
         echo "{$gitBinary} checkout {$branch}\n";
 
