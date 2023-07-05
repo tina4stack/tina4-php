@@ -171,7 +171,7 @@ class GitDeploy
         if (isWindows()) {
             `rmdir /s /q {$path}`;
         } else {
-            `rmdir -Rf {$path}`;
+            `rmdir -rf {$path}`;
         }
 
         return !is_dir($path);
