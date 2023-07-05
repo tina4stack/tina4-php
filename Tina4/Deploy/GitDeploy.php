@@ -88,12 +88,14 @@ class GitDeploy
 
         // run composer install
         $currentDir = getcwd();
-        chdir($projectRoot);
+        chdir($stagingPath);
 
         `{$gitBinary} checkout {$branch}`;
 
         //Make sure if this lands under a webserver that everything is blocked
         file_put_contents($projectRoot.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
+
+        chdir($projectRoot);
 
         $composer = $this->getBinPath("composer");
         if (empty($composer))
