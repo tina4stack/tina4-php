@@ -55,7 +55,7 @@ class GitDeploy
                 return false;
             }
 
-            if ($request->data->workflow_run->status !== "completed")
+            if ($request->data->workflow_run->status !== "completed" && $request->data->workflow_run->conclusion !== "success")
             {
                 return false;
             }
