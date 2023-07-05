@@ -86,17 +86,14 @@ class GitDeploy
 
         `{$gitBinary} clone --recurse-submodules {$repository} {$stagingPath}`;
 
-        `{$gitBinary} checkout {$branch}`;
-
-        $this->cleanPath($stagingPath.DIRECTORY_SEPARATOR.".git");
-        $this->cleanPath($stagingPath.DIRECTORY_SEPARATOR.".github");
-
-        //Make sure if this lands under a webserver that everything is blocked
-        file_put_contents($stagingPath.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
-
         // run composer install
         $currentDir = getcwd();
         chdir($projectRoot);
+
+        `{$gitBinary} checkout {$branch}`;
+
+        //Make sure if this lands under a webserver that everything is blocked
+        file_put_contents($stagingPath.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
 
         $composer = $this->getBinPath("composer");
         if (empty($composer))
@@ -109,7 +106,7 @@ class GitDeploy
         $composerResults = `{$composer} install`;
 
         //check for lock file and autoloader
-        if (is_file($stagingPath.DIRECTORY_SEPARATOR."composer.lock") && is_file($stagingPath.DIRECTORY_SEPARATOR."vendor".DIRECTORY_SEPARATOR."autoload.php")) {
+        if (is_file($projectRoot.DIRECTORY_SEPARATOR."composer.lock") && is_file($projectRoot.DIRECTORY_SEPARATOR."vendor".DIRECTORY_SEPARATOR."autoload.php")) {
             //@todo Run inbuilt tests or other, if fails then don't deploy
 
 
@@ -127,14 +124,14 @@ class GitDeploy
 
             foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath)
             {
-                Utilities::recurseCopy($stagingPath.DIRECTORY_SEPARATOR.$copyPath, $deploymentPath.DIRECTORY_SEPARATOR.$copyPath);
+                Utilities::recurseCopy($projectRoot.DIRECTORY_SEPARATOR.$copyPath, $deploymentPath.DIRECTORY_SEPARATOR.$copyPath);
             }
 
             //deploy index.php to deployment path
             //deploy composer.lock and composer.json to deployment path
             foreach (["index.php", "composer.json", "composer.lock"] as $copyFile) {
-                if (is_file($stagingPath . DIRECTORY_SEPARATOR . $copyFile)) {
-                    $contents = file_get_contents($stagingPath . DIRECTORY_SEPARATOR . $copyFile);
+                if (is_file($projectRoot . DIRECTORY_SEPARATOR . $copyFile)) {
+                    $contents = file_get_contents($projectRoot . DIRECTORY_SEPARATOR . $copyFile);
                     Debug::message("Copying ".$copyFile);
                     file_put_contents($deploymentPath . DIRECTORY_SEPARATOR . $copyFile, $contents);
 
