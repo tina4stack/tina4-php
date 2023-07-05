@@ -36,7 +36,7 @@ class GitDeploy
         if (!empty($_ENV["GIT_REPOSITORY"])) {
             //Make sure branch matches the branch specified in the GIT_BRANCH
 
-            if ($request->headers["X-GitHub-Event"] !== "push") {
+            if ($request->headers["X-Github-Event"] !== "push") {
 
                 return false;
             }
