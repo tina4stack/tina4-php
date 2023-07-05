@@ -93,7 +93,7 @@ class GitDeploy
         `{$gitBinary} checkout {$branch}`;
 
         //Make sure if this lands under a webserver that everything is blocked
-        file_put_contents($stagingPath.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
+        file_put_contents($projectRoot.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
 
         $composer = $this->getBinPath("composer");
         if (empty($composer))
