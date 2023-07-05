@@ -94,7 +94,11 @@ class Request
             }
         }
 
-        $requestHeaders = getallheaders();
+        $requestHeaders = null;
+        if (function_exists("getallheaders")) {
+            $requestHeaders = getallheaders();
+        }
+
         if (!empty($requestHeaders)) {
             $this->headers = $requestHeaders;
         }

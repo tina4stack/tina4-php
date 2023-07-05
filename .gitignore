@@ -73,3 +73,4 @@ test.db
 /bin/reportengine.exe
 /bin/settings.json
 /log/event.log
+/deployment/

@@ -77,7 +77,7 @@ class Thread
                 }
                 $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; '.$code.$eventName.'('.join(',', $vars).');';
 
-                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                if (isWindows()) {
                     pclose($handle = popen('start /B php -r "' . $code . '"', 'r'));
                 } else {
                     pclose($handle = popen('php -r "' . $code . '" > /dev/null & ', 'r'));

@@ -135,7 +135,7 @@ SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0';
 
                     $nextIndex = 0;
                     $prompt = "";
-                    $indexContent = '<?php' . PHP_EOL . 'require_once "./vendor/autoload.php";'. PHP_EOL.'\Tina4\Initialize();' . PHP_EOL. PHP_EOL . '$config = new \Tina4\Config(static function (\Tina4\Config $config){'.PHP_EOL.'  //Your own config initializations '.PHP_EOL.'});'. PHP_EOL . PHP_EOL . 'echo new \Tina4\Tina4Php($config);';
+                    $indexContent = '<?php' . PHP_EOL . 'require_once "./vendor/autoload.php";'. PHP_EOL.'// \Tina4\Initialize();' . PHP_EOL. PHP_EOL . '$config = new \Tina4\Config(static function (\Tina4\Config $config){'.PHP_EOL.'  //Your own config initializations '.PHP_EOL.'});'. PHP_EOL . PHP_EOL . 'echo new \Tina4\Tina4Php($config);';
                     file_put_contents($rootPath . DIRECTORY_SEPARATOR . "index.php", $indexContent);
                 } else {
                     $nextIndex = 0;

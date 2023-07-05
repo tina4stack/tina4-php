@@ -136,3 +136,16 @@ function getFormToken($payload, $auth=null): string
     }
     return $auth->getToken(compact('payload'));
 }
+
+/**
+ * Tells us if the operating system is windows
+ * @return bool
+ */
+function isWindows(): bool
+{
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        return true;
+    } else {
+        return false;
+    }
+}

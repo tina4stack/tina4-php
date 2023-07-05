@@ -343,6 +343,26 @@ Here the trigger is fired on 2 routes, hit each one up in your browser to see th
 
 The output to the event.log file should happen asynchronously whilst the routes return back immediately to the user browsing.
 
+### Triggering deployments using git web hooks
+
+There is a built-in path that will trigger a deployment from a github webhook on your system
+
+```
+https://<site-name>/git/deploy
+```
+
+This requires the following to be in your .env to work; and you will need to generate a secret to be shared between the systems.
+Additionally, you can specify directories from your repository to be included in your deployment with ```GIT_DEPLOYMENT_DIRS```
+Make sure you give permissions to git on the system you deploy to if you work with a private repository.
+```
+[DEPLOYMENT]
+GIT_BRANCH=master
+GIT_REPOSITORY=https://github.com/tina4stack/tina4-php.git
+GIT_SECRET=0123456789
+GIT_DEPLOYMENT_STAGING=..\staging
+GIT_DEPLOYMENT_PATH=deploy-test
+GIT_DEPLOYMENT_DIRS=["branding", "bin"]
+```
 
 ### PhpDocs
 
