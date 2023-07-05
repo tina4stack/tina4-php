@@ -188,7 +188,10 @@ class Tina4Php extends Data
             {
                 Thread::trigger("tina4-run-deploy", []);
 
+            } else {
+                Debug::message("Not running webhook as it is not valid for running", TINA4_LOG_NOTICE);
             }
+
             return $response("OK");
         });
 
@@ -306,7 +309,7 @@ class Tina4Php extends Data
                     $scss_compiler->setImportPaths($scssLocation);
                 }
                 if (!TINA4_SCSS_SPLIT_CSS) {
-                    Debug::message('Creating CSS file: default.css', TINA4_DEBUG );
+                    Debug::message('Creating CSS file: default.css', TINA4_LOG_DEBUG );
                     $scssDefault = $scss_compiler->compileString(implode(" ", $scssContent))->getCss();
                     if (file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public")) {
                         if (!file_exists($this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css") && !mkdir($concurrentDirectory = $this->documentRoot . "src" . DIRECTORY_SEPARATOR . "public" . DIRECTORY_SEPARATOR . "css", 0777, true) && !is_dir($concurrentDirectory)) {

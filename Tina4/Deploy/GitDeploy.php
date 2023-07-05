@@ -35,6 +35,11 @@ class GitDeploy
 
         if (!empty($_ENV["GIT_REPOSITORY"])) {
             //Make sure branch matches the branch specified in the GIT_BRANCH
+
+            if (!isset($request->data->action)) {
+                return false;
+            }
+
             if ($request->data->action !== "completed")
             {
                 return false;
