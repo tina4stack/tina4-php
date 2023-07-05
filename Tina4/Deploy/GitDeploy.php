@@ -70,7 +70,7 @@ class GitDeploy
         $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
         Debug::message("Cloning ".$_ENV["GIT_REPOSITORY"]." into ".$stagingPath);
         $repository = $_ENV["GIT_REPOSITORY"];
-        $branch = $_ENV["GIT_REPOSITORY"];
+        $branch = $_ENV["GIT_BRANCH"];
 
         //clean up deployment
         $this->cleanPath($stagingPath);
@@ -88,14 +88,10 @@ class GitDeploy
 
         // run composer install
         $currentDir = getcwd();
-        echo $currentDir."\n";
+
         chdir($stagingPath);
 
-        `{$gitBinary} pull origin {$branch}`;
         `{$gitBinary} checkout {$branch}`;
-
-
-        echo "{$gitBinary} checkout {$branch}\n";
 
         //Make sure if this lands under a webserver that everything is blocked
         file_put_contents($projectRoot.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
