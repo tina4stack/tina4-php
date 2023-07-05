@@ -27,7 +27,7 @@ class GitDeploy
         $signature = "sha1=".hash_hmac('sha1', $request->rawRequest, $_ENV["GIT_SECRET"]);
 
         //Validate the post
-        if (isset($request->headers["X-Hub-Signature"]) && $signature !== $request->headers["X-Hub-Signature"] || !TINA4_DEBUG) {
+        if (isset($request->headers["x-hub-signature"]) && $signature !== $request->headers["x-hub-signature"] || !TINA4_DEBUG) {
             Debug::message("Invalid signature from GIT, make sure you have set your secret properly on your webhook");
 
             return false;
@@ -36,7 +36,7 @@ class GitDeploy
         if (!empty($_ENV["GIT_REPOSITORY"])) {
             //Make sure branch matches the branch specified in the GIT_BRANCH
 
-            if ($request->headers["X-Github-Event"] !== "push") {
+            if ($request->headers["x-github-event"] !== "push") {
 
                 return false;
             }
