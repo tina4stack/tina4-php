@@ -55,6 +55,8 @@ class Thread
                 $code .= $lines[$l];
             }
         }
+        $code = str_replace('$', '\$', $code);
+        //$code = str_replace( '=', '\=', $code);
         return str_replace(PHP_EOL, "", str_replace('"', '\"', $code));
     }
 
