@@ -76,7 +76,7 @@ class GitDeploy
             $this->log("=== STARTING DEPLOYMENT ===");
             $this->log("Current working path " . getcwd());
             $stagingPath = ($_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT . "staging"); //workspace for cloning and testing the repository
-            $projectRoot = realpath($stagingPath . DIRECTORY_SEPARATOR . $_ENV["GIT_TINA4_PROJECT_ROOT"]) ?? $stagingPath;
+            $projectRoot = $stagingPath . DIRECTORY_SEPARATOR . $_ENV["GIT_TINA4_PROJECT_ROOT"] ?? $stagingPath;
             $this->log("Project root " . $projectRoot);
             $deploymentPath = $_ENV["GIT_DEPLOYMENT_PATH"] ?? getcwd();
             $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
