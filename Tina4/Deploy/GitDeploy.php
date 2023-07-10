@@ -18,7 +18,7 @@ class GitDeploy
     function log($message): void
     {
         Debug::message($message, TINA4_LOG_INFO);
-        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s") . ": ($this->gitTag)" . $message . "\n", FILE_APPEND);
+        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s") . ": ($this->gitTag) " . $message . "\n", FILE_APPEND);
     }
 
     /**
