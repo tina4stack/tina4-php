@@ -106,15 +106,6 @@ class GitDeploy
             $currentDir = getcwd();
             $this->log("Current directory is {$currentDir}");
 
-            //$this->log("Changing working directory to {$stagingPath}");
-            //if (!chdir($stagingPath)) {
-            //    $this->log("Can't change the working folder !!!!!");
-            //}
-
-            //$this->log("Checking out {$branch}");
-            //$runCheckout = "{$gitBinary} checkout {$branch}";
-            //shell_exec($runCheckout);
-
             //Make sure if this lands under a webserver that everything is blocked
             $this->log("Putting .htaccess in {$projectRoot}");
             file_put_contents($projectRoot . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
@@ -125,9 +116,9 @@ class GitDeploy
             $this->log("Checking for composer");
             $composer = $this->getBinPath("composer");
             if (empty($composer)) {
-                `php -dxdebug.mode=off -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
-                `php -dxdebug.mode=off composer-setup.php`;
-                $composer = "php -dxdebug.mode=off composer.phar";
+                `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
+                `php -r composer-setup.php`;
+                $composer = "php composer.phar";
             }
 
             $this->log("Running composer install");
