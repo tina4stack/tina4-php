@@ -112,12 +112,11 @@ class GitDeploy
             chdir($projectRoot);
 
             $this->log("Checking for composer");
-            $composer = $this->getBinPath("composer");
-            if (empty($composer)) {
-                `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
-                `php composer-setup.php`;
-                $composer = "php composer.phar";
-            }
+            `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
+            `php composer-setup.php`;
+            $composer = "php composer.phar";
+            
+
 
             $this->log("Running composer install");
             `{$composer} install --no-interaction`;
