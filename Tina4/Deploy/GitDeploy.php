@@ -100,7 +100,7 @@ class GitDeploy
 
             $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
             $this->log($runClone);
-            $this->log(shell_exec($runClone));
+            shell_exec($runClone);
 
             // run composer install
             $currentDir = getcwd();
