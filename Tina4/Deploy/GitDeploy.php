@@ -101,13 +101,16 @@ class GitDeploy
 
         chdir($stagingPath);
 
+        $this->log("Checking out {$branch}");
         `{$gitBinary} checkout {$branch}`;
 
         //Make sure if this lands under a webserver that everything is blocked
+        $this->log("Putting .htaccess in {$projectRoot}");
         file_put_contents($projectRoot . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
 
         chdir($projectRoot);
 
+        $this->log("Checking for composer");
         $composer = $this->getBinPath("composer");
         if (empty($composer)) {
             `php -dxdebug.mode=off -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
@@ -115,7 +118,9 @@ class GitDeploy
             $composer = "php -dxdebug.mode=off composer.phar";
         }
 
-        $composerResults = `{$composer} install`;
+        $this->log("Running composer install");
+        `{$composer} install`;
+
 
         //check for lock file and autoloader
         if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
