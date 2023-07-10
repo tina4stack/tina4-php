@@ -98,7 +98,7 @@ class GitDeploy
             $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
 
 
-            $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
+            $runClone = "{$gitBinary} clone --quiet --single-branch --branch {$branch} {$repository} {$stagingPath}";
             $this->log($runClone);
             shell_exec($runClone);
 
