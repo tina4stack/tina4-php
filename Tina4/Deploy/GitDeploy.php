@@ -119,7 +119,7 @@ class GitDeploy
             $composer = $this->getBinPath("composer");
             if (empty($composer)) {
                 `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
-                `php -r composer-setup.php`;
+                `php composer-setup.php`;
                 $composer = "php composer.phar";
             }
 
