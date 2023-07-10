@@ -107,7 +107,7 @@ class GitDeploy
             // run composer install
             $currentDir = getcwd();
             $this->log("Current directory is {$currentDir}");
-            
+
             $this->log("Change to {$projectRoot}");
             chdir($projectRoot);
 
@@ -120,7 +120,7 @@ class GitDeploy
             }
 
             $this->log("Running composer install");
-            shell_exec("{$composer} install --no-interaction");
+            `{$composer} install --no-interaction`;
 
 
             //check for lock file and autoloader
