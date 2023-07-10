@@ -99,6 +99,7 @@ class GitDeploy
 
 
             $runClone = "{$gitBinary} clone --recurse-submodules {$repository} {$stagingPath}";
+            $this->log($runClone);
             shell_exec($runClone);
 
             // run composer install
