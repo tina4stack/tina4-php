@@ -120,11 +120,12 @@ class GitDeploy
             }
 
             $this->log("Running composer install");
-            `{$composer} install`;
+            shell_exec("{$composer} install");
 
 
             //check for lock file and autoloader
-            if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
+            if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php"))
+            {
                 //@todo Run inbuilt tests or other, if fails then don't deploy
                 //get back to where we should be
                 chdir($currentDir);
