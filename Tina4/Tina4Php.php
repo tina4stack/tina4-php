@@ -176,7 +176,7 @@ class Tina4Php extends Data
 
         //run the deploy in a thread
         Thread::onTrigger("tina4-run-deploy", static function () {
-            \Tina4\Debug::message("Running deploy");
+            (new \Tina4\GitDeploy())->log("Running a deployment");
             (new \Tina4\GitDeploy())->doDeploy();
         });
 
@@ -186,6 +186,7 @@ class Tina4Php extends Data
         Route::post("/git/deploy", function (Response $response, Request $request) use ($tina4Php) {
             if ((new GitDeploy())->validateHook($response, $request))
             {
+                (new \Tina4\GitDeploy())->log("Triggering a deployment");
                 Thread::trigger("tina4-run-deploy", []);
 
             } else {

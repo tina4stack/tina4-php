@@ -88,7 +88,8 @@ class Thread
                     pclose($handle = popen('start /B php -dxdebug.mode=off -r "' . $code . '"', 'r'));
                 } else {
                     $code = str_replace('$', '\$', $code); //linux needs the $ var to be escaped for some reason
-                    pclose($handle = popen('php -dxdebug.mode=off -r "' . $code . '" > /dev/null & ', 'r'));
+                    Debug::message("Running ".'php -r "' . $code . '" > /dev/null & ');
+                    pclose($handle = popen('php -r "' . $code . '" > /dev/null & ', 'r'));
                 }
                 \Tina4\Debug::message("Event ".$eventName." fired with handle ".$handle, TINA4_LOG_NOTICE);
             }
