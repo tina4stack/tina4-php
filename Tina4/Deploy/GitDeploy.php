@@ -112,8 +112,12 @@ class GitDeploy
             chdir($projectRoot);
 
             $this->log("Checking for composer");
-            `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
-            `php composer-setup.php`;
+            if (isWindows()) {
+                `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
+                `php composer-setup.php`;
+            } else {
+                `curl -sS https://getcomposer.org/installer | sudo php`;
+            }
             $composer = "php composer.phar";
 
 
