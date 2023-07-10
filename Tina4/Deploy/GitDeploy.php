@@ -106,7 +106,10 @@ class GitDeploy
             $currentDir = getcwd();
             $this->log("Current directory is {$currentDir}");
 
-            chdir($stagingPath);
+            $this->log("Changing working directory to {$stagingPath}");
+            if (!chdir($stagingPath)) {
+                $this->log("Can't change the working folder !!!!!");
+            }
 
             $this->log("Checking out {$branch}");
             $runCheckout = "{$gitBinary} checkout {$branch}";
