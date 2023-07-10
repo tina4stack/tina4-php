@@ -80,13 +80,13 @@ class Thread
                 foreach ($params as $param) {
                     $vars[] = var_export($param, TRUE);
                 }
-                $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; '.$code.$methodName.'('.join(',', $vars).');';
+                $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; \Tina4\Initialize(); '.$code.$methodName.'('.join(',', $vars).');';
                 ignore_user_abort(true);
                 set_time_limit(0);
 
                 Debug::message('start /B php -r "' .$code. '"', TINA4_LOG_DEBUG);
                 if (isWindows()) {
-                    pclose($handle = popen('start /B php -dxdebug.mode=off -r "' . $code . '"', 'r'));
+                    pclose($handle = popen('start /B php -r "' . $code . '"', 'r'));
                 } else {
                     $code = str_replace('$', '\$', $code); //linux needs the $ var to be escaped for some reason
                     Debug::message("Running ".'php -r "' . $code . '" > /dev/null & ');

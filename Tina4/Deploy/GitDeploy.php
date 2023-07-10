@@ -115,7 +115,7 @@ class GitDeploy
             `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
             `php composer-setup.php`;
             $composer = "php composer.phar";
-            
+
 
 
             $this->log("Running composer install");
