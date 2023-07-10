@@ -107,11 +107,7 @@ class GitDeploy
             // run composer install
             $currentDir = getcwd();
             $this->log("Current directory is {$currentDir}");
-
-            //Make sure if this lands under a webserver that everything is blocked
-            $this->log("Putting .htaccess in {$projectRoot}");
-            file_put_contents($projectRoot . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
-
+            
             $this->log("Change to {$projectRoot}");
             chdir($projectRoot);
 
