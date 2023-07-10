@@ -8,7 +8,12 @@ use function PHPUnit\Framework\throwException;
 
 class GitDeploy
 {
+    private string $gitTag = "";
 
+    function log($message) {
+        Debug::message($message, TINA4_LOG_INFO);
+        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s").": ($this->gitTag)". $message);
+    }
     /**
      * Validation of the GIT hook request
      * @param Response $response
@@ -17,7 +22,7 @@ class GitDeploy
      */
     public function validateHook(Response $response, Request $request): bool
     {
-        Debug::message("Validated signature from GIT, pulling repository", TINA4_LOG_INFO);
+
         if (!isset($_ENV["GIT_SECRET"])) {
             Debug::message("GIT_SECRET not set in .env");
 
@@ -28,7 +33,7 @@ class GitDeploy
 
         //Validate the post
         if (isset($request->headers["x-hub-signature"]) && $signature !== $request->headers["x-hub-signature"]) {
-            Debug::message("Invalid signature from GIT, make sure you have set your secret properly on your webhook");
+            $this->log("Invalid signature from GIT, make sure you have set your secret properly on your webhook");
 
             return false;
         }
@@ -43,7 +48,7 @@ class GitDeploy
 
             //check the branch && event
             if ($request->data->ref !== "refs/heads/".$_ENV["GIT_BRANCH"]) {
-                Debug::message("Got a git event but not a push or not the right branch", TINA4_LOG_INFO);
+                $this->log("Got a git event but not a push or not the right branch", TINA4_LOG_INFO);
                 return false;
             }
 
@@ -62,13 +67,13 @@ class GitDeploy
     {
         //Pull the repository from the git repository
 
-        Debug::message("Current working path ".getcwd());
+        $this->log("Current working path ".getcwd());
         $stagingPath = $_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT."staging"; //workspace for cloning and testing the repository
         $projectRoot = realpath($stagingPath.DIRECTORY_SEPARATOR.$_ENV["GIT_TINA4_PROJECT_ROOT"]) ?? $stagingPath;
-        Debug::message( "Project root ".$projectRoot);
+        $this->log( "Project root ".$projectRoot);
         $deploymentPath = $_ENV["GIT_DEPLOYMENT_PATH"] ?? getcwd();
         $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
-        Debug::message("Cloning ".$_ENV["GIT_REPOSITORY"]." into ".$stagingPath);
+        $this->log("Cloning ".$_ENV["GIT_REPOSITORY"]." into ".$stagingPath);
         $repository = $_ENV["GIT_REPOSITORY"];
         $branch = $_ENV["GIT_BRANCH"];
 
@@ -79,7 +84,7 @@ class GitDeploy
 
         if (empty($gitBinary))
         {
-            Debug::message("Deployment failed! Git binary not found, please install git on your system", TINA4_LOG_ERROR);
+            $this->log("Deployment failed! Git binary not found, please install git on your system", TINA4_LOG_ERROR);
 
             throwException("Git binary not found, please install git on your system");
         }
@@ -121,7 +126,7 @@ class GitDeploy
             }
 
             //deploy the src folder to deployment path
-            Debug::message("Deploying system to ".$deploymentPath);
+            $this->log("Deploying system to ".$deploymentPath);
 
             foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath)
             {
@@ -135,21 +140,20 @@ class GitDeploy
                     $contents = file_get_contents($projectRoot . DIRECTORY_SEPARATOR . $copyFile);
                     Debug::message("Copying ".$copyFile);
                     file_put_contents($deploymentPath . DIRECTORY_SEPARATOR . $copyFile, $contents);
-
                 }
             }
 
             //run the migrations if found
             if (is_dir($deploymentPath.DIRECTORY_SEPARATOR."migrations")) {
-                Debug::message("Running migrations");
+                $this->log("Running migrations");
                 (new \Tina4\Migration($deploymentPath.DIRECTORY_SEPARATOR."migrations"))->doMigration();
             }
 
-            Debug::message("Done installing");
+            $this->log("Done installing");
         }
           else
         {
-            Debug::message("Deployment failed!", TINA4_LOG_ERROR);
+            $this->log("Deployment failed!", TINA4_LOG_ERROR);
         }
     }
 
@@ -190,7 +194,7 @@ class GitDeploy
         }
 
         $path = explode("\n", $path);
-        Debug::message("Found $binary at {$path[0]}");
+        $this->log("Found $binary at {$path[0]}");
         return '"'.$path[0].'"' ?? "";
     }
 }
