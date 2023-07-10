@@ -73,7 +73,6 @@ class Thread
         $debugTrace = debug_backtrace();
         $TINA4_EVENTS_DETAIL[$eventName]["event"] = ["params" => $params, "debug" => $debugTrace[0]];
         if (isset($TINA4_EVENTS[$eventName])) {
-            //ignore_user_abort(true);
             foreach ($TINA4_EVENTS[$eventName] as $id => $method) {
                 $methodName = str_replace("-", "_", $eventName);
                 $code = self::closureDump($method, $methodName);
@@ -82,6 +81,8 @@ class Thread
                     $vars[] = var_export($param, TRUE);
                 }
                 $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; '.$code.$methodName.'('.join(',', $vars).');';
+                ignore_user_abort(true);
+                set_time_limit(0);
 
                 Debug::message('start /B php -r "' .$code. '"', TINA4_LOG_DEBUG);
                 if (isWindows()) {
