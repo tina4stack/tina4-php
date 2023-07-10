@@ -9,6 +9,7 @@ use function PHPUnit\Framework\throwException;
 class GitDeploy
 {
     private string $gitTag = "";
+    private string $workingPath = './';
 
     /**
      * Log messages
@@ -18,7 +19,7 @@ class GitDeploy
     function log($message): void
     {
         Debug::message($message, TINA4_LOG_INFO);
-        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s") . ": ($this->gitTag) " . $message . "\n", FILE_APPEND);
+        file_put_contents($this->workingPath.DIRECTORY_SEPARATOR."log/deploy.log", date("Y-m-d H:i:s") . ": ($this->gitTag) " . $message . "\n", FILE_APPEND);
     }
 
     /**
@@ -75,6 +76,7 @@ class GitDeploy
             //Pull the repository from the git repository
             $this->log("=== STARTING DEPLOYMENT ===");
             $this->log("Current working path " . getcwd());
+            $this->workingPath = getcwd();
             $stagingPath = ($_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT . "staging"); //workspace for cloning and testing the repository
             $projectRoot = $stagingPath . DIRECTORY_SEPARATOR . $_ENV["GIT_TINA4_PROJECT_ROOT"] ?? $stagingPath;
             $this->log("Project root " . $projectRoot);
