@@ -118,6 +118,14 @@ class GitDeploy
             } else {
                 `curl -sS https://getcomposer.org/installer | php`;
             }
+
+            $counter = 0;
+            while (!file_exists("composer.phar") && $counter < 10) {
+                $this->log("Looking for composer.phar ... ");
+                sleep(1);
+                $counter++;
+            }
+
             $composer = "php composer.phar";
 
 
