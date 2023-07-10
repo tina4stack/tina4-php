@@ -24,7 +24,7 @@ class GitDeploy
     {
 
         if (!isset($_ENV["GIT_SECRET"])) {
-            Debug::message("GIT_SECRET not set in .env");
+            $this->log("GIT_SECRET not set in .env");
 
             return false;
         }
