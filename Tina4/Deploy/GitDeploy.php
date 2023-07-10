@@ -116,7 +116,7 @@ class GitDeploy
                 `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
                 `php composer-setup.php`;
             } else {
-                `curl -sS https://getcomposer.org/installer | sudo php`;
+                `curl -sS https://getcomposer.org/installer | php`;
             }
             $composer = "php composer.phar";
 
