@@ -71,98 +71,102 @@ class GitDeploy
      */
     public function doDeploy()
     {
-        //Pull the repository from the git repository
-        $this->log("=== STARTING DEPLOYMENT ===");
-        $this->log("Current working path " . getcwd());
-        $stagingPath = realpath($_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT . "staging"); //workspace for cloning and testing the repository
-        $projectRoot = realpath($stagingPath . DIRECTORY_SEPARATOR . $_ENV["GIT_TINA4_PROJECT_ROOT"]) ?? $stagingPath;
-        $this->log("Project root " . $projectRoot);
-        $deploymentPath = $_ENV["GIT_DEPLOYMENT_PATH"] ?? getcwd();
-        $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
-        $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
-        $repository = $_ENV["GIT_REPOSITORY"];
-        $branch = $_ENV["GIT_BRANCH"];
+        try {
+            //Pull the repository from the git repository
+            $this->log("=== STARTING DEPLOYMENT ===");
+            $this->log("Current working path " . getcwd());
+            $stagingPath = realpath($_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT . "staging"); //workspace for cloning and testing the repository
+            $projectRoot = realpath($stagingPath . DIRECTORY_SEPARATOR . $_ENV["GIT_TINA4_PROJECT_ROOT"]) ?? $stagingPath;
+            $this->log("Project root " . $projectRoot);
+            $deploymentPath = $_ENV["GIT_DEPLOYMENT_PATH"] ?? getcwd();
+            $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
+            $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
+            $repository = $_ENV["GIT_REPOSITORY"];
+            $branch = $_ENV["GIT_BRANCH"];
 
-        //clean up deployment
-        $this->cleanPath($stagingPath);
+            //clean up deployment
+            $this->cleanPath($stagingPath);
 
-        $gitBinary = $this->getBinPath("git");
+            $gitBinary = $this->getBinPath("git");
 
-        if (empty($gitBinary)) {
-            $this->log("Deployment failed! Git binary not found, please install git on your system", TINA4_LOG_ERROR);
+            if (empty($gitBinary)) {
+                $this->log("Deployment failed! Git binary not found, please install git on your system", TINA4_LOG_ERROR);
 
-            throwException("Git binary not found, please install git on your system");
-        }
-
-        `{$gitBinary} clone --recurse-submodules {$repository} {$stagingPath}`;
-
-        // run composer install
-        $currentDir = getcwd();
-
-        chdir($stagingPath);
-
-        $this->log("Checking out {$branch}");
-        `{$gitBinary} checkout {$branch}`;
-
-        //Make sure if this lands under a webserver that everything is blocked
-        $this->log("Putting .htaccess in {$projectRoot}");
-        file_put_contents($projectRoot . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
-
-        chdir($projectRoot);
-
-        $this->log("Checking for composer");
-        $composer = $this->getBinPath("composer");
-        if (empty($composer)) {
-            `php -dxdebug.mode=off -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
-            `php -dxdebug.mode=off composer-setup.php`;
-            $composer = "php -dxdebug.mode=off composer.phar";
-        }
-
-        $this->log("Running composer install");
-        `{$composer} install`;
-
-
-        //check for lock file and autoloader
-        if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
-            //@todo Run inbuilt tests or other, if fails then don't deploy
-            //get back to where we should be
-            chdir($currentDir);
-
-            //Clean up src/app, src/routes , src/orm , src/sass, src/routes & src/templates
-            foreach (["app", "orm", "sass", "routes", "templates"] as $removePath) {
-                $this->log("Cleaning " . $deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
-                $this->cleanPath($deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
+                throwException("Git binary not found, please install git on your system");
             }
 
-            //deploy the src folder to deployment path
-            $this->log("Deploying system to " . $deploymentPath);
+            `{$gitBinary} clone --recurse-submodules {$repository} {$stagingPath}`;
 
-            foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath) {
-                Utilities::recurseCopy($projectRoot . DIRECTORY_SEPARATOR . $copyPath, $deploymentPath . DIRECTORY_SEPARATOR . $copyPath);
+            // run composer install
+            $currentDir = getcwd();
+
+            chdir($stagingPath);
+
+            $this->log("Checking out {$branch}");
+            `{$gitBinary} checkout {$branch}`;
+
+            //Make sure if this lands under a webserver that everything is blocked
+            $this->log("Putting .htaccess in {$projectRoot}");
+            file_put_contents($projectRoot . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
+
+            chdir($projectRoot);
+
+            $this->log("Checking for composer");
+            $composer = $this->getBinPath("composer");
+            if (empty($composer)) {
+                `php -dxdebug.mode=off -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
+                `php -dxdebug.mode=off composer-setup.php`;
+                $composer = "php -dxdebug.mode=off composer.phar";
             }
 
-            //deploy index.php to deployment path
-            //deploy composer.lock and composer.json to deployment path
-            foreach (["index.php", "composer.json", "composer.lock"] as $copyFile) {
-                if (is_file($projectRoot . DIRECTORY_SEPARATOR . $copyFile)) {
-                    $contents = file_get_contents($projectRoot . DIRECTORY_SEPARATOR . $copyFile);
-                    $this->log("Copying " . $copyFile);
-                    file_put_contents($deploymentPath . DIRECTORY_SEPARATOR . $copyFile, $contents);
+            $this->log("Running composer install");
+            `{$composer} install`;
+
+
+            //check for lock file and autoloader
+            if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
+                //@todo Run inbuilt tests or other, if fails then don't deploy
+                //get back to where we should be
+                chdir($currentDir);
+
+                //Clean up src/app, src/routes , src/orm , src/sass, src/routes & src/templates
+                foreach (["app", "orm", "sass", "routes", "templates"] as $removePath) {
+                    $this->log("Cleaning " . $deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
+                    $this->cleanPath($deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
                 }
+
+                //deploy the src folder to deployment path
+                $this->log("Deploying system to " . $deploymentPath);
+
+                foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath) {
+                    Utilities::recurseCopy($projectRoot . DIRECTORY_SEPARATOR . $copyPath, $deploymentPath . DIRECTORY_SEPARATOR . $copyPath);
+                }
+
+                //deploy index.php to deployment path
+                //deploy composer.lock and composer.json to deployment path
+                foreach (["index.php", "composer.json", "composer.lock"] as $copyFile) {
+                    if (is_file($projectRoot . DIRECTORY_SEPARATOR . $copyFile)) {
+                        $contents = file_get_contents($projectRoot . DIRECTORY_SEPARATOR . $copyFile);
+                        $this->log("Copying " . $copyFile);
+                        file_put_contents($deploymentPath . DIRECTORY_SEPARATOR . $copyFile, $contents);
+                    }
+                }
+
+                //run the migrations if found
+                if (is_dir($deploymentPath . DIRECTORY_SEPARATOR . "migrations")) {
+                    $this->log("Running migrations");
+                    (new \Tina4\Migration($deploymentPath . DIRECTORY_SEPARATOR . "migrations"))->doMigration();
+                }
+
+                $this->log("Done installing");
+            } else {
+                $this->log("Deployment failed!", TINA4_LOG_ERROR);
             }
 
-            //run the migrations if found
-            if (is_dir($deploymentPath . DIRECTORY_SEPARATOR . "migrations")) {
-                $this->log("Running migrations");
-                (new \Tina4\Migration($deploymentPath . DIRECTORY_SEPARATOR . "migrations"))->doMigration();
-            }
-
-            $this->log("Done installing");
-        } else {
-            $this->log("Deployment failed!", TINA4_LOG_ERROR);
+            $this->log("=== END DEPLOYMENT ===");
+        } catch (\Exception $exception) {
+            $this->log("Error occurred: ".$exception->getMessage());
         }
-
-        $this->log("=== END DEPLOYMENT ===");
     }
 
     /**
