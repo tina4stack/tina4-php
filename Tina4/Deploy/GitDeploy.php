@@ -80,7 +80,7 @@ class GitDeploy
             $this->log("Project root " . $projectRoot);
             $deploymentPath = $_ENV["GIT_DEPLOYMENT_PATH"] ?? getcwd();
             $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
-            $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
+
             $repository = $_ENV["GIT_REPOSITORY"];
             $branch = $_ENV["GIT_BRANCH"];
 
@@ -95,15 +95,21 @@ class GitDeploy
                 throwException("Git binary not found, please install git on your system");
             }
 
-            `{$gitBinary} clone --recurse-submodules {$repository} {$stagingPath}`;
+            $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
+
+
+            $runClone = "{$gitBinary} clone --recurse-submodules {$repository} {$stagingPath}";
+            shell_exec($runClone);
 
             // run composer install
             $currentDir = getcwd();
+            $this->log("Current directory is {$currentDir}");
 
             chdir($stagingPath);
 
             $this->log("Checking out {$branch}");
-            `{$gitBinary} checkout {$branch}`;
+            $runCheckout = "{$gitBinary} checkout {$branch}";
+            shell_exec($runCheckout);
 
             //Make sure if this lands under a webserver that everything is blocked
             $this->log("Putting .htaccess in {$projectRoot}");
