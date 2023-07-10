@@ -10,10 +10,17 @@ class GitDeploy
 {
     private string $gitTag = "";
 
-    function log($message) {
+    /**
+     * Log messages
+     * @param $message
+     * @return void
+     */
+    function log($message): void
+    {
         Debug::message($message, TINA4_LOG_INFO);
-        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s").": ($this->gitTag)". $message."\n", FILE_APPEND);
+        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s") . ": ($this->gitTag)" . $message . "\n", FILE_APPEND);
     }
+
     /**
      * Validation of the GIT hook request
      * @param Response $response
@@ -22,14 +29,13 @@ class GitDeploy
      */
     public function validateHook(Response $response, Request $request): bool
     {
-
         if (!isset($_ENV["GIT_SECRET"])) {
             $this->log("GIT_SECRET not set in .env");
 
             return false;
         }
 
-        $signature = "sha1=".hash_hmac('sha1', $request->rawRequest, $_ENV["GIT_SECRET"]);
+        $signature = "sha1=" . hash_hmac('sha1', $request->rawRequest, $_ENV["GIT_SECRET"]);
 
         //Validate the post
         if (isset($request->headers["x-hub-signature"]) && $signature !== $request->headers["x-hub-signature"]) {
@@ -47,13 +53,13 @@ class GitDeploy
             }
 
             //check the branch && event
-            if ($request->data->ref !== "refs/heads/".$_ENV["GIT_BRANCH"]) {
+            if ($request->data->ref !== "refs/heads/" . $_ENV["GIT_BRANCH"]) {
                 $this->log("Got a git event but not a push or not the right branch", TINA4_LOG_INFO);
+
                 return false;
             }
 
             return true;
-
         }
 
         return false;
@@ -66,14 +72,14 @@ class GitDeploy
     public function doDeploy()
     {
         //Pull the repository from the git repository
-
-        $this->log("Current working path ".getcwd());
-        $stagingPath = $_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT."staging"; //workspace for cloning and testing the repository
-        $projectRoot = realpath($stagingPath.DIRECTORY_SEPARATOR.$_ENV["GIT_TINA4_PROJECT_ROOT"]) ?? $stagingPath;
-        $this->log( "Project root ".$projectRoot);
+        $this->log("=== STARTING DEPLOYMENT ===");
+        $this->log("Current working path " . getcwd());
+        $stagingPath = $_ENV["GIT_DEPLOYMENT_STAGING"] ?? TINA4_DOCUMENT_ROOT . "staging"; //workspace for cloning and testing the repository
+        $projectRoot = realpath($stagingPath . DIRECTORY_SEPARATOR . $_ENV["GIT_TINA4_PROJECT_ROOT"]) ?? $stagingPath;
+        $this->log("Project root " . $projectRoot);
         $deploymentPath = $_ENV["GIT_DEPLOYMENT_PATH"] ?? getcwd();
         $deployDirectories = $_ENV["GIT_DEPLOYMENT_DIRS"] ?? [];
-        $this->log("Cloning ".$_ENV["GIT_REPOSITORY"]." into ".$stagingPath);
+        $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
         $repository = $_ENV["GIT_REPOSITORY"];
         $branch = $_ENV["GIT_BRANCH"];
 
@@ -82,8 +88,7 @@ class GitDeploy
 
         $gitBinary = $this->getBinPath("git");
 
-        if (empty($gitBinary))
-        {
+        if (empty($gitBinary)) {
             $this->log("Deployment failed! Git binary not found, please install git on your system", TINA4_LOG_ERROR);
 
             throwException("Git binary not found, please install git on your system");
@@ -99,13 +104,12 @@ class GitDeploy
         `{$gitBinary} checkout {$branch}`;
 
         //Make sure if this lands under a webserver that everything is blocked
-        file_put_contents($projectRoot.DIRECTORY_SEPARATOR.".htaccess", "Deny from all");
+        file_put_contents($projectRoot . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
 
         chdir($projectRoot);
 
         $composer = $this->getBinPath("composer");
-        if (empty($composer))
-        {
+        if (empty($composer)) {
             `php -dxdebug.mode=off -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
             `php -dxdebug.mode=off composer-setup.php`;
             $composer = "php -dxdebug.mode=off composer.phar";
@@ -114,23 +118,22 @@ class GitDeploy
         $composerResults = `{$composer} install`;
 
         //check for lock file and autoloader
-        if (is_file($projectRoot.DIRECTORY_SEPARATOR."composer.lock") && is_file($projectRoot.DIRECTORY_SEPARATOR."vendor".DIRECTORY_SEPARATOR."autoload.php")) {
+        if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
             //@todo Run inbuilt tests or other, if fails then don't deploy
             //get back to where we should be
             chdir($currentDir);
 
             //Clean up src/app, src/routes , src/orm , src/sass, src/routes & src/templates
-            foreach (["app","orm", "sass", "routes", "templates"] as $removePath) {
-                Debug::message("Cleaning ".$deploymentPath.DIRECTORY_SEPARATOR."src".DIRECTORY_SEPARATOR.$removePath);
-                $this->cleanPath($deploymentPath . DIRECTORY_SEPARATOR ."src".DIRECTORY_SEPARATOR.$removePath);
+            foreach (["app", "orm", "sass", "routes", "templates"] as $removePath) {
+                $this->log("Cleaning " . $deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
+                $this->cleanPath($deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
             }
 
             //deploy the src folder to deployment path
-            $this->log("Deploying system to ".$deploymentPath);
+            $this->log("Deploying system to " . $deploymentPath);
 
-            foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath)
-            {
-                Utilities::recurseCopy($projectRoot.DIRECTORY_SEPARATOR.$copyPath, $deploymentPath.DIRECTORY_SEPARATOR.$copyPath);
+            foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath) {
+                Utilities::recurseCopy($projectRoot . DIRECTORY_SEPARATOR . $copyPath, $deploymentPath . DIRECTORY_SEPARATOR . $copyPath);
             }
 
             //deploy index.php to deployment path
@@ -138,23 +141,23 @@ class GitDeploy
             foreach (["index.php", "composer.json", "composer.lock"] as $copyFile) {
                 if (is_file($projectRoot . DIRECTORY_SEPARATOR . $copyFile)) {
                     $contents = file_get_contents($projectRoot . DIRECTORY_SEPARATOR . $copyFile);
-                    Debug::message("Copying ".$copyFile);
+                    $this->log("Copying " . $copyFile);
                     file_put_contents($deploymentPath . DIRECTORY_SEPARATOR . $copyFile, $contents);
                 }
             }
 
             //run the migrations if found
-            if (is_dir($deploymentPath.DIRECTORY_SEPARATOR."migrations")) {
+            if (is_dir($deploymentPath . DIRECTORY_SEPARATOR . "migrations")) {
                 $this->log("Running migrations");
-                (new \Tina4\Migration($deploymentPath.DIRECTORY_SEPARATOR."migrations"))->doMigration();
+                (new \Tina4\Migration($deploymentPath . DIRECTORY_SEPARATOR . "migrations"))->doMigration();
             }
 
             $this->log("Done installing");
-        }
-          else
-        {
+        } else {
             $this->log("Deployment failed!", TINA4_LOG_ERROR);
         }
+
+        $this->log("=== END DEPLOYMENT ===");
     }
 
     /**
@@ -165,8 +168,7 @@ class GitDeploy
 
     function cleanPath($path): bool
     {
-        if (!is_dir($path))
-        {
+        if (!is_dir($path)) {
             return false;
         }
 
@@ -186,8 +188,7 @@ class GitDeploy
      */
     function getBinPath($binary): string
     {
-        if (isWindows())
-        {
+        if (isWindows()) {
             $path = `where {$binary}`;
         } else {
             $path = `which {$binary}`;
@@ -195,6 +196,6 @@ class GitDeploy
 
         $path = explode("\n", $path);
         $this->log("Found $binary at {$path[0]}");
-        return '"'.$path[0].'"' ?? "";
+        return '"' . $path[0] . '"' ?? "";
     }
 }
