@@ -2,9 +2,9 @@
 
 namespace Tina4;
 
-use Coyl\Git\Git;
-use Mpdf\Tag\U;
 use function PHPUnit\Framework\throwException;
+
+
 
 class GitDeploy
 {
@@ -66,6 +66,7 @@ class GitDeploy
         return false;
     }
 
+
     /***
      * Deploying the system from a git repository
      * @return void
@@ -119,13 +120,6 @@ class GitDeploy
                 `php -r "eval('?>'.file_get_contents('http://getcomposer.org/installer'));"`;
             }
 
-            $counter = 0;
-            while (!file_exists("composer.phar") && $counter < 10) {
-                $this->log("Looking for composer.phar ... ");
-                sleep(1);
-                $counter++;
-            }
-
             if (file_exists("./composer.phar")) {
                 $composer = "php composer.phar";
             } else {
@@ -133,8 +127,12 @@ class GitDeploy
             }
 
             $this->log("Running composer install");
-            `{$composer} install --no-interaction`;
 
+            if (isWindows()) {
+                `{$composer} install --no-interaction`;
+            } else {
+                `export COMPOSER_HOME={$projectRoot} && {$composer} install --no-interaction`;
+            }
 
             //check for lock file and autoloader
             if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php"))
