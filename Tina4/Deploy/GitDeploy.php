@@ -126,9 +126,11 @@ class GitDeploy
                 $counter++;
             }
 
-            $composer = "php composer.phar";
-
-
+            if (file_exists("./composer.phar")) {
+                $composer = "php composer.phar";
+            } else {
+                $composer = $this->getBinPath("composer");
+            }
 
             $this->log("Running composer install");
             `{$composer} install --no-interaction`;
@@ -218,6 +220,11 @@ class GitDeploy
 
         $path = explode("\n", $path);
         $this->log("Found $binary at {$path[0]}");
-        return '"' . $path[0] . '"' ?? "";
+        if (isWindows()) {
+            return '"' . $path[0] . '"' ?? "";
+        } else {
+            return $path[0] ?? "";
+        }
+
     }
 }
