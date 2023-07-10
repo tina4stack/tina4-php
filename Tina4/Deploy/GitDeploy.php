@@ -12,7 +12,7 @@ class GitDeploy
 
     function log($message) {
         Debug::message($message, TINA4_LOG_INFO);
-        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s").": ($this->gitTag)". $message);
+        file_put_contents("./log/deploy.log", date("Y-m-d H:i:s").": ($this->gitTag)". $message."\n", FILE_APPEND);
     }
     /**
      * Validation of the GIT hook request
