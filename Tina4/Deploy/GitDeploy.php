@@ -178,6 +178,7 @@ class GitDeploy
 
     function cleanPath($path): bool
     {
+        $this->log("Deleting all files and folders under {$path}");
         if (!is_dir($path)) {
             return false;
         }
