@@ -131,7 +131,7 @@ class GitDeploy
             }
 
             $this->log("Running composer install");
-            shell_exec("{$composer} install");
+            shell_exec("{$composer} install --no-interaction");
 
 
             //check for lock file and autoloader
