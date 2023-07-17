@@ -32,9 +32,17 @@ class Slack extends \Tina4\Api
         return $this->sendRequest("chat.postMessage", "POST", ["text" => $message, "channel" => $channels[$channel]["id"]]);
     }
 
-    function getChannels()
+    /**
+     * Gets channels from Slack
+     * @param string|null $types
+     * @param string $limit
+     * @return array|mixed
+     */
+    function getChannels(string $types= null, string $limit="1000")
     {
-        $result = $this->sendRequest("conversations.list", "GET");
+        $types ??= "public_channel,private_channel";
+        $result = $this->sendRequest("conversations.list?types={$types}&limit={$limit}", "GET");
+
         if (empty($result["error"])) {
             $channels = $result["body"]["channels"];
             $channelList = [];

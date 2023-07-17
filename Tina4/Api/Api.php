@@ -165,12 +165,12 @@ class Api
             curl_close($curlRequest);
 
             if ($response = json_decode($curlResult, true)) {
-                return  ["error" => $curlError, "info" => $curlInfo, "body" => $response, "httpCode" => $curlInfo['http_code']];
+                return  ["error" => $curlError, "info" => $curlInfo, "body" => $response, "httpCode" => $curlInfo['http_code'], "headers" => $headers];
             } else {
                 return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult, "httpCode" => $curlInfo['http_code'], "headers" => $headers];
             }
         } catch (\Exception $error) {
-            return ["error" => $error->getMessage(), "info" => null, "body" => null, "httpCode" => null];
+            return ["error" => $error->getMessage(), "info" => null, "body" => null, "httpCode" => null, "headers" => $headers];
         }
     }
 }
