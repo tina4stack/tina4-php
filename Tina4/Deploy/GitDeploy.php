@@ -11,6 +11,8 @@ class GitDeploy
     private string $gitTag = "";
     private string $workingPath = './';
 
+    private $deployLog = '';
+
     /**
      * Log messages
      * @param $message
@@ -19,7 +21,9 @@ class GitDeploy
     function log($message): void
     {
         Debug::message($message, TINA4_LOG_INFO);
-        file_put_contents($this->workingPath.DIRECTORY_SEPARATOR."log/deploy.log", date("Y-m-d H:i:s") . ": ($this->gitTag) " . $message . "\n", FILE_APPEND);
+        $output = date("Y-m-d H:i:s") . ": ($this->gitTag) " . $message . "\n";
+        $this->deployLog .= $output;
+        file_put_contents($this->workingPath.DIRECTORY_SEPARATOR."log/deploy.log", $output, FILE_APPEND);
     }
 
     /**
@@ -176,6 +180,9 @@ class GitDeploy
             }
 
             $this->log("=== END DEPLOYMENT ===");
+            if (!empty($_ENV["SLACK_CHANNEL"])) {
+                (new \Tina4\Slack())->postMessage($this->deployLog, $_ENV["SLACK_CHANNEL"]);
+            }
         } catch (\Exception $exception) {
             $this->log("Error occurred: ".$exception->getMessage());
         }

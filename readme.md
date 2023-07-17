@@ -363,7 +363,10 @@ GIT_SECRET=0123456789
 GIT_DEPLOYMENT_STAGING=..\staging
 GIT_DEPLOYMENT_PATH=deploy-test
 GIT_DEPLOYMENT_DIRS=["branding", "bin"]
+SLACK_NOTIFICATION_CHANNEL="general"
 ```
+
+
 
 ### PhpDocs
 

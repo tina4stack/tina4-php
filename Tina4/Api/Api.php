@@ -107,23 +107,25 @@ class Api
             $headers[] = "Accept-Charset: utf-8, *;q=0.8";
 
             if (!empty($this->authHeader)) {
-                $headers = array_merge ($headers, explode(",", $this->authHeader));
+                $headers = [...$headers, ...explode(",", $this->authHeader)];
             }
 
             if (!empty($this->username) && !empty($this->password)) {
                 $headers[] = "Authorization: Basic " . base64_encode("{$this->username}:{$this->password}");
             }
 
+
+
             if (!empty($body) && !empty($contentType)) {
                 $headers[] = "Content-Type: " . $contentType;
             }
 
             if (!empty($this->customHeaders)) {
-                $headers = array_merge ($headers, $this->customHeaders);
+                $headers = [...$headers, ...$this->customHeaders];
             }
 
             if (!empty($customHeaders)) {
-                $headers = array_merge($headers, $customHeaders);
+                $headers = [...$headers, ...$customHeaders];
             }
 
             $curlRequest = curl_init($this->baseURL . $restService);
@@ -141,6 +143,7 @@ class Api
             curl_setopt($curlRequest, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($curlRequest, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($curlRequest, CURLOPT_FOLLOWLOCATION, 1);
+            curl_setopt($curlRequest, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
             if (!empty($curlOptions)) {
                 foreach ($curlOptions as $option => $optionValue) {
@@ -152,6 +155,7 @@ class Api
                 if ((is_object($body) || is_array($body)) && $contentType === "application/json" ) {
                     $body = json_encode($body);
                 }
+                $headers[] = "Content-Length: " . strlen($body);
                 curl_setopt($curlRequest, CURLOPT_POSTFIELDS, $body);
             }
 
@@ -163,7 +167,7 @@ class Api
             if ($response = json_decode($curlResult, true)) {
                 return  ["error" => $curlError, "info" => $curlInfo, "body" => $response, "httpCode" => $curlInfo['http_code']];
             } else {
-                return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult, "httpCode" => $curlInfo['http_code']];
+                return ["error" => $curlError, "info" => $curlInfo, "body" => $curlResult, "httpCode" => $curlInfo['http_code'], "headers" => $headers];
             }
         } catch (\Exception $error) {
             return ["error" => $error->getMessage(), "info" => null, "body" => null, "httpCode" => null];

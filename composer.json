@@ -30,6 +30,7 @@
                 "Tina4/Routing/",
                 "Tina4/Security/",
                 "Tina4/Service/",
+                "Tina4/Slack",
                 "Tina4/Twig"
             ]
         }
