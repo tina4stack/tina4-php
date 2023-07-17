@@ -79,6 +79,9 @@ class GitDeploy
     {
         try {
             //Pull the repository from the git repository
+            if (!empty($_ENV["SLACK_CHANNEL"])) {
+                (new \Tina4\Slack())->postMessage("A deployment has started for ".$_ENV["GIT_BRANCH"], $_ENV["SLACK_CHANNEL"]);
+            }
             $this->log("=== STARTING DEPLOYMENT ===");
             $this->log("Current working path " . getcwd());
             $this->workingPath = getcwd();
