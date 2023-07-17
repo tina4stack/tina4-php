@@ -27,7 +27,7 @@ jobs:
             ${{ runner.os }}-php-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress --no-suggest --ignore-platform-req=ext-interbase
 
       - name: Initialize framework
         run: composer exec tina4 initialize:run
