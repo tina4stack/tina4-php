@@ -132,7 +132,7 @@ function loadPage(loadURL, targetElement) {
         if (document.getElementById(targetElement) !== null) {
             handleHtmlData (data, targetElement);
         } else {
-            console.log('TINA4 - define targetElement for postUrl', data);
+            console.log('TINA4 - define targetElement for loadPage', data);
         }
     });
 }
