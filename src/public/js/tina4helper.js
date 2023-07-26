@@ -87,7 +87,7 @@ function handleHtmlData(data, targetElement) {
     //Strip out the scripts
     const parser = new DOMParser();
     const htmlData = parser.parseFromString(data, 'text/html');
-    const body = htmlData.querySelector('*');
+    const body = htmlData.querySelector('body');
     const scripts = body.querySelectorAll('script');
     // remove the script tags
     body.querySelectorAll('script').forEach(script => script.remove());
