@@ -310,7 +310,7 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
 }
 
 //Add the icon file for making it look pretty""
-if (!file_exists(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico")) {
+if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
     if (file_exists(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico")) {
         copy(TINA4_PROJECT_ROOT. DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
     }
