@@ -80,7 +80,7 @@ class Thread
                 foreach ($params as $param) {
                     $vars[] = var_export($param, TRUE);
                 }
-                $code = 'require_once \"./vendor/autoload.php\"; const TINA4_SUPPRESS = true; \Tina4\Initialize(); '.$code.$methodName.'('.join(',', $vars).');';
+                $code = 'require_once \"./vendor/autoload.php\";  \Tina4\Initialize(); const TINA4_SUPPRESS = true; require_once \"./index.php\"; '.$code.$methodName.'('.join(',', $vars).');';
                 ignore_user_abort(true);
                 set_time_limit(0);
 
