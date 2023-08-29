@@ -574,9 +574,6 @@ class Router extends Data
      */
     public function getRouteResult($class, $method, $params): ?array
     {
-
-        ;
-
         if (!empty($class)) {
             $methodCheck = new \ReflectionMethod($class, $method);
             if ($methodCheck->isStatic()) {
