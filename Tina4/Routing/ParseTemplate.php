@@ -157,9 +157,11 @@ class ParseTemplate
                     $this->fileName = $realFileName;
                     if (!is_dir($realFileName)) {
                         $content = file_get_contents($realFileName);
-                        $content = $this->parseSnippets($content);
-                        $content = $this->parseCalls($content);
-                        $content = $this->parseVariables($content);
+                        if(!$this->isImage($mimeType)){
+                            $content = $this->parseSnippets($content);
+                            $content = $this->parseCalls($content);
+                            $content = $this->parseVariables($content);
+                        }
                     } else {
                         Debug::message("$this->GUID Returning File not found {$fileName}", TINA4_LOG_DEBUG);
                         $this->headers[] = "Tina4-Debug: ".$this->GUID;
@@ -181,6 +183,21 @@ class ParseTemplate
             }
         }
         return $content;
+    }
+
+    /**
+     * Determines if mimeType starts with image
+     * @param $mimeType
+     * @return bool
+     */
+    public function isImage($mimeType)
+    {
+        $isImage = false;
+        if(strpos($mimeType, "image") === 0){
+            $isImage = true;
+        }
+
+        return $isImage;
     }
 
     /**
