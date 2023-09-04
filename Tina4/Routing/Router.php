@@ -92,7 +92,6 @@ class Router extends Data
 
 
         //SECOND STATIC FILES - ONLY GET
-
         if ($method === TINA4_GET) {
             $fileName = realpath(TINA4_DOCUMENT_ROOT . PATH_SEPARATOR."src".PATH_SEPARATOR."public".$url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
@@ -100,7 +99,10 @@ class Router extends Data
                 if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
                     $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), $fileName);
                 }
-                return $routerResponse;
+
+                if (!empty($routerResponse->content)) {
+                    return $routerResponse;
+                }
             }
         }
 
@@ -208,9 +210,8 @@ class Router extends Data
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         if ($ext !== "twig") {
             $content = file_get_contents($fileName);
-        } else {
-            $content = renderTemplate($fileName);
         }
+
         return new RouterResponse($content, HTTP_OK, $headers);
     }
 
