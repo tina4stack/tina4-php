@@ -1,0 +1,38 @@
+{% set title = 'Threads' %}
+
+{% set introduction %}
+    If services do not meet the required use case, perhaps one wants a more immediate action, or the server environment
+    does not allow command line interaction, threads could be an option.
+{% endset %}
+
+{% set requirements = ['Threads', 'Routing'] %}
+
+{% set content %}
+    <h5>Registering a thread</h5>
+    <p>Adding a trigger to start a thread, can be done anywhere in the code. Just remember that it has to have run before
+    actually calling the trigger. If the use case is just to start a thread, then the trigger registration and trigger call
+    can happen in the same place. If the trigger needs to be used in multiple places, probably best to place it somewhere
+    that the composer autoload will find it. Suggestion is to create a triggers.php file in the "src/app"
+        <pre><code>{{ include_code("examples/advanced-threads-register.twig"| raw) }}</code></pre>
+    </p>
+
+    <h5>Firing off a thread</h5>
+    <p>A simple line of code fires off the thread. It uses the trigger name, and an array of parameters. The order of the
+    parameters, matches the order of arguments in the trigger function.
+    <pre><code>{{ include_code("examples/advanced-threads-fire.twig"| raw) }}</code></pre>
+    </p>
+
+    <h5>Debugging threads</h5>
+    <p>The getEvents() method in the Thread class can be used to see what handlers (registered Threads) and events
+        (Thread calls) exists upto the point of calling the method.
+    <pre><code>{{ include_code("examples/advanced-threads-get.twig"| raw) }}</code></pre>
+    </p>
+{% endset %}
+
+{% set tips = [
+    'The thread code is not allowed to have comments and can only have simple variables',
+    'To register a thread you can use onTrigger or addTrigger'
+]
+%}
+
+{% include "documentation/components/help-segment.twig" %}

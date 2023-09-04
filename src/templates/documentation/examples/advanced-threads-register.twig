@@ -1,0 +1,7 @@
+<?php
+
+\Tina4\Thread::onTrigger("register-me", static function ($name, $greeting) {
+
+    file_put_contents("trigger.txt", "{$greeting}, {$name}", FILE_APPEND);
+
+});
