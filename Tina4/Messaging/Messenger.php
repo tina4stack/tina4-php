@@ -37,7 +37,7 @@ class Messenger
      *
      * The sendMail function takes on a number of params and sends and email to a receipient.
      *
-     * @param mixed $recipients array This can be a String or Array, the String should be ; delimited email@test.com;emai2@test2.com or  ["name" => "Test", "email" => "email@email.com"]
+     * @param mixed $recipients array This can be a String or Array of Arrays, the String should be ; delimited email@test.com;emai2@test2.com or  [["name" => "Test", "email" => "email@email.com"],["name" => "Test Two", "email" => "noone@nowhere.com"]]
      * @param string $subject  The subject for the email
      * @param mixed $message array/string The message to send to the Receipient - can be ["template" => "twigFile", "data" => Array or Object]
      * @param string $fromName  The name of the person sending the message
