@@ -85,7 +85,6 @@ class Messenger
             file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml", $headers . $message);
 
             if (!$this->settings->usePHPMailer) {
-                Debug::message("Sending email using PHP mail");
                 $message = $this->prepareHtmlMail($message, $eol, "--" . $boundary_rel, "--" . $boundary_alt);
 
                 if (!empty($this->settings->smtpPort)) {
@@ -105,6 +104,7 @@ class Messenger
 
                 die("Install PHP Mailer - <pre><code>composer require phpmailer/phpmailer</code></pre>");
             } else {
+                Debug::message("Sending email using PHP mail");
                 $phpMailer = new \PHPMailer\PHPMailer\PHPMailer(true);
                 try {
                     ob_start();
