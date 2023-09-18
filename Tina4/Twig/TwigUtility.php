@@ -29,6 +29,7 @@ class TwigUtility
 
         //Twig initialization
         if (empty($twig)) {
+
             if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL") && !empty(TINA4_TEMPLATE_LOCATIONS_INTERNAL)) {
                 $twigPaths = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
             } else {

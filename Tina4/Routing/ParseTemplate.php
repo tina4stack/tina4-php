@@ -44,6 +44,7 @@ class ParseTemplate
         if (TINA4_DEBUG) {
             Debug::message("$this->GUID TINA4 Filename: " . $fileName, TINA4_LOG_DEBUG);
         }
+
         if (defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             $this->locations = TINA4_TEMPLATE_LOCATIONS_INTERNAL;
         }
@@ -102,7 +103,12 @@ class ParseTemplate
                     $location = $location["path"];
                 }
 
-                $testFile = ($this->root . $location . DIRECTORY_SEPARATOR . $parseFileName);
+                if (file_exists($location)) {
+                    $testFile = ($location . DIRECTORY_SEPARATOR . $parseFileName);
+                } else {
+                    $testFile = ($this->root . $location . DIRECTORY_SEPARATOR . $parseFileName);
+                }
+
                 $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
                 if (file_exists($testFile)) {
                     $found = true;

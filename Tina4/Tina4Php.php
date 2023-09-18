@@ -29,6 +29,7 @@ class Tina4Php extends Data
             $config = new Config();
         }
 
+
         //Get all the include folders
         if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {

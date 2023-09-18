@@ -22,7 +22,7 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
     }
 
     if (!empty($fileNameString)) {
-        $fileName = str_replace(TINA4_DOCUMENT_ROOT, "", $fileNameString);
+        $fileName = str_replace(($location !== "" ? $location : TINA4_DOCUMENT_ROOT) , "", $fileNameString);
     } else {
         $fileName = null;
     }
