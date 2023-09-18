@@ -151,9 +151,10 @@ class ParseTemplate
                 else {
                     Debug::message("$this->GUID Found ".$realFileName, TINA4_LOG_DEBUG);
                     $this->headers[] = "Content-Type: " . $mimeType;
-                    $this->headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
+                    $this->headers[] = ('Cache-Control: max-age=' . (60 * 60 * 60) . ', public');
                     $this->headers[] = "Tina4-Debug: ".$this->GUID;
-                    $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+                    $this->headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60 * 60))); //60 hour expiry time
+                    $this->headers[] = ('Pragma: cache');
                     $this->fileName = $realFileName;
                     if (!is_dir($realFileName)) {
                         $content = file_get_contents($realFileName);

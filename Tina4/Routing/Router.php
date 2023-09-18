@@ -204,8 +204,10 @@ class Router extends Data
 
         $headers[] = ('Content-Type: ' . $mimeType);
         $headers[] = ('Tina4-Debug: '.$this->GUID);
-        $headers[] = ('Cache-Control: max-age=' . (60 * 60) . ', public');
-        $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60))); //1 hour expiry time
+        $headers[] = ('Cache-Control: max-age=' . (60 * 60 * 60) . ', public');
+        $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60 * 60))); //60 hour expiry time
+        $headers[] = ('Pragma: cache');
+
 
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         if ($ext !== "twig") {

@@ -1,6 +1,0 @@
-\Tina4\Get::add("/test-trigger", function (\Tina4\Response $response) {
-
-    \Tina4\Thread::trigger("register-me", ["Tina", "Good morning"]);
-
-    return $response("This will add to the file: 'Good morning, Tina'");
-});
