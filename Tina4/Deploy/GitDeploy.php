@@ -95,22 +95,63 @@ class GitDeploy
             $branch = $_ENV["GIT_BRANCH"];
 
             //clean up deployment
-            $this->cleanPath($stagingPath);
+            $this->cleanPath($stagingPath, true);
 
             $gitBinary = $this->getBinPath("git");
+            $gitBinary = "";
 
             if (empty($gitBinary)) {
-                $this->log("Deployment failed! Git binary not found, please install git on your system", TINA4_LOG_ERROR);
+                $this->log("Deployment failed! Git binary not found, trying to do wget", TINA4_LOG_ERROR);
 
-                throwException("Git binary not found, please install git on your system");
+                $re = '/github.com\/(.*)\/(.*)\.git/m';
+                $str = $repository;
+                $subst = "codeload.github.com/$1/$2/zip/refs/heads/$branch";
+
+                $result = preg_replace($re, $subst, $str);
+
+                $zipContents = file_get_contents($result);
+                $zipFile = $stagingPath."/".$branch.".zip";
+                file_put_contents($zipFile, $zipContents);
+
+                //downloads the zip file and then extracts it into the staging Path
+                $zip = new \ZipArchive;
+                $this->log("Unzipping $zipFile to $stagingPath");
+                if ($zip->open($zipFile) === TRUE) {
+                    $baseFolder = substr($zip->getNameIndex(0), 0, -1);
+                    for($i = 1; $i < $zip->numFiles; $i++) {
+                        $filename = $zip->getNameIndex($i);
+
+                        $stagingPath = realpath($stagingPath);
+                        $fileInfo = pathinfo($filename);
+
+                        if (isset($fileInfo["dirname"])) {
+                            $destination = str_replace("/", DIRECTORY_SEPARATOR, str_replace($baseFolder, "", $fileInfo["dirname"]));
+                            if (!file_exists($stagingPath . $destination)) {
+                                mkdir($stagingPath . $destination, "0755", true);
+                            }
+                        }
+
+                        if (isset($fileInfo["extension"])) {
+                            copy("zip://" . $zipFile . "#" . $filename, $stagingPath . $destination . DIRECTORY_SEPARATOR . $fileInfo['basename']);
+                        }
+                    }
+                    $zip->close();
+                    $this->log("Unzipped $zipFile to $stagingPath");
+
+                } else {
+                    $this->log("Failed to unzip $zipFile to $stagingPath");
+                }
+
             }
+              else {
 
-            $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
+                  $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
 
 
-            $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
-            $this->log($runClone);
-            shell_exec($runClone);
+                  $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
+                  $this->log($runClone);
+                  shell_exec($runClone);
+            }
 
             // run composer install
             $currentDir = getcwd();
@@ -194,13 +235,17 @@ class GitDeploy
     /**
      * Deletes all folders and files under a path / directory
      * @param $path
+     * @param $makeDir
      * @return bool
      */
 
-    function cleanPath($path): bool
+    function cleanPath($path, $makeDir=false): bool
     {
         $this->log("Deleting all files and folders under {$path}");
         if (!is_dir($path)) {
+            if ($makeDir){
+                `mkdir {$path}`;
+            }
             return false;
         }
 
@@ -208,6 +253,10 @@ class GitDeploy
             `rmdir /s /q {$path}`;
         } else {
             `rm -Rf {$path}`;
+        }
+
+        if ($makeDir){
+            `mkdir {$path}`;
         }
 
         return !is_dir($path);
