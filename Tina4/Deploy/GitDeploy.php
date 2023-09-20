@@ -108,10 +108,9 @@ class GitDeploy
                 $subst = "codeload.github.com/$1/$2/zip/refs/heads/$branch";
 
                 $result = preg_replace($re, $subst, $str);
-
-                $zipContents = file_get_contents($result);
                 $zipFile = $stagingPath."/".$branch.".zip";
-                file_put_contents($zipFile, $zipContents);
+
+                $this->downloadFile($result, $zipFile);
 
                 //downloads the zip file and then extracts it into the staging Path
                 $zip = new \ZipArchive;
@@ -127,7 +126,7 @@ class GitDeploy
                         if (isset($fileInfo["dirname"])) {
                             $destination = str_replace("/", DIRECTORY_SEPARATOR, str_replace($baseFolder, "", $fileInfo["dirname"]));
                             if (!file_exists($stagingPath . $destination)) {
-                                mkdir($stagingPath . $destination, "0755", true);
+                                mkdir($stagingPath . $destination, "0777", true);
                             }
                         }
 
@@ -143,14 +142,14 @@ class GitDeploy
                 }
 
             }
-              else {
+            else {
 
-                  $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
+                $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
 
 
-                  $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
-                  $this->log($runClone);
-                  shell_exec($runClone);
+                $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
+                $this->log($runClone);
+                shell_exec($runClone);
             }
 
             // run composer install
@@ -162,16 +161,23 @@ class GitDeploy
 
             $this->log("Checking for composer");
             if (isWindows()) {
-                `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`;
+                $this->downloadFile("https://getcomposer.org/installer", $stagingPath."/composer-setup.php");
                 `php composer-setup.php`;
             } else {
-                `php -r "eval('?>'.file_get_contents('http://getcomposer.org/installer'));"`;
+                $this->downloadFile("https://getcomposer.org/installer", $stagingPath."/composer-setup.php");
+                `php composer-setup.php`;
             }
 
             if (file_exists("./composer.phar")) {
                 $composer = "php composer.phar";
             } else {
                 $composer = $this->getBinPath("composer");
+            }
+
+            if (empty($composer))
+            {
+                $this->log("Composer could not be downloaded");
+                throw new \Exception("Composer could not be located!");
             }
 
             $this->log("Running composer install");
@@ -283,5 +289,25 @@ class GitDeploy
             return $path[0] ?? "";
         }
 
+    }
+
+    /**
+     * Download a file with curl
+     * @param $url
+     * @param string $fileName
+     * @return bool
+     */
+    private function downloadFile($url, string $fileName) : bool
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+        $st = curl_exec($ch);
+        $fd = fopen($fileName, 'w');
+        fwrite($fd, $st);
+        fclose($fd);
+        curl_close($ch);
+        return file_exists($fileName);
     }
 }

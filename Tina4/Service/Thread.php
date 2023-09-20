@@ -84,8 +84,11 @@ class Thread
                 ignore_user_abort(true);
                 set_time_limit(0);
 
-                Debug::message('start /B php -r "' .$code. '"', TINA4_LOG_DEBUG);
+                $code = str_replace("\n", " ", $code);
+                $code = str_replace("\r", " ", $code);
+
                 if (isWindows()) {
+                    Debug::message('start /B php -r "' .$code. '"', TINA4_LOG_DEBUG);
                     pclose($handle = popen('start /B php -r "' . $code . '"', 'r'));
                 } else {
                     $code = str_replace('$', '\$', $code); //linux needs the $ var to be escaped for some reason
