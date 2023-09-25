@@ -85,12 +85,14 @@ function getFormData(formName) {
  */
 function handleHtmlData(data, targetElement) {
     //Strip out the scripts
+    if (data === "") return '';
     const parser = new DOMParser();
-    const htmlData = parser.parseFromString(data, 'text/html');
+    const htmlData = parser.parseFromString(data.includes('<html>') ? data : '<body>'+data+'</body></html>', 'text/html');
     const body = htmlData.querySelector('body');
     const scripts = body.querySelectorAll('script');
     // remove the script tags
     body.querySelectorAll('script').forEach(script => script.remove());
+
 
     if (targetElement !== null) {
         document.getElementById(targetElement).replaceChildren(...body.children);
@@ -111,6 +113,7 @@ function handleHtmlData(data, targetElement) {
                 newScript.async = true;
                 newScript.textContent = script.innerText;
                 document.body.append(newScript);
+                console.log(newScript);
             });
         }
 
