@@ -89,6 +89,18 @@ class Migration extends Data
                 $this->DBA->exec($sql);
                 $this->DBA->commit();
             }
+
+            //Table to set and determine the version of the database
+            if (!$this->DBA->tableExists("tina4_version")) {
+                $sql = "create table tina4_version (version varchar (100) not null, software varchar(100) default 'tina4', notes blob, primary key (version, software))";
+                if (get_class($this->DBA) === "Tina4\DataPostgresql") {
+                    $sql = str_replace("blob", "bytea", $sql);
+                }
+                $this->DBA->exec($sql);
+                $this->DBA->commit();
+                $this->DBA->exec("insert into tina4_version(version, notes) values ('1.0.0', 'Initial version')");
+                $this->DBA->commit();
+            }
         }
     }
 
@@ -279,5 +291,48 @@ class Migration extends Data
         } else {
             return "Failed to create a migration, needs description & content";
         }
+    }
+
+    /**
+     * Sets the version of a migration to be used in deciding where to migrate a database
+     * @param $version
+     * @param $notes
+     * @param $software
+     * @return void
+     */
+    public function setVersion($version, $notes, $software='tina4')
+    {
+        if (!empty($version) && !empty($notes)) {
+            $versionInfo = $this->DBA->fetchOne("select * from tina4_version where version = '{$version}' and software = '{$software}'");
+
+            if (empty($versionInfo)) {
+                $this->DBA->exec("insert into tina4_version(version, notes, software) values (?,?,?)", $version, $notes, $software);
+
+            } else {
+                $this->DBA->exec("update tina4_version set notes = ? where version = ? and software = ?", $notes, $version, $software);
+            }
+            $this->DBA->commit();
+        }
+    }
+
+    /**
+     * Gets the current version of the database
+     * @param $software
+     * @return mixed|null
+     */
+    public function getVersionInfo($software='tina4')
+    {
+        return $this->DBA->fetchOne("select * from tina4_version where software = '{$software}' order by version desc");
+    }
+
+    /**
+     * Gets the current version of the database
+     * @param $software
+     * @return mixed|null
+     */
+    public function getVersion($software='tina4')
+    {
+        $version = $this->getVersionInfo($software);
+        return $version->version;
     }
 }

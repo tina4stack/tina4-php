@@ -93,7 +93,6 @@ function handleHtmlData(data, targetElement) {
     // remove the script tags
     body.querySelectorAll('script').forEach(script => script.remove());
 
-
     if (targetElement !== null) {
         document.getElementById(targetElement).replaceChildren(...body.children);
         if (scripts) {
