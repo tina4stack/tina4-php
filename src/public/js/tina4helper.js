@@ -204,7 +204,7 @@ function saveForm(formName, targetURL, targetElement) {
  * @param message
  */
 function showMessage(message) {
-    document.getElementById('message').innerHTML = '<div class="alert alert-info alert-dismissible fade show"><strong>Info</strong> ' + message + '</div>';
+    document.getElementById('message').innerHTML = '<div class="alert alert-info alert-dismissible fade show"><strong>Info</strong> ' + message + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
 }
 
 /**
