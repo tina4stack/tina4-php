@@ -98,7 +98,6 @@ class GitDeploy
             $this->cleanPath($stagingPath, true);
 
             $gitBinary = $this->getBinPath("git");
-            $gitBinary = "";
 
             if (empty($gitBinary)) {
                 $this->log("Deployment failed! Git binary not found, trying to do wget", TINA4_LOG_ERROR);
