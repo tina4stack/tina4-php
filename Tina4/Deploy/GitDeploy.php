@@ -5,7 +5,6 @@ namespace Tina4;
 use function PHPUnit\Framework\throwException;
 
 
-
 class GitDeploy
 {
     private string $gitTag = "";
@@ -23,7 +22,7 @@ class GitDeploy
         Debug::message($message, TINA4_LOG_INFO);
         $output = date("Y-m-d H:i:s") . ": ($this->gitTag) " . $message . "\n";
         $this->deployLog .= $output;
-        file_put_contents($this->workingPath.DIRECTORY_SEPARATOR."log/deploy.log", $output, FILE_APPEND);
+        file_put_contents($this->workingPath . DIRECTORY_SEPARATOR . "log/deploy.log", $output, FILE_APPEND);
     }
 
     /**
@@ -53,7 +52,6 @@ class GitDeploy
             //Make sure branch matches the branch specified in the GIT_BRANCH
 
             if ($request->headers["x-github-event"] !== "push") {
-
                 return false;
             }
 
@@ -80,7 +78,10 @@ class GitDeploy
         try {
             //Pull the repository from the git repository
             if (!empty($_ENV["SLACK_CHANNEL"])) {
-                (new \Tina4\Slack())->postMessage("A deployment has started for ".$_ENV["GIT_BRANCH"], $_ENV["SLACK_CHANNEL"]);
+                (new \Tina4\Slack())->postMessage(
+                    "A deployment has started for " . $_ENV["GIT_BRANCH"],
+                    $_ENV["SLACK_CHANNEL"]
+                );
             }
             $this->log("=== STARTING DEPLOYMENT ===");
             $this->log("Current working path " . getcwd());
@@ -107,44 +108,48 @@ class GitDeploy
                 $subst = "codeload.github.com/$1/$2/zip/refs/heads/$branch";
 
                 $result = preg_replace($re, $subst, $str);
-                $zipFile = $stagingPath."/".$branch.".zip";
+                $zipFile = $stagingPath . "/" . $branch . ".zip";
 
                 $this->downloadFile($result, $zipFile);
 
                 //downloads the zip file and then extracts it into the staging Path
                 $zip = new \ZipArchive;
                 $this->log("Unzipping $zipFile to $stagingPath");
-                if ($zip->open($zipFile) === TRUE) {
+
+                if ($zip->open($zipFile) === true) {
                     $baseFolder = substr($zip->getNameIndex(0), 0, -1);
-                    for($i = 1; $i < $zip->numFiles; $i++) {
+                    for ($i = 1; $i < $zip->numFiles; $i++) {
                         $filename = $zip->getNameIndex($i);
 
                         $stagingPath = realpath($stagingPath);
                         $fileInfo = pathinfo($filename);
 
                         if (isset($fileInfo["dirname"])) {
-                            $destination = str_replace("/", DIRECTORY_SEPARATOR, str_replace($baseFolder, "", $fileInfo["dirname"]));
+                            $destination = str_replace(
+                                "/",
+                                DIRECTORY_SEPARATOR,
+                                str_replace($baseFolder, "", $fileInfo["dirname"])
+                            );
                             if (!file_exists($stagingPath . $destination)) {
                                 mkdir($stagingPath . $destination, "0777", true);
                             }
                         }
 
                         if (isset($fileInfo["extension"])) {
-                            copy("zip://" . $zipFile . "#" . $filename, $stagingPath . $destination . DIRECTORY_SEPARATOR . $fileInfo['basename']);
+                            copy(
+                                "zip://" . $zipFile . "#" . $filename,
+                                $stagingPath . $destination . DIRECTORY_SEPARATOR . $fileInfo['basename']
+                            );
                         }
                     }
                     $zip->close();
-                    $this->log("Unzipped $zipFile to $stagingPath");
 
+                    $this->log("Unzipped $zipFile to $stagingPath");
                 } else {
                     $this->log("Failed to unzip $zipFile to $stagingPath");
                 }
-
-            }
-            else {
-
+            } else {
                 $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
-
 
                 $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
                 $this->log($runClone);
@@ -159,11 +164,12 @@ class GitDeploy
             chdir($projectRoot);
 
             $this->log("Checking for composer");
+
             if (isWindows()) {
-                $this->downloadFile("https://getcomposer.org/installer", $stagingPath."/composer-setup.php");
+                $this->downloadFile("https://getcomposer.org/installer", $stagingPath . "/composer-setup.php");
                 `php composer-setup.php`;
             } else {
-                $this->downloadFile("https://getcomposer.org/installer", $stagingPath."/composer-setup.php");
+                $this->downloadFile("https://getcomposer.org/installer", $stagingPath . "/composer-setup.php");
                 `php composer-setup.php`;
             }
 
@@ -173,8 +179,7 @@ class GitDeploy
                 $composer = $this->getBinPath("composer");
             }
 
-            if (empty($composer))
-            {
+            if (empty($composer)) {
                 $this->log("Composer could not be downloaded");
                 throw new \Exception("Composer could not be located!");
             }
@@ -188,15 +193,18 @@ class GitDeploy
             }
 
             //check for lock file and autoloader
-            if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file($projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php"))
-            {
+            if (is_file($projectRoot . DIRECTORY_SEPARATOR . "composer.lock") && is_file(
+                    $projectRoot . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php"
+                )) {
                 //@todo Run inbuilt tests or other, if fails then don't deploy
                 //get back to where we should be
                 chdir($currentDir);
 
                 //Clean up src/app, src/routes , src/orm , src/sass, src/routes & src/templates
                 foreach (["app", "orm", "sass", "routes", "templates"] as $removePath) {
-                    $this->log("Cleaning " . $deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
+                    $this->log(
+                        "Cleaning " . $deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath
+                    );
                     $this->cleanPath($deploymentPath . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . $removePath);
                 }
 
@@ -204,7 +212,10 @@ class GitDeploy
                 $this->log("Deploying system to " . $deploymentPath);
 
                 foreach (["src", "vendor", "migrations", ...$deployDirectories] as $copyPath) {
-                    Utilities::recurseCopy($projectRoot . DIRECTORY_SEPARATOR . $copyPath, $deploymentPath . DIRECTORY_SEPARATOR . $copyPath);
+                    Utilities::recurseCopy(
+                        $projectRoot . DIRECTORY_SEPARATOR . $copyPath,
+                        $deploymentPath . DIRECTORY_SEPARATOR . $copyPath
+                    );
                 }
 
                 //deploy index.php to deployment path
@@ -233,7 +244,7 @@ class GitDeploy
                 (new \Tina4\Slack())->postMessage($this->deployLog, $_ENV["SLACK_CHANNEL"]);
             }
         } catch (\Exception $exception) {
-            $this->log("Error occurred: ".$exception->getMessage());
+            $this->log("Error occurred: " . $exception->getMessage());
         }
     }
 
@@ -244,11 +255,11 @@ class GitDeploy
      * @return bool
      */
 
-    function cleanPath($path, $makeDir=false): bool
+    function cleanPath($path, $makeDir = false): bool
     {
         $this->log("Deleting all files and folders under {$path}");
         if (!is_dir($path)) {
-            if ($makeDir){
+            if ($makeDir) {
                 `mkdir {$path}`;
             }
             return false;
@@ -260,7 +271,7 @@ class GitDeploy
             `rm -Rf {$path}`;
         }
 
-        if ($makeDir){
+        if ($makeDir) {
             `mkdir {$path}`;
         }
 
@@ -287,7 +298,6 @@ class GitDeploy
         } else {
             return $path[0] ?? "";
         }
-
     }
 
     /**
@@ -296,7 +306,7 @@ class GitDeploy
      * @param string $fileName
      * @return bool
      */
-    private function downloadFile($url, string $fileName) : bool
+    private function downloadFile($url, string $fileName): bool
     {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -307,6 +317,7 @@ class GitDeploy
         fwrite($fd, $st);
         fclose($fd);
         curl_close($ch);
+
         return file_exists($fileName);
     }
 }

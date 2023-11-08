@@ -77,12 +77,22 @@ class Messenger
 
 
         try {
-            if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool")) {
-                if (!mkdir($concurrentDirectory = $_SERVER["DOCUMENT_ROOT"] . "/messenger/spool", 0755, true) && !is_dir($concurrentDirectory)) {
-                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+            if (defined("TINA4_DEBUG") && TINA4_DEBUG) {
+                $documentRoot = TINA4_DOCUMENT_ROOT ?? getcwd();
+                if (!file_exists($documentRoot . "/messenger/spool")) {
+                    if (!mkdir(
+                            $concurrentDirectory = $documentRoot . "/messenger/spool",
+                            0755,
+                            true
+                        ) && !is_dir($concurrentDirectory)) {
+                        throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                    }
                 }
+                file_put_contents(
+                    $documentRoot . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml",
+                    $headers . $message
+                );
             }
-            file_put_contents($_SERVER["DOCUMENT_ROOT"] . "/messenger/spool/email_" . date("d_m_Y_h_i_s") . ".eml", $headers . $message);
 
             if (!$this->settings->usePHPMailer) {
                 $message = $this->prepareHtmlMail($message, $eol, "--" . $boundary_rel, "--" . $boundary_alt);
