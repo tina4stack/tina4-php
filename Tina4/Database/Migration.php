@@ -333,6 +333,9 @@ class Migration extends Data
     public function getVersion($software='tina4')
     {
         $version = $this->getVersionInfo($software);
+        if(empty($version)) {
+            $version = (object)["version" => "1.0.0"];
+        }
         return $version->version;
     }
 }
