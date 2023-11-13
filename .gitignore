@@ -74,3 +74,5 @@ test.db
 /bin/settings.json
 /log/event.log
 /deployment/
+/src/public/css/tina4-docs.css
+/src/public/components/
