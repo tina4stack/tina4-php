@@ -27,9 +27,6 @@ RewriteCond %{REQUEST_FILENAME} -d [OR]
 RewriteCond %{REQUEST_URI} ^/src/public/ [NC]
 RewriteRule ^ - [L]
 
-RewriteCond %{DOCUMENT_ROOT}/src/public/$1 -f
-RewriteRule ^(.*)$ src/public/$1 [NC,L]
-
 RewriteCond %{REQUEST_FILENAME} !-f [OR]
 RewriteCond %{REQUEST_FILENAME} !-d [OR]
 RewriteRule ^(.*)$ index.php [QSA,L]
