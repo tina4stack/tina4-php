@@ -35,11 +35,11 @@ class Request
                 if (is_array($vValue)) {
                     $value[$vKey] = $this->filterValue($vValue);
                 } else {
-                    $value[$vKey] = htmlspecialchars($vValue, ENT_NOQUOTES);
+                    $value[$vKey] = htmlspecialchars($vValue, ENT_NOQUOTES, "UTF-8");
                 }
             }
         } else {
-            $value = htmlspecialchars($value, ENT_NOQUOTES);
+            $value = htmlspecialchars($value, ENT_NOQUOTES, "UTF-8");
         }
         return $value;
     }
@@ -119,7 +119,7 @@ class Request
         }
 
         if (!empty($rawRequest)) {
-            $this->data = json_decode(mb_convert_encoding($rawRequest, "UTF-8", "ISO-8859-1"), false, 512);
+            $this->data = json_decode($this->rawRequest, false, 512);
             if ($this->data === null && $rawRequest !== '') {
                 $this->data = $rawRequest;
             }
