@@ -126,15 +126,21 @@ function handleHtmlData(data, targetElement) {
  * Loads a page to a target html element
  * @param loadURL
  * @param targetElement
+ * @callback
  */
-function loadPage(loadURL, targetElement) {
+function loadPage(loadURL, targetElement, callback = null) {
     if (targetElement === undefined) targetElement = 'content';
     console.log('LOADING PAGE', loadURL);
     sendRequest(loadURL, null, "GET", function(data) {
+        let processedHTML = '';
         if (document.getElementById(targetElement) !== null) {
-            handleHtmlData (data, targetElement);
+            processedHTML = (data, targetElement);
         } else {
             console.log('TINA4 - define targetElement for loadPage', data);
+        }
+
+        if (callback) {
+            callback(processedHTML);
         }
     });
 }
@@ -144,8 +150,9 @@ function loadPage(loadURL, targetElement) {
  * @param action
  * @param loadURL
  * @param targetElement
+ * @param callback
  */
-function showForm(action, loadURL, targetElement) {
+function showForm(action, loadURL, targetElement, callback = null) {
     if (targetElement === undefined) targetElement = 'form';
 
     if (action === 'create') action = 'GET';
@@ -153,14 +160,19 @@ function showForm(action, loadURL, targetElement) {
     if (action === 'delete') action = 'DELETE';
 
     sendRequest(loadURL, null, action, function(data) {
+        let processedHTML = '';
         if (data.message !== undefined) {
-            handleHtmlData ((data.message), targetElement);
+            processedHTML = handleHtmlData ((data.message), targetElement);
         } else {
             if (document.getElementById(targetElement) !== null) {
-                handleHtmlData (data, targetElement);
+                processedHTML = handleHtmlData (data, targetElement);
             } else {
                 console.log('TINA4 - define targetElement for showForm', data);
             }
+        }
+
+        if (callback) {
+            callback(processedHTML);
         }
     });
 }
@@ -171,16 +183,21 @@ function showForm(action, loadURL, targetElement) {
  * @param data
  * @param targetElement
  */
-function postUrl(url, data, targetElement) {
+function postUrl(url, data, targetElement, callback= null) {
     sendRequest(url, data, 'POST', function(data) {
+        let processedHTML = '';
         if (data.message !== undefined) {
-            handleHtmlData ((data.message), targetElement);
+             processedHTML = handleHtmlData ((data.message), targetElement);
         } else {
             if (document.getElementById(targetElement) !== null) {
-                handleHtmlData (data, targetElement);
+                processedHTML =  handleHtmlData (data, targetElement);
             } else {
                 console.log('TINA4 - define targetElement for postUrl', data);
             }
+        }
+
+        if (callback) {
+            callback(processedHTML)
         }
     });
 }
@@ -190,13 +207,14 @@ function postUrl(url, data, targetElement) {
  * @param formName
  * @param targetURL
  * @param targetElement
+ * @param callback - optional
  */
-function saveForm(formName, targetURL, targetElement) {
+function saveForm(formName, targetURL, targetElement, callback = null) {
     if (targetElement === undefined) targetElement = 'message';
     //compile a data model
     let data = getFormData(formName);
 
-    postUrl(targetURL, data, targetElement);
+    postUrl(targetURL, data, targetElement, callback);
 }
 
 /**
