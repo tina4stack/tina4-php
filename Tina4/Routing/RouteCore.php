@@ -21,5 +21,12 @@ interface RouteCore
      * @param false $inlineParamsToRequest
      * @param false $secure
      */
-    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void;
+    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): Route;
+
+    /***
+     * Adds a method names to the global routing table for middleware to be run
+     * @param array $functionNames
+     * @return void
+     */
+    public static function middleware(array $functionNames): void;
 }

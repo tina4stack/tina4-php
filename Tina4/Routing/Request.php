@@ -22,6 +22,7 @@ class Request
     public $files = null;
     public $headers = null;
     public $rawRequest = null;
+    public $security = null;
 
     /**
      * Filter value

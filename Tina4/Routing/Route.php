@@ -14,12 +14,13 @@ namespace Tina4;
  */
 class Route implements RouteCore
 {
-
     /**
      * @var string Type of method e.g. ANY, POST, DELETE, etc
      */
     public static $method;
-/**
+
+
+    /**
      * Get route
      * @param string $routePath
      * @param $function
@@ -39,9 +40,10 @@ class Route implements RouteCore
      * @param \Closure|Mixed $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      * @param bool $inlineParamsToRequest
      * @param bool $secure
+     * @return Route
      * @example "api/tests.php"
      */
-    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): void
+    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): Route
     {
         global $arrRoutes;
         $originalRoute = $routePath;
@@ -66,6 +68,8 @@ class Route implements RouteCore
                 $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
             }
         }
+
+        return new static;
     }
 
     //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
@@ -86,54 +90,70 @@ class Route implements RouteCore
      * PUT route
      * @param string $routePath
      * @param $function
+     * @return Route
      */
-    public static function put(string $routePath, $function): void
+    public static function put(string $routePath, $function): Route
     {
         self::$method = TINA4_PUT;
-        self::add($routePath, $function, true);
+        return self::add($routePath, $function, true);
     }
 
     /**
      * POST route
      * @param string $routePath
      * @param $function
+     * @return Route
      */
-    public static function post(string $routePath, $function): void
+    public static function post(string $routePath, $function): Route
     {
         self::$method = TINA4_POST;
-        self::add($routePath, $function, true);
+        return self::add($routePath, $function, true);
     }
 
     /**
      * PATCH route
      * @param string $routePath
      * @param $function
+     * @return Route
      */
-    public static function patch(string $routePath, $function): void
+    public static function patch(string $routePath, $function): Route
     {
         self::$method = TINA4_PATCH;
-        self::add($routePath, $function, true);
+        return self::add($routePath, $function, true);
     }
 
     /**
      * DELETE route
      * @param string $routePath
      * @param $function
+     * @return Route
      */
-    public static function delete(string $routePath, $function): void
+    public static function delete(string $routePath, $function): Route
     {
         self::$method = TINA4_DELETE;
-        self::add($routePath, $function, true);
+        return self::add($routePath, $function, true);
     }
 
     /**
      * ANY route - All methods
      * @param string $routePath
      * @param $function
+     * @return Route
      */
-    public static function any(string $routePath, $function): void
+    public static function any(string $routePath, $function): Route
     {
         self::$method = TINA4_ANY;
-        self::add($routePath, $function, true);
+        return self::add($routePath, $function, true);
+    }
+
+    /***
+     * Adds a method to the global routing table for middleware to be run
+     * @param array $functionNames
+     * @return array
+     */
+    public static function middleware(array $functionNames): void
+    {
+        global $arrRoutes;
+        $arrRoutes[sizeof($arrRoutes)-1]["middleware"] = $functionNames;
     }
 }

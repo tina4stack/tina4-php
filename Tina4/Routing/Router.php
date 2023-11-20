@@ -90,7 +90,6 @@ class Router extends Data
             return $routerResponse;
         }
 
-
         //SECOND STATIC FILES - ONLY GET
         if ($method === TINA4_GET) {
             $fileName = realpath(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "public" . $url); //The most obvious request
@@ -385,7 +384,6 @@ class Router extends Data
             $result = null;
             Debug::message("$this->GUID Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
             if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
-                //Look to see if we are a secure route
                 if (!empty($route["class"])) {
                     $reflectionClass = new \ReflectionClass($route["class"]);
                     $reflection = $reflectionClass->getMethod($route["function"]);
@@ -393,10 +391,35 @@ class Router extends Data
                     $reflection = new  \ReflectionFunction($route["function"]);
                 }
 
+                //Get the annotations for the route
                 $doc = $reflection->getDocComment();
-                preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
+                $annotations = (new Annotation())->parseAnnotations($doc, "");
+                print_r ($annotations);
 
                 $params = $this->getParams($response, $route["inlineParamsToRequest"], $customRequest);
+
+                //Check for middle ware and pass params to the middle ware for processing
+                if (isset($annotations["middleware"])) {
+                    $route["middleware"] = explode(",", $annotations["middleware"][0]);
+                }
+
+                if (isset($annotations["secure"]) || isset($annotations["security"])) {
+                    $params[sizeof($params)-1]->security = isset($annotations["secure"]) ? explode(",", $annotations["secure"][0]) : explode(",", $annotations["security"][0]);
+                }
+
+                if (isset($route["middleware"])) {
+                    global $arrMiddleware;
+                    foreach ($route["middleware"] as $middleware) {
+                        if (isset($arrMiddleware[Middleware::getName($middleware)])) {
+                            \Tina4\Debug::message("Executing " . $middleware);
+                            $response = $arrMiddleware[Middleware::getName($middleware)]["function"](...$params);
+                            if (!empty($response)) {
+                                $result = $response;
+                                break;
+                            }
+                        }
+                    }
+                }
 
                 if (function_exists("getallheaders")) {
                     $requestHeaders = getallheaders();
@@ -404,7 +427,8 @@ class Router extends Data
                     $requestHeaders = $customHeaders;
                 }
 
-                if (in_array("secure", $annotations[1], true) || (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
+                //Look to see if we are a secure route
+                if (empty($result) && in_array("secure", $annotations, true) || (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
                     if ($this->config->getAuthentication() === null) {
                         $auth = new Auth();
                         $this->config->setAuthentication($auth);
@@ -438,8 +462,6 @@ class Router extends Data
                         }
                     }
                 }
-
-
 
                 if ($result === null) {
                     if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {

@@ -19,6 +19,7 @@ RUN docker-php-ext-install intl
 RUN apt-get install -y libtidy-dev && docker-php-ext-install tidy
 RUN apt-get install -y libxml2-dev && docker-php-ext-install soap
 RUN apt-get install -y libzip-dev && docker-php-ext-install zip
+RUN apt-get install -y libzip-dev && docker-php-ext-install gettext
 RUN docker-php-ext-install bcmath
 RUN docker-php-ext-install opcache
 
@@ -79,6 +80,8 @@ RUN mv composer.phar /usr/local/bin/composer
 RUN dpkg --add-architecture i386 && apt-get update && apt-get install wine32 -y
 RUN apt-get install wine -y
 RUN docker-php-ext-enable xdebug
+RUN apt-get install gettext -y
+COPY ./php.ini-development /usr/local/etc/php/php.ini
 WORKDIR /app
 
 
