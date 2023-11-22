@@ -117,12 +117,22 @@ class TwigUtility
             self::addTwigMethods($config, $twig);
 
             //Add form Token
-
             if ($auth !== null) {
                 $twig->addGlobal('formToken', $config->getAuthentication()->getToken());
 
                 $function = new TwigFunction("formToken", static function($payload) use ($auth) {
                     return $auth->getToken(compact('payload'));
+                });
+
+                $twig->addFunction($function);
+
+                $function = new TwigFunction("_", static function($message) {
+                    if (function_exists("gettext")) {
+                        return gettext($message);
+                    } else {
+                        Debug::message("gettext extension not loaded", TINA4_LOG_ERROR);
+                        return $message;
+                    }
                 });
 
                 $twig->addFunction($function);
