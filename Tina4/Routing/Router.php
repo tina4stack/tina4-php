@@ -394,7 +394,6 @@ class Router extends Data
                 //Get the annotations for the route
                 $doc = $reflection->getDocComment();
                 $annotations = (new Annotation())->parseAnnotations($doc, "");
-                print_r ($annotations);
 
                 $params = $this->getParams($response, $route["inlineParamsToRequest"], $customRequest);
 
