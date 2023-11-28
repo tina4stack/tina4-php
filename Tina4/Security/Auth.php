@@ -173,8 +173,6 @@ class Auth extends Data
      */
     public function getToken(array $payLoad = [], int $expiresInDays=0, string $privateKey = "", string $encryption = JWT::ALGORITHM_RS256): string
     {
-        $this->initSession();
-
         if (!empty($privateKey)) {
             $this->privateKey = $privateKey;
         }
