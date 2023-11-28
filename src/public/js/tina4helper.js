@@ -138,7 +138,7 @@ function loadPage(loadURL, targetElement, callback = null) {
     sendRequest(loadURL, null, "GET", function(data) {
         let processedHTML = '';
         if (document.getElementById(targetElement) !== null) {
-            processedHTML = (data, targetElement);
+            processedHTML = handleHtmlData(data, targetElement);
         } else {
             console.log('TINA4 - define targetElement for loadPage', data);
         }
