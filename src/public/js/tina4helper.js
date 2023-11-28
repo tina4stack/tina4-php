@@ -87,14 +87,18 @@ function handleHtmlData(data, targetElement) {
     //Strip out the scripts
     if (data === "") return '';
     const parser = new DOMParser();
-    const htmlData = parser.parseFromString(data.includes('<html>') ? data : '<body>'+data+'</body></html>', 'text/html');
+    const htmlData = parser.parseFromString(data.includes !== undefined && data.includes('<html>') ? data : '<body>'+data+'</body></html>', 'text/html');
     const body = htmlData.querySelector('body');
     const scripts = body.querySelectorAll('script');
     // remove the script tags
     body.querySelectorAll('script').forEach(script => script.remove());
 
     if (targetElement !== null) {
-        document.getElementById(targetElement).replaceChildren(...body.children);
+        if (body.children.length > 0) {
+            document.getElementById(targetElement).replaceChildren(...body.children);
+        } else {
+            document.getElementById(targetElement).replaceChildren(body.innerHTML);
+        }
         if (scripts) {
             scripts.forEach(script => {
                 const newScript = document.createElement("script");

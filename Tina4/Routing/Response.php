@@ -14,6 +14,7 @@ namespace Tina4;
  */
 class Response
 {
+
     /**
      * Performs task when invoked
      * @param mixed $content Content of which may be a simple string to show on screen or even a parsed twig template using renderTemplate()
@@ -54,8 +55,6 @@ class Response
                 break;
             }
         }
-
         return ["contentType" => "Content-Type: {$contentType}", "content" => $content, "httpCode" => $httpCode, "customHeaders" => $customHeaders];
     }
-
 }

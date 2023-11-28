@@ -73,11 +73,7 @@ class Router extends Data
         }
 
         $url = $this->cleanURL($url);
-        $cacheResult = $this->getCacheResponse($url);
-        if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
-            Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
-            return new RouterResponse($cacheResult["content"], $cacheResult["httpCode"], $cacheResult["headers"]);
-        }
+
         Debug::message("$this->GUID {$method} - {$url}", TINA4_LOG_DEBUG);
         //Clean the URL
 
@@ -95,9 +91,7 @@ class Router extends Data
             $fileName = realpath(TINA4_DOCUMENT_ROOT . DIRECTORY_SEPARATOR . "src" . DIRECTORY_SEPARATOR . "public" . $url); //The most obvious request
             if (file_exists($fileName) && $routerResponse = $this->returnStatic($fileName)) {
                 Debug::message("$this->GUID GET - " . $fileName, TINA4_LOG_DEBUG);
-                if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
-                    $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), $fileName);
-                }
+                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), $fileName);
 
                 if (!empty($routerResponse->content)) {
                     return $routerResponse;
@@ -115,9 +109,7 @@ class Router extends Data
 
         //THIRD ROUTING
         if ($routerResponse = $this->handleRoutes($method, $url, $customHeaders, $customRequest)) {
-            if (defined("TINA4_CACHED_ROUTES") && strpos(print_r(TINA4_CACHED_ROUTES, 1), $url) !== false) {
-                $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), "");
-            }
+            $this->createCacheResponse($url, $routerResponse->httpCode, $routerResponse->content, $this->addCORS($routerResponse->headers), "");
             return $routerResponse;
         }
 
@@ -461,6 +453,19 @@ class Router extends Data
                         }
                     }
                 }
+
+                if (!isset($route["noCache"])) {
+                    $cacheResult = $this->getCacheResponse($url);
+                    if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
+                        Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
+                        return new RouterResponse(
+                            $cacheResult["content"],
+                            $cacheResult["httpCode"],
+                            $cacheResult["headers"]
+                        );
+                    }
+                }
+
 
                 if ($result === null) {
                     if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
