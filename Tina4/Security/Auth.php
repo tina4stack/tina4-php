@@ -89,13 +89,12 @@ class Auth extends Data
      */
     public function initSession(): void
     {
-        if (TINA4_CACHE_ON) {
-            session_cache_limiter(false);
-        }
-
         //make sure the session is started
         if (!$this->configured && session_status() === PHP_SESSION_NONE) {
             $this->configured = true;
+            if (TINA4_CACHE_ON) {
+                session_cache_limiter(false);
+            }
             session_start();
         } else {
             $this->configured = true;
@@ -112,7 +111,6 @@ class Auth extends Data
      */
     public function generateSecureKeys(): bool
     {
-
         Debug::message("Generating Auth keys - {$this->documentRoot}secrets");
         if (file_exists($this->documentRoot . "secrets/private.key")) {
             Debug::message("Secrets folder exists already, please remove");
@@ -235,7 +233,6 @@ class Auth extends Data
     public function validToken(string $token, string $publicKey = "", string $encryption = JWT::ALGORITHM_RS256): bool
     {
         Debug::message("Validating token");
-        $this->initSession();
 
         if (!empty($publicKey)) {
             $this->publicKey = $publicKey;
@@ -324,7 +321,6 @@ class Auth extends Data
         } else {
             $payLoad = $tokenDecoded->getPayload();
 
-
             if (isset($payLoad["expires"])) {
                 unset($payLoad["expires"]);
             }
@@ -354,8 +350,6 @@ class Auth extends Data
      */
     public function validateAuth($request, string $lastPath = null): string
     {
-        $this->initSession();
-
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
             $lastPath = $_SESSION["tina4:lastPath"];
         } else {
@@ -370,7 +364,6 @@ class Auth extends Data
      */
     public function clearTokens(): void
     {
-        $this->initSession();
         if (isset($_SERVER["REMOTE_ADDR"])) {
             unset($_SESSION["tina4:authToken"]);
         }
