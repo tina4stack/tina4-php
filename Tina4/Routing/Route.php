@@ -172,7 +172,7 @@ class Route implements RouteCore
      * Cache route
      * @return void
      */
-    public static function Cache(): void
+    public static function cache(): void
     {
         global $arrRoutes;
         $arrRoutes[sizeof($arrRoutes)-1]["cached"] = true;
