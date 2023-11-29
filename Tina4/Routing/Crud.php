@@ -186,6 +186,7 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          * @secure
+         * @no-cache
          */
         Route::get(
             $path . "/form",
@@ -198,6 +199,7 @@ class Crud
 
         /**
          * @description  {$path} CRUD
+         * @no-cache
          */
         Route::post(
             $path,
@@ -223,6 +225,7 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          * @secure
+         * @no-cache
          */
         Route::get(
             $path,
@@ -239,6 +242,7 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          * @secure
+         * @no-cache
          */
         Route::get(
             $path . "/{id}",
@@ -258,6 +262,7 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          * @secure
+         * @no-cache
          */
         Route::post(
             $path . "/{id}",
@@ -281,6 +286,7 @@ class Crud
          * @description  {$path} CRUD
          * @tags CRUD
          * @secure
+         * @no-cache
          */
         Route::delete(
             $path . "/{id}",

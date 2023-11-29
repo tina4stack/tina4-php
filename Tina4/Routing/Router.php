@@ -109,7 +109,7 @@ class Router extends Data
         if ($routerResponse = $this->handleRoutes($method, $url, $customHeaders, $customRequest)) {
             if ($routerResponse->cached) {
                 $this->createCacheResponse(
-                    $url,
+                    $url.$method,
                     $routerResponse->httpCode,
                     $routerResponse->content,
                     $this->addCORS($routerResponse->headers),
@@ -514,7 +514,7 @@ class Router extends Data
                 }
                   else
                 if ($route["cached"]) {
-                    $cacheResult = $this->getCacheResponse($url);
+                    $cacheResult = $this->getCacheResponse($url.$method);
                     if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
                         Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
                         return new RouterResponse(
@@ -538,7 +538,7 @@ class Router extends Data
                             return new RouterResponse("", HTTP_FORBIDDEN, $headers);
                         } else {
                             if ($route["cached"]) {
-                                $cacheResult = $this->getCacheResponse($url);
+                                $cacheResult = $this->getCacheResponse($url.$method);
                                 if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
                                     Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
                                     return new RouterResponse(
