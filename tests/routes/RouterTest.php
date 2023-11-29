@@ -27,4 +27,40 @@ final class RouterTest extends TestCase
 
     }
 
+    public function testGetRouting(): void
+    {
+        //test get route application/json
+
+        //test get route text/html
+
+        //test get route application/xml
+
+        //test get route with @secure
+
+        //test get route with @content-type
+
+        //test get route with @cache
+
+        //test get route with @no-cache
+
+    }
+
+    public function testPostRouting(): void
+    {
+        //test post route application/json
+
+        //test post route text/html
+
+        //test post route application/xml
+
+        //test post route with @secure
+
+        //test post route with @content-type
+
+        //test post route with @cache
+
+        //test post route with @no-cache
+
+    }
+
 }

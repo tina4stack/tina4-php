@@ -318,32 +318,37 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
 
 
 //On a rerun need to check if we have already instantiated the cache
-function createCache()
-{
-    //Initialize the Cache
-    global $cache;
+if (!function_exists("createCache")) {
+    function createCache()
+    {
+        //Initialize the Cache
+        global $cache;
 
-    if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR) && !mkdir("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true)) {
-        Debug::message("Could not create " . DIRECTORY_SEPARATOR . "cache");
-    }
-
-    if (empty($cache)) {
-        //Setup caching options
-        try {
-            $TINA4_CACHE_CONFIG =
-                new ConfigurationOption([
-                    "path" => TINA4_DOCUMENT_ROOT . "cache"
-                ]);
-            CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
-            $cache = CacheManager::getInstance("files");
-        } catch (\Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException $e) {
-            \Tina4\Debug::message("Could not initialize cache", TINA4_LOG_ERROR);
+        if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR) && !mkdir(
+                "." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR,
+                0777,
+                true
+            )) {
+            Debug::message("Could not create " . DIRECTORY_SEPARATOR . "cache");
         }
+
+        if (empty($cache)) {
+            //Setup caching options
+            try {
+                $TINA4_CACHE_CONFIG =
+                    new ConfigurationOption([
+                        "path" => TINA4_DOCUMENT_ROOT . "cache"
+                    ]);
+                CacheManager::setDefaultConfig($TINA4_CACHE_CONFIG);
+                $cache = CacheManager::getInstance("files");
+            } catch (\Phpfastcache\Exceptions\PhpfastcacheInvalidConfigurationException $e) {
+                \Tina4\Debug::message("Could not initialize cache", TINA4_LOG_ERROR);
+            }
+        }
+
+        return $cache;
     }
-
-    return $cache;
 }
-
 
 if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
     createCache();
