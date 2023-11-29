@@ -165,6 +165,16 @@ class Route implements RouteCore
     public static function noCache(): void
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["noCache"] = true;
+        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = false;
+    }
+
+    /**
+     * Cache route
+     * @return void
+     */
+    public static function Cache(): void
+    {
+        global $arrRoutes;
+        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = true;
     }
 }

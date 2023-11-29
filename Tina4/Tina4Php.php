@@ -368,10 +368,13 @@ class Tina4Php extends Data
         $content = "";
         if ($routerResponse !== null) {
             if (!headers_sent()) {
-                foreach ($routerResponse->headers as $hid => $header) {
-                    header($header);
+                if ($routerResponse->httpCode !== HTTP_FORBIDDEN) {
+                    foreach ($routerResponse->headers as $hid => $header) {
+                            header($header);    
+                    }
                 }
             }
+            header("Content-Type: " . $routerResponse->contentType);
             http_response_code($routerResponse->httpCode);
             if ($routerResponse->content === "") {
                 //try give back a response based on the error code - first templates then public

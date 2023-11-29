@@ -17,11 +17,15 @@ class RouterResponse
     public $content;
     public $httpCode;
     public $headers;
+    public $cached;
+    public $contentType;
 
-    public function __construct($content, ?int $httpCode = HTTP_NOT_FOUND, array $headers = [])
+    public function __construct($content, ?int $httpCode = HTTP_NOT_FOUND, array $headers = [], $cached=false, $contentType=TEXT_HTML)
     {
         $this->content = $content;
         $this->httpCode = $httpCode;
         $this->headers = $headers;
+        $this->cached = $cached;
+        $this->contentType = $contentType;
     }
 }

@@ -316,11 +316,13 @@ if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
     }
 }
 
-//Initialize the Cache
-global $cache;
-//On a rerun need to check if we have already instantiated the cache
 
-if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
+//On a rerun need to check if we have already instantiated the cache
+function createCache()
+{
+    //Initialize the Cache
+    global $cache;
+
     if (!file_exists("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR) && !mkdir("." . DIRECTORY_SEPARATOR . "cache" . DIRECTORY_SEPARATOR, 0777, true)) {
         Debug::message("Could not create " . DIRECTORY_SEPARATOR . "cache");
     }
@@ -338,6 +340,13 @@ if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
             \Tina4\Debug::message("Could not initialize cache", TINA4_LOG_ERROR);
         }
     }
+
+    return $cache;
+}
+
+
+if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
+    createCache();
 } else {
     $cache = null;
 }
