@@ -1,3 +1,5 @@
+var formToken = null;
+
 /**
  * Sends an http request
  * @param url
@@ -16,11 +18,21 @@ function sendRequest (url, request, method, callback) {
         method = 'GET';
     }
 
+    //Inject the new token
+    if (formToken !== null) {
+        const regex = /formToken=(.*)/gm;
+        const subst = `formToken=${formToken}`;
+        url = url.replace(regex, subst);
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open(method, url, true);
 
     xhr.onload = function () {
         let content = xhr.response;
+        console.log('headers', xhr.getResponseHeader('freshToken'));
+        formToken = xhr.getResponseHeader('freshToken');
+
         try {
             content = JSON.parse(content);
             callback(content);
@@ -47,6 +59,10 @@ function getFormData(formName) {
     for (let ie = 0; ie < elements.length; ie++ )
     {
         let element = elements[ie];
+        //refresh the token
+        if (element.name === 'formToken' && formToken !== null) {
+            element.value = formToken;
+        }
         if (element.name) {
             if (element.type === 'file') {
                 for (let i = 0; i < element.files.length; i++) {
@@ -191,7 +207,7 @@ function postUrl(url, data, targetElement, callback= null) {
     sendRequest(url, data, 'POST', function(data) {
         let processedHTML = '';
         if (data.message !== undefined) {
-             processedHTML = handleHtmlData ((data.message), targetElement);
+            processedHTML = handleHtmlData ((data.message), targetElement);
         } else {
             if (document.getElementById(targetElement) !== null) {
                 processedHTML =  handleHtmlData (data, targetElement);
