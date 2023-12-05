@@ -513,7 +513,7 @@ class Router extends Data
                     }
                 }
                   else
-                if ($route["cached"]) {
+                if ($route["cached"] && empty($result)) {
                     $cacheResult = $this->getCacheResponse($url.$method);
                     if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
                         Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
