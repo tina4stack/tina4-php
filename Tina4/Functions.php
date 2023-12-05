@@ -27,7 +27,6 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
         $fileName = null;
     }
 
-
     if (!empty($fileName)) {
         try {
             global $twig;
@@ -35,7 +34,6 @@ function renderTemplate($fileNameString, $data = [], $location = ""): string
             if ($twig === null) {
                 TwigUtility::initTwig();
             }
-
 
             $internalTwig = clone $twig;
 

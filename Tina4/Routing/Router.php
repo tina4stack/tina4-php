@@ -478,7 +478,7 @@ class Router extends Data
                 }
 
                 //Look to see if we are a secure route
-                if (empty($result) && isset($annotations["secure"]) || (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
+                if (empty($result) && isset($annotations["secure"]) || empty($result) && (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken(urldecode($requestHeaders["Authorization"]))) {
                         //call closure with & without params
                         $this->config->setAuthentication(null); //clear the auth
