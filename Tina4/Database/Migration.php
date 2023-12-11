@@ -322,7 +322,7 @@ class Migration extends Data
      */
     public function getVersionInfo($software='tina4')
     {
-        return $this->DBA->fetchOne("select * from tina4_version where software = '{$software}' order by version desc");
+        return $this->DBA->fetchOne("select version as \"version\" from tina4_version where software = '{$software}' order by version desc");
     }
 
     /**
