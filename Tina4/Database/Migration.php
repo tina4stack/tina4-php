@@ -68,7 +68,9 @@ class Migration extends Data
                 $this->migrationPath .= "/" . $this->DBA->getShortName();
                 $this->runRootMigrations = true;
             } else {
-                \Tina4\Debug::message("Please upgrade the database driver to include getShortName method for migrations", TINA4_LOG_DEBUG);
+                if (!method_exists($this->DBA, "getShortName")) {
+                    \Tina4\Debug::message("Please upgrade the database driver to include getShortName method for migrations", TINA4_LOG_DEBUG);
+                }
             }
 
             //Turn off auto commits so we can roll back
@@ -223,6 +225,7 @@ class Migration extends Data
                 if ($error) {
                     $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nAll Transactions Rolled Back ...\n";
                     $this->DBA->rollback($transId);
+                    break;
                 } else {
                     $this->DBA->commit($transId);
 
@@ -248,12 +251,14 @@ class Migration extends Data
         error_reporting(E_ALL);
         $result .= "</pre>";
 
+
+
         if ($this->runRootMigrations) {
             //get rid of the database path
             $this->migrationPath = str_replace("/".$this->DBA->getShortName(), "", $this->migrationPath);
             $this->runRootMigrations = false;
             $result .= $this->doMigration();
-
+            file_put_contents("./log/migrations.html", $result, FILE_APPEND);
         }
 
         return $result;

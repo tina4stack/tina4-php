@@ -374,7 +374,7 @@ class Tina4Php extends Data
                     }
                 }
             }
-            header("Content-Type: " . $routerResponse->contentType);
+            header($routerResponse->contentType);
             http_response_code($routerResponse->httpCode);
             if ($routerResponse->content === "") {
                 //try give back a response based on the error code - first templates then public
