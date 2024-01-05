@@ -27,5 +27,14 @@ class RouterResponse
         $this->headers = $headers;
         $this->cached = $cached;
         $this->contentType = $contentType;
+
+        if (empty($this->contentType)) {
+            $this->contentType = TEXT_HTML;
+        }
+
+        if (!in_array("Content-Type: ".$this->contentType, $this->headers)) {
+            $this->headers[] = "Content-Type: " . $this->contentType;
+        }
+
     }
 }
