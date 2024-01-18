@@ -147,6 +147,12 @@ class Migration extends Data
             $fileParts = explode(" ", $fileParts[0]);
             //Get first 14 characters (length of migration id column)
             $migrationId = substr($fileParts[0], 0, 14);
+
+            //Fix if we end up with weird migrations which do not conform to the spec
+            if (empty($migrationId)) {
+                $migrationId = substr($entry, 0, 14);
+            }
+
             //Get the rest of the string
             $leftOverFileParts = substr($fileParts[0], 14, strlen($fileParts[0]));
             unset($fileParts[0]);
