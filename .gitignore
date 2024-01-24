@@ -77,3 +77,4 @@ test.db
 /src/public/css/tina4-docs.css
 /src/public/components/
 /src/public/images/test/
+/log/deploy.log

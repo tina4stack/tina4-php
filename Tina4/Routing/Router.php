@@ -192,20 +192,22 @@ class Router extends Data
         $fileName = preg_replace('#/+#', '/', $fileName);
         $mimeType = self::getMimeType($fileName);
 
-        if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
-            return $this->rangeDownload($fileName);
-        }
-
+        $headers = [];
         $headers[] = ('Content-Type: ' . $mimeType);
         $headers[] = ('Tina4-Debug: '.$this->GUID);
         $headers[] = ('Cache-Control: max-age=' . (60 * 60 * 60) . ', public');
         $headers[] = ('Expires: ' . gmdate('D, d M Y H:i:s \G\M\T', time() + (60 * 60 * 60))); //60 hour expiry time
         $headers[] = ('Pragma: cache');
 
+        if (isset($_SERVER['HTTP_RANGE'])) { // do it for any device that supports byte-ranges not only iPhone
+            return $this->rangeDownload($fileName, $headers);
+        }
 
         $ext = pathinfo($fileName, PATHINFO_EXTENSION);
         if ($ext !== "twig") {
             $content = file_get_contents($fileName);
+        } else {
+            $content = "";
         }
 
         return new RouterResponse($content, HTTP_OK, $headers, false, $mimeType);
@@ -214,11 +216,11 @@ class Router extends Data
     /**
      * Method to download / stream files
      * @param $file
+     * @param $headers
      * @return RouterResponse
      */
-    public function rangeDownload($file): RouterResponse
+    public function rangeDownload($file, $headers): RouterResponse
     {
-        $headers = [];
         $fp = @fopen($file, 'rb');
         $size = filesize($file); // File size
         $length = $size;           // Content length
@@ -273,7 +275,7 @@ class Router extends Data
             // Validate the requested range and return an error if it's not correct.
             if ($c_start > $c_end || $c_start > $size - 1 || $c_end >= $size) {
                 $headers[] = ('HTTP/1.1 416 Requested Range Not Satisfiable');
-                $headers[] = ("Content-Range: bytes $start-$end/$size");
+                $headers[] = ("Content-Range: bytes ".($start-$end/$size));
                 // (?) Echo some info to the client?
                 return new RouterResponse("", HTTP_REQUEST_RANGE_NOT_SATISFIABLE, $headers);
             }
@@ -285,15 +287,15 @@ class Router extends Data
             return new RouterResponse("", HTTP_PARTIAL_CONTENT, $headers);
         }
         // Notify the client the byte range we'll be outputting
-        $headers[] = ("Content-Range: bytes $start-$end/$size");
-        $headers[] = ("Content-Length: $length");
+        $headers[] = ("Content-Range: bytes " . ($start - $end / $size));
+        $headers[] = ("Content-Length: {$length}");
 
         // Start buffered download
         $buffer = 1024 * 8;
         $content = "";
         while (!feof($fp) && ($p = ftell($fp)) <= $end) {
             if ($p + $buffer > $end) {
-                // In case we're only outputtin a chunk, make sure we don't
+                // In case we're only outputting a chunk, make sure we don't
                 // read past the length
                 $buffer = $end - $p + 1;
             }
@@ -472,7 +474,42 @@ class Router extends Data
                     foreach ($route["middleware"] as $middleware) {
                         if (isset($arrMiddleware[Middleware::getName($middleware)])) {
                             \Tina4\Debug::message("Executing " . $middleware);
-                            $response = $arrMiddleware[Middleware::getName($middleware)]["function"](...$params);
+
+                            $middleWareFunction = new \ReflectionFunction($arrMiddleware[Middleware::getName($middleware)]["function"]);
+                            $middlewareParams = $middleWareFunction->getParameters();
+
+                            //Everything should work based on order of input parameters
+                            if (count($params) === count($middlewareParams)) {
+                                $response = $arrMiddleware[Middleware::getName($middleware)]["function"](...$params);
+                            } else {
+                                $refFunction = new \ReflectionFunction($route["function"]);
+                                $routeParams = $refFunction->getParameters();
+
+                                $iterateParams = $middlewareParams;
+                                $checkParams = $routeParams;
+
+                                $newParams = [];
+                                $counterIterateParams = 0;
+                                while ($counterIterateParams < count($iterateParams)) {
+                                    $found = false;
+                                    foreach ($checkParams as $id => $param) {
+                                        if ($iterateParams[$counterIterateParams]->getName() === $param->getName()) {
+                                            $newParams[] = $params[$id];
+                                            $found = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!$found) {
+                                        $newParams[] = null;
+                                    }
+
+                                    $counterIterateParams++;
+                                }
+
+                                $response = $middleWareFunction->invoke(...$newParams);
+                            }
+
                             if (!empty($response)) {
                                 $result = $response;
                                 break;
