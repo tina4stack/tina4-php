@@ -507,7 +507,7 @@ class Router extends Data
                                     $counterIterateParams++;
                                 }
 
-                                $response = $middleWareFunction->invoke(...$newParams);
+                                $response = $arrMiddleware[Middleware::getName($middleware)]["function"](...$newParams);
                             }
 
                             if (!empty($response)) {
