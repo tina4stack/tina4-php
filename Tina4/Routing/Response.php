@@ -55,6 +55,6 @@ class Response
                 break;
             }
         }
-        return ["contentType" => "Content-Type: {$contentType}", "content" => $content, "httpCode" => $httpCode, "customHeaders" => $customHeaders];
+        return ["contentType" => $contentType, "content" => $content, "httpCode" => $httpCode, "customHeaders" => $customHeaders];
     }
 }
