@@ -48,11 +48,24 @@ class Thread
         $code .= implode(', ', $params);
         $code .= '){';
         $lines = file($reflection->getFileName());
+
         for($l = $reflection->getStartLine(); $l < $reflection->getEndLine(); $l++) {
+
             if (trim($lines[$l]) == "});") {
                 $code .= "};";
             } else {
-                $code .= $lines[$l];
+                $tempLine = explode ("//", $lines[$l]); // explode by comment
+
+                if (count($tempLine) == 1) {
+                    $code .= str_replace("\n", "", $lines[$l]);
+                } else {
+                    //determine comments and remove
+                    foreach ($tempLine as $codeLine) {
+                        if (strpos($codeLine,";") !== false) {
+                            $code .= " ".trim($codeLine);
+                        }
+                    }
+                }
             }
         }
 
