@@ -146,6 +146,7 @@ function handleHtmlData(data, targetElement) {
  * Loads a page to a target html element
  * @param loadURL
  * @param targetElement
+ * @param callback
  * @callback
  */
 function loadPage(loadURL, targetElement, callback = null) {
@@ -157,10 +158,14 @@ function loadPage(loadURL, targetElement, callback = null) {
             processedHTML = handleHtmlData(data, targetElement);
         } else {
             console.log('TINA4 - define targetElement for loadPage', data);
+            if (callback) {
+                callback(data);
+            }
+            return;
         }
 
         if (callback) {
-            callback(processedHTML);
+            callback(processedHTML, data);
         }
     });
 }
@@ -202,6 +207,7 @@ function showForm(action, loadURL, targetElement, callback = null) {
  * @param url
  * @param data
  * @param targetElement
+ * @param callback
  */
 function postUrl(url, data, targetElement, callback= null) {
     sendRequest(url, data, 'POST', function(data) {
