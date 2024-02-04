@@ -13,6 +13,8 @@ class Swoole
     /**
      * @param int $port
      * @param array $events array ["on" => $method]
+     * @param string $type
+     * @param array $params
      * @param bool $daemonize
      * @param int $workers
      */
