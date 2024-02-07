@@ -299,7 +299,7 @@ class Auth extends Data
             $tokenEncoded = new TokenEncoded($token);
         } catch (\Exception $e) {
             Debug::message("Encoded token input failed! " . $e->getMessage());
-            return false;
+            return [];
         }
 
         try {
@@ -307,11 +307,11 @@ class Auth extends Data
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
             Debug::message("Validating {$token} failed!");
-            return false;
+            return [];
         } catch (\Exception $e) {
             // Handle other validation exceptions
             Debug::message("Validating {$token} failed! " . $e->getMessage());
-            return false;
+            return [];
         }
 
         $tokenDecoded = $tokenEncoded->decode();
