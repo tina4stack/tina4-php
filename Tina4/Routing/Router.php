@@ -40,7 +40,6 @@ class Router extends Data
      */
     final public function addCORS($headers) {
         if (defined("TINA4_ALLOW_ORIGINS")) {
-
            if (is_array(TINA4_ALLOW_ORIGINS)) {
                $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
            } else {
@@ -48,8 +47,6 @@ class Router extends Data
                \Tina4\Debug::message("TINA4_ALLOW_ORIGINS must be an array!" , TINA4_LOG_ERROR);
                die();
            }
-
-
         }
 
         $headers[] = ('Vary: Origin');

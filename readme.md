@@ -396,3 +396,17 @@ https://gist.github.com/rhacker/3550309
 ```
 sudo chown -R "$(id -un)":"$(id -gn)" /opt/homebrew
 ```
+
+### PHP info
+
+Example of a PHP info route if needed.
+
+```PHP
+Route::get("/phpinfo", function(Response $response){
+  ob_start();
+  phpinfo();
+  $data = ob_get_contents();
+  ob_clean();
+  return $response($data, HTTP_OK, TEXT_HTML);
+});
+```

@@ -247,14 +247,6 @@ class Tina4Php extends Data
                 return $response($result, HTTP_OK, TEXT_HTML);
             });
 
-            Route::get("/phpinfo", function(Response $response){
-                ob_start();
-                phpinfo();
-                $data = ob_get_contents();
-                ob_clean();
-                return $response($data, HTTP_OK, TEXT_HTML);
-            });
-
             Route::get("/xdebuginfo", function(Response $response){
                 ob_start();
                 if (function_exists("xdebug_info")) {
