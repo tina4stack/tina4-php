@@ -78,3 +78,4 @@ test.db
 /src/public/components/
 /src/public/images/test/
 /log/deploy.log
+/bin/tina4

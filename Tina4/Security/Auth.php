@@ -132,7 +132,9 @@ class Auth extends Data
             openssl_pkey_export($keys, $private_key_pem);
 
             if (!file_exists($this->documentRoot . "secrets")) {
-                mkdir($this->documentRoot . 'secrets');
+                if (!mkdir($concurrentDirectory = $this->documentRoot . 'secrets') && !is_dir($concurrentDirectory)) {
+                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                }
             }
 
             //write keys to files #1
@@ -149,7 +151,9 @@ class Auth extends Data
         } else {
             \Tina4\Debug::message("Could not generate Secrets folder the code way", TINA4_LOG_NOTICE);
             if (!file_exists($this->documentRoot . "secrets")) {
-                mkdir($this->documentRoot . 'secrets');
+                if (!mkdir($concurrentDirectory = $this->documentRoot . 'secrets') && !is_dir($concurrentDirectory)) {
+                    throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+                }
             }
             `ssh-keygen -t rsa -b 1024 -m PEM -f {$this->documentRoot}secrets/private.key -q -N ""`;
             `chmod 600 {$this->documentRoot}secrets/private.key`;
@@ -194,6 +198,10 @@ class Auth extends Data
             } else {
                 $payLoad["expires"] = time() + TINA4_TOKEN_MINUTES * 60;
             }
+        }
+
+        if (!empty($_SERVER["REQUEST_URI"])) {
+            $payLoad["requestURI"] = $_SERVER["REQUEST_URI"];
         }
 
         $tokenDecoded = new TokenDecoded($payLoad);
