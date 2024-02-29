@@ -24,6 +24,14 @@ function sendRequest (url, request, method, callback) {
         const regex = /formToken=(.*)/gm;
         const subst = `formToken=${formToken}`;
         url = url.replace(regex, subst);
+
+        if (url.indexOf('formToken') === -1) {
+            if (url.indexOf('?') === -1) {
+                url += '?formToken='+formToken;
+            } else {
+                url += '&formToken='+formToken;
+            }
+        }
     }
 
     const xhr = new XMLHttpRequest();
