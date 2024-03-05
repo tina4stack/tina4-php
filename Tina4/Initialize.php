@@ -175,7 +175,12 @@ if (!defined("TINA4_TOKEN_MINUTES")) {
     define("TINA4_TOKEN_MINUTES", 10);
 }
 
-//Initialize Secrets
+// Prevents javascript XSS attacks aimed to steal the session ID
+ini_set('session.cookie_httponly', 1);
+// Prevent Session ID from being passed through  URLs
+ini_set('session.use_only_cookies', 1);
+
+//Initialize Secrets which starts the session
 (new \Tina4\Auth());
 
 if (!defined("TINA4_ALLOW_ORIGINS")) {
@@ -355,10 +360,5 @@ if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
 } else {
     $cache = null;
 }
-
-// Prevents javascript XSS attacks aimed to steal the session ID
-ini_set('session.cookie_httponly', 1);
-// Prevent Session ID from being passed through  URLs
-ini_set('session.use_only_cookies', 1);
 
 //@todo Init Git Here
