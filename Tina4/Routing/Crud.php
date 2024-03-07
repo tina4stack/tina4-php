@@ -198,7 +198,8 @@ class Crud
         );
 
         /**
-         * @description  {$path} CRUD
+         * @description {$path} CRUD
+         * @tags CRUD
          * @no-cache
          */
         Route::post(
