@@ -39,7 +39,10 @@ function sendRequest (url, request, method, callback) {
 
     xhr.onload = function () {
         let content = xhr.response;
-        formToken = xhr.getResponseHeader('freshToken');
+        if (xhr.getResponseHeader('freshToken') !== '' && xhr.getResponseHeader('freshToken') !== null) {
+            formToken = xhr.getResponseHeader('freshToken');
+        }
+
 
         try {
             content = JSON.parse(content);
@@ -159,7 +162,6 @@ function handleHtmlData(data, targetElement) {
  */
 function loadPage(loadURL, targetElement, callback = null) {
     if (targetElement === undefined) targetElement = 'content';
-    console.log('LOADING PAGE', loadURL);
     sendRequest(loadURL, null, "GET", function(data) {
         let processedHTML = '';
         if (document.getElementById(targetElement) !== null) {
