@@ -204,8 +204,8 @@ class Auth extends Data
             }
         }
 
-        if (!empty($_SERVER["REQUEST_URI"])) {
-            $payLoad["requestURI"] = $_SERVER["REQUEST_URI"];
+        if (!empty($_SERVER["HTTP_REFERER"])) {
+            $payLoad["HTTP_REFERER"] = $_SERVER["HTTP_REFERER"];
         }
 
         $tokenDecoded = new TokenDecoded($payLoad);
