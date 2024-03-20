@@ -4880,12 +4880,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4-documentation.git",
-                "reference": "d3c7999021e04cd042e22742bb9614bcd29bfc85"
+                "reference": "967f1160cdb463a8942d4d6a7031ec30e54ae65c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4-documentation/zipball/d3c7999021e04cd042e22742bb9614bcd29bfc85",
-                "reference": "d3c7999021e04cd042e22742bb9614bcd29bfc85",
+                "url": "https://api.github.com/repos/tina4stack/tina4-documentation/zipball/967f1160cdb463a8942d4d6a7031ec30e54ae65c",
+                "reference": "967f1160cdb463a8942d4d6a7031ec30e54ae65c",
                 "shasum": ""
             },
             "require-dev": {
@@ -4915,7 +4915,7 @@
                 "issues": "https://github.com/tina4stack/tina4-documentation/issues",
                 "source": "https://github.com/tina4stack/tina4-documentation/tree/main"
             },
-            "time": "2024-03-20T09:39:11+00:00"
+            "time": "2024-03-20T10:59:32+00:00"
         },
         {
             "name": "tina4stack/tina4php-firebird",
