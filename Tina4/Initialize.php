@@ -161,6 +161,10 @@ if (!defined("TINA4_CACHE_ON")) {
     define("TINA4_CACHE_ON", false);
 }
 
+if (!defined("TINA4_SINGLE_USE_TOKENS")) {
+    define("TINA4_SINGLE_USE_TOKENS", true);
+}
+
 if (TINA4_DEBUG) {
     error_reporting(E_ALL);
 }
