@@ -639,7 +639,6 @@ class Router extends Data
             }
         }
 
-        exit;
         return null;
     }
 
@@ -705,8 +704,6 @@ class Router extends Data
         } else {
             $matching = false;
         }
-
-
 
         return $matching;
     }
