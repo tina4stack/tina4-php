@@ -73,7 +73,7 @@ class GitDeploy
      * Deploying the system from a git repository
      * @return void
      */
-    public function doDeploy()
+    final public function doDeploy(): void
     {
         try {
             //Pull the repository from the git repository
@@ -165,23 +165,27 @@ class GitDeploy
 
             $this->log("Checking for composer");
 
-            if (isWindows()) {
-                $this->downloadFile("https://getcomposer.org/installer", $stagingPath . "/composer-setup.php");
-                `php composer-setup.php`;
-            } else {
-                $this->downloadFile("https://getcomposer.org/installer", $stagingPath . "/composer-setup.php");
-                `php composer-setup.php`;
-            }
-
-            if (file_exists("./composer.phar")) {
-                $composer = "php composer.phar";
-            } else {
-                $composer = $this->getBinPath("composer");
-            }
+            $composer = $this->getBinPath("composer");
 
             if (empty($composer)) {
-                $this->log("Composer could not be downloaded");
-                throw new \Exception("Composer could not be located!");
+                if (isWindows()) {
+                    $this->downloadFile("https://getcomposer.org/installer", $stagingPath . "/composer-setup.php");
+                    `php composer-setup.php`;
+                } else {
+                    $this->downloadFile("https://getcomposer.org/installer", $stagingPath . "/composer-setup.php");
+                    `php composer-setup.php`;
+                }
+
+                if (file_exists("./composer.phar")) {
+                    $composer = "php composer.phar";
+                } else {
+                    $composer = $this->getBinPath("composer");
+                }
+
+                if (empty($composer)) {
+                    $this->log("Composer could not be downloaded");
+                    throw new \Exception("Composer could not be located!");
+                }
             }
 
             $this->log("Running composer install");
@@ -285,6 +289,10 @@ class GitDeploy
      */
     function getBinPath($binary): string
     {
+        if (!empty($_ENV(strtoupper($binary)."_PATH"))) {
+            return $_ENV(strtoupper($binary)."_PATH");
+        }
+
         if (isWindows()) {
             $path = `where {$binary}`;
         } else {
@@ -295,9 +303,9 @@ class GitDeploy
         $this->log("Found $binary at {$path[0]}");
         if (isWindows()) {
             return '"' . $path[0] . '"' ?? "";
-        } else {
-            return $path[0] ?? "";
         }
+
+        return $path[0] ?? "";
     }
 
     /**
