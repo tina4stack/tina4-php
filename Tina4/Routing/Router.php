@@ -40,13 +40,13 @@ class Router extends Data
      */
     final public function addCORS($headers) {
         if (defined("TINA4_ALLOW_ORIGINS")) {
-           if (is_array(TINA4_ALLOW_ORIGINS)) {
-               $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
-           } else {
-               echo "TINA4_ALLOW_ORIGNS must be declared as an array! Example: <pre>TINA4_ALLOW_ORIGINS=['*']</pre>";
-               \Tina4\Debug::message("TINA4_ALLOW_ORIGINS must be an array!" , TINA4_LOG_ERROR);
-               die();
-           }
+            if (is_array(TINA4_ALLOW_ORIGINS)) {
+                $headers[] = ('Access-Control-Allow-Origin: ' . implode(",", TINA4_ALLOW_ORIGINS));
+            } else {
+                echo "TINA4_ALLOW_ORIGNS must be declared as an array! Example: <pre>TINA4_ALLOW_ORIGINS=['*']</pre>";
+                \Tina4\Debug::message("TINA4_ALLOW_ORIGINS must be an array!" , TINA4_LOG_ERROR);
+                die();
+            }
         }
 
         $headers[] = ('Vary: Origin');
@@ -555,20 +555,20 @@ class Router extends Data
                         }
                     }
                 }
-                  else
-                if ($route["cached"] && empty($result)) {
-                    $cacheResult = $this->getCacheResponse($url.$method);
-                    if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
-                        Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
-                        return new RouterResponse(
-                            $cacheResult["content"],
-                            $cacheResult["httpCode"],
-                            array_merge($cacheResult["headers"], $headers),
-                            false,
-                            $cacheResult["contentType"]
-                        );
+                else
+                    if ($route["cached"] && empty($result)) {
+                        $cacheResult = $this->getCacheResponse($url.$method);
+                        if ($cacheResult !== null && $url !== "/cache/clear" && $url !== "/migrate" && $url !== "/migrate/create") {
+                            Debug::message("$this->GUID Got cached result for $url", TINA4_LOG_DEBUG);
+                            return new RouterResponse(
+                                $cacheResult["content"],
+                                $cacheResult["httpCode"],
+                                array_merge($cacheResult["headers"], $headers),
+                                false,
+                                $cacheResult["contentType"]
+                            );
+                        }
                     }
-                }
 
                 if ($result === null) {
                     if (isset($_REQUEST["formToken"]) && in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
@@ -638,6 +638,7 @@ class Router extends Data
                 break;
             }
         }
+
         return null;
     }
 
@@ -649,8 +650,27 @@ class Router extends Data
      */
     public function matchPath($url, $routePath): bool
     {
+        //We don't need to bother going further in the matching routine for these basic rules
+        if ($url === "/" && $routePath === "/") {
+            return true;
+        }
+
+        if ($routePath === "/" && $routePath !== $url) {
+            return false;
+        }
+
+        //Add trailing slashes for regex pattern to work properly
         $url .= "/";
         $routePath .= "/";
+
+        $urlPrecheck = explode("/", $url);
+        $routePathPrecheck = explode("/", $url);
+
+        //if counts do not match then why bother going further
+        if (count($urlPrecheck) !== count($routePathPrecheck)) {
+            Debug::message("$this->GUID NO MATCH {$url} -> {$routePath}", TINA4_LOG_DEBUG);
+            return false;
+        }
 
         Debug::message("$this->GUID Matching {$url} -> {$routePath}", TINA4_LOG_DEBUG);
         preg_match_all($this->pathMatchExpression, $url, $matchesPath);
@@ -659,9 +679,6 @@ class Router extends Data
         $variables = [];
         $this->params = [];
 
-        if ($url !== $routePath && count($matchesPath[1]) === count($matchesRoute[1]) && count($matchesPath[1]) === 2) {
-            return false;
-        }
 
         if (count($matchesPath[1]) === count($matchesRoute[1])) {
             foreach ($matchesPath[1] as $rid => $matchPath) {

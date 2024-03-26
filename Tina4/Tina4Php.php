@@ -29,7 +29,6 @@ class Tina4Php extends Data
             $config = new Config();
         }
 
-
         //Get all the include folders
         if (!defined("TINA4_TEMPLATE_LOCATIONS_INTERNAL")) {
             if (defined("TINA4_TEMPLATE_LOCATIONS")) {
@@ -335,8 +334,6 @@ class Tina4Php extends Data
         }
     }
 
-
-
     /**
      * @throws \Twig\Error\SyntaxError
      * @throws \Psr\Cache\InvalidArgumentException
@@ -360,7 +357,7 @@ class Tina4Php extends Data
         $content = "";
         if ($routerResponse !== null) {
             if (!headers_sent()) {
-                if ($routerResponse->httpCode !== HTTP_FORBIDDEN) {
+                if ($routerResponse->httpCode === HTTP_OK) {
                     foreach ($routerResponse->headers as $hid => $header) {
                             header($header);    
                     }

@@ -26,7 +26,7 @@ class Auth extends Data
      * The path where the website is served from
      * @var string
      */
-    public $documentRoot;
+    public string $documentRoot;
     /**
      * Is the authentication configured, so it only runs once in a page load
      * @var bool
@@ -205,7 +205,19 @@ class Auth extends Data
         }
 
         if (!empty($_SERVER["HTTP_REFERER"])) {
-            $payLoad["HTTP_REFERER"] = $_SERVER["HTTP_REFERER"];
+            $payLoad["httpReferer"] = $_SERVER["HTTP_REFERER"];
+        }
+
+        if (!empty($_SERVER["REQUEST_URI"])) {
+            $url = explode("?", $_SERVER["REQUEST_URI"]);
+            if (isset($url[0])) {
+                if (empty($payLoad["payload"])) {
+                    $payLoad["payload"] = $url[0];
+                }
+                $payLoad["requestURI"] = $url[0];
+            } else {
+                $payLoad["requestURI"] = $_SERVER["REQUEST_URI"];
+            }
         }
 
         $tokenDecoded = new TokenDecoded($payLoad);

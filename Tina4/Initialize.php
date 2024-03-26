@@ -161,6 +161,10 @@ if (!defined("TINA4_CACHE_ON")) {
     define("TINA4_CACHE_ON", false);
 }
 
+if (!defined("TINA4_SINGLE_USE_TOKENS")) {
+    define("TINA4_SINGLE_USE_TOKENS", true);
+}
+
 if (TINA4_DEBUG) {
     error_reporting(E_ALL);
 }
@@ -308,14 +312,6 @@ if (TINA4_PROJECT_ROOT !== TINA4_DOCUMENT_ROOT) {
         \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . "tina4php-core". DIRECTORY_SEPARATOR . "bin", TINA4_DOCUMENT_ROOT . "bin");
     }
 }
-
-//Add the icon file for making it look pretty""
-if (!file_exists(TINA4_DOCUMENT_ROOT . "favicon.ico")) {
-    if (file_exists(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico")) {
-        copy(TINA4_PROJECT_ROOT. DIRECTORY_SEPARATOR. "tina4php" . DIRECTORY_SEPARATOR . "favicon.ico", TINA4_DOCUMENT_ROOT . "favicon.ico");
-    }
-}
-
 
 //On a rerun need to check if we have already instantiated the cache
 if (!function_exists("createCache")) {
