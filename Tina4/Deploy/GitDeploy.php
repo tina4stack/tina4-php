@@ -253,30 +253,39 @@ class GitDeploy
     }
 
     /**
+     * Deletes a directory
+     * @param $dirPath
+     * @return void
+     */
+    final function deleteDirectory($dirPath) {
+        $files = glob($dirPath . '/*');
+        foreach ($files as $file) {
+            if (is_dir($file)) {
+                deleteDirectory($file);
+            } else {
+                unlink($file);
+            }
+        }
+        rmdir($dirPath);
+    }
+
+    /**
      * Deletes all folders and files under a path / directory
-     * @param $path
-     * @param $makeDir
+     * @param string $path
+     * @param bool $makeDir
      * @return bool
      */
-
-    function cleanPath($path, $makeDir = false): bool
+    final public function cleanPath($path, $makeDir = false): bool
     {
         $this->log("Deleting all files and folders under {$path}");
-        if (!is_dir($path)) {
-            if ($makeDir) {
-                `mkdir {$path}`;
-            }
-            return false;
-        }
 
-        if (isWindows()) {
-            `rmdir /s /q {$path}`;
-        } else {
-            `rm -Rf {$path}`;
-        }
+        $this->deleteDirectory($path);
 
         if ($makeDir) {
-            `mkdir {$path}`;
+            if (!mkdir($path) && !is_dir($path)) {
+                $this->log("Could not make directory {$path}");
+                return false;
+            }
         }
 
         return !is_dir($path);
@@ -284,10 +293,10 @@ class GitDeploy
 
     /**
      * Gets the path to the binary
-     * @param $binary
+     * @param string $binary
      * @return string
      */
-    function getBinPath($binary): string
+    final public function getBinPath(string $binary): string
     {
         if (!empty($_ENV(strtoupper($binary)."_PATH"))) {
             return $_ENV(strtoupper($binary)."_PATH");
