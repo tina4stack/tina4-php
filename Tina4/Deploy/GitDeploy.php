@@ -2,6 +2,7 @@
 
 namespace Tina4;
 
+use FilesystemIterator;
 use function PHPUnit\Framework\throwException;
 
 
@@ -257,13 +258,18 @@ class GitDeploy
      * @param $dirPath
      * @return void
      */
-    final function deleteDirectory($dirPath) {
-        $files = glob($dirPath . '/*');
-        foreach ($files as $file) {
-            if (is_dir($file)) {
-                deleteDirectory($file);
+    final public function deleteDirectory(string $dirPath):void
+    {
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dirPath,
+                \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $file) {
+            if ($file->isDir()) {
+                rmdir($file->getPathname());
             } else {
-                unlink($file);
+                unlink($file->getPathname());
             }
         }
         rmdir($dirPath);
@@ -298,8 +304,8 @@ class GitDeploy
      */
     final public function getBinPath(string $binary): string
     {
-        if (!empty($_ENV(strtoupper($binary)."_PATH"))) {
-            return $_ENV(strtoupper($binary)."_PATH");
+        if (!empty($_ENV[strtoupper($binary)."_PATH"])) {
+            return $_ENV[strtoupper($binary)."_PATH"];
         }
 
         if (isWindows()) {
