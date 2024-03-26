@@ -260,19 +260,22 @@ class GitDeploy
      */
     final public function deleteDirectory(string $dirPath):void
     {
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dirPath,
-                \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $file) {
-            if ($file->isDir()) {
-                rmdir($file->getPathname());
-            } else {
-                unlink($file->getPathname());
+        if (file_exists($dirPath))
+        {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dirPath,
+                    \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($iterator as $file) {
+                if ($file->isDir()) {
+                    rmdir($file->getPathname());
+                } else {
+                    unlink($file->getPathname());
+                }
             }
+            rmdir($dirPath);
         }
-        rmdir($dirPath);
     }
 
     /**
