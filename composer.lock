@@ -7,6 +7,56 @@
     "content-hash": "c06ae9fffcb393f6125abb9e06c84e43",
     "packages": [
         {
+            "name": "cesargb/php-log-rotation",
+            "version": "2.7.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/cesargb/php-log-rotation.git",
+                "reference": "bb54f44bba4c4d1b31f8621701595797f2d1b1cf"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/cesargb/php-log-rotation/zipball/bb54f44bba4c4d1b31f8621701595797f2d1b1cf",
+                "reference": "bb54f44bba4c4d1b31f8621701595797f2d1b1cf",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.0"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^1.9",
+                "phpunit/phpunit": "^9.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Cesargb\\Log\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Cesar Garcia",
+                    "email": "cesargb@gmail.com"
+                }
+            ],
+            "description": "PHP Class to rotate log files",
+            "homepage": "https://github.com/cesargb/php-log-rotation",
+            "keywords": [
+                "log",
+                "php",
+                "rotation"
+            ],
+            "support": {
+                "issues": "https://github.com/cesargb/php-log-rotation/issues",
+                "source": "https://github.com/cesargb/php-log-rotation/tree/2.7.1"
+            },
+            "time": "2023-01-15T14:07:52+00:00"
+        },
+        {
             "name": "coyl/git",
             "version": "0.1.7",
             "source": {
@@ -795,19 +845,20 @@
         },
         {
             "name": "tina4stack/tina4php-debug",
-            "version": "v2.0.9",
+            "version": "v2.0.10",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-debug.git",
-                "reference": "53fd58e47a7a36776c01c96979d342490b88c9a1"
+                "reference": "88b014c6edaf8dd3860f7700e07e2d6c56d28d17"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/53fd58e47a7a36776c01c96979d342490b88c9a1",
-                "reference": "53fd58e47a7a36776c01c96979d342490b88c9a1",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/88b014c6edaf8dd3860f7700e07e2d6c56d28d17",
+                "reference": "88b014c6edaf8dd3860f7700e07e2d6c56d28d17",
                 "shasum": ""
             },
             "require": {
+                "cesargb/php-log-rotation": "^2.7",
                 "psr/log": "^1.1",
                 "twig/twig": "^3.3"
             },
@@ -837,9 +888,9 @@
             "description": "Tina4 PHP Debug Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-debug/issues",
-                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.9"
+                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.10"
             },
-            "time": "2024-03-20T07:32:24+00:00"
+            "time": "2024-03-21T01:35:21+00:00"
         },
         {
             "name": "tina4stack/tina4php-env",
@@ -2284,12 +2335,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/Roave/SecurityAdvisories.git",
-                "reference": "a93bfa3d635bfaf71fa8c459a6df6278c5cdb9e8"
+                "reference": "1054e91fea643e960a73f15090d987d99a1b1190"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/a93bfa3d635bfaf71fa8c459a6df6278c5cdb9e8",
-                "reference": "a93bfa3d635bfaf71fa8c459a6df6278c5cdb9e8",
+                "url": "https://api.github.com/repos/Roave/SecurityAdvisories/zipball/1054e91fea643e960a73f15090d987d99a1b1190",
+                "reference": "1054e91fea643e960a73f15090d987d99a1b1190",
                 "shasum": ""
             },
             "conflict": {
@@ -2435,7 +2486,7 @@
                 "ezsystems/ezplatform-admin-ui": ">=1.3,<1.3.5|>=1.4,<1.4.6|>=1.5,<1.5.29|>=2.3,<2.3.26",
                 "ezsystems/ezplatform-admin-ui-assets": ">=4,<4.2.1|>=5,<5.0.1|>=5.1,<5.1.1",
                 "ezsystems/ezplatform-graphql": ">=1.0.0.0-RC1-dev,<1.0.13|>=2.0.0.0-beta1,<2.3.12",
-                "ezsystems/ezplatform-kernel": "<1.2.5.1-dev|>=1.3,<1.3.34",
+                "ezsystems/ezplatform-kernel": "<1.2.5.1-dev|>=1.3,<1.3.35",
                 "ezsystems/ezplatform-rest": ">=1.2,<=1.2.2|>=1.3,<1.3.8",
                 "ezsystems/ezplatform-richtext": ">=2.3,<2.3.7.1-dev",
                 "ezsystems/ezplatform-solr-search-engine": ">=1.7,<1.7.12|>=2,<2.0.2|>=3.3,<3.3.15",
@@ -2509,7 +2560,7 @@
                 "httpsoft/http-message": "<1.0.12",
                 "hyn/multi-tenant": ">=5.6,<5.7.2",
                 "ibexa/admin-ui": ">=4.2,<4.2.3",
-                "ibexa/core": ">=4,<4.0.7|>=4.1,<4.1.4|>=4.2,<4.2.3|>=4.5,<4.5.4",
+                "ibexa/core": ">=4,<4.0.7|>=4.1,<4.1.4|>=4.2,<4.2.3|>=4.5,<4.5.6|>=4.6,<4.6.2",
                 "ibexa/graphql": ">=2.5,<2.5.31|>=3.3,<3.3.28|>=4.2,<4.2.3",
                 "ibexa/post-install": "<=1.0.4",
                 "ibexa/solr": ">=4.5,<4.5.4",
@@ -2577,7 +2628,7 @@
                 "liftkit/database": "<2.13.2",
                 "limesurvey/limesurvey": "<3.27.19",
                 "livehelperchat/livehelperchat": "<=3.91",
-                "livewire/livewire": ">2.2.4,<2.2.6",
+                "livewire/livewire": ">2.2.4,<2.2.6|>=3.3.5,<3.4.9",
                 "lms/routes": "<2.1.1",
                 "localizationteam/l10nmgr": "<7.4|>=8,<8.7|>=9,<9.2",
                 "luyadev/yii-helpers": "<1.2.1",
@@ -3018,7 +3069,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-03-18T21:04:52+00:00"
+            "time": "2024-03-20T19:04:14+00:00"
         },
         {
             "name": "sebastian/cli-parser",

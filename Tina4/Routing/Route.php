@@ -47,8 +47,20 @@ class Route implements RouteCore
     {
         global $arrRoutes;
         $originalRoute = $routePath;
-//pipe is an or operator for the routing which will allow multiple routes for one anonymous function
+        //pipe is an or operator for the routing which will allow multiple routes for one anonymous function
+        //find the ignore routes
+        $ignoreRoutes = explode("~~", $routePath."~~");
+
+        $ignoreRoutePaths = [];
+        if (count($ignoreRoutes) > 1)
+        {
+            $ignorePath = $ignoreRoutes[1]."|";
+            $ignoreRoutePaths = explode("|", $ignorePath);
+        }
+        //find the normal routes
+        $routePath = $ignoreRoutes[0];
         $routePath .= "|";
+
         $routes = explode("|", $routePath);
         foreach ($routes as $rid => $routePathLoop) {
             if ($routePathLoop !== "") {
@@ -65,7 +77,7 @@ class Route implements RouteCore
                     $method = $function[1];
                 }
 
-                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest];
+                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest, "ignoreRoutes" => $ignoreRoutePaths];
             }
         }
 
@@ -149,7 +161,7 @@ class Route implements RouteCore
     /***
      * Adds a method to the global routing table for middleware to be run
      * @param array $functionNames
-     * @return array
+     * @return void
      */
     public static function middleware(array $functionNames): void
     {

@@ -409,11 +409,10 @@ class Router extends Data
         $headers = $this->addCORS($headers); //Adding CORS headers on response
 
         //iterate through the routes
-
         foreach ($arrRoutes as $rid => $route) {
             $result = null;
             Debug::message("$this->GUID Method match {$method} -> {$route["method"]}", TINA4_LOG_DEBUG);
-            if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"])) {
+            if (($route["method"] === $method || $route["method"] === TINA4_ANY) && $this->matchPath($url, $route["routePath"], $route["ignoreRoutes"] ?? [])) {
                 if (!empty($route["class"])) {
                     $reflectionClass = new \ReflectionClass($route["class"]);
                     $reflection = $reflectionClass->getMethod($route["function"]);
@@ -646,10 +645,16 @@ class Router extends Data
      * Match path
      * @param $url
      * @param $routePath
+     * @param $ignoreRoutes
      * @return bool
      */
-    public function matchPath($url, $routePath): bool
+    public function matchPath($url, $routePath, $ignoreRoutes): bool
     {
+        //if we have an ignore route we can return false
+        if (in_array($url, $ignoreRoutes)) {
+            return false;
+        }
+
         //We don't need to bother going further in the matching routine for these basic rules
         if ($url === "/" && $routePath === "/") {
             return true;
