@@ -132,6 +132,7 @@ class Migration extends Data
         restore_error_handler();
         error_reporting(0);
 
+        //Reads all the sql files into a fileArray
         $fileArray = [];
         while (false !== ($entry = readdir($dirHandle)) && !$error) {
             if ($entry != "." && $entry != ".." && stripos($entry, ".sql")) {

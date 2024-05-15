@@ -357,10 +357,11 @@ class Tina4Php extends Data
         $content = "";
         if ($routerResponse !== null) {
             if (!headers_sent()) {
-                if ($routerResponse->httpCode === HTTP_OK) {
-                    foreach ($routerResponse->headers as $hid => $header) {
-                            header($header);    
+                foreach ($routerResponse->headers as $header) {
+                    if ($routerResponse->httpCode !== HTTP_OK && strpos($header, "FreshToken") !== false) {
+                        continue;
                     }
+                    header($header);
                 }
             }
             http_response_code($routerResponse->httpCode);
