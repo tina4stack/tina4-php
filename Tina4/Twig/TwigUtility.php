@@ -36,7 +36,7 @@ class TwigUtility
                 $twigPaths = ["cache", "src" . DIRECTORY_SEPARATOR . "templates", "src" . DIRECTORY_SEPARATOR . "public", "src" . DIRECTORY_SEPARATOR . "assets", "src" . DIRECTORY_SEPARATOR . "templates" . DIRECTORY_SEPARATOR . "snippets"];
             }
 
-            Debug::message("TINA4: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_LOG_DEBUG);
+            Debug::message("TINA: Twig Paths - " . str_replace("\n", "", print_r($twigPaths, 1)), TINA4_LOG_DEBUG);
 
             foreach ($twigPaths as $tid => $twigPath) {
                 if (!is_array($twigPath) && !file_exists($twigPath) && !file_exists(str_replace(DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, TINA4_DOCUMENT_ROOT . $twigPath))) {
@@ -139,7 +139,7 @@ class TwigUtility
 
                 $filter = new TwigFilter("formToken", static function ($payload) use ($auth) {
                     if (!empty($_SERVER) && isset($_SERVER["REMOTE_ADDR"])) {
-                        return _input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "";
+                        return new \Twig\Markup(_input(["type" => "hidden", "name" => "formToken", "value" => $auth->getToken(["formName" => $payload])]) . "", "UTF-8");
                     }
 
                     return "";

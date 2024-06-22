@@ -79,3 +79,4 @@ test.db
 /src/public/images/test/
 /log/deploy.log
 /bin/tina4
+/src/templates/index.twig

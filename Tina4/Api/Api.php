@@ -46,7 +46,7 @@ class Api
 
     /**
      * API constructor.
-     * @param ?string $baseURL
+     * @param string|null $baseURL
      * @param string $authHeader Example - Authorization: Bearer AFD-22323-FD
      * @tests tina4
      *   assert ("https://the-one-api.dev/v2", "Authorization: Bearer 123456") === null,"Could not initialize API"
