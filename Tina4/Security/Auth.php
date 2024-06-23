@@ -256,7 +256,12 @@ class Auth extends Data
      */
     public function validToken(string $token, string $publicKey = "", string $encryption = JWT::ALGORITHM_RS256): bool
     {
-        Debug::message("Validating token");
+        Debug::message("Validating token", TINA4_LOG_DEBUG);
+
+        if (isset($_ENV["API_KEY"]) && trim(str_ireplace("bearer", "", $token)) === $_ENV["API_KEY"]) {
+            Debug::message("Using generic .env API_KEY token", TINA4_LOG_WARNING);
+            return true;
+        }
 
         if (!empty($publicKey)) {
             $this->publicKey = $publicKey;

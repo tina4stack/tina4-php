@@ -95,9 +95,13 @@ class Swagger implements \JsonSerializable
                     } elseif ($matches[1] === "@queryParams" || $matches[1] === "@params") {
                         $queryParams = explode(",", $matches[2]);
                     } elseif ($matches[1] === "@example") {
+
+
                         $this->ormObjects[] = trim(str_replace("\n", "", "\\" . $matches[2]));
                         $example = [];
                         $className = trim(str_replace("\n", "", "\\" . $matches[2]));
+
+
                         if (class_exists($className)) {
                             $exampleObject = (new $className);
 
@@ -115,9 +119,15 @@ class Swagger implements \JsonSerializable
                                 $example["data"] = (object)json_decode(json_encode($exampleObject));
                                 $example["properties"] = (object)[];
                             }
+                        } else {
+                            $className = substr($className, 1);
+                            $example["data"] = json_decode($className);
+                            $example["properties"] = (object)[];
                         }
 
-                    } elseif ($matches[1] === "@secure") {
+                    }
+
+                    if ($matches[1] === "@secure" || $method != "GET") {
                         $security[] = (object)["bearerAuth" => []];
                     }
                 }
