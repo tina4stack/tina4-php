@@ -128,7 +128,7 @@ class Swagger implements \JsonSerializable
                     }
 
                     if ($matches[1] === "@secure" || $method != "GET") {
-                        $security[] = (object)["bearerAuth" => []];
+                        $security = [(object)["bearerAuth" => []]];
                     }
                 }
             }
@@ -137,12 +137,9 @@ class Swagger implements \JsonSerializable
                 $summary = $description;
             }
 
-
             $arguments = $reflection->getParameters();
-
             $params = json_decode(json_encode($arguments));
             $params = array_merge($params, $addParams);
-
 
             $propertyIn = "in";
             $propertyType = "type";
@@ -158,14 +155,10 @@ class Swagger implements \JsonSerializable
                     $params[$pid]->{$propertyType} = "string";
                 }
 
-
                 if ($params[$pid]->name === "response" || $params[$pid]->name === "request") {
                     unset($params[$pid]);
                 }
-
-
             }
-
 
             foreach ($queryParams as $pid => $param) {
                 $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string"];
@@ -173,7 +166,6 @@ class Swagger implements \JsonSerializable
             }
 
             $params = json_decode(json_encode(array_values($params)));
-
 
             if ($description !== "None") {
                 if ($method === "any") {
@@ -200,15 +192,12 @@ class Swagger implements \JsonSerializable
                         ])
                     ];
                 } else {
-                    $response = [];
-
                     if ($method === "get" && !empty($example)) {
-                        if (is_array($example) && !empty($example)) {
+                        if (is_array($example)) {
                             $schema = (object)["type" => "object", "properties" => $example["properties"], "example" => $example["data"]];
                         } else {
                             $schema = (object)["type" => "object", "example" => $example];
                         }
-
 
                         $responseContent = (object)["application/json" => $schema];
                         $response = (object)[
@@ -248,6 +237,7 @@ class Swagger implements \JsonSerializable
 
     /**
      * Get Swagger Entry
+     * @param $method
      * @param $tags
      * @param $summary
      * @param $description
@@ -260,7 +250,6 @@ class Swagger implements \JsonSerializable
      */
     public function getSwaggerEntry($method, $tags, $summary, $description, $produces, $security, $params, $example, $responses): object
     {
-
         if (is_array($example) && !empty($example)) {
             $schema = (object)["type" => "object", "properties" => $example["properties"], "example" => $example["data"]];
         } else {

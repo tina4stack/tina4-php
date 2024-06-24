@@ -267,7 +267,7 @@ class Tina4Php extends Data
                 define("SWAGGER_DESCRIPTION", "Please declare in your .env values for SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION");
                 define("SWAGGER_VERSION", "1.0.0");
             }
-            return $response($tina4Php->getSwagger(SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION));
+            return $response($tina4Php->getSwagger(SWAGGER_TITLE, SWAGGER_DESCRIPTION, SWAGGER_VERSION), HTTP_OK, APPLICATION_JSON);
         });
     }
 
