@@ -722,7 +722,7 @@ class Router extends Data
      */
     public function getParams($response, $inlineToRequest = null, $customRequest=null): array
     {
-        $request = new Request(file_get_contents("php://input"), $customRequest);
+        $request = new Request(@file_get_contents("php://input"), $customRequest); //added @ to ignore warnings so the router does not break
 
         if ($inlineToRequest) { //Pull the inlineParams into the request by resetting the params
             $request->inlineParams = $this->params;
