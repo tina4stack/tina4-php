@@ -83,9 +83,6 @@ class Swagger implements \JsonSerializable
             $description = "None";
             $tags = [];
             $queryParams = [];
-
-
-            $addParams = [];
             $security = [];
             $example = null;
             foreach ($annotations as $annotationName => $annotationValue) {
@@ -152,14 +149,17 @@ class Swagger implements \JsonSerializable
                 $summary = $description;
             }
 
-            $arguments = $reflection->getParameters();
-            $params = json_decode(json_encode($arguments));
-            $params = array_merge($params, $addParams);
+            $regEx = '/\{(.*)\}/mU';
+            preg_match_all($regEx, $route["routePath"], $matches, PREG_SET_ORDER, 0);
+            $params = [];
 
             $propertyIn = "in";
             $propertyType = "type";
             $propertyName = "name";
 
+            foreach ($matches as $match) {
+                $params[] = (object)[ $propertyName => $match[1]];
+            }
 
             foreach ($params as $pid => $param) {
                 if (!isset($params[$pid]->{$propertyIn})) {
