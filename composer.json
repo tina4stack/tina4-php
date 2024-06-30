@@ -81,7 +81,6 @@
         "overtrue/phplint": "^2.0",
         "tina4stack/tina4php-sqlite3": "^2.0",
         "phpmetrics/phpmetrics": "^2.8",
-        "tina4stack/tina4php-reports": "dev-main",
-        "tina4stack/tina4-documentation": "dev-main"
+        "tina4stack/tina4php-reports": "dev-main"
     }
 }

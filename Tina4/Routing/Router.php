@@ -135,14 +135,6 @@ class Router extends Data
         Debug::message("$this->GUID URL Last Resort {$method} - {$url}", TINA4_LOG_DEBUG);
         $parseFile = new ParseTemplate($url, "", $this->GUID);
 
-        //TRY FIND THE TINA4 DOCUMENTATION
-        if (TINA4_DEBUG) {
-            if (empty($parseFile->content) && $parseFile->httpCode === HTTP_NOT_FOUND && $url === "/index") {
-                $url = "documentation/index";
-                $parseFile = new ParseTemplate($url, "", $this->GUID);
-            }
-        }
-
         //Caching of templates
         if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON) {
             $this->createCacheResponse($url, $parseFile->httpCode, $parseFile->content, $this->addCORS($parseFile->headers), $parseFile->fileName, TEXT_HTML);
@@ -706,8 +698,6 @@ class Router extends Data
         if ($matching) {
             Debug::message("$this->GUID Matching {$url} with {$routePath}", TINA4_LOG_DEBUG);
             $this->params = $variables;
-        } else {
-            $matching = false;
         }
 
         return $matching;

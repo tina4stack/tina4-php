@@ -20,15 +20,18 @@ class Route implements RouteCore
     public static $method;
 
 
+    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
+
     /**
-     * Get route
-     * @param string $routePath
-     * @param $function
+     * Clean URL by splitting string at "?" to get actual URL
+     * @param string $url URL to be cleaned that may contain "?"
+     * @return mixed Part of the URL before the "?" if it existed
      */
-    public static function get(string $routePath, $function): void
+    public static function cleanURL(string $url): string
     {
-        self::$method = TINA4_GET;
-        self::add($routePath, $function, true);
+        $url = explode("?", $url, 2);
+        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
+        return str_replace("//", "/", $url[0]);
     }
 
     /**
@@ -40,10 +43,11 @@ class Route implements RouteCore
      * @param \Closure|Mixed $function An anonymous function to handle the route called, has params based on inline params and $response, $request params by default
      * @param bool $inlineParamsToRequest
      * @param bool $secure
+     * @param bool $cached
+     * @param null $caller
      * @return Route
-     * @example "api/tests.php"
      */
-    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false): Route
+    public static function add(string $routePath, $function, bool $inlineParamsToRequest = false, bool $secure = false, bool $cached = false, $caller=null): Route
     {
         global $arrRoutes;
         $originalRoute = $routePath;
@@ -77,25 +81,30 @@ class Route implements RouteCore
                     $method = $function[1];
                 }
 
-                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute, "inlineParamsToRequest" => $inlineParamsToRequest, "ignoreRoutes" => $ignoreRoutePaths];
+                if (empty($caller)) {
+                    list(, $caller) = debug_backtrace(false);
+                }
+
+                $arrRoutes[] = ["routePath" => $routePathLoop, "method" => static::$method, "function" => $method, "class" => $class, "originalRoute" => $originalRoute,
+                    "inlineParamsToRequest" => $inlineParamsToRequest, "ignoreRoutes" => $ignoreRoutePaths, "secure" => $secure, "cached" => $cached,
+                    "caller" => $caller];
             }
         }
 
         return new static;
     }
 
-    //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
-
     /**
-     * Clean URL by splitting string at "?" to get actual URL
-     * @param string $url URL to be cleaned that may contain "?"
-     * @return mixed Part of the URL before the "?" if it existed
+     * Get route
+     * @param string $routePath
+     * @param $function
+     * @return Route
      */
-    public static function cleanURL(string $url): string
+    public static function get(string $routePath, $function): Route
     {
-        $url = explode("?", $url, 2);
-        $url[0] = str_replace(TINA4_SUB_FOLDER, "/", $url[0]);
-        return str_replace("//", "/", $url[0]);
+        self::$method = TINA4_GET;
+        list(, $caller) = debug_backtrace(false);
+        return self::add($routePath, $function, true, false, false, $caller);
     }
 
     /**
@@ -107,7 +116,8 @@ class Route implements RouteCore
     public static function put(string $routePath, $function): Route
     {
         self::$method = TINA4_PUT;
-        return self::add($routePath, $function, true);
+        list(, $caller) = debug_backtrace(false);
+        return self::add($routePath, $function, true, false, false, $caller);
     }
 
     /**
@@ -119,7 +129,8 @@ class Route implements RouteCore
     public static function post(string $routePath, $function): Route
     {
         self::$method = TINA4_POST;
-        return self::add($routePath, $function, true);
+        list(, $caller) = debug_backtrace(false);
+        return self::add($routePath, $function, true, false, false, $caller);
     }
 
     /**
@@ -131,7 +142,8 @@ class Route implements RouteCore
     public static function patch(string $routePath, $function): Route
     {
         self::$method = TINA4_PATCH;
-        return self::add($routePath, $function, true);
+        list(, $caller) = debug_backtrace(false);
+        return self::add($routePath, $function, true, false, false, $caller);
     }
 
     /**
@@ -143,7 +155,8 @@ class Route implements RouteCore
     public static function delete(string $routePath, $function): Route
     {
         self::$method = TINA4_DELETE;
-        return self::add($routePath, $function, true);
+        list(, $caller) = debug_backtrace(false);
+        return self::add($routePath, $function, true, false, false, $caller);
     }
 
     /**
@@ -155,38 +168,68 @@ class Route implements RouteCore
     public static function any(string $routePath, $function): Route
     {
         self::$method = TINA4_ANY;
-        return self::add($routePath, $function, true);
+        list(, $caller) = debug_backtrace(false);
+        return self::add($routePath, $function, true, false, false, $caller);
     }
 
     /***
      * Adds a method to the global routing table for middleware to be run
      * @param array $functionNames
-     * @return void
+     * @return Route
      */
-    public static function middleware(array $functionNames): void
+    public static function middleware(array $functionNames): Route
     {
         global $arrRoutes;
         $arrRoutes[sizeof($arrRoutes)-1]["middleware"] = $functionNames;
+        return new static;
     }
 
 
     /**
      * No cached route
+     * @param bool $default
      * @return void
      */
-    public static function noCache(): void
+    public static function noCache(bool $default=false): Route
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = false;
+        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = $default;
+        return new static;
     }
 
     /**
      * Cache route
+     * @param bool $default
      * @return void
      */
-    public static function cache(): void
+    public static function cache(bool $default=true): Route
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = true;
+        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = $default;
+        return new static;
+    }
+
+    /**
+     * Secure route
+     * @param bool $default
+     * @return void
+     */
+    public static function secure(bool $default=true): Route
+    {
+        global $arrRoutes;
+        $arrRoutes[sizeof($arrRoutes)-1]["secure"] = $default;
+        return new static;
+    }
+
+    /**
+     * Add caller
+     */
+    public static function caller($caller=null): Route
+    {
+        global $arrRoutes;
+        if (!empty($caller)) {
+            $arrRoutes[sizeof($arrRoutes) - 1]["caller"] = $caller;
+        }
+        return new static;
     }
 }

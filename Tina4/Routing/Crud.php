@@ -177,16 +177,17 @@ class Crud
      * @param ORM $object
      * @param $function
      * @param bool $secure
-     * @params $secure
+     * @param bool $cached
      */
-    public static function route($path, ORM $object, $function, $secure = false): void
+    public static function route($path, ORM $object, $function, bool $secure = false, bool $cached = false): void
     {
+        list(, $caller) = debug_backtrace(false);
+
         //What if the path has ids in it ? /store/{id}/{hash}
         /**
-         * @description  {$path} CRUD
-         * @tags CRUD
-         * @secure
-         * @no-cache
+         * @description  {description} for {path}
+         * @summary Get all for {path}
+         * @tags {tags}
          */
         Route::get(
             $path . "/form",
@@ -195,12 +196,15 @@ class Crud
 
                 return $response($htmlResult, HTTP_OK);
             }
-        );
+        )
+        ->secure($secure)
+        ->cache($cached);
 
         /**
-         * @description {$path} CRUD
-         * @tags CRUD
-         * @no-cache
+         * @description  {description} for {path}
+         * @summary Post for {path}
+         * @tags {tags}
+         * @example {example}
          */
         Route::post(
             $path,
@@ -220,13 +224,13 @@ class Crud
 
                 return $response($jsonResult, HTTP_OK);
             }
-        );
+        )->secure($secure)
+        ->cache($cached);
 
         /**
-         * @description  {$path} CRUD
-         * @tags CRUD
-         * @secure
-         * @no-cache
+         * @description  {description} for {path}
+         * @summary Get for {path}
+         * @tags {tags}
          */
         Route::get(
             $path,
@@ -236,14 +240,15 @@ class Crud
 
                 return $response($jsonResult, HTTP_OK);
             }
-        );
+        )->secure($secure)
+            ->cache($cached);
 
 
         /**
-         * @description  {$path} CRUD
-         * @tags CRUD
-         * @secure
-         * @no-cache
+         * @description  {description} for {path}
+         * @summary Get by Id for {path}
+         * @tags {tags}
+         * @example {example}
          */
         Route::get(
             $path . "/{id}",
@@ -257,13 +262,14 @@ class Crud
 
                 return $response($jsonResult, HTTP_OK);
             }
-        );
+        )->secure($secure)
+            ->cache($cached);
 
         /**
-         * @description  {$path} CRUD
-         * @tags CRUD
-         * @secure
-         * @no-cache
+         * @description  {description} for {path}
+         * @summary Post for Id for {path}
+         * @tags {tags}
+         * @example {example}
          */
         Route::post(
             $path . "/{id}",
@@ -281,13 +287,13 @@ class Crud
 
                 return $response($jsonResult, HTTP_OK);
             }
-        );
+        )->secure($secure)
+            ->cache($cached);
 
         /**
-         * @description  {$path} CRUD
-         * @tags CRUD
-         * @secure
-         * @no-cache
+         * @description  {description} for {path}
+         * @summary Delete by Id for {path}
+         * @tags {tags}
          */
         Route::delete(
             $path . "/{id}",
@@ -305,7 +311,8 @@ class Crud
 
                 return $response($jsonResult, HTTP_OK);
             }
-        );
+        )->secure($secure)
+            ->cache($cached);
     }
 
     /**
