@@ -58,12 +58,12 @@ function sendRequest (url, request, method, callback) {
 
 /**
  * Gets form data based on a form Id
- * @param formName
+ * @param formId
  * @returns {FormData}
  */
-function getFormData(formName) {
+function getFormData(formId) {
     let data = new FormData();
-    let elements = document.querySelectorAll("#" + formName + " select, #" + formName + " input, #" + formName + " textarea");
+    let elements = document.querySelectorAll("#" + formId + " select, #" + formId + " input, #" + formId + " textarea");
     for (let ie = 0; ie < elements.length; ie++ )
     {
         let element = elements[ie];
@@ -248,15 +248,15 @@ function postUrl(url, data, targetElement, callback= null) {
 
 /**
  * Saves a form to a POST end point
- * @param formName
+ * @param formId
  * @param targetURL
  * @param targetElement
  * @param callback - optional
  */
-function saveForm(formName, targetURL, targetElement, callback = null) {
+function saveForm(formId, targetURL, targetElement, callback = null) {
     if (targetElement === undefined) targetElement = 'message';
     //compile a data model
-    let data = getFormData(formName);
+    let data = getFormData(formId);
 
     postUrl(targetURL, data, targetElement, callback);
 }
@@ -329,11 +329,11 @@ const popupCenter = ({url, title, w, h}) => {
 
 /**
  * Opens a popup window
- * @param sreport
+ * @param pdfReportPath
  */
-function openReport(sreport){
-    if (sreport.indexOf("No data available") < 0){
-        open(sreport, "content", "target=_blank, toolbar=no, scrollbars=yes, resizable=yes, width=800, height=600, top=0, left=0");
+function openReport(pdfReportPath){
+    if (pdfReportPath.indexOf("No data available") < 0){
+        open(pdfReportPath, "content", "target=_blank, toolbar=no, scrollbars=yes, resizable=yes, width=800, height=600, top=0, left=0");
     }
     else {
         window.alert("Sorry , unable to print a report according to your selection!");
