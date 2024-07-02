@@ -16,6 +16,7 @@ namespace Tina4;
 class Swagger implements \JsonSerializable
 {
     public $root;
+    public $annotation;
     public $subFolder;
     public $swagger = [];
     public $ormObjects = []; //define which objects should be returned in the schema
@@ -39,6 +40,7 @@ class Swagger implements \JsonSerializable
         }
 
         $this->subFolder = $subFolder;
+        $this->annotation = new Annotation();
 
         $paths = (object)[];
 
@@ -46,8 +48,6 @@ class Swagger implements \JsonSerializable
             $route["routePath"] = str_replace("//", "/", $this->subFolder . $route["routePath"]);
 
             $method = strtolower($route["method"]);
-            //echo $method;
-
             if (!empty($route["class"])) {
                 $reflectionClass = new \ReflectionClass($route["class"]);
                 $reflection = $reflectionClass->getMethod($route["function"]);
@@ -55,96 +55,111 @@ class Swagger implements \JsonSerializable
                 $reflection = new \ReflectionFunction($route["function"]);
             }
 
-
             $doc = $reflection->getDocComment();
+            $annotations = $this->annotation->parseAnnotations($doc);
 
+            if (!empty($reflection) && !empty($reflection->getClosureScopeClass()) && $reflection->getClosureScopeClass()->name === "Tina4\Crud") {
+                $reflectionCaller = new \ReflectionFunction($route["caller"]["args"][2]);
+                $crudDocumentation = $reflectionCaller->getDocComment();
+                $crudAnnotations = $this->annotation->parseAnnotations($crudDocumentation, "");
 
-            preg_match_all('#@(.*?)(\r\n|\n)#s', $doc, $annotations);
+                foreach ($annotations as $annotation => $annotationValue) {
+
+                    if (!empty($crudAnnotations[$annotation])) {
+                        $annotations[$annotation][0] = str_replace("{" . $annotation . "}", $crudAnnotations[$annotation][0], $annotationValue[0]);
+                        $annotations[$annotation][0] = str_replace("{path}", $route["caller"]["args"][0], $annotations[$annotation][0]);
+                    } else {
+                        if ($annotation === "example") {
+                            $annotations[$annotation][0] = (new \ReflectionClass($route["caller"]["args"][1]))->getShortName();
+                        } else {
+                            unset($annotations[$annotation]);
+                        }
+                    }
+
+                }
+            }
 
             $summary = "None";
             $description = "None";
             $tags = [];
             $queryParams = [];
-
-
-            $addParams = [];
             $security = [];
             $example = null;
-            foreach ($annotations[0] as $aid => $annotation) {
-                preg_match_all('/^(@[a-zA-Z]*)([\w\s,\W]*)$/m', $annotation, $matches, PREG_SET_ORDER, 0);
-                if (count($matches) > 0) {
-                    $matches = $matches[0];
-                } else {
-                    $matches = null;
+            foreach ($annotations as $annotationName => $annotationValue) {
+                $annotationValue = $annotationValue[0];
+
+                if ($annotationName === "summary") {
+                    $summary = $annotationValue;
                 }
-
-                if (!empty($matches[2])) {
-                    $matches[2] = trim($matches[2]);
+                    else
+                if ($annotationName === "description")
+                {
+                    $description = str_replace("\n", "", $annotationValue);
                 }
+                    else
+                if ($annotationName === "tags")
+                {
+                    $tags = explode(",", $annotationValue);
+                    foreach ($tags as $tid => $tag) {
+                        $tags[$tid] = trim(str_replace("\n", "", $tag));
+                    }
+                }
+                    else
+                if ($annotationName === "params" || $annotationName === "queryParams")
+                {
+                    $queryParams = explode(",", $annotationValue);
+                }
+                    else
+                if ($annotationName === "example") {
+                    $this->ormObjects[] = trim(str_replace("\n", "", "\\" . $annotationValue));
+                    $example = [];
+                    $className = trim(str_replace("\n", "", "\\" . $annotationValue));
 
-                if (!empty($matches)) {
-                    if ($matches[1] === "@summary") {
-                        $summary = $matches[2];
-                    } elseif ($matches[1] === "@description") {
-                        $description = str_replace("\n", "", $matches[2]);
-                    } elseif ($matches[1] === "@tags") {
-                        $tags = explode(",", $matches[2]);
-                        foreach ($tags as $tid => $tag) {
-                            $tags[$tid] = str_replace("\n", "", $tag);
-                        }
-                    } elseif ($matches[1] === "@queryParams" || $matches[1] === "@params") {
-                        $queryParams = explode(",", $matches[2]);
-                    } elseif ($matches[1] === "@example") {
+                    if (class_exists($className)) {
+                        $exampleObject = (new $className);
 
-
-                        $this->ormObjects[] = trim(str_replace("\n", "", "\\" . $matches[2]));
-                        $example = [];
-                        $className = trim(str_replace("\n", "", "\\" . $matches[2]));
-
-
-                        if (class_exists($className)) {
-                            $exampleObject = (new $className);
-
-                            if (method_exists($exampleObject, "asArray")) {
-                                $example["data"] = (object)$exampleObject->asArray();
-                                $fields = $exampleObject->getFieldDefinitions();
-                                $properties = (object)[];
-                                if ($fields !== null) {
-                                    foreach ($fields as $field) {
-                                        $properties->{$field->fieldName} = (object)["type" => $field->dataType];
-                                    }
+                        if (method_exists($exampleObject, "asArray")) {
+                            $example["data"] = (object)$exampleObject->asArray();
+                            $fields = $exampleObject->getFieldDefinitions();
+                            $properties = (object)[];
+                            if ($fields !== null) {
+                                foreach ($fields as $field) {
+                                    $properties->{$field->fieldName} = (object)["type" => $field->dataType];
                                 }
-                                $example["properties"] = $properties;
-                            } else {
-                                $example["data"] = (object)json_decode(json_encode($exampleObject));
-                                $example["properties"] = (object)[];
                             }
+                            $example["properties"] = $properties;
                         } else {
-                            $className = substr($className, 1);
-                            $example["data"] = json_decode($className);
+                            $example["data"] = (object)json_decode(json_encode($exampleObject));
                             $example["properties"] = (object)[];
                         }
-
-                    }
-
-                    if ($matches[1] === "@secure" || $method != "GET") {
-                        $security = [(object)["bearerAuth" => []]];
+                    } else {
+                        $className = substr($className, 1);
+                        $example["data"] = json_decode($className);
+                        $example["properties"] = (object)[];
                     }
                 }
+
+                if ($annotationName === "@secure" || $method != "GET") {
+                    $security = [(object)["bearerAuth" => []]];
+                }
+
             }
 
             if ($summary === "None" && $description !== "None") {
                 $summary = $description;
             }
 
-            $arguments = $reflection->getParameters();
-            $params = json_decode(json_encode($arguments));
-            $params = array_merge($params, $addParams);
+            $regEx = '/\{(.*)\}/mU';
+            preg_match_all($regEx, $route["routePath"], $matches, PREG_SET_ORDER, 0);
+            $params = [];
 
             $propertyIn = "in";
             $propertyType = "type";
             $propertyName = "name";
 
+            foreach ($matches as $match) {
+                $params[] = (object)[ $propertyName => $match[1]];
+            }
 
             foreach ($params as $pid => $param) {
                 if (!isset($params[$pid]->{$propertyIn})) {
