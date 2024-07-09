@@ -87,7 +87,7 @@ class Auth extends Data
      * @tests tina4
      *   assert session_status() !== PHP_SESSION_NONE, "Session should be active by now"
      */
-    public function initSession(): void
+    final public function initSession(): void
     {
         //make sure the session is started
         if (!$this->configured && session_status() === PHP_SESSION_NONE) {
@@ -113,7 +113,7 @@ class Auth extends Data
      *   assert file_exists("./secrets/private.key.pub") === true,"private.key.pub does not exist - openssl installed ?"
      *   assert file_exists("./secrets/public.pub") === true,"public.pub does not exist - openssl installed ?"
      */
-    public function generateSecureKeys(): bool
+    final public function generateSecureKeys(): bool
     {
         Debug::message("Generating Auth keys - {$this->documentRoot}secrets");
         if (file_exists($this->documentRoot . "secrets/private.key")) {
@@ -235,7 +235,7 @@ class Auth extends Data
     /**
      * Checks for $_SESSION["tokens"]
      */
-    public function tokenExists(): bool
+    final public function tokenExists(): bool
     {
         if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
             return true;
@@ -347,14 +347,14 @@ class Auth extends Data
 
         if ($returnExpires) {
             return $tokenDecoded->getPayload();
-        } else {
-            $payLoad = $tokenDecoded->getPayload();
-
-            if (isset($payLoad["expires"])) {
-                unset($payLoad["expires"]);
-            }
-            return $payLoad;
         }
+
+        $payLoad = $tokenDecoded->getPayload();
+
+        if (isset($payLoad["expires"])) {
+            unset($payLoad["expires"]);
+        }
+        return $payLoad;
     }
 
     /**

@@ -410,3 +410,11 @@ Route::get("/phpinfo", function(Response $response){
   return $response($data, HTTP_OK, TEXT_HTML);
 });
 ```
+
+## MacOS extensions for PHP
+
+Example installing IMAP extension
+```
+brew tap kabel/php-ext
+brew install php-imap
+```
