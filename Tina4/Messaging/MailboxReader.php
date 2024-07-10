@@ -71,9 +71,9 @@ class MailboxReader
 
                             if (strtoupper($parts[$i]->disposition ?? "") === "ATTACHMENT") { /* Attachment */
                                 $attachment = new MessageAttachment();
-                                $attachment->attachmentName = $parts[$i]->parameters[0]->value;
-                                $attachment->attachmentType = "ATTACHMENT";
-                                $attachment->attachmentData = base64_decode(@imap_fetchbody($this->mailbox, $mId, $partString));
+                                $attachment->name = $parts[$i]->parameters[0]->value;
+                                $attachment->type = "ATTACHMENT";
+                                $attachment->data = base64_decode(@imap_fetchbody($this->mailbox, $mId, $partString));
 
                                 $message->attachments[] = $attachment;
                             } elseif (strtoupper($parts[$i]->subtype ?? "") === "PLAIN") { /* Message */

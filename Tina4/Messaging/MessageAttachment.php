@@ -10,7 +10,7 @@ namespace Tina4;
 
 class MessageAttachment
 {
-    public $attachmentType;
-    public $attachmentName;
-    public $attachmentData;
+    public $type;
+    public $name;
+    public $data;
 }
