@@ -28,6 +28,10 @@ class Config
         }
     }
 
+    /**
+     * Calls the init function of the Config constructor - see index.php for example of where it runs
+     * @return void
+     */
     public function callInitFunction(): void
     {
         if ($this->initFunction !== null) {
