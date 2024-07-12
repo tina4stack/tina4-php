@@ -19,17 +19,13 @@ function sendRequest (url, request, method, callback) {
     }
 
     //Inject the new token
+    //Inject the new token
     if (formToken !== null) {
-        const regex = /formToken=(.*)/gm;
-        const subst = `formToken=${formToken}`;
-        url = url.replace(regex, subst);
-        if (url.indexOf('formToken') === -1) {
-            if (url.indexOf('?') === -1) {
-                url += '?formToken='+formToken;
-            } else {
-                url += '&formToken='+formToken;
-            }
-        }
+        console.log('Injecting new token');
+        // check if there is a form token in the url, if so replace it
+        urlParams = url.searchParams;
+        urlParams.set('formToken', formToken);
+        url.search = urlParams.toString();
     }
 
     const xhr = new XMLHttpRequest();
