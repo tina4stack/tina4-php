@@ -397,7 +397,10 @@ class Router extends Data
 
         $headers = [];
         $headers[] = "Tina4Debug: $this->GUID";
-        $headers[] = "FreshToken: ".$this->config->getAuthentication()->getToken(["payload" => $url]);
+
+        //Fresh token contains the requester URL so we can do security validation against it
+        $payLoadUrl = explode("?", $url);
+        $headers[] = "FreshToken: ".$this->config->getAuthentication()->getToken(["payload" => $payLoadUrl[0] ?? ""]);
         $headers = $this->addCORS($headers); //Adding CORS headers on response
 
         //iterate through the routes

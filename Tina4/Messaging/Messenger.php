@@ -35,7 +35,7 @@ class Messenger
     /**
      * A function that will send a confirmation email to the user.
      *
-     * The sendMail function takes on a number of params and sends and email to a receipient.
+     * The sendMail function takes on a number of params and sends and email to a recipient.
      *
      * @param mixed $recipients array This can be a String or Array of Arrays, the String should be ; delimited email@test.com;emai2@test2.com or  [["name" => "Test", "email" => "email@email.com"],["name" => "Test Two", "email" => "noone@nowhere.com"]]
      * @param string $subject  The subject for the email
