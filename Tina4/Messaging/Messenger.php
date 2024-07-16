@@ -19,17 +19,21 @@ class Messenger
      */
     private ?MessengerSettings $settings;
 
+    public $verboseMessageLog;
+    public $lastMessageLog;
+
     /**
      * Messenger constructor.
      * @param MessengerSettings|null $settings
      */
-    public function __construct(MessengerSettings $settings = null)
+    public function __construct(MessengerSettings $settings = null, $verboseMessageLog=false)
     {
         if ($settings !== null) {
             $this->settings = $settings;
         } else {
             $this->settings = new MessengerSettings();
         }
+        $this->verboseMessageLog = $verboseMessageLog;
     }
 
     /**
@@ -119,7 +123,7 @@ class Messenger
                 try {
                     ob_start();
                     //Server settings
-                    if (TINA4_DEBUG) {
+                    if (TINA4_DEBUG || $this->verboseMessageLog) {
                         $phpMailer->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_LOWLEVEL;                      // Enable verbose debug output
                     }
                     $phpMailer->isSMTP();                                            // Send using SMTP
@@ -171,6 +175,7 @@ class Messenger
 
                     $mailSent = $phpMailer->send();
                     $messageLog = ob_get_clean();
+                    $this->lastMessageLog = $messageLog;
                     Debug::message("Message results" . $messageLog, TINA4_LOG_DEBUG);
                 } catch (\Exception $e) {
                     $mailSent = false;
