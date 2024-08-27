@@ -179,6 +179,7 @@ class Messenger
                     Debug::message("Message results" . $messageLog, TINA4_LOG_DEBUG);
                 } catch (\Exception $e) {
                     $mailSent = false;
+                    $this->lastMessageLog = $e->getMessage();
                     Debug::message("Messenger Error:" . $e->getMessage());
                 }
             }
