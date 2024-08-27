@@ -255,9 +255,12 @@ class Crud
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
 
-                $jsonResult = $function("fetch", (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'"), null, $request);
+                if (!(new $object())->load("{$object->getFieldName($object->primaryKey)} = ?", [$id])) {
+                    $jsonResult = $function("fetch", $object, null, $request);
+                }
+
                 if (empty($jsonResult)) {
-                    $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                    $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
                 }
 
                 return $response($jsonResult, HTTP_OK);
