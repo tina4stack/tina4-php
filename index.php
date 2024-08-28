@@ -9,6 +9,4 @@ $config = new \Tina4\Config(static function (\Tina4\Config $config){
 
 });
 
-$config->setAuthentication((new ExampleAuth()));
-
 echo new \Tina4\Tina4Php($config);

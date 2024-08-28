@@ -10,6 +10,14 @@ use Phpfastcache\Config\ConfigurationOption;
 use Tina4\Debug;
 use Tina4\Module;
 
+if (isset($_SERVER) && strpos($_SERVER["REQUEST_URI"], "index.php") !== false )
+{
+    http_response_code(403);
+    echo '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>';
+    Debug::message("Tina4 stack should never be invoked by running index.php directly");
+    exit;
+}
+
 //TINA4 CONSTANTS
 if (!defined("TINA4_DATABASE_TYPES")) {
     define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb", "Tina4\DataPostgresql", "Tina4\DataMSSQL"]);
