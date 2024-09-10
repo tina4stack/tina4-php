@@ -266,6 +266,7 @@ class Crud
                     $result = new $object();
                     if ($result->load("{$object->getFieldName($object->primaryKey)} = ?", [$id])) {
                         $jsonResult = $function("fetch", $result, null, $request);
+
                     }
                 }
 
