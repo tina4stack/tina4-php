@@ -255,18 +255,28 @@ class Crud
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
 
-                if (!(new $object())->load("{$object->getFieldName($object->primaryKey)} = ?", [$id])) {
-                    $jsonResult = $function("fetch", $object, null, $request);
+                /**
+                 * Fix for when we want to edit a form
+                 * Philip Malan <philip@codeinfinity.co.za>
+                 * 5 September 2024
+                 */
+
+                 //Check if it is a form and not an api call
+                 if (!empty($request->data->formToken)) {
+                    $result = new $object();
+                    if ($result->load("{$object->getFieldName($object->primaryKey)} = ?", [$id])) {
+                        $jsonResult = $function("fetch", $result, null, $request);
+                    }
                 }
 
                 if (empty($jsonResult)) {
                     $jsonResult = (new $object())->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
                 }
-
                 return $response($jsonResult, HTTP_OK);
             }
         )->secure($secure)
             ->cache($cached);
+
 
         /**
          * @description  {description} for {path}
