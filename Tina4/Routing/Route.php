@@ -90,7 +90,6 @@ class Route implements RouteCore
                     "caller" => $caller];
             }
         }
-
         return new static;
     }
 
@@ -104,6 +103,7 @@ class Route implements RouteCore
     {
         self::$method = TINA4_GET;
         list(, $caller) = debug_backtrace(false);
+
         return self::add($routePath, $function, true, false, false, $caller);
     }
 
@@ -117,6 +117,7 @@ class Route implements RouteCore
     {
         self::$method = TINA4_PUT;
         list(, $caller) = debug_backtrace(false);
+
         return self::add($routePath, $function, true, false, false, $caller);
     }
 
@@ -130,6 +131,7 @@ class Route implements RouteCore
     {
         self::$method = TINA4_POST;
         list(, $caller) = debug_backtrace(false);
+
         return self::add($routePath, $function, true, false, false, $caller);
     }
 
@@ -143,6 +145,7 @@ class Route implements RouteCore
     {
         self::$method = TINA4_PATCH;
         list(, $caller) = debug_backtrace(false);
+
         return self::add($routePath, $function, true, false, false, $caller);
     }
 
@@ -156,6 +159,7 @@ class Route implements RouteCore
     {
         self::$method = TINA4_DELETE;
         list(, $caller) = debug_backtrace(false);
+
         return self::add($routePath, $function, true, false, false, $caller);
     }
 
@@ -169,6 +173,7 @@ class Route implements RouteCore
     {
         self::$method = TINA4_ANY;
         list(, $caller) = debug_backtrace(false);
+
         return self::add($routePath, $function, true, false, false, $caller);
     }
 
@@ -180,7 +185,8 @@ class Route implements RouteCore
     public static function middleware(array $functionNames): Route
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["middleware"] = $functionNames;
+        $arrRoutes[count($arrRoutes)-1]["middleware"] = $functionNames;
+
         return new static;
     }
 
@@ -193,7 +199,8 @@ class Route implements RouteCore
     public static function noCache(bool $default=false): Route
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = $default;
+        $arrRoutes[count($arrRoutes)-1]["cached"] = $default;
+
         return new static;
     }
 
@@ -205,7 +212,8 @@ class Route implements RouteCore
     public static function cache(bool $default=true): Route
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["cached"] = $default;
+        $arrRoutes[count($arrRoutes)-1]["cached"] = $default;
+
         return new static;
     }
 
@@ -217,7 +225,8 @@ class Route implements RouteCore
     public static function secure(bool $default=true): Route
     {
         global $arrRoutes;
-        $arrRoutes[sizeof($arrRoutes)-1]["secure"] = $default;
+        $arrRoutes[count($arrRoutes)-1]["secure"] = $default;
+
         return new static;
     }
 
@@ -228,8 +237,9 @@ class Route implements RouteCore
     {
         global $arrRoutes;
         if (!empty($caller)) {
-            $arrRoutes[sizeof($arrRoutes) - 1]["caller"] = $caller;
+            $arrRoutes[count($arrRoutes) - 1]["caller"] = $caller;
         }
+
         return new static;
     }
 }
