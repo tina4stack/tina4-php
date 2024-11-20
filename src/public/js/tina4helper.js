@@ -18,18 +18,15 @@ function sendRequest (url, request, method, callback) {
         method = 'GET';
     }
 
-    //Inject the new token
-    //Inject the new token
-    if (formToken !== null) {
-        console.log('Injecting new token');
-        // check if there is a form token in the url, if so replace it
-        urlParams = url.searchParams;
-        urlParams.set('formToken', formToken);
-        url.search = urlParams.toString();
-    }
-
     const xhr = new XMLHttpRequest();
+
+
     xhr.open(method, url, true);
+
+    if (formToken !== null) {
+        //set a form token to the header
+        xhr.setRequestHeader('Authorization', 'Bearer '+formToken);
+    }
 
     xhr.onload = function () {
         let content = xhr.response;
