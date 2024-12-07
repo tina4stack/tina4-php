@@ -107,6 +107,7 @@ class ParseTemplate
                     $testFile = ($location . DIRECTORY_SEPARATOR . $parseFileName);
                 } else {
                     $testFile = ($this->root . $location . DIRECTORY_SEPARATOR . $parseFileName);
+                    $location = $this->root . $location . DIRECTORY_SEPARATOR;
                 }
 
                 $testFile = preg_replace('#/+#', DIRECTORY_SEPARATOR, $testFile);
