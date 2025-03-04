@@ -103,8 +103,13 @@ class Api
     {
         try {
             $headers = [];
-            $headers[] = "Accept: " . $contentType;
-            $headers[] = "Accept-Charset: utf-8, *;q=0.8";
+            if (!in_array("Accept:", $customHeaders)) {
+                $headers[] = "Accept: " . $contentType;
+            }
+
+            if (!in_array("Accept-Charset:", $customHeaders)) {
+                $headers[] = "Accept-Charset: utf-8, *;q=0.8";
+            }
 
             if (!empty($this->authHeader)) {
                 $headers = [...$headers, ...explode(",", $this->authHeader)];
@@ -113,8 +118,6 @@ class Api
             if (!empty($this->username) && !empty($this->password)) {
                 $headers[] = "Authorization: Basic " . base64_encode("{$this->username}:{$this->password}");
             }
-
-
 
             if (!empty($body) && !empty($contentType)) {
                 $headers[] = "Content-Type: " . $contentType;
