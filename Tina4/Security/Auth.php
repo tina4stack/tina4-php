@@ -228,23 +228,10 @@ class Auth extends Data
         if (!empty($this->privateKey)) {
             $tokenEncoded = $tokenDecoded->encode($this->privateKey, $encryption);
             $tokenString = $tokenEncoded->toString();
-            $_SESSION["tina4:authToken"] = $tokenString;
         } else {
             $tokenString = "secrets folder is empty of tokens";
         }
         return $tokenString;
-    }
-
-    /**
-     * Checks for $_SESSION["tokens"]
-     */
-    final public function tokenExists(): bool
-    {
-        if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
-            return true;
-        } else {
-            return false;
-        }
     }
 
     /**
@@ -275,10 +262,6 @@ class Auth extends Data
         }
 
         $token = trim(str_replace("Bearer ", "", $token));
-
-        if (isset($_SESSION["tina4:authToken"]) && empty($token)) {
-            $token = $_SESSION["tina4:authToken"];
-        }
 
         try {
             $tokenEncoded = new TokenEncoded($token);
@@ -361,19 +344,6 @@ class Auth extends Data
     }
 
     /**
-     * Gets a session token
-     * @return false|mixed
-     */
-    public function getSessionToken(): string
-    {
-        if (isset($_SESSION["tina4:authToken"]) && $this->validToken($_SESSION["tina4:authToken"])) {
-            return $_SESSION["tina4:authToken"];
-        } else {
-            return "";
-        }
-    }
-
-    /**
      * Validate the request
      * @param $request
      * @param string|null $lastPath
@@ -391,13 +361,4 @@ class Auth extends Data
         return $lastPath;
     }
 
-    /**
-     * Clears the session auth tokens
-     */
-    public function clearTokens(): void
-    {
-        if (isset($_SERVER["REMOTE_ADDR"])) {
-            unset($_SESSION["tina4:authToken"]);
-        }
-    }
 }

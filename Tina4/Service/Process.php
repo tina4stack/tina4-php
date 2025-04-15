@@ -35,6 +35,7 @@ class Process implements ProcessInterface
     public function canRun(): bool
     {
         // TODO: Implement canRun() method.
+        // if $this->isTime
     }
 
     /**
