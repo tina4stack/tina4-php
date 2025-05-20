@@ -281,7 +281,7 @@ class Auth extends Data
                     return true;
                 }
             } else {
-                return true;
+                return false;
             }
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
