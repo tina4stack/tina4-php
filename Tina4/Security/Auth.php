@@ -26,7 +26,7 @@ class Auth extends Data
      * The path where the website is served from
      * @var string
      */
-    public string $documentRoot;
+    public $documentRoot;
     /**
      * Is the authentication configured, so it only runs once in a page load
      * @var bool
