@@ -224,7 +224,6 @@ class Crud
          * @description  {description} for {path}
          * @summary Get all for {path}
          * @tags {tags}
-         * @middleware {middleware}
          */
         Route::get(
             $path . "/form",
@@ -243,7 +242,6 @@ class Crud
          * @summary Post for {path}
          * @tags {tags}
          * @example {example}
-         * @middleware {middleware}
          */
         Route::post(
             $path,
@@ -271,7 +269,6 @@ class Crud
          * @description  {description} for {path}
          * @summary Get for {path}
          * @tags {tags}
-         * @middleware {middleware}
          */
         Route::get(
             $path,
@@ -291,7 +288,6 @@ class Crud
          * @summary Get by Id for {path}
          * @tags {tags}
          * @example {example}
-         * @middleware {middleware}
          */
         Route::get(
             $path . "/{id}",
@@ -315,7 +311,6 @@ class Crud
          * @summary Post for Id for {path}
          * @tags {tags}
          * @example {example}
-         * @middleware {middleware}
          */
         Route::post(
             $path . "/{id}",
@@ -341,7 +336,6 @@ class Crud
          * @description  {description} for {path}
          * @summary Delete by Id for {path}
          * @tags {tags}
-         * @middleware {middleware}
          */
         Route::delete(
             $path . "/{id}",
