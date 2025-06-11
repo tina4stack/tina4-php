@@ -15,17 +15,21 @@ namespace Tina4;
 class Process implements ProcessInterface
 {
     public $name;
+    public $timing;
 
     /**
      * Process constructor.
      * @param string $name
+     * @param string $timing
      */
-    public function __construct(string $name = "")
+    public function __construct(string $name = "", string $timing = "")
     {
         if (!empty($name)) {
             $this->name = $name;
+            $this->timing = $timing;
         }
-        Debug::message("Initializing Process: {$this->name}", TINA4_LOG_DEBUG);
+        // No validation is done on the incoming $timing. Poorly constructed timings will result in the process not running
+        Debug::message("Initializing Process: {$this->name}" . " with timing " . $this->timing, TINA4_LOG_DEBUG);
     }
 
     /**
@@ -35,7 +39,6 @@ class Process implements ProcessInterface
     public function canRun(): bool
     {
         // TODO: Implement canRun() method.
-        // if $this->isTime
     }
 
     /**
