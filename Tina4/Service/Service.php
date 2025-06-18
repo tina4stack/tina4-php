@@ -20,6 +20,7 @@ class Service extends Data
      * @var false|string
      */
     private $serviceSaveFilename;
+    private $servicesTimingFilename;
 
     /**
      * Service constructor
@@ -28,6 +29,7 @@ class Service extends Data
     {
         parent::__construct();
         $this->serviceSaveFilename = TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "services.data";
+        $this->servicesLastTimeFilename = TINA4_DOCUMENT_ROOT . "bin" . DIRECTORY_SEPARATOR . "servicesLastTime.data";
     }
 
     /**
@@ -78,6 +80,36 @@ class Service extends Data
     }
 
     /**
+     * Add process to the list of last run processes with their last time
+     * @param Process $process
+     */
+    public function addLastTimeProcess(\Tina4\Process $process)
+    {
+        if (file_exists($this->servicesLastTimeFilename)) {
+            $services = unserialize(file_get_contents($this->servicesLastTimeFilename));
+        } else {
+            $services = [];
+        }
+        $services[$process->name] = $process;
+        file_put_contents($this->servicesLastTimeFilename, serialize($services));
+    }
+
+    /**
+     * Get the last run processes with their last run time
+     * @return array|mixed
+     */
+    public function getLastTimeProcesses()
+    {
+        if (file_exists($this->servicesLastTimeFilename)) {
+            $services = unserialize(file_get_contents($this->servicesLastTimeFilename));
+        } else {
+            $services = [];
+        }
+
+        return $services;
+    }
+
+    /**
      * Sleep time between each run
      * @return int
      */
@@ -88,7 +120,7 @@ class Service extends Data
             $this->sleepTime = $_ENV["TINA4_SERVICE_TIME"];
         }
         \Tina4\Debug::message("Process Sleep Time: {$this->sleepTime}", TINA4_LOG_DEBUG);
-        
+
         return $this->sleepTime;
     }
 
