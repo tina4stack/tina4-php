@@ -350,7 +350,7 @@ class Auth extends Data
      * @return string
      * @throws \Exception
      */
-    public function validateAuth($request, string $lastPath = null): string
+    public function validateAuth($request, ?string $lastPath = null): string
     {
         if (empty($lastPath) && !isset($_SESSION["tina4:lastPath"]) && !empty($_SESSION["tina4:lastPath"])) {
             $lastPath = $_SESSION["tina4:lastPath"];

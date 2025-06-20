@@ -41,7 +41,7 @@
         "twig/twig": "^3.3.8",
         "phpfastcache/phpfastcache": "^8.0.5",
         "coyl/git": "^0.1.7",
-        "scssphp/scssphp": "^1.5.2",
+        "scssphp/scssphp": "^2.0.1",
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
         "tina4stack/tina4php-env": "^2.0",
