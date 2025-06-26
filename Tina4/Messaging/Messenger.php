@@ -25,8 +25,9 @@ class Messenger
     /**
      * Messenger constructor.
      * @param MessengerSettings|null $settings
+     * @param bool $verboseMessageLog
      */
-    public function __construct(MessengerSettings $settings = null, $verboseMessageLog=false)
+    public function __construct(?MessengerSettings $settings = null, $verboseMessageLog=false)
     {
         if ($settings !== null) {
             $this->settings = $settings;

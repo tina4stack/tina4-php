@@ -38,7 +38,7 @@ class Slack extends \Tina4\Api
      * @param string $limit
      * @return array|mixed
      */
-    function getChannels(string $types= null, string $limit="1000")
+    function getChannels(?string $types= null, string $limit="1000")
     {
         $types ??= "public_channel,private_channel";
         $result = $this->sendRequest("conversations.list?types={$types}&limit={$limit}", "GET");

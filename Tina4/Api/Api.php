@@ -17,32 +17,32 @@ class Api
     /**
      * @var string|null Base url for the Api
      */
-    public $baseURL;
+    public ?string $baseURL;
 
     /**
      * @var string Auth header , normally basic auth or token auth
      */
-    public $authHeader;
+    public string $authHeader;
 
     /**
      * @var bool Set to true to ignore SSL validation
      */
-    public $ignoreSSLValidation;
+    public bool $ignoreSSLValidation;
 
     /**
      * @var array An array of custom headers to make things happen!
      */
-    private $customHeaders;
+    private array $customHeaders;
 
     /**
      * @var string Username for basic auth
      */
-    private $username;
+    private string $username;
 
     /**
      * @var string Password for basic auth
      */
-    private $password;
+    private string $password;
 
     /**
      * API constructor.
@@ -67,7 +67,8 @@ class Api
      * @param $headers
      * @return void
      */
-    public function addCustomHeaders($headers) {
+    public function addCustomHeaders($headers) : void
+    {
         $this->customHeaders = $headers;
     }
 
@@ -77,7 +78,8 @@ class Api
      * @param $password
      * @return void
      */
-    public function setUsernamePassword($username, $password) {
+    public function setUsernamePassword($username, $password) : void
+    {
         $this->username = $username;
         $this->password = $password;
     }
@@ -90,7 +92,7 @@ class Api
      * @param string $contentType
      * @param array $customHeaders
      * @param array $curlOptions
-     * @return array|mixed
+     * @return array tests tina4
      * tests tina4
      *   assert ("/book")['docs'][0]['name'] === "The Fellowship Of The Ring", "API Get request"
      *   assert ("/book")['docs'][1]['name'] !== "The Fellowship Of The Ring", "API Get request"
@@ -99,7 +101,7 @@ class Api
      * @tips
      * @code-example
      */
-    final public function sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "application/json", $customHeaders=[], $curlOptions=[]): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "application/json", array $customHeaders=[], array $curlOptions=[]): array
     {
         try {
             $headers = [];
