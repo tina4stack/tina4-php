@@ -236,7 +236,7 @@ class GitDeploy
                 //run the migrations if found
                 if (is_dir($deploymentPath . DIRECTORY_SEPARATOR . "migrations")) {
                     $this->log("Running migrations");
-                    new \Tina4\Migration($deploymentPath . DIRECTORY_SEPARATOR . "migrations")->doMigration();
+                    (new \Tina4\Migration($deploymentPath . DIRECTORY_SEPARATOR . "migrations"))->doMigration();
                 }
 
                 $this->log("Done installing");
