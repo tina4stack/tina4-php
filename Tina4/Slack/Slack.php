@@ -4,7 +4,7 @@ namespace Tina4;
 
 class Slack extends \Tina4\Api
 {
-    public $ignoreSSLValidation = true;
+    public bool $ignoreSSLValidation = true;
     /**
      * Constructor for Slack
      * @param string|null $baseURL
