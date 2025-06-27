@@ -88,7 +88,7 @@ class Api
      * Sends a request to the specified API
      * @param string $restService
      * @param string $requestType
-     * @param string|null $body
+     * @param null $body
      * @param string $contentType
      * @param array $customHeaders
      * @param array $curlOptions
@@ -101,7 +101,7 @@ class Api
      * @tips
      * @code-example
      */
-    final public function sendRequest(string $restService = "", string $requestType = "GET", ?string $body = null, string $contentType = "application/json", array $customHeaders=[], array $curlOptions=[]): array
+    final public function sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "application/json", array $customHeaders=[], array $curlOptions=[]): array
     {
         try {
             $headers = [];
