@@ -60,6 +60,8 @@ class Api
         if (!empty($authHeader)) {
             $this->authHeader = $authHeader;
         }
+
+        $this->ignoreSSLValidation = false;
     }
 
     /**
@@ -90,7 +92,7 @@ class Api
      * @param string $requestType
      * @param null $body
      * @param string $contentType
-     * @param array $customHeaders
+     * @param array $customHeader s
      * @param array $curlOptions
      * @return array tests tina4
      * tests tina4
