@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tina4PHP vs 5 Popular PHP Frameworks (2025)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding: 2rem 0; background: #f8f9fa; }
+    h1, h2 { text-align: center; }
+    .table thead th { background: #343a40; color: white; }
+    .badge-tina4 { background: #e91e63; }
+    .badge-popular { background: #0d6efd; }
+    .table-sm th, .table-sm td { padding: 0.5rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <h1 class="mb-4">Tina4PHP vs 5 Popular PHP Frameworks (2025></h1>
+  <p class="text-center lead mb-5">Updated 2025 – real-world comparison</p>
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped table-hover table-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Feature</th>
+          <th><span class="badge badge-tina4">Tina4PHP</span></th>
+          <th>Laravel 11</th>
+          <th>Symfony 7</th>
+          <th>Slim 4</th>
+          <th>Lumen</th>
+          <th>CodeIgniter 4</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Install size (full)</strong></td>
+          <td><strong>~8–12 MB</strong></td>
+          <td>~180 MB</td>
+          <td>~120 MB</td>
+          <td><strong>~3 MB</strong></td>
+          <td>~60 MB</td>
+          <td>~25 MB</td>
+        </tr>
+        <tr>
+          <td><strong>Philosophy</strong></td>
+          <td>“This is not a framework” – ultra-light</td>
+          <td>Full-stack elegance</td>
+          <td>Reusable components</td>
+          <td>Micro-framework</td>
+          <td>Laravel but faster</td>
+          <td>Simple classic MVC</td>
+        </tr>
+        <tr>
+          <td><strong>Learning curve</strong></td>
+          <td><strong>Very low</strong></td>
+          <td>Medium</td>
+          <td>High</td>
+          <td>Very low</td>
+          <td>Low–Medium</td>
+          <td>Very low</td>
+        </tr>
+        <tr>
+          <td><strong>Routing style</strong></td>
+          <td>Get::add(), Post::add() (very expressive)</td>
+          <td>Elegant Route facade</td>
+          <td>Classic + attributes</td>
+          <td>PSR-15 middleware</td>
+          <td>Same as Laravel</td>
+          <td>Simple closures</td>
+        </tr>
+        <tr>
+          <td><strong>Templating</strong></td>
+          <td>Twig built-in</td>
+          <td>Blade</td>
+          <td>Twig</td>
+          <td>Any (Twig, Plates…)</td>
+          <td>Blade</td>
+          <td>PHP or Twig</td>
+        </tr>
+        <tr>
+          <td><strong>ORM / DB</strong></td>
+          <td>Lightweight active-record ORM</td>
+          <td>Eloquent (very powerful)</td>
+          <td>Doctrine</td>
+          <td>None (you choose)</td>
+          <td>Eloquent</td>
+          <td>Query Builder</td>
+        </tr>
+        <tr>
+          <td><strong>Swagger / OpenAPI docs</strong></td>
+          <td>Built-in (auto from annotations)</td>
+          <td>Extra package</td>
+          <td>Nelmio / API-Platform</td>
+          <td>No</td>
+          <td>No</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><strong>Swoole / Async support</strong></td>
+          <td>First-class (HTTP & TCP servers)</td>
+          <td>Octane + Swoole</td>
+          <td>Messenger + Swoole</td>
+          <td>Excellent with Swoole</td>
+          <td>Octane</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><strong>Auto CRUD</strong></td>
+          <td>Yes – Crud::add()</td>
+          <td>Nova / Backpack (paid)</td>
+          <td>EasyAdmin / API-Platform</td>
+          <td>No</td>
+          <td>No</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><strong>Git webhook auto-deploy</strong></td>
+          <td>Built-in</td>
+          <td>No</td>
+          <td>No</td>
+          <td>No</td>
+          <td>No</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><strong>Background services / cron</strong></td>
+          <td>Yes (extend Process)</td>
+          <td>Laravel Scheduler</td>
+          <td>Messenger workers</td>
+          <td>No</td>
+          <td>Yes</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><strong>Community size (2025)</strong></td>
+          <td>Niche</td>
+          <td>Very large</td>
+          <td>Large</td>
+          <td>Medium</td>
+          <td>Medium</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><strong>GitHub stars</strong></td>
+          <td>~350</td>
+          <td>78k+</td>
+          <td>29k+</td>
+          <td>12k+</td>
+          <td>7.6k</td>
+          <td>7k+</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="mt-5">When to Choose Tina4PHP?</h2>
+  <div class="row text-center">
+    <div class="col-md-4"><div class="alert alert-success">You want <strong>less than 15 MB</strong> total install</div></div>
+    <div class="col-md-4"><div class="alert alert-success">You need <strong>instant Swagger</strong> docs</div></div>
+    <div class="col-md-4"><div class="alert alert-success">You love <strong>Swoole</strong> without extra setup</div></div>
+    <div class="col-md-4"><div class="alert alert-success">You want <strong>auto-CRUD</strong> in one line</div></div>
+    <div class="col-md-4"><div class="alert alert-success">You need <strong>git webhook deploy</strong></div></div>
+    <div class="col-md-4"><div class="alert alert-success">You hate bloat & want <strong>fast prototyping</strong></div></div>
+  </div>
+
+  <footer class="text-center mt-5 text-muted">
+    Comparison made in 2025 • Data based on real installs & GitHub metrics
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
