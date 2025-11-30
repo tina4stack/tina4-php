@@ -50,12 +50,12 @@ jobs:
 
       # 6. Initialize Tina4 (creates config, migrations folder, etc.)
       - name: Initialize Tina4 framework
-        run: php tina4 initialize:run
+        run: composer exec tina4 initialize:run
         # or if the binary is in vendor/bin:
         # run: vendor/bin/tina4 initialize:run
 
       # 7. Run Tina4 test suite
       - name: Run Tina4 test suite
-        run: php tina4 tests:run tina4
+        run: composer exec tina4 tests:run tina4
         # or:
         # run: vendor/bin/tina4 tests:run tina4
