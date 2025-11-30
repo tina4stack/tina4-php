@@ -362,42 +362,72 @@ if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
 
 //@todo Init Git Here
 
+if (!class_exists("Get")) {
 //Attributes for routing
 // src/Attributes/Get.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Get { public function __construct(public string $path) {} }
+    #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+    final class Get
+    {
+        public function __construct(public string $path)
+        {
+        }
+    }
+}
 
+if (!class_exists("Post")) {
 // src/Attributes/Post.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Post { public function __construct(public string $path) {} }
+    #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+    final class Post
+    {
+        public function __construct(public string $path)
+        {
+        }
+    }
+}
 
+if (!class_exists("Put")) {
 // src/Attributes/Put.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Put { public function __construct(public string $path) {} }
+    #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+    final class Put
+    {
+        public function __construct(public string $path)
+        {
+        }
+    }
+}
 
+if (!class_exists("Patch")) {
 // src/Attributes/Patch.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Patch { public function __construct(public string $path) {} }
+    #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+    final class Patch
+    {
+        public function __construct(public string $path)
+        {
+        }
+    }
+}
 
+if (!class_exists("Delete")) {
 // src/Attributes/Delete.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Delete { public function __construct(public string $path) {} }
+    #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+    final class Delete
+    {
+        public function __construct(public string $path)
+        {
+        }
+    }
+}
 
-// src/Attributes/Options.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Options { public function __construct(public string $path) {} }
-
-// src/Attributes/Head.php
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Head { public function __construct(public string $path) {} }
-
+if (!class_exists("Any")) {
 // src/Attributes/Any.php          ← matches ALL methods (very useful)
-#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
-final class Any { public function __construct(public string $path) {} }
-
-// src/Attributes/Prefix.php       ← for controllers
-#[\Attribute(\Attribute::TARGET_CLASS)]
-final class Prefix { public function __construct(public string $prefix) {} }
+    #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+    final class Any
+    {
+        public function __construct(public string $path)
+        {
+        }
+    }
+}
 
 $routeFolder = TINA4_DOCUMENT_ROOT. 'src';
 
@@ -432,24 +462,26 @@ foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFold
     }
 }
 
+if (!function_exists("registerRouteFromAttributes")) {
 // ── Helper that does the actual registration ─────────────────────────────
-function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
-{
-    foreach ($ref->getAttributes() as $attr) {
-        $instance = $attr->newInstance();
+    function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
+    {
+        foreach ($ref->getAttributes() as $attr) {
+            $instance = $attr->newInstance();
 
-        $path = $prefix . $instance->path;
+            $path = $prefix . $instance->path;
 
-        match ($attr->getName()) {
-            Get::class => \Tina4\Get::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Post::class => \Tina4\Post::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Options::class => \Tina4\Options::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Head::class => \Tina4\Head::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-            default => null,
-        };
+            match ($attr->getName()) {
+                Get::class => \Tina4\Get::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Post::class => \Tina4\Post::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Options::class => \Tina4\Options::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Head::class => \Tina4\Head::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                default => null,
+            };
+        }
     }
 }
