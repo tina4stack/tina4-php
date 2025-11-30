@@ -1,4 +1,4 @@
-<img src="branding/SVG/Logos/tina4-logo-transparent.svg" width="300">
+<img src="logo.svg" width="300">
 
 Tina4 is a light-weight routing and twig based templating system which allows you to write websites and API applications
 very quickly. Currently, the full deployment is under 8mb in size, and we are aiming at being the PHP framework with the smallest carbon footprint.
