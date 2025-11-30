@@ -477,8 +477,6 @@ if (!function_exists("registerRouteFromAttributes")) {
                 Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
                 Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
                 Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Options::class => \Tina4\Options::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Head::class => \Tina4\Head::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
                 Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
                 default => null,
             };
