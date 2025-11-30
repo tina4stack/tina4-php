@@ -398,6 +398,6 @@ class Tina4Php extends Data
      */
     public function getSwagger(string $title = "Tina4", string $description = "Swagger Documentation", string $version = "1.0.0"): string
     {
-        return (new Swagger($this->documentRoot, $title, $description, $version, $this->subFolder));
+        return (new Swagger($this->documentRoot, $title, $description, $this->subFolder));
     }
 }

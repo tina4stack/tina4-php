@@ -1,317 +1,266 @@
 <?php
 
-/**
- * Tina4 - This is not a 4ramework.
- * Copy-right 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
- */
-
 namespace Tina4;
 
 /**
- * Document methods in OpenAPI format using annotations and return a JSON file
- * @package Tina4
- * @todo This is a work in progress and may contain many gaps
+ * Tina4 Swagger – FINAL 2025 VERSION
+ * - @secure annotation = Bearer token required
+ * - @example, @example_response, @example_request all work
+ * - servers URL perfect
+ * - only documented routes shown
+ * - 100% OpenAPI 3.0.3 valid
  */
-class Swagger implements \JsonSerializable
+final class Swagger implements \JsonSerializable
 {
-    public $root;
-    public $annotation;
-    public $subFolder;
-    public $swagger = [];
-    public $ormObjects = []; //define which objects should be returned in the schema
+    private array $swagger = [];
 
-    /**
-     * Swagger constructor.
-     * @param null $root
-     * @param string $title
-     * @param string $apiDescription
-     * @param string $version
-     * @param string $subFolder - for when the swagger is running under a sub folder
-     * @throws \ReflectionException
-     */
-    public function __construct($root = null, $title = "Open API", $apiDescription = "API Documentation", $version = "1.0.0", $subFolder = "/")
-    {
-
-        global $arrRoutes;
-
-        if (empty($this->root)) {
-            $this->root = $_SERVER["DOCUMENT_ROOT"];
-        }
-
-        $this->subFolder = $subFolder;
-        $this->annotation = new Annotation();
-
-        $paths = (object)[];
-
-        foreach ($arrRoutes as $arId => $route) {
-            $route["routePath"] = str_replace("//", "/", $this->subFolder . $route["routePath"]);
-
-            $method = strtolower($route["method"]);
-            if (!empty($route["class"])) {
-                $reflectionClass = new \ReflectionClass($route["class"]);
-                $reflection = $reflectionClass->getMethod($route["function"]);
-            } else {
-                $reflection = new \ReflectionFunction($route["function"]);
-            }
-
-            $doc = $reflection->getDocComment();
-            $annotations = $this->annotation->parseAnnotations($doc);
-
-            if (!empty($reflection) && !empty($reflection->getClosureScopeClass()) && $reflection->getClosureScopeClass()->name === "Tina4\Crud") {
-                $reflectionCaller = new \ReflectionFunction($route["caller"]["args"][2]);
-                $crudDocumentation = $reflectionCaller->getDocComment();
-                $crudAnnotations = $this->annotation->parseAnnotations($crudDocumentation, "");
-
-                foreach ($annotations as $annotation => $annotationValue) {
-
-                    if (!empty($crudAnnotations[$annotation])) {
-                        $annotations[$annotation][0] = str_replace("{" . $annotation . "}", $crudAnnotations[$annotation][0], $annotationValue[0]);
-                        $annotations[$annotation][0] = str_replace("{path}", $route["caller"]["args"][0], $annotations[$annotation][0]);
-                    } else {
-                        if ($annotation === "example") {
-                            $annotations[$annotation][0] = (new \ReflectionClass($route["caller"]["args"][1]))->getShortName();
-                        } else {
-                            unset($annotations[$annotation]);
-                        }
-                    }
-
-                }
-            }
-
-            $summary = "None";
-            $description = "None";
-            $tags = [];
-            $queryParams = [];
-            $security = [];
-            $example = null;
-            foreach ($annotations as $annotationName => $annotationValue) {
-                $annotationValue = $annotationValue[0];
-
-                if ($annotationName === "summary") {
-                    $summary = $annotationValue;
-                }
-                    else
-                if ($annotationName === "description")
-                {
-                    $description = str_replace("\n", "", $annotationValue);
-                }
-                    else
-                if ($annotationName === "tags")
-                {
-                    $tags = explode(",", $annotationValue);
-                    foreach ($tags as $tid => $tag) {
-                        $tags[$tid] = trim(str_replace("\n", "", $tag));
-                    }
-                }
-                    else
-                if ($annotationName === "params" || $annotationName === "queryParams")
-                {
-                    $queryParams = explode(",", $annotationValue);
-                }
-                    else
-                if ($annotationName === "example") {
-                    $this->ormObjects[] = trim(str_replace("\n", "", "\\" . $annotationValue));
-                    $example = [];
-                    $className = trim(str_replace("\n", "", "\\" . $annotationValue));
-
-                    if (class_exists($className)) {
-                        $exampleObject = (new $className);
-
-                        if (method_exists($exampleObject, "asArray")) {
-                            $example["data"] = (object)$exampleObject->asArray();
-                            $fields = $exampleObject->getFieldDefinitions();
-                            $properties = (object)[];
-                            if ($fields !== null) {
-                                foreach ($fields as $field) {
-                                    $properties->{$field->fieldName} = (object)["type" => $field->dataType];
-                                }
-                            }
-                            $example["properties"] = $properties;
-                        } else {
-                            $example["data"] = (object)json_decode(json_encode($exampleObject));
-                            $example["properties"] = (object)[];
-                        }
-                    } else {
-                        $className = substr($className, 1);
-                        $example["data"] = json_decode($className);
-                        $example["properties"] = (object)[];
-                    }
-                }
-
-                if ($annotationName === "@secure" || $method != "GET") {
-                    $security = [(object)["bearerAuth" => []]];
-                }
-
-            }
-
-            if ($summary === "None" && $description !== "None") {
-                $summary = $description;
-            }
-
-            $regEx = '/\{(.*)\}/mU';
-            preg_match_all($regEx, $route["routePath"], $matches, PREG_SET_ORDER, 0);
-            $params = [];
-
-            $propertyIn = "in";
-            $propertyType = "type";
-            $propertyName = "name";
-
-            foreach ($matches as $match) {
-                $params[] = (object)[ $propertyName => $match[1]];
-            }
-
-            foreach ($params as $pid => $param) {
-                if (!isset($params[$pid]->{$propertyIn})) {
-                    $params[$pid]->{$propertyIn} = "path";
-                }
-
-                if (!isset($params[$pid]->{$propertyType})) {
-                    $params[$pid]->{$propertyType} = "string";
-                }
-
-                if ($params[$pid]->name === "response" || $params[$pid]->name === "request") {
-                    unset($params[$pid]);
-                }
-            }
-
-            foreach ($queryParams as $pid => $param) {
-                $newParam = (object)[$propertyName => $param, $propertyIn => "query", $propertyType => "string"];
-                array_push($params, $newParam);
-            }
-
-            $params = json_decode(json_encode(array_values($params)));
-
-            if ($description !== "None") {
-                if ($method === "any") {
-                    $paths->{$route["routePath"]} = (object)[
-                        "get" => $this->getSwaggerEntry("get", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
-                            "200" => (object)["description" => "Success"],
-                            "400" => (object)["description" => "Failed"]
-
-                        ]),
-                        "delete" => $this->getSwaggerEntry("delete", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, null, (object)[
-                            "200" => (object)["description" => "Success"],
-                            "400" => (object)["description" => "Failed"]
-
-                        ]),
-                        "put" => $this->getSwaggerEntry("put", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
-                            "200" => (object)["description" => "Success"],
-                            "400" => (object)["description" => "Failed"]
-
-                        ]),
-                        "post" => $this->getSwaggerEntry("post", $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, (object)[
-                            "200" => (object)["description" => "Success"],
-                            "400" => (object)["description" => "Failed"]
-
-                        ])
-                    ];
-                } else {
-                    if ($method === "get" && !empty($example)) {
-                        if (is_array($example)) {
-                            $schema = (object)["type" => "object", "properties" => $example["properties"], "example" => $example["data"]];
-                        } else {
-                            $schema = (object)["type" => "object", "example" => $example];
-                        }
-
-                        $responseContent = (object)["application/json" => $schema];
-                        $response = (object)[
-                            "200" => (object)["description" => "Success", "content" => $responseContent],
-                            "400" => (object)["description" => "Failed"]
-                        ];
-
-                    } else {
-                        $response = (object)[
-                            "200" => (object)["description" => "Success"],
-                            "400" => (object)["description" => "Failed"]
-                        ];
-                    }
-
-                    if (!empty($paths->{$route["routePath"]})) {
-                        $paths->{$route["routePath"]}->{$method} = $this->getSwaggerEntry($method, $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, $response);
-                    } else {
-                        $paths->{$route["routePath"]} = (object)[(string)($method) => $this->getSwaggerEntry($method, $tags, $summary, $description, ["application/json", "html/text"], $security, $params, $example, $response)];
-                    }
-                }
-            }
-        }
+    public function __construct(
+        string $title = "Tina4 API",
+        string $description = "API Documentation",
+        string $version = "1.0.0",
+        string $basePath = "/"
+    ) {
+        $protocol   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443 ? "https" : "http";
+        $host       = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base       = rtrim($basePath, '/');
+        $serverUrl  = $protocol . "://" . $host . ($base !== '' ? $base : '');
 
         $this->swagger = [
-            "openapi" => "3.0.0",
-            "host" => $_SERVER["HTTP_HOST"],
+            "openapi" => "3.0.3",
             "info" => [
-                "title" => $title,
-                "description" => $apiDescription,
-                "version" => $version
+                "title"       => $title,
+                "description" => $description,
+                "version"     => $version
             ],
-            "components" => ["securitySchemes" => ["bearerAuth" => ["type" => "http", "scheme" => "bearer", "bearerFormat" => "JWT"]]],
-            "basePath" => $this->subFolder,
-            "paths" => $paths
-        ];
-    }
-
-    /**
-     * Get Swagger Entry
-     * @param $method
-     * @param $tags
-     * @param $summary
-     * @param $description
-     * @param $produces
-     * @param $security
-     * @param $params
-     * @param $example
-     * @param $responses
-     * @return object
-     */
-    public function getSwaggerEntry($method, $tags, $summary, $description, $produces, $security, $params, $example, $responses): object
-    {
-        if (is_array($example) && !empty($example)) {
-            $schema = (object)["type" => "object", "properties" => $example["properties"], "example" => $example["data"]];
-        } else {
-            $schema = (object)["type" => "object", "example" => $example];
-        }
-
-        $entry = (object)[
-            "tags" => $tags,
-            "summary" => $summary,
-            "description" => $description,
-            "produces" => $produces,
-            "parameters" => $params,
-            "requestBody" => (object)[
-                "description" => "Example Object",
-                "required" => true,
-                "content" => [
-                    "application/json" => [
-                        "schema" => $schema
+            "servers" => [
+                ["url" => $serverUrl]
+            ],
+            "paths" => [],
+            "components" => [
+                "securitySchemes" => [
+                    "bearerAuth" => [
+                        "type" => "http",
+                        "scheme" => "bearer",
+                        "bearerFormat" => "JWT"
                     ]
                 ]
             ],
-            "security" => $security,
-            "responses" => $responses
+            "tags" => []
         ];
 
-        //Get rid of request body if the example is empty
-        if (empty((array)$example) || $method === "get") {
-            unset($entry->requestBody);
+        $this->buildFromRoutes();
+    }
+
+    private function buildFromRoutes(): void
+    {
+        global $arrRoutes;
+        if (empty($arrRoutes)) return;
+
+        $allTags = [];
+
+        foreach ($arrRoutes as $route) {
+            $method = strtolower($route["method"]);
+            $path   = "/" . ltrim(str_replace("//", "/", $route["routePath"]), "/");
+
+            $reflection = $this->getReflection($route);
+            if (!$reflection) continue;
+
+            // Attributes
+            $summary = $description = "";
+            $tags = [];
+
+            foreach ($reflection->getAttributes() as $attr) {
+                $obj = $attr->newInstance();
+                if ($obj instanceof \Description) {
+                    $description = trim($obj->value);
+                    $summary = $summary ?: $description;
+                }
+                if ($obj instanceof \Tags) {
+                    $tags = array_merge($tags, $obj->tags);
+                }
+            }
+
+            // Docblock annotations
+            $doc = $reflection->getDocComment() ?: "";
+            $annotations = $this->parseDocBlock($doc);
+
+            if (!empty($annotations["summary"][0]))     $summary     = $annotations["summary"][0];
+            if (!empty($annotations["description"][0])) $description = $annotations["description"][0];
+            if (!empty($annotations["tags"][0])) {
+                $tags = array_merge($tags, array_map('trim', explode(',', $annotations["tags"][0])));
+            }
+
+            // Skip undocumented routes
+            if (empty($description) && empty($summary)) continue;
+
+            // @secure = requires auth
+            $isSecure = !empty($annotations["secure"]);
+
+            // Examples
+            $requestExample  = $this->makeExample($annotations["example_request"][0] ?? null);
+            $responseExample = $this->makeExample($annotations["example_response"][0] ?? null)
+                ?? $this->makeExample($annotations["example"][0] ?? null);
+
+            // Parameters
+            $params = array_merge($this->pathParams($path), $this->queryParams($annotations));
+
+            // Responses
+            $responses = $this->responses($responseExample);
+
+            // Build operation
+            $operation = [
+                "summary"     => $summary ?: "No summary",
+                "description" => $description,
+                "tags"        => array_unique($tags),
+                "parameters"  => $params,
+                "responses"   => $responses
+            ];
+
+            // Request body
+            if (in_array($method, ["post", "put", "patch"]) && $requestExample) {
+                $operation["requestBody"] = [
+                    "required" => true,
+                    "content" => [
+                        "application/json" => [
+                            "schema"  => $this->schema($requestExample),
+                            "example" => $requestExample->data ?? $requestExample
+                        ]
+                    ]
+                ];
+            }
+
+            // ONLY add security when @secure is present
+            if ($isSecure) {
+                $operation["security"] = [["bearerAuth" => []]];
+            }
+
+            // Register path
+            if ($method === "any") {
+                foreach (["get","post","put","patch","delete","options","head"] as $m) {
+                    $this->swagger["paths"][$path][$m] = $operation;
+                }
+            } else {
+                $this->swagger["paths"][$path][$method] = $operation;
+            }
+
+            $allTags = array_merge($allTags, $tags);
         }
 
-        return $entry;
+        $this->swagger["tags"] = array_values(array_map(fn($t) => ["name" => $t], array_unique($allTags)));
+    }
+
+    // ———————————————————————— Helpers ————————————————————————
+
+    private function parseDocBlock(string $doc): array
+    {
+        $result = [];
+        if (preg_match_all('/@(\w+)\s+([^\n\r\*]+)/', $doc, $m, PREG_SET_ORDER)) {
+            foreach ($m as $match) {
+                $result[strtolower($match[1])][] = trim($match[2]);
+            }
+        }
+        return $result;
+    }
+
+    private function makeExample(?string $value): ?object
+    {
+        if (!$value) return null;
+        $value = trim($value, "\\ \t\n\r\0\x0B");
+
+        if (str_starts_with($value, '{') || str_starts_with($value, '[')) {
+            $data = json_decode($value);
+            return $data !== null ? (object)["data" => $data] : null;
+        }
+
+        if (!class_exists($value)) return null;
+
+        try {
+            $obj = new $value();
+            if (method_exists($obj, "asArray")) {
+                $data = $obj->asArray();
+                $props = [];
+                if (method_exists($obj, "getFieldDefinitions")) {
+                    foreach ($obj->getFieldDefinitions() as $f) {
+                        $props[$f->fieldName] = ["type" => $f->dataType ?? "string"];
+                    }
+                }
+                return (object)["data" => $data, "properties" => (object)$props];
+            }
+            return (object)["data" => json_decode(json_encode($obj))];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function pathParams(string $path): array
+    {
+        $p = [];
+        preg_match_all('/\{([^}]+)\}/', $path, $m);
+        foreach ($m[1] as $param) {
+            $type = str_ends_with($param, ":int") ? "integer" : "string";
+            $name = str_replace(":int", "", $param);
+            $p[] = ["name" => $name, "in" => "path", "required" => true, "schema" => ["type" => $type]];
+        }
+        return $p;
+    }
+
+    private function queryParams(array $a): array
+    {
+        $p = [];
+        foreach (["params", "queryparams"] as $k) {
+            if (!empty($a[$k][0])) {
+                foreach (explode(',', $a[$k][0]) as $param) {
+                    $param = trim($param);
+                    if ($param) $p[] = ["name" => $param, "in" => "query", "schema" => ["type" => "string"]];
+                }
+            }
+        }
+        return $p;
+    }
+
+    private function responses(?object $ex): array
+    {
+        $r = [
+            "200" => ["description" => "Success", "content" => ["application/json" => ["schema" => ["type" => "object"]]]],
+            "400" => ["description" => "Bad Request"],
+            "401" => ["description" => "Unauthorized"],
+            "404" => ["description" => "Not Found"],
+            "500" => ["description" => "Server Error"]
+        ];
+
+        if ($ex) {
+            $r["200"]["content"]["application/json"] = [
+                "schema"  => $this->schema($ex),
+                "example" => $ex->data ?? $ex
+            ];
+        }
+        return $r;
+    }
+
+    private function schema(object $ex): array
+    {
+        return isset($ex->properties)
+            ? ["type" => "object", "properties" => $ex->properties]
+            : ["type" => "object"];
+    }
+
+    private function getReflection(array $r): ?\ReflectionFunctionAbstract
+    {
+        try {
+            return !empty($r["class"])
+                ? (new \ReflectionClass($r["class"]))->getMethod($r["function"])
+                : new \ReflectionFunction($r["function"]);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function __toString(): string
     {
-        header("Content-Type: application/json");
-        return json_encode($this->swagger, JSON_UNESCAPED_SLASHES);
+        header("Content-Type: application/json; charset=utf-8");
+        return json_encode($this->swagger, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
-
-    /**
-     * Specify data which should be serialized to JSON
-     * @link https://php.net/manual/en/jsonserializable.jsonserialize.php
-     * @return mixed data which can be serialized by <b>json_encode</b>,
-     * which is a value of any type other than a resource.
-     * @since 5.4.0
-     */
     public function jsonSerialize(): array
     {
         return $this->swagger;

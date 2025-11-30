@@ -162,9 +162,9 @@ class Auth extends Data
                     throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
                 }
             }
-            `ssh-keygen -t rsa -b 1024 -m PEM -f {$this->documentRoot}secrets/private.key -q -N ""`;
-            `chmod 600 {$this->documentRoot}secrets/private.key`;
-            `openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub`;
+            shell_exec("ssh-keygen -t rsa -b 1024 -m PEM -f {$this->documentRoot}secrets/private.key -q -N \"\"");
+            shell_exec("chmod 600 {$this->documentRoot}secrets/private.key");
+            shell_exec("openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub");
         }
 
         return true;

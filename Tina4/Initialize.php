@@ -361,3 +361,95 @@ if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
 }
 
 //@todo Init Git Here
+
+//Attributes for routing
+// src/Attributes/Get.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Get { public function __construct(public string $path) {} }
+
+// src/Attributes/Post.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Post { public function __construct(public string $path) {} }
+
+// src/Attributes/Put.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Put { public function __construct(public string $path) {} }
+
+// src/Attributes/Patch.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Patch { public function __construct(public string $path) {} }
+
+// src/Attributes/Delete.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Delete { public function __construct(public string $path) {} }
+
+// src/Attributes/Options.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Options { public function __construct(public string $path) {} }
+
+// src/Attributes/Head.php
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Head { public function __construct(public string $path) {} }
+
+// src/Attributes/Any.php          ← matches ALL methods (very useful)
+#[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+final class Any { public function __construct(public string $path) {} }
+
+// src/Attributes/Prefix.php       ← for controllers
+#[\Attribute(\Attribute::TARGET_CLASS)]
+final class Prefix { public function __construct(public string $prefix) {} }
+
+$routeFolder = TINA4_DOCUMENT_ROOT. 'src';
+
+foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFolder)) as $file) {
+    if ($file->getExtension() !== 'php') continue;
+
+    require_once $file->getRealPath();
+
+    // ── Class methods (controllers) ─────────────────────────────────────
+    foreach (get_declared_classes() as $class) {
+        $refClass = new ReflectionClass($class);
+
+        // Skip if this class wasn't in the one we just required
+        if ($refClass->getFileName() !== $file->getRealPath()) continue;
+
+        $prefix = '';
+        foreach ($refClass->getAttributes(Prefix::class) as $attr) {
+            $prefix = $attr->newInstance()->prefix;
+        }
+
+        foreach ($refClass->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            registerRouteFromAttributes($method, $prefix);
+        }
+    }
+
+    // ── Global functions (flat Python style) ─────────────────────────────
+    foreach (get_defined_functions()['user'] as $func) {
+        $refFunc = new ReflectionFunction($func);
+        if ($refFunc->getFileName() !== $file->getRealPath()) continue;
+
+        registerRouteFromAttributes($refFunc);
+    }
+}
+
+// ── Helper that does the actual registration ─────────────────────────────
+function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
+{
+    foreach ($ref->getAttributes() as $attr) {
+        $instance = $attr->newInstance();
+
+        $path = $prefix . $instance->path;
+
+        match ($attr->getName()) {
+            Get::class => \Tina4\Get::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Post::class => \Tina4\Post::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Options::class => \Tina4\Options::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Head::class => \Tina4\Head::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+            default => null,
+        };
+    }
+}
