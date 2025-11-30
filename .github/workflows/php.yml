@@ -1,6 +1,5 @@
 name: PHP Composer
 
-
 on:
   push:
     branches: [ master ]
@@ -9,33 +8,54 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout code
       - uses: actions/checkout@v4
 
-      - name: Validate composer.json and composer.lock
+      # 2. Set up PHP 8.4 with Composer action
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
+          php-version: '8.4'
+          extensions: mbstring, intl, pdo_sqlite, sqlite3, gd  # add any others your project needs
+          ini-values: memory_limit=-1
+          coverage: none
+          tools: composer:v2
+
+      # 3. Validate composer.json and composer.lock
+      - name: Validate composer.json and composer.lock
         run: composer validate --strict
+
+      # 4. Cache Composer vendor directory
       - name: Cache Composer packages
         id: composer-cache
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-8.4-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php-
+            ${{ runner.os }}-php-8.4-
 
+      # 5. Install dependencies (ignore platform reqs only if really needed)
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest --ignore-platform-req=ext-interbase
+        run: >
+          composer install 
+          --prefer-dist 
+          --no-progress 
+          --no-suggest 
+          --no-interaction
+          --ignore-platform-req=ext-interbase  # keep only if you really don't have interbase/firebird
 
-      - name: Initialize framework
-        run: composer exec tina4 initialize:run
+      # 6. Initialize Tina4 (creates config, migrations folder, etc.)
+      - name: Initialize Tina4 framework
+        run: php tina4 initialize:run
+        # or if the binary is in vendor/bin:
+        # run: vendor/bin/tina4 initialize:run
 
-      # Add a test script to composer.json, for instance: "test": "vendor/bin/phpunit"
-      # Docs: https://getcomposer.org/doc/articles/scripts.md
-
-      - name: Run test suite
-        run: composer exec tina4 tests:run tina4
+      # 7. Run Tina4 test suite
+      - name: Run Tina4 test suite
+        run: php tina4 tests:run tina4
+        # or:
+        # run: vendor/bin/tina4 tests:run tina4
