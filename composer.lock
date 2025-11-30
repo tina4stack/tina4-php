@@ -1152,16 +1152,16 @@
         },
         {
             "name": "tina4stack/tina4php-core",
-            "version": "v2.0.15",
+            "version": "v2.0.16",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-core.git",
-                "reference": "c10e407853373a01e1cb51ee3da88a6a5f06eb99"
+                "reference": "c716ee3dbb39c3b59028ed2ba7ab26f47479d84c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/c10e407853373a01e1cb51ee3da88a6a5f06eb99",
-                "reference": "c10e407853373a01e1cb51ee3da88a6a5f06eb99",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/c716ee3dbb39c3b59028ed2ba7ab26f47479d84c",
+                "reference": "c716ee3dbb39c3b59028ed2ba7ab26f47479d84c",
                 "shasum": ""
             },
             "require-dev": {
@@ -1195,9 +1195,9 @@
             "description": "Tina4 PHP Core Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-core/issues",
-                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.15"
+                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.16"
             },
-            "time": "2025-11-30T16:15:55+00:00"
+            "time": "2025-11-30T16:23:43+00:00"
         },
         {
             "name": "tina4stack/tina4php-database",

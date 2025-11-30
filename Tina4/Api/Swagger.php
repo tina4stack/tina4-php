@@ -154,7 +154,7 @@ final class Swagger implements \JsonSerializable
     private function parseDocBlock(string $doc): array
     {
         $result = [];
-        if (preg_match_all('/@(\w+)\s+([^\n\r\*]+)/', $doc, $m, PREG_SET_ORDER)) {
+        if (preg_match_all('/@(\w+)\s+([^\n\r*]+)/', $doc, $m, PREG_SET_ORDER)) {
             foreach ($m as $match) {
                 $result[strtolower($match[1])][] = trim($match[2]);
             }
@@ -195,7 +195,7 @@ final class Swagger implements \JsonSerializable
     private function pathParams(string $path): array
     {
         $p = [];
-        preg_match_all('/\{([^}]+)\}/', $path, $m);
+        preg_match_all('/\{([^}]+)}/', $path, $m);
         foreach ($m[1] as $param) {
             $type = str_ends_with($param, ":int") ? "integer" : "string";
             $name = str_replace(":int", "", $param);
