@@ -485,8 +485,10 @@ foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFold
     }
 }
 
-// === OPTIMIZED ROUTE INDEX (add at the very end of initialize.php) ===
+
 global $arrRoutes, $arrRouteIndex;
+
+
 $arrRouteIndex = [];
 
 foreach ($arrRoutes as $route) {
