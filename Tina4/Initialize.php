@@ -484,3 +484,27 @@ foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFold
         registerRouteFromAttributes($refFunc);
     }
 }
+
+// === OPTIMIZED ROUTE INDEX (add at the very end of initialize.php) ===
+global $arrRoutes, $arrRouteIndex;
+$arrRouteIndex = [];
+
+foreach ($arrRoutes as $route) {
+    $method = $route["method"] === TINA4_ANY ? "ANY" : $route["method"];
+    $path = rtrim($route["routePath"], '/');
+    $parts = $path === '' ? [] : explode('/', trim($path, '/'));
+
+    $node = &$arrRouteIndex;
+    if (!isset($node[$method])) $node[$method] = ['children' => [], 'routes' => []];
+    $current = &$node[$method]['children'];
+
+    foreach ($parts as $part) {
+        if ($part === '') continue;
+        if (!isset($current[$part])) {
+            $current[$part] = ['children' => [], 'routes' => []];
+        }
+        $current = &$current[$part]['children'];
+    }
+    $current['routes'][] = $route;
+}
+// =====================================================================

@@ -80,3 +80,5 @@ test.db
 /log/deploy.log
 /bin/tina4
 /src/templates/index.twig
+/bin/libmysql.dll
+/bin/sqlite3.dll
