@@ -361,7 +361,6 @@ if (defined("TINA4_CACHE_ON") && TINA4_CACHE_ON === true) {
 }
 
 //@todo Init Git Here
-
 if (!class_exists("Get")) {
 //Attributes for routing
 // src/Attributes/Get.php
@@ -429,6 +428,30 @@ if (!class_exists("Any")) {
     }
 }
 
+
+if (!function_exists("registerRouteFromAttributes")) {
+    // ── Helper that does the actual registration ─────────────────────────────
+    function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
+    {
+        foreach ($ref->getAttributes() as $attr) {
+            $instance = $attr->newInstance();
+
+            $path = $prefix . $instance->path;
+
+            match ($attr->getName()) {
+                Get::class => \Tina4\Get::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Post::class => \Tina4\Post::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                default => null,
+            };
+        }
+    }
+}
+
+
 $routeFolder = TINA4_DOCUMENT_ROOT. 'src';
 
 foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFolder)) as $file) {
@@ -459,27 +482,5 @@ foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFold
         if ($refFunc->getFileName() !== $file->getRealPath()) continue;
 
         registerRouteFromAttributes($refFunc);
-    }
-}
-
-if (!function_exists("registerRouteFromAttributes")) {
-// ── Helper that does the actual registration ─────────────────────────────
-    function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
-    {
-        foreach ($ref->getAttributes() as $attr) {
-            $instance = $attr->newInstance();
-
-            $path = $prefix . $instance->path;
-
-            match ($attr->getName()) {
-                Get::class => \Tina4\Get::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Post::class => \Tina4\Post::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                default => null,
-            };
-        }
     }
 }
