@@ -52,6 +52,7 @@
         "ext-json": "*",
         "ext-curl": "*",
         "ext-fileinfo": "*",
+        "ext-zip": "*",
         "tina4stack/tina4php-core": "^2.0"
     },
     "scripts": {

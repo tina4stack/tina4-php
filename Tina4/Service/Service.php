@@ -19,8 +19,8 @@ class Service extends Data
      * Name of the file to store the serialized service in
      * @var false|string
      */
-    private $serviceSaveFilename;
-    private $servicesTimingFilename;
+    private string|false $serviceSaveFilename;
+    private string $servicesLastTimeFilename;
 
     /**
      * Service constructor
@@ -36,7 +36,7 @@ class Service extends Data
      * Add process to the list to be run
      * @param Process $process
      */
-    public function addProcess(\Tina4\Process $process)
+    public function addProcess(\Tina4\Process $process): void
     {
         if (file_exists($this->serviceSaveFilename)) {
             $services = unserialize(file_get_contents($this->serviceSaveFilename));
@@ -51,7 +51,7 @@ class Service extends Data
      * Add process to the list to be run
      * @param string $name
      */
-    public function removeProcess(string $name)
+    public function removeProcess(string $name): void
     {
         if (file_exists($this->serviceSaveFilename)) {
             $services = unserialize(file_get_contents($this->serviceSaveFilename));
@@ -83,7 +83,7 @@ class Service extends Data
      * Add process to the list of last run processes with their last time
      * @param Process $process
      */
-    public function addLastTimeProcess(\Tina4\Process $process)
+    public function addLastTimeProcess(\Tina4\Process $process): void
     {
         if (file_exists($this->servicesLastTimeFilename)) {
             $services = unserialize(file_get_contents($this->servicesLastTimeFilename));

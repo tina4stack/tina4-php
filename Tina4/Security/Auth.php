@@ -285,7 +285,7 @@ class Auth extends Data
             }
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
-            Debug::message("Validating {$token} failed!");
+            Debug::message("Validating {$token} failed! ".$e->getMessage());
             return false;
         } catch (\Exception $e) {
             // Handle other validation exceptions
@@ -321,7 +321,7 @@ class Auth extends Data
             $tokenEncoded->validate($this->publicKey, $encryption);
         } catch (IntegrityViolationException $e) {
             // Handle token not trusted
-            Debug::message("Validating {$token} failed!");
+            Debug::message("Validating {$token} failed! ". $e->getMessage());
             return [];
         } catch (\Exception $e) {
             // Handle other validation exceptions

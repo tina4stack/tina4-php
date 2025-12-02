@@ -2,9 +2,6 @@
 
 namespace Tina4;
 
-use FilesystemIterator;
-use function PHPUnit\Framework\throwException;
-
 
 class GitDeploy
 {
