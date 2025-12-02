@@ -345,7 +345,7 @@ class Tina4Php extends Data
     public function __toString(): string
     {
         if (!isset($_SERVER["REQUEST_METHOD"])) {
-            $_SERVER["REQUEST_METHOD"] = TINA4_GET;
+            $_SERVER["REQUEST_METHOD"] = "GET";
         }
 
         if (!isset($_SERVER["REQUEST_URI"])) {
