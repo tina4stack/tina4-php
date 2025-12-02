@@ -9,7 +9,6 @@
 namespace Tina4;
 
 use ScssPhp\ScssPhp\Compiler;
-use ScssPhp\ScssPhp\Exception\CompilerException;
 use Twig\Error\LoaderError;
 
 /**
@@ -112,20 +111,16 @@ class Tina4Php extends Data
                 $dateB = strtotime($dateB);
             }
 
-            switch ($operator) {
-                case "==":
-                    return $dateA == $dateB;
-                case "!=":
-                    return $dateA != $dateB;
-                case ">":
-                    return $dateA > $dateB;
-                case "<":
-                    return $dateA < $dateB;
-                case ">=":
-                    return $dateA >= $dateB;
-                case "<=":
-                    return $dateA <= $dateB;
-            }
+            return match ($operator) {
+                "==" => $dateA == $dateB,
+                "!=" => $dateA != $dateB,
+                ">" => $dateA > $dateB,
+                "<" => $dateA < $dateB,
+                ">=" => $dateA >= $dateB,
+                "<=" => $dateA <= $dateB,
+                default => False,
+            };
+
         });
 
 
