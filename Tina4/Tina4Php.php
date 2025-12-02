@@ -115,22 +115,16 @@ class Tina4Php extends Data
             switch ($operator) {
                 case "==":
                     return $dateA == $dateB;
-                    break;
                 case "!=":
                     return $dateA != $dateB;
-                    break;
                 case ">":
                     return $dateA > $dateB;
-                    break;
                 case "<":
                     return $dateA < $dateB;
-                    break;
                 case ">=":
                     return $dateA >= $dateB;
-                    break;
                 case "<=":
                     return $dateA <= $dateB;
-                    break;
             }
         });
 
@@ -147,7 +141,7 @@ class Tina4Php extends Data
 
             try {
                 $this->initCSS();
-            } catch (CompilerException $e) {
+            } catch (\Exception $e) {
                 Debug::message("Could not create default.css twig in Tina4PHP Constructor", TINA4_LOG_ERROR);
             }
         }
