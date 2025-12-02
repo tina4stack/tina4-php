@@ -510,8 +510,10 @@ if (!$alreadyLoaded) {
     // =====================================================================
     //$after = microtime(true);
     //Debug::message("After: ".$after-$before);
-    Debug::message( is_array(opcache_get_status()) ? 'OPCACHE: Enabled' : 'OPCACHE: Disabled');
+    if (function_exists("opcache_get_status")) {
+        Debug::message(is_array(opcache_get_status()) ? 'OPCACHE: Enabled' : 'OPCACHE: Disabled');
+    } else {
+        Debug::message("NO OP CACHE ENABLED - CONSIDER ENABLING IT", TINA4_LOG_ERROR);
+    }
 
-} else {
-    Debug::message("Already Loading ", TINA4_LOG_DEBUG);
 }
