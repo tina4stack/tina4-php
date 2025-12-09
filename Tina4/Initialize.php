@@ -11,7 +11,6 @@ use Tina4\Debug;
 use Tina4\Module;
 
 
-
 //TINA4 CONSTANTS
 if (!defined("TINA4_DATABASE_TYPES")) {
     define("TINA4_DATABASE_TYPES", ["Tina4\DataMySQL", "Tina4\DataFirebird", "Tina4\DataSQLite3", "Tina4\DataMongoDb", "Tina4\DataPostgresql", "Tina4\DataMSSQL"]);
@@ -366,6 +365,17 @@ if (!$alreadyLoaded) {
     }
 
     //@todo Init Git Here
+    if (!class_exists("Template")) {
+        //Attributes for routing
+        #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
+        final class Template
+        {
+            public function __construct(public string $twigFile, public mixed $data = null)
+            {
+            }
+        }
+    }
+
     if (!class_exists("Get")) {
         //Attributes for routing
         #[\Attribute(\Attribute::TARGET_FUNCTION | \Attribute::TARGET_METHOD)]
@@ -431,18 +441,49 @@ if (!$alreadyLoaded) {
         // ── Helper that does the actual registration ─────────────────────────────
         function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
         {
-            foreach ($ref->getAttributes() as $attr) {
+            $attributes = $ref->getAttributes();
+
+            $templateAttr = null;
+            $routeAttrs = [];
+
+            foreach ($attributes as $attr) {
+                $name = $attr->getName();
+                if ($name === Template::class) {
+                    $templateAttr = $attr;
+                } else {
+                    $routeAttrs[] = $attr;
+                }
+            }
+
+            $originalCallable = $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name;
+
+            $callable = $originalCallable;
+            if ($templateAttr) {
+                $templateInstance = $templateAttr->newInstance();
+                $templateName = $templateInstance->twigFile;  // Use 'twigFile' to match your class property
+
+                $callable = function (...$args) use ($originalCallable, $templateName) {
+                    $result = call_user_func_array($originalCallable, $args);
+                    if (is_array($result)) {
+                        $response = end($args);  // Assume \Tina4\Response is the last parameter
+                        return $response(\Tina4\render($templateName, $result));
+                    }
+                    return $result;
+                };
+            }
+
+            foreach ($routeAttrs as $attr) {
                 $instance = $attr->newInstance();
 
                 $path = $prefix . $instance->path;
 
                 match ($attr->getName()) {
-                    Get::class => \Tina4\Get::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                    Post::class => \Tina4\Post::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                    Put::class => \Tina4\Put::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                    Patch::class => \Tina4\Patch::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                    Delete::class => \Tina4\Delete::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
-                    Any::class => \Tina4\Any::add($path, $ref instanceof ReflectionMethod ? [$ref->class, $ref->name] : $ref->name),
+                    Get::class => \Tina4\Get::add($path, $callable),
+                    Post::class => \Tina4\Post::add($path, $callable),
+                    Put::class => \Tina4\Put::add($path, $callable),
+                    Patch::class => \Tina4\Patch::add($path, $callable),
+                    Delete::class => \Tina4\Delete::add($path, $callable),
+                    Any::class => \Tina4\Any::add($path, $callable),
                     default => null,
                 };
             }

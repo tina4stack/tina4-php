@@ -43,17 +43,25 @@ class Migration extends Data
     private $runRootMigrations = false;
 
     /**
+     * Output format: 'html' or 'terminal'
+     * @var string
+     */
+    private $outputFormat = 'html';
+
+    /**
      * Constructor for Migrations
      * The path is relative to your web folder.
      *
      * @param String $migrationPath relative path to your web folder
      * @param String $delim A delimiter to say how your SQL is run
+     * @param string $outputFormat 'html' or 'terminal'
      */
-    public function __construct(string $migrationPath = "./migrations", string $delim = ";")
+    public function __construct(string $migrationPath = "./migrations", string $delim = ";", string $outputFormat = 'html')
     {
         parent::__construct();
         $this->delimit = $delim;
         $this->migrationPath = $migrationPath;
+        $this->outputFormat = $outputFormat;
 
         if ($this->DBA === null) {
             echo "Please make sure you have a global \$DBA connection in your index.php\n";
@@ -126,8 +134,10 @@ class Migration extends Data
         set_time_limit(0);
 
 
-        $result .= "<pre>";
-        $result .= "<span style=\"color:green;\">STARTING Migrations ($this->migrationPath)....</span>\n";
+        if ($this->outputFormat === 'html') {
+            $result .= "<pre>";
+        }
+        $result .= $this->formatText("STARTING Migrations ($this->migrationPath)....", 'green') . "\n";
 
         restore_error_handler();
         error_reporting(0);
@@ -182,7 +192,7 @@ class Migration extends Data
 
             $runSql = false;
             if (empty($record)) {
-                $result .= "<span style=\"color:orange;\">RUNNING:\"{$migrationId} {$description}\" ...</span>\n";
+                $result .= $this->formatText("RUNNING:\"{$migrationId} {$description}\" ...", 'orange') . "\n";
                 $transId = $this->DBA->startTransaction();
 
                 $sqlInsert = "insert into tina4_migration (migration_id, description, content, passed)
@@ -193,13 +203,13 @@ class Migration extends Data
                 $this->DBA->commit($transId);
                 $runSql = true;
             } else if ($record->passed === "0" || $record->passed === "" || $record->passed == 0) {
-                $result .= "<span style=\"color:orange;\">RETRY: \"{$migrationId} {$description}\" ... </span> \n";
+                $result .= $this->formatText("RETRY: \"{$migrationId} {$description}\" ... ", 'orange') . "\n";
                 $runSql = true;
             } elseif ($record->passed === "1" || $record->passed == 1) {
                 //Update the migration with the latest copy
                 $sqlUpdate = "update tina4_migration set content = ".$this->DBA->getQueryParam("1", 1)." where migration_id = '{$migrationId}'";
                 $this->DBA->exec($sqlUpdate, substr($content, 0, 10000));
-                $result .= "<span style=\"color:green;\">PASSED:\"{$migrationId} {$description}\"</span>\n";
+                $result .= $this->formatText("PASSED:\"{$migrationId} {$description}\"", 'green') . "\n";
                 $runSql = false;
             }
 
@@ -219,18 +229,18 @@ class Migration extends Data
                     if (!empty(trim($sql))) {
                         $success = $this->DBA->exec($sql, $transId);
                         if ($success->getError()["errorMessage"] !== "" && $success->getError()["errorMessage"] !== "not an error" && $success->getError()["errorMessage"] !== false) {
-                            $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nQUERY:{$sql}\nERROR:" . $success->getError()["errorMessage"] . "\n";
+                            $result .= $this->formatText("FAILED: \"{$migrationId} {$description}\"", 'red') . "\nQUERY:{$sql}\nERROR:" . $success->getError()["errorMessage"] . "\n";
                             $error = true;
                             break;
                         } else {
-                            $result .= "<span style=\"color:green;\">PASSED:</span> ";
+                            $result .= $this->formatText("PASSED:", 'green') . " ";
                         }
                         $result .= $sql . " ...\n";
                     }
                 }
 
                 if ($error) {
-                    $result .= "<span style=\"color:red;\">FAILED: \"{$migrationId} {$description}\"</span>\nAll Transactions Rolled Back ...\n";
+                    $result .= $this->formatText("FAILED: \"{$migrationId} {$description}\"", 'red') . "\nAll Transactions Rolled Back ...\n";
                     $this->DBA->rollback($transId);
                     break;
                 } else {
@@ -238,7 +248,7 @@ class Migration extends Data
 
                     //we need to make sure the commit resulted in no errors
                     if ($this->DBA->error()->getError()["errorMessage"] !== "" && $this->DBA->error()->getError()["errorMessage"] !== "not an error" && $success->getError()["errorMessage"] !== false) {
-                        $result .= "<span style=\"color:red;\">FAILED COMMIT: \"{$migrationId} {$description}\"</span>\nERROR:" . $this->DBA->error()->getError()["errorMessage"] . "\n";
+                        $result .= $this->formatText("FAILED COMMIT: \"{$migrationId} {$description}\"", 'red') . "\nERROR:" . $this->DBA->error()->getError()["errorMessage"] . "\n";
                         $this->DBA->rollback($transId);
                         $error = true;
                         break;
@@ -246,18 +256,19 @@ class Migration extends Data
                         $transId = $this->DBA->startTransaction();
                         $this->DBA->exec("update tina4_migration set passed = 1 where migration_id = '{$migrationId}'");
                         $this->DBA->commit($transId);
-                        $result .= "<span style=\"color:green;\">PASSED: \"{$migrationId} {$description}\"</span>\n";
+                        $result .= $this->formatText("PASSED: \"{$migrationId} {$description}\"", 'green') . "\n";
                     }
                 }
             }
         }
 
         if (!$error) {
-            $result .= "<span style=\"color:green;\">FINISHED! ....</span>\n";
+            $result .= $this->formatText("FINISHED! ....", 'green') . "\n";
         }
         error_reporting(E_ALL);
-        $result .= "</pre>";
-
+        if ($this->outputFormat === 'html') {
+            $result .= "</pre>";
+        }
 
 
         if ($this->runRootMigrations) {
@@ -269,6 +280,32 @@ class Migration extends Data
         }
 
         return $result;
+    }
+
+    /**
+     * Format text based on output format
+     * @param string $text
+     * @param string $color 'green', 'orange', 'red'
+     * @return string
+     */
+    private function formatText(string $text, string $color): string
+    {
+        if ($this->outputFormat === 'terminal') {
+            $colors = [
+                'green' => "\033[32m",
+                'orange' => "\033[33m",
+                'red' => "\033[31m",
+                'reset' => "\033[0m"
+            ];
+            return $colors[$color] . $text . $colors['reset'];
+        } else { // html
+            $htmlColors = [
+                'green' => '<span style="color:green;">',
+                'orange' => '<span style="color:orange;">',
+                'red' => '<span style="color:red;">'
+            ];
+            return $htmlColors[$color] . $text . '</span>';
+        }
     }
 
 
