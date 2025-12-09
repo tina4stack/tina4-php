@@ -18,5 +18,5 @@ class Patch extends Route
     /**
      * @var string Sets $method to PATCH
      */
-    public static $method = TINA4_PATCH;
+    public static string $method = TINA4_PATCH;
 }

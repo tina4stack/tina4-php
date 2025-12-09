@@ -18,5 +18,5 @@ class Put extends Route
     /**
      * @var string Sets $method to PUT
      */
-    public static $method = TINA4_PUT;
+    public static string $method = TINA4_PUT;
 }

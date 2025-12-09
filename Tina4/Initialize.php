@@ -188,6 +188,9 @@ if (!$alreadyLoaded) {
     }
 
     function getLogLevel(mixed $input) {
+        if (is_array($input)) {
+            return $input;
+        }
         $debugLevel = [];
         @eval("\$debugLevel = ".$input.";");
         return $debugLevel;

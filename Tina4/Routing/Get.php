@@ -19,5 +19,7 @@ class Get extends Route
     /**
      * @var string Sets $method to GET
      */
-    public static $method = TINA4_GET;
+    public static string $method = TINA4_GET;
+
+
 }

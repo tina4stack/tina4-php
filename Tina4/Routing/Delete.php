@@ -19,5 +19,5 @@ class Delete extends Route
     /**
      * @var string Sets $method to DELETE
      */
-    public static $method = TINA4_DELETE;
+    public static string $method = TINA4_DELETE;
 }

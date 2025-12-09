@@ -18,5 +18,5 @@ class Any extends Route
     /**
      * @var string Sets $method to ANY
      */
-    public static $method = TINA4_ANY;
+    public static string $method = TINA4_ANY;
 }

@@ -19,5 +19,5 @@ class Post extends Route
     /**
      * @var string Sets $method to POST
      */
-    public static $method = TINA4_POST;
+    public static string $method = TINA4_POST;
 }

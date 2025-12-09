@@ -17,8 +17,7 @@ class Route implements RouteCore
     /**
      * @var string Type of method e.g. ANY, POST, DELETE, etc
      */
-    public static $method;
-
+    public static string $method;
 
     //These methods are used for mostly CRUD and dynamic routes not for code readability, the inline params are passed into the request
 
@@ -90,7 +89,10 @@ class Route implements RouteCore
                     "caller" => $caller];
             }
         }
+
+
         return new static;
+
     }
 
     /**
@@ -194,7 +196,7 @@ class Route implements RouteCore
     /**
      * No cached route
      * @param bool $default
-     * @return void
+     * @return Route
      */
     public static function noCache(bool $default=false): Route
     {
@@ -207,7 +209,7 @@ class Route implements RouteCore
     /**
      * Cache route
      * @param bool $default
-     * @return void
+     * @return Route
      */
     public static function cache(bool $default=true): Route
     {
@@ -220,7 +222,7 @@ class Route implements RouteCore
     /**
      * Secure route
      * @param bool $default
-     * @return void
+     * @return Route
      */
     public static function secure(bool $default=true): Route
     {
