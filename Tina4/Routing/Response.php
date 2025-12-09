@@ -57,4 +57,6 @@ class Response
         }
         return ["contentType" => $contentType, "content" => $content, "httpCode" => $httpCode, "customHeaders" => $customHeaders];
     }
+
+
 }

@@ -427,7 +427,6 @@ if (!$alreadyLoaded) {
         }
     }
 
-
     if (!function_exists("registerRouteFromAttributes")) {
         // ── Helper that does the actual registration ─────────────────────────────
         function registerRouteFromAttributes(ReflectionFunctionAbstract $ref, string $prefix = ''): void
@@ -485,8 +484,6 @@ if (!$alreadyLoaded) {
 
 
     global $arrRoutes, $arrRouteIndex;
-
-
     $arrRouteIndex = [];
 
     foreach ($arrRoutes as $route) {
@@ -507,9 +504,7 @@ if (!$alreadyLoaded) {
         }
         $current['routes'][] = $route;
     }
-    // =====================================================================
-    //$after = microtime(true);
-    //Debug::message("After: ".$after-$before);
+
     if (function_exists("opcache_get_status")) {
         Debug::message(is_array(opcache_get_status()) ? 'OPCACHE: Enabled' : 'OPCACHE: Disabled');
     } else {

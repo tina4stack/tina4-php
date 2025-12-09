@@ -92,7 +92,7 @@ class Api
      * @param string $requestType
      * @param null $body
      * @param string $contentType
-     * @param array $customHeader s
+     * @param array $customHeaders
      * @param array $curlOptions
      * @return array tests tina4
      * tests tina4
