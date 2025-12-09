@@ -180,14 +180,15 @@ global $alreadyLoaded;
 if (!$alreadyLoaded) {
     $alreadyLoaded = True;
 
-    if (isset($_SERVER, $_SERVER["REQUEST_URI"]) && strpos($_SERVER["REQUEST_URI"], "index.php") !== false) {
+    if (isset($_SERVER["REQUEST_URI"]) && strpos($_SERVER["REQUEST_URI"], "index.php") !== false) {
         http_response_code(403);
-        echo '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>';
+        echo '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html lang="en"><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>';
         Debug::message("Tina4 stack should never be invoked by running index.php directly");
         exit;
     }
 
-    function getLogLevel(mixed $input) {
+    function getLogLevel(mixed $input): array
+    {
         if (is_array($input)) {
             return $input;
         }
@@ -220,13 +221,13 @@ if (!$alreadyLoaded) {
      * @param $class
      */
     if (!function_exists("autoLoadFolders")) {
-        function autoLoadFolders($documentRoot, $location, $class)
+        function autoLoadFolders($documentRoot, $location, $class): void
         {
             if (is_dir($documentRoot . $location)) {
                 $subFolders = scandir($documentRoot . $location);
                 foreach ($subFolders as $id => $file) {
                     if (is_dir(realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file)) && $file !== "." && $file !== "..") {
-                        $fileName = realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file . DIRECTORY_SEPARATOR . "{$class}.php");
+                        $fileName = realpath($documentRoot . $location . DIRECTORY_SEPARATOR . $file . DIRECTORY_SEPARATOR . "$class.php");
                         if (file_exists($fileName)) {
                             require_once $fileName;
                         } else {
@@ -518,7 +519,11 @@ if (!$alreadyLoaded) {
 
         // ── Class methods (controllers) ─────────────────────────────────────
         foreach (get_declared_classes() as $class) {
-            $refClass = new ReflectionClass($class);
+            try {
+                $refClass = new ReflectionClass($class);
+            } catch (ReflectionException $e) {
+                continue;
+            }
 
             // Skip if this class wasn't in the one we just required
             if ($refClass->getFileName() !== $file->getRealPath()) continue;
@@ -535,7 +540,11 @@ if (!$alreadyLoaded) {
 
         // ── Global functions (flat Python style) ─────────────────────────────
         foreach (get_defined_functions()['user'] as $func) {
-            $refFunc = new ReflectionFunction($func);
+            try {
+                $refFunc = new ReflectionFunction($func);
+            } catch (ReflectionException $e) {
+                continue;
+            }
             if ($refFunc->getFileName() !== $file->getRealPath()) continue;
 
             registerRouteFromAttributes($refFunc);
