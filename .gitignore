@@ -83,3 +83,4 @@ test.db
 /bin/libmysql.dll
 /bin/sqlite3.dll
 /src/routes/decorator.php
+/.phpunit.result.cache

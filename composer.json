@@ -69,7 +69,7 @@
         "begin": "@tina4 initialize:run",
         "start": "@tina4 webservice:run",
         "start-service": "@tina4service",
-        "run-tests": "./vendor/bin/phpunit tests --color --log-junit=tests/junit.xml -v",
+        "run-tests": "./vendor/bin/phpunit tests --verbose --color --log-junit=tests/junit.xml -v",
         "phpmetrics": "./vendor/bin/phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
         "lint": "@phplint --exclude=vendor"
     },

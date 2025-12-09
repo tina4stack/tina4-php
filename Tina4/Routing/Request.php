@@ -12,7 +12,7 @@ namespace Tina4;
  * Implements request params which get passed through to the routers
  * @package Tina4
  */
-class Request
+class Request extends \StdClass
 {
     public $data = null;
     public $params = null;
@@ -45,6 +45,10 @@ class Request
         return $value;
     }
 
+    /**
+     * @param $rawRequest
+     * @param $customRequest
+     */
     public function __construct($rawRequest, $customRequest=null)
     {
         $this->rawRequest = $rawRequest;

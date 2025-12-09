@@ -419,7 +419,13 @@ class Router extends Data
                 $doc = $reflection->getDocComment();
                 $annotations = (new Annotation())->parseAnnotations($doc, "");
 
-                $params = $this->getParams($response, $route["inlineParamsToRequest"], $customRequest);
+                //Prepare request and inline values
+                $request = new Request(@file_get_contents("php://input"), $customRequest); //added @ to ignore warnings so the router does not break
+                $inlineValues = $this->params;
+                if (!empty($route["inlineParamsToRequest"])) {
+                    $request->inlineParams = $this->params;
+                    $inlineValues = [];
+                }
 
                 //Check for middle ware and pass params to the middle ware for processing
                 if (isset($annotations["middleware"])) {
@@ -453,9 +459,9 @@ class Router extends Data
 
 
                 if (isset($annotations["secure"]) || isset($annotations["security"])) {
-                    $params[sizeof($params)-1]->security = isset($annotations["secure"]) ? explode(",", $annotations["secure"][0]) : explode(",", $annotations["security"][0]);
-                    if (empty($params[sizeof($params)-1]->security[0])) {
-                        $params[sizeof($params)-1]->security[0] = "user";
+                    $request->security = isset($annotations["secure"]) ? explode(",", $annotations["secure"][0]) : explode(",", $annotations["security"][0]);
+                    if (empty($request->security[0])) {
+                        $request->security[0] = "user";
                     }
                 }
 
@@ -465,43 +471,9 @@ class Router extends Data
                         if (isset($arrMiddleware[Middleware::getName($middleware)])) {
                             \Tina4\Debug::message("Executing " . $middleware);
 
-                            $middleWareFunction = new \ReflectionFunction($arrMiddleware[Middleware::getName($middleware)]["function"]);
-                            $middlewareParams = $middleWareFunction->getParameters();
+                            $result = $this->callHandler(null, $arrMiddleware[Middleware::getName($middleware)]["function"], $inlineValues, $request, $response);
 
-                            //Everything should work based on order of input parameters
-                            if (count($params) === count($middlewareParams)) {
-                                $response = $arrMiddleware[Middleware::getName($middleware)]["function"](...$params);
-                            } else {
-                                $refFunction = new \ReflectionFunction($route["function"]);
-                                $routeParams = $refFunction->getParameters();
-
-                                $iterateParams = $middlewareParams;
-                                $checkParams = $routeParams;
-
-                                $newParams = [];
-                                $counterIterateParams = 0;
-                                while ($counterIterateParams < count($iterateParams)) {
-                                    $found = false;
-                                    foreach ($checkParams as $id => $param) {
-                                        if ($iterateParams[$counterIterateParams]->getName() === $param->getName()) {
-                                            $newParams[] = $params[$id];
-                                            $found = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (!$found) {
-                                        $newParams[] = null;
-                                    }
-
-                                    $counterIterateParams++;
-                                }
-
-                                $response = $arrMiddleware[Middleware::getName($middleware)]["function"](...$newParams);
-                            }
-
-                            if (!empty($response)) {
-                                $result = $response;
+                            if (!empty($result)) {
                                 break;
                             }
                         }
@@ -519,7 +491,7 @@ class Router extends Data
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken(urldecode($requestHeaders["Authorization"]))) {
                         //call closure with & without params
                         $this->config->setAuthentication(null); //clear the auth
-                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                     } else {
                         //Fail over to formToken, but payload must match the route
                         //CRUD fix for built-in values of form & {id}
@@ -537,7 +509,7 @@ class Router extends Data
                             //\Tina4\Debug::message("$this->GUID Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
                             $this->config->setAuthentication(null); //clear the auth
 
-                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                            $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                         } else {
                             if ($route["method"] === TINA4_GET) {
                                 if ($route["content-type"] === APPLICATION_JSON || $route["content-type"] === APPLICATION_XML) {
@@ -589,14 +561,14 @@ class Router extends Data
                             }
 
                             $this->config->setAuthentication(null); //clear the auth
-                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                            $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                         }
                     } elseif (!in_array($route["method"], [\TINA4_POST, \TINA4_PUT, \TINA4_PATCH, \TINA4_DELETE], true)) {
                         $this->config->setAuthentication(null); //clear the auth
-                        $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                        $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                     } elseif (!empty($this->config->getAuthentication())) {
                         if ($url === "/git/deploy" || $this->config->getAuthentication()->validToken(json_encode($_REQUEST))) {
-                            $result = $this->getRouteResult($route["class"], $route["function"], $params);
+                            $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                         } else {
                             if ($route["content-type"] === APPLICATION_JSON || $route["content-type"] === APPLICATION_XML) {
                                 return new RouterResponse([], HTTP_FORBIDDEN, $headers, false, $route["content-type"]);
@@ -634,6 +606,64 @@ class Router extends Data
         }
 
         return null;
+    }
+
+    /**
+     * Calls a route handler or middleware with flexible argument ordering for Request and Response.
+     * Inline params are assigned positionally to non-Request/Response parameters.
+     * @param ?string $class
+     * @param callable|string $function
+     * @param array $inlineValues
+     * @param Request $request
+     * @param Response $response
+     * @return mixed
+     * @throws \ReflectionException
+     */
+    public function callHandler(?string $class, $function, array $inlineValues, Request $request, Response $response)
+    {
+        if (!empty($class)) {
+            $reflection = new \ReflectionMethod($class, $function);
+            $classInstance = new \ReflectionClass($class);
+            $instance = $classInstance->newInstance();
+            $isStatic = $reflection->isStatic();
+        } else {
+            $reflection = new \ReflectionFunction($function);
+            $instance = null;
+            $isStatic = false;
+        }
+
+        $funcParams = $reflection->getParameters();
+        $args = [];
+        $inlineIndex = 0;
+
+        foreach ($funcParams as $param) {
+            $type = $param->getType() ? $param->getType()->getName() : null;
+
+            if ($type === 'Tina4\Request' || strtolower($param->getName()) === 'request') {
+                $args[] = $request;
+            } elseif ($type === 'Tina4\Response' || strtolower($param->getName()) === 'response') {
+                $args[] = $response;
+            } else {
+                if ($inlineIndex < count($inlineValues)) {
+                    $args[] = $inlineValues[$inlineIndex];
+                    $inlineIndex++;
+                } elseif ($param->isOptional()) {
+                    $args[] = $param->getDefaultValue();
+                } else {
+                    throw new \Exception("Missing required argument for parameter '{$param->getName()}'");
+                }
+            }
+        }
+
+        if ($class) {
+            if ($isStatic) {
+                return $reflection->invokeArgs(null, $args);
+            } else {
+                return $reflection->invokeArgs($instance, $args);
+            }
+        } else {
+            return $reflection->invokeArgs($args);
+        }
     }
 
     /**
@@ -707,33 +737,12 @@ class Router extends Data
     }
 
     /**
-     * Get the params
-     * @param $response
-     * @param $inlineToRequest
-     * @param $customRequest
-     * @return array
-     */
-    public function getParams($response, $inlineToRequest = null, $customRequest=null): array
-    {
-        $request = new Request(@file_get_contents("php://input"), $customRequest); //added @ to ignore warnings so the router does not break
-
-        if ($inlineToRequest) { //Pull the inlineParams into the request by resetting the params
-            $request->inlineParams = $this->params;
-            $this->params = [];
-        }
-
-        $this->params[] = $response;
-        $this->params[] = $request; //Check if header is JSON
-
-        return $this->params;
-    }
-
-    /**
      * @param $class
      * @param $method
      * @param $params
      * @return false|mixed
      * @throws \ReflectionException
+     * @deprecated Use callHandler instead
      */
     public function getRouteResult($class, $method, $params): ?array
     {

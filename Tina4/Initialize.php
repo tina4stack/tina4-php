@@ -187,7 +187,18 @@ if (!$alreadyLoaded) {
         exit;
     }
 
-    Debug::$logLevel = TINA4_DEBUG_LEVEL;
+    function getLogLevel(mixed $input) {
+        $debugLevel = [];
+        @eval("\$debugLevel = ".$input.";");
+        return $debugLevel;
+    }
+
+    try {
+        Debug::$logLevel = getLogLevel(TINA4_DEBUG_LEVEL);
+    } catch (Exception $e) {
+        Debug::$logLevel = [TINA4_LOG_INFO];
+    }
+
     Debug::message("Project Root: " . TINA4_PROJECT_ROOT, TINA4_LOG_DEBUG);
     Debug::message("Document Root: " . TINA4_DOCUMENT_ROOT, TINA4_LOG_DEBUG);
     Debug::message("SubFolder: " . TINA4_SUB_FOLDER, TINA4_LOG_DEBUG);
@@ -292,13 +303,19 @@ if (!$alreadyLoaded) {
     $arrRoutes = [];
 
     //Add the .htaccess file for redirecting things & copy the default src structure
+
     if (!file_exists(TINA4_DOCUMENT_ROOT . ".htaccess") && !file_exists(TINA4_DOCUMENT_ROOT . "src")) {
         if (!file_exists(TINA4_DOCUMENT_ROOT . "src")) {
 
             $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
             foreach ($foldersToCopy as $id => $folder) {
                 if (!file_exists(TINA4_DOCUMENT_ROOT . $folder)) {
-                    \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR . "tina4php" . DIRECTORY_SEPARATOR . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                    if ($folder === "src/public") {
+                        \Tina4\Utilities::recurseCopy(TINA4_PROJECT_ROOT . DIRECTORY_SEPARATOR . "tina4php" . DIRECTORY_SEPARATOR . $folder, TINA4_DOCUMENT_ROOT . $folder);
+                    } else {
+                        mkdir(TINA4_DOCUMENT_ROOT . $folder, 0755, true);
+                        file_put_contents(TINA4_DOCUMENT_ROOT . $folder . DIRECTORY_SEPARATOR . ".htaccess", "Deny from all");
+                    }
                 }
             }
         }
@@ -465,8 +482,7 @@ if (!$alreadyLoaded) {
                 $callable = function (...$args) use ($originalCallable, $templateName) {
                     $result = call_user_func_array($originalCallable, $args);
                     if (is_array($result)) {
-                        $response = end($args);  // Assume \Tina4\Response is the last parameter
-                        return $response(\Tina4\render($templateName, $result));
+                        return ["content" => \Tina4\renderTemplate($templateName, $result), "httpCode" => 200, "contentType" => TEXT_HTML];
                     }
                     return $result;
                 };
