@@ -32,6 +32,9 @@ use SimpleXMLElement;
  */
 abstract class WSDL
 {
+
+    protected const RESERVED_METHODS = ["xsdType", "convertParam", "registerArrayType", "addFieldsToSequence", "getOperations"];
+
     /**
      * Basic XSD type mapping – can be extended in subclasses if needed
      */
@@ -238,6 +241,8 @@ abstract class WSDL
     public function generateWsdl(): string
     {
         $serviceName = get_class($this);
+        $serviceName = str_replace("\\", "/" , $serviceName);
+
         $tns = "http://tempuri.org/" . strtolower($serviceName);
 
         // Determine location
@@ -271,6 +276,10 @@ abstract class WSDL
         // Build request & response types for every operation
         $operations = $this->getOperations();
         foreach ($operations as $op) {
+            if (in_array($op, self::RESERVED_METHODS)) {
+              continue;
+            }
+
             $method = new ReflectionMethod($this, $op);
 
             // Request message
@@ -368,6 +377,11 @@ abstract class WSDL
 
         // <message>
         foreach ($operations as $op) {
+
+            if (in_array($op, self::RESERVED_METHODS)) {
+                continue;
+            }
+
             $reqMsg = $doc->createElement("message");
             $definitions->appendChild($reqMsg);
             $reqMsg->setAttribute("name", $op . "Request");
@@ -391,6 +405,11 @@ abstract class WSDL
         $portType->setAttribute("name", $serviceName . "PortType");
 
         foreach ($operations as $op) {
+
+            if (in_array($op, self::RESERVED_METHODS)) {
+                continue;
+            }
+
             $operation = $doc->createElement("operation");
             $portType->appendChild($operation);
             $operation->setAttribute("name", $op);
@@ -416,6 +435,11 @@ abstract class WSDL
         $soapBinding->setAttribute("transport", "http://schemas.xmlsoap.org/soap/http");
 
         foreach ($operations as $op) {
+
+            if (in_array($op, self::RESERVED_METHODS)) {
+                continue;
+            }
+
             $operation = $doc->createElement("operation");
             $binding->appendChild($operation);
             $operation->setAttribute("name", $op);
