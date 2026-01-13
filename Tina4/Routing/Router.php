@@ -24,7 +24,7 @@ class Router extends Data
      * @var string Used to check if path matches route path in matchPath()
      */
     protected $pathMatchExpression = "/([a-zA-Z0-9\\%\\ \\! \\-\\}\\{\\.\\_]*)\\//";
-    private $params;
+    private $params = [];
     /**
      * @var Config|null
      */
