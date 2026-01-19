@@ -97,7 +97,7 @@ final class Swagger implements \JsonSerializable
             $isSecure = !empty($annotations["secure"]);
 
             // Examples
-            $requestExample  = $this->makeExample($annotations["example_request"][0] ?? null);
+            $requestExample  = $this->makeExample($annotations["example_request"][0] ?? $annotations["example"][0] ?? null);
             $responseExample = $this->makeExample($annotations["example_response"][0] ?? null)
                 ?? $this->makeExample($annotations["example"][0] ?? null);
 
@@ -162,34 +162,65 @@ final class Swagger implements \JsonSerializable
         return $result;
     }
 
+    /**
+     * Makes an example entry
+     * @param string|null $value
+     * @return object|null
+     */
     private function makeExample(?string $value): ?object
     {
         if (!$value) return null;
-        $value = trim($value, "\\ \t\n\r\0\x0B");
+        $value = trim($value);
 
+        // Remove common markdown/code fences
+        $value = preg_replace('#^(```json\s*|\s*```)$#im', '', $value);
+        $value = trim($value);
+
+        // Try as JSON first (most common case)
         if (str_starts_with($value, '{') || str_starts_with($value, '[')) {
-            $data = json_decode($value);
-            return $data !== null ? (object)["data" => $data] : null;
-        }
-
-        if (!class_exists($value)) return null;
-
-        try {
-            $obj = new $value();
-            if (method_exists($obj, "asArray")) {
-                $data = $obj->asArray();
-                $props = [];
-                if (method_exists($obj, "getFieldDefinitions")) {
-                    foreach ($obj->getFieldDefinitions() as $f) {
-                        $props[$f->fieldName] = ["type" => $f->dataType ?? "string"];
-                    }
-                }
-                return (object)["data" => $data, "properties" => (object)$props];
+            $data = json_decode($value, false);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return (object) ['data' => $data];
             }
-            return (object)["data" => json_decode(json_encode($obj))];
-        } catch (\Throwable) {
-            return null;
         }
+
+        // Try as class name
+        if (class_exists($value)) {
+            try {
+                $obj = new $value();
+
+                // Popular patterns in Tina4 / PHP frameworks
+                if (method_exists($obj, 'toArray')) {
+                    $data = $obj->toArray();
+                } elseif (method_exists($obj, 'asArray')) {
+                    $data = $obj->asArray();
+                } elseif (method_exists($obj, 'jsonSerialize')) {
+                    $data = $obj->jsonSerialize();
+                } else {
+                    $data = json_decode(json_encode($obj), false);
+                }
+
+                $props = null;
+                if (method_exists($obj, 'getFieldDefinitions')) {
+                    $defs = $obj->getFieldDefinitions();
+                    $props = [];
+                    foreach ($defs as $f) {
+                        $props[$f->fieldName ?? $f['name'] ?? ''] = ['type' => $f->dataType ?? 'string'];
+                    }
+                    $props = (object) array_filter($props);
+                }
+
+                return (object) [
+                    'data' => $data,
+                    'properties' => $props ?: null
+                ];
+            } catch (\Throwable $e) {
+                error_log("Swagger makeExample instantiation failed for $value: " . $e->getMessage());
+                return null;
+            }
+        }
+
+        return null;
     }
 
     private function pathParams(string $path): array
