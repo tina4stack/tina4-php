@@ -7,46 +7,71 @@ var formToken = null;
  * @param method
  * @param callback
  */
-function sendRequest (url, request, method, callback) {
-    if (url === undefined) {
-        url = "";
-    }
-    if (request === undefined) {
-        request = null;
-    }
-    if (method === undefined) {
-        method = 'GET';
-    }
+function sendRequest(url, request, method, callback) {
+    // Default values
+    if (url === undefined)       url = "";
+    if (request === undefined)   request = null;
+    if (method === undefined)    method = 'GET';
 
     const xhr = new XMLHttpRequest();
-
-
     xhr.open(method, url, true);
 
+    // Add authorization header if token exists
     if (formToken !== null) {
-        //set a form token to the header
-        xhr.setRequestHeader('Authorization', 'Bearer '+formToken);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + formToken);
     }
 
+    // ────────────────────────────────────────────────
+    // Content-Type logic – only set when appropriate
+    // ────────────────────────────────────────────────
+    let isFormData = request instanceof FormData;
+
+    if (method.toUpperCase() === 'POST' || method.toUpperCase() === 'PUT' || method.toUpperCase() === 'PATCH') {
+        if (isFormData) {
+            //DO not touch this
+        } else if (typeof request === 'object' && request !== null) {
+            //Becomes a JSON String
+            request = JSON.stringify(request);
+            xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+        } else if (typeof request === 'string') {
+            // Already a string – assume JSON or let server decide
+            // You can set charset=UTF-8 if you're sure it's JSON/text
+            xhr.setRequestHeader('Content-Type', 'text/plain; charset=UTF-8');
+        }
+    }
+
+    // ────────────────────────────────────────────────
+    // Response handling
+    // ────────────────────────────────────────────────
     xhr.onload = function () {
         let content = xhr.response;
-        if (xhr.getResponseHeader('FreshToken') !== '' && xhr.getResponseHeader('FreshToken') !== null) {
-            formToken = xhr.getResponseHeader('FreshToken');
+
+        // Update token if server sent a fresh one
+        const freshToken = xhr.getResponseHeader('FreshToken');
+        if (freshToken && freshToken !== '') {
+            formToken = freshToken;
         }
 
         try {
             content = JSON.parse(content);
-            callback(content);
-        } catch (exception) {
-            callback (content);
+        } catch (e) {
+            // Not JSON → keep as raw string/text
+        }
+
+        if (typeof callback === 'function') {
+            callback(content, xhr.status, xhr);
         }
     };
 
-    if (method === 'POST') {
-        xhr.send(request);
-    } else {
-        xhr.send(null);
-    }
+    // Optional: handle errors
+    xhr.onerror = function () {
+        if (typeof callback === 'function') {
+            callback(null, xhr.status, xhr);
+        }
+    };
+
+    // Send the body (or null)
+    xhr.send(request);
 }
 
 /**
@@ -252,6 +277,28 @@ function saveForm(formId, targetURL, targetElement, callback = null) {
     let data = getFormData(formId);
 
     postUrl(targetURL, data, targetElement, callback);
+}
+
+/**
+ * Alias of saveForm
+ * @param formId
+ * @param targetURL
+ * @param targetElement
+ * @param callback
+ */
+function postForm(formId, targetURL, targetElement, callback = null){
+    saveForm(formId, targetURL, targetElement, callback)
+}
+
+/**
+ * Alias of saveForm
+ * @param formId
+ * @param targetURL
+ * @param targetElement
+ * @param callback
+ */
+function submitForm(formId, targetURL, targetElement, callback = null){
+    saveForm(formId, targetURL, targetElement, callback)
 }
 
 /**
