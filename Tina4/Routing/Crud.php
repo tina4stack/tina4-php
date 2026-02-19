@@ -410,25 +410,42 @@ class Crud
 
             foreach ($columns as $id => $column) {
                 $columnName = $ORM->getFieldName($column["data"], $ORM->fieldMapping);
+                if (($column["searchable"] == "true")) {
+                    // Prioritises general search over column search
+                    if (!empty($search["value"])) {
+                        // Searches all searchable fields for the search box value
+                        //Add each searchable column to array
+                        $listOfColumnNames[] = $tablePrefix . $columnName;
+                        //Split search phrase into individual searchable words
+                        $splitValue = explode(" ", $search["value"]);
 
-                if (($column["searchable"] == "true") && !empty($search["value"])) {
-                    //Add each searchable column to array
-                    $listOfColumnNames[] = $tablePrefix . $columnName;
-                    //Split search phrase into individual searchable words
-                    $splitValue = explode(" ", $search["value"]);
-
-                    //Iterate searchable words
-                    foreach ($splitValue as $singleValue) {
-                        //Check that the values aren't whitespaces
-                        if (!empty($singleValue)) {
-                            $filterValue = " like '%" . strtoupper($singleValue) . "%'";
-                            //Check if $filer is already an array
-                            if (!is_array($filter)) {
-                                $filter[] = $filterValue;
-                                //Check if filter value is already in $filer array
-                            } elseif (!in_array($filterValue, $filter)) {
-                                $filter[] = $filterValue;
+                        //Iterate searchable words
+                        foreach ($splitValue as $singleValue) {
+                            //Check that the values aren't whitespaces
+                            if (!empty($singleValue)) {
+                                $filterValue = " like '%" . strtoupper($singleValue) . "%'";
+                                //Check if $filer is already an array
+                                if (!is_array($filter)) {
+                                    $filter[] = $filterValue;
+                                    //Check if filter value is already in $filer array
+                                } elseif (!in_array($filterValue, $filter)) {
+                                    $filter[] = $filterValue;
+                                }
                             }
+                        }
+                    } elseif (!empty($column["search"]["value"])) {
+                        $listOfColumnNames[] = $tablePrefix . $columnName;
+                        // Allows column value searches to be set from the outset
+                        $searchValue = $column['search']['value'];
+                        $isRegex = $column['search']['regex'] ?? false;
+
+                        if ($isRegex == "true") {
+                            // Use REGEXP for regex search
+                            $filter[] = " REGEXP '" . $searchValue . "'";
+                        } else {
+                            // a standard search filter any sql can be used.
+                            // fieldName "=5" or " like '%test%'"
+                            $filter[] = $searchValue;
                         }
                     }
                 }
