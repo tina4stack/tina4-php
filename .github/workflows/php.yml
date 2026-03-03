@@ -14,6 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: openssl, libxml, json, curl, fileinfo, zip, sqlite3
+          coverage: none
+
       - name: Validate composer.json and composer.lock
         run: composer validate --strict
 
@@ -22,18 +29,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-8.4-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php-
+            ${{ runner.os }}-php-8.4-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest --ignore-platform-req=ext-interbase
+        run: composer install --prefer-dist --no-progress --ignore-platform-req=ext-interbase
 
       - name: Initialize framework
         run: composer exec tina4 initialize:run
-
-      # Add a test script to composer.json, for instance: "test": "vendor/bin/phpunit"
-      # Docs: https://getcomposer.org/doc/articles/scripts.md
 
       - name: Run test suite
         run: composer exec tina4 tests:run tina4
