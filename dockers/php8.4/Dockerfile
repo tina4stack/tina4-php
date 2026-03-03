@@ -25,6 +25,16 @@ RUN apt-get update && apt-get install -y \
         libssl-dev \
         libcurl4-openssl-dev
 
+RUN apt-get install -y firebird-dev
+RUN git clone https://github.com/FirebirdSQL/php-firebird.git
+WORKDIR php-firebird
+RUN phpize
+RUN CPPFLAGS=-I/usr/include/firebird ./configure
+RUN make
+RUN make install
+RUN echo "extension=interbase.so" > /usr/local/etc/php/conf.d/docker-php-ext-interbase.ini
+
+
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 
 RUN apt-get install -y libicu-dev libcurl4-openssl-dev && docker-php-ext-install curl
