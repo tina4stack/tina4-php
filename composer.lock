@@ -1152,22 +1152,26 @@
         },
         {
             "name": "tina4stack/tina4php-core",
-            "version": "v2.0.20",
+            "version": "v2.0.22",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-core.git",
-                "reference": "164f1b1c371a9cf8c1bc1554d107ac39d20f4e55"
+                "reference": "8aa406a16d5dfd72db38e4a9aa83f5025cc8f7de"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/164f1b1c371a9cf8c1bc1554d107ac39d20f4e55",
-                "reference": "164f1b1c371a9cf8c1bc1554d107ac39d20f4e55",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-core/zipball/8aa406a16d5dfd72db38e4a9aa83f5025cc8f7de",
+                "reference": "8aa406a16d5dfd72db38e4a9aa83f5025cc8f7de",
                 "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
             },
             "require-dev": {
                 "overtrue/phplint": "^2.0",
                 "phpmetrics/phpmetrics": "^2.8",
                 "phpunit/phpunit": "^9",
+                "tina4stack/tina4php-database": "^2.0",
                 "tina4stack/tina4php-debug": "^2.0"
             },
             "bin": [
@@ -1181,12 +1185,10 @@
                 ],
                 "psr-4": {
                     "Tina4\\": [
-                        "Tina4/"
+                        "Tina4/",
+                        "Tina4/Core/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1195,26 +1197,27 @@
             "description": "Tina4 PHP Core Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-core/issues",
-                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.20"
+                "source": "https://github.com/tina4stack/tina4php-core/tree/v2.0.22"
             },
-            "time": "2026-01-19T08:48:20+00:00"
+            "time": "2026-03-14T18:23:25+00:00"
         },
         {
             "name": "tina4stack/tina4php-database",
-            "version": "v2.0.21",
+            "version": "v2.0.24",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-database.git",
-                "reference": "e7ed46b1a0b124636a8196e612861e240e8fcf9a"
+                "reference": "5537a840312f8d2a99a0741ff55558e850b786c9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/e7ed46b1a0b124636a8196e612861e240e8fcf9a",
-                "reference": "e7ed46b1a0b124636a8196e612861e240e8fcf9a",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-database/zipball/5537a840312f8d2a99a0741ff55558e850b786c9",
+                "reference": "5537a840312f8d2a99a0741ff55558e850b786c9",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
+                "php": ">=8.1",
                 "tina4stack/tina4php-debug": "^2.0"
             },
             "require-dev": {
@@ -1225,25 +1228,13 @@
             "type": "library",
             "autoload": {
                 "files": [
-                    "Tina4/constants.php",
-                    "Tina4/DataBase.php",
-                    "Tina4/DataBaseMetaData.php",
-                    "Tina4/DataBaseCore.php",
-                    "Tina4/DataBaseQuery.php",
-                    "Tina4/DataError.php",
-                    "Tina4/DataField.php",
-                    "Tina4/DataRecord.php",
-                    "Tina4/DataResult.php",
-                    "Tina4/SQL.php"
+                    "Tina4/constants.php"
                 ],
                 "psr-4": {
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1252,26 +1243,27 @@
             "description": "Tina4 PHP Database Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-database/issues",
-                "source": "https://github.com/tina4stack/tina4php-database/tree/v2.0.21"
+                "source": "https://github.com/tina4stack/tina4php-database/tree/v2.0.24"
             },
-            "time": "2025-10-13T15:45:44+00:00"
+            "time": "2026-03-14T19:28:02+00:00"
         },
         {
             "name": "tina4stack/tina4php-debug",
-            "version": "v2.0.13",
+            "version": "v2.0.15",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-debug.git",
-                "reference": "7e5f187fc5292ef3134bb728fc538e1953e27289"
+                "reference": "e67199f35391fae52c946e9e4ebf4209ce41c468"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/7e5f187fc5292ef3134bb728fc538e1953e27289",
-                "reference": "7e5f187fc5292ef3134bb728fc538e1953e27289",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-debug/zipball/e67199f35391fae52c946e9e4ebf4209ce41c468",
+                "reference": "e67199f35391fae52c946e9e4ebf4209ce41c468",
                 "shasum": ""
             },
             "require": {
                 "cesargb/php-log-rotation": "^2.7",
+                "php": ">=8.1",
                 "psr/log": "^1.1",
                 "twig/twig": "^3.3"
             },
@@ -1289,10 +1281,7 @@
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1301,23 +1290,26 @@
             "description": "Tina4 PHP Debug Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-debug/issues",
-                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.13"
+                "source": "https://github.com/tina4stack/tina4php-debug/tree/v2.0.15"
             },
-            "time": "2024-07-13T14:23:27+00:00"
+            "time": "2026-03-14T18:22:54+00:00"
         },
         {
             "name": "tina4stack/tina4php-env",
-            "version": "v2.0.7",
+            "version": "v2.0.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-env.git",
-                "reference": "2e67418d80faf7562dcae55b41458208f9102742"
+                "reference": "60aa926ae6dc02c4ad131c12dd8bfb6fa89b9843"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-env/zipball/2e67418d80faf7562dcae55b41458208f9102742",
-                "reference": "2e67418d80faf7562dcae55b41458208f9102742",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-env/zipball/60aa926ae6dc02c4ad131c12dd8bfb6fa89b9843",
+                "reference": "60aa926ae6dc02c4ad131c12dd8bfb6fa89b9843",
                 "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
             },
             "require-dev": {
                 "overtrue/phplint": "^2.0",
@@ -1332,10 +1324,7 @@
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1344,27 +1333,30 @@
             "description": "Tina4 PHP Environment Functionality",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-env/issues",
-                "source": "https://github.com/tina4stack/tina4php-env/tree/v2.0.7"
+                "source": "https://github.com/tina4stack/tina4php-env/tree/v2.0.9"
             },
-            "time": "2025-12-09T18:59:38+00:00"
+            "time": "2026-03-14T18:22:56+00:00"
         },
         {
             "name": "tina4stack/tina4php-orm",
-            "version": "v2.0.21",
+            "version": "v2.0.23",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-orm.git",
-                "reference": "fa8655d07c83b1a3ca157e23be7b6b9b67a326d6"
+                "reference": "71f2ffb9b40a7ac829ade247e7113a8abef8d739"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/fa8655d07c83b1a3ca157e23be7b6b9b67a326d6",
-                "reference": "fa8655d07c83b1a3ca157e23be7b6b9b67a326d6",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-orm/zipball/71f2ffb9b40a7ac829ade247e7113a8abef8d739",
+                "reference": "71f2ffb9b40a7ac829ade247e7113a8abef8d739",
                 "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
             },
             "require-dev": {
                 "overtrue/phplint": "^2.0",
-                "phpmetrics/phpmetrics": "^0.0.1",
+                "phpmetrics/phpmetrics": "^2.8",
                 "phpunit/phpunit": "^9",
                 "roave/security-advisories": "dev-latest",
                 "tina4stack/tina4php-firebird": "^2.0"
@@ -1375,10 +1367,7 @@
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1387,23 +1376,26 @@
             "description": "Tina4 ORM Module",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-orm/issues",
-                "source": "https://github.com/tina4stack/tina4php-orm/tree/v2.0.21"
+                "source": "https://github.com/tina4stack/tina4php-orm/tree/v2.0.23"
             },
-            "time": "2025-09-01T07:51:46+00:00"
+            "time": "2026-03-14T19:36:23+00:00"
         },
         {
             "name": "tina4stack/tina4php-shape",
-            "version": "v2.0.2",
+            "version": "v2.0.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-shape.git",
-                "reference": "2701fdc744bea76afd9068d481d051ddcf9f04c5"
+                "reference": "a7d4f7e042f95245dc231a3ef0d0e780acc11545"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/2701fdc744bea76afd9068d481d051ddcf9f04c5",
-                "reference": "2701fdc744bea76afd9068d481d051ddcf9f04c5",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-shape/zipball/a7d4f7e042f95245dc231a3ef0d0e780acc11545",
+                "reference": "a7d4f7e042f95245dc231a3ef0d0e780acc11545",
                 "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
             },
             "require-dev": {
                 "overtrue/phplint": "^2.0",
@@ -1420,10 +1412,7 @@
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -1432,9 +1421,9 @@
             "description": "Tina4 PHP HTML Shape Language",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-shape/issues",
-                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.2"
+                "source": "https://github.com/tina4stack/tina4php-shape/tree/v2.0.4"
             },
-            "time": "2021-07-21T10:35:18+00:00"
+            "time": "2026-03-14T18:23:04+00:00"
         },
         {
             "name": "twig/twig",
@@ -5688,17 +5677,18 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-reports.git",
-                "reference": "485960d6333ff2be6618b60aee6989a2852d9c66"
+                "reference": "75c9fe65d68515f6dc5d2c557ddf85f22d3fe248"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-reports/zipball/485960d6333ff2be6618b60aee6989a2852d9c66",
-                "reference": "485960d6333ff2be6618b60aee6989a2852d9c66",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-reports/zipball/75c9fe65d68515f6dc5d2c557ddf85f22d3fe248",
+                "reference": "75c9fe65d68515f6dc5d2c557ddf85f22d3fe248",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
                 "mpdf/mpdf": "^8.1",
+                "php": ">=8.1",
                 "tina4stack/tina4php-core": "^2.0"
             },
             "require-dev": {
@@ -5719,10 +5709,7 @@
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -5733,24 +5720,25 @@
                 "issues": "https://github.com/tina4stack/tina4php-reports/issues",
                 "source": "https://github.com/tina4stack/tina4php-reports/tree/main"
             },
-            "time": "2025-12-03T06:13:55+00:00"
+            "time": "2026-03-14T18:23:05+00:00"
         },
         {
             "name": "tina4stack/tina4php-sqlite3",
-            "version": "v2.0.5",
+            "version": "v2.0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tina4stack/tina4php-sqlite3.git",
-                "reference": "376f3ee02c4fde18391b5906b4a3b3ffb2edf6e8"
+                "reference": "c64d2070bde5102beed34b7cbeefad900b460545"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tina4stack/tina4php-sqlite3/zipball/376f3ee02c4fde18391b5906b4a3b3ffb2edf6e8",
-                "reference": "376f3ee02c4fde18391b5906b4a3b3ffb2edf6e8",
+                "url": "https://api.github.com/repos/tina4stack/tina4php-sqlite3/zipball/c64d2070bde5102beed34b7cbeefad900b460545",
+                "reference": "c64d2070bde5102beed34b7cbeefad900b460545",
                 "shasum": ""
             },
             "require": {
                 "ext-sqlite3": "*",
+                "php": ">=8.1",
                 "tina4stack/tina4php-database": "^2.0"
             },
             "require-dev": {
@@ -5764,10 +5752,7 @@
                     "Tina4\\": [
                         "Tina4/"
                     ]
-                },
-                "classmap": [
-                    "Tina4/"
-                ]
+                }
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -5776,9 +5761,9 @@
             "description": "Tina4 PHP Sqlite3 Database Driver",
             "support": {
                 "issues": "https://github.com/tina4stack/tina4php-sqlite3/issues",
-                "source": "https://github.com/tina4stack/tina4php-sqlite3/tree/v2.0.5"
+                "source": "https://github.com/tina4stack/tina4php-sqlite3/tree/v2.0.7"
             },
-            "time": "2025-03-07T08:34:16+00:00"
+            "time": "2026-03-14T19:29:31+00:00"
         }
     ],
     "aliases": [],
