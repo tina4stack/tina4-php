@@ -93,8 +93,8 @@ final class Swagger implements \JsonSerializable
             // Skip undocumented routes
             if (empty($description) && empty($summary)) continue;
 
-            // @secure = requires auth
-            $isSecure = !empty($annotations["secure"]);
+            // @secure = requires auth (check both annotation and route flag)
+            $isSecure = !empty($annotations["secure"]) || !empty($route["secure"]);
 
             // Examples
             $requestExample  = $this->makeExample($annotations["example_request"][0] ?? $annotations["example"][0] ?? null);

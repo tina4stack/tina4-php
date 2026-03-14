@@ -463,6 +463,9 @@ class Router extends Data
                     if (empty($request->security[0])) {
                         $request->security[0] = "user";
                     }
+                } elseif (!empty($route["secure"])) {
+                    // Route was secured via ->secure() or Crud::route(secure: true)
+                    $request->security = ["user"];
                 }
 
                 if (isset($route["middleware"])) {
@@ -486,8 +489,8 @@ class Router extends Data
                     $requestHeaders = $customHeaders;
                 }
 
-                //Look to see if we are a secure route
-                if (empty($result) && isset($annotations["secure"]) || empty($result) && (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
+                //Look to see if we are a secure route - check both annotation @secure and route flag ->secure()
+                if (empty($result) && (isset($annotations["secure"]) || !empty($route["secure"])) || empty($result) && (isset($requestHeaders["Authorization"]) && stripos($requestHeaders["Authorization"], "bearer ") !== false)) {
                     if (isset($requestHeaders["Authorization"]) && $this->config->getAuthentication()->validToken(urldecode($requestHeaders["Authorization"]))) {
                         //call closure with & without params
                         $this->config->setAuthentication(null); //clear the auth
@@ -504,12 +507,35 @@ class Router extends Data
                         $route["routePath"] = str_replace("/{id}", "", $route["routePath"]);
 
                         if (isset($_REQUEST["formToken"]) && $route["method"] === TINA4_GET && $this->config->getAuthentication()->validToken($_REQUEST["formToken"]))
-                            // && $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"] === $route["routePath"]) @todo fix this
                         {
-                            //\Tina4\Debug::message("$this->GUID Matching secure ".$this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"])["payload"]." ".$route["routePath"], TINA4_LOG_DEBUG);
-                            $this->config->setAuthentication(null); //clear the auth
+                            // Validate that the token payload matches the route path
+                            $tokenAllowed = false;
+                            try {
+                                $tokenPayload = $this->config->getAuthentication()->getPayLoad($_REQUEST["formToken"]);
+                                $tokenPath = $tokenPayload["payload"] ?? "";
 
-                            $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
+                                // Normalize token path same way as route path
+                                if (substr($tokenPath, -5, 5) === '/form') {
+                                    $tokenPath = substr_replace($tokenPath, '', strrpos($tokenPath, '/form'), 5);
+                                }
+                                $tokenPath = str_replace("/{id}", "", $tokenPath);
+
+                                // Allow if token path matches route or if token has no path (backward compat)
+                                if (empty($tokenPath) || $tokenPath === $route["routePath"]) {
+                                    $tokenAllowed = true;
+                                }
+                            } catch (\Exception $e) {
+                                $tokenAllowed = false;
+                            }
+
+                            if ($tokenAllowed) {
+                                Debug::message("$this->GUID formToken validated for route {$route["routePath"]}", TINA4_LOG_DEBUG);
+                                $this->config->setAuthentication(null); //clear the auth
+                                $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
+                            } else {
+                                Debug::message("$this->GUID formToken payload mismatch for route {$route["routePath"]}", TINA4_LOG_DEBUG);
+                                return new RouterResponse("", HTTP_FORBIDDEN, $headers);
+                            }
                         } else {
                             if ($route["method"] === TINA4_GET) {
                                 if ($route["content-type"] === APPLICATION_JSON || $route["content-type"] === APPLICATION_XML) {
@@ -567,7 +593,7 @@ class Router extends Data
                         $this->config->setAuthentication(null); //clear the auth
                         $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                     } elseif (!empty($this->config->getAuthentication())) {
-                        if ($url === "/git/deploy" || $this->config->getAuthentication()->validToken(json_encode($_REQUEST))) {
+                        if ($this->config->getAuthentication()->validToken(json_encode($_REQUEST))) {
                             $result = $this->callHandler($route["class"], $route["function"], $inlineValues, $request, $response);
                         } else {
                             if ($route["content-type"] === APPLICATION_JSON || $route["content-type"] === APPLICATION_XML) {
