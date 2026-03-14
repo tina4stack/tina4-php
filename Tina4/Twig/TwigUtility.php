@@ -126,13 +126,35 @@ class TwigUtility
 
                 $twig->addFunction($function);
 
-                $function = new TwigFunction("_", static function($message) {
+                // Localization: use Tina4\Localization if available, otherwise raw gettext, otherwise passthrough
+                $localization = null;
+                if (class_exists('\Tina4\Localization')) {
+                    $locale = $_ENV["TINA4_LOCALE"] ?? (defined("TINA4_LOCALE") ? TINA4_LOCALE : "en_US");
+                    $localePath = $_ENV["TINA4_LOCALE_PATH"] ?? (defined("TINA4_LOCALE_PATH") ? TINA4_LOCALE_PATH : "./locale");
+                    $localization = new Localization($locale, $localePath);
+                }
+
+                $function = new TwigFunction("_", static function($message) use ($localization) {
+                    if ($localization !== null) {
+                        return $localization->translate($message);
+                    }
                     if (function_exists("gettext")) {
                         return gettext($message);
-                    } else {
-                        Debug::message("gettext extension not loaded", TINA4_LOG_ERROR);
-                        return $message;
                     }
+                    return $message;
+                });
+
+                $twig->addFunction($function);
+
+                // Add ngettext plural support: {{ _n("1 item", "%d items", count) }}
+                $function = new TwigFunction("_n", static function($singular, $plural, $count) use ($localization) {
+                    if ($localization !== null) {
+                        return $localization->translatePlural($singular, $plural, $count);
+                    }
+                    if (function_exists("ngettext")) {
+                        return ngettext($singular, $plural, $count);
+                    }
+                    return $count === 1 ? $singular : $plural;
                 });
 
                 $twig->addFunction($function);

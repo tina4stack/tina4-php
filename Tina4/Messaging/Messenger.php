@@ -292,7 +292,7 @@ class Messenger
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($curl, CURLOPT_POSTFIELDS, 'concat_text_sms_max_parts=4&allow_concat_text_sms=1&username=' . $this->settings->bulkSMSUsername . '&password=' . $this->settings->bulkSMSPassword . '&message=' . $message . '&msisdn=' . $cellphone);
         $request = curl_exec($curl);
-        curl_close($curl);
+        unset($curl); // curl handles auto-close in PHP 8.0+
         return stripos($request, "IN_PROGRESS") !== false;
     }
 

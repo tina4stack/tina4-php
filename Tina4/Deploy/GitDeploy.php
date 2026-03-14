@@ -1,4 +1,9 @@
 <?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
 
 namespace Tina4;
 
@@ -339,7 +344,7 @@ class GitDeploy
         $fd = fopen($fileName, 'w');
         fwrite($fd, $st);
         fclose($fd);
-        curl_close($ch);
+        unset($ch); // curl handles auto-close in PHP 8.0+
 
         return file_exists($fileName);
     }

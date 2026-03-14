@@ -169,7 +169,7 @@ class Api
             $curlResult = curl_exec($curlRequest); //execute the Curl request
             $curlInfo = curl_getinfo($curlRequest); //Assign the response to a variable
             $curlError = curl_error($curlRequest);
-            curl_close($curlRequest);
+            unset($curlRequest); // curl handles auto-close in PHP 8.0+
 
             if ($response = json_decode($curlResult, true)) {
                 return  ["error" => $curlError, "info" => $curlInfo, "body" => $response, "httpCode" => $curlInfo['http_code'], "headers" => $headers];

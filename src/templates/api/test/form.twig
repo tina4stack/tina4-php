@@ -1,0 +1,18 @@
+<form id="testForm" enctype="multipart/form-data" xmlns="http://www.w3.org/1999/html">
+    <div class="row">
+
+                    <div class="form-group col-md-6">
+                <label for="firstName">First Name</label>
+                <input class="form-control" type="text" id="firstName"
+                       name="firstName" placeholder="First Name"
+                       value="{{ data.firstName }}">
+            </div>
+                    <div class="form-group col-md-6">
+                <label for="lastName">Last Name</label>
+                <input class="form-control" type="text" id="lastName"
+                       name="lastName" placeholder="Last Name"
+                       value="{{ data.lastName }}">
+            </div>
+            </div>
+    {{"testForm" | formToken | raw }}
+</form>
