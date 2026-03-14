@@ -192,9 +192,28 @@ if (!$alreadyLoaded) {
         if (is_array($input)) {
             return $input;
         }
-        $debugLevel = [];
-        @eval("\$debugLevel = ".$input.";");
-        return $debugLevel;
+        if (is_string($input)) {
+            // Handle array-like strings e.g. "[TINA4_LOG_DEBUG, TINA4_LOG_ERROR]"
+            $input = trim($input, "[] \t\n\r");
+            $parts = array_map('trim', explode(',', $input));
+            $debugLevel = [];
+            foreach ($parts as $part) {
+                $debugLevel[] = match(strtoupper(trim($part))) {
+                    'DEBUG', 'TINA4_LOG_DEBUG' => TINA4_LOG_DEBUG,
+                    'INFO', 'TINA4_LOG_INFO' => TINA4_LOG_INFO,
+                    'WARNING', 'WARN', 'TINA4_LOG_WARNING' => TINA4_LOG_WARNING,
+                    'ERROR', 'TINA4_LOG_ERROR' => TINA4_LOG_ERROR,
+                    'NOTICE', 'TINA4_LOG_NOTICE' => TINA4_LOG_NOTICE,
+                    'CRITICAL', 'TINA4_LOG_CRITICAL' => TINA4_LOG_CRITICAL,
+                    'ALERT', 'TINA4_LOG_ALERT' => TINA4_LOG_ALERT,
+                    'EMERGENCY', 'TINA4_LOG_EMERGENCY' => TINA4_LOG_EMERGENCY,
+                    'ALL', 'TINA4_LOG_ALL' => TINA4_LOG_ALL,
+                    default => defined($part) ? constant($part) : TINA4_LOG_DEBUG,
+                };
+            }
+            return $debugLevel;
+        }
+        return [TINA4_LOG_DEBUG];
     }
 
     try {
