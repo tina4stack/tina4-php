@@ -512,42 +512,45 @@ if (!$alreadyLoaded) {
 
     $routeFolder = TINA4_DOCUMENT_ROOT . 'src';
 
-    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFolder)) as $file) {
-        if ($file->getExtension() !== 'php') continue;
+    if (file_exists($routeFolder)) {
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFolder)) as $file) {
+            if ($file->getExtension() !== 'php') continue;
 
-        require_once $file->getRealPath();
+            require_once $file->getRealPath();
 
-        // ── Class methods (controllers) ─────────────────────────────────────
-        foreach (get_declared_classes() as $class) {
-            try {
-                $refClass = new ReflectionClass($class);
-            } catch (ReflectionException $e) {
-                continue;
+            // ── Class methods (controllers) ─────────────────────────────────────
+            foreach (get_declared_classes() as $class) {
+                try {
+                    $refClass = new ReflectionClass($class);
+                } catch (ReflectionException $e) {
+                    continue;
+                }
+
+                // Skip if this class wasn't in the one we just required
+                if ($refClass->getFileName() !== $file->getRealPath()) continue;
+
+                $prefix = '';
+                foreach ($refClass->getAttributes(Prefix::class) as $attr) {
+                    $prefix = $attr->newInstance()->prefix;
+                }
+
+                foreach ($refClass->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+                    registerRouteFromAttributes($method, $prefix);
+                }
             }
 
-            // Skip if this class wasn't in the one we just required
-            if ($refClass->getFileName() !== $file->getRealPath()) continue;
 
-            $prefix = '';
-            foreach ($refClass->getAttributes(Prefix::class) as $attr) {
-                $prefix = $attr->newInstance()->prefix;
+            // ── Global functions (flat Python style) ─────────────────────────────
+            foreach (get_defined_functions()['user'] as $func) {
+                try {
+                    $refFunc = new ReflectionFunction($func);
+                } catch (ReflectionException $e) {
+                    continue;
+                }
+                if ($refFunc->getFileName() !== $file->getRealPath()) continue;
+
+                registerRouteFromAttributes($refFunc);
             }
-
-            foreach ($refClass->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                registerRouteFromAttributes($method, $prefix);
-            }
-        }
-
-        // ── Global functions (flat Python style) ─────────────────────────────
-        foreach (get_defined_functions()['user'] as $func) {
-            try {
-                $refFunc = new ReflectionFunction($func);
-            } catch (ReflectionException $e) {
-                continue;
-            }
-            if ($refFunc->getFileName() !== $file->getRealPath()) continue;
-
-            registerRouteFromAttributes($refFunc);
         }
     }
 
