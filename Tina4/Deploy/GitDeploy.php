@@ -194,9 +194,9 @@ class GitDeploy
             $this->log("Running composer install");
 
             if (isWindows()) {
-                `{$composer} install --no-interaction`;
+                `{$composer} install --no-dev --no-interaction`;
             } else {
-                `export COMPOSER_HOME={$projectRoot} && {$composer} install --no-interaction`;
+                `export COMPOSER_HOME={$projectRoot} && {$composer} install --no-dev --no-interaction`;
             }
 
             //check for lock file and autoloader

@@ -41,7 +41,6 @@
         "nowakowskir/php-jwt": "^2.0.1",
         "twig/twig": "^3.3.8",
         "phpfastcache/phpfastcache": "^8.0.5",
-        "coyl/git": "^0.1.7",
         "scssphp/scssphp": "^2.0.1",
         "tina4stack/tina4php-debug": "^2.0",
         "tina4stack/tina4php-shape": "^2.0",
@@ -84,5 +83,9 @@
         "tina4stack/tina4php-sqlite3": "^2.0",
         "phpmetrics/phpmetrics": "^2.8",
         "tina4stack/tina4php-reports": "dev-main"
+    },
+    "suggest": {
+        "coyl/git": "Required for programmatic Git repository operations (^0.1.7)",
+        "tina4stack/tina4php-reports": "Required for PDF/report generation with mPDF (dev-main)"
     }
 }
