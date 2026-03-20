@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://tina4.com/img/tina4-logo.svg" alt="Tina4" width="200">
+  <img src="https://tina4.com/logo.svg" alt="Tina4" width="200">
 </p>
 
 <h1 align="center">Tina4 PHP</h1>
@@ -193,7 +193,7 @@ Get::add("/api/users", function (Response $response) {
 
 Get::add("/api/users/{id}", function ($id, Response $response) {
     $user = new User();
-    $user->load("id = {$id}");
+    $user->load($id);
     return $response($user->asArray(), HTTP_OK);
 });
 
