@@ -87,3 +87,4 @@ test.db
 .phpunit.cache
 .claude/
 .github_token
+/logs/
