@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Todo App — Tina4</title>
+    <link rel="stylesheet" href="/css/tina4.min.css">
+</head>
+<body>
+<div class="container mt-4">
+    <h1>Todo App</h1>
+    <form id="todoForm" class="mb-4">
+        <div class="d-flex gap-2">
+            <input type="text" name="title" class="form-control" placeholder="What needs to be done?">
+            <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+    </form>
+    <ul id="todoList" class="list-group">
+        {% for todo in todos %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="{{ 'text-decoration-line-through' if todo.completed }}">{{ todo.title }}</span>
+            <span class="badge bg-secondary">{{ todo.created_at }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+</body>
+</html>
