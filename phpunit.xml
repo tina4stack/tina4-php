@@ -32,6 +32,24 @@
             <file>tests/GraphQLV3Test.php</file>
             <file>tests/WebSocketV3Test.php</file>
             <file>tests/ServiceRunnerV3Test.php</file>
+            <file>tests/SqlTranslationTest.php</file>
+            <file>tests/ResponseCacheTest.php</file>
+            <file>tests/ContainerTest.php</file>
+            <file>tests/QueueBackendTest.php</file>
+            <file>tests/SessionHandlerTest.php</file>
+            <file>tests/AITest.php</file>
+            <file>tests/ErrorOverlayTest.php</file>
+            <file>tests/EventsTest.php</file>
+            <file>tests/FormTokenTest.php</file>
+            <file>tests/HtmlElementTest.php</file>
+            <file>tests/PostProtectionTest.php</file>
+            <file>tests/SwaggerTest.php</file>
+            <file>tests/WsdlTest.php</file>
+            <file>tests/MessengerTest.php</file>
+            <file>tests/DevAdminTest.php</file>
+        </testsuite>
+        <testsuite name="Tina4 Smoke Test">
+            <file>tests/SmokeTest.php</file>
         </testsuite>
     </testsuites>
 </phpunit>

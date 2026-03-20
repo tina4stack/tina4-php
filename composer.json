@@ -1,14 +1,19 @@
 {
     "name": "tina4stack/tina4php",
-    "description": "Tina4 PHP",
+    "description": "Tina4 PHP — This is not a 4ramework",
     "version": "3.0.0",
     "license": "MIT",
     "autoload": {
         "psr-4": {
             "Tina4\\": "src/Tina4/",
+            "Tina4\\Database\\": "src/Tina4/Database/",
             "Tina4\\Middleware\\": "src/Tina4/Middleware/",
-            "Tina4\\Database\\": "src/Tina4/Database/"
-        }
+            "Tina4\\Queue\\": "src/Tina4/Queue/",
+            "Tina4\\Session\\": "src/Tina4/Session/"
+        },
+        "files": [
+            "src/Tina4/Constants.php"
+        ]
     },
     "require": {
         "php": ">=8.2",
@@ -16,22 +21,10 @@
         "ext-json": "*"
     },
     "scripts": {
-        "tina4php": "@php bin/tina4php",
-        "tina4php-debug": "@php -dxdebug.mode=debug -dxdebug.client_host=host.docker.internal -dxdebug.client_port=9004 -dxdebug.start_with_request=yes bin/tina4php",
-        "tina4service": "tina4service",
-        "test": "@tina4php tests:run",
-        "phplint": "vendor/bin/phplint",
-        "watcher": "vendor/bin/php-watcher",
-        "test:verbose": "@tina4php tests:verbose",
-        "initialize": "@tina4php initialize:run",
-        "initialise": "@tina4php initialize:run",
-        "debug": "@tina4php-debug webservice:run",
-        "begin": "@tina4php initialize:run",
-        "start": "@tina4php webservice:run",
-        "start-service": "@tina4service",
-        "run-tests": "./vendor/bin/phpunit tests --verbose --color --log-junit=tests/junit.xml -v",
-        "phpmetrics": "./vendor/bin/phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
-        "lint": "@phplint --exclude=vendor"
+        "serve": "@php bin/tina4php serve",
+        "start": "@php bin/tina4php serve",
+        "test": "./vendor/bin/phpunit tests --verbose --color",
+        "lint": "vendor/bin/phplint --exclude=vendor"
     },
     "config": {
         "process-timeout": 0

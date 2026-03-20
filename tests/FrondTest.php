@@ -896,4 +896,55 @@ TPL;
         $result = $this->engine->renderString('{% set data = json | json_decode %}{{ data.name }}', ['json' => '{"name":"Bob"}']);
         $this->assertSame('Bob', $result);
     }
+
+    // ── Form Token Tests ──────────────────────────────────────
+
+    public function testFormTokenFunctionRendersHiddenInput(): void
+    {
+        $result = $this->engine->renderString('{{ form_token() | raw }}', []);
+        $this->assertStringContainsString('<input type="hidden" name="formToken" value="', $result);
+
+        // Extract JWT and verify structure
+        preg_match('/value="([^"]+)"/', $result, $matches);
+        $this->assertNotEmpty($matches);
+        $token = $matches[1];
+        $parts = explode('.', $token);
+        $this->assertCount(3, $parts, 'JWT should have 3 dot-separated parts');
+    }
+
+    public function testFormTokenCamelCaseAlias(): void
+    {
+        $result = $this->engine->renderString('{{ formToken() | raw }}', []);
+        $this->assertStringContainsString('<input type="hidden" name="formToken" value="', $result);
+    }
+
+    public function testFormTokenFilter(): void
+    {
+        $result = $this->engine->renderString('{{ "" | form_token | raw }}', []);
+        $this->assertStringContainsString('<input type="hidden" name="formToken" value="', $result);
+    }
+
+    public function testFormTokenIsValidJwt(): void
+    {
+        $result = $this->engine->renderString('{{ form_token() | raw }}', []);
+        preg_match('/value="([^"]+)"/', $result, $matches);
+        $token = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
+
+        $secret = $_ENV['SECRET'] ?? 'tina4-default-secret';
+        $payload = \Tina4\Auth::validateToken($token, $secret);
+        $this->assertNotNull($payload, 'Token should be valid');
+        $this->assertSame('form', $payload['type']);
+    }
+
+    public function testFormTokenWithDescriptor(): void
+    {
+        $result = $this->engine->renderString('{{ "admin" | form_token | raw }}', []);
+        preg_match('/value="([^"]+)"/', $result, $matches);
+        $token = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
+
+        $payload = \Tina4\Auth::getPayload($token);
+        $this->assertNotNull($payload);
+        $this->assertSame('form', $payload['type']);
+        $this->assertSame('admin', $payload['context']);
+    }
 }

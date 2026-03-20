@@ -1,0 +1,48 @@
+// Tina4 CSS Framework - CSS Custom Properties
+// Exposes the design tokens as CSS custom properties for runtime use
+
+@import 'variables';
+
+:root {
+  // Theme colors
+  --t4-primary: #{$primary};
+  --t4-secondary: #{$secondary};
+  --t4-success: #{$success};
+  --t4-danger: #{$danger};
+  --t4-warning: #{$warning};
+  --t4-info: #{$info};
+  --t4-light: #{$light};
+  --t4-dark: #{$dark};
+  --t4-white: #{$white};
+  --t4-black: #{$black};
+  --t4-muted: #{$muted};
+
+  // Body
+  --t4-body-bg: #{$body-bg};
+  --t4-body-color: #{$body-color};
+
+  // Typography
+  --t4-font-family: #{$font-family-base};
+  --t4-font-family-mono: #{$font-family-mono};
+  --t4-font-size-base: #{$font-size-base};
+  --t4-line-height-base: #{$line-height-base};
+
+  // Spacing
+  --t4-spacer: #{$spacer};
+
+  // Border radius
+  --t4-border-radius: #{$border-radius};
+  --t4-border-radius-lg: #{$border-radius-lg};
+  --t4-border-radius-xl: #{$border-radius-xl};
+
+  // Shadows
+  --t4-shadow-sm: #{$shadow-sm};
+  --t4-shadow: #{$shadow};
+  --t4-shadow-lg: #{$shadow-lg};
+
+  // Transitions
+  --t4-transition: #{$transition-base};
+
+  // Link
+  --t4-link-color: #{$link-color};
+}

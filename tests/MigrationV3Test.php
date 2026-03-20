@@ -49,7 +49,7 @@ class MigrationV3Test extends TestCase
     public function testMigrationsTableCreated(): void
     {
         new Migration($this->db, $this->migrationsDir);
-        $this->assertTrue($this->db->tableExists('_tina4_migrations'));
+        $this->assertTrue($this->db->tableExists('tina4_migration'));
     }
 
     // --- Migrate ---

@@ -1,0 +1,81 @@
+// Tina4 CSS Framework - 12-Column Flexbox Grid
+// -----------------------------------------------
+
+.container,
+.container-fluid {
+  width: 100%;
+  padding-right: calc($grid-gutter / 2);
+  padding-left: calc($grid-gutter / 2);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+@each $bp, $max-width in $container-max-widths {
+  @media (min-width: map-get($breakpoints, $bp)) {
+    .container {
+      max-width: $max-width;
+    }
+  }
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: calc($grid-gutter / -2);
+  margin-left: calc($grid-gutter / -2);
+  > * {
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    padding-right: calc($grid-gutter / 2);
+    padding-left: calc($grid-gutter / 2);
+  }
+}
+
+.col {
+  flex: 1 0 0%;
+}
+
+// Generate base columns
+@for $i from 1 through $grid-columns {
+  .col-#{$i} {
+    flex: 0 0 auto;
+    width: percentage($i / $grid-columns);
+  }
+}
+@each $i in 1, 2, 3, 4 {
+  .offset-#{$i} {
+    margin-left: percentage($i / $grid-columns);
+  }
+}
+.offset-0 { margin-left: 0; }
+
+// Responsive columns (core breakpoints only for size)
+$grid-breakpoints: (sm, md, lg, xl);
+
+@each $bp in $grid-breakpoints {
+  $min-width: map-get($breakpoints, $bp);
+  @media (min-width: $min-width) {
+    .col-#{$bp} {
+      flex: 1 0 0%;
+    }
+    @for $i from 1 through $grid-columns {
+      .col-#{$bp}-#{$i} {
+        flex: 0 0 auto;
+        width: percentage($i / $grid-columns);
+      }
+    }
+    .offset-#{$bp}-0 { margin-left: 0; }
+  }
+}
+
+// Row alignment
+.justify-start   { justify-content: flex-start; }
+.justify-center  { justify-content: center; }
+.justify-end     { justify-content: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-around  { justify-content: space-around; }
+
+.align-start  { align-items: flex-start; }
+.align-center { align-items: center; }
+.align-end    { align-items: flex-end; }

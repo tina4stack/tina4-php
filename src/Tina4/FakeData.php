@@ -13,10 +13,15 @@ namespace Tina4;
  *
  * Generate realistic fake data for testing and development.
  *
- *     $name  = Seeder::fullName();   // "Alice Johnson"
- *     $email = Seeder::email();      // "alice.johnson@example.com"
+ *     $fake  = new FakeData();
+ *     $name  = $fake->fullName();   // "Alice Johnson"
+ *     $email = $fake->email();      // "alice.johnson@example.com"
+ *
+ *     // Deterministic output with a seed:
+ *     $fake  = new FakeData(42);
+ *     $name  = $fake->fullName();   // same every time
  */
-class Seeder
+class FakeData
 {
     // ── Word banks ──────────────────────────────────────────────
 
@@ -96,127 +101,174 @@ class Seeder
         'navy', 'coral', 'salmon', 'indigo', 'violet', 'lime',
     ];
 
+    // ── Instance state ────────────────────────────────────────────
+
+    private ?int $seed;
+
+    // ── Constructor ───────────────────────────────────────────────
+
+    public function __construct(?int $seed = null)
+    {
+        $this->seed = $seed;
+        if ($seed !== null) {
+            mt_srand($seed);
+        }
+    }
+
+    /**
+     * Static factory — create a seeded FakeData instance.
+     *
+     *     $fake = FakeData::seed(42);
+     *     $fake->fullName(); // deterministic
+     */
+    public static function seed(int $seed): self
+    {
+        return new self($seed);
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────
+
+    /**
+     * Generate a random integer in the given range using the seedable MT engine.
+     */
+    private function rand(int $min, int $max): int
+    {
+        return mt_rand($min, $max);
+    }
+
+    /**
+     * Pick a random element from an array.
+     */
+    private function pick(array $list): string
+    {
+        return $list[$this->rand(0, count($list) - 1)];
+    }
+
     // ── Generators ──────────────────────────────────────────────
 
-    public static function firstName(): string
+    public function firstName(): string
     {
-        return self::FIRST_NAMES[random_int(0, count(self::FIRST_NAMES) - 1)];
+        return $this->pick(self::FIRST_NAMES);
     }
 
-    public static function lastName(): string
+    public function lastName(): string
     {
-        return self::LAST_NAMES[random_int(0, count(self::LAST_NAMES) - 1)];
+        return $this->pick(self::LAST_NAMES);
     }
 
-    public static function fullName(): string
+    public function fullName(): string
     {
-        return self::firstName() . ' ' . self::lastName();
+        return $this->firstName() . ' ' . $this->lastName();
     }
 
-    public static function email(): string
+    public function email(): string
     {
-        $first = strtolower(self::firstName());
-        $last = strtolower(self::lastName());
-        $domain = self::DOMAINS[random_int(0, count(self::DOMAINS) - 1)];
+        $first = strtolower($this->firstName());
+        $last = strtolower($this->lastName());
+        $domain = $this->pick(self::DOMAINS);
         return $first . '.' . $last . '@' . $domain;
     }
 
-    public static function phone(): string
+    public function phone(): string
     {
-        $area = random_int(200, 999);
-        $mid = random_int(100, 999);
-        $end = random_int(1000, 9999);
+        $area = $this->rand(200, 999);
+        $mid = $this->rand(100, 999);
+        $end = $this->rand(1000, 9999);
         return sprintf('+1 (%03d) %03d-%04d', $area, $mid, $end);
     }
 
-    public static function address(): string
+    public function address(): string
     {
-        $num = random_int(1, 999);
-        $street = self::STREETS[random_int(0, count(self::STREETS) - 1)];
-        $city = self::CITIES[random_int(0, count(self::CITIES) - 1)];
+        $num = $this->rand(1, 999);
+        $street = $this->pick(self::STREETS);
+        $city = $this->pick(self::CITIES);
         return $num . ' ' . $street . ', ' . $city;
     }
 
-    public static function city(): string
+    public function city(): string
     {
-        return self::CITIES[random_int(0, count(self::CITIES) - 1)];
+        return $this->pick(self::CITIES);
     }
 
-    public static function country(): string
+    public function country(): string
     {
-        return self::COUNTRIES[random_int(0, count(self::COUNTRIES) - 1)];
+        return $this->pick(self::COUNTRIES);
     }
 
-    public static function zipCode(): string
+    public function zipCode(): string
     {
-        return sprintf('%05d', random_int(10000, 99999));
+        return sprintf('%05d', $this->rand(10000, 99999));
     }
 
-    public static function company(): string
+    public function company(): string
     {
-        $last = self::lastName();
-        $suffix = self::COMPANY_SUFFIXES[random_int(0, count(self::COMPANY_SUFFIXES) - 1)];
+        $last = $this->lastName();
+        $suffix = $this->pick(self::COMPANY_SUFFIXES);
         return $last . ' ' . $suffix;
     }
 
-    public static function jobTitle(): string
+    public function jobTitle(): string
     {
-        return self::JOB_TITLES[random_int(0, count(self::JOB_TITLES) - 1)];
+        return $this->pick(self::JOB_TITLES);
     }
 
-    public static function paragraph(int $sentences = 3): string
+    public function paragraph(int $sentences = 3): string
     {
         $parts = [];
         for ($i = 0; $i < $sentences; $i++) {
-            $parts[] = self::sentence(random_int(5, 12));
+            $parts[] = $this->sentence($this->rand(5, 12));
         }
         return implode(' ', $parts);
     }
 
-    public static function sentence(int $words = 8): string
+    public function sentence(int $words = 8): string
     {
         $w = [];
         for ($i = 0; $i < $words; $i++) {
-            $w[] = self::word();
+            $w[] = $this->word();
         }
         return ucfirst(implode(' ', $w)) . '.';
     }
 
-    public static function word(): string
+    public function word(): string
     {
-        return self::WORDS[random_int(0, count(self::WORDS) - 1)];
+        return $this->pick(self::WORDS);
     }
 
-    public static function integer(int $min = 0, int $max = 1000): int
+    public function integer(int $min = 0, int $max = 1000): int
     {
-        return random_int($min, $max);
+        return $this->rand($min, $max);
     }
 
-    public static function float(float $min = 0, float $max = 1000, int $decimals = 2): float
+    public function float(float $min = 0, float $max = 1000, int $decimals = 2): float
     {
         $rand = $min + mt_rand() / mt_getrandmax() * ($max - $min);
         return round($rand, $decimals);
     }
 
-    public static function boolean(): bool
+    public function boolean(): bool
     {
-        return (bool)random_int(0, 1);
+        return (bool)$this->rand(0, 1);
     }
 
-    public static function date(string $start = '2020-01-01', string $end = '2025-12-31'): string
+    public function date(string $start = '2020-01-01', string $end = '2025-12-31'): string
     {
         $startTs = strtotime($start);
         $endTs = strtotime($end);
         if ($startTs === false || $endTs === false) {
             return date('Y-m-d');
         }
-        $ts = random_int($startTs, $endTs);
+        $ts = $this->rand($startTs, $endTs);
         return date('Y-m-d', $ts);
     }
 
-    public static function uuid(): string
+    public function uuid(): string
     {
-        $data = random_bytes(16);
+        // Build 16 random bytes using the seedable MT engine
+        $data = '';
+        for ($i = 0; $i < 16; $i++) {
+            $data .= chr($this->rand(0, 255));
+        }
         // Set version 4
         $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
         // Set variant 10xx
@@ -232,46 +284,46 @@ class Seeder
         );
     }
 
-    public static function url(): string
+    public function url(): string
     {
-        $domain = self::DOMAINS[random_int(0, count(self::DOMAINS) - 1)];
-        $path = self::word() . '/' . self::word();
+        $domain = $this->pick(self::DOMAINS);
+        $path = $this->word() . '/' . $this->word();
         return 'https://' . $domain . '/' . $path;
     }
 
-    public static function ipAddress(): string
+    public function ipAddress(): string
     {
-        return random_int(1, 255) . '.' . random_int(0, 255) . '.' .
-               random_int(0, 255) . '.' . random_int(1, 254);
+        return $this->rand(1, 255) . '.' . $this->rand(0, 255) . '.' .
+               $this->rand(0, 255) . '.' . $this->rand(1, 254);
     }
 
-    public static function color(): string
+    public function color(): string
     {
-        return self::COLORS[random_int(0, count(self::COLORS) - 1)];
+        return $this->pick(self::COLORS);
     }
 
-    public static function hexColor(): string
+    public function hexColor(): string
     {
-        return sprintf('#%06x', random_int(0, 0xFFFFFF));
+        return sprintf('#%06x', $this->rand(0, 0xFFFFFF));
     }
 
     /**
      * Generate a fake credit card number (test numbers only, e.g. 4111...).
      */
-    public static function creditCard(): string
+    public function creditCard(): string
     {
         $prefixes = ['4111', '4242', '5500', '5105'];
-        $prefix = $prefixes[random_int(0, count($prefixes) - 1)];
+        $prefix = $prefixes[$this->rand(0, count($prefixes) - 1)];
         $rest = '';
         for ($i = 0; $i < 12; $i++) {
-            $rest .= random_int(0, 9);
+            $rest .= $this->rand(0, 9);
         }
         return $prefix . $rest;
     }
 
-    public static function currency(): string
+    public function currency(): string
     {
-        return self::CURRENCIES[random_int(0, count(self::CURRENCIES) - 1)];
+        return $this->pick(self::CURRENCIES);
     }
 
     // ── Seeder runner ───────────────────────────────────────────
@@ -284,7 +336,7 @@ class Seeder
      * @param string $seedDir Directory containing seed PHP files
      * @return array Summary of seeded files
      */
-    public static function seed(string $seedDir = 'src/seeds'): array
+    public function seedDir(string $seedDir = 'src/seeds'): array
     {
         $results = [];
 
@@ -316,7 +368,7 @@ class Seeder
      * @param int      $count  Number of rows to generate
      * @return array   Generated rows
      */
-    public static function run(callable $seeder, int $count = 10): array
+    public function run(callable $seeder, int $count = 10): array
     {
         $rows = [];
         for ($i = 0; $i < $count; $i++) {

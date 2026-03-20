@@ -1,96 +1,110 @@
-# Seeder
+# FakeData
 
-The `Seeder` class generates realistic fake data for testing and development. It provides static methods for names, emails, addresses, companies, dates, UUIDs, and more — all zero-dependency using PHP's `random_int()` for secure randomness.
+The `FakeData` class generates realistic fake data for testing and development. It provides instance methods for names, emails, addresses, companies, dates, UUIDs, and more — all zero-dependency. An optional seed parameter enables deterministic output for reproducible tests.
 
 The seeder also includes a runner that discovers seed files from a directory and executes them.
+
+## Creating an Instance
+
+```php
+use Tina4\FakeData;
+
+// Unseeded (random each time)
+$fake = new FakeData();
+
+// Seeded (deterministic — same output every time)
+$fake = new FakeData(42);
+```
 
 ## Data Generators
 
 ### People
 
 ```php
-use Tina4\Seeder;
+$fake = new FakeData();
 
-echo Seeder::firstName();   // "Alice"
-echo Seeder::lastName();    // "Johnson"
-echo Seeder::fullName();    // "Bob Smith"
-echo Seeder::email();       // "alice.johnson@example.com"
-echo Seeder::phone();       // "+1 (415) 555-1234"
-echo Seeder::jobTitle();    // "Software Engineer"
+echo $fake->firstName();   // "Alice"
+echo $fake->lastName();    // "Johnson"
+echo $fake->fullName();    // "Bob Smith"
+echo $fake->email();       // "alice.johnson@example.com"
+echo $fake->phone();       // "+1 (415) 555-1234"
+echo $fake->jobTitle();    // "Software Engineer"
 ```
 
 ### Addresses
 
 ```php
-echo Seeder::address();   // "742 Main St, New York"
-echo Seeder::city();      // "Tokyo"
-echo Seeder::country();   // "United States"
-echo Seeder::zipCode();   // "90210"
+echo $fake->address();   // "742 Main St, New York"
+echo $fake->city();      // "Tokyo"
+echo $fake->country();   // "United States"
+echo $fake->zipCode();   // "90210"
 ```
 
 ### Companies
 
 ```php
-echo Seeder::company();   // "Johnson Technologies"
+echo $fake->company();   // "Johnson Technologies"
 ```
 
 ### Text
 
 ```php
-echo Seeder::word();                    // "lorem"
-echo Seeder::sentence(words: 8);       // "The quick brown fox jumps over lazy dog."
-echo Seeder::paragraph(sentences: 3);  // Three random sentences
+echo $fake->word();                    // "lorem"
+echo $fake->sentence(words: 8);       // "The quick brown fox jumps over lazy dog."
+echo $fake->paragraph(sentences: 3);  // Three random sentences
 ```
 
 ### Numbers and Booleans
 
 ```php
-echo Seeder::integer(min: 1, max: 100);   // 42
-echo Seeder::float(min: 0, max: 100, decimals: 2);  // 73.55
-echo Seeder::boolean();  // true
+echo $fake->integer(min: 1, max: 100);   // 42
+echo $fake->float(min: 0, max: 100, decimals: 2);  // 73.55
+echo $fake->boolean();  // true
 ```
 
 ### Dates and UUIDs
 
 ```php
-echo Seeder::date('2024-01-01', '2026-12-31');  // "2025-07-15"
-echo Seeder::uuid();  // "a1b2c3d4-e5f6-4789-ab01-c2d3e4f5a6b7"
+echo $fake->date('2024-01-01', '2026-12-31');  // "2025-07-15"
+echo $fake->uuid();  // "a1b2c3d4-e5f6-4789-ab01-c2d3e4f5a6b7"
 ```
 
 ### Web and Network
 
 ```php
-echo Seeder::url();        // "https://example.com/lorem/ipsum"
-echo Seeder::ipAddress();  // "192.168.42.100"
+echo $fake->url();        // "https://example.com/lorem/ipsum"
+echo $fake->ipAddress();  // "192.168.42.100"
 ```
 
 ### Colors
 
 ```php
-echo Seeder::color();     // "teal"
-echo Seeder::hexColor();  // "#3a7f2c"
+echo $fake->color();     // "teal"
+echo $fake->hexColor();  // "#3a7f2c"
 ```
 
 ### Finance
 
 ```php
-echo Seeder::currency();    // "USD"
-echo Seeder::creditCard();  // "4111234567890123" (test numbers only)
+echo $fake->currency();    // "USD"
+echo $fake->creditCard();  // "4111234567890123" (test numbers only)
 ```
 
 ## Generating Multiple Records
 
-Use `Seeder::run()` to generate multiple rows from a callable.
+Use `$fake->run()` to generate multiple rows from a callable.
 
 ```php
-$users = Seeder::run(function () {
+$fake = new FakeData();
+
+$users = $fake->run(function () use ($fake) {
     return [
-        'name' => Seeder::fullName(),
-        'email' => Seeder::email(),
-        'phone' => Seeder::phone(),
-        'city' => Seeder::city(),
-        'role' => ['admin', 'editor', 'user'][random_int(0, 2)],
-        'created_at' => Seeder::date('2024-01-01', '2026-03-20'),
+        'name' => $fake->fullName(),
+        'email' => $fake->email(),
+        'phone' => $fake->phone(),
+        'city' => $fake->city(),
+        'role' => ['admin', 'editor', 'user'][mt_rand(0, 2)],
+        'created_at' => $fake->date('2024-01-01', '2026-03-20'),
     ];
 }, count: 50);
 
@@ -103,15 +117,16 @@ echo $users[0]['name']; // "Grace Miller"
 
 ```php
 use Tina4\Database\SQLite3Adapter;
-use Tina4\Seeder;
+use Tina4\FakeData;
 
 $db = new SQLite3Adapter('app.db');
+$fake = new FakeData();
 
-$users = Seeder::run(function () {
+$users = $fake->run(function () use ($fake) {
     return [
-        'first_name' => Seeder::firstName(),
-        'last_name' => Seeder::lastName(),
-        'email' => Seeder::email(),
+        'first_name' => $fake->firstName(),
+        'last_name' => $fake->lastName(),
+        'email' => $fake->email(),
         'role' => 'user',
     ];
 }, count: 100);
@@ -134,11 +149,12 @@ Place seed files in `src/seeds/`. Each file must return a callable that produces
 
 ```php
 // src/seeds/users.php
-return function () {
+$fake = new \Tina4\FakeData();
+return function () use ($fake) {
     return [
-        'first_name' => \Tina4\Seeder::firstName(),
-        'last_name' => \Tina4\Seeder::lastName(),
-        'email' => \Tina4\Seeder::email(),
+        'first_name' => $fake->firstName(),
+        'last_name' => $fake->lastName(),
+        'email' => $fake->email(),
         'role' => 'user',
     ];
 };
@@ -146,12 +162,13 @@ return function () {
 
 ```php
 // src/seeds/products.php
-return function () {
+$fake = new \Tina4\FakeData();
+return function () use ($fake) {
     return [
-        'name' => ucfirst(\Tina4\Seeder::word()) . ' ' . ucfirst(\Tina4\Seeder::word()),
-        'price' => \Tina4\Seeder::float(1.99, 999.99, 2),
-        'category' => ['electronics', 'clothing', 'food', 'books'][random_int(0, 3)],
-        'stock' => \Tina4\Seeder::integer(0, 500),
+        'name' => ucfirst($fake->word()) . ' ' . ucfirst($fake->word()),
+        'price' => $fake->float(1.99, 999.99, 2),
+        'category' => ['electronics', 'clothing', 'food', 'books'][mt_rand(0, 3)],
+        'stock' => $fake->integer(0, 500),
     ];
 };
 ```
@@ -159,7 +176,8 @@ return function () {
 Discover and load seed files:
 
 ```php
-$results = Seeder::seed('src/seeds');
+$fake = new FakeData();
+$results = $fake->seedDir('src/seeds');
 // ['users.php' => 'loaded', 'products.php' => 'loaded']
 ```
 
@@ -167,12 +185,13 @@ $results = Seeder::seed('src/seeds');
 
 ```php
 $db = new SQLite3Adapter('app.db');
+$fake = new FakeData();
 
-$rows = Seeder::run(function () {
+$rows = $fake->run(function () use ($fake) {
     return [
-        'first_name' => Seeder::firstName(),
-        'last_name' => Seeder::lastName(),
-        'email' => Seeder::email(),
+        'first_name' => $fake->firstName(),
+        'last_name' => $fake->lastName(),
+        'email' => $fake->email(),
     ];
 }, count: 25);
 
@@ -182,11 +201,22 @@ foreach ($rows as $row) {
 }
 ```
 
+## Deterministic Output
+
+Use a seed for reproducible test data:
+
+```php
+$fake = new FakeData(42);
+echo $fake->fullName();  // Always the same name for seed 42
+echo $fake->email();     // Always the same email for seed 42
+```
+
 ## Tips
 
-- All generators use `random_int()` for cryptographically secure randomness.
+- Unseeded instances use PHP's default `mt_rand()` randomness.
+- Seeded instances produce deterministic output — useful for reproducible tests.
 - Email addresses use safe test domains (`example.com`, `test.org`, etc.) — they will not reach real inboxes.
 - Credit card numbers are standard test numbers (e.g., `4111...`, `4242...`).
-- Use `Seeder::run()` for bulk generation — it returns an array of generated rows.
+- Use `$fake->run()` for bulk generation — it returns an array of generated rows.
 - Seed files are sorted alphabetically, so prefix with numbers for ordering: `01_users.php`, `02_products.php`.
 - Combine seeding with migrations for a complete development setup: migrate, then seed.

@@ -1,0 +1,14 @@
+{% extends "errors/base.twig" %}
+{% block title %}Redirecting…{% endblock %}
+{% block meta %}<meta http-equiv="refresh" content="0;url={{ redirect_url }}">{% endblock %}
+{% block extra_styles %}
+.spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 1rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+{% endblock %}
+{% block content %}
+    <div class="spinner"></div>
+    <div class="error-title">Redirecting…</div>
+    <div class="error-msg">You are being redirected to a new location.</div>
+    <div class="error-path" style="color:var(--primary)">{{ redirect_url }}</div>
+    <a href="{{ redirect_url }}" class="error-home">Click here if not redirected</a>
+{% endblock %}

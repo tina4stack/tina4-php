@@ -7,85 +7,92 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use Tina4\Seeder;
+use Tina4\FakeData;
 
 class SeederV3Test extends TestCase
 {
+    private FakeData $fake;
+
+    protected function setUp(): void
+    {
+        $this->fake = new FakeData();
+    }
+
     public function testFirstName(): void
     {
-        $name = Seeder::firstName();
+        $name = $this->fake->firstName();
         $this->assertIsString($name);
         $this->assertNotEmpty($name);
     }
 
     public function testLastName(): void
     {
-        $name = Seeder::lastName();
+        $name = $this->fake->lastName();
         $this->assertIsString($name);
         $this->assertNotEmpty($name);
     }
 
     public function testFullName(): void
     {
-        $name = Seeder::fullName();
+        $name = $this->fake->fullName();
         $this->assertIsString($name);
         $this->assertStringContainsString(' ', $name);
     }
 
     public function testEmail(): void
     {
-        $email = Seeder::email();
+        $email = $this->fake->email();
         $this->assertStringContainsString('@', $email);
         $this->assertStringContainsString('.', $email);
     }
 
     public function testPhone(): void
     {
-        $phone = Seeder::phone();
+        $phone = $this->fake->phone();
         $this->assertMatchesRegularExpression('#^\+1 \(\d{3}\) \d{3}-\d{4}$#', $phone);
     }
 
     public function testAddress(): void
     {
-        $address = Seeder::address();
+        $address = $this->fake->address();
         $this->assertIsString($address);
         $this->assertStringContainsString(',', $address);
     }
 
     public function testCity(): void
     {
-        $this->assertIsString(Seeder::city());
-        $this->assertNotEmpty(Seeder::city());
+        $this->assertIsString($this->fake->city());
+        $this->assertNotEmpty($this->fake->city());
     }
 
     public function testCountry(): void
     {
-        $this->assertIsString(Seeder::country());
-        $this->assertNotEmpty(Seeder::country());
+        $this->assertIsString($this->fake->country());
+        $this->assertNotEmpty($this->fake->country());
     }
 
     public function testZipCode(): void
     {
-        $zip = Seeder::zipCode();
+        $zip = $this->fake->zipCode();
         $this->assertMatchesRegularExpression('#^\d{5}$#', $zip);
     }
 
     public function testCompany(): void
     {
-        $company = Seeder::company();
+        $company = $this->fake->company();
         $this->assertIsString($company);
         $this->assertStringContainsString(' ', $company);
     }
 
     public function testJobTitle(): void
     {
-        $this->assertIsString(Seeder::jobTitle());
-        $this->assertNotEmpty(Seeder::jobTitle());
+        $this->assertIsString($this->fake->jobTitle());
+        $this->assertNotEmpty($this->fake->jobTitle());
     }
 
     public function testSentence(): void
     {
-        $sentence = Seeder::sentence(5);
+        $sentence = $this->fake->sentence(5);
         $this->assertStringEndsWith('.', $sentence);
         // First letter should be uppercase
         $this->assertMatchesRegularExpression('#^[A-Z]#', $sentence);
@@ -93,7 +100,7 @@ class SeederV3Test extends TestCase
 
     public function testParagraph(): void
     {
-        $para = Seeder::paragraph(3);
+        $para = $this->fake->paragraph(3);
         // Should contain multiple sentences (dots)
         $dots = substr_count($para, '.');
         $this->assertGreaterThanOrEqual(3, $dots);
@@ -101,7 +108,7 @@ class SeederV3Test extends TestCase
 
     public function testWord(): void
     {
-        $word = Seeder::word();
+        $word = $this->fake->word();
         $this->assertIsString($word);
         $this->assertNotEmpty($word);
         $this->assertStringNotContainsString(' ', $word);
@@ -109,27 +116,27 @@ class SeederV3Test extends TestCase
 
     public function testInteger(): void
     {
-        $val = Seeder::integer(10, 20);
+        $val = $this->fake->integer(10, 20);
         $this->assertGreaterThanOrEqual(10, $val);
         $this->assertLessThanOrEqual(20, $val);
     }
 
     public function testFloat(): void
     {
-        $val = Seeder::float(1.0, 5.0, 2);
+        $val = $this->fake->float(1.0, 5.0, 2);
         $this->assertGreaterThanOrEqual(1.0, $val);
         $this->assertLessThanOrEqual(5.0, $val);
     }
 
     public function testBoolean(): void
     {
-        $val = Seeder::boolean();
+        $val = $this->fake->boolean();
         $this->assertIsBool($val);
     }
 
     public function testDate(): void
     {
-        $date = Seeder::date('2023-01-01', '2023-12-31');
+        $date = $this->fake->date('2023-01-01', '2023-12-31');
         $this->assertMatchesRegularExpression('#^\d{4}-\d{2}-\d{2}$#', $date);
         $this->assertGreaterThanOrEqual('2023-01-01', $date);
         $this->assertLessThanOrEqual('2023-12-31', $date);
@@ -137,7 +144,7 @@ class SeederV3Test extends TestCase
 
     public function testUuid(): void
     {
-        $uuid = Seeder::uuid();
+        $uuid = $this->fake->uuid();
         $this->assertMatchesRegularExpression(
             '#^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$#',
             $uuid
@@ -146,48 +153,49 @@ class SeederV3Test extends TestCase
 
     public function testUrl(): void
     {
-        $url = Seeder::url();
+        $url = $this->fake->url();
         $this->assertStringStartsWith('https://', $url);
         $this->assertStringContainsString('/', $url);
     }
 
     public function testIpAddress(): void
     {
-        $ip = Seeder::ipAddress();
+        $ip = $this->fake->ipAddress();
         $this->assertMatchesRegularExpression('#^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$#', $ip);
     }
 
     public function testColor(): void
     {
-        $this->assertIsString(Seeder::color());
-        $this->assertNotEmpty(Seeder::color());
+        $this->assertIsString($this->fake->color());
+        $this->assertNotEmpty($this->fake->color());
     }
 
     public function testHexColor(): void
     {
-        $hex = Seeder::hexColor();
+        $hex = $this->fake->hexColor();
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex);
     }
 
     public function testCreditCard(): void
     {
-        $cc = Seeder::creditCard();
+        $cc = $this->fake->creditCard();
         $this->assertSame(16, strlen($cc));
         $this->assertMatchesRegularExpression('#^\d{16}$#', $cc);
     }
 
     public function testCurrency(): void
     {
-        $currency = Seeder::currency();
+        $currency = $this->fake->currency();
         $this->assertSame(3, strlen($currency));
     }
 
     public function testRunGeneratesRows(): void
     {
-        $rows = Seeder::run(function () {
+        $fake = $this->fake;
+        $rows = $fake->run(function () use ($fake) {
             return [
-                'name' => Seeder::fullName(),
-                'email' => Seeder::email(),
+                'name' => $fake->fullName(),
+                'email' => $fake->email(),
             ];
         }, 5);
         $this->assertCount(5, $rows);
@@ -199,8 +207,36 @@ class SeederV3Test extends TestCase
 
     public function testSeedEmptyDir(): void
     {
-        $result = Seeder::seed('/nonexistent/seed/dir');
+        $result = $this->fake->seedDir('/nonexistent/seed/dir');
         $this->assertIsArray($result);
         $this->assertEmpty($result);
+    }
+
+    public function testSeededDeterministic(): void
+    {
+        $fake1 = new FakeData(42);
+        $name1 = $fake1->fullName();
+        $email1 = $fake1->email();
+
+        $fake2 = new FakeData(42);
+        $name2 = $fake2->fullName();
+        $email2 = $fake2->email();
+
+        $this->assertSame($name1, $name2);
+        $this->assertSame($email1, $email2);
+    }
+
+    public function testConstructorWithSeed(): void
+    {
+        $fake1 = new FakeData(99);
+        $name1 = $fake1->firstName();
+        $int1 = $fake1->integer(1, 1000);
+
+        $fake2 = new FakeData(99);
+        $name2 = $fake2->firstName();
+        $int2 = $fake2->integer(1, 1000);
+
+        $this->assertSame($name1, $name2);
+        $this->assertSame($int1, $int2);
     }
 }

@@ -26,8 +26,8 @@ class RateLimiter
 
     public function __construct(?int $limit = null, ?int $window = null)
     {
-        $this->limit = $limit ?? (int)DotEnv::get('TINA4_RATE_LIMIT', '60');
-        $this->window = $window ?? (int)DotEnv::get('TINA4_RATE_WINDOW', '60');
+        $this->limit = $limit ?? (int)DotEnv::getEnv('TINA4_RATE_LIMIT', '60');
+        $this->window = $window ?? (int)DotEnv::getEnv('TINA4_RATE_WINDOW', '60');
     }
 
     /**

@@ -1,0 +1,12 @@
+2026-03-20T12:51:31.372Z [INFO   ] [afb56f4679e08454] Request processed {"route":"/api/hello","ms":12}
+2026-03-20T12:51:31.373Z [WARNING] [afb56f4679e08454] Slow query detected {"ms":450}
+2026-03-20T12:51:31.373Z [ERROR  ] [afb56f4679e08454] Connection refused {"host":"db.local"}
+2026-03-20T13:44:11.551Z [INFO   ] [02e2653bf44d7dcc] Request processed {"route":"/api/hello","ms":12}
+2026-03-20T13:44:11.552Z [WARNING] [02e2653bf44d7dcc] Slow query detected {"ms":450}
+2026-03-20T13:44:11.552Z [ERROR  ] [02e2653bf44d7dcc] Connection refused {"host":"db.local"}
+2026-03-20T13:50:39.697Z [INFO   ] [727d6559d0dda30b] Request processed {"route":"/api/hello","ms":12}
+2026-03-20T13:50:39.697Z [WARNING] [727d6559d0dda30b] Slow query detected {"ms":450}
+2026-03-20T13:50:39.697Z [ERROR  ] [727d6559d0dda30b] Connection refused {"host":"db.local"}
+2026-03-20T13:56:45.786Z [INFO   ] [f14db53c83a4e509] Request processed {"route":"/api/hello","ms":12}
+2026-03-20T13:56:45.787Z [WARNING] [f14db53c83a4e509] Slow query detected {"ms":450}
+2026-03-20T13:56:45.787Z [ERROR  ] [f14db53c83a4e509] Connection refused {"host":"db.local"}

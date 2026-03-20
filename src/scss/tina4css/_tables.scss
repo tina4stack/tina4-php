@@ -1,0 +1,54 @@
+// Tina4 CSS Framework - Tables
+// -------------------------------
+
+.table {
+  width: 100%;
+  margin-bottom: 1rem;
+  vertical-align: top;
+  border-color: rgba($black, 0.1);
+
+  > :not(caption) > * > * {
+    padding: 0.5rem;
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-bottom-color: inherit;
+  }
+
+  > thead {
+    vertical-align: bottom;
+    border-bottom: 2px solid currentColor;
+  }
+
+  > tbody > tr:last-child > * {
+    border-bottom-color: transparent;
+  }
+}
+
+.table-sm {
+  > :not(caption) > * > * {
+    padding: 0.25rem;
+  }
+}
+
+.table-bordered {
+  border: 1px solid rgba($black, 0.1);
+  > :not(caption) > * > * {
+    border-width: 1px;
+    border-style: solid;
+    border-color: inherit;
+  }
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: rgba($black, 0.02);
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: rgba($black, 0.04);
+}
+
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+

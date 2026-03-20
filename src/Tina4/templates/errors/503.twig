@@ -1,0 +1,12 @@
+{% extends "errors/base.twig" %}
+{% block title %}503 — Service Unavailable{% endblock %}
+{% block extra_styles %}
+.error-code { color: var(--warn); }
+{% endblock %}
+{% block content %}
+    <div class="error-code" style="color:var(--warn)">503</div>
+    <div class="error-title">Service Unavailable</div>
+    <div class="error-msg">The server is temporarily unavailable. Please try again shortly.</div>
+    <div class="error-path" style="color:var(--warn)">{{ path }}</div>
+    <a href="/" class="error-home">Go Home</a>
+{% endblock %}

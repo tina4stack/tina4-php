@@ -38,7 +38,7 @@ $authMiddleware = function (Request $request, Response $response): true|Response
         return $response->json(['error' => 'Authentication required'], 401);
     }
 
-    $payload = \Tina4\Auth::verifyToken($token, $_ENV['JWT_SECRET']);
+    $payload = \Tina4\Auth::validateToken($token, $_ENV['JWT_SECRET']);
     if ($payload === null) {
         return $response->json(['error' => 'Invalid or expired token'], 401);
     }

@@ -1,0 +1,9 @@
+{% extends "errors/base.twig" %}
+{% block title %}404 — Not Found{% endblock %}
+{% block content %}
+    <div class="error-code" style="color:var(--primary)">404</div>
+    <div class="error-title">Page Not Found</div>
+    <div class="error-msg">The page you're looking for doesn't exist or has been moved.</div>
+    <div class="error-path" style="color:var(--primary)">{{ path }}</div>
+    <a href="/" class="error-home">Go Home</a>
+{% endblock %}

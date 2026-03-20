@@ -5,11 +5,23 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Queue — File-backed job queue, zero dependencies.
+ * Queue — File-backed job queue with pluggable backends, zero dependencies.
  * Matches the Python tina4_python.queue implementation.
+ *
+ * Supported backends:
+ *   - 'file'     — JSON files on disk (default)
+ *   - 'rabbitmq' — RabbitMQ via raw TCP sockets (AMQP 0-9-1)
+ *   - 'kafka'    — Kafka via raw TCP sockets
+ *
+ * Environment variable:
+ *   TINA4_QUEUE_BACKEND — 'file', 'rabbitmq', or 'kafka'
  */
 
 namespace Tina4;
+
+use Tina4\Queue\QueueBackend;
+use Tina4\Queue\RabbitMQBackend;
+use Tina4\Queue\KafkaBackend;
 
 class Queue
 {
@@ -17,15 +29,35 @@ class Queue
     private string $basePath;
     private int $maxRetries;
 
+    /** @var QueueBackend|null External queue backend (rabbitmq, kafka) */
+    private ?QueueBackend $externalBackend = null;
+
     /**
-     * @param string $backend  Queue backend type (currently only 'file')
-     * @param array  $config   Configuration: path, maxRetries
+     * @param string $backend  Queue backend type: 'file', 'rabbitmq', 'kafka'
+     * @param array  $config   Configuration: path, maxRetries, and backend-specific options
      */
     public function __construct(string $backend = 'file', array $config = [])
     {
         $this->backend = getenv('TINA4_QUEUE_BACKEND') ?: $backend;
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');
         $this->maxRetries = $config['maxRetries'] ?? 3;
+
+        // Initialize external backends
+        if ($this->backend === 'rabbitmq') {
+            $this->externalBackend = new RabbitMQBackend($config);
+        } elseif ($this->backend === 'kafka') {
+            $this->externalBackend = new KafkaBackend($config);
+        }
+    }
+
+    /**
+     * Get the external queue backend instance (if using rabbitmq or kafka).
+     *
+     * @return QueueBackend|null
+     */
+    public function getExternalBackend(): ?QueueBackend
+    {
+        return $this->externalBackend;
     }
 
     /**
@@ -38,6 +70,16 @@ class Queue
      */
     public function push(string $queue, mixed $payload, int $delay = 0): string
     {
+        // Delegate to external backend if configured
+        if ($this->externalBackend !== null) {
+            $message = [
+                'id' => $this->generateId(),
+                'payload' => $payload,
+                'topic' => $queue,
+            ];
+            return $this->externalBackend->enqueue($queue, $message);
+        }
+
         $queuePath = $this->queuePath($queue);
         $this->ensureDir($queuePath);
 
@@ -67,6 +109,11 @@ class Queue
      */
     public function pop(string $queue): ?array
     {
+        // Delegate to external backend if configured
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->dequeue($queue);
+        }
+
         $queuePath = $this->queuePath($queue);
         if (!is_dir($queuePath)) {
             return null;

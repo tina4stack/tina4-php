@@ -37,7 +37,7 @@ class DotEnv
      * @return void
      * @throws \RuntimeException If the file cannot be read
      */
-    public static function load(string $path = '.env', bool $overwrite = false): void
+    public static function loadEnv(string $path = '.env', bool $overwrite = false): void
     {
         if (!is_file($path) || !is_readable($path)) {
             throw new \RuntimeException("DotEnv: Cannot read file '{$path}'");
@@ -150,7 +150,7 @@ class DotEnv
     private static function interpolate(string $value): string
     {
         return preg_replace_callback('/\$\{([A-Za-z_][A-Za-z0-9_]*)}/', function (array $matches): string {
-            return self::get($matches[1], '');
+            return self::getEnv($matches[1], '');
         }, $value) ?? $value;
     }
 
@@ -171,7 +171,7 @@ class DotEnv
      * @param string|null $default Default value if not found
      * @return string|null
      */
-    public static function get(string $key, ?string $default = null): ?string
+    public static function getEnv(string $key, ?string $default = null): ?string
     {
         // Check our internal store first
         if (isset(self::$variables[$key])) {
@@ -199,9 +199,9 @@ class DotEnv
      * @return string The value
      * @throws \RuntimeException If the variable is not set
      */
-    public static function require(string $key): string
+    public static function requireEnv(string $key): string
     {
-        $value = self::get($key);
+        $value = self::getEnv($key);
 
         if ($value === null) {
             throw new \RuntimeException("DotEnv: Required environment variable '{$key}' is not set");
@@ -213,15 +213,15 @@ class DotEnv
     /**
      * Check if a variable has been loaded.
      */
-    public static function has(string $key): bool
+    public static function hasEnv(string $key): bool
     {
-        return self::get($key) !== null;
+        return self::getEnv($key) !== null;
     }
 
     /**
      * Reset the internal state (useful for testing).
      */
-    public static function reset(): void
+    public static function resetEnv(): void
     {
         self::$variables = [];
         self::$loaded = false;
@@ -232,7 +232,7 @@ class DotEnv
      *
      * @return array<string, string>
      */
-    public static function all(): array
+    public static function allEnv(): array
     {
         return self::$variables;
     }

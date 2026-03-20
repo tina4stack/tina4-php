@@ -19,7 +19,8 @@ class Auth
     // ── JWT ────────────────────────────────────────────────────────
 
     /**
-     * Generate a signed JWT token.
+     * Create a signed JWT token.
+     * Maps to Python: create_token(payload, expiry_minutes)
      *
      * @param array  $payload    Claims to include in the token
      * @param string $secret     Signing secret (HS256) or PEM private key (RS256)
@@ -27,7 +28,7 @@ class Auth
      * @param string $algorithm  'HS256' or 'RS256'
      * @return string Encoded JWT (header.payload.signature)
      */
-    public static function generateToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    public static function createToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
     {
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
@@ -50,14 +51,15 @@ class Auth
     }
 
     /**
-     * Verify a JWT token and return the decoded payload.
+     * Validate a JWT token and return the decoded payload.
+     * Maps to Python: validate_token(token)
      *
      * @param string $token     The JWT string
      * @param string $secret    Signing secret (HS256) or PEM public key (RS256)
      * @param string $algorithm 'HS256' or 'RS256'
      * @return array|null Decoded payload on success, null on failure
      */
-    public static function verifyToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+    public static function validateToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
     {
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
@@ -108,12 +110,13 @@ class Auth
     }
 
     /**
-     * Decode a JWT payload WITHOUT verifying the signature or expiration.
+     * Get the payload from a JWT WITHOUT verifying the signature or expiration.
+     * Maps to Python: get_payload(token)
      *
      * @param string $token The JWT string
      * @return array|null Decoded payload, or null if malformed
      */
-    public static function decodeToken(string $token): ?array
+    public static function getPayload(string $token): ?array
     {
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
@@ -151,13 +154,14 @@ class Auth
     }
 
     /**
-     * Verify a password against a PBKDF2 hash string.
+     * Check a password against a PBKDF2 hash string.
+     * Maps to Python: check_password(hashed, password)
      *
      * @param string $password The plaintext password to verify
      * @param string $hash     The stored hash string (pbkdf2_sha256:iterations:salt:hash)
      * @return bool True if the password matches
      */
-    public static function verifyPassword(string $password, string $hash): bool
+    public static function checkPassword(string $password, string $hash): bool
     {
         $parts = explode(':', $hash);
         if (count($parts) !== 4 || $parts[0] !== 'pbkdf2_sha256') {
@@ -195,10 +199,77 @@ class Auth
             }
 
             $token = substr($authHeader, 7);
-            $payload = self::verifyToken($token, $secret, $algorithm);
+            $payload = self::validateToken($token, $secret, $algorithm);
 
             return $payload; // null if invalid/expired, array if valid
         };
+    }
+
+    // ── Token Refresh ─────────────────────────────────────────────
+
+    /**
+     * Refresh a JWT token — validate then re-sign with fresh expiry.
+     * Maps to Python: refresh_token(token, expiry_minutes)
+     *
+     * @param string $token     The existing JWT
+     * @param string $secret    Signing secret
+     * @param int    $expiresIn New lifetime in seconds (default 3600)
+     * @param string $algorithm 'HS256' or 'RS256'
+     * @return string|null New JWT on success, null if original token is invalid
+     */
+    public static function refreshToken(string $token, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): ?string
+    {
+        $payload = self::validateToken($token, $secret, $algorithm);
+        if ($payload === null) {
+            return null;
+        }
+
+        // Remove old timing claims — createToken sets fresh ones
+        unset($payload['iat'], $payload['exp']);
+
+        return self::createToken($payload, $secret, $expiresIn, $algorithm);
+    }
+
+    /**
+     * Authenticate a request by extracting and validating the Bearer token.
+     * Maps to Python: authenticate_request(headers)
+     *
+     * @param array<string, string> $headers Request headers (key => value)
+     * @param string $secret Signing secret
+     * @param string $algorithm 'HS256' or 'RS256'
+     * @return array|null Decoded payload on success, null on failure
+     */
+    public static function authenticateRequest(array $headers, string $secret, string $algorithm = 'HS256'): ?array
+    {
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+        if (!str_starts_with($authHeader, 'Bearer ')) {
+            return null;
+        }
+
+        $token = substr($authHeader, 7);
+        return self::validateToken($token, $secret, $algorithm);
+    }
+
+    /**
+     * Validate an API key by comparing against the configured key.
+     * Maps to Python: validate_api_key(provided)
+     *
+     * @param string $provided The API key provided in the request
+     * @param string|null $expected The expected API key (defaults to TINA4_API_KEY env var)
+     * @return bool True if the API key is valid
+     */
+    public static function validateApiKey(string $provided, ?string $expected = null): bool
+    {
+        if ($expected === null) {
+            $expected = DotEnv::getEnv('TINA4_API_KEY');
+        }
+
+        if ($expected === null || $expected === '') {
+            return false;
+        }
+
+        return hash_equals($expected, $provided);
     }
 
     // ── Internal Helpers ──────────────────────────────────────────

@@ -1,0 +1,117 @@
+// Tina4 CSS Framework - Design Tokens
+// ------------------------------------
+
+// Colors
+$primary:   #4a90d9 !default;
+$secondary: #6c757d !default;
+$success:   #28a745 !default;
+$danger:    #dc3545 !default;
+$warning:   #ffc107 !default;
+$info:      #17a2b8 !default;
+$light:     #f8f9fa !default;
+$dark:      #212529 !default;
+$white:     #fff !default;
+$black:     #000 !default;
+$body-bg:   $white !default;
+$body-color: $dark !default;
+$muted:     #6c757d !default;
+
+$theme-colors: (
+  "primary":   $primary,
+  "secondary": $secondary,
+  "success":   $success,
+  "danger":    $danger,
+  "warning":   $warning,
+  "info":      $info,
+  "light":     $light,
+  "dark":      $dark
+) !default;
+
+// Spacing
+$spacer: 1rem !default;
+$spacers: (
+  0: 0,
+  1: $spacer * 0.25,
+  2: $spacer * 0.5,
+  3: $spacer,
+  4: $spacer * 1.5,
+  5: $spacer * 3
+) !default;
+
+// Border radius
+$border-radius:    0.25rem !default;
+$border-radius-sm: 0.25rem !default;
+$border-radius-lg: 0.5rem !default;
+$border-radius-xl: 1rem !default;
+$border-radius-pill: 50rem !default;
+
+// Typography
+$font-family-base: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !default;
+$font-family-mono: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !default;
+
+$font-size-sm:   0.875rem !default;
+$font-size-base: 1rem !default;
+$font-size-lg:   1.125rem !default;
+$font-size-xl:   1.25rem !default;
+$font-size-2xl:  1.5rem !default;
+$font-size-3xl:  1.875rem !default;
+$font-size-4xl:  2.25rem !default;
+
+$font-sizes: (
+  1: $font-size-4xl,
+  2: $font-size-3xl,
+  3: $font-size-2xl,
+  4: $font-size-xl,
+  5: $font-size-base,
+  6: $font-size-sm
+) !default;
+
+$line-height-base: 1.5 !default;
+$line-height-sm:   1.25 !default;
+$line-height-lg:   2 !default;
+
+$font-weight-light:  300 !default;
+$font-weight-normal: 400 !default;
+$font-weight-bold:   700 !default;
+
+// Breakpoints
+$breakpoints: (
+  sm:  576px,
+  md:  768px,
+  lg:  992px,
+  xl:  1200px,
+  xxl: 1400px
+) !default;
+
+// Container max-widths
+$container-max-widths: (
+  sm:  540px,
+  md:  720px,
+  lg:  960px,
+  xl:  1140px,
+  xxl: 1320px
+) !default;
+
+// Grid
+$grid-columns: 12 !default;
+$grid-gutter:  1.5rem !default;
+
+// Shadows
+$shadow-sm:   0 0.125rem 0.25rem rgba($black, 0.075) !default;
+$shadow:      0 0.5rem 1rem rgba($black, 0.15) !default;
+$shadow-lg:   0 1rem 3rem rgba($black, 0.175) !default;
+
+// Transitions
+$transition-base: all 0.2s ease-in-out !default;
+$transition-fade: opacity 0.15s linear !default;
+
+// Z-index
+$zindex-dropdown:  1000 !default;
+$zindex-sticky:    1020 !default;
+$zindex-fixed:     1030 !default;
+$zindex-backdrop:  1040 !default;
+$zindex-modal:     1050 !default;
+
+// Links
+$link-color: $primary !default;
+$link-hover-color: darken($primary, 15%) !default;

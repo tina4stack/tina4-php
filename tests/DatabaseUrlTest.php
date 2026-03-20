@@ -14,12 +14,12 @@ class DatabaseUrlTest extends TestCase
 {
     protected function setUp(): void
     {
-        DotEnv::reset();
+        DotEnv::resetEnv();
     }
 
     protected function tearDown(): void
     {
-        DotEnv::reset();
+        DotEnv::resetEnv();
         putenv('DATABASE_URL');
         unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
     }
@@ -196,7 +196,7 @@ class DatabaseUrlTest extends TestCase
         putenv('DATABASE_URL=sqlite:///tmp/test.db');
 
         // Reset DotEnv so it picks up the env var
-        DotEnv::reset();
+        DotEnv::resetEnv();
 
         $result = DatabaseUrl::fromEnv();
 

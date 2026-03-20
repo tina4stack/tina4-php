@@ -40,6 +40,9 @@ class Router
     /** @var array<callable> Current group middleware */
     private static array $groupMiddleware = [];
 
+    /** @var string Base path for static file serving */
+    public static string $basePath = '.';
+
     /** @var int Index of the last registered route (for chaining) */
     private static ?int $lastRouteIndex = null;
 
@@ -233,7 +236,13 @@ class Router
         $result = self::match($request->method, $request->path);
 
         if ($result === null) {
-            return $response->json(['error' => 'Not Found'], 404);
+            // Try serving a static file before returning 404
+            $staticResponse = StaticFiles::tryServe($request->path, self::$basePath);
+            if ($staticResponse !== null) {
+                return $staticResponse;
+            }
+
+            return self::renderError($response, 404, 'Not Found', $request->path);
         }
 
         $route = $result['route'];
@@ -243,7 +252,7 @@ class Router
         if ($route['secure']) {
             $token = $request->bearerToken();
             if ($token === null) {
-                return $response->json(['error' => 'Unauthorized'], 401);
+                return self::renderError($response, 401, 'Unauthorized', $request->path);
             }
             // JWT validation would go here — for now, presence of token is enough
         }
@@ -257,27 +266,44 @@ class Router
             }
             // If middleware returns false, stop processing
             if ($mwResult === false) {
-                return $response->json(['error' => 'Forbidden'], 403);
+                return self::renderError($response, 403, 'Forbidden', $request->path);
             }
         }
 
         // Invoke the handler
-        $handlerResult = ($route['callback'])($request, $response);
+        try {
+            $handlerResult = ($route['callback'])($request, $response);
+        } catch (\Throwable $e) {
+            $errorMessage = $e->getMessage() . "\n" . $e->getTraceAsString();
+            return self::renderError($response, 500, 'Server Error', $request->path, [
+                'error_message' => $errorMessage,
+                'request_id' => substr(md5(uniqid('', true)), 0, 12),
+            ]);
+        }
 
         if ($handlerResult instanceof Response) {
-            return $handlerResult;
+            $finalResponse = $handlerResult;
+        } elseif (is_array($handlerResult)) {
+            $finalResponse = $response->json($handlerResult);
+        } elseif (is_string($handlerResult)) {
+            $finalResponse = $response->html($handlerResult);
+        } else {
+            $finalResponse = $response;
         }
 
-        // If the handler returned an array or scalar, wrap it in JSON
-        if (is_array($handlerResult)) {
-            return $response->json($handlerResult);
+        // Dev overlay injection: inject a floating dev button into HTML responses
+        $isDev = DotEnv::getEnv('TINA4_DEBUG', 'false') === 'true';
+        if ($isDev && !str_starts_with($request->path, '/__dev') && str_contains($finalResponse->getContentType() ?? '', 'text/html')) {
+            $overlay = DevAdmin::renderOverlayScript();
+            $body = $finalResponse->getBody();
+            if (str_contains($body, '</body>')) {
+                $finalResponse->setBody(str_replace('</body>', $overlay . "\n</body>", $body));
+            } else {
+                $finalResponse->setBody($body . $overlay);
+            }
         }
 
-        if (is_string($handlerResult)) {
-            return $response->html($handlerResult);
-        }
-
-        return $response;
+        return $finalResponse;
     }
 
     /**
@@ -291,12 +317,27 @@ class Router
 
         foreach (self::$routes as $method => $routes) {
             foreach ($routes as $route) {
+                // Derive handler name from the callback
+                $handler = '';
+                if (isset($route['handler'])) {
+                    $cb = $route['handler'];
+                    if ($cb instanceof \Closure) {
+                        $ref = new \ReflectionFunction($cb);
+                        $file = $ref->getFileName();
+                        $handler = $file ? basename($file) . ':' . $ref->getStartLine() : 'Closure';
+                    } elseif (is_string($cb)) {
+                        $handler = $cb;
+                    } elseif (is_array($cb) && count($cb) === 2) {
+                        $handler = (is_object($cb[0]) ? get_class($cb[0]) : $cb[0]) . '::' . $cb[1];
+                    }
+                }
                 $list[] = [
                     'method' => $method,
                     'pattern' => $route['pattern'],
                     'middleware' => count($route['middleware']),
                     'cache' => $route['cache'],
                     'secure' => $route['secure'],
+                    'handler' => $handler,
                 ];
             }
         }
@@ -317,6 +358,54 @@ class Router
     }
 
     /**
+     * Render an error page via Frond templates with fallback to JSON.
+     *
+     * Resolution order:
+     *   1. User override:    src/templates/errors/{code}.twig
+     *   2. Framework default: __DIR__/templates/errors/{code}.twig
+     *   3. JSON fallback
+     *
+     * @param Response $response The response object
+     * @param int $code HTTP status code
+     * @param string $message Error message
+     * @param string $path Request path (for display in template)
+     * @param array $extraData Additional template variables
+     * @return Response
+     */
+    private static function renderError(Response $response, int $code, string $message, string $path = '', array $extraData = []): Response
+    {
+        $templateFile = "errors/{$code}.twig";
+        $data = array_merge(['path' => $path, 'error_message' => $message], $extraData);
+
+        // 1. Try user override in src/templates/
+        $userTemplateDir = 'src/templates';
+        if (is_file($userTemplateDir . '/' . $templateFile)) {
+            try {
+                $frond = new Frond($userTemplateDir);
+                $html = $frond->render($templateFile, $data);
+                return $response->html($html, $code);
+            } catch (\Throwable $e) {
+                // Fall through to framework default
+            }
+        }
+
+        // 2. Try framework default in Tina4/templates/
+        $frameworkTemplateDir = __DIR__ . '/templates';
+        if (is_file($frameworkTemplateDir . '/' . $templateFile)) {
+            try {
+                $frond = new Frond($frameworkTemplateDir);
+                $html = $frond->render($templateFile, $data);
+                return $response->html($html, $code);
+            } catch (\Throwable $e) {
+                // Fall through to JSON
+            }
+        }
+
+        // 3. JSON fallback
+        return $response->json(['error' => $message], $code);
+    }
+
+    /**
      * Reset all routes (for testing).
      */
     public static function reset(): void
@@ -326,6 +415,7 @@ class Router
         self::$groupMiddleware = [];
         self::$lastRouteIndex = null;
         self::$lastRouteMethod = null;
+        self::$basePath = '.';
     }
 
     /**

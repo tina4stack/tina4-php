@@ -1,0 +1,9 @@
+{% extends "errors/base.twig" %}
+{% block title %}502 — Bad Gateway{% endblock %}
+{% block content %}
+    <div class="error-code" style="color:var(--danger)">502</div>
+    <div class="error-title">Bad Gateway</div>
+    <div class="error-msg">The upstream server returned an invalid response.</div>
+    <div class="error-path" style="color:var(--danger)">{{ path }}</div>
+    <a href="/" class="error-home">Go Home</a>
+{% endblock %}

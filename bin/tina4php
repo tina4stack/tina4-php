@@ -37,17 +37,7 @@ foreach ($autoloadPaths as $autoloadFile) {
     }
 }
 
-// Load constants
-$constantsPaths = [
-    $cwd . '/vendor/tina4stack/tina4php/src/Tina4/Constants.php',
-    __DIR__ . '/../src/Tina4/Constants.php',
-];
-foreach ($constantsPaths as $constFile) {
-    if (file_exists($constFile)) {
-        require_once $constFile;
-        break;
-    }
-}
+// Constants are auto-loaded via composer "files" autoload — no manual require needed
 
 // Framework root (where the Tina4 source lives)
 $frameworkRoot = realpath(__DIR__ . '/..');
@@ -90,15 +80,8 @@ switch ($command) {
             $indexContent = <<<'PHP'
 <?php
 require_once "./vendor/autoload.php";
-require_once "./vendor/tina4stack/tina4php/src/Tina4/Constants.php";
 
 $app = new \Tina4\App(basePath: __DIR__, development: true);
-
-// Landing page
-\Tina4\Router::get("/", function (\Tina4\Request $request, \Tina4\Response $response) {
-    return $response->html("<h1>Welcome to Tina4 PHP v3</h1><p>Edit src/routes/ to get started.</p>");
-});
-
 $app->start();
 
 // Dispatch when running under PHP built-in server
@@ -209,7 +192,34 @@ PHP;
         break;
 
     case 'migrate:rollback':
-        echo "Rollback not yet implemented in v3.\n";
+        if ($autoloaded && file_exists($cwd . '/index.php')) {
+            ob_start();
+            include_once $cwd . '/index.php';
+            ob_end_clean();
+        }
+        $migrationsDir = $cwd . '/migrations';
+        if (!is_dir($migrationsDir)) {
+            mkdir($migrationsDir, 0755, true);
+        }
+        if (class_exists('\Tina4\Migration')) {
+            $migration = new \Tina4\Migration($migrationsDir);
+            $result = $migration->rollback();
+
+            if (empty($result['rolledBack']) && empty($result['errors'])) {
+                echo "Nothing to rollback.\n";
+            } else {
+                foreach ($result['rolledBack'] as $name) {
+                    echo "  Rolled back: {$name}\n";
+                }
+                foreach ($result['errors'] as $name => $error) {
+                    echo "  Error rolling back {$name}: {$error}\n";
+                }
+                $count = count($result['rolledBack']);
+                echo "\n{$count} migration(s) rolled back.\n";
+            }
+        } else {
+            echo "Migration class not available.\n";
+        }
         break;
 
     // ────────────────────────────────────────────

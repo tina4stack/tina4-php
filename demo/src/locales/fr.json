@@ -1,0 +1,13 @@
+{
+    "greeting": "Bonjour {name} !",
+    "welcome": "Bienvenue sur Tina4 PHP v3",
+    "goodbye": "Au revoir {name}, a bientot !",
+    "errors": {
+        "not_found": "Page non trouvee",
+        "unauthorized": "Vous n'etes pas autorise"
+    },
+    "demo": {
+        "title": "Application de demonstration Tina4",
+        "description": "Cette demo presente toutes les fonctionnalites du framework Tina4 PHP v3"
+    }
+}

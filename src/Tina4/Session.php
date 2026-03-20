@@ -126,6 +126,20 @@ class Session
     }
 
     /**
+     * Clear all session data (but keep the session alive).
+     * Maps to Python: clear()
+     */
+    public function clear(): void
+    {
+        $meta = $this->data['_meta'] ?? null;
+        $this->data = [];
+        if ($meta !== null) {
+            $this->data['_meta'] = $meta;
+        }
+        $this->save();
+    }
+
+    /**
      * Get all session data (excluding internal metadata).
      *
      * @return array
