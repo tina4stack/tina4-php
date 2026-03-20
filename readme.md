@@ -18,6 +18,8 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/tests-1166%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/carbonah-A%2B%20rated-00cc44" alt="Carbonah A+">
   <img src="https://img.shields.io/badge/zero--dep-core-blue" alt="Zero Dependencies">
   <img src="https://img.shields.io/badge/php-8.2%2B-blue" alt="PHP 8.2+">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT License">
