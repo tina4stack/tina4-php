@@ -1,525 +1,162 @@
 #!/usr/bin/env php
 <?php
-$replacePath = $argv[0]; //used to figure out where we're running
-global $rootPath;
-global $projectRoot;
-global $session; //store things here you want to reuse
-$session = [];
+/**
+ * Tina4 PHP CLI — v3
+ *
+ * Usage:
+ *   tina4php init [dir]             Scaffold a new project
+ *   tina4php serve [port]           Start dev server (default: 7145)
+ *   tina4php start [port]           Alias for serve
+ *   tina4php migrate                Run pending migrations
+ *   tina4php migrate:create <desc>  Create a migration file
+ *   tina4php migrate:rollback       Rollback last batch
+ *   tina4php seed                   Run seeders from src/seeds/
+ *   tina4php routes                 List all registered routes
+ *   tina4php test                   Run test suite
+ *   tina4php build                  Build distributable package
+ *   tina4php ai [--all]             Detect AI tools and install context
+ *   tina4php help                   Show this help
+ */
 
-foreach (get_included_files() as $id => $file) {
-    if (strpos($file, "vendor" . DIRECTORY_SEPARATOR . "autoload.php")) {
-        $rootPath = str_ireplace("vendor" . DIRECTORY_SEPARATOR . "autoload.php", "", $file);
+// ── Resolve paths ──
+$cwd = getcwd();
+
+// Find autoloader: CWD first, then relative to this binary
+$autoloadPaths = [
+    $cwd . '/vendor/autoload.php',
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../autoload.php',
+];
+
+$autoloaded = false;
+foreach ($autoloadPaths as $autoloadFile) {
+    if (file_exists($autoloadFile)) {
+        require_once $autoloadFile;
+        $autoloaded = true;
         break;
     }
 }
 
-$projectRoot = str_replace(DIRECTORY_SEPARATOR . "bin", "", __DIR__);
-
-if (empty($rootPath)) {
-    $rootPath = str_replace("vendor" . DIRECTORY_SEPARATOR . "tina4stack" . DIRECTORY_SEPARATOR . "tina4php-core" . DIRECTORY_SEPARATOR . "bin" . DIRECTORY_SEPARATOR . "tina4php", "", __FILE__);
-    $rootPath = str_replace("bin" . DIRECTORY_SEPARATOR . "tina4php", "", $rootPath);
-}
-
-require_once "{$rootPath}vendor/autoload.php";
-
-const TINA4_SUPPRESS = true;
-
-
-if (file_exists($rootPath . "index.php")) {
-    include_once $rootPath . "index.php";
-}
-
-function writeLine($output): void
-{
-    echo $output . "\n";
-}
-
-function write($output): void
-{
-    echo $output;
-}
-
-function readLn($prefix = "")
-{
-    if (PHP_OS === 'WINNT') {
-        echo $prefix;
-        return stream_get_line(STDIN, 1024, PHP_EOL);
-    } else {
-        return readline($prefix);
+// Load constants
+$constantsPaths = [
+    $cwd . '/vendor/tina4stack/tina4php/src/Tina4/Constants.php',
+    __DIR__ . '/../src/Tina4/Constants.php',
+];
+foreach ($constantsPaths as $constFile) {
+    if (file_exists($constFile)) {
+        require_once $constFile;
+        break;
     }
 }
 
-$initializeCode = static function ($index, $input, $options) {
-    function configureComposerJson($composerFile)
-    {
-        $composer = json_decode(file_get_contents($composerFile), true);
-        $scripts = ["tina4php" => "tina4php",
-                "tina4service" => "tina4service",
-                "test" => "@tina4php tests:run",
-                "test:verbose" => "@tina4php tests:verbose",
-                "initialize" => "@tina4php initialize:run",
-                "start" => "@tina4php webservice:run",
-                "start-service" => "@tina4service",
-                "migrate" => "@tina4php migrate:run",
-                "migrate:create" => "@tina4php migrate:create"];
-        $classMap = ["src/*", "src/app/*", "src/orm/*", "src/routes/*"];
-        $psr4 = ["\\" => ["src/", "src/app/", "src/orm/", "src/routes"]];
-        $config = ["process-timeout" => 0];
-        if (!isset($composer["scripts"])) {
-            $composer["scripts"] = $scripts;
-            $composer["classmap"] = $classMap;
-            $composer["autoload"] = ["psr-4" => $psr4];
-            $composer["config"] = $config;
+// Framework root (where the Tina4 source lives)
+$frameworkRoot = realpath(__DIR__ . '/..');
+
+// ── Parse command ──
+$command = $argv[1] ?? 'help';
+$args = array_slice($argv, 2);
+
+switch ($command) {
+
+    // ────────────────────────────────────────────
+    // INIT — Scaffold a new project
+    // ────────────────────────────────────────────
+    case 'init':
+        $targetDir = isset($args[0]) ? realpath($args[0]) ?: $args[0] : $cwd;
+
+        // Create target if it doesn't exist
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
         }
-        file_put_contents($composerFile, str_replace("\/", "/", json_encode($composer, JSON_PRETTY_PRINT)));
-    }
+        $targetDir = realpath($targetDir) . DIRECTORY_SEPARATOR;
 
-    global $rootPath;
-    global $projectRoot;
-    if ($input === "0") { //Menu Option 0 - Exit
-        return ["index" => 0, "prompt" => ""];
-    }
-
-    if (!empty($options)) {
-        if ($options === "initialize:run" || $options === "init") {
-            $index = 1;
-            $input = "y";
-
-            configureComposerJson($rootPath . "composer.json");
-        }
-    }
-    switch ($index) {
-        case 1:
-            if ($input === "" || strtolower($input) === "y") {
-                if (!file_exists($rootPath . DIRECTORY_SEPARATOR . "index.php")) {
-                    if (!file_exists($rootPath . "src")) {
-                        $foldersToCopy = ["src/public", "src/app", "src/routes", "src/templates", "src/orm", "src/services", "src/scss"];
-                        foreach ($foldersToCopy as $id => $folder) {
-                            if (!file_exists($rootPath. DIRECTORY_SEPARATOR . $folder)) {
-                                \Tina4\Utilities::recurseCopy($projectRoot .DIRECTORY_SEPARATOR. $folder, $rootPath.DIRECTORY_SEPARATOR . $folder);
-                            }
-                        }
-                    }
-
-                    if (file_exists($rootPath . DIRECTORY_SEPARATOR.".htaccess")) {
-                        $htaccessContent = file_get_contents($rootPath.DIRECTORY_SEPARATOR.".htaccess");
-                        if (strpos($htaccessContent, "#Block access") === false) {
-                            $htaccessContent .= '#Block access to .env and other files
-
-<Files ~ ".db">
-Order Allow,Deny
-Deny from all
-Satisfy all
-</Files>
-
-<Files ~ ".env">
-Order Allow,Deny
-Deny from all
-Satisfy all
-</Files>
-
-<Files ~ "^.*\.([Hh][Tt][Aa])">
-Order allow,deny
-Deny from all
-Satisfy all
-</Files>
-
-#Disable the 3 lines below for just to http
-RewriteCond %{HTTPS} !=on
-RewriteCond %{REQUEST_URI} !^/.well-known/.*$ [NC]
-RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301,NE]
-
-
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ index.php [QSA,L]
-
-#Add ability to get the authorization headers on the webserver
-SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0';
-                        }
-                        file_put_contents($rootPath.DIRECTORY_SEPARATOR.".htaccess", $htaccessContent);
-                    } else {
-                        copy($projectRoot . DIRECTORY_SEPARATOR.".htaccess", $rootPath . DIRECTORY_SEPARATOR.".htaccess");
-                    }
-
-                    $nextIndex = 0;
-                    $prompt = "";
-                    $indexContent = '<?php' . PHP_EOL . 'require_once "./vendor/autoload.php";'. PHP_EOL.'\Tina4\Initialize();' . PHP_EOL. PHP_EOL . '$config = new \Tina4\Config(static function (\Tina4\Config $config){'.PHP_EOL.'  //Your own config initializations '.PHP_EOL.'});'. PHP_EOL . PHP_EOL . 'echo (new \Tina4\Tina4Php($config));';
-                    file_put_contents($rootPath . DIRECTORY_SEPARATOR . "index.php", $indexContent);
-                } else {
-                    $nextIndex = 0;
-                    $prompt = "";
-                    write("index.php file already exists, please make a backup of it or remove it to try again");
-                    readLn();
-                }
-            } else {
-                $nextIndex = 0;
-                $prompt = "";
-                write("index.php not created");
-                readLn();
+        // Create directories
+        $dirs = [
+            'src/routes', 'src/templates', 'src/templates/errors',
+            'src/orm', 'src/public', 'src/public/css', 'src/public/js',
+            'src/scss', 'src/services', 'src/app', 'src/locales', 'src/seeds',
+            'migrations', 'logs',
+        ];
+        foreach ($dirs as $dir) {
+            $full = $targetDir . str_replace('/', DIRECTORY_SEPARATOR, $dir);
+            if (!is_dir($full)) {
+                mkdir($full, 0755, true);
+                echo "  Created {$dir}/\n";
             }
-            break;
-        default:
-            $nextIndex = 1;
-            $prompt = "Create {$rootPath}index.php?\nIf you already have an index.php, it will not be overwritten! (Y/n):";
-            break;
+        }
+
+        // Create index.php
+        if (!file_exists($targetDir . 'index.php')) {
+            $indexContent = <<<'PHP'
+<?php
+require_once "./vendor/autoload.php";
+require_once "./vendor/tina4stack/tina4php/src/Tina4/Constants.php";
+
+$app = new \Tina4\App(basePath: __DIR__, development: true);
+
+// Landing page
+\Tina4\Router::get("/", function (\Tina4\Request $request, \Tina4\Response $response) {
+    return $response->html("<h1>Welcome to Tina4 PHP v3</h1><p>Edit src/routes/ to get started.</p>");
+});
+
+$app->start();
+
+// Dispatch when running under PHP built-in server
+if (php_sapi_name() === "cli-server") {
+    $response = \Tina4\Router::dispatch(new \Tina4\Request(), new \Tina4\Response());
+    http_response_code($response->getStatusCode());
+    foreach ($response->getHeaders() as $name => $value) {
+        header("$name: $value");
     }
-    return ["index" => $nextIndex, "prompt" => $prompt];
-};
+    echo $response->getBody();
+}
+PHP;
+            file_put_contents($targetDir . 'index.php', $indexContent);
+            echo "  Created index.php\n";
+        }
 
-$menus[] = ["id" => 1, "name" => "initialize", "description" => "Create index.php", "commandLine" => ["options" => ["run"]], "menuCode" => $initializeCode];
+        // Create .env
+        if (!file_exists($targetDir . '.env')) {
+            file_put_contents($targetDir . '.env', "TINA4_DEBUG=true\n");
+            echo "  Created .env\n";
+        }
 
+        // Create .gitignore
+        if (!file_exists($targetDir . '.gitignore')) {
+            file_put_contents($targetDir . '.gitignore', "vendor/\nlogs/\n*.db\n.env\nnode_modules/\n");
+            echo "  Created .gitignore\n";
+        }
 
-$menus[] = ["id" => 2, "name" => "tests", "description" => "Run Tests", "commandLine" => ["options" => ["run", "verbose"]], "menuCode" => static function ($index, $input, $options) use ($argv) {
-    global $rootPath;
-    $testGroups = [];
-    // If test groups have been requested, get the requested group names into a usable array to pass to the run
-    if (isset($argv[2])) {
-        $testGroups = array_slice($argv, 2);
-        $testGroups = implode(" ", $testGroups);
-        $testGroups = array_map("trim", explode(",", $testGroups));
-    }
+        echo "\nProject initialized in {$targetDir}\n";
+        echo "  Run: tina4php serve\n";
+        break;
 
-    if (!empty($options)) {
-        if ($options === "tests:verbose") {
-            (new \Tina4\Test($rootPath))->run(false, $testGroups);
+    // ────────────────────────────────────────────
+    // SERVE / START — Start PHP built-in server
+    // ────────────────────────────────────────────
+    case 'serve':
+    case 'start':
+        $port = $args[0] ?? '7145';
+
+        if (str_contains($port, ':')) {
+            [$host, $port] = explode(':', $port, 2);
         } else {
-            (new \Tina4\Test($rootPath))->run(true, $testGroups);
+            $host = '127.0.0.1';
+            if (str_contains(php_uname(), 'Linux')) {
+                $host = '0.0.0.0';
+            }
         }
-    } else {
-        (new \Tina4\Test($rootPath))->run(true, $testGroups);
-        readLn();
-    }
-    return ["index" => 0, "prompt" => ""];
-}];
 
-
-//Helper functions for menu 3
-function createDatabaseConnection($databaseType, $databaseName, $databaseHost = "", $username = "", $password = "")
-{
-    $settings = [];
-    switch ($databaseType) {
-        case "sqlite3":
-            $settings["configString"] = '$DBA = new \Tina4\DataSQLite3("[databasePath]");';
-            break;
-        case "mysql":
-            $settings["configString"] = '$DBA = new \Tina4\DataMySQL("[hostName]/3306:[databasePath]", "[username]", "[password]");';
-            break;
-        case "firebird":
-            $settings["configString"] = '$DBA = new \Tina4\DataFirebird("[hostName]/3050:[databasePath]", "[username]", "[password]");';
-            break;
-    }
-
-    $settings["configString"] = str_replace('[databasePath]', $databaseName, $settings["configString"]);
-    $settings["configString"] = str_replace('[hostName]', $databaseHost, $settings["configString"]);
-    $settings["configString"] = str_replace('[username]', $username, $settings["configString"]);
-    $settings["configString"] = str_replace('[password]', $password, $settings["configString"]);
-
-    $indexContent = file_get_contents("./index.php");
-
-    //existing record
-    $findDBA = '/^\$DBA(.*)/m';
-    preg_match($findDBA, $indexContent, $matches, PREG_OFFSET_CAPTURE);
-
-    if (!empty ($matches)) {
-        $indexContent = str_replace($matches[0], $settings["configString"], $indexContent);
-    } else {
-        $indexContent = str_replace('echo new \Tina4\Tina4Php(', 'global $DBA;' . "\n" . $settings["configString"] . "\n" . 'echo new \Tina4\Tina4Php(', $indexContent);
-    }
-
-    return $indexContent;
-}
-
-function createMigration($rootPath, $name) {
-    $migrationsPath = $rootPath . 'migrations' . DIRECTORY_SEPARATOR;
-    if (!file_exists($migrationsPath)) {
-        mkdir($migrationsPath, 0755, true);
-    }
-    $migration = new \Tina4\Migration($migrationsPath);
-    $content = "-- Write your migration SQL here\n";
-    $result = $migration->createMigration($name, $content);
-    writeLine($result);
-}
-
-function runMigrations($rootPath, $DBA) {
-    $migrationsPath = $rootPath . 'migrations' . DIRECTORY_SEPARATOR;
-    if (!file_exists($migrationsPath)) {
-        writeLine("Migrations directory does not exist.");
-        return;
-    }
-    $migration = new \Tina4\Migration($migrationsPath, ";", "terminal");
-    $result = $migration->doMigration();
-    echo $result;
-}
-
-$menus[] = ["id" => 3, "name" => "database", "description" => "Create database connection", "menuCode" => static function ($index, $input) {
-    global $settings;
-
-    if ($input === "0") { //Menu Option 0 - Exit
-        return ["index" => 0, "prompt" => ""];
-    }
-
-    if ($index === 1 && $input === "2") {
-        $index = 2; //MySQL
-    }
-
-    if ($index === 1 && $input === "3") {
-        $index = 3; //Firebird
-    }
-
-    switch ($index) {
-        case 1: //Sqlite
-            $nextIndex = 11;
-            $settings["databaseType"] = "sqlite3";
-            $settings["databaseHost"] = "";
-            $settings["databaseUsername"] = "";
-            $prompt = "Path and name of database (Example: /home/test.db) :";
-            break;
-        case 11:
-            if ($settings["databaseType"] === "sqlite3") {
-                $settings["databasePath"] = $input;
-            } else {
-                $settings["databasePassword"] = $input;
-            }
-
-            $nextIndex = 12;
-            $prompt = "Add database configuration to the index.php {$input} (Y/n) ?";
-            break;
-        case 12:
-            $indexContent = createDatabaseConnection($settings["databaseType"], $settings["databasePath"], $settings["databaseHost"], $settings["databaseUsername"], $settings["databasePassword"]);
-            if ($input === "y") {
-                file_put_contents("./index.php", $indexContent);
-            } else {
-                writeLine($indexContent);
-            }
-            $nextIndex = 0;
-            break;
-        case 2: //MySQL
-            $nextIndex = 21;
-            $settings["databaseType"] = "mysql";
-            $prompt = "Hostname (Example: 127.0.0.1) :";
-            break;
-        case 3: //Firebird
-            $nextIndex = 21;
-            $settings["databaseType"] = "firebird";
-            $prompt = "Hostname (Example: 127.0.0.1) :";
-            break;
-        case 21:
-            $nextIndex = 22;
-            $settings["databaseHost"] = $input;
-            switch ($settings["databaseType"]) {
-                case "mysql":
-                    $example = "test_db";
-                    break;
-                case "firebird":
-                    $example = "/home/firebird/TEST.FDB";
-                    break;
-            }
-            $prompt = "Database Name (Example: {$example}') :";
-            break;
-        case 22:
-            $settings["databasePath"] = $input;
-            $nextIndex = 23;
-            $prompt = "Username (Example: admin) :";
-            break;
-        case 23:
-            $settings["databaseUsername"] = $input;
-            $nextIndex = 11;
-            $prompt = "Password (Example: admin) :";
-            break;
-        default:
-            $nextIndex = 1;
-            $prompt = "Choose database type:\n";
-            $prompt .= "1. Sqlite3 \n";
-            $prompt .= "2. MySQL \n";
-            $prompt .= "3. Firebird \n";
-            $prompt .= "0. Exit \n";
-            $prompt .= "Choose:";
-            break;
-    }
-    return ["index" => $nextIndex, "prompt" => $prompt];
-}];
-
-$menus[] = ["id" => 4, "name" => "orm", "description" => "Create ORM objects", "menuCode" => static function ($index, $input) {
-
-    global $DBA;
-    global $session;
-    global $rootPath;
-
-    if ($input === "0") {
-        return ["index" => 0, "prompt" => ""];
-    }
-
-    if (empty($DBA)) {
-        $nextIndex = 1;
-        $prompt = "Please setup a global \$DBA variable and assign a database connection";
-    } else {
-
-        if (empty($session["database"])) {
-            $database = $DBA->getDatabase();
-            $session["database"] = $database;
+        // Find index.php
+        if (file_exists($cwd . '/index.php')) {
+            $docRoot = $cwd;
         } else {
-            $database = $session["database"];
+            echo "Error: No index.php found in {$cwd}\n";
+            echo "Run 'tina4php init' first.\n";
+            exit(1);
         }
 
-        switch ($index) {
-            case 1:
-                $nextIndex = 2;
-                $no = 0;
-                foreach ($database as $table => $fields) {
-                    $no++;
-                    if ($no == $input || $input == "all") {
-                        echo str_repeat("=", 40) . "\n";
-                        echo "Table: {$table}\n";
-                        echo str_repeat("=", 40) . "\n";
-                        foreach ($fields as $id => $field) {
-                            echo "{$field->fieldName}\n";
-                        }
-                        $session["tableData"][] = compact('table', 'fields');
-                    }
-                }
-
-                if ($input == "all") {
-                    writeLine("You want to convert all the tables in the database ? ");
-                }
-
-                $prompt = "Is this correct ? (y/n):";
-                break;
-            case 2:
-                $nextIndex = -1;
-                //we are skipping the index 1 step
-                $no = 0;
-                foreach ($database as $table => $fields) {
-                    $no++;
-                    if ($no == $input || $input == "all") {
-                        $session["tableData"][] = compact('table', 'fields');
-                    }
-                }
-
-
-                $record = new \Tina4\DataRecord();
-                foreach ($session["tableData"] as $id => $data) {
-                    $className = ucwords($record->getObjectName($data["table"]));
-
-                    $fields = [];
-                    $fieldMapping = [];
-                    $primaryKey = "";
-                    foreach ($data["fields"] as $fid => $field) {
-                        if ($fid == 0 || $field->isPrimaryKey === 1) {
-                            $primaryKey = $field->fieldName;
-                        }
-                        $fieldMapping [] = '"' . $record->getObjectName($field->fieldName) . '" => "' . $field->fieldName . '"';
-                        $fields[] = "\tpublic \$" . $record->getObjectName($field->fieldName) . ";";
-                    }
-
-                    $definition = '<?php
-class [CLASS_NAME] extends \Tina4\ORM
-{
-    public $tableName="[TABLE_NAME]";
-    public $primaryKey="[PRIMARY_KEY]"; //set for primary key
-    //public $fieldMapping = [[FIELD_MAPPING]];
-    //public $genPrimaryKey=false; //set to true if you want to set the primary key
-    //public $ignoreFields = []; //fields to ignore in CRUD
-    //public $softDelete=true; //uncomment for soft deletes in crud 
-    
-[FIELDS]
-}';
-
-                    $fileName = $rootPath . "src" . DIRECTORY_SEPARATOR . "orm" . DIRECTORY_SEPARATOR . $className . ".php";
-
-                    echo "Creating object in {$fileName} {$className}\n";
-                    if (!file_exists($fileName)) {
-                        $definition = str_replace("[PRIMARY_KEY]", $record->getObjectName($primaryKey), $definition);
-                        $definition = str_replace("[TABLE_NAME]", $data["table"], $definition);
-                        $definition = str_replace("[CLASS_NAME]", $className, $definition);
-                        $definition = str_replace("[FIELDS]", join("\n", $fields), $definition);
-                        $definition = str_replace("[FIELD_MAPPING]", join(",", $fieldMapping), $definition);
-                        file_put_contents($fileName, $definition);
-                    }
-                }
-                $prompt = "Done, press Enter to continue!";
-
-                $session["tableData"] = null;
-                break;
-            default:
-                $nextIndex = 2;
-                $no = 0;
-                foreach ($database as $table => $fields) {
-                    $no++;
-                    writeLine("{$no}.) {$table}");
-                }
-                writeLine("0.) Exit");
-                writeLine("Type 'all' to convert all the tables, no existing objects will be over written");
-
-                $prompt = "Choose table:";
-                break;
-        }
-    }
-    return ["index" => $nextIndex, "prompt" => $prompt];
-}];
-
-$menus[] = ["id" => 5, "name" => "migrate", "description" => "Database migrations", "commandLine" => ["options" => ["run", "create"]], "menuCode" => static function ($index, $input, $options) use ($argv) {
-    if ($input === "0") { //Menu Option 0 - Exit
-        return ["index" => 0, "prompt" => ""];
-    }
-
-    global $rootPath;
-    global $DBA;
-
-    if (empty($DBA)) {
-        writeLine("Please setup a database connection first.");
-        readLn();
-        return ["index" => 0, "prompt" => ""];
-    }
-
-    if (!empty($options)) {
-        if ($options === "migrate:run") {
-            runMigrations($rootPath, $DBA);
-        } elseif ($options === "migrate:create") {
-            $name = $argv[2] ?? "";
-            if (empty($name)) {
-                writeLine("Please provide a migration name.");
-                return ["index" => 0, "prompt" => ""];
-            }
-            createMigration($rootPath, $name);
-        }
-        return ["index" => 0, "prompt" => ""];
-    }
-
-    switch ($index) {
-        case 1:
-            if ($input === "1") {
-                runMigrations($rootPath, $DBA);
-            } elseif ($input === "2") {
-                $name = readLn("Migration name (e.g., create_users_table): ");
-                createMigration($rootPath, $name);
-            }
-            $nextIndex = 0;
-            $prompt = "";
-            break;
-        default:
-            $nextIndex = 1;
-            $prompt = "1. Run pending migrations\n2. Create new migration\n0. Exit\nChoose: ";
-            break;
-    }
-    return ["index" => $nextIndex, "prompt" => $prompt];
-}];
-
-$webserviceCode = static function ($index, $input) use ($argv) {
-    $port = $argv[2] ?? "7145";
-
-    if (strpos($port, ":") !== false) {
-        $host = explode(":", $port)[0];
-        $port = explode(":", $port)[1];
-    } else {
-        $host = $host ?? "127.0.0.1";
-        if (strpos(php_uname(), "Linux") !== false) {
-            $host = "0.0.0.0";
-        }
-    }
-
-    \Tina4\Debug::message("Server running on http://{$host}:{$port}");
-    echo "\e[36;1m"."
+        echo "\e[35m"."
 ████████╗██╗███╗   ██╗ █████╗ ██╗  ██╗
 ╚══██╔══╝██║████╗  ██║██╔══██╗██║  ██║
    ██║   ██║██╔██╗ ██║███████║███████║
@@ -527,135 +164,147 @@ $webserviceCode = static function ($index, $input) use ($argv) {
    ██║   ██║██║ ╚████║██║  ██║     ██║
    ╚═╝   ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝     ╚═╝
 "."\e[0m";
-    shell_exec("php -S {$host}:{$port} index.php");
+        echo "    \e[35mTina4 PHP v" . \Tina4\App::VERSION . " - This is not a framework\e[0m\n\n";
+        echo "  Server: http://{$host}:{$port}\n";
+        echo "  Root:   {$docRoot}\n";
+        echo "  Press Ctrl+C to stop\n\n";
 
-};
+        passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
+        break;
 
-addMenu($menus, "webservice", "Runs webservice", $webserviceCode, true,  ["options" => ["run"]]);
-
-
-/**
- * Menus are created and have a function "menuCode" which takes on the following inputs ($index, $input, $options)
- * The index is handled in a switch statement to parse the input, the menuCode function always should return
- * ["index" => , "prompt" => ], if you want it to end you need to return ["index" => 0, "prompt" => ""];
- *
- * $menus[] = ["id" => 2, "name" => "Do something", "menuCode" => static function($index, $input, $options) {
- * return ["index" => 0, "prompt" => ""];
- * }];
- */
-
-function addMenu(&$menus, $name,  $description , $menuCode, $canShow=true, $commandLineOptions=[]) : void
-{
-    $menus[] = ["id" => count($menus)+1, "name" => $name, "menuCode" => $menuCode, "show" => $canShow, "description" => $description, "commandLine" => $commandLineOptions];
-}
-
-addMenu($menus, "init", "Create index.php", $initializeCode, false, ["options" => ["run"]]);
-addMenu($menus, "start", "Runs webservice", $webserviceCode, false, ["options" => ["run"]]);
-
-
-/**
- * Draws a menu based on the array above for display to the user
- * @param $menus
- */
-function drawMenu($menus)
-{
-    global $rootPath;
-    $menuId = 0;
-    $input = "";
-    $index = 0;
-
-    while ($input !== "quit") {
-        write("\e[H\e[J"); //clear screen
-        writeLine(str_repeat("=", 100));
-        writeLine("TINA4 - MENU ({$rootPath})");
-        writeLine(str_repeat("=", 100));
-
-        if ($menuId !== 0) {
-            $found = false;
-            foreach ($menus as $mid => $menu) {
-                if ($menuId === $menu["id"]) {
-                    $prompt = call_user_func($menu["menuCode"], $index, $input, null);
-                    $index = $prompt["index"];
-                    if ($index === 0) {
-                        $menuId = 0;
-                    } else {
-                        $input = readLn($prompt["prompt"]);
-                        $found = true;
-                    }
-                }
-            }
-            if (!$found) {
-                $menuId = 0;
-            }
+    // ────────────────────────────────────────────
+    // MIGRATE — Run/create/rollback migrations
+    // ────────────────────────────────────────────
+    case 'migrate':
+        if ($autoloaded && file_exists($cwd . '/index.php')) {
+            // Load the project to get $DBA
+            ob_start();
+            include_once $cwd . '/index.php';
+            ob_end_clean();
+        }
+        $migrationsDir = $cwd . '/migrations';
+        if (!is_dir($migrationsDir)) {
+            mkdir($migrationsDir, 0755, true);
+        }
+        if (class_exists('\Tina4\Migration')) {
+            $migration = new \Tina4\Migration($migrationsDir);
+            echo $migration->doMigration();
         } else {
-            foreach ($menus as $id => $menu) {
-                if (!isset($menu["show"])) {
-                    $menu["show"] = true;
-                }
-                if ($menu["show"]) {
-                    writeLine(($menu["id"]) . ".) " . $menu["description"]);
-                }
-
-            }
-            $input = readLn("Choose menu option or type \"quit\" to Exit:");
-            $menuId = (int)$input;
+            echo "Migration class not available.\n";
         }
-    }
+        break;
+
+    case 'migrate:create':
+        $name = implode(' ', $args) ?: 'unnamed_migration';
+        $migrationsDir = $cwd . '/migrations';
+        if (!is_dir($migrationsDir)) {
+            mkdir($migrationsDir, 0755, true);
+        }
+        if (class_exists('\Tina4\Migration')) {
+            $migration = new \Tina4\Migration($migrationsDir);
+            echo $migration->createMigration($name, "-- Write your migration SQL here\n");
+        } else {
+            echo "Migration class not available.\n";
+        }
+        break;
+
+    case 'migrate:rollback':
+        echo "Rollback not yet implemented in v3.\n";
+        break;
+
+    // ────────────────────────────────────────────
+    // ROUTES — List registered routes
+    // ────────────────────────────────────────────
+    case 'routes':
+        // Load the project
+        if (file_exists($cwd . '/index.php')) {
+            ob_start();
+            include_once $cwd . '/index.php';
+            ob_end_clean();
+        }
+        if (class_exists('\Tina4\Router')) {
+            $routes = \Tina4\Router::list();
+            echo str_pad('METHOD', 8) . str_pad('PATH', 40) . "FLAGS\n";
+            echo str_repeat('-', 60) . "\n";
+            foreach ($routes as $r) {
+                $flags = [];
+                if ($r['cache'] ?? false) $flags[] = 'CACHE';
+                if ($r['secure'] ?? false) $flags[] = 'AUTH';
+                $flagStr = $flags ? '[' . implode(', ', $flags) . ']' : '';
+                echo str_pad($r['method'], 8) . str_pad($r['pattern'], 40) . $flagStr . "\n";
+            }
+            echo str_repeat('-', 60) . "\n";
+            echo "Total: " . count($routes) . " routes\n";
+        }
+        break;
+
+    // ────────────────────────────────────────────
+    // TEST — Run tests
+    // ────────────────────────────────────────────
+    case 'test':
+        if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
+            passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'));
+        } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
+            passthru($cwd . '/vendor/bin/phpunit tests --verbose --color');
+        } else {
+            echo "No test runner found. Install phpunit or create tests/test_v3_smoke.php\n";
+        }
+        break;
+
+    // ────────────────────────────────────────────
+    // SEED — Run seeders
+    // ────────────────────────────────────────────
+    case 'seed':
+        $seedDir = $cwd . '/src/seeds';
+        if (!is_dir($seedDir)) {
+            echo "No seeds directory found at src/seeds/\n";
+            break;
+        }
+        $seeds = glob($seedDir . '/*.php');
+        if (empty($seeds)) {
+            echo "No seed files found in src/seeds/\n";
+        }
+        foreach ($seeds as $seedFile) {
+            echo "Running " . basename($seedFile) . "...\n";
+            include $seedFile;
+        }
+        break;
+
+    // ────────────────────────────────────────────
+    // BUILD — Build distributable
+    // ────────────────────────────────────────────
+    case 'build':
+        echo "Build not yet implemented in v3.\n";
+        break;
+
+    // ────────────────────────────────────────────
+    // AI — Install AI context files
+    // ────────────────────────────────────────────
+    case 'ai':
+        echo "AI context installation not yet implemented in v3.\n";
+        break;
+
+    // ────────────────────────────────────────────
+    // HELP
+    // ────────────────────────────────────────────
+    case 'help':
+    case '--help':
+    case '-h':
+    default:
+        echo "Tina4 PHP CLI v3\n\n";
+        echo "Usage: tina4php <command> [options]\n\n";
+        echo "Commands:\n";
+        echo "  init [dir]              Scaffold a new project\n";
+        echo "  serve [port]            Start dev server (default: 7145)\n";
+        echo "  start [port]            Alias for serve\n";
+        echo "  migrate                 Run pending migrations\n";
+        echo "  migrate:create <desc>   Create a migration file\n";
+        echo "  migrate:rollback        Rollback last batch\n";
+        echo "  seed                    Run seeders from src/seeds/\n";
+        echo "  routes                  List all registered routes\n";
+        echo "  test                    Run test suite\n";
+        echo "  build                   Build distributable package\n";
+        echo "  ai [--all]              Detect AI tools and install context\n";
+        echo "  help                    Show this help\n";
+        break;
 }
-
-if (count($argv) === 1) {
-    drawMenu($menus);
-    echo "\e[H\e[J"; //clear screen
-} else {
-    //write("\e[H\e[J");
-    $options = [];
-    $options[] = ["command" => "help", "description" => "Gets the help menu"];
-    foreach ($menus as $mid => $menu) {
-        if (isset($menu["commandLine"])) {
-            foreach ($menu["commandLine"]["options"] as $oid => $option) {
-                $options[] = ["command" => $menu["name"] . ":" . $option, "description" => $menu["description"], "function" => $menu["menuCode"]];
-            }
-        }
-    }
-
-    $command = $argv[1];
-    if (in_array($command, ['init', 'start', 'migrate'])) {
-        $command .= ':run';
-    }
-
-    if (isset($argv[1])) {
-        writeLine("Running: " . $argv[0] . " " . $argv[1]);
-    }
-
-    if (strtolower($argv[1]) === "help") {
-        writeLine("Available options:");
-        foreach ($options as $oid => $option) {
-            writeLine(str_pad($option["command"] . " ", 30, ".", STR_PAD_RIGHT) . $option["description"]);
-        }
-    } else {
-
-        $found = false;
-        foreach ($options as $oid => $option) {
-            if ($option["command"] === $command) {
-                call_user_func($option["function"], 0, "", $option["command"]);
-                $found = true;
-            }
-        }
-        if (!$found) {
-            writeLine("Command not found: " . $command);
-        }
-    }
-}
-
-//End of the console app, say something nice!
-$comments[] = "Have a great day!";
-$comments[] = "Keep up the good work!";
-$comments[] = "You are a star!";
-$comments[] = "Nothing is impossible!";
-$comments[] = "Keep learning!";
-$comments[] = "Live long and prosper!";
-$comments[] = "Life is lemons, make lemonade!";
-
-$complimentary = $comments[rand(0, count($comments) - 1)];
-writeLine("");
-echo "Thank you for using Tina4 - {$complimentary}\n";

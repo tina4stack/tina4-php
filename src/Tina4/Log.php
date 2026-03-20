@@ -205,7 +205,8 @@ class Log
         $reset = "\033[0m";
         $color = $colors[$level] ?? '';
 
-        fwrite(STDOUT, $color . $line . $reset);
+        $stdout = defined('STDOUT') ? \STDOUT : fopen('php://stdout', 'w');
+        fwrite($stdout, $color . $line . $reset);
     }
 
     /**
