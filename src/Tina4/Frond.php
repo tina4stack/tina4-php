@@ -1,0 +1,1686 @@
+<?php
+
+namespace Tina4;
+
+/**
+ * Frond - Zero-dependency Twig-like template engine for Tina4.
+ *
+ * Supports: variables, filters, control structures (if/for/set/include/extends/block/macro/cache),
+ * expression evaluation, template inheritance, auto-escaping, sandboxing, whitespace control, and comments.
+ */
+class Frond
+{
+    private string $templateDir;
+    private array $globals = [];
+    private array $filters = [];
+    private array $tests = [];
+    private array $cache = [];
+    private bool $sandboxed = false;
+    private ?array $sandboxFilters = null;
+    private ?array $sandboxTags = null;
+    private ?array $sandboxVars = null;
+    private array $macros = [];
+
+    // Sentinel for "raw" (no auto-escape)
+    private const RAW_MARKER = "\x00FROND_RAW\x00";
+
+    public function __construct(string $templateDir = 'src/templates')
+    {
+        $this->templateDir = rtrim($templateDir, '/');
+        $this->registerBuiltinFilters();
+        $this->registerBuiltinTests();
+    }
+
+    /* ───────────────────── public API ───────────────────── */
+
+    public function render(string $template, array $data = []): string
+    {
+        $file = $this->templateDir . '/' . $template;
+        if (!is_file($file)) {
+            throw new \RuntimeException("Template not found: $file");
+        }
+        $source = file_get_contents($file);
+        return $this->renderString($source, $data, $template);
+    }
+
+    public function renderString(string $source, array $data = [], ?string $templateName = null): string
+    {
+        $data = array_merge($this->globals, $data);
+        $tokens = $this->tokenize($source);
+        $ast = $this->parse($tokens);
+
+        // Handle extends
+        $ast = $this->resolveInheritance($ast, $data, $templateName);
+
+        return $this->execute($ast, $data);
+    }
+
+    public function addFilter(string $name, callable $fn): void
+    {
+        $this->filters[$name] = $fn;
+    }
+
+    public function addGlobal(string $name, mixed $value): void
+    {
+        $this->globals[$name] = $value;
+    }
+
+    public function addTest(string $name, callable $fn): void
+    {
+        $this->tests[$name] = $fn;
+    }
+
+    public function sandbox(?array $filters = null, ?array $tags = null, ?array $vars = null): self
+    {
+        $this->sandboxed = true;
+        $this->sandboxFilters = $filters;
+        $this->sandboxTags = $tags;
+        $this->sandboxVars = $vars;
+        return $this;
+    }
+
+    public function unsandbox(): self
+    {
+        $this->sandboxed = false;
+        $this->sandboxFilters = null;
+        $this->sandboxTags = null;
+        $this->sandboxVars = null;
+        return $this;
+    }
+
+    /* ───────────────────── tokenizer ───────────────────── */
+
+    private function tokenize(string $source): array
+    {
+        $tokens = [];
+        $pos = 0;
+        $len = strlen($source);
+
+        while ($pos < $len) {
+            // Find the next opening tag
+            $nextComment = strpos($source, '{#', $pos);
+            $nextVar = strpos($source, '{{', $pos);
+            $nextBlock = strpos($source, '{%', $pos);
+
+            $candidates = [];
+            if ($nextComment !== false) $candidates[$nextComment] = 'comment';
+            if ($nextVar !== false) $candidates[$nextVar] = 'var';
+            if ($nextBlock !== false) $candidates[$nextBlock] = 'block';
+
+            if (empty($candidates)) {
+                // Rest is text
+                $tokens[] = ['type' => 'TEXT', 'value' => substr($source, $pos)];
+                break;
+            }
+
+            ksort($candidates);
+            $nextPos = array_key_first($candidates);
+            $type = $candidates[$nextPos];
+
+            // Text before tag
+            if ($nextPos > $pos) {
+                $tokens[] = ['type' => 'TEXT', 'value' => substr($source, $pos, $nextPos - $pos)];
+            }
+
+            if ($type === 'comment') {
+                $end = strpos($source, '#}', $nextPos + 2);
+                if ($end === false) {
+                    $tokens[] = ['type' => 'TEXT', 'value' => substr($source, $nextPos)];
+                    break;
+                }
+                // Check whitespace control
+                $inner = substr($source, $nextPos + 2, $end - $nextPos - 2);
+                $lstripComment = str_starts_with($inner, '-');
+                $rstripComment = str_ends_with($inner, '-');
+                $tokens[] = [
+                    'type' => 'COMMENT',
+                    'value' => $inner,
+                    'lstrip' => $lstripComment,
+                    'rstrip' => $rstripComment,
+                ];
+                $pos = $end + 2;
+            } elseif ($type === 'var') {
+                $end = strpos($source, '}}', $nextPos + 2);
+                if ($end === false) {
+                    $tokens[] = ['type' => 'TEXT', 'value' => substr($source, $nextPos)];
+                    break;
+                }
+                $inner = substr($source, $nextPos + 2, $end - $nextPos - 2);
+                $lstrip = str_starts_with($inner, '-');
+                $rstrip = str_ends_with(rtrim($inner), '-');
+                if ($lstrip) $inner = substr($inner, 1);
+                if ($rstrip) $inner = substr(rtrim($inner), 0, -1);
+                $tokens[] = [
+                    'type' => 'VAR',
+                    'value' => trim($inner),
+                    'lstrip' => $lstrip,
+                    'rstrip' => $rstrip,
+                ];
+                $pos = $end + 2;
+            } elseif ($type === 'block') {
+                $end = strpos($source, '%}', $nextPos + 2);
+                if ($end === false) {
+                    $tokens[] = ['type' => 'TEXT', 'value' => substr($source, $nextPos)];
+                    break;
+                }
+                $inner = substr($source, $nextPos + 2, $end - $nextPos - 2);
+                $lstrip = str_starts_with($inner, '-');
+                $rstrip = str_ends_with(rtrim($inner), '-');
+                if ($lstrip) $inner = substr($inner, 1);
+                if ($rstrip) $inner = substr(rtrim($inner), 0, -1);
+                $tokens[] = [
+                    'type' => 'BLOCK',
+                    'value' => trim($inner),
+                    'lstrip' => $lstrip,
+                    'rstrip' => $rstrip,
+                ];
+                $pos = $end + 2;
+            }
+        }
+
+        // Apply whitespace control
+        $this->applyWhitespaceControl($tokens);
+
+        return $tokens;
+    }
+
+    private function applyWhitespaceControl(array &$tokens): void
+    {
+        for ($i = 0; $i < count($tokens); $i++) {
+            $t = $tokens[$i];
+            if ($t['type'] === 'TEXT') continue;
+
+            // lstrip: remove trailing whitespace from previous TEXT token
+            if (!empty($t['lstrip']) && $i > 0 && $tokens[$i - 1]['type'] === 'TEXT') {
+                $tokens[$i - 1]['value'] = rtrim($tokens[$i - 1]['value']);
+            }
+            // rstrip: remove leading whitespace from next TEXT token
+            if (!empty($t['rstrip']) && $i + 1 < count($tokens) && $tokens[$i + 1]['type'] === 'TEXT') {
+                $tokens[$i + 1]['value'] = ltrim($tokens[$i + 1]['value']);
+            }
+        }
+    }
+
+    /* ───────────────────── parser ───────────────────── */
+
+    private function parse(array $tokens, int &$pos = 0, ?string $until = null, ?array $untilAny = null): array
+    {
+        $nodes = [];
+        $count = count($tokens);
+
+        while ($pos < $count) {
+            $token = $tokens[$pos];
+
+            if ($token['type'] === 'TEXT') {
+                if ($token['value'] !== '') {
+                    $nodes[] = ['type' => 'text', 'value' => $token['value']];
+                }
+                $pos++;
+            } elseif ($token['type'] === 'COMMENT') {
+                $pos++;
+            } elseif ($token['type'] === 'VAR') {
+                $nodes[] = ['type' => 'output', 'expr' => $token['value']];
+                $pos++;
+            } elseif ($token['type'] === 'BLOCK') {
+                $tag = $token['value'];
+
+                // Check if this is an end/else tag we're looking for
+                if ($until !== null && $this->tagMatches($tag, $until)) {
+                    return $nodes;
+                }
+                if ($untilAny !== null) {
+                    foreach ($untilAny as $u) {
+                        if ($this->tagMatches($tag, $u)) {
+                            return $nodes;
+                        }
+                    }
+                }
+
+                $node = $this->parseBlock($tag, $tokens, $pos);
+                if ($node !== null) {
+                    $nodes[] = $node;
+                }
+            }
+        }
+
+        return $nodes;
+    }
+
+    private function tagMatches(string $tag, string $expected): bool
+    {
+        $tag = trim($tag);
+        if ($tag === $expected) return true;
+        // Also match tag names that start with expected keyword
+        return str_starts_with($tag, $expected . ' ') || str_starts_with($tag, $expected . '(');
+    }
+
+    private function parseBlock(string $tag, array &$tokens, int &$pos): ?array
+    {
+        $tagParts = preg_split('/\s+/', trim($tag), 2);
+        $keyword = $tagParts[0];
+        $rest = $tagParts[1] ?? '';
+
+        switch ($keyword) {
+            case 'if':
+                return $this->parseIf($rest, $tokens, $pos);
+            case 'for':
+                return $this->parseFor($rest, $tokens, $pos);
+            case 'set':
+                $pos++;
+                return $this->parseSet($rest);
+            case 'include':
+                $pos++;
+                return $this->parseInclude($rest);
+            case 'extends':
+                $pos++;
+                return $this->parseExtends($rest);
+            case 'block':
+                return $this->parseBlockDef($rest, $tokens, $pos);
+            case 'macro':
+                return $this->parseMacro($rest, $tokens, $pos);
+            case 'cache':
+                return $this->parseCache($rest, $tokens, $pos);
+            default:
+                $pos++;
+                return null;
+        }
+    }
+
+    private function parseIf(string $condition, array &$tokens, int &$pos): array
+    {
+        $pos++; // skip {% if %}
+        $branches = [];
+
+        // Parse the if body until elseif/elif/else/endif
+        $body = $this->parse($tokens, $pos, null, ['elseif', 'elif', 'else', 'endif']);
+
+        $branches[] = ['condition' => $condition, 'body' => $body];
+
+        while ($pos < count($tokens)) {
+            $tag = trim($tokens[$pos]['value'] ?? '');
+            if ($this->tagMatches($tag, 'endif')) {
+                $pos++;
+                break;
+            } elseif ($this->tagMatches($tag, 'elseif') || $this->tagMatches($tag, 'elif')) {
+                $cond = preg_replace('/^(elseif|elif)\s+/', '', $tag);
+                $pos++;
+                $body = $this->parse($tokens, $pos, null, ['elseif', 'elif', 'else', 'endif']);
+                $branches[] = ['condition' => $cond, 'body' => $body];
+            } elseif ($this->tagMatches($tag, 'else')) {
+                $pos++;
+                $body = $this->parse($tokens, $pos, 'endif');
+                $branches[] = ['condition' => 'true', 'body' => $body];
+                $pos++; // skip endif
+                break;
+            } else {
+                $pos++;
+                break;
+            }
+        }
+
+        return ['type' => 'if', 'branches' => $branches];
+    }
+
+    private function parseFor(string $expr, array &$tokens, int &$pos): array
+    {
+        $pos++; // skip {% for %}
+
+        // Parse "key, value in iterable" or "value in iterable"
+        if (!preg_match('/^(.+?)\s+in\s+(.+)$/s', $expr, $m)) {
+            // fallback
+            $body = $this->parse($tokens, $pos, 'endfor');
+            $pos++;
+            return ['type' => 'text', 'value' => ''];
+        }
+
+        $varPart = trim($m[1]);
+        $iterExpr = trim($m[2]);
+        $keyVar = null;
+        $valueVar = $varPart;
+
+        if (str_contains($varPart, ',')) {
+            $parts = array_map('trim', explode(',', $varPart, 2));
+            $keyVar = $parts[0];
+            $valueVar = $parts[1];
+        }
+
+        // Parse body, looking for else or endfor
+        $body = $this->parse($tokens, $pos, null, ['else', 'endfor']);
+        $elseBody = null;
+
+        if ($pos < count($tokens)) {
+            $tag = trim($tokens[$pos]['value'] ?? '');
+            if ($this->tagMatches($tag, 'else')) {
+                $pos++;
+                $elseBody = $this->parse($tokens, $pos, 'endfor');
+            }
+            // skip endfor
+            $pos++;
+        }
+
+        return [
+            'type' => 'for',
+            'keyVar' => $keyVar,
+            'valueVar' => $valueVar,
+            'iterExpr' => $iterExpr,
+            'body' => $body,
+            'elseBody' => $elseBody,
+        ];
+    }
+
+    private function parseSet(string $expr): array
+    {
+        // set name = expression
+        if (preg_match('/^(\w+)\s*=\s*(.+)$/s', $expr, $m)) {
+            return ['type' => 'set', 'name' => $m[1], 'expr' => trim($m[2])];
+        }
+        return ['type' => 'text', 'value' => ''];
+    }
+
+    private function parseInclude(string $expr): array
+    {
+        // include "file.html" [with {data}] [ignore missing]
+        $ignoreMissing = false;
+        if (preg_match('/\s+ignore\s+missing\s*$/', $expr)) {
+            $ignoreMissing = true;
+            $expr = preg_replace('/\s+ignore\s+missing\s*$/', '', $expr);
+        }
+
+        $withData = null;
+        if (preg_match('/\s+with\s+(.+)$/s', $expr, $m)) {
+            $withData = trim($m[1]);
+            $expr = preg_replace('/\s+with\s+.+$/s', '', $expr);
+        }
+
+        $file = trim($expr, " \t\n\r\"'");
+        return [
+            'type' => 'include',
+            'file' => $file,
+            'withData' => $withData,
+            'ignoreMissing' => $ignoreMissing,
+        ];
+    }
+
+    private function parseExtends(string $expr): array
+    {
+        $file = trim($expr, " \t\n\r\"'");
+        return ['type' => 'extends', 'file' => $file];
+    }
+
+    private function parseBlockDef(string $name, array &$tokens, int &$pos): array
+    {
+        $name = trim($name);
+        $pos++; // skip {% block name %}
+        $body = $this->parse($tokens, $pos, 'endblock');
+        $pos++; // skip endblock
+        return ['type' => 'block', 'name' => $name, 'body' => $body];
+    }
+
+    private function parseMacro(string $sig, array &$tokens, int &$pos): array
+    {
+        $pos++; // skip {% macro %}
+        // Parse "name(arg1, arg2)"
+        if (!preg_match('/^(\w+)\s*\(([^)]*)\)/', $sig, $m)) {
+            $body = $this->parse($tokens, $pos, 'endmacro');
+            $pos++;
+            return ['type' => 'text', 'value' => ''];
+        }
+        $name = $m[1];
+        $args = array_map('trim', $m[2] !== '' ? explode(',', $m[2]) : []);
+        $body = $this->parse($tokens, $pos, 'endmacro');
+        $pos++;
+        return ['type' => 'macro', 'name' => $name, 'args' => $args, 'body' => $body];
+    }
+
+    private function parseCache(string $params, array &$tokens, int &$pos): array
+    {
+        $pos++;
+        // Parse "key" ttl
+        $parts = preg_split('/\s+/', trim($params), 2);
+        $key = trim($parts[0], "\"'");
+        $ttl = isset($parts[1]) ? (int)$parts[1] : 0;
+        $body = $this->parse($tokens, $pos, 'endcache');
+        $pos++;
+        return ['type' => 'cache', 'key' => $key, 'ttl' => $ttl, 'body' => $body];
+    }
+
+    /* ───────────────────── template inheritance ───────────────────── */
+
+    private function resolveInheritance(array $ast, array &$data, ?string $templateName): array
+    {
+        // Find extends node
+        $extendsNode = null;
+        foreach ($ast as $node) {
+            if ($node['type'] === 'extends') {
+                $extendsNode = $node;
+                break;
+            }
+        }
+
+        if ($extendsNode === null) return $ast;
+
+        // Collect child blocks
+        $childBlocks = $this->collectBlocks($ast);
+
+        // Load parent
+        $parentFile = $this->templateDir . '/' . $extendsNode['file'];
+        if (!is_file($parentFile)) {
+            throw new \RuntimeException("Parent template not found: $parentFile");
+        }
+        $parentSource = file_get_contents($parentFile);
+        $parentTokens = $this->tokenize($parentSource);
+        $parentPos = 0;
+        $parentAst = $this->parse($parentTokens, $parentPos);
+
+        // Recursively resolve parent inheritance
+        $parentAst = $this->resolveInheritance($parentAst, $data, $extendsNode['file']);
+
+        // Replace parent blocks with child blocks
+        return $this->replaceBlocks($parentAst, $childBlocks);
+    }
+
+    private function collectBlocks(array $ast): array
+    {
+        $blocks = [];
+        foreach ($ast as $node) {
+            if ($node['type'] === 'block') {
+                $blocks[$node['name']] = $node['body'];
+            }
+        }
+        return $blocks;
+    }
+
+    private function replaceBlocks(array $ast, array $childBlocks): array
+    {
+        $result = [];
+        foreach ($ast as $node) {
+            if ($node['type'] === 'block') {
+                if (isset($childBlocks[$node['name']])) {
+                    $node['body'] = $this->replaceBlocks($childBlocks[$node['name']], $childBlocks);
+                } else {
+                    $node['body'] = $this->replaceBlocks($node['body'], $childBlocks);
+                }
+            }
+            // Also recurse into if/for branches
+            if ($node['type'] === 'if') {
+                foreach ($node['branches'] as &$branch) {
+                    $branch['body'] = $this->replaceBlocks($branch['body'], $childBlocks);
+                }
+                unset($branch);
+            }
+            if ($node['type'] === 'for') {
+                $node['body'] = $this->replaceBlocks($node['body'], $childBlocks);
+                if (!empty($node['elseBody'])) {
+                    $node['elseBody'] = $this->replaceBlocks($node['elseBody'], $childBlocks);
+                }
+            }
+            $result[] = $node;
+        }
+        return $result;
+    }
+
+    /* ───────────────────── executor ───────────────────── */
+
+    private function execute(array $ast, array &$data): string
+    {
+        $out = '';
+        foreach ($ast as $node) {
+            $out .= $this->executeNode($node, $data);
+        }
+        return $out;
+    }
+
+    private function executeNode(array $node, array &$data): string
+    {
+        switch ($node['type']) {
+            case 'text':
+                return $node['value'];
+
+            case 'output':
+                return $this->executeOutput($node['expr'], $data);
+
+            case 'if':
+                return $this->executeIf($node, $data);
+
+            case 'for':
+                return $this->executeFor($node, $data);
+
+            case 'set':
+                return $this->executeSet($node, $data);
+
+            case 'include':
+                return $this->executeInclude($node, $data);
+
+            case 'block':
+                return $this->execute($node['body'], $data);
+
+            case 'macro':
+                $this->macros[$node['name']] = $node;
+                return '';
+
+            case 'cache':
+                return $this->executeCache($node, $data);
+
+            default:
+                return '';
+        }
+    }
+
+    private function executeOutput(string $expr, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('output', $this->sandboxTags) && !in_array('var', $this->sandboxTags)) {
+            // output is always allowed unless tags explicitly exclude it
+        }
+
+        $value = $this->evaluateExpression($expr, $data);
+        $isRaw = false;
+
+        if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
+            $value = str_replace(self::RAW_MARKER, '', $value);
+            $isRaw = true;
+        }
+
+        $str = $this->valueToString($value);
+
+        // Auto-escape unless raw
+        if (!$isRaw) {
+            $str = htmlspecialchars($str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        }
+
+        return $str;
+    }
+
+    private function valueToString(mixed $value): string
+    {
+        if ($value === null) return '';
+        if ($value === true) return '1';
+        if ($value === false) return '';
+        if (is_array($value)) return json_encode($value, JSON_UNESCAPED_UNICODE);
+        return (string)$value;
+    }
+
+    private function executeIf(array $node, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('if', $this->sandboxTags)) {
+            return '';
+        }
+        foreach ($node['branches'] as $branch) {
+            $condValue = $this->evaluateExpression($branch['condition'], $data);
+            if ($this->isTruthy($condValue)) {
+                return $this->execute($branch['body'], $data);
+            }
+        }
+        return '';
+    }
+
+    private function executeFor(array $node, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('for', $this->sandboxTags)) {
+            return '';
+        }
+
+        $iterable = $this->evaluateExpression($node['iterExpr'], $data);
+
+        if (!is_iterable($iterable) || (is_array($iterable) && empty($iterable))) {
+            if ($node['elseBody'] !== null) {
+                return $this->execute($node['elseBody'], $data);
+            }
+            return '';
+        }
+
+        // Convert to array for counting
+        $items = is_array($iterable) ? $iterable : iterator_to_array($iterable);
+        if (empty($items)) {
+            if ($node['elseBody'] !== null) {
+                return $this->execute($node['elseBody'], $data);
+            }
+            return '';
+        }
+
+        $out = '';
+        $length = count($items);
+        $idx = 0;
+
+        foreach ($items as $key => $value) {
+            $loopData = $data; // copy context
+            $loopData[$node['valueVar']] = $value;
+            if ($node['keyVar'] !== null) {
+                $loopData[$node['keyVar']] = $key;
+            }
+            $loopData['loop'] = [
+                'index' => $idx + 1,
+                'index0' => $idx,
+                'first' => $idx === 0,
+                'last' => $idx === $length - 1,
+                'length' => $length,
+                'revindex' => $length - $idx,
+                'revindex0' => $length - $idx - 1,
+                'even' => ($idx + 1) % 2 === 0,
+                'odd' => ($idx + 1) % 2 === 1,
+            ];
+            $out .= $this->execute($node['body'], $loopData);
+            $idx++;
+        }
+
+        // Propagate any set variables from inside for loop back (except loop-specific vars)
+        // Not standard Twig behavior - variables set in for don't leak out
+
+        return $out;
+    }
+
+    private function executeSet(array $node, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('set', $this->sandboxTags)) {
+            return '';
+        }
+        $value = $this->evaluateExpression($node['expr'], $data);
+        // Strip raw marker from set values
+        if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
+            $value = str_replace(self::RAW_MARKER, '', $value);
+        }
+        $data[$node['name']] = $value;
+        return '';
+    }
+
+    private function executeInclude(array $node, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('include', $this->sandboxTags)) {
+            return '';
+        }
+
+        $file = $this->templateDir . '/' . $node['file'];
+        if (!is_file($file)) {
+            if ($node['ignoreMissing']) return '';
+            throw new \RuntimeException("Include template not found: $file");
+        }
+
+        $includeData = $data;
+        if ($node['withData'] !== null) {
+            $extra = $this->evaluateExpression($node['withData'], $data);
+            if (is_array($extra)) {
+                $includeData = array_merge($includeData, $extra);
+            }
+        }
+
+        $source = file_get_contents($file);
+        $tokens = $this->tokenize($source);
+        $tpos = 0;
+        $ast = $this->parse($tokens, $tpos);
+        return $this->execute($ast, $includeData);
+    }
+
+    private function executeCache(array $node, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('cache', $this->sandboxTags)) {
+            return '';
+        }
+
+        $key = $node['key'];
+        if (isset($this->cache[$key])) {
+            $entry = $this->cache[$key];
+            if ($entry['ttl'] === 0 || (time() - $entry['time']) < $entry['ttl']) {
+                return $entry['content'];
+            }
+        }
+
+        $content = $this->execute($node['body'], $data);
+        $this->cache[$key] = [
+            'content' => $content,
+            'time' => time(),
+            'ttl' => $node['ttl'],
+        ];
+        return $content;
+    }
+
+    /* ───────────────────── expression evaluator ───────────────────── */
+
+    private function evaluateExpression(string $expr, array &$data): mixed
+    {
+        $expr = trim($expr);
+        if ($expr === '') return '';
+        if ($expr === 'true') return true;
+        if ($expr === 'false') return false;
+        if ($expr === 'none' || $expr === 'null') return null;
+
+        // Check for filter pipe (respecting strings and parens)
+        $filterSplit = $this->splitFilters($expr);
+        if (count($filterSplit) > 1) {
+            $value = $this->evaluateExpression($filterSplit[0], $data);
+            for ($i = 1; $i < count($filterSplit); $i++) {
+                $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
+            }
+            return $value;
+        }
+
+        // Ternary: condition ? true_val : false_val
+        $ternaryPos = $this->findTernary($expr);
+        if ($ternaryPos !== false) {
+            $condition = trim(substr($expr, 0, $ternaryPos));
+            $rest = substr($expr, $ternaryPos + 1);
+            $colonPos = $this->findTernaryColon($rest);
+            if ($colonPos !== false) {
+                $trueVal = trim(substr($rest, 0, $colonPos));
+                $falseVal = trim(substr($rest, $colonPos + 1));
+                $condResult = $this->evaluateExpression($condition, $data);
+                if ($this->isTruthy($condResult)) {
+                    return $this->evaluateExpression($trueVal, $data);
+                } else {
+                    return $this->evaluateExpression($falseVal, $data);
+                }
+            }
+        }
+
+        // Null coalescing: value ?? default
+        $coalPos = $this->findOperator($expr, '??');
+        if ($coalPos !== false) {
+            $left = trim(substr($expr, 0, $coalPos));
+            $right = trim(substr($expr, $coalPos + 2));
+            $leftVal = $this->evaluateExpressionSafe($left, $data);
+            if ($leftVal !== null) return $leftVal;
+            return $this->evaluateExpression($right, $data);
+        }
+
+        // Logical: or
+        $orPos = $this->findLogicalOp($expr, ' or ');
+        if ($orPos !== false) {
+            $left = trim(substr($expr, 0, $orPos));
+            $right = trim(substr($expr, $orPos + 4));
+            return $this->isTruthy($this->evaluateExpression($left, $data))
+                || $this->isTruthy($this->evaluateExpression($right, $data));
+        }
+
+        // Logical: and
+        $andPos = $this->findLogicalOp($expr, ' and ');
+        if ($andPos !== false) {
+            $left = trim(substr($expr, 0, $andPos));
+            $right = trim(substr($expr, $andPos + 5));
+            return $this->isTruthy($this->evaluateExpression($left, $data))
+                && $this->isTruthy($this->evaluateExpression($right, $data));
+        }
+
+        // not prefix
+        if (preg_match('/^not\s+(.+)$/s', $expr, $m)) {
+            return !$this->isTruthy($this->evaluateExpression($m[1], $data));
+        }
+
+        // Comparisons: ==, !=, <=, >=, <, >, in, not in
+        // "not in" check
+        $notInPos = $this->findLogicalOp($expr, ' not in ');
+        if ($notInPos !== false) {
+            $left = trim(substr($expr, 0, $notInPos));
+            $right = trim(substr($expr, $notInPos + 8));
+            $leftVal = $this->evaluateExpression($left, $data);
+            $rightVal = $this->evaluateExpression($right, $data);
+            return !$this->checkIn($leftVal, $rightVal);
+        }
+
+        // "in" check
+        $inPos = $this->findLogicalOp($expr, ' in ');
+        if ($inPos !== false) {
+            $left = trim(substr($expr, 0, $inPos));
+            $right = trim(substr($expr, $inPos + 4));
+            $leftVal = $this->evaluateExpression($left, $data);
+            $rightVal = $this->evaluateExpression($right, $data);
+            return $this->checkIn($leftVal, $rightVal);
+        }
+
+        // "is not" tests
+        if (preg_match('/^(.+?)\s+is\s+not\s+(.+)$/s', $expr, $m)) {
+            return !$this->evaluateTest(trim($m[1]), trim($m[2]), $data);
+        }
+
+        // "is" tests
+        if (preg_match('/^(.+?)\s+is\s+(.+)$/s', $expr, $m)) {
+            $testName = trim($m[2]);
+            // Make sure this isn't a variable that happens to contain "is"
+            if ($this->isKnownTest($testName)) {
+                return $this->evaluateTest(trim($m[1]), $testName, $data);
+            }
+        }
+
+        // Comparison operators
+        foreach (['!=', '==', '<=', '>=', '<', '>'] as $op) {
+            $opPos = $this->findComparisonOp($expr, $op);
+            if ($opPos !== false) {
+                $left = trim(substr($expr, 0, $opPos));
+                $right = trim(substr($expr, $opPos + strlen($op)));
+                $leftVal = $this->evaluateExpression($left, $data);
+                $rightVal = $this->evaluateExpression($right, $data);
+                return match($op) {
+                    '==' => $leftVal == $rightVal,
+                    '!=' => $leftVal != $rightVal,
+                    '<' => $leftVal < $rightVal,
+                    '>' => $leftVal > $rightVal,
+                    '<=' => $leftVal <= $rightVal,
+                    '>=' => $leftVal >= $rightVal,
+                };
+            }
+        }
+
+        // String concatenation with ~
+        $tildePos = $this->findConcat($expr);
+        if ($tildePos !== false) {
+            $left = trim(substr($expr, 0, $tildePos));
+            $right = trim(substr($expr, $tildePos + 1));
+            $leftVal = $this->evaluateExpression($left, $data);
+            $rightVal = $this->evaluateExpression($right, $data);
+            // Strip raw markers for concat
+            $leftStr = $this->valueToString($leftVal);
+            $rightStr = $this->valueToString($rightVal);
+            if (is_string($leftVal) && str_contains($leftVal, self::RAW_MARKER)) {
+                $leftStr = str_replace(self::RAW_MARKER, '', $leftStr);
+            }
+            if (is_string($rightVal) && str_contains($rightVal, self::RAW_MARKER)) {
+                $rightStr = str_replace(self::RAW_MARKER, '', $rightStr);
+            }
+            return $leftStr . $rightStr;
+        }
+
+        // Math: +, -, *, //, /, %
+        foreach ([['+', '-'], ['*', '//', '/', '%']] as $ops) {
+            foreach ($ops as $op) {
+                $opPos = $this->findMathOp($expr, $op);
+                if ($opPos !== false) {
+                    $left = trim(substr($expr, 0, $opPos));
+                    $right = trim(substr($expr, $opPos + strlen($op)));
+                    $leftVal = $this->evaluateExpression($left, $data);
+                    $rightVal = $this->evaluateExpression($right, $data);
+                    if (is_numeric($leftVal) && is_numeric($rightVal)) {
+                        return match($op) {
+                            '+' => $leftVal + $rightVal,
+                            '-' => $leftVal - $rightVal,
+                            '*' => $leftVal * $rightVal,
+                            '/' => $rightVal != 0 ? $leftVal / $rightVal : 0,
+                            '//' => $rightVal != 0 ? intdiv((int)$leftVal, (int)$rightVal) : 0,
+                            '%' => $rightVal != 0 ? $leftVal % $rightVal : 0,
+                        };
+                    }
+                    // + can also concatenate arrays
+                    if ($op === '+' && is_array($leftVal) && is_array($rightVal)) {
+                        return array_merge($leftVal, $rightVal);
+                    }
+                    return match($op) {
+                        '+' => ($leftVal ?? 0) + ($rightVal ?? 0),
+                        '-' => ($leftVal ?? 0) - ($rightVal ?? 0),
+                        '*' => ($leftVal ?? 0) * ($rightVal ?? 0),
+                        '/' => ($rightVal ?? 0) != 0 ? ($leftVal ?? 0) / $rightVal : 0,
+                        '//' => ($rightVal ?? 0) != 0 ? intdiv((int)($leftVal ?? 0), (int)$rightVal) : 0,
+                        '%' => ($rightVal ?? 0) != 0 ? ($leftVal ?? 0) % $rightVal : 0,
+                    };
+                }
+            }
+        }
+
+        // Parenthesized expression
+        if (str_starts_with($expr, '(') && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
+            return $this->evaluateExpression(substr($expr, 1, -1), $data);
+        }
+
+        // Numeric literal
+        if (is_numeric($expr)) {
+            return str_contains($expr, '.') ? (float)$expr : (int)$expr;
+        }
+
+        // String literal
+        if ((str_starts_with($expr, '"') && str_ends_with($expr, '"'))
+            || (str_starts_with($expr, "'") && str_ends_with($expr, "'"))) {
+            $inner = substr($expr, 1, -1);
+            // Handle escape sequences
+            $inner = str_replace(['\\n', '\\t', '\\\\', "\\'", '\\"'], ["\n", "\t", "\\", "'", '"'], $inner);
+            return $inner;
+        }
+
+        // Array/dict literal: [a, b, c] or {key: value}
+        if (str_starts_with($expr, '[') && str_ends_with($expr, ']')) {
+            return $this->parseArrayLiteral(substr($expr, 1, -1), $data);
+        }
+        if (str_starts_with($expr, '{') && str_ends_with($expr, '}')) {
+            return $this->parseDictLiteral(substr($expr, 1, -1), $data);
+        }
+
+        // Range: start..end
+        if (preg_match('/^(\d+)\.\.(\d+)$/', $expr, $m)) {
+            return range((int)$m[1], (int)$m[2]);
+        }
+
+        // Macro call: name(args)
+        if (preg_match('/^(\w+)\s*\((.*)?\)$/s', $expr, $m)) {
+            $funcName = $m[1];
+            $argsStr = $m[2] ?? '';
+            if (isset($this->macros[$funcName])) {
+                return $this->callMacro($funcName, $argsStr, $data);
+            }
+            // Could be range() or other built-in
+            if ($funcName === 'range') {
+                $args = $this->parseArgs($argsStr, $data);
+                if (count($args) >= 2) {
+                    $step = $args[2] ?? 1;
+                    return range($args[0], $args[1], $step);
+                }
+            }
+        }
+
+        // Variable resolution
+        return $this->resolveVariable($expr, $data);
+    }
+
+    private function evaluateExpressionSafe(string $expr, array &$data): mixed
+    {
+        try {
+            $val = $this->evaluateExpression($expr, $data);
+            // Check if the variable was actually defined
+            $varName = trim($expr);
+            if (!str_contains($varName, ' ') && !str_contains($varName, '"') && !str_contains($varName, "'")) {
+                $parts = explode('.', $varName);
+                $root = $parts[0];
+                if (str_contains($root, '[')) {
+                    $root = substr($root, 0, strpos($root, '['));
+                }
+                if (!array_key_exists($root, $data)) {
+                    return null;
+                }
+            }
+            return $val;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function resolveVariable(string $expr, array &$data): mixed
+    {
+        $expr = trim($expr);
+
+        // Sandbox check
+        if ($this->sandboxed && $this->sandboxVars !== null) {
+            $rootName = $expr;
+            if (str_contains($rootName, '.')) $rootName = substr($rootName, 0, strpos($rootName, '.'));
+            if (str_contains($rootName, '[')) $rootName = substr($rootName, 0, strpos($rootName, '['));
+            if ($rootName !== 'loop' && !in_array($rootName, $this->sandboxVars)) {
+                return '';
+            }
+        }
+
+        // Handle dotted paths and bracket access
+        // First tokenize the path: split on dots and brackets
+        $segments = $this->parseVarPath($expr);
+        if (empty($segments)) return '';
+
+        $current = $data;
+        foreach ($segments as $seg) {
+            if (is_array($current)) {
+                if (array_key_exists($seg, $current)) {
+                    $current = $current[$seg];
+                } else {
+                    return '';
+                }
+            } elseif (is_object($current)) {
+                if (property_exists($current, $seg)) {
+                    $current = $current->$seg;
+                } elseif (method_exists($current, $seg)) {
+                    $current = $current->$seg();
+                } else {
+                    return '';
+                }
+            } else {
+                return '';
+            }
+        }
+
+        return $current;
+    }
+
+    private function parseVarPath(string $expr): array
+    {
+        $segments = [];
+        $len = strlen($expr);
+        $pos = 0;
+        $current = '';
+
+        while ($pos < $len) {
+            $ch = $expr[$pos];
+
+            if ($ch === '.') {
+                if ($current !== '') {
+                    $segments[] = $current;
+                    $current = '';
+                }
+                $pos++;
+            } elseif ($ch === '[') {
+                if ($current !== '') {
+                    $segments[] = $current;
+                    $current = '';
+                }
+                $end = strpos($expr, ']', $pos + 1);
+                if ($end === false) break;
+                $idx = substr($expr, $pos + 1, $end - $pos - 1);
+                $idx = trim($idx, " \"'");
+                if (is_numeric($idx)) $idx = (int)$idx;
+                $segments[] = $idx;
+                $pos = $end + 1;
+            } else {
+                $current .= $ch;
+                $pos++;
+            }
+        }
+
+        if ($current !== '') {
+            $segments[] = $current;
+        }
+
+        return $segments;
+    }
+
+    /* ─── operator finders (respect string boundaries) ─── */
+
+    private function findTernary(string $expr): int|false
+    {
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($ch === '?' && $depth === 0 && $i + 1 < $len && $expr[$i + 1] !== '?') {
+                // Make sure it's not ??
+                if ($i > 0 && $expr[$i - 1] === '?') continue;
+                return $i;
+            }
+        }
+        return false;
+    }
+
+    private function findTernaryColon(string $expr): int|false
+    {
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($ch === ':' && $depth === 0) return $i;
+        }
+        return false;
+    }
+
+    private function findOperator(string $expr, string $op): int|false
+    {
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        $opLen = strlen($op);
+        for ($i = 0; $i <= $len - $opLen; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($depth === 0 && substr($expr, $i, $opLen) === $op) return $i;
+        }
+        return false;
+    }
+
+    private function findLogicalOp(string $expr, string $op): int|false
+    {
+        // Find last occurrence for left-associativity
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        $opLen = strlen($op);
+        $lastPos = false;
+        for ($i = 0; $i <= $len - $opLen; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($depth === 0 && substr($expr, $i, $opLen) === $op) {
+                $lastPos = $i;
+            }
+        }
+        return $lastPos;
+    }
+
+    private function findComparisonOp(string $expr, string $op): int|false
+    {
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        $opLen = strlen($op);
+        for ($i = 0; $i <= $len - $opLen; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($depth === 0 && substr($expr, $i, $opLen) === $op) {
+                // For < and >, make sure we don't match <= or >= or != already handled
+                if ($op === '<' && $i + 1 < $len && $expr[$i + 1] === '=') continue;
+                if ($op === '>' && $i + 1 < $len && $expr[$i + 1] === '=') continue;
+                if ($op === '!' && $i + 1 < $len && $expr[$i + 1] === '=') continue;
+                if (($op === '<' || $op === '>') && $i > 0 && ($expr[$i - 1] === '!' || $expr[$i - 1] === '<' || $expr[$i - 1] === '>')) continue;
+                return $i;
+            }
+        }
+        return false;
+    }
+
+    private function findConcat(string $expr): int|false
+    {
+        // Find ~ not inside strings or parens
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($ch === '~' && $depth === 0) return $i;
+        }
+        return false;
+    }
+
+    private function findMathOp(string $expr, string $op): int|false
+    {
+        // Search from right for +/-, left for *//, to respect precedence
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+        $opLen = strlen($op);
+
+        if (in_array($op, ['+', '-'])) {
+            // Right-to-left search for left-associativity (find last)
+            $lastPos = false;
+            for ($i = 0; $i <= $len - $opLen; $i++) {
+                $ch = $expr[$i];
+                if ($inStr) {
+                    if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                    continue;
+                }
+                if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+                if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+                if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+                if ($depth === 0 && substr($expr, $i, $opLen) === $op) {
+                    // Don't match unary minus at start or after operator
+                    if ($op === '-' && $i === 0) continue;
+                    if ($i > 0) {
+                        $prev = trim(substr($expr, 0, $i));
+                        if ($prev === '' || str_ends_with($prev, '(') || str_ends_with($prev, ',')) continue;
+                    }
+                    $lastPos = $i;
+                }
+            }
+            return $lastPos;
+        }
+
+        // Left-to-right for *, /, //, %
+        for ($i = 0; $i <= $len - $opLen; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
+            if ($depth === 0 && substr($expr, $i, $opLen) === $op) {
+                // For /, make sure we don't match //
+                if ($op === '/' && $opLen === 1) {
+                    if ($i + 1 < $len && $expr[$i + 1] === '/') continue;
+                    if ($i > 0 && $expr[$i - 1] === '/') continue;
+                }
+                return $i;
+            }
+        }
+        return false;
+    }
+
+    private function findMatchingParen(string $expr, int $start): int|false
+    {
+        $depth = 0;
+        $len = strlen($expr);
+        $open = $expr[$start];
+        $close = match($open) { '(' => ')', '[' => ']', '{' => '}', default => ')' };
+        for ($i = $start; $i < $len; $i++) {
+            if ($expr[$i] === $open) $depth++;
+            if ($expr[$i] === $close) {
+                $depth--;
+                if ($depth === 0) return $i;
+            }
+        }
+        return false;
+    }
+
+    /* ─── filter splitting (respects strings, parens, brackets) ─── */
+
+    private function splitFilters(string $expr): array
+    {
+        $parts = [];
+        $current = '';
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len = strlen($expr);
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $expr[$i];
+
+            if ($inStr) {
+                $current .= $ch;
+                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+
+            if ($ch === '"' || $ch === "'") {
+                $inStr = true;
+                $strCh = $ch;
+                $current .= $ch;
+                continue;
+            }
+
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; $current .= $ch; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; $current .= $ch; continue; }
+
+            if ($ch === '|' && $depth === 0) {
+                $parts[] = $current;
+                $current = '';
+                continue;
+            }
+
+            $current .= $ch;
+        }
+
+        if ($current !== '') $parts[] = $current;
+        return $parts;
+    }
+
+    /* ─── filter application ─── */
+
+    private function applyFilter(string $filterExpr, mixed $value, array &$data): mixed
+    {
+        // Parse filter name and args
+        $filterExpr = trim($filterExpr);
+
+        // Check for filter(args)
+        $filterName = $filterExpr;
+        $args = [];
+
+        if (preg_match('/^(\w+)\s*\((.+)\)$/s', $filterExpr, $m)) {
+            $filterName = $m[1];
+            $args = $this->parseFilterArgs($m[2], $data);
+        }
+
+        // Sandbox check
+        if ($this->sandboxed && $this->sandboxFilters !== null && !in_array($filterName, $this->sandboxFilters)) {
+            return '';
+        }
+
+        if (isset($this->filters[$filterName])) {
+            $fn = $this->filters[$filterName];
+            return $fn($value, ...$args);
+        }
+
+        return $value;
+    }
+
+    private function parseFilterArgs(string $argsStr, array &$data): array
+    {
+        $args = [];
+        $parts = $this->splitArgs($argsStr);
+        foreach ($parts as $part) {
+            $part = trim($part);
+            $args[] = $this->evaluateExpression($part, $data);
+        }
+        return $args;
+    }
+
+    private function splitArgs(string $str): array
+    {
+        $parts = [];
+        $current = '';
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+
+        for ($i = 0; $i < strlen($str); $i++) {
+            $ch = $str[$i];
+            if ($inStr) {
+                $current .= $ch;
+                if ($ch === $strCh && ($i === 0 || $str[$i-1] !== '\\')) $inStr = false;
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; $current .= $ch; continue; }
+            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; $current .= $ch; continue; }
+            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; $current .= $ch; continue; }
+            if ($ch === ',' && $depth === 0) {
+                $parts[] = $current;
+                $current = '';
+                continue;
+            }
+            $current .= $ch;
+        }
+        if ($current !== '') $parts[] = $current;
+        return $parts;
+    }
+
+    private function parseArgs(string $argsStr, array &$data): array
+    {
+        return $this->parseFilterArgs($argsStr, $data);
+    }
+
+    /* ─── tests ─── */
+
+    private function isKnownTest(string $name): bool
+    {
+        // Remove argument parens
+        $baseName = $name;
+        if (str_contains($baseName, '(')) {
+            $baseName = trim(substr($baseName, 0, strpos($baseName, '(')));
+        }
+        // Also handle "divisible by(n)" as "divisible by"
+        if (str_starts_with($baseName, 'divisible')) {
+            $baseName = 'divisible by';
+        }
+
+        $builtins = ['defined', 'empty', 'even', 'odd', 'divisible by', 'null', 'none',
+            'iterable', 'string', 'number', 'boolean'];
+        if (in_array($baseName, $builtins)) return true;
+        return isset($this->tests[$baseName]);
+    }
+
+    private function evaluateTest(string $valueExpr, string $testExpr, array &$data): bool
+    {
+        // Handle "divisible by(n)" or "divisible by (n)"
+        if (preg_match('/^divisible\s*by\s*\(?\s*(.+?)\s*\)?$/', $testExpr, $m)) {
+            $value = $this->evaluateExpression($valueExpr, $data);
+            $divisor = $this->evaluateExpression(trim($m[1]), $data);
+            if ($divisor == 0) return false;
+            return ((int)$value % (int)$divisor) === 0;
+        }
+
+        $value = $this->evaluateExpression($valueExpr, $data);
+
+        switch ($testExpr) {
+            case 'defined':
+                $parts = $this->parseVarPath(trim($valueExpr));
+                if (empty($parts)) return false;
+                $current = $data;
+                foreach ($parts as $seg) {
+                    if (is_array($current) && array_key_exists($seg, $current)) {
+                        $current = $current[$seg];
+                    } else {
+                        return false;
+                    }
+                }
+                return true;
+            case 'empty':
+                return empty($value);
+            case 'even':
+                return ((int)$value) % 2 === 0;
+            case 'odd':
+                return ((int)$value) % 2 !== 0;
+            case 'null':
+            case 'none':
+                return $value === null || $value === '';
+            case 'iterable':
+                return is_array($value) || is_iterable($value);
+            case 'string':
+                return is_string($value) && !str_contains($value, self::RAW_MARKER);
+            case 'number':
+                return is_int($value) || is_float($value);
+            case 'boolean':
+                return is_bool($value);
+            default:
+                if (isset($this->tests[$testExpr])) {
+                    return (bool)($this->tests[$testExpr])($value);
+                }
+                return false;
+        }
+    }
+
+    private function checkIn(mixed $needle, mixed $haystack): bool
+    {
+        if (is_array($haystack)) {
+            return in_array($needle, $haystack);
+        }
+        if (is_string($haystack) && is_string($needle)) {
+            return str_contains($haystack, $needle);
+        }
+        return false;
+    }
+
+    private function isTruthy(mixed $value): bool
+    {
+        if ($value === null || $value === '' || $value === false || $value === 0 || $value === 0.0 || $value === '0') return false;
+        if (is_array($value) && empty($value)) return false;
+        return true;
+    }
+
+    /* ─── array / dict literals ─── */
+
+    private function parseArrayLiteral(string $content, array &$data): array
+    {
+        $content = trim($content);
+        if ($content === '') return [];
+        $items = $this->splitArgs($content);
+        $result = [];
+        foreach ($items as $item) {
+            $result[] = $this->evaluateExpression(trim($item), $data);
+        }
+        return $result;
+    }
+
+    private function parseDictLiteral(string $content, array &$data): array
+    {
+        $content = trim($content);
+        if ($content === '') return [];
+        $pairs = $this->splitArgs($content);
+        $result = [];
+        foreach ($pairs as $pair) {
+            $pair = trim($pair);
+            if (preg_match('/^(["\']?)(\w+)\1\s*:\s*(.+)$/s', $pair, $m)) {
+                $key = $m[2];
+                $val = $this->evaluateExpression(trim($m[3]), $data);
+                $result[$key] = $val;
+            }
+        }
+        return $result;
+    }
+
+    /* ─── macro calls ─── */
+
+    private function callMacro(string $name, string $argsStr, array &$data): string
+    {
+        $macro = $this->macros[$name];
+        $argValues = $argsStr !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
+        $macroData = $data;
+        foreach ($macro['args'] as $i => $argName) {
+            // Handle default values
+            $argName = trim($argName);
+            $default = '';
+            if (str_contains($argName, '=')) {
+                $parts = explode('=', $argName, 2);
+                $argName = trim($parts[0]);
+                $default = trim($parts[1], " \"'");
+            }
+            $macroData[$argName] = $argValues[$i] ?? $default;
+        }
+        return $this->execute($macro['body'], $macroData);
+    }
+
+    /* ───────────────────── built-in filters ───────────────────── */
+
+    private function registerBuiltinFilters(): void
+    {
+        // Text filters
+        $this->filters['upper'] = fn($v) => strtoupper((string)$v);
+        $this->filters['lower'] = fn($v) => strtolower((string)$v);
+        $this->filters['capitalize'] = fn($v) => ucfirst(strtolower((string)$v));
+        $this->filters['title'] = fn($v) => mb_convert_case((string)$v, MB_CASE_TITLE);
+        $this->filters['trim'] = fn($v) => trim((string)$v);
+        $this->filters['ltrim'] = fn($v) => ltrim((string)$v);
+        $this->filters['rtrim'] = fn($v) => rtrim((string)$v);
+        $this->filters['replace'] = fn($v, $from, $to) => str_replace($from, $to, (string)$v);
+        $this->filters['striptags'] = fn($v) => strip_tags((string)$v);
+
+        // Encoding
+        $this->filters['escape'] = fn($v) => self::RAW_MARKER . htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $this->filters['e'] = $this->filters['escape'];
+        $this->filters['raw'] = fn($v) => self::RAW_MARKER . (is_string($v) ? str_replace(self::RAW_MARKER, '', $v) : $this->valueToString($v));
+        $this->filters['safe'] = $this->filters['raw'];
+        $this->filters['json_encode'] = fn($v) => self::RAW_MARKER . json_encode($v, JSON_UNESCAPED_UNICODE);
+        $this->filters['json_decode'] = fn($v) => json_decode((string)$v, true);
+        $this->filters['base64_encode'] = fn($v) => base64_encode((string)$v);
+        $this->filters['base64_decode'] = fn($v) => base64_decode((string)$v);
+        $this->filters['url_encode'] = fn($v) => rawurlencode((string)$v);
+
+        // Hashing
+        $this->filters['md5'] = fn($v) => md5((string)$v);
+        $this->filters['sha256'] = fn($v) => hash('sha256', (string)$v);
+
+        // Numbers
+        $this->filters['abs'] = fn($v) => abs(is_numeric($v) ? $v : 0);
+        $this->filters['round'] = fn($v, $d = 0) => round((float)$v, (int)$d);
+        $this->filters['int'] = fn($v) => (int)$v;
+        $this->filters['float'] = fn($v) => (float)$v;
+        $this->filters['number_format'] = fn($v, $d = 0) => number_format((float)$v, (int)$d);
+
+        // Date
+        $this->filters['date'] = function($v, $format = 'Y-m-d') {
+            if ($v instanceof \DateTimeInterface) {
+                return $v->format($format);
+            }
+            $ts = is_numeric($v) ? (int)$v : strtotime((string)$v);
+            if ($ts === false) return (string)$v;
+            return date($format, $ts);
+        };
+
+        // Arrays
+        $this->filters['length'] = fn($v) => is_array($v) ? count($v) : (is_string($v) ? mb_strlen($v) : 0);
+        $this->filters['first'] = function($v) {
+            if (is_array($v)) return !empty($v) ? reset($v) : '';
+            if (is_string($v)) return $v !== '' ? $v[0] : '';
+            return '';
+        };
+        $this->filters['last'] = function($v) {
+            if (is_array($v)) return !empty($v) ? end($v) : '';
+            if (is_string($v)) return $v !== '' ? $v[strlen($v) - 1] : '';
+            return '';
+        };
+        $this->filters['reverse'] = function($v) {
+            if (is_array($v)) return array_reverse($v);
+            if (is_string($v)) return strrev($v);
+            return $v;
+        };
+        $this->filters['sort'] = function($v) {
+            if (!is_array($v)) return $v;
+            $sorted = array_values($v);
+            sort($sorted);
+            return $sorted;
+        };
+        $this->filters['shuffle'] = function($v) {
+            if (!is_array($v)) return $v;
+            $shuffled = $v;
+            shuffle($shuffled);
+            return $shuffled;
+        };
+        $this->filters['unique'] = fn($v) => is_array($v) ? array_values(array_unique($v)) : $v;
+        $this->filters['join'] = fn($v, $sep = '') => is_array($v) ? implode($sep, $v) : (string)$v;
+        $this->filters['split'] = fn($v, $sep = '') => $sep !== '' ? explode($sep, (string)$v) : str_split((string)$v);
+        $this->filters['slice'] = function($v, $start = 0, $end = null) {
+            if (is_array($v)) {
+                $length = $end === null ? null : $end - $start;
+                return array_slice($v, $start, $length);
+            }
+            if (is_string($v)) {
+                $length = $end === null ? null : $end - $start;
+                return substr($v, $start, $length ?? (strlen($v) - $start));
+            }
+            return $v;
+        };
+        $this->filters['batch'] = function($v, $size) {
+            if (!is_array($v)) return $v;
+            return array_chunk($v, max(1, (int)$size));
+        };
+        $this->filters['map'] = function($v, $key) {
+            if (!is_array($v)) return $v;
+            return array_map(fn($item) => is_array($item) && isset($item[$key]) ? $item[$key] : (is_object($item) && isset($item->$key) ? $item->$key : ''), $v);
+        };
+        $this->filters['filter'] = function($v) {
+            if (!is_array($v)) return $v;
+            return array_values(array_filter($v));
+        };
+        $this->filters['column'] = function($v, $key) {
+            if (!is_array($v)) return $v;
+            return array_column($v, $key);
+        };
+
+        // Dict
+        $this->filters['keys'] = fn($v) => is_array($v) ? array_keys($v) : [];
+        $this->filters['values'] = fn($v) => is_array($v) ? array_values($v) : [];
+        $this->filters['merge'] = fn($v, $other) => is_array($v) && is_array($other) ? array_merge($v, $other) : $v;
+
+        // Utility
+        $this->filters['default'] = fn($v, $fallback = '') => ($v === null || $v === '' || $v === false) ? $fallback : $v;
+        $this->filters['dump'] = function($v) {
+            ob_start();
+            var_dump($v);
+            return self::RAW_MARKER . '<pre>' . htmlspecialchars(ob_get_clean(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
+        };
+        $this->filters['string'] = fn($v) => (string)$v;
+        $this->filters['truncate'] = function($v, $length = 255) {
+            $s = (string)$v;
+            if (mb_strlen($s) <= $length) return $s;
+            return mb_substr($s, 0, $length) . '...';
+        };
+        $this->filters['wordwrap'] = fn($v, $width = 75) => wordwrap((string)$v, (int)$width, "\n", true);
+        $this->filters['slug'] = function($v) {
+            $s = strtolower((string)$v);
+            $s = preg_replace('/[^a-z0-9]+/', '-', $s);
+            return trim($s, '-');
+        };
+        $this->filters['nl2br'] = fn($v) => self::RAW_MARKER . nl2br(htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+        $this->filters['format'] = function($v, ...$args) {
+            return vsprintf((string)$v, $args);
+        };
+    }
+
+    /* ───────────────────── built-in tests ───────────────────── */
+
+    private function registerBuiltinTests(): void
+    {
+        // Tests are handled inline in evaluateTest()
+    }
+}
