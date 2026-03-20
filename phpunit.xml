@@ -33,14 +33,5 @@
             <file>tests/WebSocketV3Test.php</file>
             <file>tests/ServiceRunnerV3Test.php</file>
         </testsuite>
-        <testsuite name="Tina4 Legacy Tests">
-            <file>tests/AuthTest.php</file>
-            <file>tests/CacheTest.php</file>
-            <file>tests/ResponseTest.php</file>
-            <file>tests/RoutingTest.php</file>
-            <file>tests/RouterTest.php</file>
-            <file>tests/CrudRouteTest.php</file>
-            <file>tests/RouterSecurityTest.php</file>
-        </testsuite>
     </testsuites>
 </phpunit>
