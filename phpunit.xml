@@ -31,6 +31,7 @@
             <file>tests/QueueV3Test.php</file>
             <file>tests/GraphQLV3Test.php</file>
             <file>tests/WebSocketV3Test.php</file>
+            <file>tests/ServiceRunnerV3Test.php</file>
         </testsuite>
         <testsuite name="Tina4 Legacy Tests">
             <file>tests/AuthTest.php</file>
