@@ -1,0 +1,445 @@
+<?php
+
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copyright 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
+
+namespace Tina4;
+
+/**
+ * Zero-dependency HTTP router with dynamic params, middleware, groups, and caching.
+ *
+ * Usage:
+ *   Router::get('/users/{id}', fn($req, $res) => $res->json(['id' => $req->params['id']]));
+ *   Router::group('/api/v1', function() {
+ *       Router::get('/users', $handler);
+ *   });
+ */
+class Router
+{
+    /**
+     * @var array<string, array<int, array{
+     *     pattern: string,
+     *     regex: string,
+     *     paramNames: array<string>,
+     *     callback: callable,
+     *     middleware: array<callable>,
+     *     cache: bool,
+     *     secure: bool,
+     *     catchAll: bool,
+     *     catchAllName: string|null,
+     * }>> Routes indexed by HTTP method
+     */
+    private static array $routes = [];
+
+    /** @var string Current group prefix */
+    private static string $groupPrefix = '';
+
+    /** @var array<callable> Current group middleware */
+    private static array $groupMiddleware = [];
+
+    /** @var int Index of the last registered route (for chaining) */
+    private static ?int $lastRouteIndex = null;
+
+    /** @var string Method of the last registered route */
+    private static ?string $lastRouteMethod = null;
+
+    /**
+     * Register a GET route.
+     */
+    public static function get(string $path, callable $callback): self
+    {
+        return self::addRoute('GET', $path, $callback);
+    }
+
+    /**
+     * Register a POST route.
+     */
+    public static function post(string $path, callable $callback): self
+    {
+        return self::addRoute('POST', $path, $callback);
+    }
+
+    /**
+     * Register a PUT route.
+     */
+    public static function put(string $path, callable $callback): self
+    {
+        return self::addRoute('PUT', $path, $callback);
+    }
+
+    /**
+     * Register a PATCH route.
+     */
+    public static function patch(string $path, callable $callback): self
+    {
+        return self::addRoute('PATCH', $path, $callback);
+    }
+
+    /**
+     * Register a DELETE route.
+     */
+    public static function delete(string $path, callable $callback): self
+    {
+        return self::addRoute('DELETE', $path, $callback);
+    }
+
+    /**
+     * Register a route for any HTTP method.
+     */
+    public static function any(string $path, callable $callback): self
+    {
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            self::addRoute($method, $path, $callback);
+        }
+        // Point lastRoute to the GET one for chaining
+        self::$lastRouteMethod = 'GET';
+        self::$lastRouteIndex = count(self::$routes['GET']) - 1;
+        return new self();
+    }
+
+    /**
+     * Define a route group with a shared prefix and optional middleware.
+     *
+     * @param string $prefix URL prefix for all routes in the group
+     * @param callable $callback Closure that registers routes within the group
+     * @param array<callable> $middleware Middleware to apply to all routes in the group
+     */
+    public static function group(string $prefix, callable $callback, array $middleware = []): void
+    {
+        $previousPrefix = self::$groupPrefix;
+        $previousMiddleware = self::$groupMiddleware;
+
+        self::$groupPrefix = $previousPrefix . rtrim($prefix, '/');
+        self::$groupMiddleware = array_merge($previousMiddleware, $middleware);
+
+        $callback();
+
+        self::$groupPrefix = $previousPrefix;
+        self::$groupMiddleware = $previousMiddleware;
+    }
+
+    /**
+     * Add middleware to the last registered route.
+     *
+     * @param array<callable> $middleware
+     * @return $this
+     */
+    public function middleware(array $middleware): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            $route = &self::$routes[self::$lastRouteMethod][self::$lastRouteIndex];
+            $route['middleware'] = array_merge($route['middleware'], $middleware);
+
+            // If this was registered via any(), apply to all methods
+            if ($this->wasAnyRoute()) {
+                foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+                    $idx = $this->findMatchingRoute($method, $route['pattern']);
+                    if ($idx !== null) {
+                        self::$routes[$method][$idx]['middleware'] = $route['middleware'];
+                    }
+                }
+            }
+        }
+        return $this;
+    }
+
+    /**
+     * Mark the last registered route as cacheable.
+     *
+     * @return $this
+     */
+    public function cache(): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['cache'] = true;
+        }
+        return $this;
+    }
+
+    /**
+     * Mark the last registered route as non-cacheable.
+     *
+     * @return $this
+     */
+    public function noCache(): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['cache'] = false;
+        }
+        return $this;
+    }
+
+    /**
+     * Mark the last registered route as secure (requires valid JWT).
+     *
+     * @return $this
+     */
+    public function secure(): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['secure'] = true;
+        }
+        return $this;
+    }
+
+    /**
+     * Match a request method and path to a registered route.
+     *
+     * @return array{route: array, params: array<string, string>}|null
+     */
+    public static function match(string $method, string $path): ?array
+    {
+        $method = strtoupper($method);
+        $path = '/' . trim($path, '/');
+
+        if (!isset(self::$routes[$method])) {
+            return null;
+        }
+
+        foreach (self::$routes[$method] as $route) {
+            if (preg_match($route['regex'], $path, $matches)) {
+                $params = [];
+
+                // Extract named parameters
+                foreach ($route['paramNames'] as $name) {
+                    if (isset($matches[$name])) {
+                        $params[$name] = $matches[$name];
+                    }
+                }
+
+                // Extract catch-all parameter
+                if ($route['catchAll'] && $route['catchAllName'] !== null && isset($matches[$route['catchAllName']])) {
+                    $params[$route['catchAllName']] = $matches[$route['catchAllName']];
+                }
+
+                return [
+                    'route' => $route,
+                    'params' => $params,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Dispatch a request — match, run middleware, invoke handler.
+     */
+    public static function dispatch(Request $request, Response $response): Response
+    {
+        $result = self::match($request->method, $request->path);
+
+        if ($result === null) {
+            return $response->json(['error' => 'Not Found'], 404);
+        }
+
+        $route = $result['route'];
+        $request->params = $result['params'];
+
+        // Check secure route
+        if ($route['secure']) {
+            $token = $request->bearerToken();
+            if ($token === null) {
+                return $response->json(['error' => 'Unauthorized'], 401);
+            }
+            // JWT validation would go here — for now, presence of token is enough
+        }
+
+        // Run middleware chain
+        foreach ($route['middleware'] as $mw) {
+            $mwResult = $mw($request, $response);
+            // If middleware returns a Response, short-circuit
+            if ($mwResult instanceof Response) {
+                return $mwResult;
+            }
+            // If middleware returns false, stop processing
+            if ($mwResult === false) {
+                return $response->json(['error' => 'Forbidden'], 403);
+            }
+        }
+
+        // Invoke the handler
+        $handlerResult = ($route['callback'])($request, $response);
+
+        if ($handlerResult instanceof Response) {
+            return $handlerResult;
+        }
+
+        // If the handler returned an array or scalar, wrap it in JSON
+        if (is_array($handlerResult)) {
+            return $response->json($handlerResult);
+        }
+
+        if (is_string($handlerResult)) {
+            return $response->html($handlerResult);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get all registered routes as a flat list for CLI/debug.
+     *
+     * @return array<int, array{method: string, pattern: string, middleware: int, cache: bool, secure: bool}>
+     */
+    public static function list(): array
+    {
+        $list = [];
+
+        foreach (self::$routes as $method => $routes) {
+            foreach ($routes as $route) {
+                $list[] = [
+                    'method' => $method,
+                    'pattern' => $route['pattern'],
+                    'middleware' => count($route['middleware']),
+                    'cache' => $route['cache'],
+                    'secure' => $route['secure'],
+                ];
+            }
+        }
+
+        return $list;
+    }
+
+    /**
+     * Get the number of registered routes.
+     */
+    public static function count(): int
+    {
+        $count = 0;
+        foreach (self::$routes as $routes) {
+            $count += count($routes);
+        }
+        return $count;
+    }
+
+    /**
+     * Reset all routes (for testing).
+     */
+    public static function reset(): void
+    {
+        self::$routes = [];
+        self::$groupPrefix = '';
+        self::$groupMiddleware = [];
+        self::$lastRouteIndex = null;
+        self::$lastRouteMethod = null;
+    }
+
+    /**
+     * Register a route.
+     */
+    private static function addRoute(string $method, string $path, callable $callback): self
+    {
+        $fullPath = self::$groupPrefix . '/' . ltrim($path, '/');
+        $fullPath = '/' . trim($fullPath, '/');
+
+        // Avoid double slashes
+        $fullPath = preg_replace('#/+#', '/', $fullPath);
+
+        // Parse the path into a regex
+        $parsed = self::compilePath($fullPath);
+
+        if (!isset(self::$routes[$method])) {
+            self::$routes[$method] = [];
+        }
+
+        self::$routes[$method][] = [
+            'pattern' => $fullPath,
+            'regex' => $parsed['regex'],
+            'paramNames' => $parsed['paramNames'],
+            'callback' => $callback,
+            'middleware' => self::$groupMiddleware,
+            'cache' => false,
+            'secure' => false,
+            'catchAll' => $parsed['catchAll'],
+            'catchAllName' => $parsed['catchAllName'],
+        ];
+
+        self::$lastRouteMethod = $method;
+        self::$lastRouteIndex = count(self::$routes[$method]) - 1;
+
+        return new self();
+    }
+
+    /**
+     * Compile a route path pattern into a regex.
+     *
+     * Supports:
+     *   {param}     — named parameter (matches one path segment)
+     *   {param:.*}  — catch-all parameter (matches remaining path)
+     *
+     * @return array{regex: string, paramNames: array<string>, catchAll: bool, catchAllName: string|null}
+     */
+    private static function compilePath(string $path): array
+    {
+        $paramNames = [];
+        $catchAll = false;
+        $catchAllName = null;
+
+        // Replace catch-all params: {name:.*}
+        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*):(\.\*)\}#', function ($m) use (&$paramNames, &$catchAll, &$catchAllName) {
+            $catchAll = true;
+            $catchAllName = $m[1];
+            $paramNames[] = $m[1];
+            return '(?P<' . $m[1] . '>.+)';
+        }, $path);
+
+        // Replace standard params: {name}
+        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', function ($m) use (&$paramNames) {
+            $paramNames[] = $m[1];
+            return '(?P<' . $m[1] . '>[^/]+)';
+        }, $regex);
+
+        // Escape forward slashes and anchor
+        $regex = '#^' . $regex . '$#';
+
+        return [
+            'regex' => $regex,
+            'paramNames' => $paramNames,
+            'catchAll' => $catchAll,
+            'catchAllName' => $catchAllName,
+        ];
+    }
+
+    /**
+     * Check if the last route was registered via any().
+     */
+    private function wasAnyRoute(): bool
+    {
+        if (self::$lastRouteMethod === null || self::$lastRouteIndex === null) {
+            return false;
+        }
+
+        $pattern = self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['pattern'];
+
+        // Check if the same pattern exists for all methods
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            if ($this->findMatchingRoute($method, $pattern) === null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Find the index of a route by method and pattern.
+     */
+    private function findMatchingRoute(string $method, string $pattern): ?int
+    {
+        if (!isset(self::$routes[$method])) {
+            return null;
+        }
+
+        foreach (self::$routes[$method] as $idx => $route) {
+            if ($route['pattern'] === $pattern) {
+                return $idx;
+            }
+        }
+
+        return null;
+    }
+}

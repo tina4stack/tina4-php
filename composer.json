@@ -5,7 +5,8 @@
     "autoload": {
         "psr-4": {
             "Tina4\\": "src/Tina4/",
-            "Tina4\\Middleware\\": "src/Tina4/Middleware/"
+            "Tina4\\Middleware\\": "src/Tina4/Middleware/",
+            "Tina4\\Database\\": "src/Tina4/Database/"
         }
     },
     "require": {
