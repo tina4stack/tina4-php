@@ -503,7 +503,7 @@ GIT_SECRET=0123456789                   # Webhook secret
 
 ## Zero-Dependency Philosophy
 
-Tina4 PHP is built from the ground up with no third-party runtime dependencies in core. The framework requires only PHP 8.2+ with `openssl`, `json`, and `pcntl` extensions. Database drivers are optional and installed separately. This keeps the full deployment under 8MB and minimizes your project's carbon footprint.
+Tina4 PHP is built from the ground up with no third-party runtime dependencies in core. The framework requires only PHP 8.2+ with `openssl` and `json` extensions. The `pcntl` extension is optional (used for graceful signal handling on Linux/macOS). Database drivers are optional and installed separately. This keeps the full deployment under 8MB and minimizes your project's carbon footprint.
 
 ## Docker Support
 

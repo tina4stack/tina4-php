@@ -13,22 +13,21 @@
     "require": {
         "php": ">=8.2",
         "ext-openssl": "*",
-        "ext-json": "*",
-        "ext-pcntl": "*"
+        "ext-json": "*"
     },
     "scripts": {
-        "tina4": "@php bin/tina4",
-        "tina4-debug": "@php -dxdebug.mode=debug -dxdebug.client_host=host.docker.internal -dxdebug.client_port=9004 -dxdebug.start_with_request=yes bin/tina4",
+        "tina4php": "@php bin/tina4php",
+        "tina4php-debug": "@php -dxdebug.mode=debug -dxdebug.client_host=host.docker.internal -dxdebug.client_port=9004 -dxdebug.start_with_request=yes bin/tina4php",
         "tina4service": "tina4service",
-        "test": "@tina4 tests:run",
+        "test": "@tina4php tests:run",
         "phplint": "vendor/bin/phplint",
         "watcher": "vendor/bin/php-watcher",
-        "test:verbose": "@tina4 tests:verbose",
-        "initialize": "@tina4 initialize:run",
-        "initialise": "@tina4 initialize:run",
-        "debug": "@tina4-debug webservice:run",
-        "begin": "@tina4 initialize:run",
-        "start": "@tina4 webservice:run",
+        "test:verbose": "@tina4php tests:verbose",
+        "initialize": "@tina4php initialize:run",
+        "initialise": "@tina4php initialize:run",
+        "debug": "@tina4php-debug webservice:run",
+        "begin": "@tina4php initialize:run",
+        "start": "@tina4php webservice:run",
         "start-service": "@tina4service",
         "run-tests": "./vendor/bin/phpunit tests --verbose --color --log-junit=tests/junit.xml -v",
         "phpmetrics": "./vendor/bin/phpmetrics --report-html=phpmetrics --junit=tests/junit.xml ./Tina4",
@@ -40,6 +39,9 @@
     "require-dev": {
         "phpunit/phpunit": "^10 || ^11"
     },
+    "bin": [
+        "bin/tina4php"
+    ],
     "suggest": {
         "ext-sqlite3": "Required for SQLite3 database support",
         "ext-pdo": "Required for MySQL/PostgreSQL/MSSQL database support",
