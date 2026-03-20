@@ -12,6 +12,14 @@
             <file>tests/RateLimiterTest.php</file>
             <file>tests/HealthTest.php</file>
             <file>tests/DatabaseUrlTest.php</file>
+            <file>tests/RequestV3Test.php</file>
+            <file>tests/ResponseV3Test.php</file>
+            <file>tests/RouterV3Test.php</file>
+            <file>tests/RouteDiscoveryV3Test.php</file>
+            <file>tests/SQLite3AdapterTest.php</file>
+            <file>tests/ORMV3Test.php</file>
+            <file>tests/AutoCrudV3Test.php</file>
+            <file>tests/MigrationV3Test.php</file>
         </testsuite>
         <testsuite name="Tina4 Legacy Tests">
             <file>tests/AuthTest.php</file>
