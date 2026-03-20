@@ -23,6 +23,8 @@
             <file>tests/ORMV3Test.php</file>
             <file>tests/AutoCrudV3Test.php</file>
             <file>tests/MigrationV3Test.php</file>
+            <file>tests/AuthV3Test.php</file>
+            <file>tests/SessionV3Test.php</file>
         </testsuite>
         <testsuite name="Tina4 Legacy Tests">
             <file>tests/AuthTest.php</file>

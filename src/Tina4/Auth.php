@@ -1,0 +1,248 @@
+<?php
+
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copyright 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
+
+namespace Tina4;
+
+/**
+ * JWT authentication, password hashing, and auth middleware — zero dependencies.
+ * Uses only PHP built-in functions: hash_hmac, openssl_*, hash_pbkdf2, random_bytes.
+ *
+ * Mirrors the Python implementation in tina4_python.auth.
+ */
+class Auth
+{
+    // ── JWT ────────────────────────────────────────────────────────
+
+    /**
+     * Generate a signed JWT token.
+     *
+     * @param array  $payload    Claims to include in the token
+     * @param string $secret     Signing secret (HS256) or PEM private key (RS256)
+     * @param int    $expiresIn  Token lifetime in seconds (0 = no expiry)
+     * @param string $algorithm  'HS256' or 'RS256'
+     * @return string Encoded JWT (header.payload.signature)
+     */
+    public static function generateToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    {
+        $header = ['alg' => $algorithm, 'typ' => 'JWT'];
+
+        $now = time();
+        $payload['iat'] = $now;
+        if ($expiresIn > 0) {
+            $payload['exp'] = $now + $expiresIn;
+        }
+
+        $segments = [];
+        $segments[] = self::base64urlEncode(json_encode($header, JSON_UNESCAPED_SLASHES));
+        $segments[] = self::base64urlEncode(json_encode($payload, JSON_UNESCAPED_SLASHES));
+
+        $signingInput = implode('.', $segments);
+        $signature = self::sign($signingInput, $secret, $algorithm);
+
+        $segments[] = $signature;
+
+        return implode('.', $segments);
+    }
+
+    /**
+     * Verify a JWT token and return the decoded payload.
+     *
+     * @param string $token     The JWT string
+     * @param string $secret    Signing secret (HS256) or PEM public key (RS256)
+     * @param string $algorithm 'HS256' or 'RS256'
+     * @return array|null Decoded payload on success, null on failure
+     */
+    public static function verifyToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        [$headerB64, $payloadB64, $signatureB64] = $parts;
+
+        $signingInput = "$headerB64.$payloadB64";
+
+        // Verify signature
+        if ($algorithm === 'HS256') {
+            $expected = self::sign($signingInput, $secret, $algorithm);
+            if (!hash_equals($expected, $signatureB64)) {
+                return null;
+            }
+        } elseif ($algorithm === 'RS256') {
+            $sigBytes = self::base64urlDecode($signatureB64);
+            $publicKey = openssl_pkey_get_public($secret);
+            if ($publicKey === false) {
+                return null;
+            }
+            $result = openssl_verify($signingInput, $sigBytes, $publicKey, OPENSSL_ALGO_SHA256);
+            if ($result !== 1) {
+                return null;
+            }
+        } else {
+            return null;
+        }
+
+        // Decode payload
+        $payloadJson = self::base64urlDecode($payloadB64);
+        if ($payloadJson === false) {
+            return null;
+        }
+
+        $payload = json_decode($payloadJson, true);
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        // Check expiration
+        if (isset($payload['exp']) && time() > $payload['exp']) {
+            return null;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Decode a JWT payload WITHOUT verifying the signature or expiration.
+     *
+     * @param string $token The JWT string
+     * @return array|null Decoded payload, or null if malformed
+     */
+    public static function decodeToken(string $token): ?array
+    {
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        $payloadJson = self::base64urlDecode($parts[1]);
+        if ($payloadJson === false) {
+            return null;
+        }
+
+        $payload = json_decode($payloadJson, true);
+        return is_array($payload) ? $payload : null;
+    }
+
+    // ── Password Hashing ──────────────────────────────────────────
+
+    /**
+     * Hash a password using PBKDF2-HMAC-SHA256.
+     *
+     * @param string      $password   The plaintext password
+     * @param string|null $salt       Optional salt (hex-encoded); random if null
+     * @param int         $iterations PBKDF2 iteration count
+     * @return string Format: "pbkdf2_sha256:iterations:salt:hash"
+     */
+    public static function hashPassword(string $password, ?string $salt = null, int $iterations = 100000): string
+    {
+        if ($salt === null) {
+            $salt = bin2hex(random_bytes(16));
+        }
+
+        $hash = hash_pbkdf2('sha256', $password, $salt, $iterations, 64, false);
+
+        return "pbkdf2_sha256:$iterations:$salt:$hash";
+    }
+
+    /**
+     * Verify a password against a PBKDF2 hash string.
+     *
+     * @param string $password The plaintext password to verify
+     * @param string $hash     The stored hash string (pbkdf2_sha256:iterations:salt:hash)
+     * @return bool True if the password matches
+     */
+    public static function verifyPassword(string $password, string $hash): bool
+    {
+        $parts = explode(':', $hash);
+        if (count($parts) !== 4 || $parts[0] !== 'pbkdf2_sha256') {
+            return false;
+        }
+
+        [, $iterations, $salt, $expectedHash] = $parts;
+        $iterations = (int)$iterations;
+
+        $computed = hash_pbkdf2('sha256', $password, $salt, $iterations, 64, false);
+
+        return hash_equals($expectedHash, $computed);
+    }
+
+    // ── Middleware Helper ──────────────────────────────────────────
+
+    /**
+     * Create an auth middleware callable that verifies Bearer JWT tokens.
+     *
+     * The middleware extracts the Bearer token from the Authorization header,
+     * verifies it, and attaches the decoded payload to the request attributes.
+     * Returns a 401 response if the token is missing, invalid, or expired.
+     *
+     * @param string $secret    Signing secret (HS256) or PEM public key (RS256)
+     * @param string $algorithm 'HS256' or 'RS256'
+     * @return callable Middleware function (Request $request) => ?array
+     */
+    public static function middleware(string $secret, string $algorithm = 'HS256'): callable
+    {
+        return function (object $request) use ($secret, $algorithm): ?array {
+            $authHeader = $request->header('Authorization') ?? '';
+
+            if (!str_starts_with($authHeader, 'Bearer ')) {
+                return null; // No token — signal 401
+            }
+
+            $token = substr($authHeader, 7);
+            $payload = self::verifyToken($token, $secret, $algorithm);
+
+            return $payload; // null if invalid/expired, array if valid
+        };
+    }
+
+    // ── Internal Helpers ──────────────────────────────────────────
+
+    /**
+     * Base64url-encode data (RFC 7515).
+     */
+    private static function base64urlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * Base64url-decode data (RFC 7515).
+     */
+    private static function base64urlDecode(string $data): string|false
+    {
+        $remainder = strlen($data) % 4;
+        if ($remainder !== 0) {
+            $data .= str_repeat('=', 4 - $remainder);
+        }
+
+        $decoded = base64_decode(strtr($data, '-_', '+/'), true);
+        return $decoded;
+    }
+
+    /**
+     * Sign a message using the specified algorithm.
+     *
+     * @param string $message   The message to sign
+     * @param string $secret    Secret key (HS256) or PEM private key (RS256)
+     * @param string $algorithm 'HS256' or 'RS256'
+     * @return string Base64url-encoded signature
+     */
+    private static function sign(string $message, string $secret, string $algorithm): string
+    {
+        if ($algorithm === 'RS256') {
+            $privateKey = openssl_pkey_get_private($secret);
+            openssl_sign($message, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+            return self::base64urlEncode($signature);
+        }
+
+        // Default: HS256
+        $signature = hash_hmac('sha256', $message, $secret, true);
+        return self::base64urlEncode($signature);
+    }
+}
