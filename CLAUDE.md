@@ -58,22 +58,6 @@ Debug levels controlled by `TINA4_LOG_*` constants passed to `Debug::message()`.
 ## Project Structure
 
 ```
-Tina4/                   # Framework core (bundled)
-  Api/                   # API handling + Swagger
-  Config/                # Configuration
-  Database/              # Database abstraction + Migration
-  Deploy/                # Deployment tools (GitDeploy)
-  Messaging/             # Email/notifications (Messenger)
-  Routing/               # Router, Route, Swoole
-  Security/              # Auth (JWT)
-  Service/               # Background service layer
-  Slack/                 # Slack integration
-  Twig/                  # Twig template extensions
-  Tina4Php.php           # Main framework class
-  Functions.php          # Global helper functions
-  Initialize.php         # Bootstrap
-Helpers/
-  Ruth.php               # Helper utility
 src/                     # User application code
   app/                   # Application logic
   orm/                   # ORM model definitions (one per model)
