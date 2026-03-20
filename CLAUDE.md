@@ -7,10 +7,10 @@ Full Tina4 PHP framework and application scaffold. See https://tina4.com for ful
 - PHP: >=8.0
 - Install: `composer install`
 - Run tests: `composer run-tests` or `./vendor/bin/phpunit tests --verbose --color`
-- Start server: `composer start` (runs `tina4 webservice:run`)
+- Start server: `composer start` (runs `tina4php webservice:run`)
 - Debug server: `composer debug` (Xdebug enabled)
 - Initialize project: `composer initialize`
-- CLI: `composer tina4` or `bin/tina4`
+- CLI: `composer tina4php` or `bin/tina4php`
 
 ## Code Principles
 
@@ -70,7 +70,7 @@ src/                     # User application code
 migrations/              # Database migration SQL files
 tests/                   # PHPUnit tests (Router, Response, Routing)
 bin/
-  tina4                  # CLI tool
+  tina4php               # CLI tool
 dockers/                 # Docker configurations
 ```
 

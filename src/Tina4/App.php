@@ -227,15 +227,19 @@ class App
             return;
         }
 
-        pcntl_signal(SIGTERM, function () {
-            Log::info('Received SIGTERM');
-            $this->shutdown();
-        });
+        if (defined('SIGTERM')) {
+            pcntl_signal(SIGTERM, function () {
+                Log::info('Received SIGTERM');
+                $this->shutdown();
+            });
+        }
 
-        pcntl_signal(SIGINT, function () {
-            Log::info('Received SIGINT');
-            $this->shutdown();
-        });
+        if (defined('SIGINT')) {
+            pcntl_signal(SIGINT, function () {
+                Log::info('Received SIGINT');
+                $this->shutdown();
+            });
+        }
     }
 
     /**
