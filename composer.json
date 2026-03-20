@@ -3,57 +3,16 @@
     "description": "Tina4 PHP",
     "license": "MIT",
     "autoload": {
-        "files": [
-            "Tina4/Functions.php",
-            "Tina4/Initialize.php"
-        ],
-        "classmap": [
-            "Helpers/",
-            "Tina4/",
-            "src/"
-        ],
         "psr-4": {
-            "\\": [
-                "src",
-                "src/app",
-                "src/orm",
-                "src/routes",
-                "Helpers/"
-            ],
-            "Tina4\\": [
-                "Tina4/",
-                "Tina4/Api/",
-                "Tina4/Config/",
-                "Tina4/Database/",
-                "Tina4/Deploy",
-                "Tina4/Messaging/",
-                "Tina4/Routing/",
-                "Tina4/Security/",
-                "Tina4/Service/",
-                "Tina4/Slack",
-                "Tina4/Twig"
-            ]
+            "Tina4\\": "src/Tina4/",
+            "Tina4\\Middleware\\": "src/Tina4/Middleware/"
         }
     },
     "require": {
-        "php": ">=8.1",
-        "psr/log": "^1.1.4",
-        "nowakowskir/php-jwt": "^2.0.1",
-        "twig/twig": "^3.3.8",
-        "phpfastcache/phpfastcache": "^8.0.5",
-        "scssphp/scssphp": "^2.0.1",
-        "tina4stack/tina4php-debug": "^2.0",
-        "tina4stack/tina4php-shape": "^2.0",
-        "tina4stack/tina4php-env": "^2.0",
-        "tina4stack/tina4php-database": "^2.0",
-        "tina4stack/tina4php-orm": "^2.0",
+        "php": ">=8.2",
         "ext-openssl": "*",
-        "ext-libxml": "*",
         "ext-json": "*",
-        "ext-curl": "*",
-        "ext-fileinfo": "*",
-        "ext-zip": "*",
-        "tina4stack/tina4php-core": "^2.0"
+        "ext-pcntl": "*"
     },
     "scripts": {
         "tina4": "@php bin/tina4",
@@ -77,15 +36,13 @@
         "process-timeout": 0
     },
     "require-dev": {
-        "roave/security-advisories": "dev-latest",
-        "phpunit/phpunit": "^9",
-        "overtrue/phplint": "^2.0",
-        "tina4stack/tina4php-sqlite3": "^2.0",
-        "phpmetrics/phpmetrics": "^2.8",
-        "tina4stack/tina4php-reports": "dev-main"
+        "phpunit/phpunit": "^10 || ^11"
     },
     "suggest": {
-        "coyl/git": "Required for programmatic Git repository operations (^0.1.7)",
-        "tina4stack/tina4php-reports": "Required for PDF/report generation with mPDF (dev-main)"
+        "ext-sqlite3": "Required for SQLite3 database support",
+        "ext-pdo": "Required for MySQL/PostgreSQL/MSSQL database support",
+        "ext-curl": "Required for external API calls",
+        "ext-fileinfo": "Required for file type detection",
+        "ext-zip": "Required for ZIP file handling"
     }
 }

@@ -140,6 +140,23 @@ if (!defined("DATA_NO_SQL")) {
     define("DATA_NO_SQL", "ERR001");
 }
 
+// Log level constants (previously in tina4php-debug package)
+if (!defined("TINA4_LOG_DEBUG")) {
+    define("TINA4_LOG_DEBUG", "debug");
+}
+if (!defined("TINA4_LOG_INFO")) {
+    define("TINA4_LOG_INFO", "info");
+}
+if (!defined("TINA4_LOG_WARNING")) {
+    define("TINA4_LOG_WARNING", "warning");
+}
+if (!defined("TINA4_LOG_ERROR")) {
+    define("TINA4_LOG_ERROR", "error");
+}
+if (!defined("TINA4_LOG_CRITICAL")) {
+    define("TINA4_LOG_CRITICAL", "critical");
+}
+
 //Initialize the ENV
 if (!defined("TINA4_DEBUG_LEVEL")) {
     define("TINA4_DEBUG_LEVEL", [TINA4_LOG_INFO]);

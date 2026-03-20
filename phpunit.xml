@@ -1,11 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit bootstrap="vendor/autoload.php"
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
          colors="true"
-         verbose="true"
          stopOnFailure="false">
     <testsuites>
-        <testsuite name="Tina4 Tests">
-            <directory>tests</directory>
+        <testsuite name="Tina4 v3 Tests">
+            <file>tests/DotEnvTest.php</file>
+            <file>tests/LogTest.php</file>
+            <file>tests/CorsTest.php</file>
+            <file>tests/RateLimiterTest.php</file>
+            <file>tests/HealthTest.php</file>
+            <file>tests/DatabaseUrlTest.php</file>
+        </testsuite>
+        <testsuite name="Tina4 Legacy Tests">
+            <file>tests/AuthTest.php</file>
+            <file>tests/CacheTest.php</file>
+            <file>tests/ResponseTest.php</file>
+            <file>tests/RoutingTest.php</file>
+            <file>tests/RouterTest.php</file>
+            <file>tests/CrudRouteTest.php</file>
+            <file>tests/RouterSecurityTest.php</file>
         </testsuite>
     </testsuites>
 </phpunit>

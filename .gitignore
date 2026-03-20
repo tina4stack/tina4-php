@@ -86,3 +86,4 @@ test.db
 /.phpunit.result.cache
 .phpunit.cache
 .claude/
+.github_token
