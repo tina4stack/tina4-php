@@ -1,0 +1,55 @@
+// Tina4 CSS Framework - Typography
+// ------------------------------------
+
+h1 { font-size: $font-size-4xl; }
+h2 { font-size: $font-size-3xl; }
+h3 { font-size: $font-size-2xl; }
+h4 { font-size: $font-size-xl; }
+h5 { font-size: $font-size-lg; }
+h6 { font-size: $font-size-base; }
+
+small, .small {
+  font-size: 0.875em;
+}
+
+mark, .mark {
+  padding: 0.2em;
+  background-color: rgba($warning, 0.3);
+}
+
+blockquote {
+  margin: 0 0 1rem;
+  padding: 0.5rem 1rem;
+  border-left: 0.25rem solid rgba($black, 0.1);
+  font-size: $font-size-lg;
+}
+
+code {
+  font-size: 0.875em;
+  color: $danger;
+  word-wrap: break-word;
+}
+
+pre {
+  display: block;
+  padding: 1rem;
+  font-size: 0.875em;
+  color: $dark;
+  background-color: $light;
+  border-radius: $border-radius;
+}
+
+.list-unstyled {
+  padding-left: 0;
+  list-style: none;
+}
+
+.list-inline {
+  padding-left: 0;
+  list-style: none;
+}
+
+.list-inline-item {
+  display: inline-block;
+  &:not(:last-child) { margin-right: 0.5rem; }
+}

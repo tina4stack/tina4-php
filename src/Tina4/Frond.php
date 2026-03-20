@@ -29,6 +29,7 @@ class Frond
         $this->templateDir = rtrim($templateDir, '/');
         $this->registerBuiltinFilters();
         $this->registerBuiltinTests();
+        $this->registerBuiltinGlobals();
     }
 
     /* ───────────────────── public API ───────────────────── */
@@ -943,12 +944,17 @@ class Frond
             return range((int)$m[1], (int)$m[2]);
         }
 
-        // Macro call: name(args)
+        // Macro or function call: name(args)
         if (preg_match('/^(\w+)\s*\((.*)?\)$/s', $expr, $m)) {
             $funcName = $m[1];
             $argsStr = $m[2] ?? '';
             if (isset($this->macros[$funcName])) {
                 return $this->callMacro($funcName, $argsStr, $data);
+            }
+            // Check globals for callable functions (e.g. formToken, form_token)
+            if (isset($data[$funcName]) && is_callable($data[$funcName])) {
+                $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
+                return ($data[$funcName])(...$args);
             }
             // Could be range() or other built-in
             if ($funcName === 'range') {
@@ -1682,5 +1688,36 @@ class Frond
     private function registerBuiltinTests(): void
     {
         // Tests are handled inline in evaluateTest()
+    }
+
+    /* ───────────────────── built-in globals ───────────────────── */
+
+    private function registerBuiltinGlobals(): void
+    {
+        $formTokenFn = static function (string $descriptor = ''): string {
+            $payload = ['type' => 'form'];
+            if ($descriptor !== '') {
+                if (str_contains($descriptor, '|')) {
+                    $parts = explode('|', $descriptor, 2);
+                    $payload['context'] = $parts[0];
+                    $payload['ref'] = $parts[1];
+                } else {
+                    $payload['context'] = $descriptor;
+                }
+            }
+
+            $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
+            $ttlMinutes = (int)(DotEnv::getEnv('TINA4_TOKEN_LIMIT') ?? $_ENV['TINA4_TOKEN_LIMIT'] ?? '30');
+            $expiresIn = $ttlMinutes * 60;
+            $token = Auth::createToken($payload, $secret, $expiresIn);
+            return self::RAW_MARKER . '<input type="hidden" name="formToken" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+        };
+
+        $this->globals['formToken'] = $formTokenFn;
+        $this->globals['form_token'] = $formTokenFn;
+
+        // Also register as filters so {{ "" | formToken }} and {{ "" | form_token }} work
+        $this->filters['formToken'] = fn($v) => $formTokenFn((string)($v ?: ''));
+        $this->filters['form_token'] = fn($v) => $formTokenFn((string)($v ?: ''));
     }
 }

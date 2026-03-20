@@ -297,6 +297,27 @@ abstract class ORM
     }
 
     /**
+     * Convert the model to a dictionary (associative array).
+     * Maps to Python: to_dict()
+     *
+     * @return array<string, mixed>
+     */
+    public function toDict(): array
+    {
+        return $this->_data;
+    }
+
+    /**
+     * Convert the model to an object (alias for toDict).
+     *
+     * @return array<string, mixed>
+     */
+    public function toObject(): array
+    {
+        return $this->toDict();
+    }
+
+    /**
      * Convert the model to an associative array.
      *
      * @return array<string, mixed>
@@ -304,6 +325,16 @@ abstract class ORM
     public function toArray(): array
     {
         return $this->_data;
+    }
+
+    /**
+     * Convert the model to an indexed list of values (keys stripped).
+     *
+     * @return array<int, mixed>
+     */
+    public function toList(): array
+    {
+        return array_values($this->_data);
     }
 
     /**
@@ -336,6 +367,270 @@ abstract class ORM
     public function getDbColumn(string $property): string
     {
         return $this->fieldMapping[$property] ?? $property;
+    }
+
+    /**
+     * Run a raw SQL SELECT and return model instances.
+     * Maps to Python: select(sql, params, limit, skip)
+     *
+     * @param string $sql SQL SELECT statement
+     * @param array $params Bound parameters
+     * @param int $limit Max results
+     * @param int $offset Starting offset
+     * @return array<int, static>
+     */
+    public function select(string $sql, array $params = [], int $limit = 20, int $offset = 0): array
+    {
+        $this->ensureDb();
+        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+
+        $models = [];
+        foreach ($result['data'] as $row) {
+            $model = new static($this->_db);
+            $model->fill($row);
+            $model->_exists = true;
+            $models[] = $model;
+        }
+
+        return $models;
+    }
+
+    /**
+     * Query records with a WHERE clause.
+     * Maps to Python: where(filter_sql, params, limit, skip)
+     *
+     * @param string $filterSql WHERE clause (without "WHERE")
+     * @param array $params Bound parameters
+     * @param int $limit Max results
+     * @param int $offset Starting offset
+     * @return array<int, static>
+     */
+    public function where(string $filterSql, array $params = [], int $limit = 20, int $offset = 0): array
+    {
+        $this->ensureDb();
+
+        $sql = "SELECT * FROM {$this->tableName} WHERE {$filterSql}";
+        if ($this->softDelete) {
+            $sql = "SELECT * FROM {$this->tableName} WHERE ({$filterSql}) AND is_deleted = 0";
+        }
+
+        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+
+        $models = [];
+        foreach ($result['data'] as $row) {
+            $model = new static($this->_db);
+            $model->fill($row);
+            $model->_exists = true;
+            $models[] = $model;
+        }
+
+        return $models;
+    }
+
+    /**
+     * Find a record by primary key or throw an exception.
+     * Maps to Python: find_or_fail(pk_value)
+     *
+     * @throws \RuntimeException If the record is not found
+     */
+    public function findOrFail(int|string $id): static
+    {
+        $model = new static($this->_db);
+        $model->load($id);
+
+        if (!$model->exists()) {
+            throw new \RuntimeException("Record not found in {$this->tableName} with {$this->primaryKey} = {$id}");
+        }
+
+        return $model;
+    }
+
+    /**
+     * Force-delete a record (bypass soft delete).
+     * Maps to Python: force_delete()
+     */
+    public function forceDelete(): bool
+    {
+        $this->ensureDb();
+
+        $pkValue = $this->getPrimaryKeyValue();
+        if ($pkValue === null) {
+            return false;
+        }
+
+        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $sql = "DELETE FROM {$this->tableName} WHERE {$pkColumn} = :id";
+        $result = $this->_db->exec($sql, [':id' => $pkValue]);
+
+        if ($result) {
+            $this->_exists = false;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Restore a soft-deleted record.
+     * Maps to Python: restore()
+     */
+    public function restore(): bool
+    {
+        if (!$this->softDelete) {
+            return false;
+        }
+
+        $this->ensureDb();
+
+        $pkValue = $this->getPrimaryKeyValue();
+        if ($pkValue === null) {
+            return false;
+        }
+
+        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $sql = "UPDATE {$this->tableName} SET is_deleted = 0 WHERE {$pkColumn} = :id";
+        $result = $this->_db->exec($sql, [':id' => $pkValue]);
+
+        if ($result) {
+            $this->_exists = true;
+            $this->_data['is_deleted'] = 0;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Query records including soft-deleted ones.
+     * Maps to Python: with_trashed(filter_sql, params, limit, skip)
+     *
+     * @param string $filterSql WHERE clause (default "1=1" for all)
+     * @param array $params Bound parameters
+     * @param int $limit Max results
+     * @param int $offset Starting offset
+     * @return array<int, static>
+     */
+    public function withTrashed(string $filterSql = '1=1', array $params = [], int $limit = 20, int $offset = 0): array
+    {
+        $this->ensureDb();
+
+        $sql = "SELECT * FROM {$this->tableName} WHERE {$filterSql}";
+        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+
+        $models = [];
+        foreach ($result['data'] as $row) {
+            $model = new static($this->_db);
+            $model->fill($row);
+            $model->_exists = true;
+            $models[] = $model;
+        }
+
+        return $models;
+    }
+
+    /**
+     * Validate the model data. Override in subclasses to add rules.
+     * Maps to Python: validate()
+     *
+     * @return array<string> List of validation error messages (empty = valid)
+     */
+    public function validate(): array
+    {
+        return [];
+    }
+
+    /**
+     * Apply a named scope query.
+     * Maps to Python: scope(name, filter_sql, params)
+     *
+     * @param string $name Scope name (for identification)
+     * @param string $filterSql WHERE clause
+     * @param array $params Bound parameters
+     * @return array<int, static>
+     */
+    public function scope(string $name, string $filterSql, array $params = []): array
+    {
+        return $this->where($filterSql, $params);
+    }
+
+    /**
+     * Get a has-one related model.
+     * Maps to Python: has_one(related_class, foreign_key)
+     *
+     * @param string $relatedClass Fully qualified class name of the related ORM model
+     * @param string|null $foreignKey Foreign key column (defaults to thisTable_id)
+     * @return static|null The related model or null
+     */
+    public function hasOne(string $relatedClass, ?string $foreignKey = null): ?ORM
+    {
+        $this->ensureDb();
+        $pkValue = $this->getPrimaryKeyValue();
+        if ($pkValue === null) {
+            return null;
+        }
+
+        if ($foreignKey === null) {
+            $foreignKey = rtrim($this->tableName, 's') . '_id';
+        }
+
+        /** @var ORM $related */
+        $related = new $relatedClass($this->_db);
+        $results = $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], 1);
+        return $results[0] ?? null;
+    }
+
+    /**
+     * Get has-many related models.
+     * Maps to Python: has_many(related_class, foreign_key, limit, skip)
+     *
+     * @param string $relatedClass Fully qualified class name of the related ORM model
+     * @param string|null $foreignKey Foreign key column (defaults to thisTable_id)
+     * @param int $limit Max results
+     * @param int $offset Starting offset
+     * @return array<int, static>
+     */
+    public function hasMany(string $relatedClass, ?string $foreignKey = null, int $limit = 100, int $offset = 0): array
+    {
+        $this->ensureDb();
+        $pkValue = $this->getPrimaryKeyValue();
+        if ($pkValue === null) {
+            return [];
+        }
+
+        if ($foreignKey === null) {
+            $foreignKey = rtrim($this->tableName, 's') . '_id';
+        }
+
+        /** @var ORM $related */
+        $related = new $relatedClass($this->_db);
+        return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+    }
+
+    /**
+     * Get the parent model in a belongs-to relationship.
+     * Maps to Python: belongs_to(related_class, foreign_key)
+     *
+     * @param string $relatedClass Fully qualified class name of the parent ORM model
+     * @param string|null $foreignKey Foreign key column on THIS model (defaults to relatedTable_id)
+     * @return static|null The parent model or null
+     */
+    public function belongsTo(string $relatedClass, ?string $foreignKey = null): ?ORM
+    {
+        $this->ensureDb();
+
+        /** @var ORM $related */
+        $related = new $relatedClass($this->_db);
+
+        if ($foreignKey === null) {
+            $foreignKey = rtrim($related->tableName, 's') . '_id';
+        }
+
+        $fkValue = $this->_data[$foreignKey] ?? null;
+        if ($fkValue === null) {
+            return null;
+        }
+
+        $parent = new $relatedClass($this->_db);
+        $parent->load($fkValue);
+        return $parent->exists() ? $parent : null;
     }
 
     /**

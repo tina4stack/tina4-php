@@ -1,6 +1,6 @@
 # Migrations
 
-The `Migration` class reads SQL migration files from a directory, applies them in order, and tracks which migrations have been run using a `_tina4_migrations` table. Migrations support batch tracking for rollbacks and stop on the first error to prevent partial schema changes.
+The `Migration` class reads SQL migration files from a directory, applies them in order, and tracks which migrations have been run using a `tina4_migration` table. Migrations support batch tracking for rollbacks and stop on the first error to prevent partial schema changes.
 
 Migration files are plain SQL — no PHP wrappers, no DSL. Each file contains one or more SQL statements separated by a configurable delimiter.
 
@@ -175,10 +175,10 @@ $migration = new Migration($db, 'src/migrations', delimiter: ';;');
 
 ## Tracking Table
 
-The `_tina4_migrations` table is created automatically on first use:
+The `tina4_migration` table is created automatically on first use:
 
 ```sql
-CREATE TABLE _tina4_migrations (
+CREATE TABLE tina4_migration (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     migration VARCHAR(255) NOT NULL UNIQUE,
     batch INTEGER NOT NULL,

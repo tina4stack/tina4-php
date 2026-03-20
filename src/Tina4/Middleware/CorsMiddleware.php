@@ -31,10 +31,10 @@ class CorsMiddleware
         ?string $headers = null,
         ?int $maxAge = null,
     ) {
-        $this->allowedOrigins = $origins ?? DotEnv::get('TINA4_CORS_ORIGINS', '*');
-        $this->allowedMethods = $methods ?? DotEnv::get('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        $this->allowedHeaders = $headers ?? DotEnv::get('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Requested-With');
-        $this->maxAge = $maxAge ?? (int)DotEnv::get('TINA4_CORS_MAX_AGE', '86400');
+        $this->allowedOrigins = $origins ?? DotEnv::getEnv('TINA4_CORS_ORIGINS', '*');
+        $this->allowedMethods = $methods ?? DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        $this->allowedHeaders = $headers ?? DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Requested-With');
+        $this->maxAge = $maxAge ?? (int)DotEnv::getEnv('TINA4_CORS_MAX_AGE', '86400');
     }
 
     /**

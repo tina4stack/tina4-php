@@ -417,6 +417,152 @@ class GraphQL
     }
 
     /**
+     * Auto-generate type, queries, and CRUD mutations from an ORM class.
+     *
+     * Creates:
+     *   - A GraphQL type from the ORM's table columns
+     *   - Queries: {modelName}(id: ID!): Type, {modelNames}(limit: Int, offset: Int): [Type]
+     *   - Mutations: create{ModelName}, update{ModelName}, delete{ModelName}
+     *
+     * @param ORM $ormInstance An instance of the ORM subclass (must have setDb() called)
+     * @return self
+     */
+    public function fromOrm(ORM $ormInstance): self
+    {
+        $db = $ormInstance->getDb();
+        if ($db === null) {
+            throw new \RuntimeException('GraphQL::fromOrm() requires an ORM instance with a database adapter set.');
+        }
+
+        $className = (new \ReflectionClass($ormInstance))->getShortName();
+        $tableName = $ormInstance->tableName;
+        $primaryKey = $ormInstance->primaryKey;
+
+        // Get column metadata from the database
+        $columns = $db->getColumns($tableName);
+
+        // Build GraphQL fields from column definitions
+        $gqlFields = [];
+        foreach ($columns as $col) {
+            $colName = $col['name'];
+            $colType = strtoupper($col['type'] ?? 'TEXT');
+
+            if ($col['primary'] ?? false) {
+                $gqlType = 'ID';
+            } elseif (str_contains($colType, 'INT')) {
+                $gqlType = 'Int';
+            } elseif (str_contains($colType, 'REAL') || str_contains($colType, 'FLOAT')
+                || str_contains($colType, 'DOUBLE') || str_contains($colType, 'NUMERIC')
+                || str_contains($colType, 'DECIMAL')) {
+                $gqlType = 'Float';
+            } elseif (str_contains($colType, 'BOOL')) {
+                $gqlType = 'Boolean';
+            } else {
+                $gqlType = 'String';
+            }
+
+            $gqlFields[$colName] = $gqlType;
+        }
+
+        // If no columns found, create a minimal type with just the primary key
+        if (empty($gqlFields)) {
+            $gqlFields[$primaryKey] = 'ID';
+        }
+
+        $this->addType($className, $gqlFields);
+
+        // Build singular/plural names
+        $singular = lcfirst($className);
+        $plural = $singular . 's';
+
+        // Query: single record by ID
+        $this->addQuery($singular, ['id' => 'ID!'], $className, function ($root, $args, $context) use ($ormInstance) {
+            $model = clone $ormInstance;
+            $model->load($args['id']);
+            return $model->exists() ? $model->toDict() : null;
+        });
+
+        // Query: list with pagination
+        $this->addQuery($plural, ['limit' => 'Int', 'offset' => 'Int'], "[{$className}]", function ($root, $args, $context) use ($ormInstance) {
+            $limit = $args['limit'] ?? 10;
+            $offset = $args['offset'] ?? 0;
+            $result = $ormInstance->all($limit, $offset);
+            $records = [];
+            foreach ($result['data'] as $model) {
+                $records[] = $model->toDict();
+            }
+            return $records;
+        });
+
+        // Build mutation args (all fields except PK)
+        $mutationArgs = [];
+        foreach ($gqlFields as $field => $type) {
+            if ($field !== $primaryKey) {
+                $mutationArgs[$field] = 'String';
+            }
+        }
+
+        // Mutation: create
+        $this->addMutation("create{$className}", $mutationArgs, $className, function ($root, $args, $context) use ($ormInstance) {
+            $model = clone $ormInstance;
+            $model->fill($args);
+            $model->save();
+            return $model->toDict();
+        });
+
+        // Mutation: update
+        $updateArgs = array_merge(['id' => 'ID!'], $mutationArgs);
+        $this->addMutation("update{$className}", $updateArgs, $className, function ($root, $args, $context) use ($ormInstance, $primaryKey) {
+            $model = clone $ormInstance;
+            $model->load($args['id']);
+            if (!$model->exists()) {
+                return null;
+            }
+            $data = $args;
+            unset($data['id']);
+            $model->fill($data);
+            $model->save();
+            return $model->toDict();
+        });
+
+        // Mutation: delete
+        $this->addMutation("delete{$className}", ['id' => 'ID!'], 'Boolean', function ($root, $args, $context) use ($ormInstance) {
+            $model = clone $ormInstance;
+            $model->load($args['id']);
+            if (!$model->exists()) {
+                return false;
+            }
+            $model->delete();
+            return true;
+        });
+
+        return $this;
+    }
+
+    /**
+     * Map a database column type string to a GraphQL type.
+     *
+     * @param string $dbType The database column type (e.g. 'INTEGER', 'TEXT', 'REAL')
+     * @return string The GraphQL type name
+     */
+    private function dbTypeToGraphQL(string $dbType): string
+    {
+        $dbType = strtoupper($dbType);
+        if (str_contains($dbType, 'INT')) {
+            return 'Int';
+        }
+        if (str_contains($dbType, 'REAL') || str_contains($dbType, 'FLOAT')
+            || str_contains($dbType, 'DOUBLE') || str_contains($dbType, 'NUMERIC')
+            || str_contains($dbType, 'DECIMAL')) {
+            return 'Float';
+        }
+        if (str_contains($dbType, 'BOOL')) {
+            return 'Boolean';
+        }
+        return 'String';
+    }
+
+    /**
      * Format argument definitions for SDL.
      */
     private function formatArgs(array $args): string

@@ -16,12 +16,12 @@ use Tina4\Database\DatabaseAdapter;
  * Migration files must be named: YYYYMMDDHHMMSS_description.sql
  * Located in src/migrations/ by default.
  *
- * Tracks applied migrations in the _tina4_migrations table.
+ * Tracks applied migrations in the tina4_migration table.
  */
 class Migration
 {
     /** @var string Name of the migrations tracking table */
-    private const MIGRATIONS_TABLE = '_tina4_migrations';
+    private const MIGRATIONS_TABLE = 'tina4_migration';
 
     public function __construct(
         private readonly DatabaseAdapter $db,

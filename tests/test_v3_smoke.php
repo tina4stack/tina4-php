@@ -15,7 +15,7 @@ $app = new \Tina4\App(
     development: true,
 );
 echo "   ✓ App created (v" . \Tina4\App::VERSION . ")\n";
-echo "   ✓ .env loaded (TINA4_DEBUG=" . \Tina4\DotEnv::get('TINA4_DEBUG') . ")\n";
+echo "   ✓ .env loaded (TINA4_DEBUG=" . \Tina4\DotEnv::getEnv('TINA4_DEBUG') . ")\n";
 echo "   ✓ Logger configured\n";
 echo "   ✓ Health check registered at /health\n";
 echo "   ✓ Signal handlers: " . (function_exists('pcntl_signal') ? 'POSIX' : 'skipped (Windows-safe)') . "\n\n";
@@ -93,8 +93,8 @@ echo "   " . $passed . "/" . count($tests) . " assertions passed\n\n";
 
 // ── 4. DotEnv ──
 echo "── 4. Environment (.env) ──\n";
-echo "   TINA4_DEBUG = " . \Tina4\DotEnv::get('TINA4_DEBUG', 'false') . "\n";
-echo "   MISSING_VAR = " . \Tina4\DotEnv::get('MISSING_VAR', '(uses default)') . "\n\n";
+echo "   TINA4_DEBUG = " . \Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false') . "\n";
+echo "   MISSING_VAR = " . \Tina4\DotEnv::getEnv('MISSING_VAR', '(uses default)') . "\n\n";
 
 // ── 5. Logging ──
 echo "── 5. Structured Logging ──\n";

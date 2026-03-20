@@ -1,0 +1,9 @@
+{% extends "errors/base.twig" %}
+{% block title %}403 — Forbidden{% endblock %}
+{% block content %}
+    <div class="error-code" style="color:var(--warn)">403</div>
+    <div class="error-title">Forbidden</div>
+    <div class="error-msg">You don't have permission to access this resource.</div>
+    <div class="error-path" style="color:var(--warn)">{{ path }}</div>
+    <a href="/" class="error-home">Go Home</a>
+{% endblock %}

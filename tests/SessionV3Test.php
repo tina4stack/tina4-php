@@ -323,4 +323,290 @@ class SessionV3Test extends TestCase
 
         $this->assertEquals('yes', $session2->get('alive'));
     }
+
+    // ── Flash data — additional tests ───────────────────────────
+
+    public function testFlashMultipleKeys(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->flash('error', 'Something failed');
+        $session->flash('success', 'Item saved');
+
+        $this->assertEquals('Something failed', $session->getFlash('error'));
+        $this->assertEquals('Item saved', $session->getFlash('success'));
+
+        // Both should be consumed
+        $this->assertNull($session->getFlash('error'));
+        $this->assertNull($session->getFlash('success'));
+    }
+
+    public function testFlashWithArrayValue(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->flash('errors', ['field1' => 'required', 'field2' => 'invalid']);
+        $errors = $session->getFlash('errors');
+
+        $this->assertIsArray($errors);
+        $this->assertEquals('required', $errors['field1']);
+        $this->assertNull($session->getFlash('errors'));
+    }
+
+    public function testFlashDoesNotAffectRegularData(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('permanent', 'stays');
+        $session->flash('temporary', 'goes');
+
+        $session->getFlash('temporary');
+        $this->assertEquals('stays', $session->get('permanent'));
+    }
+
+    public function testFlashOverwrite(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->flash('msg', 'first');
+        $session->flash('msg', 'second');
+
+        $this->assertEquals('second', $session->getFlash('msg'));
+    }
+
+    // ── Regenerate — additional tests ───────────────────────────
+
+    public function testRegeneratePreservesMultipleKeys(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('a', 1);
+        $session->set('b', 'two');
+        $session->set('c', [3, 4, 5]);
+
+        $newId = $session->regenerate();
+
+        $this->assertEquals(1, $session->get('a'));
+        $this->assertEquals('two', $session->get('b'));
+        $this->assertEquals([3, 4, 5], $session->get('c'));
+        $this->assertEquals($newId, $session->getSessionId());
+    }
+
+    public function testRegenerateMultipleTimes(): void
+    {
+        $session = $this->createSession();
+        $id1 = $session->start();
+        $session->set('data', 'persistent');
+
+        $id2 = $session->regenerate();
+        $id3 = $session->regenerate();
+
+        $this->assertNotEquals($id1, $id2);
+        $this->assertNotEquals($id2, $id3);
+        $this->assertEquals('persistent', $session->get('data'));
+    }
+
+    // ── Has — additional tests ──────────────────────────────────
+
+    public function testHasAfterDelete(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('key', 'value');
+        $this->assertTrue($session->has('key'));
+
+        $session->delete('key');
+        $this->assertFalse($session->has('key'));
+    }
+
+    public function testHasWithNullValue(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('nullable', null);
+        // array_key_exists should return true even for null value
+        $this->assertTrue($session->has('nullable'));
+    }
+
+    // ── All — additional tests ──────────────────────────────────
+
+    public function testAllEmpty(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $all = $session->all();
+        $this->assertEmpty($all);
+    }
+
+    public function testAllAfterDelete(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('a', 1);
+        $session->set('b', 2);
+        $session->delete('a');
+
+        $all = $session->all();
+        $this->assertCount(1, $all);
+        $this->assertArrayNotHasKey('a', $all);
+        $this->assertArrayHasKey('b', $all);
+    }
+
+    // ── Clear ───────────────────────────────────────────────────
+
+    public function testClearRemovesAllDataButKeepsSession(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('x', 1);
+        $session->set('y', 2);
+        $session->clear();
+
+        $this->assertEmpty($session->all());
+        $this->assertTrue($session->isStarted());
+    }
+
+    public function testClearDoesNotAffectSessionId(): void
+    {
+        $session = $this->createSession();
+        $id = $session->start();
+
+        $session->set('data', 'value');
+        $session->clear();
+
+        $this->assertEquals($id, $session->getSessionId());
+    }
+
+    // ── Data types ──────────────────────────────────────────────
+
+    public function testStoreInteger(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('count', 42);
+        $this->assertSame(42, $session->get('count'));
+    }
+
+    public function testStoreFloat(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('price', 19.99);
+        $this->assertSame(19.99, $session->get('price'));
+    }
+
+    public function testStoreBoolean(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('active', true);
+        $session->set('deleted', false);
+        $this->assertTrue($session->get('active'));
+        $this->assertFalse($session->get('deleted'));
+    }
+
+    public function testStoreNestedArray(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $data = [
+            'level1' => [
+                'level2' => [
+                    'level3' => 'deep',
+                ],
+            ],
+        ];
+        $session->set('nested', $data);
+        $this->assertEquals('deep', $session->get('nested')['level1']['level2']['level3']);
+    }
+
+    public function testStoreEmptyString(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        $session->set('empty', '');
+        $this->assertSame('', $session->get('empty'));
+        $this->assertTrue($session->has('empty'));
+    }
+
+    // ── Multiple keys ───────────────────────────────────────────
+
+    public function testManyKeysAtOnce(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        for ($i = 0; $i < 50; $i++) {
+            $session->set("key_{$i}", "value_{$i}");
+        }
+
+        $all = $session->all();
+        $this->assertCount(50, $all);
+        $this->assertEquals('value_0', $session->get('key_0'));
+        $this->assertEquals('value_49', $session->get('key_49'));
+    }
+
+    // ── Persistence — flash not persisted after read ────────────
+
+    public function testFlashNotPersistedAfterRead(): void
+    {
+        $session1 = $this->createSession();
+        $id = $session1->start();
+        $session1->flash('notice', 'Hello');
+
+        // Read flash in same session
+        $session1->getFlash('notice');
+
+        // Resume in new instance — flash should be gone
+        $session2 = $this->createSession();
+        $session2->start($id);
+        $this->assertNull($session2->getFlash('notice'));
+    }
+
+    public function testFlashPersistedBeforeRead(): void
+    {
+        $session1 = $this->createSession();
+        $id = $session1->start();
+        $session1->flash('alert', 'Warning!');
+
+        // Resume without reading flash first
+        $session2 = $this->createSession();
+        $session2->start($id);
+        $this->assertEquals('Warning!', $session2->getFlash('alert'));
+    }
+
+    // ── Delete nonexistent key ──────────────────────────────────
+
+    public function testDeleteNonexistentKey(): void
+    {
+        $session = $this->createSession();
+        $session->start();
+
+        // Should not throw
+        $session->delete('nonexistent');
+        $this->assertFalse($session->has('nonexistent'));
+    }
+
+    // ── getSessionId before start ───────────────────────────────
+
+    public function testGetSessionIdBeforeStart(): void
+    {
+        $session = $this->createSession();
+        $this->assertSame('', $session->getSessionId());
+    }
 }

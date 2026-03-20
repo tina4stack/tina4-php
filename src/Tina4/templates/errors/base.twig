@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% block meta %}{% endblock %}
+<title>{% block title %}Error{% endblock %}</title>
+<style>
+:root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --primary: #7b1fa2;
+    --success: #22c55e; --danger: #ef4444; --warn: #f59e0b; --info: #06b6d4;
+    --radius: 1rem; --mono: 'SF Mono', ui-monospace, monospace;
+    --font: system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.error-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 3rem; text-align: center; max-width: 480px; width: 90%; }
+.error-code { font-size: 5rem; font-weight: 800; opacity: 0.3; line-height: 1; }
+.error-title { font-size: 1.5rem; font-weight: 600; margin: 0.5rem 0; }
+.error-msg { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+.error-path { font-family: var(--mono); background: var(--bg); padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; word-break: break-all; }
+.error-home { display: inline-block; margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--primary); color: #fff; text-decoration: none; border-radius: 0.5rem; font-size: 0.85rem; }
+.error-home:hover { opacity: 0.9; }
+.logo { width: 3rem; height: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+{% block extra_styles %}{% endblock %}
+</style>
+</head>
+<body>
+{% block body %}
+<div class="error-card">
+    <img src="https://tina4.com/logo.svg" class="logo" alt="Tina4">
+    {% block content %}{% endblock %}
+</div>
+{% endblock %}
+</body>
+</html>

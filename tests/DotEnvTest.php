@@ -33,12 +33,12 @@ class DotEnvTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/tina4_dotenv_test_' . uniqid();
         mkdir($this->tempDir, 0755, true);
-        DotEnv::reset();
+        DotEnv::resetEnv();
     }
 
     protected function tearDown(): void
     {
-        DotEnv::reset();
+        DotEnv::resetEnv();
 
         // Clean up temp files recursively
         $this->removeDir($this->tempDir);
@@ -55,9 +55,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "TEST_KEY=hello\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('hello', DotEnv::get('TEST_KEY'));
+        $this->assertEquals('hello', DotEnv::getEnv('TEST_KEY'));
         $this->assertEquals('hello', $_ENV['TEST_KEY']);
         $this->assertEquals('hello', getenv('TEST_KEY'));
     }
@@ -67,9 +67,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, 'TEST_QUOTED="hello world"' . "\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('hello world', DotEnv::get('TEST_QUOTED'));
+        $this->assertEquals('hello world', DotEnv::getEnv('TEST_QUOTED'));
     }
 
     public function testLoadSingleQuotedValue(): void
@@ -77,9 +77,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "TEST_SINGLE='hello world'\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('hello world', DotEnv::get('TEST_SINGLE'));
+        $this->assertEquals('hello world', DotEnv::getEnv('TEST_SINGLE'));
     }
 
     public function testLoadExportPrefix(): void
@@ -87,9 +87,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "export TEST_EXPORT=exported_value\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('exported_value', DotEnv::get('TEST_EXPORT'));
+        $this->assertEquals('exported_value', DotEnv::getEnv('TEST_EXPORT'));
     }
 
     public function testSkipsCommentsAndEmptyLines(): void
@@ -97,10 +97,10 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "# This is a comment\n\nTEST_KEY=value\n# Another comment\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('value', DotEnv::get('TEST_KEY'));
-        $this->assertNull(DotEnv::get('# This is a comment'));
+        $this->assertEquals('value', DotEnv::getEnv('TEST_KEY'));
+        $this->assertNull(DotEnv::getEnv('# This is a comment'));
     }
 
     public function testSkipsSectionHeaders(): void
@@ -108,9 +108,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "[Project Settings]\nTEST_KEY=value\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('value', DotEnv::get('TEST_KEY'));
+        $this->assertEquals('value', DotEnv::getEnv('TEST_KEY'));
     }
 
     public function testInlineCommentStripping(): void
@@ -118,9 +118,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "TEST_KEY=value # this is a comment\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('value', DotEnv::get('TEST_KEY'));
+        $this->assertEquals('value', DotEnv::getEnv('TEST_KEY'));
     }
 
     public function testEscapeSequencesInDoubleQuotes(): void
@@ -128,9 +128,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, 'TEST_KEY="line1\nline2"' . "\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals("line1\nline2", DotEnv::get('TEST_KEY'));
+        $this->assertEquals("line1\nline2", DotEnv::getEnv('TEST_KEY'));
     }
 
     public function testVariableInterpolation(): void
@@ -138,20 +138,20 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "DB_HOST=localhost\nDB_URL=http://\${DB_HOST}/db\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('localhost', DotEnv::get('DB_HOST'));
-        $this->assertEquals('http://localhost/db', DotEnv::get('DB_URL'));
+        $this->assertEquals('localhost', DotEnv::getEnv('DB_HOST'));
+        $this->assertEquals('http://localhost/db', DotEnv::getEnv('DB_URL'));
     }
 
     public function testGetWithDefault(): void
     {
-        $this->assertEquals('default_val', DotEnv::get('NONEXISTENT_KEY', 'default_val'));
+        $this->assertEquals('default_val', DotEnv::getEnv('NONEXISTENT_KEY', 'default_val'));
     }
 
     public function testGetReturnsNullWhenNoDefault(): void
     {
-        $this->assertNull(DotEnv::get('NONEXISTENT_KEY'));
+        $this->assertNull(DotEnv::getEnv('NONEXISTENT_KEY'));
     }
 
     public function testRequireThrowsWhenMissing(): void
@@ -159,7 +159,7 @@ class DotEnvTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage("Required environment variable 'REQUIRED_KEY' is not set");
 
-        DotEnv::require('REQUIRED_KEY');
+        DotEnv::requireEnv('REQUIRED_KEY');
     }
 
     public function testRequireReturnsValueWhenSet(): void
@@ -167,9 +167,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "REQUIRED_KEY=present\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('present', DotEnv::require('REQUIRED_KEY'));
+        $this->assertEquals('present', DotEnv::requireEnv('REQUIRED_KEY'));
     }
 
     public function testHas(): void
@@ -177,10 +177,10 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "TEST_KEY=value\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertTrue(DotEnv::has('TEST_KEY'));
-        $this->assertFalse(DotEnv::has('NONEXISTENT'));
+        $this->assertTrue(DotEnv::hasEnv('TEST_KEY'));
+        $this->assertFalse(DotEnv::hasEnv('NONEXISTENT'));
     }
 
     public function testAllReturnsLoadedVariables(): void
@@ -188,9 +188,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "TEST_KEY=one\nDB_HOST=two\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $all = DotEnv::all();
+        $all = DotEnv::allEnv();
         $this->assertArrayHasKey('TEST_KEY', $all);
         $this->assertArrayHasKey('DB_HOST', $all);
         $this->assertEquals('one', $all['TEST_KEY']);
@@ -200,7 +200,7 @@ class DotEnvTest extends TestCase
     {
         $this->expectException(\RuntimeException::class);
 
-        DotEnv::load('/nonexistent/path/.env');
+        DotEnv::loadEnv('/nonexistent/path/.env');
     }
 
     public function testEmptyValue(): void
@@ -208,9 +208,9 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "EMPTY_VAL=\n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('', DotEnv::get('EMPTY_VAL'));
+        $this->assertEquals('', DotEnv::getEnv('EMPTY_VAL'));
     }
 
     public function testValueWithSpaces(): void
@@ -218,8 +218,8 @@ class DotEnvTest extends TestCase
         $envFile = $this->tempDir . '/.env';
         file_put_contents($envFile, "SPACED = value_with_spaces \n");
 
-        DotEnv::load($envFile);
+        DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('value_with_spaces', DotEnv::get('SPACED'));
+        $this->assertEquals('value_with_spaces', DotEnv::getEnv('SPACED'));
     }
 }

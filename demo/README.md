@@ -4,7 +4,36 @@ Comprehensive demos for every feature in the Tina4 PHP framework. Each file cont
 
 Visit [https://tina4.com](https://tina4.com) for full documentation.
 
-## Getting Started
+## How to Run the Demo App
+
+The demo is a single runnable PHP application that demonstrates every working feature of Tina4 PHP v3.
+
+**Prerequisites:** PHP 8.2+ with the `openssl` and `json` extensions.
+
+```bash
+# From the project root, install dependencies first:
+composer install
+
+# Then start the demo:
+cd demo
+php app.php
+```
+
+The server starts on **http://localhost:7145**. Open it in your browser to see the landing page with links to every feature demo.
+
+Each route returns JSON with this structure:
+```json
+{
+    "feature": "Feature Name",
+    "status": "working|partial|missing",
+    "output": { ... },
+    "notes": "Explanation of what this demo shows"
+}
+```
+
+Press `Ctrl+C` to stop the server.
+
+## Getting Started (Framework)
 
 ```bash
 composer require tina4stack/tina4php
@@ -34,7 +63,7 @@ composer start
 | 16 | [Internationalization](16-i18n.md) | `16-i18n.md` | I18n with JSON locale files, dot-notation keys, parameter substitution, fallbacks |
 | 17 | [WebSocket](17-websocket.md) | `17-websocket.md` | RFC 6455 WebSocket server, event handlers, broadcast, rooms |
 | 18 | [SCSS Compiler](18-scss.md) | `18-scss.md` | Zero-dependency SCSS-to-CSS compilation, variables, nesting, mixins, imports |
-| 19 | [Seeder](19-seeder.md) | `19-seeder.md` | Fake data generation, database seeding, reproducible test data |
+| 19 | [FakeData](19-seeder.md) | `19-seeder.md` | Fake data generation, database seeding, reproducible test data |
 | 20 | [Route Discovery](20-route-discovery.md) | `20-route-discovery.md` | File-based route convention, directory-to-URL mapping, catch-all params |
 | 21 | [Constants](21-constants.md) | `21-constants.md` | HTTP status codes, content type constants for clean route handlers |
 | 22 | [Deployment](22-deployment.md) | `22-deployment.md` | Swoole HTTP/TCP servers, Docker setup, production configuration |

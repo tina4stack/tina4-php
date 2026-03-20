@@ -1,0 +1,9 @@
+{% extends "errors/base.twig" %}
+{% block title %}401 — Unauthorized{% endblock %}
+{% block content %}
+    <div class="error-code" style="color:var(--danger)">401</div>
+    <div class="error-title">Unauthorized</div>
+    <div class="error-msg">You need to sign in to access this resource.</div>
+    <div class="error-path" style="color:var(--danger)">{{ path }}</div>
+    <a href="/" class="error-home">Go Home</a>
+{% endblock %}

@@ -1,0 +1,197 @@
+// Tina4 CSS Framework - Utilities
+// ----------------------------------
+
+// Display
+$displays: none, block, flex, inline, inline-block;
+
+@each $d in $displays {
+  .d-#{$d} { display: $d !important; }
+}
+.d-grid { display: grid !important; }
+
+// Responsive display (sm, md, lg only to save size)
+@each $bp in sm, md, lg {
+  @media (min-width: map-get($breakpoints, $bp)) {
+    @each $d in $displays {
+      .d-#{$bp}-#{$d} { display: $d !important; }
+    }
+  }
+}
+
+// Flex utilities
+.flex-row           { flex-direction: row !important; }
+.flex-column        { flex-direction: column !important; }
+.flex-wrap          { flex-wrap: wrap !important; }
+.flex-nowrap        { flex-wrap: nowrap !important; }
+.flex-grow-0        { flex-grow: 0 !important; }
+.flex-grow-1        { flex-grow: 1 !important; }
+
+.justify-content-start   { justify-content: flex-start !important; }
+.justify-content-end     { justify-content: flex-end !important; }
+.justify-content-center  { justify-content: center !important; }
+.justify-content-between { justify-content: space-between !important; }
+.justify-content-around  { justify-content: space-around !important; }
+
+.align-items-start   { align-items: flex-start !important; }
+.align-items-end     { align-items: flex-end !important; }
+.align-items-center  { align-items: center !important; }
+
+@each $key, $val in $spacers {
+  .gap-#{$key} { gap: $val !important; }
+}
+
+// Spacing: margin and padding
+$spacing-props: (
+  "m":  "margin",
+  "p":  "padding"
+);
+$spacing-dirs: (
+  "t": "-top",
+  "b": "-bottom",
+  "s": "-left",
+  "e": "-right"
+);
+
+@each $abbr, $prop in $spacing-props {
+  @each $key, $val in $spacers {
+    .#{$abbr}-#{$key} { #{$prop}: $val !important; }
+  }
+  @each $dir, $suffix in $spacing-dirs {
+    @each $key, $val in $spacers {
+      .#{$abbr}#{$dir}-#{$key} { #{$prop}#{$suffix}: $val !important; }
+    }
+  }
+}
+
+.mx-auto { margin-left: auto !important; margin-right: auto !important; }
+
+// Text
+.text-start      { text-align: left !important; }
+.text-center     { text-align: center !important; }
+.text-end        { text-align: right !important; }
+.text-uppercase  { text-transform: uppercase !important; }
+.text-capitalize { text-transform: capitalize !important; }
+.text-nowrap     { white-space: nowrap !important; }
+.text-truncate   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.fw-bold   { font-weight: $font-weight-bold !important; }
+.fw-normal { font-weight: $font-weight-normal !important; }
+.fw-light  { font-weight: $font-weight-light !important; }
+
+@each $key, $size in $font-sizes {
+  .fs-#{$key} { font-size: $size !important; }
+}
+
+// Text colors
+@each $name, $color in $theme-colors {
+  .text-#{$name} { color: $color !important; }
+}
+.text-muted { color: $muted !important; }
+.text-white { color: $white !important; }
+
+// Background colors
+@each $name, $color in $theme-colors {
+  .bg-#{$name} { background-color: $color !important; }
+}
+.bg-white { background-color: $white !important; }
+
+// Borders
+.border   { border: 1px solid rgba($black, 0.1) !important; }
+.border-0 { border: 0 !important; }
+.rounded        { border-radius: $border-radius !important; }
+.rounded-0      { border-radius: 0 !important; }
+.rounded-circle { border-radius: 50% !important; }
+.rounded-pill   { border-radius: $border-radius-pill !important; }
+
+// Width and height
+@each $val in 25, 50, 75, 100 {
+  .w-#{$val}  { width: percentage($val / 100) !important; }
+  .h-#{$val}  { height: percentage($val / 100) !important; }
+}
+.mw-100 { max-width: 100% !important; }
+.mh-100 { max-height: 100% !important; }
+
+// Position
+.position-relative { position: relative !important; }
+.position-absolute { position: absolute !important; }
+.position-fixed    { position: fixed !important; }
+.position-sticky   { position: sticky !important; }
+.position-static   { position: static !important; }
+
+// Visibility
+.visible   { visibility: visible !important; }
+.invisible { visibility: hidden !important; }
+
+.overflow-hidden { overflow: hidden !important; }
+.overflow-auto   { overflow: auto !important; }
+
+// Shadows
+.shadow      { box-shadow: $shadow !important; }
+.shadow-sm   { box-shadow: $shadow-sm !important; }
+.shadow-lg   { box-shadow: $shadow-lg !important; }
+.shadow-none { box-shadow: none !important; }
+
+// Collapse
+.collapse { display: none; &.show { display: block; } }
+
+// Fade transition
+.fade { opacity: 0; transition: opacity 0.15s linear; &.show { opacity: 1; } }
+
+// Misc
+.clearfix::after { display: block; clear: both; content: ""; }
+.cursor-pointer { cursor: pointer !important; }
+
+// Close button (replaces Bootstrap's btn-close)
+.btn-close {
+  box-sizing: content-box;
+  width: 1em;
+  height: 1em;
+  padding: 0.25em;
+  color: $black;
+  background: transparent;
+  border: 0;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  &:hover { opacity: 0.75; }
+  &:focus { opacity: 1; outline: 0; box-shadow: 0 0 0 0.2rem rgba($primary, 0.25); }
+}
+
+// Image utilities
+.img-fluid    { max-width: 100%; height: auto; }
+.img-thumbnail {
+  padding: 0.25rem;
+  background-color: $body-bg;
+  border: 1px solid rgba($black, 0.1);
+  border-radius: $border-radius;
+  max-width: 100%;
+  height: auto;
+}
+
+// Border top/bottom helpers
+.border-top    { border-top: 1px solid rgba($black, 0.1) !important; }
+.border-bottom { border-bottom: 1px solid rgba($black, 0.1) !important; }
+
+// Vertical alignment
+.align-middle  { vertical-align: middle !important; }
+.align-top     { vertical-align: top !important; }
+.align-bottom  { vertical-align: bottom !important; }
+
+// Float
+.float-start { float: left !important; }
+.float-end   { float: right !important; }
+.float-none  { float: none !important; }
+
+// Screen reader only
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

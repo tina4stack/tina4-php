@@ -26,7 +26,7 @@ class SQLite3Adapter implements DatabaseAdapter
         private readonly string $database = ':memory:',
         ?bool $autoCommit = null,
     ) {
-        $envAutoCommit = \Tina4\DotEnv::get('TINA4_AUTO_COMMIT');
+        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTO_COMMIT');
         $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
         $this->open();
     }
@@ -161,6 +161,61 @@ class SQLite3Adapter implements DatabaseAdapter
             $this->lastError = $e->getMessage();
             return false;
         }
+    }
+
+    public function execute(string $sql, array $params = []): bool
+    {
+        return $this->exec($sql, $params);
+    }
+
+    public function fetchOne(string $sql, array $params = []): ?array
+    {
+        $rows = $this->query($sql, $params);
+        return $rows[0] ?? null;
+    }
+
+    public function insert(string $table, array $data): bool
+    {
+        $cols = implode(', ', array_keys($data));
+        $placeholders = implode(', ', array_fill(0, count($data), '?'));
+        $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+        return $this->execute($sql, array_values($data));
+    }
+
+    public function update(string $table, array $data, string $where = '', array $whereParams = []): bool
+    {
+        $setParts = [];
+        $params = [];
+        foreach ($data as $col => $val) {
+            $setParts[] = "{$col} = ?";
+            $params[] = $val;
+        }
+        $sql = "UPDATE {$table} SET " . implode(', ', $setParts);
+        if ($where !== '') {
+            $sql .= " WHERE {$where}";
+            $params = array_merge($params, $whereParams);
+        }
+        return $this->execute($sql, $params);
+    }
+
+    public function delete(string $table, string $where = '', array $whereParams = []): bool
+    {
+        $sql = "DELETE FROM {$table}";
+        if ($where !== '') {
+            $sql .= " WHERE {$where}";
+        }
+        return $this->execute($sql, $whereParams);
+    }
+
+    public function getTables(): array
+    {
+        $rows = $this->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+        return array_column($rows, 'name');
+    }
+
+    public function startTransaction(): void
+    {
+        $this->begin();
     }
 
     public function tableExists(string $table): bool

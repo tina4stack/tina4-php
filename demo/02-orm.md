@@ -243,4 +243,4 @@ class Order extends ORM
 - Use `$softDelete = true` for audit trails — add an `is_deleted INTEGER DEFAULT 0` column to your table.
 - Call `exists()` after `load()` to check if the record was found before accessing properties.
 - The `save()` method is an upsert: it checks for an existing primary key and runs INSERT or UPDATE accordingly.
-- Combine field mapping with the Seeder class for generating realistic test data.
+- Combine field mapping with the FakeData class for generating realistic test data.

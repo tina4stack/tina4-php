@@ -1,0 +1,34 @@
+// Tina4 CSS Framework - Alerts
+// -------------------------------
+
+.alert {
+  position: relative;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+  border-radius: $border-radius;
+}
+
+@each $name, $color in $theme-colors {
+  .alert-#{$name} {
+    color: darken($color, 25%);
+    background-color: lighten($color, 35%);
+    border-color: lighten($color, 25%);
+  }
+}
+
+.alert-dismissible {
+  padding-right: 3rem;
+  .btn-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0.9375rem 1rem;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.5;
+    &:hover { opacity: 0.75; }
+  }
+}

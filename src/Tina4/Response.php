@@ -285,6 +285,23 @@ class Response
     }
 
     /**
+     * Get the Content-Type header value.
+     */
+    public function getContentType(): ?string
+    {
+        return $this->headers['Content-Type'] ?? null;
+    }
+
+    /**
+     * Set the response body directly.
+     */
+    public function setBody(string $body): self
+    {
+        $this->body = $body;
+        return $this;
+    }
+
+    /**
      * Get the decoded JSON body (for testing).
      */
     public function getJsonBody(): mixed

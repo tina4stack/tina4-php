@@ -1,0 +1,49 @@
+// Tina4 CSS Framework - Cards
+// ------------------------------
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: $white;
+  background-clip: border-box;
+  border: 1px solid rgba($black, 0.125);
+  border-radius: $border-radius-lg;
+}
+
+.card-header {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0;
+  background-color: rgba($black, 0.03);
+  border-bottom: 1px solid rgba($black, 0.125);
+  &:first-child { border-radius: calc($border-radius-lg - 1px) calc($border-radius-lg - 1px) 0 0; }
+}
+
+.card-body {
+  flex: 1 1 auto;
+  padding: 1rem;
+}
+
+.card-footer {
+  padding: 0.75rem 1rem;
+  background-color: rgba($black, 0.03);
+  border-top: 1px solid rgba($black, 0.125);
+  &:last-child { border-radius: 0 0 calc($border-radius-lg - 1px) calc($border-radius-lg - 1px); }
+}
+
+.card-title {
+  margin-bottom: 0.5rem;
+  font-weight: $font-weight-bold;
+}
+
+.card-text:last-child {
+  margin-bottom: 0;
+}
+
+.card-img-top {
+  width: 100%;
+  border-top-left-radius: calc($border-radius-lg - 1px);
+  border-top-right-radius: calc($border-radius-lg - 1px);
+}

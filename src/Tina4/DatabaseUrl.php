@@ -112,7 +112,7 @@ class DatabaseUrl
      */
     public static function fromEnv(string $envKey = 'DATABASE_URL'): ?self
     {
-        $url = DotEnv::get($envKey);
+        $url = DotEnv::getEnv($envKey);
 
         if ($url === null || $url === '') {
             return null;

@@ -205,8 +205,18 @@ class Log
         $reset = "\033[0m";
         $color = $colors[$level] ?? '';
 
-        $stdout = defined('STDOUT') ? \STDOUT : fopen('php://stdout', 'w');
-        fwrite($stdout, $color . $line . $reset);
+        if (defined('STDOUT')) {
+            $stdout = \STDOUT;
+        } else {
+            $stdout = @fopen('php://stdout', 'w');
+        }
+
+        if (is_resource($stdout)) {
+            @fwrite($stdout, $color . $line . $reset);
+        } else {
+            // Fallback: use error_log when stdout isn't available
+            error_log(strip_tags($line));
+        }
     }
 
     /**

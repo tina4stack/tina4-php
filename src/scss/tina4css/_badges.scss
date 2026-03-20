@@ -1,0 +1,22 @@
+// Tina4 CSS Framework - Badges
+// -------------------------------
+
+.badge {
+  display: inline-block;
+  padding: 0.25em 0.65em;
+  font-size: 0.75em;
+  font-weight: $font-weight-bold;
+  line-height: 1;
+  color: $white;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: $border-radius-pill;
+}
+
+@each $name, $color in $theme-colors {
+  .badge-#{$name} {
+    color: if($name == "light" or $name == "warning", $dark, $white);
+    background-color: $color;
+  }
+}

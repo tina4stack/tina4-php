@@ -119,25 +119,25 @@ KEY=${OTHER_VAR}/path              # Variable interpolation in unquoted values
 use Tina4\DotEnv;
 
 // Load .env file (called automatically by App)
-DotEnv::load('.env');
+DotEnv::loadEnv('.env');
 
 // Load with overwrite (replaces existing env vars)
-DotEnv::load('.env.local', overwrite: true);
+DotEnv::loadEnv('.env.local', overwrite: true);
 
 // Get a value with default
-$debug = DotEnv::get('TINA4_DEBUG', 'false');
-$port = DotEnv::get('APP_PORT', '8000');
+$debug = DotEnv::getEnv('TINA4_DEBUG', 'false');
+$port = DotEnv::getEnv('APP_PORT', '8000');
 
 // Require a value (throws RuntimeException if missing)
-$secret = DotEnv::require('JWT_SECRET');
+$secret = DotEnv::requireEnv('JWT_SECRET');
 
 // Check existence
-if (DotEnv::has('DATABASE_URL')) {
-    $dbUrl = DotEnv::get('DATABASE_URL');
+if (DotEnv::hasEnv('DATABASE_URL')) {
+    $dbUrl = DotEnv::getEnv('DATABASE_URL');
 }
 
 // Get all loaded variables
-$allVars = DotEnv::all();
+$allVars = DotEnv::allEnv();
 ```
 
 ## Key Environment Variables
@@ -194,7 +194,7 @@ $app->start();
 ## Tips
 
 - Never commit `.env` to version control. Add it to `.gitignore` and provide a `.env.example`.
-- Use `DotEnv::require()` for values that must be set (secrets, database URLs) — it fails fast with a clear error.
+- Use `DotEnv::requireEnv()` for values that must be set (secrets, database URLs) — it fails fast with a clear error.
 - The `App` class detects debug mode from both the constructor flag and `TINA4_DEBUG` env var.
 - Signal handlers (SIGTERM/SIGINT) are only registered if `pcntl_signal` is available.
 - Use `.env.local` with `overwrite: true` for developer-specific overrides.

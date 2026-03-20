@@ -1,0 +1,149 @@
+// Tina4 CSS Framework - Navigation
+// -----------------------------------
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+
+.nav-item { }
+
+.nav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: $link-color;
+  text-decoration: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+
+  &:hover, &:focus {
+    color: $link-hover-color;
+  }
+
+  &.disabled {
+    color: $muted;
+    pointer-events: none;
+    cursor: default;
+  }
+
+  &.active {
+    color: $primary;
+    font-weight: $font-weight-bold;
+  }
+}
+
+// Navbar
+.navbar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+}
+
+.navbar-brand {
+  padding-top: 0.3125rem;
+  padding-bottom: 0.3125rem;
+  margin-right: 1rem;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  &:hover { color: inherit; opacity: 0.8; }
+}
+
+.navbar-nav {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+  .nav-link {
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+  }
+}
+
+.navbar-toggler {
+  padding: 0.25rem 0.75rem;
+  font-size: $font-size-lg;
+  line-height: 1;
+  background-color: transparent;
+  border: 1px solid rgba($black, 0.1);
+  border-radius: $border-radius;
+  cursor: pointer;
+  &:focus { outline: 0; box-shadow: 0 0 0 0.2rem rgba($primary, 0.25); }
+}
+
+.navbar-collapse {
+  flex-basis: 100%;
+  flex-grow: 1;
+  align-items: center;
+  display: none;
+  &.show { display: flex; }
+}
+
+// Responsive expand classes
+@each $bp, $px in $breakpoints {
+  .navbar-expand-#{$bp} {
+    @media (min-width: $px) {
+      .navbar-nav { flex-direction: row; }
+      .navbar-collapse { display: flex; flex-basis: auto; }
+      .navbar-toggler { display: none; }
+    }
+  }
+}
+
+// Legacy: bare .navbar also expands at lg
+@media (min-width: map-get($breakpoints, lg)) {
+  .navbar-nav {
+    flex-direction: row;
+  }
+  .navbar-collapse {
+    display: flex;
+    flex-basis: auto;
+  }
+  .navbar-toggler {
+    display: none;
+  }
+}
+
+.navbar-dark {
+  color: $white;
+  background-color: $dark;
+  .navbar-brand { color: $white; }
+  .nav-link { color: rgba($white, 0.75); &:hover, &.active { color: $white; } }
+}
+
+.navbar-light {
+  background-color: $light;
+  .nav-link { color: rgba($black, 0.55); &:hover, &.active { color: rgba($black, 0.9); } }
+}
+
+// Breadcrumb
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  list-style: none;
+  background-color: $light;
+  border-radius: $border-radius;
+}
+
+.breadcrumb-item {
+  & + .breadcrumb-item::before {
+    display: inline-block;
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+    color: $muted;
+    content: "/";
+  }
+  &.active {
+    color: $muted;
+  }
+}
