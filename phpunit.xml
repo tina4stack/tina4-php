@@ -5,6 +5,9 @@
          colors="true"
          stopOnFailure="false">
     <testsuites>
+        <testsuite name="Tina4 Frond Tests">
+            <file>tests/FrondTest.php</file>
+        </testsuite>
         <testsuite name="Tina4 v3 Tests">
             <file>tests/DotEnvTest.php</file>
             <file>tests/LogTest.php</file>
