@@ -2,7 +2,7 @@
 
 // MessageLog and RequestInspector are defined in DevAdmin.php alongside DevAdmin
 // but PSR-4 cannot autoload them individually, so we force-include the file.
-require_once __DIR__ . '/../src/Tina4/DevAdmin.php';
+require_once __DIR__ . '/../Tina4/DevAdmin.php';
 
 use PHPUnit\Framework\TestCase;
 use Tina4\DevAdmin;

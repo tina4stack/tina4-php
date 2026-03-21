@@ -33,7 +33,7 @@
 composer require tina4stack/tina4php
 composer exec tina4 initialize:run
 composer start
-# -> http://localhost:7145
+# -> http://localhost:7146
 ```
 
 That's it. Zero configuration, zero classes, zero boilerplate.
@@ -130,7 +130,7 @@ Get::add("/api/hello/{name}", function ($name, Response $response) {
 });
 ```
 
-Visit `http://localhost:7145/api/hello` -- routes are auto-discovered, no imports needed.
+Visit `http://localhost:7146/api/hello` -- routes are auto-discovered, no imports needed.
 
 ### 3. Add a database
 
@@ -477,7 +477,7 @@ Set `TINA4_DEBUG=true` in `.env` to enable:
 ```bash
 composer tina4                           # Tina4 menu
 composer exec tina4 initialize:run       # Scaffold a new project
-composer start                           # Start dev server (default: 7145)
+composer start                           # Start dev server (default: 7146)
 composer start 8080                      # Start on specific port
 composer tina4 migrate                   # Run pending migrations
 composer tina4 migrate:create <desc>     # Create a migration file
@@ -512,7 +512,7 @@ Tina4 PHP is built from the ground up with no third-party runtime dependencies i
 ```bash
 docker run -v $(pwd):/app tina4stack/php:latest composer require tina4stack/tina4php
 docker run -v $(pwd):/app tina4stack/php:latest composer exec tina4 initialize:run
-docker run -v $(pwd):/app -p7145:7145 tina4stack/php:latest composer start
+docker run -v $(pwd):/app -p7146:7146 tina4stack/php:latest composer start
 ```
 
 ---

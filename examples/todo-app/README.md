@@ -7,7 +7,7 @@ Minimal todo API demonstrating Tina4 conventions.
 ```bash
 cd examples/todo-app
 composer install
-php -S localhost:7145 index.php
+php -S localhost:7146 index.php
 ```
 
 ## API
