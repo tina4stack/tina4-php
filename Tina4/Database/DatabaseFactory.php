@@ -18,27 +18,23 @@ use Tina4\DatabaseUrl;
  * are thrown if the required extension is missing.
  *
  * Supported schemes:
- *   sqlite, sqlite3    => SQLite3Adapter
- *   pgsql, postgres, postgresql => PostgresAdapter
- *   mysql, mariadb      => MySQLAdapter
- *   mssql, sqlsrv       => MSSQLAdapter
- *   firebird, fdb       => FirebirdAdapter
+ *   sqlite              => SQLite3Adapter
+ *   postgres, postgresql => PostgresAdapter
+ *   mysql               => MySQLAdapter
+ *   mssql, sqlserver     => MSSQLAdapter
+ *   firebird            => FirebirdAdapter
  */
 class DatabaseFactory
 {
     /** @var array<string, class-string<DatabaseAdapter>> Maps scheme to adapter class */
     private const ADAPTER_MAP = [
         'sqlite' => SQLite3Adapter::class,
-        'sqlite3' => SQLite3Adapter::class,
-        'pgsql' => PostgresAdapter::class,
         'postgres' => PostgresAdapter::class,
         'postgresql' => PostgresAdapter::class,
         'mysql' => MySQLAdapter::class,
-        'mariadb' => MySQLAdapter::class,
         'mssql' => MSSQLAdapter::class,
-        'sqlsrv' => MSSQLAdapter::class,
+        'sqlserver' => MSSQLAdapter::class,
         'firebird' => FirebirdAdapter::class,
-        'fdb' => FirebirdAdapter::class,
     ];
 
     /**
@@ -50,7 +46,7 @@ class DatabaseFactory
      * @throws \InvalidArgumentException If the URL scheme is unsupported
      * @throws \RuntimeException If the required PHP extension is missing
      */
-    public static function create(string $url, ?bool $autoCommit = null): DatabaseAdapter
+    public static function create(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): DatabaseAdapter
     {
         // Handle SQLite special cases
         if ($url === ':memory:' || $url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
@@ -72,7 +68,7 @@ class DatabaseFactory
         if ($parts === false || !isset($parts['scheme'])) {
             throw new \InvalidArgumentException(
                 "DatabaseFactory: Cannot determine database type from '{$url}'. "
-                . "Use a URL like 'pgsql://user:pass@host/db' or 'sqlite:///path/to/db'."
+                . "Use a URL like 'postgres://user:pass@host/db' or 'sqlite:///path/to/db'."
             );
         }
 
@@ -92,13 +88,13 @@ class DatabaseFactory
                 ltrim($parts['path'] ?? ':memory:', '/'),
                 $autoCommit,
             ),
-            PostgresAdapter::class => new PostgresAdapter($url, $autoCommit),
-            MySQLAdapter::class => new MySQLAdapter($url, autoCommit: $autoCommit),
-            MSSQLAdapter::class => new MSSQLAdapter($url, autoCommit: $autoCommit),
+            PostgresAdapter::class => new PostgresAdapter($url, $autoCommit, username: $username, password: $password),
+            MySQLAdapter::class => new MySQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
+            MSSQLAdapter::class => new MSSQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             FirebirdAdapter::class => new FirebirdAdapter(
                 $url,
-                username: isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA',
-                password: isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey',
+                username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
+                password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
                 autoCommit: $autoCommit,
             ),
         };
@@ -119,7 +115,10 @@ class DatabaseFactory
             return null;
         }
 
-        return self::create($url, $autoCommit);
+        $username = \Tina4\DotEnv::getEnv('DATABASE_USERNAME') ?? '';
+        $password = \Tina4\DotEnv::getEnv('DATABASE_PASSWORD') ?? '';
+
+        return self::create($url, $autoCommit, $username, $password);
     }
 
     /**

@@ -45,7 +45,7 @@ class MSSQLAdapter implements DatabaseAdapter
             );
         }
 
-        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTO_COMMIT');
+        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');
         $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
         $this->open();
     }
@@ -388,8 +388,8 @@ class MSSQLAdapter implements DatabaseAdapter
             return [
                 'host' => $parts['host'] ?? 'localhost',
                 'port' => $parts['port'] ?? 1433,
-                'username' => isset($parts['user']) ? urldecode($parts['user']) : '',
-                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : '',
+                'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
+                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
                 'database' => ltrim($parts['path'] ?? '', '/'),
             ];
         }
