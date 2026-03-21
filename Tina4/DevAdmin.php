@@ -336,6 +336,76 @@ class DevAdmin
             return $response->json(['tool' => $tool, 'output' => $output]);
         });
 
+        // API: Gallery — list available gallery examples
+        Router::get('/__dev/api/gallery', function (Request $request, Response $response) {
+            $galleryDir = __DIR__ . '/gallery';
+            $items = [];
+            if (is_dir($galleryDir)) {
+                $entries = scandir($galleryDir);
+                sort($entries);
+                foreach ($entries as $entry) {
+                    if ($entry === '.' || $entry === '..') {
+                        continue;
+                    }
+                    $metaFile = $galleryDir . '/' . $entry . '/meta.json';
+                    if (is_dir($galleryDir . '/' . $entry) && file_exists($metaFile)) {
+                        $meta = json_decode(file_get_contents($metaFile), true);
+                        $meta['id'] = $entry;
+                        // List the files that would be deployed
+                        $srcDir = $galleryDir . '/' . $entry . '/src';
+                        if (is_dir($srcDir)) {
+                            $files = [];
+                            $iterator = new \RecursiveIteratorIterator(
+                                new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+                            );
+                            foreach ($iterator as $file) {
+                                if ($file->isFile()) {
+                                    $files[] = str_replace($srcDir . '/', '', $file->getPathname());
+                                }
+                            }
+                            sort($files);
+                            $meta['files'] = $files;
+                        }
+                        $items[] = $meta;
+                    }
+                }
+            }
+            return $response->json(['gallery' => $items, 'count' => count($items)]);
+        });
+
+        // API: Gallery — deploy a gallery example into the running project
+        Router::post('/__dev/api/gallery/deploy', function (Request $request, Response $response) {
+            $name = $request->input('name') ?? '';
+            if ($name === '') {
+                return $response->json(['error' => 'No gallery item specified'], 400);
+            }
+
+            $gallerySrc = __DIR__ . '/gallery/' . $name . '/src';
+            if (!is_dir($gallerySrc)) {
+                return $response->json(['error' => "Gallery item '{$name}' not found"], 404);
+            }
+
+            $projectSrc = getcwd() . '/src';
+            $copied = [];
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($gallerySrc, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $rel = str_replace($gallerySrc . '/', '', $file->getPathname());
+                    $dest = $projectSrc . '/' . $rel;
+                    $destDir = dirname($dest);
+                    if (!is_dir($destDir)) {
+                        mkdir($destDir, 0755, true);
+                    }
+                    copy($file->getPathname(), $dest);
+                    $copied[] = $rel;
+                }
+            }
+
+            return $response->json(['deployed' => $name, 'files' => $copied]);
+        });
+
         // API: Chat (placeholder)
         Router::post('/__dev/api/chat', function (Request $request, Response $response) {
             $message = $request->input('message') ?? '';
