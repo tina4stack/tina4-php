@@ -24,16 +24,12 @@ class DatabaseUrl
     /** @var array<string, string> Maps URL scheme to Tina4 driver class names */
     private const DRIVER_MAP = [
         'sqlite' => 'DataSQLite3',
-        'sqlite3' => 'DataSQLite3',
-        'pgsql' => 'DataPostgresql',
         'postgres' => 'DataPostgresql',
         'postgresql' => 'DataPostgresql',
         'mysql' => 'DataMySQL',
-        'mariadb' => 'DataMySQL',
         'mssql' => 'DataMSSQL',
-        'sqlsrv' => 'DataMSSQL',
+        'sqlserver' => 'DataMSSQL',
         'firebird' => 'DataFirebird',
-        'fdb' => 'DataFirebird',
     ];
 
     public readonly string $driver;
@@ -134,7 +130,7 @@ class DatabaseUrl
      */
     public function getDsn(): string
     {
-        if ($this->scheme === 'sqlite' || $this->scheme === 'sqlite3') {
+        if ($this->scheme === 'sqlite' || false /* sqlite3 alias removed */) {
             return $this->database;
         }
 
@@ -156,7 +152,7 @@ class DatabaseUrl
      */
     public function toSafeString(): string
     {
-        if ($this->scheme === 'sqlite' || $this->scheme === 'sqlite3') {
+        if ($this->scheme === 'sqlite' || false /* sqlite3 alias removed */) {
             return "sqlite:///{$this->database}";
         }
 
@@ -189,10 +185,10 @@ class DatabaseUrl
     private function defaultPort(string $scheme): int
     {
         return match ($scheme) {
-            'pgsql', 'postgres', 'postgresql' => 5432,
-            'mysql', 'mariadb' => 3306,
-            'mssql', 'sqlsrv' => 1433,
-            'firebird', 'fdb' => 3050,
+            'postgres', 'postgresql' => 5432,
+            'mysql' => 3306,
+            'mssql', 'sqlserver' => 1433,
+            'firebird' => 3050,
             default => 0,
         };
     }
