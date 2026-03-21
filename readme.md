@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-1166%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-1304%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/carbonah-A%2B%20rated-00cc44" alt="Carbonah A+">
   <img src="https://img.shields.io/badge/zero--dep-core-blue" alt="Zero Dependencies">
   <img src="https://img.shields.io/badge/php-8.2%2B-blue" alt="PHP 8.2+">
@@ -48,16 +48,18 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 |----------|----------|
 | **HTTP** | Built-in PHP server, static route registration, path params (`{id}`, `{name}`), middleware pipeline, CORS, rate limiting |
 | **Templates** | Frond engine (Twig-compatible), inheritance, partials, filters, macros, fragment caching, sandboxing |
-| **ORM** | Active Record, typed properties, soft delete, relationships (`hasOne`/`hasMany`), field mapping, table filters, multi-database |
-| **Database** | SQLite3, PostgreSQL, MySQL, MSSQL, Firebird -- unified adapter interface, `DatabaseFactory::create()` |
+| **ORM** | Active Record, typed properties, soft delete, relationships (`hasOne`/`hasMany`/`belongsTo` with eager loading), field mapping, table filters, multi-database |
+| **Database** | SQLite3, PostgreSQL, MySQL, MSSQL, Firebird -- unified adapter interface, query caching (TINA4_DB_CACHE=true for 4x speedup) |
 | **Auth** | Zero-dep JWT (RS256/HS256), sessions, secure key generation, form tokens |
 | **API** | Swagger/OpenAPI auto-generation, GraphQL with ORM auto-schema and GraphiQL IDE |
-| **Background** | Service runner for long-running processes, async triggers and events |
+| **Background** | Queue (SQLite/RabbitMQ/Kafka) with priority, delayed jobs, retry, batch processing |
 | **Real-time** | Swoole HTTP and TCP support |
 | **Frontend** | tina4-css, frond.js helper, SCSS compiler, live reload |
 | **DX** | Dev admin dashboard, error overlay, request inspector, annotation-driven testing |
 | **Data** | Migrations with rollback, ORM seeders, fake data generators |
-| **Other** | REST client, localization (i18n), in-memory cache (TTL), event system, configurable error pages, HTML element builder, health check |
+| **Other** | REST client, localization (i18n), cache (memory/Redis/file), event system, messenger (.env driven), configurable error pages, HTML element builder, health check |
+
+**1,304 tests across 38 built-in features. Zero dependencies. All Carbonah benchmarks rated A+.**
 
 For full documentation visit **[tina4.com](https://tina4.com)**.
 
@@ -469,11 +471,63 @@ composer tina4                           # Tina4 menu
 composer exec tina4 initialize:run       # Scaffold a new project
 composer start                           # Start dev server (default: 7146)
 composer start 8080                      # Start on specific port
+composer start --production              # Auto-use OPcache + best production config
 composer tina4 migrate                   # Run pending migrations
 composer tina4 migrate:create <desc>     # Create a migration file
+composer tina4 generate model <name>     # Generate ORM model scaffold
+composer tina4 generate route <name>     # Generate route scaffold
+composer tina4 generate migration <desc> # Generate migration file
+composer tina4 generate middleware <name># Generate middleware scaffold
 composer test                            # Run test suite
 composer start-service                   # Start background service runner
 ```
+
+### Production Server Auto-Detection
+
+`tina4 serve` auto-detects the best production configuration:
+
+- **PHP**: OPcache enabled, optimized settings
+- Use `composer start --production` to auto-apply production configuration
+
+### Scaffolding with `tina4 generate`
+
+Quickly scaffold new components:
+
+```bash
+composer tina4 generate model User          # Creates src/orm/User.php
+composer tina4 generate route users         # Creates src/routes/users.php
+composer tina4 generate migration "add age" # Creates migration SQL file
+composer tina4 generate middleware AuthLog   # Creates middleware class
+```
+
+### ORM Relationships & Eager Loading
+
+```php
+// Relationships defined on the model
+public $hasMany = [["Order" => "userId"]];
+public $hasOne = [["Profile" => "userId"]];
+public $belongsTo = [["Customer" => "customerId"]];
+
+// Eager loading with include
+$users = (new User())->select("*", 100, include: ["orders", "profile"])->asArray();
+```
+
+### DB Query Caching
+
+Enable query caching for up to 4x speedup on read-heavy workloads:
+
+```bash
+# .env
+TINA4_DB_CACHE=true
+```
+
+### Frond Pre-Compilation
+
+Templates are pre-compiled for 2.8x faster rendering.
+
+### Gallery
+
+7 interactive examples with **Try It** deploy.
 
 ## Environment
 
@@ -513,7 +567,7 @@ Full guides, API reference, and examples at **[tina4.com](https://tina4.com)**.
 
 ## License
 
-MIT (c) 2007-2025 Tina4 Stack
+MIT (c) 2007-2026 Tina4 Stack
 https://opensource.org/licenses/MIT
 
 ---

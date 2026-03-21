@@ -14,6 +14,7 @@
  *   tina4php routes                 List all registered routes
  *   tina4php test                   Run test suite
  *   tina4php build                  Build distributable package
+ *   tina4php generate <what> <name>  Generate scaffolding (model, route, migration, middleware)
  *   tina4php ai [--all]             Detect AI tools and install context
  *   tina4php help                   Show this help
  */
@@ -381,6 +382,67 @@ PHP;
     // ────────────────────────────────────────────
     // AI — Install AI context files
     // ────────────────────────────────────────────
+    case 'generate':
+        $what = $args[0] ?? null;
+        $genName = $args[1] ?? null;
+        if (!$what || !$genName) {
+            echo "Usage: tina4php generate <what> <name>\n";
+            echo "  Generators: model, route, migration, middleware\n";
+            exit(1);
+        }
+        switch ($what) {
+            case 'model':
+                $dir = 'src/orm';
+                @mkdir($dir, 0755, true);
+                $path = "$dir/$genName.php";
+                if (file_exists($path)) { echo "  File already exists: $path\n"; exit(1); }
+                file_put_contents($path, "<?php\n\nclass $genName extends \\Tina4\\ORM {\n    public ?int \$id = null;\n    public string \$name = '';\n    public string \$email = '';\n}\n");
+                echo "  Created $path\n";
+                break;
+            case 'route':
+                $routePath = ltrim($genName, '/');
+                $dir = "src/routes/$routePath";
+                @mkdir($dir, 0755, true);
+                $path = rtrim($dir, '/') . '.php';
+                if (file_exists($path)) { echo "  File already exists: $path\n"; exit(1); }
+                $content = "<?php\n\n";
+                $content .= "\\Tina4\\Get::add(\"/$routePath\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"data\" => []]);\n});\n\n";
+                $content .= "\\Tina4\\Get::add(\"/$routePath/{id}\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"data\" => []]);\n});\n\n";
+                $content .= "\\Tina4\\Post::add(\"/$routePath\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"message\" => \"created\"], 201);\n});\n\n";
+                $content .= "\\Tina4\\Put::add(\"/$routePath/{id}\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"message\" => \"updated\"]);\n});\n\n";
+                $content .= "\\Tina4\\Delete::add(\"/$routePath/{id}\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"message\" => \"deleted\"]);\n});\n";
+                file_put_contents($path, $content);
+                echo "  Created $path\n";
+                break;
+            case 'migration':
+                $dir = 'migrations';
+                @mkdir($dir, 0755, true);
+                $timestamp = date('YmdHis');
+                $table = preg_replace('/^create_/', '', $genName);
+                if (!str_ends_with($table, 's')) {
+                    $table = str_ends_with($table, 'y') ? substr($table, 0, -1) . 'ies' : $table . 's';
+                }
+                $fileName = "{$timestamp}_{$genName}.sql";
+                $path = "$dir/$fileName";
+                $now = date('Y-m-d H:i:s');
+                file_put_contents($path, "-- Migration: $genName\n-- Created: $now\n\nCREATE TABLE $table (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name TEXT NOT NULL,\n    email TEXT NOT NULL,\n    created_at DATETIME DEFAULT CURRENT_TIMESTAMP\n);\n");
+                echo "  Created $path\n";
+                break;
+            case 'middleware':
+                $dir = 'src/middleware';
+                @mkdir($dir, 0755, true);
+                $path = "$dir/$genName.php";
+                if (file_exists($path)) { echo "  File already exists: $path\n"; exit(1); }
+                file_put_contents($path, "<?php\n\nclass $genName extends \\Tina4\\Middleware {\n    public function process(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?\\Tina4\\Response {\n        \$auth = \$request->getHeader(\"Authorization\");\n        if (empty(\$auth)) {\n            return \$response->json([\"error\" => \"Unauthorized\"], 401);\n        }\n        return null;\n    }\n}\n");
+                echo "  Created $path\n";
+                break;
+            default:
+                echo "Unknown generator: $what\n";
+                echo "  Available: model, route, migration, middleware\n";
+                exit(1);
+        }
+        break;
+
     case 'ai':
         echo "AI context installation not yet implemented in v3.\n";
         break;
@@ -405,6 +467,7 @@ PHP;
         echo "  routes                  List all registered routes\n";
         echo "  test                    Run test suite\n";
         echo "  build                   Build distributable package\n";
+        echo "  generate <what> <name>  Generate scaffolding (model, route, migration, middleware)\n";
         echo "  ai [--all]              Detect AI tools and install context\n";
         echo "  help                    Show this help\n";
         break;
