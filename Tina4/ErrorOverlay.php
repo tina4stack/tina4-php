@@ -193,7 +193,7 @@ HTML;
     public static function isDebugMode(): bool
     {
         $debug = getenv('TINA4_DEBUG') ?: ($_ENV['TINA4_DEBUG'] ?? 'false');
-        return strtolower($debug) === 'true';
+        return DotEnv::isTruthy($debug);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
