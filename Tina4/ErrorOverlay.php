@@ -187,7 +187,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 </head>
 <body>
 <div class="error-card">
-    <div class="logo">T4</div>
     <div class="error-code">{$statusCode}</div>
     <div class="error-title">{$e_msg}</div>
     <div class="error-msg">Something went wrong while processing your request.</div>
