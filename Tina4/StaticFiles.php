@@ -75,7 +75,7 @@ class StaticFiles
         $searchDirs = [
             $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public',
             $basePath . DIRECTORY_SEPARATOR . 'public',
-            dirname(__DIR__) . DIRECTORY_SEPARATOR . 'public',
+            dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public',
         ];
 
         // Normalise the request path to a relative file path
