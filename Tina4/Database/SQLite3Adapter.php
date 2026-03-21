@@ -168,6 +168,38 @@ class SQLite3Adapter implements DatabaseAdapter
         return $this->exec($sql, $params);
     }
 
+    public function executeMany(string $sql, array $paramsList = []): int
+    {
+        $this->ensureOpen();
+        $this->lastError = null;
+        $totalAffected = 0;
+
+        try {
+            $stmt = $this->db->prepare($sql);
+            if ($stmt === false) {
+                $this->lastError = $this->db->lastErrorMsg();
+                return 0;
+            }
+
+            foreach ($paramsList as $params) {
+                $stmt->reset();
+                $stmt->clear();
+                $this->bindParams($stmt, $params);
+                $result = $stmt->execute();
+                if ($result !== false) {
+                    $totalAffected += $this->db->changes();
+                    $result->finalize();
+                }
+            }
+
+            $stmt->close();
+            return $totalAffected;
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+            return 0;
+        }
+    }
+
     public function fetchOne(string $sql, array $params = []): ?array
     {
         $rows = $this->query($sql, $params);
@@ -176,6 +208,16 @@ class SQLite3Adapter implements DatabaseAdapter
 
     public function insert(string $table, array $data): bool
     {
+        // Detect list of rows (indexed array of assoc arrays)
+        if (isset($data[0]) && is_array($data[0])) {
+            $keys = array_keys($data[0]);
+            $cols = implode(', ', $keys);
+            $placeholders = implode(', ', array_fill(0, count($keys), '?'));
+            $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+            $paramsList = array_map(fn($row) => array_values($row), $data);
+            return $this->executeMany($sql, $paramsList) > 0;
+        }
+
         $cols = implode(', ', array_keys($data));
         $placeholders = implode(', ', array_fill(0, count($data), '?'));
         $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
@@ -198,11 +240,34 @@ class SQLite3Adapter implements DatabaseAdapter
         return $this->execute($sql, $params);
     }
 
-    public function delete(string $table, string $where = '', array $whereParams = []): bool
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool
     {
+        // List of assoc arrays — delete each row
+        if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            foreach ($filter as $row) {
+                if (!$this->delete($table, $row)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Assoc array — build WHERE from keys
+        if (is_array($filter)) {
+            $parts = [];
+            $params = [];
+            foreach ($filter as $col => $val) {
+                $parts[] = "{$col} = ?";
+                $params[] = $val;
+            }
+            $where = implode(' AND ', $parts);
+            return $this->delete($table, $where, $params);
+        }
+
+        // String filter
         $sql = "DELETE FROM {$table}";
-        if ($where !== '') {
-            $sql .= " WHERE {$where}";
+        if ($filter !== '') {
+            $sql .= " WHERE {$filter}";
         }
         return $this->execute($sql, $whereParams);
     }

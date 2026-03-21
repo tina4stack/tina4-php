@@ -236,10 +236,10 @@ The `template()` method uses `Frond` (built-in Twig-compatible engine, zero depe
 
 ```php
 $auth = new \Tina4\Auth();
-$auth->getToken(array $payLoad = [], int $expiresInDays = 0): string
-$auth->validToken(string $token): bool
-$auth->getPayLoad($token): ?array
-$auth->generateSecureKeys(): bool
+Auth::getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+Auth::validToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+Auth::getPayload(string $token): ?array
+// Aliases: createToken() -> getToken(), validateToken() -> validToken()
 ```
 
 ### Api — External HTTP client

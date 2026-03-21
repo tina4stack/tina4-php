@@ -233,6 +233,64 @@ class Response
     }
 
     /**
+     * Serve a file as the response.
+     *
+     * Reads the file, sets the appropriate Content-Type (auto-detected from
+     * extension if not provided), and optionally forces a download via
+     * Content-Disposition: attachment.
+     *
+     * @param string      $path        Path to the file
+     * @param string|null $contentType MIME type (auto-detected if null)
+     * @param bool        $download    If true, sets Content-Disposition: attachment
+     * @return $this
+     */
+    public function file(string $path, ?string $contentType = null, bool $download = false): self
+    {
+        if (!file_exists($path) || !is_readable($path)) {
+            $this->statusCode = 404;
+            $this->headers['Content-Type'] = 'text/plain; charset=UTF-8';
+            $this->body = "File not found: {$path}";
+            return $this;
+        }
+
+        // Auto-detect content type from extension
+        if ($contentType === null) {
+            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+            $mimeMap = [
+                'html' => 'text/html', 'htm' => 'text/html',
+                'css' => 'text/css', 'js' => 'application/javascript',
+                'json' => 'application/json', 'xml' => 'application/xml',
+                'txt' => 'text/plain', 'csv' => 'text/csv',
+                'pdf' => 'application/pdf',
+                'zip' => 'application/zip', 'gz' => 'application/gzip',
+                'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+                'gif' => 'image/gif', 'svg' => 'image/svg+xml', 'webp' => 'image/webp',
+                'ico' => 'image/x-icon',
+                'mp3' => 'audio/mpeg', 'wav' => 'audio/wav', 'ogg' => 'audio/ogg',
+                'mp4' => 'video/mp4', 'webm' => 'video/webm',
+                'woff' => 'font/woff', 'woff2' => 'font/woff2',
+                'ttf' => 'font/ttf', 'otf' => 'font/otf',
+                'doc' => 'application/msword',
+                'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'xls' => 'application/vnd.ms-excel',
+                'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ];
+            $contentType = $mimeMap[$ext] ?? 'application/octet-stream';
+        }
+
+        $this->headers['Content-Type'] = $contentType;
+        $this->headers['Content-Length'] = (string)filesize($path);
+
+        if ($download) {
+            $filename = basename($path);
+            $this->headers['Content-Disposition'] = "attachment; filename=\"{$filename}\"";
+        }
+
+        $this->body = file_get_contents($path);
+        return $this;
+    }
+
+    /**
      * Get the current status code.
      */
     public function getStatusCode(): int

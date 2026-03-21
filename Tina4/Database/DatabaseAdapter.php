@@ -76,8 +76,11 @@ interface DatabaseAdapter
      * Build and execute an INSERT statement.
      * Maps to Python: insert(table, data)
      *
+     * Accepts a single associative array (one row) or a list of associative
+     * arrays (multiple rows — calls executeMany internally).
+     *
      * @param string $table Table name
-     * @param array<string, mixed> $data Column => value pairs
+     * @param array<string, mixed>|array<int, array<string, mixed>> $data Column => value pairs, or list of rows
      * @return bool True on success
      */
     public function insert(string $table, array $data): bool;
@@ -96,14 +99,29 @@ interface DatabaseAdapter
 
     /**
      * Build and execute a DELETE statement.
-     * Maps to Python: delete(table, where)
+     * Maps to Python: delete(table, filter)
+     *
+     * Accepts:
+     *   - string $filter: SQL WHERE clause (e.g. "age < 18")
+     *   - array $filter: key-value pairs to build WHERE (e.g. ["id" => 5])
+     *   - array of arrays: delete multiple rows by key match
      *
      * @param string $table Table name
-     * @param string $where WHERE clause (without "WHERE")
-     * @param array<mixed> $whereParams Bound parameters for WHERE clause
+     * @param string|array $filter WHERE clause string, or assoc array, or list of assoc arrays
+     * @param array<mixed> $whereParams Bound parameters (only for string filter)
      * @return bool True on success
      */
-    public function delete(string $table, string $where = '', array $whereParams = []): bool;
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool;
+
+    /**
+     * Execute a single SQL statement with multiple parameter sets (batch).
+     * Maps to Python: execute_many(sql, params_list)
+     *
+     * @param string $sql SQL statement with placeholders
+     * @param array<int, array<mixed>> $paramsList List of parameter arrays
+     * @return int Total affected rows
+     */
+    public function executeMany(string $sql, array $paramsList = []): int;
 
     /**
      * Check if a table exists.

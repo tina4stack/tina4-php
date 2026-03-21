@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>403 Error - {{ server.REQUEST_URI }}</title>
-</head>
-<body style="text-align: center">
-<h2>Well this looks really bad! Are you a hacker?</h2>
-<img src="{{ baseURL }}/images/403.png" alt="403 Error - {{ server.REQUEST_URI }}">
-<h3>Visit <a target="_blank" alt="Visit tina4.com" href="https://tina4.com">https://tina4.com</a> for help.</h3>
-</body>
-</html>
+{% extends "errors/base.twig" %}
+{% block title %}403 — Forbidden{% endblock %}
+{% block content %}
+    <div class="error-code" style="color:var(--warn)">403</div>
+    <div class="error-title">Forbidden</div>
+    <div class="error-msg">You don't have permission to access this resource.</div>
+    <div class="error-path" style="color:var(--warn)">{{ server.REQUEST_URI }}</div>
+    <a href="/" class="error-home">Go Home</a>
+{% endblock %}

@@ -1085,14 +1085,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </div>
 
-<script src="/js/tina4-dev-admin.js"></script>
+<script src="/js/tina4-dev-admin.min.js"></script>
 <script>
 // Self-diagnostic — detect if the external JS failed to load
 (function() {
     if (typeof showTab !== 'function') {
         var banner = document.createElement('div');
         banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#ef4444;color:#fff;padding:0.75rem 1rem;font-family:system-ui;font-size:0.85rem;text-align:center';
-        banner.innerHTML = '<strong>Dev Admin Error:</strong> tina4-dev-admin.js failed to load. Check that /js/tina4-dev-admin.js is accessible.';
+        banner.innerHTML = '<strong>Dev Admin Error:</strong> tina4-dev-admin.min.js failed to load. Check that /js/tina4-dev-admin.min.js is accessible.';
         document.body.insertBefore(banner, document.body.firstChild);
     }
 })();

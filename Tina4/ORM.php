@@ -634,6 +634,40 @@ abstract class ORM
     }
 
     /**
+     * Create the table for this model from its column definitions.
+     * Maps to Python: create_table()
+     *
+     * Uses getColumns() on the adapter to introspect, falls back to
+     * generating DDL from the model's data keys if the table does not exist.
+     *
+     * @param array<string, string> $columns Column definitions: ['name' => 'TEXT', 'age' => 'INTEGER']
+     *                                       If empty, uses existing model data keys with TEXT type.
+     * @return bool True on success
+     */
+    public function createTable(array $columns = []): bool
+    {
+        $this->ensureDb();
+
+        if ($this->_db->tableExists($this->tableName)) {
+            return true;
+        }
+
+        if (empty($columns)) {
+            // No column definitions — create a minimal table with just the primary key
+            $pkColumn = $this->getDbColumn($this->primaryKey);
+            $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} ({$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT)";
+        } else {
+            $colDefs = [];
+            foreach ($columns as $colName => $colType) {
+                $colDefs[] = "{$colName} {$colType}";
+            }
+            $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
+        }
+
+        return $this->_db->execute($sql);
+    }
+
+    /**
      * Get all data (for internal use by AutoCrud etc.).
      *
      * @return array<string, mixed>

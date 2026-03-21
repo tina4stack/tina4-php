@@ -186,8 +186,29 @@ class PostgresAdapter implements DatabaseAdapter
         }
     }
 
+    public function executeMany(string $sql, array $paramsList = []): int
+    {
+        $totalAffected = 0;
+        foreach ($paramsList as $params) {
+            if ($this->execute($sql, $params)) {
+                $totalAffected++;
+            }
+        }
+        return $totalAffected;
+    }
+
     public function insert(string $table, array $data): bool
     {
+        // Detect list of rows
+        if (isset($data[0]) && is_array($data[0])) {
+            $keys = array_keys($data[0]);
+            $cols = implode(', ', $keys);
+            $placeholders = implode(', ', array_map(fn(int $i) => '$' . ($i + 1), array_keys($keys)));
+            $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+            $paramsList = array_map(fn($row) => array_values($row), $data);
+            return $this->executeMany($sql, $paramsList) > 0;
+        }
+
         $cols = implode(', ', array_keys($data));
         $placeholders = implode(', ', array_map(
             fn(int $i) => '$' . ($i + 1),
@@ -246,12 +267,40 @@ class PostgresAdapter implements DatabaseAdapter
         return true;
     }
 
-    public function delete(string $table, string $where = '', array $whereParams = []): bool
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool
     {
-        $sql = "DELETE FROM {$table}";
+        // List of assoc arrays — delete each row
+        if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            foreach ($filter as $row) {
+                if (!$this->delete($table, $row)) return false;
+            }
+            return true;
+        }
 
-        if ($where !== '') {
-            $pgWhere = $this->convertPlaceholders($where);
+        // Assoc array — build WHERE from keys
+        if (is_array($filter)) {
+            $parts = [];
+            $params = [];
+            $i = 1;
+            foreach ($filter as $col => $val) {
+                $parts[] = "{$col} = \${$i}";
+                $params[] = $val;
+                $i++;
+            }
+            $sql = "DELETE FROM {$table} WHERE " . implode(' AND ', $parts);
+            $result = @pg_query_params($this->db, $sql, $params);
+            if ($result === false) {
+                $this->lastError = pg_last_error($this->db);
+                return false;
+            }
+            pg_free_result($result);
+            return true;
+        }
+
+        // String filter
+        $sql = "DELETE FROM {$table}";
+        if ($filter !== '') {
+            $pgWhere = $this->convertPlaceholders($filter);
             $sql .= " WHERE {$pgWhere}";
         }
 
