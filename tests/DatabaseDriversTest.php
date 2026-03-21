@@ -115,20 +115,24 @@ class DatabaseDriversTest extends TestCase
     {
         $schemes = DatabaseFactory::supportedSchemes();
         $this->assertContains('sqlite', $schemes);
-        $this->assertContains('pgsql', $schemes);
         $this->assertContains('postgres', $schemes);
+        $this->assertContains('postgresql', $schemes);
         $this->assertContains('mysql', $schemes);
         $this->assertContains('mssql', $schemes);
+        $this->assertContains('sqlserver', $schemes);
         $this->assertContains('firebird', $schemes);
     }
 
     public function testFactoryIsSupported(): void
     {
         $this->assertTrue(DatabaseFactory::isSupported('sqlite'));
-        $this->assertTrue(DatabaseFactory::isSupported('pgsql'));
+        $this->assertTrue(DatabaseFactory::isSupported('postgres'));
+        $this->assertTrue(DatabaseFactory::isSupported('postgresql'));
         $this->assertTrue(DatabaseFactory::isSupported('mysql'));
         $this->assertTrue(DatabaseFactory::isSupported('mssql'));
+        $this->assertTrue(DatabaseFactory::isSupported('sqlserver'));
         $this->assertTrue(DatabaseFactory::isSupported('firebird'));
+        $this->assertFalse(DatabaseFactory::isSupported('pgsql'));
         $this->assertFalse(DatabaseFactory::isSupported('oracle'));
         $this->assertFalse(DatabaseFactory::isSupported('cassandra'));
     }

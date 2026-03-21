@@ -366,6 +366,125 @@ class DevAdmin
                 ],
             ]);
         });
+
+        // API: Get current .env database config
+        Router::get('/__dev/api/connections', function (Request $request, Response $response) {
+            $envPath = '.env';
+            $url = '';
+            $username = '';
+            $password = '';
+            if (file_exists($envPath)) {
+                $lines = file($envPath, FILE_IGNORE_NEW_LINES);
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+                        continue;
+                    }
+                    [$key, $val] = explode('=', $line, 2);
+                    $key = trim($key);
+                    $val = trim(trim($val), '"\'');
+                    if ($key === 'DATABASE_URL') {
+                        $url = $val;
+                    } elseif ($key === 'DATABASE_USERNAME') {
+                        $username = $val;
+                    } elseif ($key === 'DATABASE_PASSWORD') {
+                        $password = $val !== '' ? '***' : '';
+                    }
+                }
+            }
+            return $response->json(['url' => $url, 'username' => $username, 'password' => $password]);
+        });
+
+        // API: Test a database connection
+        Router::post('/__dev/api/connections/test', function (Request $request, Response $response) {
+            $url = $request->input('url') ?? '';
+            $username = $request->input('username') ?? '';
+            $password = $request->input('password') ?? '';
+            if ($url === '') {
+                return $response->json(['success' => false, 'error' => 'No connection URL provided']);
+            }
+            try {
+                $db = new DataBase($url, $username, $password);
+                $version = 'Connected';
+                $tableCount = 0;
+                try {
+                    $tables = $db->getDatabase();
+                    $tableCount = is_array($tables) ? count($tables) : 0;
+                } catch (\Throwable $e) {
+                    $tableCount = 0;
+                }
+                try {
+                    $urlLower = strtolower($url);
+                    if (str_contains($urlLower, 'sqlite')) {
+                        $row = $db->query("SELECT sqlite_version() as v");
+                        $version = 'SQLite ' . ($row[0]['v'] ?? '');
+                    } elseif (str_contains($urlLower, 'pgsql') || str_contains($urlLower, 'postgresql') || str_contains($urlLower, 'postgres')) {
+                        $row = $db->query("SELECT version() as v");
+                        $version = explode(',', $row[0]['v'] ?? '')[0];
+                    } elseif (str_contains($urlLower, 'mysql')) {
+                        $row = $db->query("SELECT version() as v");
+                        $version = 'MySQL ' . ($row[0]['v'] ?? '');
+                    } elseif (str_contains($urlLower, 'mssql') || str_contains($urlLower, 'sqlsrv')) {
+                        $row = $db->query("SELECT @@VERSION as v");
+                        $version = explode("\n", $row[0]['v'] ?? '')[0];
+                    } elseif (str_contains($urlLower, 'firebird')) {
+                        $row = $db->query("SELECT rdb\$get_context('SYSTEM', 'ENGINE_VERSION') as v FROM rdb\$database");
+                        $version = 'Firebird ' . ($row[0]['v'] ?? '');
+                    }
+                } catch (\Throwable $e) {
+                    // Keep $version as 'Connected'
+                }
+                return $response->json(['success' => true, 'version' => $version, 'tables' => $tableCount]);
+            } catch (\Throwable $e) {
+                return $response->json(['success' => false, 'error' => $e->getMessage()]);
+            }
+        });
+
+        // API: Save connection to .env
+        Router::post('/__dev/api/connections/save', function (Request $request, Response $response) {
+            $url = $request->input('url') ?? '';
+            $username = $request->input('username') ?? '';
+            $password = $request->input('password') ?? '';
+            if ($url === '') {
+                return $response->json(['success' => false, 'error' => 'No connection URL provided']);
+            }
+            try {
+                $envPath = '.env';
+                $lines = file_exists($envPath) ? file($envPath, FILE_IGNORE_NEW_LINES) : [];
+                $keysFound = ['DATABASE_URL' => false, 'DATABASE_USERNAME' => false, 'DATABASE_PASSWORD' => false];
+                $newLines = [];
+                foreach ($lines as $line) {
+                    $trimmed = trim($line);
+                    if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                        $newLines[] = $line;
+                        continue;
+                    }
+                    $key = trim(explode('=', $trimmed, 2)[0]);
+                    if ($key === 'DATABASE_URL') {
+                        $newLines[] = "DATABASE_URL={$url}";
+                        $keysFound['DATABASE_URL'] = true;
+                    } elseif ($key === 'DATABASE_USERNAME') {
+                        $newLines[] = "DATABASE_USERNAME={$username}";
+                        $keysFound['DATABASE_USERNAME'] = true;
+                    } elseif ($key === 'DATABASE_PASSWORD') {
+                        $newLines[] = "DATABASE_PASSWORD={$password}";
+                        $keysFound['DATABASE_PASSWORD'] = true;
+                    } else {
+                        $newLines[] = $line;
+                    }
+                }
+                $values = ['DATABASE_URL' => $url, 'DATABASE_USERNAME' => $username, 'DATABASE_PASSWORD' => $password];
+                foreach ($keysFound as $key => $found) {
+                    if (!$found) {
+                        $newLines[] = "{$key}={$values[$key]}";
+                    }
+                }
+                file_put_contents($envPath, implode("\n", $newLines) . "\n");
+                return $response->json(['success' => true]);
+            } catch (\Throwable $e) {
+                return $response->json(['success' => false, 'error' => $e->getMessage()]);
+            }
+        });
     }
 
     /**
@@ -579,6 +698,7 @@ code, .mono { font-family: var(--mono); font-size: 0.82rem; }
     <button class="dev-tab" onclick="showTab('websockets', event)">WS <span class="count" id="ws-count">0</span></button>
     <button class="dev-tab" onclick="showTab('system', event)">System</button>
     <button class="dev-tab" onclick="showTab('tools', event)">Tools</button>
+    <button class="dev-tab" onclick="showTab('connections', event)">Connections</button>
     <button class="dev-tab" onclick="showTab('chat', event)">Tina4</button>
 </div>
 
@@ -773,6 +893,149 @@ code, .mono { font-family: var(--mono); font-size: 0.82rem; }
         <pre id="tool-result" style="padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:0.75rem;font-family:var(--mono);max-height:400px;overflow:auto;white-space:pre-wrap"></pre>
     </div>
 </div>
+
+<!-- Connections Panel -->
+<div id="panel-connections" class="dev-panel hidden">
+    <div class="dev-panel-header">
+        <h2>Connection Builder</h2>
+    </div>
+    <div class="p-md">
+        <div class="flex gap-md" style="flex-wrap:wrap">
+            <div style="flex:1;min-width:300px">
+                <div class="mb-sm">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Driver</label>
+                    <select id="conn-driver" class="input" style="width:100%" onchange="connDriverChanged()">
+                        <option value="sqlite">SQLite</option>
+                        <option value="postgresql">PostgreSQL</option>
+                        <option value="mysql">MySQL</option>
+                        <option value="mssql">MSSQL</option>
+                        <option value="firebird">Firebird</option>
+                    </select>
+                </div>
+                <div class="mb-sm conn-server-field">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Host</label>
+                    <input type="text" id="conn-host" class="input" style="width:100%" value="localhost" placeholder="localhost" oninput="updateConnectionUrl()">
+                </div>
+                <div class="mb-sm conn-server-field">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Port</label>
+                    <input type="number" id="conn-port" class="input" style="width:100%" placeholder="5432" oninput="updateConnectionUrl()">
+                </div>
+                <div class="mb-sm">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Database</label>
+                    <input type="text" id="conn-database" class="input" style="width:100%" placeholder="mydb" oninput="updateConnectionUrl()">
+                </div>
+                <div class="mb-sm conn-server-field">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Username</label>
+                    <input type="text" id="conn-username" class="input" style="width:100%" placeholder="username">
+                </div>
+                <div class="mb-sm conn-server-field">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Password</label>
+                    <input type="password" id="conn-password" class="input" style="width:100%" placeholder="password">
+                </div>
+                <div class="mb-sm">
+                    <label class="text-sm text-muted" style="display:block;margin-bottom:0.25rem">Connection URL</label>
+                    <input type="text" id="conn-url" class="input input-mono" style="width:100%" readonly>
+                </div>
+                <div class="flex gap-sm">
+                    <button class="btn btn-primary" onclick="testConnection()">Test Connection</button>
+                    <button class="btn btn-success" onclick="saveConnection()">Save to .env</button>
+                </div>
+            </div>
+            <div style="width:300px">
+                <div class="dev-panel" style="margin-bottom:1rem">
+                    <div class="dev-panel-header"><h2>Test Result</h2></div>
+                    <div id="conn-test-result" class="p-md text-sm text-muted">No test run yet</div>
+                </div>
+                <div class="dev-panel">
+                    <div class="dev-panel-header"><h2>Current .env Values</h2></div>
+                    <div id="conn-env-values" class="p-md text-sm text-muted">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function connDriverChanged() {
+    var driver = document.getElementById('conn-driver').value;
+    var ports = {postgresql: 5432, mysql: 3306, mssql: 1433, firebird: 3050};
+    var isSqlite = (driver === 'sqlite');
+    document.getElementById('conn-port').value = ports[driver] || '';
+    var fields = document.querySelectorAll('.conn-server-field');
+    for (var i = 0; i < fields.length; i++) {
+        fields[i].style.display = isSqlite ? 'none' : '';
+    }
+    updateConnectionUrl();
+}
+function updateConnectionUrl() {
+    var driver = document.getElementById('conn-driver').value;
+    var host = document.getElementById('conn-host').value || 'localhost';
+    var port = document.getElementById('conn-port').value;
+    var database = document.getElementById('conn-database').value;
+    if (driver === 'sqlite') {
+        document.getElementById('conn-url').value = 'sqlite:///' + database;
+    } else {
+        document.getElementById('conn-url').value = driver + '://' + host + ':' + port + '/' + database;
+    }
+}
+function testConnection() {
+    var url = document.getElementById('conn-url').value;
+    var username = document.getElementById('conn-username').value;
+    var password = document.getElementById('conn-password').value;
+    var el = document.getElementById('conn-test-result');
+    el.innerHTML = '<span class="text-muted">Testing...</span>';
+    fetch('/__dev/api/connections/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url, username: username, password: password})
+    }).then(function(r){return r.json()}).then(function(data) {
+        if (data.success) {
+            el.innerHTML = '<div style="color:var(--success);font-weight:600;margin-bottom:0.5rem">&#10004; Connected</div>' +
+                '<div class="text-sm">Version: ' + (data.version || 'N/A') + '</div>' +
+                '<div class="text-sm">Tables: ' + (data.tables !== undefined ? data.tables : 'N/A') + '</div>';
+        } else {
+            el.innerHTML = '<div style="color:var(--danger);font-weight:600;margin-bottom:0.5rem">&#10008; Failed</div>' +
+                '<div class="text-sm" style="color:var(--danger)">' + (data.error || 'Unknown error') + '</div>';
+        }
+    }).catch(function(e) {
+        el.innerHTML = '<div style="color:var(--danger)">Error: ' + e.message + '</div>';
+    });
+}
+function saveConnection() {
+    var url = document.getElementById('conn-url').value;
+    var username = document.getElementById('conn-username').value;
+    var password = document.getElementById('conn-password').value;
+    if (!url) { alert('Please build a connection URL first'); return; }
+    fetch('/__dev/api/connections/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url, username: username, password: password})
+    }).then(function(r){return r.json()}).then(function(data) {
+        if (data.success) {
+            alert('Connection saved to .env');
+            loadConnectionEnv();
+        } else {
+            alert('Save failed: ' + (data.error || 'Unknown error'));
+        }
+    }).catch(function(e) { alert('Error: ' + e.message); });
+}
+function loadConnectionEnv() {
+    fetch('/__dev/api/connections').then(function(r){return r.json()}).then(function(data) {
+        var el = document.getElementById('conn-env-values');
+        el.innerHTML = '<div class="mb-sm"><span class="text-muted">DATABASE_URL:</span> <code>' + (data.url || '<em>not set</em>') + '</code></div>' +
+            '<div class="mb-sm"><span class="text-muted">DATABASE_USERNAME:</span> <code>' + (data.username || '<em>not set</em>') + '</code></div>' +
+            '<div><span class="text-muted">DATABASE_PASSWORD:</span> <code>' + (data.password || '<em>not set</em>') + '</code></div>';
+    }).catch(function() {
+        document.getElementById('conn-env-values').innerHTML = '<span class="text-muted">Could not load .env values</span>';
+    });
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var connTab = document.querySelector('[onclick*="connections"]');
+    if (connTab) {
+        connTab.addEventListener('click', function() { loadConnectionEnv(); }, {once: true});
+    }
+});
+</script>
 
 <!-- Chat Panel (Tina4) -->
 <div id="panel-chat" class="dev-panel hidden">

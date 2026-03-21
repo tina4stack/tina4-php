@@ -344,7 +344,83 @@ CONTEXT;
             $created[] = $relative;
         }
 
+        // Install Claude Code skills if it's Claude
+        if ($name === 'claude-code') {
+            $skills = self::installClaudeSkills($root, $force);
+            $created = array_merge($created, $skills);
+        }
+
         return $created;
+    }
+
+    /**
+     * Copy Claude Code skill files from the framework's directories.
+     *
+     * @return string[] Files created (relative paths)
+     */
+    private static function installClaudeSkills(string $root, bool $force): array
+    {
+        $created = [];
+
+        // Determine the framework root (where Tina4/ lives)
+        $frameworkRoot = dirname(__DIR__);
+
+        // Copy .skill files from the framework's skills/ directory to project root
+        $skillsSource = $frameworkRoot . '/skills';
+        if (is_dir($skillsSource)) {
+            $skillFiles = glob($skillsSource . '/*.skill');
+            foreach ($skillFiles as $skillFile) {
+                $target = $root . '/' . basename($skillFile);
+                if (!file_exists($target) || $force) {
+                    copy($skillFile, $target);
+                    $created[] = basename($skillFile);
+                }
+            }
+        }
+
+        // Copy skill directories from .claude/skills/ in the framework to the project
+        $frameworkSkillsDir = $frameworkRoot . '/.claude/skills';
+        if (is_dir($frameworkSkillsDir)) {
+            $targetSkillsDir = $root . '/.claude/skills';
+            if (!is_dir($targetSkillsDir)) {
+                mkdir($targetSkillsDir, 0755, true);
+            }
+            $dirs = array_filter(glob($frameworkSkillsDir . '/*'), 'is_dir');
+            foreach ($dirs as $skillDir) {
+                $dirName = basename($skillDir);
+                $targetDir = $targetSkillsDir . '/' . $dirName;
+                if (!is_dir($targetDir) || $force) {
+                    self::copyDirectory($skillDir, $targetDir);
+                    $relative = ltrim(str_replace($root, '', $targetDir), '/');
+                    $created[] = $relative;
+                }
+            }
+        }
+
+        return $created;
+    }
+
+    /**
+     * Recursively copy a directory.
+     */
+    private static function copyDirectory(string $source, string $dest): void
+    {
+        if (!is_dir($dest)) {
+            mkdir($dest, 0755, true);
+        }
+        $items = scandir($source);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $srcPath = $source . '/' . $item;
+            $dstPath = $dest . '/' . $item;
+            if (is_dir($srcPath)) {
+                self::copyDirectory($srcPath, $dstPath);
+            } else {
+                copy($srcPath, $dstPath);
+            }
+        }
     }
 
     /**

@@ -28,6 +28,8 @@ class PostgresAdapter implements DatabaseAdapter
     public function __construct(
         private readonly string $connectionString,
         ?bool $autoCommit = null,
+        private readonly string $username = '',
+        private readonly string $password = '',
     ) {
         if (!function_exists('pg_connect')) {
             throw new \RuntimeException(
@@ -37,7 +39,7 @@ class PostgresAdapter implements DatabaseAdapter
             );
         }
 
-        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTO_COMMIT');
+        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');
         $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
         $this->open();
     }
@@ -394,11 +396,14 @@ class PostgresAdapter implements DatabaseAdapter
                 $dsn .= 'dbname=' . $dbName . ' ';
             }
         }
-        if (isset($parts['user'])) {
-            $dsn .= 'user=' . urldecode($parts['user']) . ' ';
+        $user = isset($parts['user']) ? urldecode($parts['user']) : $this->username;
+        $pass = isset($parts['pass']) ? urldecode($parts['pass']) : $this->password;
+
+        if ($user !== '') {
+            $dsn .= 'user=' . $user . ' ';
         }
-        if (isset($parts['pass'])) {
-            $dsn .= 'password=' . urldecode($parts['pass']) . ' ';
+        if ($pass !== '') {
+            $dsn .= 'password=' . $pass . ' ';
         }
 
         return trim($dsn);

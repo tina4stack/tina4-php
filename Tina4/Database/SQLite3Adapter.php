@@ -20,13 +20,13 @@ class SQLite3Adapter implements DatabaseAdapter
 
     /**
      * @param string $database Path to the SQLite database file, or ":memory:" for in-memory
-     * @param bool $autoCommit Whether to auto-commit (default based on env TINA4_AUTO_COMMIT)
+     * @param bool $autoCommit Whether to auto-commit (default based on env TINA4_AUTOCOMMIT)
      */
     public function __construct(
         private readonly string $database = ':memory:',
         ?bool $autoCommit = null,
     ) {
-        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTO_COMMIT');
+        $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');
         $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
         $this->open();
     }
