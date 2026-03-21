@@ -191,18 +191,34 @@ PHP;
             exit(1);
         }
 
-        echo "\e[35m"."
-████████╗██╗███╗   ██╗ █████╗ ██╗  ██╗
-╚══██╔══╝██║████╗  ██║██╔══██╗██║  ██║
-   ██║   ██║██╔██╗ ██║███████║███████║
-   ██║   ██║██║╚██╗██║██╔══██║╚════██║
-   ██║   ██║██║ ╚████║██║  ██║     ██║
-   ╚═╝   ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝     ╚═╝
-"."\e[0m";
-        echo "    \e[35mTina4 PHP v" . \Tina4\App::VERSION . " - This is not a framework\e[0m\n\n";
-        echo "  Server: http://{$host}:{$port}\n";
-        echo "  Root:   {$docRoot}\n";
-        echo "  Press Ctrl+C to stop\n\n";
+        // Only use colors when stdout is a TTY
+        $isTty = function_exists('posix_isatty') ? posix_isatty(STDOUT) : (getenv('TERM') !== false);
+        $color = $isTty ? "\e[35m" : "";
+        $reset = $isTty ? "\e[0m" : "";
+
+        // Load .env to read debug settings
+        $envFile = $cwd . DIRECTORY_SEPARATOR . '.env';
+        if (is_file($envFile) && class_exists('\Tina4\DotEnv')) {
+            \Tina4\DotEnv::loadEnv($envFile);
+        }
+
+        $isDebug = class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false')) : false;
+        $logLevel = (class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::getEnv('TINA4_LOG_LEVEL', 'DEBUG') : 'DEBUG');
+
+        echo "{$color}
+  ______ _             __ __
+ /_  __/(_)___  ____ _/ // /
+  / /  / / __ \\/ __ \`/ // /_
+ / /  / / / / / /_/ /__  __/
+/_/  /_/_/ /_/\\__,_/  /_/
+{$reset}
+  Tina4 PHP v" . \Tina4\App::VERSION . " — This is not a framework
+
+  Server:    http://{$host}:{$port}
+  Swagger:   http://localhost:{$port}/swagger
+  Dashboard: http://localhost:{$port}/__dev
+  Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
+";
 
         passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
         break;

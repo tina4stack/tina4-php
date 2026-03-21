@@ -50,7 +50,7 @@ class App
         }
 
         // Configure logger
-        $isDev = $this->development || DotEnv::getEnv('TINA4_DEBUG', 'false') === 'true';
+        $isDev = $this->development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         Log::configure(
             logDir: $this->basePath . DIRECTORY_SEPARATOR . 'logs',
             development: $isDev,
@@ -240,7 +240,7 @@ class App
      */
     public function isDevelopment(): bool
     {
-        return $this->development || DotEnv::getEnv('TINA4_DEBUG', 'false') === 'true';
+        return $this->development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
     }
 
     /**

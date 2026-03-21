@@ -292,7 +292,7 @@ class Router
         }
 
         // Dev toolbar injection: inject a fixed bottom toolbar into HTML responses
-        $isDev = DotEnv::getEnv('TINA4_DEBUG', 'false') === 'true';
+        $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         if ($isDev && !str_starts_with($request->path, '/__dev') && str_contains($finalResponse->getContentType() ?? '', 'text/html')) {
             $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
             $requestId = Log::getRequestId() ?? '';

@@ -19,8 +19,11 @@ class Log
     public const LEVEL_WARNING = 'WARNING';
     public const LEVEL_ERROR = 'ERROR';
 
-    /** Maximum log file size before rotation (10 MB) */
-    private const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    /** Maximum log file size before rotation in bytes (default 10 MB, configurable via TINA4_LOG_MAX_SIZE) */
+    private static int $maxFileSize = 10 * 1024 * 1024;
+
+    /** Number of rotated log files to keep (default 5, configurable via TINA4_LOG_KEEP) */
+    private static int $keepFiles = 5;
 
     /** @var string|null Current request ID for correlation */
     private static ?string $requestId = null;
@@ -64,6 +67,11 @@ class Log
         self::$stdout = $development;
         self::$humanReadable = $development;
         self::$minLevel = strtoupper($minLevel);
+
+        // Read rotation config from env (with defaults)
+        $maxSizeMb = (int) (DotEnv::getEnv('TINA4_LOG_MAX_SIZE') ?? '10');
+        self::$maxFileSize = $maxSizeMb * 1024 * 1024;
+        self::$keepFiles = (int) (DotEnv::getEnv('TINA4_LOG_KEEP') ?? '5');
     }
 
     /**
@@ -117,13 +125,16 @@ class Log
     /**
      * Write a log entry.
      */
+    /**
+     * Strip ANSI escape codes from a string.
+     */
+    private static function stripAnsi(string $text): string
+    {
+        return preg_replace('/\033\[[0-9;]*m/', '', $text) ?? $text;
+    }
+
     private static function log(string $level, string $message, array $context = []): void
     {
-        // Check minimum level
-        if (self::LEVEL_PRIORITY[$level] < self::LEVEL_PRIORITY[self::$minLevel] ?? 0) {
-            return;
-        }
-
         $entry = self::buildEntry($level, $message, $context);
 
         if (self::$humanReadable) {
@@ -134,13 +145,14 @@ class Log
 
         $line = $formatted . PHP_EOL;
 
-        // Write to stdout in development mode
-        if (self::$stdout) {
+        // Console output respects TINA4_LOG_LEVEL
+        $shouldLog = (self::LEVEL_PRIORITY[$level] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
+        if (self::$stdout && $shouldLog) {
             self::writeStdout($level, $line);
         }
 
-        // Always write to file
-        self::writeToFile($line);
+        // Always write ALL levels to file (raw log, no filtering), strip ANSI codes
+        self::writeToFile(self::stripAnsi($line));
     }
 
     /**
@@ -220,7 +232,9 @@ class Log
     }
 
     /**
-     * Write a log line to the log file, with rotation.
+     * Write a log line to the log file, with numbered rotation.
+     *
+     * Rotation scheme: tina4.log → tina4.log.1 → tina4.log.2 → ... → tina4.log.{keep}
      */
     private static function writeToFile(string $line): void
     {
@@ -233,42 +247,37 @@ class Log
         $filePath = $dir . DIRECTORY_SEPARATOR . self::$logFile;
 
         // Rotate if file exceeds max size
-        if (is_file($filePath) && filesize($filePath) >= self::MAX_FILE_SIZE) {
+        if (is_file($filePath) && filesize($filePath) >= self::$maxFileSize) {
             self::rotateLog($filePath);
-        }
-
-        // Date-based rotation: if the file is from a previous day, rotate it
-        if (is_file($filePath)) {
-            $fileDate = date('Y-m-d', filemtime($filePath));
-            $today = date('Y-m-d');
-            if ($fileDate !== $today) {
-                self::rotateLog($filePath, $fileDate);
-            }
         }
 
         file_put_contents($filePath, $line, FILE_APPEND | LOCK_EX);
     }
 
     /**
-     * Rotate a log file by renaming it with a date/time suffix.
+     * Rotate using numbered scheme: tina4.log.{keep} is deleted, all others shift up by 1.
      */
-    private static function rotateLog(string $filePath, ?string $dateSuffix = null): void
+    private static function rotateLog(string $filePath): void
     {
-        $suffix = $dateSuffix ?? date('Y-m-d_His');
-        $dir = dirname($filePath);
-        $base = pathinfo($filePath, PATHINFO_FILENAME);
-        $ext = pathinfo($filePath, PATHINFO_EXTENSION);
+        $keep = self::$keepFiles;
 
-        $rotatedPath = $dir . DIRECTORY_SEPARATOR . $base . '.' . $suffix . '.' . $ext;
-
-        // Avoid collision
-        $counter = 0;
-        while (file_exists($rotatedPath)) {
-            $counter++;
-            $rotatedPath = $dir . DIRECTORY_SEPARATOR . $base . '.' . $suffix . '.' . $counter . '.' . $ext;
+        // Delete the oldest rotated file if it exists
+        $oldest = $filePath . '.' . $keep;
+        if (is_file($oldest)) {
+            @unlink($oldest);
         }
 
-        rename($filePath, $rotatedPath);
+        // Shift existing rotated files: .{n} → .{n+1}
+        for ($n = $keep - 1; $n >= 1; $n--) {
+            $src = $filePath . '.' . $n;
+            $dst = $filePath . '.' . ($n + 1);
+            if (is_file($src)) {
+                @rename($src, $dst);
+            }
+        }
+
+        // Rename current log to .1
+        @rename($filePath, $filePath . '.1');
     }
 
     /**

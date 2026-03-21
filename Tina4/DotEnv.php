@@ -236,4 +236,18 @@ class DotEnv
     {
         return self::$variables;
     }
+
+    /**
+     * Check if a value is truthy for env boolean checks.
+     *
+     * Accepts: "true", "True", "TRUE", "1", "yes", "Yes", "YES", "on", "On", "ON".
+     * Everything else is falsy (including empty string, null, not set).
+     *
+     * @param string|null $val The value to check
+     * @return bool
+     */
+    public static function isTruthy(?string $val): bool
+    {
+        return in_array(strtolower(trim($val ?? '')), ['true', '1', 'yes', 'on']);
+    }
 }
