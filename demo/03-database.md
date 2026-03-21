@@ -2,7 +2,7 @@
 
 Tina4 v3 provides a `DatabaseAdapter` interface and a built-in `SQLite3Adapter` implementation. The adapter abstraction allows additional drivers (MySQL, PostgreSQL, MSSQL, Firebird) to be added by implementing the same interface. The `DatabaseUrl` class parses connection strings in standard URL format.
 
-Auto-commit is disabled by default and controlled by the `TINA4_AUTO_COMMIT` environment variable, keeping you safe from accidental writes.
+Auto-commit is disabled by default and controlled by the `TINA4_AUTOCOMMIT` environment variable, keeping you safe from accidental writes.
 
 ## DatabaseAdapter Interface
 
@@ -163,7 +163,7 @@ The `DatabaseUrl` class parses standard database connection URLs and maps them t
 use Tina4\DatabaseUrl;
 
 // Parse a connection URL
-$url = new DatabaseUrl('pgsql://user:pass@localhost:5432/myapp');
+$url = new DatabaseUrl('postgres://user:pass@localhost:5432/myapp');
 echo $url->driver;   // "DataPostgresql"
 echo $url->host;     // "localhost"
 echo $url->port;     // 5432
@@ -180,11 +180,11 @@ $url = new DatabaseUrl('sqlite::memory:');
 $url = DatabaseUrl::fromEnv('DATABASE_URL');
 
 // Supported schemes:
-// sqlite, sqlite3     -> DataSQLite3
-// pgsql, postgres     -> DataPostgresql
-// mysql, mariadb      -> DataMySQL
-// mssql, sqlsrv       -> DataMSSQL
-// firebird, fdb       -> DataFirebird
+// sqlite              -> DataSQLite3
+// postgres, postgresql -> DataPostgresql
+// mysql               -> DataMySQL
+// mssql, sqlserver    -> DataMSSQL
+// firebird            -> DataFirebird
 
 // Safe string (password masked)
 echo $url->toSafeString(); // "mysql://root:***@db:3306/tina4app"
@@ -196,13 +196,13 @@ By default, auto-commit is **disabled**. You must explicitly commit transactions
 
 ```php
 // Via environment variable in .env
-// TINA4_AUTO_COMMIT=true
+// TINA4_AUTOCOMMIT=true
 
 // Via constructor parameter
 $db = new SQLite3Adapter('app.db', autoCommit: true);
 ```
 
-**Best practice:** Leave auto-commit disabled in production and use explicit transactions. Set `TINA4_AUTO_COMMIT=true` only in development or testing environments.
+**Best practice:** Leave auto-commit disabled in production and use explicit transactions. Set `TINA4_AUTOCOMMIT=true` only in development or testing environments.
 
 ## Tips
 

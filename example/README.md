@@ -4,7 +4,7 @@ A minimal Tina4 PHP application demonstrating routes, ORM, templates, and JSON A
 
 ## Requirements
 
-- PHP >= 8.0
+- PHP >= 8.2
 - Composer dependencies installed (from the project root)
 
 ## Running
@@ -12,7 +12,7 @@ A minimal Tina4 PHP application demonstrating routes, ORM, templates, and JSON A
 From the `example/` directory:
 
 ```bash
-php -S localhost:7146 index.php
+php -S 0.0.0.0:7146 index.php
 ```
 
 Then open http://localhost:7146 in your browser.

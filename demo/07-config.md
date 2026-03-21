@@ -60,7 +60,7 @@ The `DotEnv` class loads `.env` files into `$_ENV`, `$_SERVER`, and `putenv()`.
 ```bash
 # Database
 DATABASE_URL=sqlite:///data/app.db
-TINA4_AUTO_COMMIT=false
+TINA4_AUTOCOMMIT=false
 
 # Authentication
 JWT_SECRET=my-super-secret-key-change-in-production
@@ -145,7 +145,7 @@ $allVars = DotEnv::allEnv();
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TINA4_DEBUG` | `false` | Enable debug mode (verbose logging, no template caching) |
-| `TINA4_AUTO_COMMIT` | `false` | Auto-commit database transactions |
+| `TINA4_AUTOCOMMIT` | `false` | Auto-commit database transactions |
 | `DATABASE_URL` | — | Database connection string |
 | `JWT_SECRET` | — | Secret key for JWT token signing |
 | `TINA4_CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated) |

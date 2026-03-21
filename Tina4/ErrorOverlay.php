@@ -21,7 +21,7 @@ namespace Tina4;
  *       echo ErrorOverlay::render($e, $_SERVER);
  *   }
  *
- * Only activate when TINA4_DEBUG_LEVEL is ALL or DEBUG.
+ * Only activate when TINA4_DEBUG is true.
  * In production, call ErrorOverlay::renderProduction() instead.
  */
 class ErrorOverlay
@@ -102,7 +102,8 @@ class ErrorOverlay
             ['PHP', PHP_VERSION],
             ['Platform', PHP_OS],
             ['SAPI', PHP_SAPI],
-            ['Debug Level', getenv('TINA4_DEBUG_LEVEL') ?: ($_ENV['TINA4_DEBUG_LEVEL'] ?? 'not set')],
+            ['Debug', getenv('TINA4_DEBUG') ?: ($_ENV['TINA4_DEBUG'] ?? 'false')],
+            ['Log Level', getenv('TINA4_LOG_LEVEL') ?: ($_ENV['TINA4_LOG_LEVEL'] ?? 'ERROR')],
         ];
         $envSection = self::collapsible('Environment', self::table($envPairs));
 
@@ -142,7 +143,7 @@ body{background:{$bg};color:{$text};font-family:-apple-system,BlinkMacSystemFont
   {$requestSection}
   {$envSection}
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid {$overlay};color:{$subtext};font-size:12px;">
-    Tina4 Debug Overlay &mdash; This page is only shown in debug mode. Set TINA4_DEBUG_LEVEL to WARNING or ERROR in production.
+    Tina4 Debug Overlay &mdash; This page is only shown in debug mode. Set TINA4_DEBUG=false in production.
   </div>
 </div>
 </body>
@@ -187,12 +188,12 @@ HTML;
     }
 
     /**
-     * Check if the current TINA4_DEBUG_LEVEL enables the error overlay.
+     * Check if TINA4_DEBUG is enabled.
      */
     public static function isDebugMode(): bool
     {
-        $level = strtoupper(getenv('TINA4_DEBUG_LEVEL') ?: ($_ENV['TINA4_DEBUG_LEVEL'] ?? ''));
-        return in_array($level, ['ALL', 'DEBUG', 'TINA4_LOG_ALL', 'TINA4_LOG_DEBUG'], true);
+        $debug = getenv('TINA4_DEBUG') ?: ($_ENV['TINA4_DEBUG'] ?? 'false');
+        return strtolower($debug) === 'true';
     }
 
     // ── Private helpers ──────────────────────────────────────────────────

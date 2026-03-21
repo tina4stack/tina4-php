@@ -50,6 +50,7 @@
             <file>tests/MessengerTest.php</file>
             <file>tests/DevAdminTest.php</file>
             <file>tests/PortConfigTest.php</file>
+            <file>tests/TemplateMethodTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>
