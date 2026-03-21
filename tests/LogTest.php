@@ -128,20 +128,22 @@ class LogTest extends TestCase
         $this->assertArrayNotHasKey('request_id', $decoded);
     }
 
-    public function testMinLevelFiltering(): void
+    public function testFileAlwaysCapturesAllLevels(): void
     {
         Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_WARNING);
-        Log::debug('Should not appear');
-        Log::info('Should not appear either');
-        Log::warning('Should appear');
-        Log::error('Should also appear');
+        Log::debug('Debug message');
+        Log::info('Info message');
+        Log::warning('Warning message');
+        Log::error('Error message');
 
         $logFile = $this->tempDir . '/tina4.log';
         $content = file_get_contents($logFile);
 
-        $this->assertStringNotContainsString('Should not appear', $content);
-        $this->assertStringContainsString('Should appear', $content);
-        $this->assertStringContainsString('Should also appear', $content);
+        // File always captures ALL levels regardless of minLevel setting
+        $this->assertStringContainsString('Debug message', $content);
+        $this->assertStringContainsString('Info message', $content);
+        $this->assertStringContainsString('Warning message', $content);
+        $this->assertStringContainsString('Error message', $content);
     }
 
     public function testHumanReadableFormat(): void
