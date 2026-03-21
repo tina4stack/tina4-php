@@ -205,6 +205,25 @@ PHP;
         $isDebug = class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false')) : false;
         $logLevel = (class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::getEnv('TINA4_LOG_LEVEL', 'DEBUG') : 'DEBUG');
 
+        // Detect production server capabilities
+        $serverName = 'php-cli';
+        $phpArgs = "-S {$host}:{$port}";
+        $extraArgs = '';
+
+        if (!$isDebug) {
+            // Check for OPcache support
+            if (function_exists('opcache_get_status') || extension_loaded('Zend OPcache')) {
+                $serverName = 'php-cli+opcache';
+                $extraArgs = ' -d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.jit=1255 -d opcache.jit_buffer_size=128M';
+            }
+
+            // Check for FrankenPHP
+            $frankenphp = trim(shell_exec('which frankenphp 2>/dev/null') ?? '');
+            if (!empty($frankenphp)) {
+                $serverName = 'frankenphp';
+            }
+        }
+
         echo "{$color}
   ______ _             __ __
  /_  __/(_)___  ____ _/ // /
@@ -214,13 +233,17 @@ PHP;
 {$reset}
   Tina4 PHP v" . \Tina4\App::VERSION . " — This is not a framework
 
-  Server:    http://{$host}:{$port}
+  Server:    http://{$host}:{$port} ({$serverName})
   Swagger:   http://localhost:{$port}/swagger
   Dashboard: http://localhost:{$port}/__dev
   Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
 ";
 
-        passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
+        if ($serverName === 'frankenphp') {
+            passthru("frankenphp php-server --listen :{$port} --root " . escapeshellarg($docRoot));
+        } else {
+            passthru("php{$extraArgs} -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
+        }
         break;
 
     // ────────────────────────────────────────────
