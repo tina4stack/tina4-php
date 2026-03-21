@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+    branches: [v3]
+  pull_request:
+    branches: [v3]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+      - name: Report results
+        if: always()
+        run: echo "Test run completed with exit code $?"
