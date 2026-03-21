@@ -139,9 +139,26 @@ PHP;
             echo "  Created index.php\n";
         }
 
+        // Create composer.json
+        if (!file_exists($targetDir . 'composer.json')) {
+            $composerContent = json_encode([
+                'name' => 'tina4/my-project',
+                'require' => [
+                    'tina4stack/tina4-php' => '^3.0',
+                ],
+                'autoload' => [
+                    'psr-4' => [
+                        '' => 'src/app/',
+                    ],
+                ],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            file_put_contents($targetDir . 'composer.json', $composerContent);
+            echo "  Created composer.json\n";
+        }
+
         // Create .env
         if (!file_exists($targetDir . '.env')) {
-            file_put_contents($targetDir . '.env', "TINA4_DEBUG=true\n");
+            file_put_contents($targetDir . '.env', "TINA4_DEBUG_LEVEL=ALL\n");
             echo "  Created .env\n";
         }
 
@@ -152,7 +169,9 @@ PHP;
         }
 
         echo "\nProject initialized in {$targetDir}\n";
-        echo "  Run: tina4php serve\n";
+        echo "  cd {$targetDir}\n";
+        echo "  composer install\n";
+        echo "  php -S 0.0.0.0:7146 index.php\n";
         break;
 
     // ────────────────────────────────────────────
