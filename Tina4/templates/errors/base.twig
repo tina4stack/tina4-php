@@ -8,7 +8,7 @@
 <style>
 :root {
     --bg: #0f172a; --surface: #1e293b; --border: #334155;
-    --text: #e2e8f0; --muted: #94a3b8; --primary: #7b1fa2;
+    --text: #e2e8f0; --muted: #94a3b8; --primary: #3b82f6;
     --success: #22c55e; --danger: #ef4444; --warn: #f59e0b; --info: #06b6d4;
     --radius: 1rem; --mono: 'SF Mono', ui-monospace, monospace;
     --font: system-ui, -apple-system, sans-serif;
@@ -29,7 +29,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 <body>
 {% block body %}
 <div class="error-card">
-    <img src="https://tina4.com/logo.svg" class="logo" alt="Tina4">
+    <img src="/images/logo.svg" class="logo" alt="Tina4">
     {% block content %}{% endblock %}
 </div>
 {% endblock %}
