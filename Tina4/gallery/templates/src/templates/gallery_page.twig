@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/css/tina4.min.css">
+    <style>
+        .component-section { margin-bottom: 2.5rem; }
+        .component-section h3 { border-bottom: 2px solid var(--bs-primary, #0d6efd); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        .code-preview { background: #1e293b; color: #4ade80; padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.85rem; overflow-x: auto; margin-top: 0.75rem; }
+    </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark bg-dark navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand" href="/">Tina4 CSS Showcase</a>
+        <div class="navbar-nav ms-auto">
+            <a class="nav-link active" href="#">Components</a>
+            <a class="nav-link" href="/__dev">Dashboard</a>
+            <a class="nav-link" href="/swagger">API Docs</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+    <div class="alert alert-info alert-dismissible mb-4">
+        <strong>tina4css</strong> — Zero-dependency CSS framework (~24KB). Bootstrap-compatible class names, dark mode ready. No CDN needed — ships with every Tina4 project.
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    </div>
+
+    <!-- Buttons -->
+    <div class="component-section">
+        <h3>Buttons</h3>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-success">Success</button>
+            <button class="btn btn-danger">Danger</button>
+            <button class="btn btn-warning">Warning</button>
+            <button class="btn btn-info">Info</button>
+            <button class="btn btn-dark">Dark</button>
+            <button class="btn btn-light">Light</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-outline-primary">Outline</button>
+            <button class="btn btn-outline-success">Outline</button>
+            <button class="btn btn-outline-danger">Outline</button>
+            <button class="btn btn-outline-warning">Outline</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary btn-lg">Large</button>
+            <button class="btn btn-primary">Default</button>
+            <button class="btn btn-primary btn-sm">Small</button>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="component-section">
+        <h3>Alerts</h3>
+        <div class="alert alert-success">Success — Record saved successfully!</div>
+        <div class="alert alert-danger">Error — Something went wrong.</div>
+        <div class="alert alert-warning">Warning — Please check your input.</div>
+        <div class="alert alert-info">Info — New version available.</div>
+    </div>
+
+    <!-- Cards -->
+    <div class="component-section">
+        <h3>Cards</h3>
+        <div class="row">
+            {% for item in items %}
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">{{ item.name }}</div>
+                    <div class="card-body">
+                        <p class="card-text">{{ item.description }}</p>
+                        <span class="badge bg-success">{{ item.badge }}</span>
+                    </div>
+                    <div class="card-footer text-muted">
+                        <small>Built with tina4css</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Badges -->
+    <div class="component-section">
+        <h3>Badges</h3>
+        <span class="badge bg-primary me-1">Primary</span>
+        <span class="badge bg-secondary me-1">Secondary</span>
+        <span class="badge bg-success me-1">Success</span>
+        <span class="badge bg-danger me-1">Danger</span>
+        <span class="badge bg-warning me-1">Warning</span>
+        <span class="badge bg-info me-1">Info</span>
+        <span class="badge bg-dark me-1">Dark</span>
+    </div>
+
+    <!-- Forms -->
+    <div class="component-section">
+        <h3>Forms</h3>
+        <div class="card">
+            <div class="card-body">
+                <form>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" class="form-control" placeholder="Andre van Zuydam">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" placeholder="you@example.com">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Framework</label>
+                                <select class="form-select">
+                                    <option>PHP</option>
+                                    <option>Python</option>
+                                    <option>Ruby</option>
+                                    <option>Node.js</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Database</label>
+                                <select class="form-select">
+                                    <option>SQLite</option>
+                                    <option>PostgreSQL</option>
+                                    <option>MySQL</option>
+                                    <option>Firebird</option>
+                                    <option>MSSQL</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-control" rows="3" placeholder="Tell us about your project..."></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" checked>
+                        <label class="form-check-label">I agree to the terms</label>
+                    </div>
+                    <button type="button" class="btn btn-primary">Submit</button>
+                    <button type="button" class="btn btn-outline-secondary ms-2">Cancel</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="component-section">
+        <h3>Tables</h3>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Framework</th>
+                        <th>Port</th>
+                        <th>Language</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>tina4-python</td><td>7145</td><td>Python 3.12+</td><td><span class="badge bg-success">Stable</span></td></tr>
+                    <tr><td>2</td><td>tina4-php</td><td>7146</td><td>PHP 8.2+</td><td><span class="badge bg-success">Stable</span></td></tr>
+                    <tr><td>3</td><td>tina4-ruby</td><td>7147</td><td>Ruby 3.1+</td><td><span class="badge bg-success">Stable</span></td></tr>
+                    <tr><td>4</td><td>tina4-nodejs</td><td>7148</td><td>Node 20+</td><td><span class="badge bg-success">Stable</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Breadcrumbs -->
+    <div class="component-section">
+        <h3>Breadcrumbs</h3>
+        <nav>
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item"><a href="#">Gallery</a></li>
+                <li class="breadcrumb-item active">Components</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Input Groups -->
+    <div class="component-section">
+        <h3>Input Groups</h3>
+        <div class="input-group mb-3">
+            <span class="input-group-text">@</span>
+            <input type="text" class="form-control" placeholder="Username">
+        </div>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" placeholder="Search routes...">
+            <button class="btn btn-primary">Search</button>
+        </div>
+        <div class="input-group">
+            <span class="input-group-text">https://</span>
+            <input type="text" class="form-control" placeholder="tina4.com">
+            <span class="input-group-text">/api</span>
+        </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="component-section">
+        <h3>Progress Bars</h3>
+        <div class="progress mb-2"><div class="progress-bar bg-primary" style="width: 25%">25%</div></div>
+        <div class="progress mb-2"><div class="progress-bar bg-success" style="width: 50%">50%</div></div>
+        <div class="progress mb-2"><div class="progress-bar bg-warning" style="width: 75%">75%</div></div>
+        <div class="progress"><div class="progress-bar bg-danger" style="width: 100%">100%</div></div>
+    </div>
+
+    <!-- List Group -->
+    <div class="component-section">
+        <h3>List Group</h3>
+        <div class="list-group">
+            <a href="#" class="list-group-item list-group-item-action active">Routes — 12 registered</a>
+            <a href="#" class="list-group-item list-group-item-action">Queue — 3 pending jobs</a>
+            <a href="#" class="list-group-item list-group-item-action">Database — SQLite connected</a>
+            <a href="#" class="list-group-item list-group-item-action disabled">Cache — Not configured</a>
+        </div>
+    </div>
+
+    <!-- How this page was built -->
+    <div class="card mt-4 mb-5" style="background:#0f172a;border:1px solid #334155;">
+        <div class="card-body">
+            <h5 style="color:#e2e8f0;">How this page was built</h5>
+            <pre style="background:#1e293b;border:1px solid #334155;border-radius:0.5rem;padding:1.25rem;margin-top:0.75rem;overflow-x:auto;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:0.9rem;line-height:1.7;"><code><span style="color:#c084fc;">Router</span>::<span style="color:#fbbf24;">get</span>(<span style="color:#4ade80;">'/gallery/page'</span>, <span style="color:#c084fc;">function</span>(<span style="color:#38bdf8;">$request</span>, <span style="color:#38bdf8;">$response</span>) {
+    <span style="color:#38bdf8;">return</span> <span style="color:#38bdf8;">$response</span>-&gt;<span style="color:#fbbf24;">template</span>(<span style="color:#4ade80;">'gallery_page.twig'</span>, [
+        <span style="color:#4ade80;">'title'</span> =&gt; <span style="color:#4ade80;">'tina4css Component Showcase'</span>,
+        <span style="color:#4ade80;">'items'</span> =&gt; [...]
+    ]);
+});</code></pre>
+            <p style="color:#94a3b8;margin-top:0.75rem;margin-bottom:0;">
+                Rendered via <code style="color:#c084fc;">$response->template()</code>. Styled with <strong style="color:#e2e8f0;">tina4css</strong> — zero external CDN.
+                All components above use only <code style="color:#4ade80;">&lt;link href="/css/tina4.min.css"&gt;</code>.
+            </p>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

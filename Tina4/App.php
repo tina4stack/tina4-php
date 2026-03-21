@@ -289,11 +289,59 @@ class App
     /**
      * Render the built-in Tina4 landing page HTML.
      */
+    /**
+     * Check if a gallery item's files exist in the project's src/ folder.
+     */
+    private static function isGalleryDeployed(string $name): bool
+    {
+        $galleryDir = __DIR__ . '/gallery/' . $name;
+        $metaFile = $galleryDir . '/meta.json';
+        if (!file_exists($metaFile)) {
+            return false;
+        }
+        $srcDir = $galleryDir . '/src';
+        if (!is_dir($srcDir)) {
+            return false;
+        }
+        $projectSrc = getcwd() . '/src';
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $rel = str_replace($srcDir . '/', '', $file->getPathname());
+                if (!file_exists($projectSrc . '/' . $rel)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Render a Try It or View button depending on deployment state.
+     */
+    private static function galleryBtn(string $name, string $tryUrl): string
+    {
+        if (self::isGalleryDeployed($name)) {
+            return '<button class="try-btn" style="background:#22c55e;" onclick="window.location.href=\'' . $tryUrl . '\'" data-deployed="1">View &#8599;</button>';
+        }
+        return '<button class="try-btn" onclick="deployGallery(\'' . $name . '\',\'' . $tryUrl . '\')">Try It</button>';
+    }
+
     private static function renderLandingPage(string $version, bool $isDev): string
     {
         $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: '7146';
 
-        return <<<HTML
+        $btnRestApi = self::galleryBtn('rest-api', '/api/gallery/hello');
+        $btnOrm = self::galleryBtn('orm', '/api/gallery/products');
+        $btnAuth = self::galleryBtn('auth', '/gallery/auth');
+        $btnQueue = self::galleryBtn('queue', '/api/gallery/queue/status');
+        $btnTemplates = self::galleryBtn('templates', '/gallery/page');
+        $btnDatabase = self::galleryBtn('database', '/api/gallery/db/tables');
+        $btnErrorOverlay = self::galleryBtn('error-overlay', '/api/gallery/crash');
+
+        $html = <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -329,6 +377,8 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 .gallery-card .icon{font-size:1.5rem;margin-bottom:0.75rem}
 .gallery-card h3{font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:#e2e8f0}
 .gallery-card p{font-size:0.85rem;color:#94a3b8;line-height:1.5}
+.gallery-card .try-btn{display:inline-block;margin-top:0.75rem;padding:0.3rem 0.8rem;background:#7b1fa2;color:#fff;border:none;border-radius:0.375rem;font-size:0.75rem;font-weight:600;cursor:pointer;transition:opacity 0.15s}
+.gallery-card .try-btn:hover{opacity:0.85}
 </style>
 </head>
 <body>
@@ -368,6 +418,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 </div>
 <div class="gallery">
     <h2 id="gallery">What You Can Build</h2>
+    <p style="color:#64748b;font-size:0.85rem;text-align:center;margin-bottom:1.25rem;">Click <strong style="color:#94a3b8;">Try It</strong> to deploy working example code into your <code style="color:#4ade80;">src/</code> folder</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
         <div class="gallery-card">
             <div class="accent accent-purple"></div>
@@ -377,6 +428,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">Router::get('/api/users', function(\$req, \$res) {
     return \$res-&gt;json(['users' =&gt; []]);
 });</pre>
+            {$btnRestApi}
         </div>
         <div class="gallery-card">
             <div class="accent accent-green"></div>
@@ -387,6 +439,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
     public \$tableName = "users";
     public \$primaryKey = "id";
 }</pre>
+            {$btnOrm}
         </div>
         <div class="gallery-card">
             <div class="accent accent-blue"></div>
@@ -395,6 +448,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <p>JWT tokens built-in</p>
             <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$token = Auth::getToken(["user_id" =&gt; 1]);
 \$valid = Auth::validToken(\$token);</pre>
+            {$btnAuth}
         </div>
         <div class="gallery-card">
             <div class="accent accent-purple"></div>
@@ -403,6 +457,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <p>Background jobs, no Redis needed</p>
             <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$producer = new Producer(new Queue("emails"));
 \$producer-&gt;produce(["to" =&gt; "a@b.com"]);</pre>
+            {$btnQueue}
         </div>
         <div class="gallery-card">
             <div class="accent accent-green"></div>
@@ -410,8 +465,9 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <h3>Templates</h3>
             <p>Twig templates with auto-reload</p>
             <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">Router::get('/dashboard', function(\$req, \$res) {
-    return \$res-&gt;render("dashboard.twig", \$data);
+    return \$res-&gt;template("dashboard.twig", \$data);
 });</pre>
+            {$btnTemplates}
         </div>
         <div class="gallery-card">
             <div class="accent accent-blue"></div>
@@ -420,12 +476,57 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <p>Multi-engine, one API</p>
             <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$db = new Database("sqlite:///app.db");
 \$result = \$db-&gt;fetch("SELECT * FROM users");</pre>
+            {$btnDatabase}
+        </div>
+        <div class="gallery-card">
+            <div class="accent accent-purple"></div>
+            <div class="icon">&#128680;</div>
+            <h3>Error Overlay</h3>
+            <p>Rich debug page with source code</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$user = ["name" =&gt; "Alice"];
+\$role = \$user["role"];  // KeyError!</pre>
+            {$btnErrorOverlay}
         </div>
     </div>
 </div>
+<script>
+function deployGallery(name, tryUrl) {
+    var btn = event.target;
+    if (btn.dataset.deployed) {
+        window.open(tryUrl, '_blank');
+        return;
+    }
+    if (!confirm('This will add example code to your src/ folder. Continue?')) return;
+    btn.textContent = 'Deploying...';
+    btn.disabled = true;
+    fetch('/__dev/api/gallery/deploy', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.deployed) {
+            btn.textContent = 'View \\u2197';
+            btn.style.background = '#22c55e';
+            btn.dataset.deployed = '1';
+            btn.disabled = false;
+            window.location.href = tryUrl;
+        } else {
+            btn.textContent = 'Try It';
+            btn.disabled = false;
+            alert(d.error || 'Deploy failed');
+        }
+    }).catch(function() {
+        btn.textContent = 'Try It';
+        btn.disabled = false;
+        alert('Deploy failed — check console');
+    });
+}
+</script>
 </body>
 </html>
 HTML;
+
+        return $html;
     }
 
     /**
