@@ -9,7 +9,7 @@
 namespace Tina4\Database;
 
 /**
- * Firebird database adapter — uses PHP's ext-interbase (ibase_*/fbird_*) functions.
+ * Firebird database adapter — uses PHP ext-interbase (ibase or fbird functions).
  * The extension is optional; a clear error is thrown if not installed.
  *
  * Firebird specifics:
