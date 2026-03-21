@@ -1,9 +1,31 @@
-{% extends "errors/base.twig" %}
-{% block title %}403 — Forbidden{% endblock %}
-{% block content %}
-    <div class="error-code" style="color:var(--warn)">403</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>403 — Forbidden</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.error-card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 3rem; text-align: center; max-width: 520px; width: 90%; }
+.error-code { font-size: 8rem; font-weight: 900; color: #f59e0b; opacity: 0.6; line-height: 1; margin-bottom: 0.5rem; }
+.error-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
+.error-msg { color: #94a3b8; font-size: 1rem; margin-bottom: 1.5rem; line-height: 1.5; }
+.error-path { font-family: 'SF Mono', monospace; background: #0f172a; color: #f59e0b; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; word-break: break-all; margin-bottom: 1.5rem; display: inline-block; }
+.error-home { display: inline-block; padding: 0.6rem 2rem; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 0.5rem; font-size: 0.9rem; font-weight: 600; }
+.error-home:hover { opacity: 0.9; }
+.logo { font-size: 1.5rem; margin-bottom: 1rem; opacity: 0.5; }
+</style>
+</head>
+<body>
+<div class="error-card">
+    <div class="logo">T4</div>
+    <div class="error-code">403</div>
     <div class="error-title">Forbidden</div>
     <div class="error-msg">You don't have permission to access this resource.</div>
-    <div class="error-path" style="color:var(--warn)">{{ path }}</div>
+    <div class="error-path">{{ path }}</div>
+    <br>
     <a href="/" class="error-home">Go Home</a>
-{% endblock %}
+</div>
+</body>
+</html>

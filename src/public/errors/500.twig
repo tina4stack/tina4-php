@@ -1,24 +1,40 @@
-{% extends "errors/base.twig" %}
-{% block title %}500 — Server Error{% endblock %}
-{% block extra_styles %}
-.error-card { max-width: 700px; padding: 2rem; text-align: left; }
-.error-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-.error-badge { background: rgba(239,68,68,0.15); color: var(--danger); padding: 0.25rem 0.75rem; border-radius: var(--radius); font-size: 0.8rem; font-weight: 700; }
-.error-trace { background: var(--bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: var(--mono); font-size: 0.8rem; line-height: 1.5; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; color: var(--danger); }
-.error-footer { margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; }
-.error-hint { color: var(--muted); font-size: 0.75rem; }
-.error-id { color: var(--muted); font-family: var(--mono); font-size: 0.75rem; }
-.logo { width: 2rem; height: 2rem; }
-{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>500 — Server Error</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.error-card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 3rem; text-align: left; max-width: 700px; width: 90%; }
+.error-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.error-code { font-size: 3rem; font-weight: 900; color: #ef4444; opacity: 0.7; }
+.error-title { font-size: 1.3rem; font-weight: 700; }
+.error-msg { color: #94a3b8; font-size: 0.95rem; margin-bottom: 1.5rem; line-height: 1.5; }
+.error-trace { background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; padding: 1rem; font-family: 'SF Mono', monospace; font-size: 0.8rem; line-height: 1.5; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; color: #ef4444; margin-bottom: 1.5rem; }
+.error-footer { display: flex; justify-content: space-between; align-items: center; }
+.error-hint { color: #64748b; font-size: 0.75rem; }
+.error-id { color: #64748b; font-family: 'SF Mono', monospace; font-size: 0.75rem; }
+.error-home { display: inline-block; padding: 0.5rem 1.5rem; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600; }
+.error-home:hover { opacity: 0.9; }
+.logo { font-size: 1.2rem; opacity: 0.5; }
+</style>
+</head>
+<body>
+<div class="error-card">
     <div class="error-header">
-        <img src="/images/logo.svg" class="logo" alt="Tina4">
-        <span class="error-badge">500</span>
-        <span class="error-title">Server Error</span>
+        <div class="logo">T4</div>
+        <div class="error-code">500</div>
+        <div class="error-title">Server Error</div>
     </div>
+    <div class="error-msg">Something went wrong while processing your request.</div>
     <pre class="error-trace">{{ error_message }}</pre>
     <div class="error-footer">
         <span class="error-hint">Fix the error and save to auto-reload</span>
+        <span class="error-id">{{ request_id }}</span>
         <a href="/" class="error-home">Go Home</a>
     </div>
-{% endblock %}
+</div>
+</body>
+</html>
