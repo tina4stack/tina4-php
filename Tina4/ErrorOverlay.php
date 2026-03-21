@@ -154,33 +154,45 @@ HTML;
     /**
      * Render a safe, generic error page for production.
      */
-    public static function renderProduction(int $statusCode = 500, string $message = 'Internal Server Error'): string
+    public static function renderProduction(int $statusCode = 500, string $message = 'Internal Server Error', string $path = ''): string
     {
         $e_msg = self::esc($message);
-        $bg = self::BG;
-        $text = self::TEXT;
-        $red = self::RED;
-        $subtext = self::SUBTEXT;
-        $overlay = self::OVERLAY;
+        $e_path = self::esc($path);
+        $codeColor = match (true) {
+            $statusCode === 403 => '#f59e0b',
+            $statusCode === 404 => '#3b82f6',
+            default => '#ef4444',
+        };
+        $pathHtml = $path !== '' ? "<div class=\"error-path\">{$e_path}</div><br>" : '';
 
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{$statusCode} — {$e_msg}</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:{$bg};color:{$text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-display:flex;justify-content:center;align-items:center;min-height:100vh;text-align:center;}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.error-card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 3rem; text-align: center; max-width: 520px; width: 90%; }
+.error-code { font-size: 8rem; font-weight: 900; color: {$codeColor}; opacity: 0.6; line-height: 1; margin-bottom: 0.5rem; }
+.error-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
+.error-msg { color: #94a3b8; font-size: 1rem; margin-bottom: 1.5rem; line-height: 1.5; }
+.error-path { font-family: 'SF Mono', monospace; background: #0f172a; color: {$codeColor}; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; word-break: break-all; margin-bottom: 1.5rem; display: inline-block; }
+.error-home { display: inline-block; padding: 0.6rem 2rem; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 0.5rem; font-size: 0.9rem; font-weight: 600; }
+.error-home:hover { opacity: 0.9; }
+.logo { font-size: 1.5rem; margin-bottom: 1rem; opacity: 0.5; }
 </style>
 </head>
 <body>
-<div>
-  <h1 style="font-size:72px;color:{$red};margin-bottom:16px;">{$statusCode}</h1>
-  <p style="font-size:20px;color:{$subtext};">{$e_msg}</p>
-  <p style="margin-top:24px;font-size:14px;color:{$overlay};">Tina4 PHP</p>
+<div class="error-card">
+    <div class="logo">T4</div>
+    <div class="error-code">{$statusCode}</div>
+    <div class="error-title">{$e_msg}</div>
+    <div class="error-msg">Something went wrong while processing your request.</div>
+    {$pathHtml}
+    <a href="/" class="error-home">Go Home</a>
 </div>
 </body>
 </html>
