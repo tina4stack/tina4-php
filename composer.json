@@ -5,14 +5,14 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Tina4\\": "src/Tina4/",
-            "Tina4\\Database\\": "src/Tina4/Database/",
-            "Tina4\\Middleware\\": "src/Tina4/Middleware/",
-            "Tina4\\Queue\\": "src/Tina4/Queue/",
-            "Tina4\\Session\\": "src/Tina4/Session/"
+            "Tina4\\": "Tina4/",
+            "Tina4\\Database\\": "Tina4/Database/",
+            "Tina4\\Middleware\\": "Tina4/Middleware/",
+            "Tina4\\Queue\\": "Tina4/Queue/",
+            "Tina4\\Session\\": "Tina4/Session/"
         },
         "files": [
-            "src/Tina4/Constants.php"
+            "Tina4/Constants.php"
         ]
     },
     "require": {

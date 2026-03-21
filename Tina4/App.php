@@ -398,10 +398,32 @@ HTML;
 
     /**
      * Get the shared database instance.
+     * If none is set and DATABASE_URL is configured, auto-creates one via DatabaseFactory.
      */
     public static function getDatabase(): ?Database\DatabaseAdapter
     {
+        if (self::$database === null) {
+            $db = Database\DatabaseFactory::fromEnv('DATABASE_URL');
+            if ($db !== null) {
+                self::$database = $db;
+            }
+        }
+
         return self::$database;
+    }
+
+    /**
+     * Create and set a database adapter from a connection URL.
+     *
+     * @param string $url Connection URL (e.g. "pgsql://user:pass@host/db", "sqlite::memory:")
+     * @param bool|null $autoCommit Override auto-commit setting
+     * @return Database\DatabaseAdapter The created adapter
+     */
+    public static function createDatabase(string $url, ?bool $autoCommit = null): Database\DatabaseAdapter
+    {
+        $db = Database\DatabaseFactory::create($url, $autoCommit);
+        self::$database = $db;
+        return $db;
     }
 
     /**

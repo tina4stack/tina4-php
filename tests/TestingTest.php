@@ -4,7 +4,7 @@
  * Tests for the inline testing framework itself.
  */
 
-require_once __DIR__ . '/../src/Tina4/Testing.php';
+require_once __DIR__ . '/../Tina4/Testing.php';
 
 use Tina4\Testing;
 

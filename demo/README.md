@@ -19,7 +19,7 @@ cd demo
 php app.php
 ```
 
-The server starts on **http://localhost:7145**. Open it in your browser to see the landing page with links to every feature demo.
+The server starts on **http://localhost:7146**. Open it in your browser to see the landing page with links to every feature demo.
 
 Each route returns JSON with this structure:
 ```json

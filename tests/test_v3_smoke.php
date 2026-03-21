@@ -2,7 +2,7 @@
 require_once __DIR__ . "/../vendor/autoload.php";
 
 // Include the constants file
-require_once __DIR__ . "/../src/Tina4/Constants.php";
+require_once __DIR__ . "/../Tina4/Constants.php";
 
 echo "╔══════════════════════════════════════════════════╗\n";
 echo "║         Tina4 PHP v3 — Clean Run Demo           ║\n";

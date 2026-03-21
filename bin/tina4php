@@ -5,8 +5,8 @@
  *
  * Usage:
  *   tina4php init [dir]             Scaffold a new project
- *   tina4php serve [port]           Start dev server (default: 7145)
- *   tina4php start [port]           Alias for serve
+ *   tina4php serve [host:port|port]  Start dev server (default: 0.0.0.0:7146)
+ *   tina4php start [host:port|port] Alias for serve
  *   tina4php migrate                Run pending migrations
  *   tina4php migrate:create <desc>  Create a migration file
  *   tina4php migrate:rollback       Rollback last batch
@@ -41,6 +41,47 @@ foreach ($autoloadPaths as $autoloadFile) {
 
 // Framework root (where the Tina4 source lives)
 $frameworkRoot = realpath(__DIR__ . '/..');
+
+// ── Port/host resolution ──
+// Priority: CLI arg > ENV var > default
+// Extracted as a function so it can be unit-tested.
+function resolveHostPort(?string $cliArg = null): array
+{
+    $defaultHost = '0.0.0.0';
+    $defaultPort = '7146';
+
+    $host = null;
+    $port = null;
+
+    // 1. CLI argument (highest priority)
+    if ($cliArg !== null && $cliArg !== '') {
+        if (str_contains($cliArg, ':')) {
+            [$host, $port] = explode(':', $cliArg, 2);
+        } else {
+            $port = $cliArg;
+        }
+    }
+
+    // 2. ENV vars (fill in anything not set by CLI)
+    if ($host === null) {
+        $envHost = getenv('HOST');
+        if ($envHost !== false && $envHost !== '') {
+            $host = $envHost;
+        }
+    }
+    if ($port === null) {
+        $envPort = getenv('PORT');
+        if ($envPort !== false && $envPort !== '') {
+            $port = $envPort;
+        }
+    }
+
+    // 3. Defaults
+    $host = $host ?? $defaultHost;
+    $port = $port ?? $defaultPort;
+
+    return [$host, $port];
+}
 
 // ── Parse command ──
 $command = $argv[1] ?? 'help';
@@ -119,16 +160,8 @@ PHP;
     // ────────────────────────────────────────────
     case 'serve':
     case 'start':
-        $port = $args[0] ?? '7145';
+        [$host, $port] = resolveHostPort($args[0] ?? null);
 
-        if (str_contains($port, ':')) {
-            [$host, $port] = explode(':', $port, 2);
-        } else {
-            $host = '127.0.0.1';
-            if (str_contains(php_uname(), 'Linux')) {
-                $host = '0.0.0.0';
-            }
-        }
 
         // Find index.php
         if (file_exists($cwd . '/index.php')) {
@@ -305,8 +338,8 @@ PHP;
         echo "Usage: tina4php <command> [options]\n\n";
         echo "Commands:\n";
         echo "  init [dir]              Scaffold a new project\n";
-        echo "  serve [port]            Start dev server (default: 7145)\n";
-        echo "  start [port]            Alias for serve\n";
+        echo "  serve [host:port|port]   Start dev server (default: 0.0.0.0:7146)\n";
+        echo "  start [host:port|port]   Alias for serve\n";
         echo "  migrate                 Run pending migrations\n";
         echo "  migrate:create <desc>   Create a migration file\n";
         echo "  migrate:rollback        Rollback last batch\n";

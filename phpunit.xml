@@ -20,6 +20,7 @@
             <file>tests/RouterV3Test.php</file>
             <file>tests/RouteDiscoveryV3Test.php</file>
             <file>tests/SQLite3AdapterTest.php</file>
+            <file>tests/DatabaseDriversTest.php</file>
             <file>tests/ORMV3Test.php</file>
             <file>tests/AutoCrudV3Test.php</file>
             <file>tests/MigrationV3Test.php</file>
@@ -47,6 +48,7 @@
             <file>tests/WsdlTest.php</file>
             <file>tests/MessengerTest.php</file>
             <file>tests/DevAdminTest.php</file>
+            <file>tests/PortConfigTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>

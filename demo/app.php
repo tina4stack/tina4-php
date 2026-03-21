@@ -5,11 +5,11 @@
  *
  * Demonstrates every working feature of the framework.
  * Run: php app.php
- * Then visit: http://localhost:7145
+ * Then visit: http://localhost:7146
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/../src/Tina4/Constants.php';
+require_once __DIR__ . '/../Tina4/Constants.php';
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -962,7 +962,7 @@ $app->start();
 if (php_sapi_name() === 'cli' && !isset($_SERVER['REQUEST_URI'])) {
     // CLI mode — start the built-in PHP server
     $host = '0.0.0.0';
-    $port = 7145;
+    $port = 7146;
 
     echo "\n";
     echo "  ╔══════════════════════════════════════════╗\n";

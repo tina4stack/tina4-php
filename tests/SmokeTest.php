@@ -231,7 +231,7 @@ class SmokeTest extends TestCase
 
     public function testErrorTemplatesExistAndRender(): void
     {
-        $templateDir = dirname(__DIR__) . '/src/Tina4/templates/errors';
+        $templateDir = dirname(__DIR__) . '/Tina4/templates/errors';
 
         $codes = [302, 401, 403, 404, 500, 502, 503];
         foreach ($codes as $code) {
