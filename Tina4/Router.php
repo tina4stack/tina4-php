@@ -274,6 +274,14 @@ class Router
         try {
             $handlerResult = ($route['callback'])($request, $response);
         } catch (\Throwable $e) {
+            if (ErrorOverlay::isDebugMode()) {
+                // Rich error overlay with stack trace, source context, and line numbers
+                $overlayHtml = ErrorOverlay::render($e, [
+                    'REQUEST_METHOD' => $request->method,
+                    'REQUEST_URI' => $request->path,
+                ]);
+                return $response->html($overlayHtml, 500);
+            }
             $errorMessage = $e->getMessage() . "\n" . $e->getTraceAsString();
             return self::renderError($response, 500, 'Server Error', $request->path, [
                 'error_message' => $errorMessage,
