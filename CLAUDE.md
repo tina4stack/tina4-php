@@ -502,4 +502,4 @@ Always read and follow the instructions in .claude/skills/tina4-maintainer/SKILL
 Always read and follow the instructions in .claude/skills/tina4-developer/SKILL.md when building applications with this framework. Read its referenced files in .claude/skills/tina4-developer/references/ as needed.
 
 ## Tina4-js Frontend Skill
-Always read and follow the instructions in .claude/skills/tina4-js-skill/SKILL.md when working with tina4-js frontend code. Read its referenced files in .claude/skills/tina4-js-skill/references/ as needed.
+Always read and follow the instructions in .claude/skills/tina4-js/SKILL.md when working with tina4-js frontend code. Read its referenced files in .claude/skills/tina4-js/references/ as needed.
