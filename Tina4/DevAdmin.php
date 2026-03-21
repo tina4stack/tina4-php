@@ -50,9 +50,20 @@ class DevAdmin
 
         // API: List all registered routes
         Router::get('/__dev/api/routes', function (Request $request, Response $response) {
+            $internalPrefixes = ['/__dev', '/health', '/swagger'];
+            $allRoutes = Router::list();
+            $filtered = array_values(array_filter($allRoutes, function ($route) use ($internalPrefixes) {
+                $pattern = $route['pattern'] ?? '';
+                foreach ($internalPrefixes as $prefix) {
+                    if (str_starts_with($pattern, $prefix)) {
+                        return false;
+                    }
+                }
+                return true;
+            }));
             return $response->json([
-                'routes' => Router::list(),
-                'count' => Router::count(),
+                'routes' => $filtered,
+                'count' => count($filtered),
             ]);
         });
 
