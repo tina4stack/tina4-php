@@ -34,6 +34,9 @@ class Router
      */
     private static array $routes = [];
 
+    /** @var array<int, array{path: string, handler: callable}> Registered WebSocket routes */
+    private static array $wsRoutes = [];
+
     /** @var string Current group prefix */
     private static string $groupPrefix = '';
 
@@ -358,11 +361,23 @@ class Router
             }
         }
 
+        // Include WebSocket routes
+        foreach (self::$wsRoutes as $wsRoute) {
+            $list[] = [
+                'method' => 'WS',
+                'pattern' => $wsRoute['path'],
+                'middleware' => 0,
+                'cache' => false,
+                'secure' => false,
+                'handler' => '',
+            ];
+        }
+
         return $list;
     }
 
     /**
-     * Get the number of registered routes.
+     * Get the number of registered routes (including WebSocket routes).
      */
     public static function count(): int
     {
@@ -370,6 +385,7 @@ class Router
         foreach (self::$routes as $routes) {
             $count += count($routes);
         }
+        $count += count(self::$wsRoutes);
         return $count;
     }
 
@@ -422,11 +438,45 @@ class Router
     }
 
     /**
+     * Register a WebSocket route.
+     *
+     * The handler receives ($connection, $message, $event) where:
+     *   - $connection is a WebSocketConnection object with send(), broadcast(), close()
+     *   - $message is the message payload (null for open/close events)
+     *   - $event is 'open', 'message', or 'close'
+     *
+     * @param string   $path    WebSocket endpoint path (e.g. '/ws/chat')
+     * @param callable $handler Handler function
+     */
+    public static function websocket(string $path, callable $handler): void
+    {
+        $fullPath = self::$groupPrefix . '/' . ltrim($path, '/');
+        $fullPath = '/' . trim($fullPath, '/');
+        $fullPath = preg_replace('#/+#', '/', $fullPath);
+
+        self::$wsRoutes[] = [
+            'path' => $fullPath,
+            'handler' => $handler,
+        ];
+    }
+
+    /**
+     * Get all registered WebSocket routes.
+     *
+     * @return array<int, array{path: string, handler: callable}>
+     */
+    public static function getWebSocketRoutes(): array
+    {
+        return self::$wsRoutes;
+    }
+
+    /**
      * Reset all routes (for testing).
      */
     public static function reset(): void
     {
         self::$routes = [];
+        self::$wsRoutes = [];
         self::$groupPrefix = '';
         self::$groupMiddleware = [];
         self::$lastRouteIndex = null;

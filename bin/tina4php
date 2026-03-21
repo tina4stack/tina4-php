@@ -181,7 +181,7 @@ PHP;
     case 'serve':
     case 'start':
         [$host, $port] = resolveHostPort($args[0] ?? null);
-
+        $port = (int)$port;
 
         // Find index.php
         if (file_exists($cwd . '/index.php')) {
@@ -206,24 +206,24 @@ PHP;
         $isDebug = class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false')) : false;
         $logLevel = (class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::getEnv('TINA4_LOG_LEVEL', 'DEBUG') : 'DEBUG');
 
-        // Detect production server capabilities
-        $serverName = 'php-cli';
-        $phpArgs = "-S {$host}:{$port}";
-        $extraArgs = '';
+        // Detect server mode
+        $serverName = 'tina4-server';
+        $useFrankenPHP = false;
 
         if (!$isDebug) {
-            // Check for OPcache support
-            if (function_exists('opcache_get_status') || extension_loaded('Zend OPcache')) {
-                $serverName = 'php-cli+opcache';
-                $extraArgs = ' -d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.jit=1255 -d opcache.jit_buffer_size=128M';
-            }
-
-            // Check for FrankenPHP
+            // Check for FrankenPHP in production mode
             $frankenphp = trim(shell_exec('which frankenphp 2>/dev/null') ?? '');
             if (!empty($frankenphp)) {
                 $serverName = 'frankenphp';
+                $useFrankenPHP = true;
             }
         }
+
+        // Count WebSocket routes for display
+        $app = new \Tina4\App(basePath: $cwd, development: $isDebug);
+        $app->start();
+        $wsRoutes = \Tina4\Router::getWebSocketRoutes();
+        $wsInfo = count($wsRoutes) > 0 ? ' (WebSocket: ' . count($wsRoutes) . ' routes)' : '';
 
         echo "{$color}
   ______ _             __ __
@@ -234,16 +234,32 @@ PHP;
 {$reset}
   Tina4 PHP v" . \Tina4\App::VERSION . " — This is not a framework
 
-  Server:    http://{$host}:{$port} ({$serverName})
+  Server:    http://{$host}:{$port} ({$serverName}){$wsInfo}
   Swagger:   http://localhost:{$port}/swagger
   Dashboard: http://localhost:{$port}/__dev
   Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
 ";
 
-        if ($serverName === 'frankenphp') {
+        if ($useFrankenPHP) {
+            // FrankenPHP for production — natively supports WebSocket
             passthru("frankenphp php-server --listen :{$port} --root " . escapeshellarg($docRoot));
         } else {
-            passthru("php{$extraArgs} -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
+            // Custom Tina4 server with HTTP + WebSocket support
+            try {
+                $server = new \Tina4\Server($host, $port);
+                $server->start();
+            } catch (\RuntimeException $e) {
+                // Fallback to PHP built-in server (no WebSocket support)
+                echo "  Warning: Custom server failed, falling back to php -S (no WebSocket support)\n";
+                echo "  Reason: {$e->getMessage()}\n\n";
+
+                $extraArgs = '';
+                if (!$isDebug && (function_exists('opcache_get_status') || extension_loaded('Zend OPcache'))) {
+                    $extraArgs = ' -d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.jit=1255 -d opcache.jit_buffer_size=128M';
+                }
+
+                passthru("php{$extraArgs} -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
+            }
         }
         break;
 
