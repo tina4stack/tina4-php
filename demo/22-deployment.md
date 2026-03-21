@@ -137,14 +137,14 @@ volumes:
 ```bash
 # Production configuration
 TINA4_DEBUG=false
-DATABASE_URL=pgsql://user:password@db:5432/myapp
+DATABASE_URL=postgres://user:password@db:5432/myapp
 JWT_SECRET=<generate-a-long-random-string>
 TINA4_CORS_ORIGINS=https://myapp.com,https://www.myapp.com
 TINA4_RATE_LIMIT=100
 TINA4_RATE_WINDOW=60
 TINA4_SESSION_BACKEND=redis
 TINA4_SESSION_REDIS_URL=tcp://redis:6379
-TINA4_AUTO_COMMIT=false
+TINA4_AUTOCOMMIT=false
 ```
 
 ## Nginx Reverse Proxy

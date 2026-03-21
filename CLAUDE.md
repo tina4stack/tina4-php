@@ -1,16 +1,14 @@
 # Tina4 PHP
 
-Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.0.0-rc.1 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
-- PHP: >=8.0
+- PHP: >=8.2
 - Install: `composer install`
-- Run tests: `composer run-tests` or `./vendor/bin/phpunit tests --verbose --color`
-- Start server: `composer start` (runs `tina4php webservice:run`)
-- Debug server: `composer debug` (Xdebug enabled)
-- Initialize project: `composer initialize`
-- CLI: `composer tina4php` or `bin/tina4php`
+- Run tests: `composer test` or `./vendor/bin/phpunit tests --verbose --color`
+- Start server: `composer start` or `composer serve` (default host `0.0.0.0`, default port `7146`)
+- CLI: `bin/tina4php`
 
 ## Code Principles
 
@@ -28,8 +26,9 @@ Full Tina4 PHP framework and application scaffold. See https://tina4.com for ful
 - **Error handling in routes** — Wrap route logic in `try/catch`, log with `Debug::message()`, return response with appropriate status
 - **All links and references** should point to https://tina4.com
 - **Push to staging only** — Never push to production without explicit approval
-- PSR-4 autoloading
-- Namespace `Tina4\` for core, `\` for src/app/orm/routes
+- PSR-4 autoloading — core classes live in `Tina4/` (not `src/Tina4/`)
+- Namespace `Tina4\` for core, `Tina4\Database\` for adapters, `Tina4\Middleware\` for middleware, `Tina4\Queue\` for queue backends, `Tina4\Session\` for session handlers
+- Namespace `\` for src/app/orm/routes
 - Linting: `composer lint` (phplint)
 
 ### Firebird-Specific Rules
@@ -48,10 +47,12 @@ When using Firebird as the database engine:
 
 Set `TINA4_DEBUG=true` in `.env` to enable:
 
+- **Dev toolbar** — A fixed toolbar at the bottom of HTML pages showing framework version, HTTP method, matched route pattern, request ID, route count, and PHP version. Includes a "Dashboard" link that opens `/__dev` in an inline panel
+- **Dev dashboard** (`/__dev`) — Single-page admin UI with route inspection, message log viewer, request capture, database query runner (SQL and GraphQL), table browser, queue management, dev mailbox, broken-route detector, WebSocket monitor, AI chat tool, and connection manager
 - **Twig debug extension** — `{{ dump(variable) }}` available in templates
 - **Verbose logging** — Full debug output via `Debug::message()`
 - **No template caching** — Templates recompile on every request
-- **Error detail** — Full stack traces shown in browser
+- **Error detail** — Full stack traces shown in browser (via `ErrorOverlay`)
 
 Debug levels controlled by `TINA4_LOG_*` constants passed to `Debug::message()`.
 
@@ -62,23 +63,57 @@ src/                     # User application code
   app/                   # Application logic
   orm/                   # ORM model definitions (one per model)
   routes/                # Auto-discovered route files (one per resource)
-  templates/             # Twig templates
+  templates/             # Twig templates (Frond engine)
   scss/                  # User SCSS
   services/              # Background services
   public/                # Static assets
   less/                  # LESS stylesheets
-  Tina4/                 # Core framework classes
-    Events.php           # Event/observer system
-    AI.php               # AI coding assistant detection & context scaffolding
-    Container.php        # Lightweight DI container
-    ErrorOverlay.php     # Rich HTML error overlay for dev mode
-    HtmlElement.php      # Programmatic HTML builder
-    Testing.php          # Inline testing framework
-    SqlTranslation.php   # SQL dialect translation layer
-    Middleware/
-      ResponseCache.php  # GET response caching middleware
+Tina4/                   # Core framework classes (namespace Tina4\)
+  App.php                # Application bootstrap & built-in server
+  Router.php             # Route dispatcher
+  Request.php            # HTTP request wrapper
+  Response.php           # HTTP response builder (with template() method)
+  Frond.php              # Built-in Twig-compatible template engine
+  Events.php             # Event/observer system
+  AI.php                 # AI coding assistant detection & context scaffolding
+  Container.php          # Lightweight DI container
+  DevAdmin.php           # Dev dashboard & toolbar (/__dev)
+  DevMailbox.php         # Dev mailbox for captured emails
+  ErrorOverlay.php       # Rich HTML error overlay for dev mode
+  FakeData.php           # Test data generator
+  GraphQL.php            # GraphQL query executor
+  HtmlElement.php        # Programmatic HTML builder
+  I18n.php               # Internationalisation
+  Messenger.php          # Messaging abstraction
+  ORM.php                # Active Record ORM
+  Queue.php              # Job queue
+  Session.php            # Session management
+  SqlTranslation.php     # SQL dialect translation layer
+  Swagger.php            # OpenAPI spec generator
+  Testing.php            # Inline testing framework
+  WebSocket.php          # WebSocket support
+  DatabaseUrl.php        # Connection URL parser
+  Database/              # Database adapters (namespace Tina4\Database\)
+    DatabaseAdapter.php  # Adapter interface
+    DatabaseFactory.php  # Factory for creating adapters from URL
+    SQLite3Adapter.php   # SQLite3 (ext-sqlite3)
+    PostgresAdapter.php  # PostgreSQL (ext-pdo)
+    MySQLAdapter.php     # MySQL (ext-pdo)
+    MSSQLAdapter.php     # SQL Server (ext-pdo)
+    FirebirdAdapter.php  # Firebird (ext-interbase/ext-pdo)
+  Middleware/
+    ResponseCache.php    # GET response caching middleware
+    CorsMiddleware.php   # CORS handling
+    RateLimiter.php      # Rate limiting
+  Queue/
+    QueueBackend.php     # Queue backend interface
+    KafkaBackend.php     # Kafka queue backend
+    RabbitMQBackend.php  # RabbitMQ queue backend
+  Session/
+    MongoSessionHandler.php  # MongoDB session handler
+    ValkeySessionHandler.php # Valkey/Redis session handler
 migrations/              # Database migration SQL files
-tests/                   # PHPUnit tests (Router, Response, Routing)
+tests/                   # PHPUnit tests
 bin/
   tina4php               # CLI tool
 dockers/                 # Docker configurations
@@ -103,13 +138,35 @@ Route::any(string $routePath, $function): Route
 ->secure(bool $default = true): Route
 ```
 
-### DataBase — Database abstraction
+### DatabaseFactory — Database connection (v3)
+
+v3 uses `DatabaseFactory::create()` with standardised URL connection strings. Old aliases (`pgsql`, `mariadb`, `fdb`, `sqlite3`, `sqlsrv`) are removed.
+
+Supported schemes: `sqlite`, `postgres`, `postgresql`, `mysql`, `mssql`, `sqlserver`, `firebird`
 
 ```php
-$db = new \Tina4\DataBase(string $database, string $username = "", string $password = "", string $dateFormat = "Y-m-d", string $charset = "utf8")
+use Tina4\Database\DatabaseFactory;
 
-$db->fetch($sql, int $noOfRecords = 10, int $offSet = 0, array $fieldMapping = []): ?DataResult
-$db->exec()
+// Create from URL — driver://host:port/database
+$db = DatabaseFactory::create('sqlite:///path/to/app.db');
+$db = DatabaseFactory::create('sqlite::memory:');
+$db = DatabaseFactory::create('postgres://localhost:5432/mydb', username: 'user', password: 'pass');
+$db = DatabaseFactory::create('mysql://localhost:3306/mydb', username: 'root', password: 'secret');
+$db = DatabaseFactory::create('mssql://localhost:1433/mydb', username: 'sa', password: 'pass');
+$db = DatabaseFactory::create('sqlserver://localhost:1433/mydb', username: 'sa', password: 'pass');
+$db = DatabaseFactory::create('firebird://localhost:3050/path/to/db.fdb', username: 'SYSDBA', password: 'masterkey');
+
+// Create from DATABASE_URL env var (also reads DATABASE_USERNAME, DATABASE_PASSWORD)
+$db = DatabaseFactory::fromEnv();
+$db = DatabaseFactory::fromEnv('CUSTOM_DB_URL');
+
+// Auto-commit control — defaults to off (safe). Override per-connection or via env:
+$db = DatabaseFactory::create($url, autoCommit: true);
+// Or set TINA4_AUTOCOMMIT=true in .env to enable globally
+
+// Adapter methods (all adapters implement DatabaseAdapter)
+$db->fetch($sql, $limit, $offset): ?DataResult
+$db->exec($sql, $params)
 $db->startTransaction()
 $db->commit($transactionId = null)
 $db->rollback($transactionId = null)
@@ -118,6 +175,24 @@ $db->tableExists(string $tableName): bool
 $db->getDatabase(): array
 $db->getLastId(): string
 $db->error()
+```
+
+#### DatabaseUrl — Connection URL parser
+
+```php
+use Tina4\DatabaseUrl;
+
+$url = new DatabaseUrl('postgres://user:pass@host:5432/mydb');
+$url->scheme;    // 'postgres'
+$url->host;      // 'host'
+$url->port;      // 5432
+$url->database;  // 'mydb'
+$url->username;  // 'user'
+$url->password;  // 'pass'
+$url->getDsn();  // 'host:5432/mydb'
+
+// From env
+$url = DatabaseUrl::fromEnv('DATABASE_URL');
 ```
 
 ### ORM — Active Record
@@ -138,6 +213,24 @@ $user->save();
 $user->load();
 $user->delete();
 ```
+
+### Response — Template rendering
+
+The `Response` object supports rendering Twig templates via the built-in `Frond` engine:
+
+```php
+Route::get("/dashboard", function (Request $request, Response $response) {
+    return $response->template("dashboard.twig", [
+        "title" => "Dashboard",
+        "user" => $currentUser,
+    ]);
+});
+
+// With custom status code and template directory
+$response->template("error.twig", ["code" => 404], 404, 'src/templates');
+```
+
+The `template()` method uses `Frond` (built-in Twig-compatible engine, zero dependencies) and defaults to looking in `src/templates/`.
 
 ### Auth — JWT authentication
 
@@ -301,7 +394,7 @@ $container->reset(): void
 Example:
 ```php
 $container = new \Tina4\Container();
-$container->singleton('db', fn() => new \Tina4\DataBase(getenv('DB_URL')));
+$container->singleton('db', fn() => \Tina4\Database\DatabaseFactory::create(getenv('DB_URL')));
 $container->register('mailer', fn() => new MailService());
 $db = $container->get('db');       // same instance every time
 $mailer = $container->get('mailer'); // new instance each time
@@ -309,7 +402,7 @@ $mailer = $container->get('mailer'); // new instance each time
 
 ### ErrorOverlay — Rich HTML error page for development
 
-Renders syntax-highlighted stack traces with source context, request details, and environment info. Activated when `TINA4_DEBUG_LEVEL` is `ALL` or `DEBUG`.
+Renders syntax-highlighted stack traces with source context, request details, and environment info. Activated when `TINA4_DEBUG` is `true`.
 
 ```php
 // Render a full HTML error overlay (dev mode)
@@ -318,7 +411,7 @@ ErrorOverlay::render(\Throwable $e, ?array $request = null): string
 // Render a safe, generic error page (production)
 ErrorOverlay::renderProduction(int $statusCode = 500, string $message = 'Internal Server Error'): string
 
-// Check if current TINA4_DEBUG_LEVEL enables the overlay
+// Check if TINA4_DEBUG is enabled
 ErrorOverlay::isDebugMode(): bool
 ```
 
@@ -471,24 +564,30 @@ $result = SqlTranslation::remember(
 
 ## Key Architecture
 
+- **Zero external dependencies** — v3 has no Composer runtime dependencies (only `ext-openssl` and `ext-json`). Database extensions are optional and suggested
+- **Unified framework** — Everything lives in the `tina4stack/tina4php` package. No separate `tina4php-core`, `tina4php-database`, `tina4php-orm` packages
+- **Default server** — Binds to `0.0.0.0:7146` by default
 - Routes auto-discovered from `src/routes/`
-- ORM with migration support via `tina4stack/tina4php-orm`
-- Twig templating with custom extensions
-- SCSS/LESS compilation via `scssphp`
-- JWT auth via `nowakowskir/php-jwt`
-- Caching via `phpfastcache`
-- Git integration via `coyl/git`
-- Depends on: `tina4php-core`, `tina4php-debug`, `tina4php-shape`, `tina4php-env`, `tina4php-database`, `tina4php-orm`
-- Dev database: `tina4stack/tina4php-sqlite3`
-- Swoole support: `swoole-http.php`, `swoole-tcp.php`
+- ORM with migration support built in
+- Twig-compatible templating via built-in `Frond` engine (zero deps)
+- SCSS/LESS compilation via built-in `ScssCompiler`
+- JWT auth built in
 - Event system (`Events`) for decoupled pub/sub communication
 - DI container (`Container`) with factory and singleton registration
 - Response cache middleware (`ResponseCache`) for in-memory GET caching with TTL
+- CORS middleware (`CorsMiddleware`) and rate limiter (`RateLimiter`)
 - Error overlay (`ErrorOverlay`) with syntax-highlighted stack traces in dev mode
+- Dev dashboard (`DevAdmin`) with route/request/query/queue/mailbox/WebSocket inspection
 - Programmatic HTML builder (`HtmlElement`) with tag helpers
 - Inline testing (`Testing`) with assertion builders and test runner
 - SQL dialect translation (`SqlTranslation`) for cross-database portability
 - AI assistant detection (`AI`) with context file scaffolding for 7 tools
+- Queue system with Kafka and RabbitMQ backends
+- Session handlers for MongoDB and Valkey/Redis
+- GraphQL query execution
+- WebSocket support
+- Swagger/OpenAPI spec generation
+- Internationalisation (`I18n`)
 
 ## Links
 

@@ -308,4 +308,28 @@ class Response
     {
         return json_decode($this->body, true);
     }
+
+    /**
+     * Render a Twig template via the Frond engine and return as HTML response.
+     *
+     * Usage:
+     *   return $res->template("dashboard.twig", ["title" => "Dashboard"]);
+     *
+     * @param string $templateName Template file relative to the template directory
+     * @param array  $data         Variables to pass into the template
+     * @param int    $status       HTTP status code (default 200)
+     * @param string $templateDir  Template directory (default 'src/templates')
+     * @return $this
+     */
+    public function template(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
+    {
+        $frond = new Frond($templateDir);
+        $html = $frond->render($templateName, $data);
+
+        $this->statusCode = $status;
+        $this->headers['Content-Type'] = 'text/html; charset=UTF-8';
+        $this->body = $html;
+
+        return $this;
+    }
 }

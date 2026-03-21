@@ -49,7 +49,7 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 | **HTTP** | Built-in PHP server, static route registration, path params (`{id}`, `{name}`), middleware pipeline, CORS, rate limiting |
 | **Templates** | Frond engine (Twig-compatible), inheritance, partials, filters, macros, fragment caching, sandboxing |
 | **ORM** | Active Record, typed properties, soft delete, relationships (`hasOne`/`hasMany`), field mapping, table filters, multi-database |
-| **Database** | SQLite3, PostgreSQL, MySQL, MSSQL, Firebird, MongoDB, ODBC, PDO -- unified adapter interface |
+| **Database** | SQLite3, PostgreSQL, MySQL, MSSQL, Firebird -- unified adapter interface, `DatabaseFactory::create()` |
 | **Auth** | Zero-dep JWT (RS256/HS256), sessions, secure key generation, form tokens |
 | **API** | Swagger/OpenAPI auto-generation, GraphQL with ORM auto-schema and GraphiQL IDE |
 | **Background** | Service runner for long-running processes, async triggers and events |
@@ -69,20 +69,9 @@ For full documentation visit **[tina4.com](https://tina4.com)**.
 composer require tina4stack/tina4php
 ```
 
-### Optional database drivers
+### Built-in database adapters
 
-Install only what you need:
-
-```bash
-composer require tina4stack/tina4php-sqlite3       # SQLite3
-composer require tina4stack/tina4php-mysql          # MySQL / MariaDB
-composer require tina4stack/tina4php-postgresql     # PostgreSQL
-composer require tina4stack/tina4php-mssql          # Microsoft SQL Server
-composer require tina4stack/tina4php-firebird       # Firebird
-composer require tina4stack/tina4php-mongodb        # MongoDB
-composer require tina4stack/tina4php-odbc           # ODBC
-composer require tina4stack/tina4php-pdo            # PDO (generic)
-```
+v3 ships with adapters for SQLite3, MySQL, PostgreSQL, MSSQL (sqlserver), and Firebird -- no extra packages needed. Just ensure the required PHP extension is installed (e.g. `ext-sqlite3`, `ext-pdo_mysql`).
 
 ---
 
@@ -318,18 +307,19 @@ $users = (new User())->select("*", 100)->asArray();
 
 ### Database
 
-Unified interface across 8 engines:
+Unified interface via `DatabaseFactory::create()`:
 
 ```php
-global $DBA;
-$DBA = new \Tina4\DataSQLite3("app.db");
-$DBA = new \Tina4\DataMySQL("localhost/3306:mydb", "user", "pass");
-$DBA = new \Tina4\DataPostgresql("localhost/5432:mydb", "user", "pass");
-$DBA = new \Tina4\DataMSSQL("localhost/1433:mydb", "sa", "pass");
-$DBA = new \Tina4\DataFirebird("localhost/3050:/path/to/db", "SYSDBA", "masterkey");
-$DBA = new \Tina4\DataMongoDB("localhost/27017:mydb");
+use Tina4\Database\DatabaseFactory;
 
-$result = $DBA->fetch("SELECT * FROM users WHERE age > ?", 20, 0);
+$db = DatabaseFactory::create("app.db");
+$db = DatabaseFactory::create("sqlite::memory:");
+$db = DatabaseFactory::create("mysql://localhost:3306/mydb", username: "user", password: "pass");
+$db = DatabaseFactory::create("postgres://localhost:5432/mydb", username: "user", password: "pass");
+$db = DatabaseFactory::create("mssql://localhost:1433/mydb", username: "sa", password: "pass");
+$db = DatabaseFactory::create("firebird://localhost:3050/path/to/db", username: "SYSDBA", password: "masterkey");
+
+$result = $db->fetch("SELECT * FROM users WHERE age > ?", 20, 0);
 ```
 
 ### Middleware
