@@ -320,6 +320,140 @@ class Queue
     }
 
     /**
+     * Get dead letter jobs — failed jobs that exceeded max retries.
+     *
+     * @param string $queue Queue name
+     * @return array List of dead letter job arrays
+     */
+    public function deadLetters(string $queue): array
+    {
+        $failedPath = $this->queuePath($queue) . '/failed';
+        if (!is_dir($failedPath)) {
+            return [];
+        }
+
+        $files = glob($failedPath . '/*.json');
+        $jobs = [];
+
+        foreach ($files as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
+                $data['status'] = 'dead';
+                $jobs[] = $data;
+            }
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * Delete messages by status (completed, failed, dead).
+     *
+     * For 'failed' and 'dead', removes from the failed subdirectory.
+     * For 'dead', only removes jobs that exceeded max retries.
+     * For 'failed', only removes jobs that have NOT exceeded max retries.
+     * For 'completed' or 'pending', removes from the main queue directory.
+     *
+     * @param string $queue  Queue name
+     * @param string $status Status to purge: 'completed', 'failed', 'dead', 'pending'
+     * @return int Number of jobs purged
+     */
+    public function purge(string $queue, string $status): int
+    {
+        $count = 0;
+
+        if ($status === 'dead') {
+            $failedPath = $this->queuePath($queue) . '/failed';
+            if (!is_dir($failedPath)) {
+                return 0;
+            }
+
+            $files = glob($failedPath . '/*.json');
+            foreach ($files as $file) {
+                $data = json_decode(file_get_contents($file), true);
+                if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
+                    unlink($file);
+                    $count++;
+                }
+            }
+        } elseif ($status === 'failed') {
+            $failedPath = $this->queuePath($queue) . '/failed';
+            if (!is_dir($failedPath)) {
+                return 0;
+            }
+
+            $files = glob($failedPath . '/*.json');
+            foreach ($files as $file) {
+                $data = json_decode(file_get_contents($file), true);
+                if ($data !== null && ($data['attempts'] ?? 0) < $this->maxRetries) {
+                    unlink($file);
+                    $count++;
+                }
+            }
+        } else {
+            // completed, pending, or other statuses — scan main queue directory
+            $queuePath = $this->queuePath($queue);
+            if (!is_dir($queuePath)) {
+                return 0;
+            }
+
+            $files = glob($queuePath . '/*.json');
+            foreach ($files as $file) {
+                $data = json_decode(file_get_contents($file), true);
+                if ($data !== null && ($data['status'] ?? '') === $status) {
+                    unlink($file);
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Re-queue failed jobs that haven't exceeded max retries back to pending.
+     *
+     * @param string $queue Queue name
+     * @return int Number of jobs re-queued
+     */
+    public function retryFailed(string $queue): int
+    {
+        $failedPath = $this->queuePath($queue) . '/failed';
+        if (!is_dir($failedPath)) {
+            return 0;
+        }
+
+        $queuePath = $this->queuePath($queue);
+        $count = 0;
+        $files = glob($failedPath . '/*.json');
+
+        foreach ($files as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data === null) {
+                continue;
+            }
+
+            // Only retry if under max retries (not dead)
+            if (($data['attempts'] ?? 0) >= $this->maxRetries) {
+                continue;
+            }
+
+            $data['status'] = 'pending';
+            $data['error'] = null;
+
+            file_put_contents(
+                $queuePath . '/' . $data['id'] . '.json',
+                json_encode($data, JSON_PRETTY_PRINT)
+            );
+
+            unlink($file);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
      * Get the base path for this queue system.
      */
     public function getBasePath(): string

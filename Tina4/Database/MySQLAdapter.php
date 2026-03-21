@@ -202,8 +202,29 @@ class MySQLAdapter implements DatabaseAdapter
         }
     }
 
+    public function executeMany(string $sql, array $paramsList = []): int
+    {
+        $totalAffected = 0;
+        foreach ($paramsList as $params) {
+            if ($this->execute($sql, $params)) {
+                $totalAffected++;
+            }
+        }
+        return $totalAffected;
+    }
+
     public function insert(string $table, array $data): bool
     {
+        // Detect list of rows
+        if (isset($data[0]) && is_array($data[0])) {
+            $keys = array_keys($data[0]);
+            $cols = implode(', ', $keys);
+            $placeholders = implode(', ', array_fill(0, count($keys), '?'));
+            $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+            $paramsList = array_map(fn($row) => array_values($row), $data);
+            return $this->executeMany($sql, $paramsList) > 0;
+        }
+
         $cols = implode(', ', array_keys($data));
         $placeholders = implode(', ', array_fill(0, count($data), '?'));
         $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
@@ -226,11 +247,26 @@ class MySQLAdapter implements DatabaseAdapter
         return $this->execute($sql, $params);
     }
 
-    public function delete(string $table, string $where = '', array $whereParams = []): bool
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool
     {
+        if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            foreach ($filter as $row) {
+                if (!$this->delete($table, $row)) return false;
+            }
+            return true;
+        }
+        if (is_array($filter)) {
+            $parts = [];
+            $params = [];
+            foreach ($filter as $col => $val) {
+                $parts[] = "{$col} = ?";
+                $params[] = $val;
+            }
+            return $this->delete($table, implode(' AND ', $parts), $params);
+        }
         $sql = "DELETE FROM {$table}";
-        if ($where !== '') {
-            $sql .= " WHERE {$where}";
+        if ($filter !== '') {
+            $sql .= " WHERE {$filter}";
         }
         return $this->execute($sql, $whereParams);
     }

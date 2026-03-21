@@ -20,6 +20,7 @@ class Auth
 
     /**
      * Create a signed JWT token.
+     * Primary method name: getToken(). Alias: createToken().
      * Maps to Python: create_token(payload, expiry_minutes)
      *
      * @param array  $payload    Claims to include in the token
@@ -28,7 +29,7 @@ class Auth
      * @param string $algorithm  'HS256' or 'RS256'
      * @return string Encoded JWT (header.payload.signature)
      */
-    public static function createToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    public static function getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
     {
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
@@ -52,6 +53,7 @@ class Auth
 
     /**
      * Validate a JWT token and return the decoded payload.
+     * Primary method name: validToken(). Alias: validateToken().
      * Maps to Python: validate_token(token)
      *
      * @param string $token     The JWT string
@@ -59,7 +61,7 @@ class Auth
      * @param string $algorithm 'HS256' or 'RS256'
      * @return array|null Decoded payload on success, null on failure
      */
-    public static function validateToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+    public static function validToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
     {
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
@@ -199,7 +201,7 @@ class Auth
             }
 
             $token = substr($authHeader, 7);
-            $payload = self::validateToken($token, $secret, $algorithm);
+            $payload = self::validToken($token, $secret, $algorithm);
 
             return $payload; // null if invalid/expired, array if valid
         };
@@ -219,15 +221,15 @@ class Auth
      */
     public static function refreshToken(string $token, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): ?string
     {
-        $payload = self::validateToken($token, $secret, $algorithm);
+        $payload = self::validToken($token, $secret, $algorithm);
         if ($payload === null) {
             return null;
         }
 
-        // Remove old timing claims — createToken sets fresh ones
+        // Remove old timing claims — getToken sets fresh ones
         unset($payload['iat'], $payload['exp']);
 
-        return self::createToken($payload, $secret, $expiresIn, $algorithm);
+        return self::getToken($payload, $secret, $expiresIn, $algorithm);
     }
 
     /**
@@ -248,7 +250,7 @@ class Auth
         }
 
         $token = substr($authHeader, 7);
-        return self::validateToken($token, $secret, $algorithm);
+        return self::validToken($token, $secret, $algorithm);
     }
 
     /**
@@ -270,6 +272,24 @@ class Auth
         }
 
         return hash_equals($expected, $provided);
+    }
+
+    // ── Backward-Compatible Aliases ──────────────────────────────
+
+    /**
+     * Alias for getToken() — kept for backward compatibility.
+     */
+    public static function createToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    {
+        return self::getToken($payload, $secret, $expiresIn, $algorithm);
+    }
+
+    /**
+     * Alias for validToken() — kept for backward compatibility.
+     */
+    public static function validateToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+    {
+        return self::validToken($token, $secret, $algorithm);
     }
 
     // ── Internal Helpers ──────────────────────────────────────────
