@@ -143,7 +143,7 @@ class ResponseCacheTest extends TestCase
 
         $stats = $cache->cacheStats();
         $this->assertEquals(2, $stats['size']);
-        $this->assertCount(2, $stats['keys']);
+        $this->assertArrayHasKey('backend', $stats);
     }
 
     public function testCacheStatsEmpty(): void
@@ -151,7 +151,13 @@ class ResponseCacheTest extends TestCase
         $cache = new ResponseCache(['ttl' => 60]);
         $stats = $cache->cacheStats();
         $this->assertEquals(0, $stats['size']);
-        $this->assertEmpty($stats['keys']);
+    }
+
+    public function testCacheStatsHasBackendField(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $stats = $cache->cacheStats();
+        $this->assertEquals('memory', $stats['backend']);
     }
 
     // -- clearCache ----------------------------------------------------------
@@ -186,5 +192,117 @@ class ResponseCacheTest extends TestCase
 
         $removed = $fresh->sweep();
         $this->assertEquals(2, $removed);
+    }
+
+    // -- Backend selection ---------------------------------------------------
+
+    public function testDefaultBackendIsMemory(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $this->assertEquals('memory', $cache->getBackend());
+    }
+
+    public function testBackendParamSelectsFile(): void
+    {
+        $cacheDir = sys_get_temp_dir() . '/tina4_test_cache_' . uniqid();
+        $cache = new ResponseCache([
+            'ttl' => 60,
+            'backend' => 'file',
+            'cacheDir' => $cacheDir,
+        ]);
+        $this->assertEquals('file', $cache->getBackend());
+
+        // Test basic operations
+        $cache->store('GET', '/file-test', 'data', 'text/plain', 200);
+        $hit = $cache->lookup('GET', '/file-test');
+        $this->assertNotNull($hit);
+        $this->assertEquals('data', $hit['body']);
+
+        // Cleanup
+        $cache->clearCache();
+        @rmdir($cacheDir);
+    }
+
+    public function testEnvBackendSelection(): void
+    {
+        $original = getenv('TINA4_CACHE_BACKEND');
+        putenv('TINA4_CACHE_BACKEND=memory');
+        try {
+            $cache = new ResponseCache(['ttl' => 60]);
+            $this->assertEquals('memory', $cache->getBackend());
+        } finally {
+            if ($original !== false) {
+                putenv("TINA4_CACHE_BACKEND=$original");
+            } else {
+                putenv('TINA4_CACHE_BACKEND');
+            }
+        }
+    }
+
+    public function testExplicitBackendOverridesEnv(): void
+    {
+        $original = getenv('TINA4_CACHE_BACKEND');
+        putenv('TINA4_CACHE_BACKEND=file');
+        try {
+            $cache = new ResponseCache(['ttl' => 60, 'backend' => 'memory']);
+            $this->assertEquals('memory', $cache->getBackend());
+        } finally {
+            if ($original !== false) {
+                putenv("TINA4_CACHE_BACKEND=$original");
+            } else {
+                putenv('TINA4_CACHE_BACKEND');
+            }
+        }
+    }
+
+    // -- Direct cache API ---------------------------------------------------
+
+    public function testDirectSetAndGet(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $cache->clearCache();
+        $cache->set('test_key', ['hello' => 'world'], 60);
+        $result = $cache->get('test_key');
+        $this->assertEquals(['hello' => 'world'], $result);
+    }
+
+    public function testDirectGetMissing(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $cache->clearCache();
+        $this->assertNull($cache->get('nonexistent_key_12345'));
+    }
+
+    public function testDirectDelete(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $cache->clearCache();
+        $cache->set('del_key', 'value', 60);
+        $this->assertTrue($cache->delete('del_key'));
+        $this->assertNull($cache->get('del_key'));
+        $this->assertFalse($cache->delete('del_key'));
+    }
+
+    // -- File backend direct API ---------------------------------------------
+
+    public function testFileBackendDirectAPI(): void
+    {
+        $cacheDir = sys_get_temp_dir() . '/tina4_test_cache_direct_' . uniqid();
+        $cache = new ResponseCache([
+            'ttl' => 60,
+            'backend' => 'file',
+            'cacheDir' => $cacheDir,
+        ]);
+
+        $cache->set('file_key', ['data' => true], 60);
+        $result = $cache->get('file_key');
+        $this->assertEquals(['data' => true], $result);
+
+        $cache->delete('file_key');
+        $this->assertNull($cache->get('file_key'));
+
+        // Cleanup
+        $cache->clearCache();
+        @rmdir($cacheDir);
     }
 }

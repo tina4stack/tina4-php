@@ -44,6 +44,9 @@ abstract class ORM
     /** @var array<string, string> Has-many relationships: ['propertyName' => 'ForeignModel.foreign_key'] */
     public array $hasMany = [];
 
+    /** @var array<string, string> Belongs-to relationships: ['propertyName' => 'ForeignModel.foreign_key'] */
+    public array $belongsTo = [];
+
     /** @var DatabaseAdapter|null Database connection */
     protected ?DatabaseAdapter $_db = null;
 
@@ -52,6 +55,9 @@ abstract class ORM
 
     /** @var bool Whether this record exists in the database */
     private bool $_exists = false;
+
+    /** @var array<string, mixed> Relationship cache for lazy loading */
+    private array $_relCache = [];
 
     /**
      * Create a new ORM instance.
@@ -78,10 +84,39 @@ abstract class ORM
 
     /**
      * Get a property value via magic getter.
+     * Supports lazy loading for relationships defined in $hasOne, $hasMany, and $belongsTo.
      */
     public function __get(string $name): mixed
     {
-        return $this->_data[$name] ?? null;
+        // Check regular data first
+        if (array_key_exists($name, $this->_data)) {
+            return $this->_data[$name];
+        }
+
+        // Check relationship cache
+        if (array_key_exists($name, $this->_relCache)) {
+            return $this->_relCache[$name];
+        }
+
+        // Lazy load has-one relationships
+        if (isset($this->hasOne[$name])) {
+            $this->_relCache[$name] = $this->_loadRelationship($name, $this->hasOne[$name], 'hasOne');
+            return $this->_relCache[$name];
+        }
+
+        // Lazy load has-many relationships
+        if (isset($this->hasMany[$name])) {
+            $this->_relCache[$name] = $this->_loadRelationship($name, $this->hasMany[$name], 'hasMany');
+            return $this->_relCache[$name];
+        }
+
+        // Lazy load belongs-to relationships
+        if (isset($this->belongsTo[$name])) {
+            $this->_relCache[$name] = $this->_loadRelationship($name, $this->belongsTo[$name], 'belongsTo');
+            return $this->_relCache[$name];
+        }
+
+        return null;
     }
 
     /**
@@ -145,6 +180,7 @@ abstract class ORM
     public function save(): bool
     {
         $this->ensureDb();
+        $this->_relCache = []; // Clear relationship cache on save
         $pkValue = $this->getPrimaryKeyValue();
 
         if ($this->_exists || ($pkValue !== null && $this->recordExists($pkValue))) {
@@ -162,6 +198,7 @@ abstract class ORM
     public function load(int|string $id): self
     {
         $this->ensureDb();
+        $this->_relCache = []; // Clear relationship cache on reload
 
         $pkColumn = $this->getDbColumn($this->primaryKey);
         $sql = "SELECT * FROM {$this->tableName} WHERE {$pkColumn} = :id";
@@ -300,11 +337,44 @@ abstract class ORM
      * Convert the model to a dictionary (associative array).
      * Maps to Python: to_dict()
      *
+     * @param array<string>|null $include Relationship names to include (supports dot notation for nesting)
      * @return array<string, mixed>
      */
-    public function toDict(): array
+    public function toDict(?array $include = null): array
     {
-        return $this->_data;
+        $result = $this->_data;
+
+        if ($include !== null) {
+            // Group includes: top-level and nested
+            $topLevel = [];
+            foreach ($include as $inc) {
+                $parts = explode('.', $inc, 2);
+                $relName = $parts[0];
+                if (!isset($topLevel[$relName])) {
+                    $topLevel[$relName] = [];
+                }
+                if (count($parts) > 1) {
+                    $topLevel[$relName][] = $parts[1];
+                }
+            }
+
+            foreach ($topLevel as $relName => $nested) {
+                // Access the relationship (triggers lazy load via __get)
+                $related = $this->__get($relName);
+                if ($related === null) {
+                    $result[$relName] = null;
+                } elseif (is_array($related)) {
+                    $result[$relName] = array_map(
+                        fn(ORM $r) => $r->toDict(!empty($nested) ? $nested : null),
+                        $related
+                    );
+                } elseif ($related instanceof ORM) {
+                    $result[$relName] = $related->toDict(!empty($nested) ? $nested : null);
+                }
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -776,6 +846,256 @@ abstract class ORM
         $sql = "SELECT COUNT(*) as cnt FROM {$this->tableName} WHERE {$pkColumn} = :id";
         $rows = $this->_db->query($sql, [':id' => $id]);
         return !empty($rows) && (int)$rows[0]['cnt'] > 0;
+    }
+
+    /**
+     * Load a relationship by parsing the definition string ('ModelClass.foreign_key').
+     *
+     * @param string $name Property name
+     * @param string $definition Relationship definition (e.g., 'Post.user_id')
+     * @param string $type 'hasOne', 'hasMany', or 'belongsTo'
+     * @return ORM|array|null
+     */
+    private function _loadRelationship(string $name, string $definition, string $type): ORM|array|null
+    {
+        $this->ensureDb();
+
+        $parts = explode('.', $definition, 2);
+        $relatedClass = $parts[0];
+        $foreignKey = $parts[1] ?? null;
+
+        if ($type === 'hasOne') {
+            if ($foreignKey === null) {
+                $foreignKey = rtrim($this->tableName, 's') . '_id';
+            }
+            return $this->hasOneMethod($relatedClass, $foreignKey);
+        } elseif ($type === 'hasMany') {
+            if ($foreignKey === null) {
+                $foreignKey = rtrim($this->tableName, 's') . '_id';
+            }
+            return $this->hasManyMethod($relatedClass, $foreignKey);
+        } elseif ($type === 'belongsTo') {
+            if ($foreignKey === null) {
+                /** @var ORM $temp */
+                $temp = new $relatedClass($this->_db);
+                $foreignKey = rtrim($temp->tableName, 's') . '_id';
+            }
+            return $this->belongsToMethod($relatedClass, $foreignKey);
+        }
+
+        return null;
+    }
+
+    /**
+     * Eager load relationships for a collection of model instances (prevents N+1).
+     *
+     * @param array<ORM> $instances Model instances
+     * @param array<string> $include Relationship names (supports dot notation for nesting)
+     * @param DatabaseAdapter $db Database adapter
+     */
+    public static function eagerLoad(array &$instances, array $include, DatabaseAdapter $db): void
+    {
+        if (empty($instances)) {
+            return;
+        }
+
+        $sample = $instances[0];
+
+        // Group includes: top-level and nested
+        $topLevel = [];
+        foreach ($include as $inc) {
+            $parts = explode('.', $inc, 2);
+            $relName = $parts[0];
+            if (!isset($topLevel[$relName])) {
+                $topLevel[$relName] = [];
+            }
+            if (count($parts) > 1) {
+                $topLevel[$relName][] = $parts[1];
+            }
+        }
+
+        foreach ($topLevel as $relName => $nested) {
+            $definition = null;
+            $type = null;
+
+            if (isset($sample->hasOne[$relName])) {
+                $definition = $sample->hasOne[$relName];
+                $type = 'hasOne';
+            } elseif (isset($sample->hasMany[$relName])) {
+                $definition = $sample->hasMany[$relName];
+                $type = 'hasMany';
+            } elseif (isset($sample->belongsTo[$relName])) {
+                $definition = $sample->belongsTo[$relName];
+                $type = 'belongsTo';
+            }
+
+            if ($definition === null) {
+                continue;
+            }
+
+            $defParts = explode('.', $definition, 2);
+            $relatedClass = $defParts[0];
+            $foreignKey = $defParts[1] ?? null;
+
+            if ($type === 'hasOne' || $type === 'hasMany') {
+                if ($foreignKey === null) {
+                    $foreignKey = rtrim($sample->tableName, 's') . '_id';
+                }
+
+                $pkValues = [];
+                foreach ($instances as $inst) {
+                    $pkVal = $inst->getPrimaryKeyValue();
+                    if ($pkVal !== null) {
+                        $pkValues[] = $pkVal;
+                    }
+                }
+
+                if (empty($pkValues)) {
+                    continue;
+                }
+
+                /** @var ORM $relTemplate */
+                $relTemplate = new $relatedClass($db);
+                $placeholders = implode(',', array_fill(0, count($pkValues), '?'));
+                $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders})";
+                $result = $db->fetch($sql, count($pkValues) * 1000, 0, $pkValues);
+
+                $related = [];
+                foreach ($result['data'] as $row) {
+                    $model = new $relatedClass($db);
+                    $model->fill($row);
+                    $model->_exists = true;
+                    $related[] = $model;
+                }
+
+                // Eager load nested
+                if (!empty($nested) && !empty($related)) {
+                    self::eagerLoad($related, $nested, $db);
+                }
+
+                // Group by FK
+                $grouped = [];
+                foreach ($related as $record) {
+                    $fkVal = $record->__get($foreignKey);
+                    $grouped[$fkVal][] = $record;
+                }
+
+                foreach ($instances as $inst) {
+                    $pkVal = $inst->getPrimaryKeyValue();
+                    $records = $grouped[$pkVal] ?? [];
+                    if ($type === 'hasOne') {
+                        $inst->_relCache[$relName] = $records[0] ?? null;
+                    } else {
+                        $inst->_relCache[$relName] = $records;
+                    }
+                }
+
+            } elseif ($type === 'belongsTo') {
+                /** @var ORM $relTemplate */
+                $relTemplate = new $relatedClass($db);
+                if ($foreignKey === null) {
+                    $foreignKey = rtrim($relTemplate->tableName, 's') . '_id';
+                }
+
+                $fkValues = [];
+                foreach ($instances as $inst) {
+                    $fkVal = $inst->__get($foreignKey);
+                    if ($fkVal !== null) {
+                        $fkValues[$fkVal] = true;
+                    }
+                }
+                $fkValues = array_keys($fkValues);
+
+                if (empty($fkValues)) {
+                    continue;
+                }
+
+                $placeholders = implode(',', array_fill(0, count($fkValues), '?'));
+                $relPk = $relTemplate->primaryKey;
+                $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders})";
+                $result = $db->fetch($sql, count($fkValues) * 10, 0, $fkValues);
+
+                $lookup = [];
+                foreach ($result['data'] as $row) {
+                    $model = new $relatedClass($db);
+                    $model->fill($row);
+                    $model->_exists = true;
+                    $lookup[$model->getPrimaryKeyValue()] = $model;
+                }
+
+                if (!empty($nested) && !empty($lookup)) {
+                    $lookupList = array_values($lookup);
+                    self::eagerLoad($lookupList, $nested, $db);
+                }
+
+                foreach ($instances as $inst) {
+                    $fkVal = $inst->__get($foreignKey);
+                    $inst->_relCache[$relName] = $lookup[$fkVal] ?? null;
+                }
+            }
+        }
+    }
+
+    /**
+     * Internal: has-one query (used by lazy and explicit loading).
+     */
+    private function hasOneMethod(string $relatedClass, string $foreignKey): ?ORM
+    {
+        $pkValue = $this->getPrimaryKeyValue();
+        if ($pkValue === null) {
+            return null;
+        }
+
+        /** @var ORM $related */
+        $related = new $relatedClass($this->_db);
+        $results = $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], 1);
+        return $results[0] ?? null;
+    }
+
+    /**
+     * Internal: has-many query (used by lazy and explicit loading).
+     */
+    private function hasManyMethod(string $relatedClass, string $foreignKey, int $limit = 100, int $offset = 0): array
+    {
+        $pkValue = $this->getPrimaryKeyValue();
+        if ($pkValue === null) {
+            return [];
+        }
+
+        /** @var ORM $related */
+        $related = new $relatedClass($this->_db);
+        return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+    }
+
+    /**
+     * Internal: belongs-to query (used by lazy and explicit loading).
+     */
+    private function belongsToMethod(string $relatedClass, string $foreignKey): ?ORM
+    {
+        $fkValue = $this->_data[$foreignKey] ?? null;
+        if ($fkValue === null) {
+            return null;
+        }
+
+        $parent = new $relatedClass($this->_db);
+        $parent->load($fkValue);
+        return $parent->exists() ? $parent : null;
+    }
+
+    /**
+     * Set a relationship cache value directly (used by eager loading).
+     */
+    public function setRelCache(string $name, mixed $value): void
+    {
+        $this->_relCache[$name] = $value;
+    }
+
+    /**
+     * Clear the relationship cache.
+     */
+    public function clearRelCache(): void
+    {
+        $this->_relCache = [];
     }
 
     /**
