@@ -27,7 +27,7 @@ class MessengerFactory
     public static function create(): Messenger|DevMailbox
     {
         $debug = self::env('TINA4_DEBUG');
-        $smtpHost = self::env('SMTP_HOST');
+        $smtpHost = self::env('TINA4_MAIL_HOST') ?? self::env('SMTP_HOST');
 
         $isDev = match (true) {
             $debug !== null && in_array(strtolower($debug), ['true', '1', 'yes', 'on'], true) => true,

@@ -82,14 +82,36 @@ class Queue
     /**
      * Push a job onto a queue.
      *
-     * @param mixed  $payload Job data (will be JSON-encoded)
-     * @param string $queue   Queue name (defaults to topic set in constructor)
-     * @param int    $delay   Delay in seconds before job becomes available
+     * Accepts two calling styles:
+     *   $queue->push($payload)                          — uses constructor topic
+     *   $queue->push($payload, 'queue_name')            — explicit queue override
+     *   $queue->push('queue_name', $payload)             — legacy (queue first)
+     *   $queue->push('queue_name', $payload, $delay)     — legacy with delay
+     *
+     * @param mixed       $payloadOrQueue Job data or queue name (string for legacy)
+     * @param mixed       $queueOrPayload Queue name or payload (legacy)
+     * @param int         $delay          Delay in seconds before job becomes available
      * @return string Job ID
      */
-    public function push(mixed $payload, string $queue = '', int $delay = 0): string
+    public function push(mixed $payloadOrQueue, mixed $queueOrPayload = '', int $delay = 0): string
     {
-        $queue = $queue ?: $this->topic;
+        // Detect calling style:
+        // 1. push('queue_name', $payload) — legacy: first arg is string queue name
+        // 2. push($payload, 'queue_name') — unified: payload first, optional queue override
+        // 3. push($payload) — unified: uses constructor topic
+        if (is_string($payloadOrQueue) && $queueOrPayload !== '') {
+            // Legacy style: push('queue_name', $payload, $delay)
+            $queue = $payloadOrQueue;
+            $payload = $queueOrPayload;
+        } elseif (!is_string($payloadOrQueue) && is_string($queueOrPayload) && $queueOrPayload !== '') {
+            // Unified with override: push($payload, 'queue_name')
+            $payload = $payloadOrQueue;
+            $queue = $queueOrPayload;
+        } else {
+            // Unified style: push($payload) — use topic
+            $payload = $payloadOrQueue;
+            $queue = $this->topic;
+        }
 
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
@@ -189,12 +211,40 @@ class Queue
     /**
      * Process jobs from a queue using a handler callback.
      *
-     * @param callable $handler Function receiving the job array
-     * @param string   $queue   Queue name (defaults to topic set in constructor)
+     * Accepts two calling styles:
+     *   $queue->process($handler)                        — uses constructor topic
+     *   $queue->process($handler, 'queue_name')          — explicit queue override
+     *   $queue->process('queue_name', $handler)           — legacy (queue first)
+     *   $queue->process('queue_name', $handler, $options) — legacy with options
+     *
+     * @param callable|string $handlerOrQueue Handler or queue name (legacy)
+     * @param callable|string|array $queueOrHandlerOrOptions Queue name, handler, or options
      * @param array    $options Options: maxJobs (int)
      */
-    public function process(callable $handler, string $queue = '', array $options = []): void
+    public function process(callable|string $handlerOrQueue, callable|string|array $queueOrHandlerOrOptions = '', array $options = []): void
     {
+        // Detect calling style
+        if (is_string($handlerOrQueue) && is_callable($queueOrHandlerOrOptions)) {
+            // Legacy: process('queue_name', $handler, $options)
+            $queue = $handlerOrQueue;
+            $handler = $queueOrHandlerOrOptions;
+        } elseif (is_callable($handlerOrQueue) && is_string($queueOrHandlerOrOptions)) {
+            // Unified: process($handler, 'queue_name')
+            $handler = $handlerOrQueue;
+            $queue = $queueOrHandlerOrOptions ?: $this->topic;
+        } elseif (is_callable($handlerOrQueue) && is_array($queueOrHandlerOrOptions)) {
+            // Unified: process($handler, $options)
+            $handler = $handlerOrQueue;
+            $queue = $this->topic;
+            $options = $queueOrHandlerOrOptions;
+        } elseif (is_callable($handlerOrQueue)) {
+            // Simple: process($handler)
+            $handler = $handlerOrQueue;
+            $queue = $this->topic;
+        } else {
+            $queue = $handlerOrQueue;
+            $handler = $queueOrHandlerOrOptions;
+        }
         $queue = $queue ?: $this->topic;
         $maxJobs = $options['maxJobs'] ?? null;
         $processed = 0;

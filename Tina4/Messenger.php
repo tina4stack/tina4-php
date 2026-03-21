@@ -7,52 +7,77 @@
  *
  * Messenger — Email sending (SMTP) and reading (IMAP), zero external dependencies.
  * Uses raw socket communication for SMTP and PHP's imap_* extension for reading.
+ *
+ * Unified .env-driven configuration with constructor override.
+ * Priority: constructor params > .env > sensible defaults
+ *
+ *   # .env
+ *   TINA4_MAIL_HOST=smtp.gmail.com
+ *   TINA4_MAIL_PORT=587
+ *   TINA4_MAIL_USERNAME=user@gmail.com
+ *   TINA4_MAIL_PASSWORD=app-password
+ *   TINA4_MAIL_FROM=noreply@myapp.com
+ *   TINA4_MAIL_ENCRYPTION=tls
+ *   TINA4_MAIL_IMAP_HOST=imap.gmail.com
+ *   TINA4_MAIL_IMAP_PORT=993
+ *
+ *   $mail = new Messenger();                                    // reads from .env
+ *   $mail = new Messenger(host: "smtp.office365.com", port: 587);  // override
+ *   $mail->send("user@test.com", "Welcome", "<h1>Hello!</h1>", html: true, text: "Hello!");
  */
 
 namespace Tina4;
 
 class Messenger
 {
-    /** @var string|null SMTP host */
-    private ?string $host;
+    /** @var string SMTP host */
+    private string $host;
 
-    /** @var int|null SMTP port */
-    private ?int $port;
+    /** @var int SMTP port */
+    private int $port;
 
-    /** @var string|null SMTP username */
-    private ?string $username;
+    /** @var string SMTP username */
+    private string $username;
 
-    /** @var string|null SMTP password */
-    private ?string $password;
+    /** @var string SMTP password */
+    private string $password;
 
-    /** @var string|null Sender email address */
-    private ?string $fromAddress;
+    /** @var string Sender email address */
+    private string $fromAddress;
 
     /** @var string|null Sender display name */
     private ?string $fromName;
 
-    /** @var bool Whether to use STARTTLS */
+    /** @var string Encryption mode: tls, ssl, starttls, none */
+    private string $encryption;
+
+    /** @var bool Whether to use STARTTLS (derived from encryption) */
     private bool $useTls;
 
     /** @var string|null IMAP host */
     private ?string $imapHost;
 
-    /** @var int|null IMAP port */
-    private ?int $imapPort;
+    /** @var int IMAP port */
+    private int $imapPort;
 
     /** @var int Socket timeout in seconds */
     private int $timeout = 30;
 
     /**
-     * @param string|null $host       SMTP server hostname
-     * @param int|null    $port       SMTP server port (587 for TLS, 465 for SSL, 25 for plain)
-     * @param string|null $username   SMTP authentication username
-     * @param string|null $password   SMTP authentication password
+     * Create a Messenger instance.
+     *
+     * Priority: constructor params > .env (TINA4_MAIL_* with SMTP_* fallback) > sensible defaults
+     *
+     * @param string|null $host        SMTP server hostname
+     * @param int|null    $port        SMTP server port (587 for TLS, 465 for SSL, 25 for plain)
+     * @param string|null $username    SMTP authentication username
+     * @param string|null $password    SMTP authentication password
      * @param string|null $fromAddress Default sender email address
-     * @param string|null $fromName   Default sender display name
-     * @param bool        $useTls     Whether to use STARTTLS (default true)
-     * @param string|null $imapHost   IMAP server hostname
-     * @param int|null    $imapPort   IMAP server port (993 for SSL, 143 for plain)
+     * @param string|null $fromName    Default sender display name
+     * @param string|null $encryption  Encryption mode: tls, ssl, starttls, none (default: tls)
+     * @param bool|null   $useTls      Deprecated — use $encryption instead
+     * @param string|null $imapHost    IMAP server hostname
+     * @param int|null    $imapPort    IMAP server port (993 for SSL, 143 for plain)
      */
     public function __construct(
         ?string $host = null,
@@ -61,19 +86,58 @@ class Messenger
         ?string $password = null,
         ?string $fromAddress = null,
         ?string $fromName = null,
-        bool $useTls = true,
+        ?string $encryption = null,
+        ?bool $useTls = null,
         ?string $imapHost = null,
         ?int $imapPort = null,
     ) {
-        $this->host = $host ?? $this->env('SMTP_HOST');
-        $this->port = $port ?? ($this->env('SMTP_PORT') !== null ? (int)$this->env('SMTP_PORT') : null);
-        $this->username = $username ?? $this->env('SMTP_USERNAME');
-        $this->password = $password ?? $this->env('SMTP_PASSWORD');
-        $this->fromAddress = $fromAddress ?? $this->env('SMTP_FROM');
-        $this->fromName = $fromName ?? $this->env('SMTP_FROM_NAME');
-        $this->useTls = $useTls;
-        $this->imapHost = $imapHost ?? $this->env('IMAP_HOST');
-        $this->imapPort = $imapPort ?? ($this->env('IMAP_PORT') !== null ? (int)$this->env('IMAP_PORT') : null);
+        // SMTP — priority: constructor > TINA4_MAIL_* > SMTP_* > default
+        $this->host = $host
+            ?? $this->env('TINA4_MAIL_HOST')
+            ?? $this->env('SMTP_HOST')
+            ?? 'localhost';
+
+        $envPort = $this->env('TINA4_MAIL_PORT') ?? $this->env('SMTP_PORT');
+        $this->port = $port ?? ($envPort !== null ? (int)$envPort : 587);
+
+        $this->username = $username
+            ?? $this->env('TINA4_MAIL_USERNAME')
+            ?? $this->env('SMTP_USERNAME')
+            ?? '';
+
+        $this->password = $password
+            ?? $this->env('TINA4_MAIL_PASSWORD')
+            ?? $this->env('SMTP_PASSWORD')
+            ?? '';
+
+        $resolvedFrom = $fromAddress
+            ?? $this->env('TINA4_MAIL_FROM')
+            ?? $this->env('SMTP_FROM');
+        $this->fromAddress = $resolvedFrom ?? ($this->username ?: 'noreply@localhost');
+
+        $this->fromName = $fromName
+            ?? $this->env('TINA4_MAIL_FROM_NAME')
+            ?? $this->env('SMTP_FROM_NAME');
+
+        // Encryption: constructor > .env > backward-compat useTls > default "tls"
+        $envEncryption = $encryption
+            ?? $this->env('TINA4_MAIL_ENCRYPTION');
+        if ($envEncryption !== null) {
+            $this->encryption = strtolower($envEncryption);
+        } elseif ($useTls !== null) {
+            $this->encryption = $useTls ? 'tls' : 'none';
+        } else {
+            $this->encryption = 'tls';
+        }
+        $this->useTls = in_array($this->encryption, ['tls', 'starttls'], true);
+
+        // IMAP
+        $this->imapHost = $imapHost
+            ?? $this->env('TINA4_MAIL_IMAP_HOST')
+            ?? $this->env('IMAP_HOST');
+
+        $envImapPort = $this->env('TINA4_MAIL_IMAP_PORT') ?? $this->env('IMAP_PORT');
+        $this->imapPort = $imapPort ?? ($envImapPort !== null ? (int)$envImapPort : 993);
     }
 
     /**
@@ -83,8 +147,9 @@ class Messenger
      * @param string       $subject     Email subject
      * @param string       $body        Email body content
      * @param bool         $html        Whether the body is HTML
-     * @param array        $cc          CC recipients
-     * @param array        $bcc         BCC recipients
+     * @param string|null  $text        Plain text alternative (when body is HTML)
+     * @param array|string $cc          CC recipients
+     * @param array|string $bcc         BCC recipients
      * @param string|null  $replyTo     Reply-to address
      * @param array        $attachments File paths or associative arrays with filename/content/mime
      * @param array        $headers     Additional headers as key => value
@@ -95,29 +160,25 @@ class Messenger
         string $subject,
         string $body,
         bool $html = false,
-        array $cc = [],
-        array $bcc = [],
+        ?string $text = null,
+        array|string $cc = [],
+        array|string $bcc = [],
         ?string $replyTo = null,
         array $attachments = [],
         array $headers = [],
     ): array {
-        if ($this->host === null || $this->port === null) {
-            return ['success' => false, 'message' => 'SMTP host and port are required', 'id' => null];
-        }
-
-        if ($this->fromAddress === null) {
-            return ['success' => false, 'message' => 'Sender address (fromAddress) is required', 'id' => null];
-        }
 
         $recipients = is_array($to) ? $to : [$to];
-        $allRecipients = array_merge($recipients, $cc, $bcc);
+        $ccList = is_array($cc) ? $cc : ($cc ? [$cc] : []);
+        $bccList = is_array($bcc) ? $bcc : ($bcc ? [$bcc] : []);
+        $allRecipients = array_merge($recipients, $ccList, $bccList);
 
         if (empty($allRecipients)) {
             return ['success' => false, 'message' => 'At least one recipient is required', 'id' => null];
         }
 
         $messageId = $this->generateMessageId();
-        $rawMessage = $this->buildMessage($recipients, $subject, $body, $html, $cc, $replyTo, $attachments, $headers, $messageId);
+        $rawMessage = $this->buildMessage($recipients, $subject, $body, $html, $ccList, $replyTo, $attachments, $headers, $messageId, $text);
 
         try {
             $socket = $this->connect();
@@ -607,9 +668,12 @@ class Messenger
         array $attachments,
         array $headers,
         string $messageId,
+        ?string $text = null,
     ): string {
         $boundary = 'Tina4_' . bin2hex(random_bytes(16));
+        $altBoundary = 'Tina4Alt_' . bin2hex(random_bytes(16));
         $hasAttachments = !empty($attachments);
+        $hasTextAlt = $text !== null && $html;
 
         $msg = '';
 
@@ -644,12 +708,28 @@ class Messenger
             $msg .= "\r\n";
             $msg .= '--' . $boundary . "\r\n";
 
-            // Body part
-            $contentType = $html ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8';
-            $msg .= 'Content-Type: ' . $contentType . "\r\n";
-            $msg .= "Content-Transfer-Encoding: base64\r\n";
-            $msg .= "\r\n";
-            $msg .= chunk_split(base64_encode($body)) . "\r\n";
+            // Body part (with optional text alternative)
+            if ($hasTextAlt) {
+                $msg .= 'Content-Type: multipart/alternative; boundary="' . $altBoundary . '"' . "\r\n";
+                $msg .= "\r\n";
+                $msg .= '--' . $altBoundary . "\r\n";
+                $msg .= "Content-Type: text/plain; charset=UTF-8\r\n";
+                $msg .= "Content-Transfer-Encoding: base64\r\n";
+                $msg .= "\r\n";
+                $msg .= chunk_split(base64_encode($text)) . "\r\n";
+                $msg .= '--' . $altBoundary . "\r\n";
+                $msg .= "Content-Type: text/html; charset=UTF-8\r\n";
+                $msg .= "Content-Transfer-Encoding: base64\r\n";
+                $msg .= "\r\n";
+                $msg .= chunk_split(base64_encode($body)) . "\r\n";
+                $msg .= '--' . $altBoundary . "--\r\n";
+            } else {
+                $contentType = $html ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8';
+                $msg .= 'Content-Type: ' . $contentType . "\r\n";
+                $msg .= "Content-Transfer-Encoding: base64\r\n";
+                $msg .= "\r\n";
+                $msg .= chunk_split(base64_encode($body)) . "\r\n";
+            }
 
             // Attachment parts
             foreach ($attachments as $attachment) {
@@ -679,6 +759,21 @@ class Messenger
             }
 
             $msg .= '--' . $boundary . "--\r\n";
+        } elseif ($hasTextAlt) {
+            // Text alternative without attachments
+            $msg .= 'Content-Type: multipart/alternative; boundary="' . $altBoundary . '"' . "\r\n";
+            $msg .= "\r\n";
+            $msg .= '--' . $altBoundary . "\r\n";
+            $msg .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $msg .= "Content-Transfer-Encoding: base64\r\n";
+            $msg .= "\r\n";
+            $msg .= chunk_split(base64_encode($text)) . "\r\n";
+            $msg .= '--' . $altBoundary . "\r\n";
+            $msg .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $msg .= "Content-Transfer-Encoding: base64\r\n";
+            $msg .= "\r\n";
+            $msg .= chunk_split(base64_encode($body)) . "\r\n";
+            $msg .= '--' . $altBoundary . "--\r\n";
         } else {
             // Simple message without attachments
             $contentType = $html ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8';
