@@ -1157,4 +1157,89 @@ TPL;
         );
         $this->assertSame('5', $result);
     }
+
+    // ── Token Pre-Compilation (Cache) Tests ─────────────────────────
+
+    public function testRenderStringCacheSameOutput(): void
+    {
+        $src = 'Hello {{ name }}!';
+        $first = $this->engine->renderString($src, ['name' => 'World']);
+        $second = $this->engine->renderString($src, ['name' => 'World']);
+        $this->assertSame('Hello World!', $first);
+        $this->assertSame($first, $second);
+    }
+
+    public function testRenderStringCacheDifferentData(): void
+    {
+        $src = '{{ greeting }}, {{ name }}!';
+        $r1 = $this->engine->renderString($src, ['greeting' => 'Hi', 'name' => 'Alice']);
+        $r2 = $this->engine->renderString($src, ['greeting' => 'Bye', 'name' => 'Bob']);
+        $this->assertSame('Hi, Alice!', $r1);
+        $this->assertSame('Bye, Bob!', $r2);
+    }
+
+    public function testRenderFileCacheSameOutput(): void
+    {
+        $this->writeTemplate('cached.html', '<p>{{ msg }}</p>');
+        $first = $this->engine->render('cached.html', ['msg' => 'hello']);
+        $second = $this->engine->render('cached.html', ['msg' => 'hello']);
+        $this->assertSame('<p>hello</p>', $first);
+        $this->assertSame($first, $second);
+    }
+
+    public function testRenderFileCacheDifferentData(): void
+    {
+        $this->writeTemplate('cached2.html', '{{ x }} + {{ y }}');
+        $r1 = $this->engine->render('cached2.html', ['x' => 1, 'y' => 2]);
+        $r2 = $this->engine->render('cached2.html', ['x' => 10, 'y' => 20]);
+        $this->assertSame('1 + 2', $r1);
+        $this->assertSame('10 + 20', $r2);
+    }
+
+    public function testCacheInvalidationOnFileChange(): void
+    {
+        putenv('TINA4_DEBUG=true');
+        try {
+            $this->writeTemplate('changing.html', 'Version 1: {{ v }}');
+            $r1 = $this->engine->render('changing.html', ['v' => 'a']);
+            $this->assertSame('Version 1: a', $r1);
+
+            // Change file content (touch to update mtime)
+            usleep(50000);
+            $this->writeTemplate('changing.html', 'Version 2: {{ v }}');
+            clearstatcache();
+            $r2 = $this->engine->render('changing.html', ['v' => 'b']);
+            $this->assertSame('Version 2: b', $r2);
+        } finally {
+            putenv('TINA4_DEBUG');
+        }
+    }
+
+    public function testClearCache(): void
+    {
+        $this->engine->renderString('{{ x }}', ['x' => 1]);
+        $this->engine->clearCache();
+        // After clearing, rendering still works (re-tokenizes)
+        $result = $this->engine->renderString('{{ x }}', ['x' => 2]);
+        $this->assertSame('2', $result);
+    }
+
+    public function testRenderStringWithForLoopCached(): void
+    {
+        $src = '{% for i in items %}{{ i }},{% endfor %}';
+        $data = ['items' => [1, 2, 3]];
+        $first = $this->engine->renderString($src, $data);
+        $second = $this->engine->renderString($src, $data);
+        $this->assertSame('1,2,3,', $first);
+        $this->assertSame($first, $second);
+    }
+
+    public function testRenderStringWithIfCached(): void
+    {
+        $src = '{% if show %}visible{% else %}hidden{% endif %}';
+        $r1 = $this->engine->renderString($src, ['show' => true]);
+        $r2 = $this->engine->renderString($src, ['show' => false]);
+        $this->assertSame('visible', $r1);
+        $this->assertSame('hidden', $r2);
+    }
 }

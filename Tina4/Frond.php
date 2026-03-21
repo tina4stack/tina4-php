@@ -20,6 +20,10 @@ class Frond
     private ?array $sandboxTags = null;
     private ?array $sandboxVars = null;
     private array $macros = [];
+    /** @var array<string, array{tokens: array, ast: array, mtime: float}> Token pre-compilation cache for file templates */
+    private array $compiled = [];
+    /** @var array<string, array{tokens: array, ast: array}> Token pre-compilation cache for string templates */
+    private array $compiledStrings = [];
 
     // Sentinel for "raw" (no auto-escape)
     private const RAW_MARKER = "\x00FROND_RAW\x00";
@@ -40,20 +44,68 @@ class Frond
         if (!is_file($file)) {
             throw new \RuntimeException("Template not found: $file");
         }
+
+        $debugMode = strtolower(getenv('TINA4_DEBUG') ?: '') === 'true';
+        $cached = $this->compiled[$template] ?? null;
+
+        if ($cached !== null) {
+            if ($debugMode) {
+                // Dev mode: check if file changed
+                $mtime = filemtime($file);
+                if ($cached['mtime'] === $mtime) {
+                    $data = array_merge($this->globals, $data);
+                    $ast = $this->resolveInheritance($cached['ast'], $data, $template);
+                    return $this->execute($ast, $data);
+                }
+            } else {
+                // Production: skip mtime check, cache is permanent
+                $data = array_merge($this->globals, $data);
+                $ast = $this->resolveInheritance($cached['ast'], $data, $template);
+                return $this->execute($ast, $data);
+            }
+        }
+
+        // Cache miss — load, tokenize, parse, cache
         $source = file_get_contents($file);
-        return $this->renderString($source, $data, $template);
+        $mtime = filemtime($file);
+        $tokens = $this->tokenize($source);
+        $ast = $this->parse($tokens);
+        $this->compiled[$template] = ['tokens' => $tokens, 'ast' => $ast, 'mtime' => $mtime];
+
+        $data = array_merge($this->globals, $data);
+        $ast = $this->resolveInheritance($ast, $data, $template);
+        return $this->execute($ast, $data);
     }
 
     public function renderString(string $source, array $data = [], ?string $templateName = null): string
     {
+        $key = md5($source);
+        $cached = $this->compiledStrings[$key] ?? null;
+
+        if ($cached !== null) {
+            $data = array_merge($this->globals, $data);
+            $ast = $this->resolveInheritance($cached['ast'], $data, $templateName);
+            return $this->execute($ast, $data);
+        }
+
         $data = array_merge($this->globals, $data);
         $tokens = $this->tokenize($source);
         $ast = $this->parse($tokens);
+        $this->compiledStrings[$key] = ['tokens' => $tokens, 'ast' => $ast];
 
         // Handle extends
         $ast = $this->resolveInheritance($ast, $data, $templateName);
 
         return $this->execute($ast, $data);
+    }
+
+    /**
+     * Clear all compiled template caches.
+     */
+    public function clearCache(): void
+    {
+        $this->compiled = [];
+        $this->compiledStrings = [];
     }
 
     public function addFilter(string $name, callable $fn): void
