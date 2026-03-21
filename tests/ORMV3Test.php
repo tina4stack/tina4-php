@@ -18,6 +18,8 @@ class TestUser extends ORM
     public string $tableName = 'users';
     public string $primaryKey = 'id';
     public array $fieldMapping = [];
+    public array $hasMany = ['posts' => 'TestRelPost.user_id'];
+    public array $hasOne = ['profile' => 'TestProfile.user_id'];
 }
 
 /**
@@ -28,6 +30,37 @@ class TestPost extends ORM
     public string $tableName = 'posts';
     public string $primaryKey = 'id';
     public bool $softDelete = true;
+}
+
+/**
+ * Test model for relationship testing — posts with user_id FK.
+ */
+class TestRelPost extends ORM
+{
+    public string $tableName = 'rel_posts';
+    public string $primaryKey = 'id';
+    public array $belongsTo = ['author' => 'TestUser.user_id'];
+    public array $hasMany = ['comments' => 'TestComment.post_id'];
+}
+
+/**
+ * Test model for relationship testing — comments with post_id FK.
+ */
+class TestComment extends ORM
+{
+    public string $tableName = 'comments';
+    public string $primaryKey = 'id';
+    public array $belongsTo = ['post' => 'TestRelPost.post_id'];
+}
+
+/**
+ * Test model for relationship testing — user profiles.
+ */
+class TestProfile extends ORM
+{
+    public string $tableName = 'profiles';
+    public string $primaryKey = 'id';
+    public array $belongsTo = ['owner' => 'TestUser.user_id'];
 }
 
 /**
@@ -53,6 +86,9 @@ class ORMV3Test extends TestCase
         $this->db->exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT, age INTEGER)");
         $this->db->exec("CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT, is_deleted INTEGER DEFAULT 0)");
         $this->db->exec("CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT, product_name TEXT NOT NULL, unit_price REAL)");
+        $this->db->exec("CREATE TABLE rel_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT, user_id INTEGER)");
+        $this->db->exec("CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, post_id INTEGER)");
+        $this->db->exec("CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, bio TEXT, user_id INTEGER)");
     }
 
     protected function tearDown(): void
@@ -352,5 +388,132 @@ class ORMV3Test extends TestCase
         $loaded = new TestUser($this->db);
         $loaded->load($id);
         $this->assertSame('Alice V2', $loaded->name);
+    }
+
+    // --- Lazy-loaded Relationship Tests ---
+
+    public function testHasManyLazyLoad(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Alice';
+        $user->save();
+
+        $post1 = new TestRelPost($this->db);
+        $post1->title = 'P1';
+        $post1->user_id = $user->getPrimaryKeyValue();
+        $post1->save();
+
+        $post2 = new TestRelPost($this->db);
+        $post2->title = 'P2';
+        $post2->user_id = $user->getPrimaryKeyValue();
+        $post2->save();
+
+        // Access via __get triggers lazy loading
+        $posts = $user->posts;
+        $this->assertIsArray($posts);
+        $this->assertCount(2, $posts);
+    }
+
+    public function testHasOneLazyLoad(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Bob';
+        $user->save();
+
+        $profile = new TestProfile($this->db);
+        $profile->bio = 'Hello world';
+        $profile->user_id = $user->getPrimaryKeyValue();
+        $profile->save();
+
+        $loadedProfile = $user->profile;
+        $this->assertInstanceOf(TestProfile::class, $loadedProfile);
+        $this->assertSame('Hello world', $loadedProfile->bio);
+    }
+
+    public function testBelongsToLazyLoad(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Carol';
+        $user->save();
+
+        $post = new TestRelPost($this->db);
+        $post->title = 'Post1';
+        $post->user_id = $user->getPrimaryKeyValue();
+        $post->save();
+
+        $author = $post->author;
+        $this->assertInstanceOf(TestUser::class, $author);
+        $this->assertSame('Carol', $author->name);
+    }
+
+    public function testRelationshipCache(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Dave';
+        $user->save();
+
+        $post = new TestRelPost($this->db);
+        $post->title = 'Cached';
+        $post->user_id = $user->getPrimaryKeyValue();
+        $post->save();
+
+        $posts1 = $user->posts;
+        $posts2 = $user->posts;
+        $this->assertSame($posts1, $posts2); // Same reference
+    }
+
+    public function testCacheClearsOnSave(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Eve';
+        $user->save();
+
+        $_ = $user->posts; // Populate cache
+        $user->name = 'Eve Updated';
+        $user->save();
+
+        // Cache should be cleared — accessing posts will trigger fresh load
+        $posts = $user->posts;
+        $this->assertIsArray($posts);
+        $this->assertCount(0, $posts);
+    }
+
+    public function testToDictWithInclude(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Alice';
+        $user->save();
+
+        $post = new TestRelPost($this->db);
+        $post->title = 'Hello';
+        $post->user_id = $user->getPrimaryKeyValue();
+        $post->save();
+
+        $dict = $user->toDict(['posts']);
+        $this->assertArrayHasKey('posts', $dict);
+        $this->assertCount(1, $dict['posts']);
+        $this->assertSame('Hello', $dict['posts'][0]['title']);
+    }
+
+    public function testToDictWithNestedInclude(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Bob';
+        $user->save();
+
+        $post = new TestRelPost($this->db);
+        $post->title = 'Post';
+        $post->user_id = $user->getPrimaryKeyValue();
+        $post->save();
+
+        $comment = new TestComment($this->db);
+        $comment->text = 'Nice';
+        $comment->post_id = $post->getPrimaryKeyValue();
+        $comment->save();
+
+        $dict = $user->toDict(['posts.comments']);
+        $this->assertArrayHasKey('posts', $dict);
+        $this->assertArrayHasKey('comments', $dict['posts'][0]);
+        $this->assertSame('Nice', $dict['posts'][0]['comments'][0]['text']);
     }
 }
