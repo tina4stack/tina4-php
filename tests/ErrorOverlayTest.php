@@ -85,7 +85,7 @@ class ErrorOverlayTest extends TestCase
     public function testRenderContainsDebugModeFooter(): void
     {
         $html = ErrorOverlay::render($this->makeException());
-        $this->assertStringContainsString('TINA4_DEBUG_LEVEL', $html);
+        $this->assertStringContainsString('TINA4_DEBUG', $html);
     }
 
     public function testRenderEscapesHtmlInMessage(): void
@@ -130,30 +130,30 @@ class ErrorOverlayTest extends TestCase
         $this->assertStringContainsString('Internal Server Error', $html);
     }
 
-    public function testIsDebugModeAll(): void
+    public function testIsDebugModeTrue(): void
     {
-        putenv('TINA4_DEBUG_LEVEL=ALL');
+        putenv('TINA4_DEBUG=true');
         $this->assertTrue(ErrorOverlay::isDebugMode());
-        putenv('TINA4_DEBUG_LEVEL');
+        putenv('TINA4_DEBUG');
     }
 
-    public function testIsDebugModeDebug(): void
+    public function testIsDebugModeOne(): void
     {
-        putenv('TINA4_DEBUG_LEVEL=DEBUG');
+        putenv('TINA4_DEBUG=1');
         $this->assertTrue(ErrorOverlay::isDebugMode());
-        putenv('TINA4_DEBUG_LEVEL');
+        putenv('TINA4_DEBUG');
     }
 
-    public function testIsDebugModeWarningIsFalse(): void
+    public function testIsDebugModeFalseIsFalse(): void
     {
-        putenv('TINA4_DEBUG_LEVEL=WARNING');
+        putenv('TINA4_DEBUG=false');
         $this->assertFalse(ErrorOverlay::isDebugMode());
-        putenv('TINA4_DEBUG_LEVEL');
+        putenv('TINA4_DEBUG');
     }
 
     public function testIsDebugModeEmptyIsFalse(): void
     {
-        putenv('TINA4_DEBUG_LEVEL');
+        putenv('TINA4_DEBUG');
         $this->assertFalse(ErrorOverlay::isDebugMode());
     }
 }

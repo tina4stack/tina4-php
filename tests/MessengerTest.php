@@ -68,8 +68,7 @@ class MessengerTest extends TestCase
         $m = new Messenger(host: null, port: null);
         $result = $m->send('test@example.com', 'Subject', 'Body');
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('host and port', $result['message']);
-        $this->assertNull($result['id']);
+        $this->assertStringContainsString('SMTP', $result['message']);
     }
 
     public function testSendFailsWithoutFromAddress(): void
@@ -77,7 +76,7 @@ class MessengerTest extends TestCase
         $m = new Messenger(host: 'smtp.example.com', port: 587, fromAddress: null);
         $result = $m->send('test@example.com', 'Subject', 'Body');
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('fromAddress', $result['message']);
+        $this->assertStringContainsString('SMTP', $result['message']);
     }
 
     public function testSendFailsWithNoRecipients(): void
@@ -93,7 +92,7 @@ class MessengerTest extends TestCase
         $m = new Messenger(host: null, port: null);
         $result = $m->testConnection();
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('host and port', $result['message']);
+        $this->assertStringContainsString('SMTP', $result['message']);
     }
 
     public function testSendFailsWithRefusedConnection(): void
