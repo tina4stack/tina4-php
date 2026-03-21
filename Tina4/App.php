@@ -291,74 +291,135 @@ class App
      */
     private static function renderLandingPage(string $version, bool $isDev): string
     {
-        $mode = $isDev ? '<span style="color:#4caf50">Development</span>' : '<span style="color:#ff9800">Production</span>';
-        $routes = Router::list();
-        $routeRows = '';
-        foreach ($routes as $r) {
-            $flags = [];
-            if ($r['cache'] ?? false) {
-                $flags[] = '<span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:3px;font-size:11px">CACHE</span>';
-            }
-            if ($r['secure'] ?? false) {
-                $flags[] = '<span style="background:#fce4ec;color:#c62828;padding:1px 6px;border-radius:3px;font-size:11px">AUTH</span>';
-            }
-            $flagStr = implode(' ', $flags);
-            $routeRows .= "<tr><td><code>{$r['method']}</code></td><td><a href=\"{$r['pattern']}\">{$r['pattern']}</a></td><td>{$flagStr}</td></tr>";
-        }
+        $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: '7146';
 
         return <<<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Tina4 PHP v{$version}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-        .hero { background: linear-gradient(135deg, #7b1fa2, #9c27b0); color: white; padding: 60px 20px; text-align: center; }
-        .hero h1 { font-size: 2.5em; margin-bottom: 10px; }
-        .hero p { font-size: 1.2em; opacity: 0.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 30px 20px; }
-        .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 20px; }
-        .card h2 { color: #7b1fa2; margin-bottom: 12px; font-size: 1.3em; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
-        th { color: #666; font-size: 0.85em; text-transform: uppercase; }
-        code { background: #f5f0ff; padding: 2px 8px; border-radius: 4px; font-size: 0.9em; color: #7b1fa2; }
-        a { color: #7b1fa2; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600; }
-        .get-started { background: #f3e5f5; border-left: 4px solid #7b1fa2; padding: 16px; border-radius: 0 8px 8px 0; }
-        .get-started code { display: block; margin-top: 8px; background: #333; color: #4caf50; padding: 8px 12px; border-radius: 4px; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tina4</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;position:relative}
+.bg-watermark{position:fixed;bottom:-5%;right:-5%;width:45%;opacity:0.04;pointer-events:none;z-index:0}
+.content{text-align:center;z-index:1;padding:2rem;max-width:960px;margin:0 auto}
+.logo{width:120px;height:120px;margin-bottom:1.5rem}
+h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
+.tagline{color:#64748b;font-size:1.1rem;margin-bottom:2rem}
+.actions{display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;margin-bottom:2.5rem}
+.btn{padding:0.6rem 1.5rem;border-radius:0.5rem;font-size:0.9rem;font-weight:600;cursor:pointer;text-decoration:none;transition:all 0.15s;border:1px solid #334155;color:#94a3b8;background:transparent}
+.btn:hover{border-color:#64748b;color:#e2e8f0}
+.btn-primary{background:#7b1fa2;color:#fff;border-color:#7b1fa2}
+.btn-primary:hover{opacity:0.9;transform:translateY(-1px)}
+.status{display:flex;gap:2rem;justify-content:center;align-items:center;color:#64748b;font-size:0.85rem;margin-bottom:1.5rem}
+.status .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:0.4rem}
+.footer{color:#334155;font-size:0.8rem;letter-spacing:0.5px;margin-top:2rem;padding-bottom:2rem}
+.card{background:#1e293b;border-radius:0.75rem;padding:2rem;margin-top:2.5rem;text-align:left}
+.card h2{font-size:1.4rem;font-weight:600;margin-bottom:1rem}
+.code-block{background:#0f172a;border-radius:0.5rem;padding:1.25rem;overflow-x:auto;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:0.85rem;line-height:1.6;color:#4ade80}
+.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-top:2.5rem}
+.gallery-title{font-size:1.4rem;font-weight:600;margin-top:2.5rem;margin-bottom:0}
+.gallery-card{background:#1e293b;border:1px solid #334155;border-radius:0.75rem;padding:1.5rem;text-align:left;position:relative;overflow:hidden}
+.gallery-card .accent{position:absolute;top:0;left:0;right:0;height:3px}
+.accent-purple{background:#7b1fa2}
+.accent-green{background:#22c55e}
+.accent-blue{background:#3b82f6}
+.gallery-card .icon{font-size:1.5rem;margin-bottom:0.75rem}
+.gallery-card h3{font-size:1.05rem;font-weight:600;margin-bottom:0.5rem}
+.gallery-card p{color:#94a3b8;font-size:0.9rem;line-height:1.5}
+</style>
 </head>
 <body>
-    <div class="hero">
-        <h1>Tina4 PHP</h1>
-        <p>This is not a 4ramework &mdash; v{$version} &mdash; {$mode}</p>
+<img src="/images/logo.png" class="bg-watermark" alt="">
+<div class="content">
+    <img src="/images/logo.png" class="logo" alt="Tina4">
+    <h1>Tina4</h1>
+    <p class="tagline">This is not a framework</p>
+    <div class="actions">
+        <a href="/__dev/" class="btn btn-primary">Dev Admin</a>
+        <a href="#gallery" class="btn">Gallery</a>
     </div>
-    <div class="container">
-        <div class="card">
-            <h2>Registered Routes</h2>
-            <table>
-                <thead><tr><th>Method</th><th>Path</th><th>Flags</th></tr></thead>
-                <tbody>{$routeRows}</tbody>
-            </table>
+    <div class="status">
+        <span><span class="dot"></span>Server running</span>
+        <span>Port {$port}</span>
+        <span>v{$version}</span>
+    </div>
+
+    <div class="card">
+        <h2>Getting Started</h2>
+        <div class="code-block"><pre>&lt;?php
+// index.php
+require_once 'vendor/autoload.php';
+
+\$app = new \Tina4\App();
+
+\Tina4\Router::get('/hello', function (\$request, \$response) {
+    return \$response-&gt;json(['message' =&gt; 'Hello World!']);
+});
+
+\$app-&gt;run();  // starts on port 7146</pre></div>
+    </div>
+
+    <h2 id="gallery" class="gallery-title">What You Can Build</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
+        <div class="gallery-card">
+            <div class="accent accent-purple"></div>
+            <div class="icon">&#128640;</div>
+            <h3>REST API</h3>
+            <p>Define routes with one decorator</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SFMono-Regular',Consolas,monospace;">Router::get('/api/users', function(\$req, \$res) {
+    return \$res-&gt;json(['users' =&gt; []]);
+});</pre>
         </div>
-        <div class="card get-started">
-            <h2>Get Started</h2>
-            <p>Create your first route file:</p>
-            <code>src/routes/hello.php</code>
-            <p style="margin-top: 12px">Or register routes in <code>index.php</code>:</p>
-            <code>Router::get('/hello', fn(Request \$req, Response \$res) => \$res->json(['hello' => 'world']));</code>
+        <div class="gallery-card">
+            <div class="accent accent-green"></div>
+            <div class="icon">&#128451;</div>
+            <h3>ORM</h3>
+            <p>Active record models, zero config</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SFMono-Regular',Consolas,monospace;">class User extends ORM {
+    public \$tableName = "users";
+    public \$primaryKey = "id";
+}</pre>
         </div>
-        <div class="card">
-            <h2>Quick Links</h2>
-            <p><a href="/health">/health</a> &mdash; Health check endpoint</p>
-            <p style="margin-top: 8px"><a href="https://tina4.com" target="_blank">tina4.com</a> &mdash; Full documentation</p>
+        <div class="gallery-card">
+            <div class="accent accent-blue"></div>
+            <div class="icon">&#128274;</div>
+            <h3>Auth</h3>
+            <p>JWT tokens built-in</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SFMono-Regular',Consolas,monospace;">\$token = Auth::getToken(["user_id" =&gt; 1]);
+\$valid = Auth::validToken(\$token);</pre>
+        </div>
+        <div class="gallery-card">
+            <div class="accent accent-purple"></div>
+            <div class="icon">&#9889;</div>
+            <h3>Queue</h3>
+            <p>Background jobs, no Redis needed</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SFMono-Regular',Consolas,monospace;">\$producer = new Producer(new Queue("emails"));
+\$producer-&gt;produce(["to" =&gt; "a@b.com"]);</pre>
+        </div>
+        <div class="gallery-card">
+            <div class="accent accent-green"></div>
+            <div class="icon">&#128196;</div>
+            <h3>Templates</h3>
+            <p>Twig templates with auto-reload</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SFMono-Regular',Consolas,monospace;">Router::get('/dashboard', function(\$req, \$res) {
+    return \$res-&gt;render("dashboard.twig", \$data);
+});</pre>
+        </div>
+        <div class="gallery-card">
+            <div class="accent accent-blue"></div>
+            <div class="icon">&#128225;</div>
+            <h3>Database</h3>
+            <p>Multi-engine, one API</p>
+            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SFMono-Regular',Consolas,monospace;">\$db = new Database("sqlite:///app.db");
+\$result = \$db-&gt;fetch("SELECT * FROM users");</pre>
         </div>
     </div>
+
+    <p class="footer">Zero dependencies &middot; Convention over configuration</p>
+</div>
 </body>
 </html>
 HTML;
