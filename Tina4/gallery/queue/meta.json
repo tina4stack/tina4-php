@@ -1,1 +1,1 @@
-{"name": "Queue", "description": "Background job producer and consumer", "try_url": "/api/gallery/queue/produce"}
+{"name": "Queue", "description": "Background job producer and consumer", "try_url": "/gallery/queue"}
