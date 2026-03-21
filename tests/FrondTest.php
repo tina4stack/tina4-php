@@ -1041,4 +1041,120 @@ TPL;
         unlink($subdir . '/forms.twig');
         rmdir($subdir);
     }
+
+    /* ═══════════ Spaceless ═══════════ */
+
+    public function testSpacelessRemovesWhitespaceBetweenTags(): void
+    {
+        $result = $this->engine->renderString('{% spaceless %}<div>  <p>  Hello  </p>  </div>{% endspaceless %}');
+        $this->assertSame('<div><p>  Hello  </p></div>', $result);
+    }
+
+    public function testSpacelessPreservesContentWhitespace(): void
+    {
+        $result = $this->engine->renderString('{% spaceless %}<span>  text  </span>{% endspaceless %}');
+        $this->assertSame('<span>  text  </span>', $result);
+    }
+
+    public function testSpacelessMultiline(): void
+    {
+        $src = "{% spaceless %}\n<div>\n    <p>Hi</p>\n</div>\n{% endspaceless %}";
+        $result = $this->engine->renderString($src);
+        $this->assertStringContainsString('<div><p>', $result);
+        $this->assertStringContainsString('</p></div>', $result);
+    }
+
+    public function testSpacelessWithVariables(): void
+    {
+        $result = $this->engine->renderString(
+            '{% spaceless %}<div>  <span>{{ name }}</span>  </div>{% endspaceless %}',
+            ['name' => 'Alice']
+        );
+        $this->assertSame('<div><span>Alice</span></div>', $result);
+    }
+
+    /* ═══════════ Autoescape ═══════════ */
+
+    public function testAutoescapeFalseDisablesEscaping(): void
+    {
+        $result = $this->engine->renderString(
+            '{% autoescape false %}{{ html }}{% endautoescape %}',
+            ['html' => '<b>bold</b>']
+        );
+        $this->assertSame('<b>bold</b>', $result);
+    }
+
+    public function testAutoescapeTrueKeepsEscaping(): void
+    {
+        $result = $this->engine->renderString(
+            '{% autoescape true %}{{ html }}{% endautoescape %}',
+            ['html' => '<b>bold</b>']
+        );
+        $this->assertStringContainsString('&lt;b&gt;', $result);
+    }
+
+    public function testAutoescapeFalseWithFilters(): void
+    {
+        $result = $this->engine->renderString(
+            '{% autoescape false %}{{ name | upper }}{% endautoescape %}',
+            ['name' => 'alice']
+        );
+        $this->assertSame('ALICE', $result);
+    }
+
+    public function testAutoescapeFalseMultipleVariables(): void
+    {
+        $result = $this->engine->renderString(
+            '{% autoescape false %}{{ a }} {{ b }}{% endautoescape %}',
+            ['a' => '<i>x</i>', 'b' => '<b>y</b>']
+        );
+        $this->assertSame('<i>x</i> <b>y</b>', $result);
+    }
+
+    /* ═══════════ Inline If ═══════════ */
+
+    public function testInlineIfTrueBranch(): void
+    {
+        $result = $this->engine->renderString(
+            "{{ 'yes' if active else 'no' }}",
+            ['active' => true]
+        );
+        $this->assertSame('yes', $result);
+    }
+
+    public function testInlineIfFalseBranch(): void
+    {
+        $result = $this->engine->renderString(
+            "{{ 'yes' if active else 'no' }}",
+            ['active' => false]
+        );
+        $this->assertSame('no', $result);
+    }
+
+    public function testInlineIfWithVariable(): void
+    {
+        $result = $this->engine->renderString(
+            "{{ name if name else 'Anonymous' }}",
+            ['name' => 'Alice']
+        );
+        $this->assertSame('Alice', $result);
+    }
+
+    public function testInlineIfWithMissingVariable(): void
+    {
+        $result = $this->engine->renderString(
+            "{{ name if name else 'Anonymous' }}",
+            []
+        );
+        $this->assertSame('Anonymous', $result);
+    }
+
+    public function testInlineIfWithNumeric(): void
+    {
+        $result = $this->engine->renderString(
+            "{{ count if count else 0 }}",
+            ['count' => 5]
+        );
+        $this->assertSame('5', $result);
+    }
 }

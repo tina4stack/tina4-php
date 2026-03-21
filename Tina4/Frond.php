@@ -308,6 +308,10 @@ class Frond
                 return $this->parseFromImport($rest);
             case 'cache':
                 return $this->parseCache($rest, $tokens, $pos);
+            case 'spaceless':
+                return $this->parseSpaceless($tokens, $pos);
+            case 'autoescape':
+                return $this->parseAutoescape($rest, $tokens, $pos);
             default:
                 $pos++;
                 return null;
@@ -483,6 +487,23 @@ class Frond
         return ['type' => 'cache', 'key' => $key, 'ttl' => $ttl, 'body' => $body];
     }
 
+    private function parseSpaceless(array &$tokens, int &$pos): array
+    {
+        $pos++;
+        $body = $this->parse($tokens, $pos, 'endspaceless');
+        $pos++;
+        return ['type' => 'spaceless', 'body' => $body];
+    }
+
+    private function parseAutoescape(string $params, array &$tokens, int &$pos): array
+    {
+        $pos++;
+        $mode = trim($params) === 'false' ? false : true;
+        $body = $this->parse($tokens, $pos, 'endautoescape');
+        $pos++;
+        return ['type' => 'autoescape', 'mode' => $mode, 'body' => $body];
+    }
+
     /* ───────────────────── template inheritance ───────────────────── */
 
     private function resolveInheritance(array $ast, array &$data, ?string $templateName): array
@@ -603,6 +624,12 @@ class Frond
 
             case 'cache':
                 return $this->executeCache($node, $data);
+
+            case 'spaceless':
+                return $this->executeSpaceless($node, $data);
+
+            case 'autoescape':
+                return $this->executeAutoescape($node, $data);
 
             default:
                 return '';
@@ -775,6 +802,41 @@ class Frond
         return $content;
     }
 
+    private function executeSpaceless(array $node, array &$data): string
+    {
+        $rendered = $this->execute($node['body'], $data);
+        return preg_replace('/>\s+</', '><', $rendered);
+    }
+
+    private function executeAutoescape(array $node, array &$data): string
+    {
+        if (!$node['mode']) {
+            // Temporarily wrap executeOutput to skip escaping
+            $rendered = $this->executeNoEscape($node['body'], $data);
+        } else {
+            $rendered = $this->execute($node['body'], $data);
+        }
+        return $rendered;
+    }
+
+    private function executeNoEscape(array $ast, array &$data): string
+    {
+        $out = '';
+        foreach ($ast as $node) {
+            if ($node['type'] === 'output') {
+                // Evaluate without escaping
+                $value = $this->evaluateExpression($node['expr'], $data);
+                if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
+                    $value = str_replace(self::RAW_MARKER, '', $value);
+                }
+                $out .= $this->valueToString($value);
+            } else {
+                $out .= $this->executeNode($node, $data);
+            }
+        }
+        return $out;
+    }
+
     /* ───────────────────── expression evaluator ───────────────────── */
 
     private function evaluateExpression(string $expr, array &$data): mixed
@@ -811,6 +873,15 @@ class Frond
                     return $this->evaluateExpression($falseVal, $data);
                 }
             }
+        }
+
+        // Jinja2-style inline if: value if condition else other_value
+        if (preg_match('/^(.+?)\s+if\s+(.+?)\s+else\s+(.+)$/', $expr, $inlineIfMatch)) {
+            $condResult = $this->evaluateExpression($inlineIfMatch[2], $data);
+            if ($this->isTruthy($condResult)) {
+                return $this->evaluateExpression($inlineIfMatch[1], $data);
+            }
+            return $this->evaluateExpression($inlineIfMatch[3], $data);
         }
 
         // Null coalescing: value ?? default

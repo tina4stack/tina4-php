@@ -5,16 +5,28 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Queue — File-backed job queue with pluggable backends, zero dependencies.
- * Matches the Python tina4_python.queue implementation.
+ * Queue — Unified job queue with pluggable backends, zero dependencies.
+ *
+ * Switching from file to RabbitMQ or Kafka is a .env change — no code change needed.
  *
  * Supported backends:
  *   - 'file'     — JSON files on disk (default)
  *   - 'rabbitmq' — RabbitMQ via raw TCP sockets (AMQP 0-9-1)
  *   - 'kafka'    — Kafka via raw TCP sockets
  *
- * Environment variable:
+ * Environment variables:
  *   TINA4_QUEUE_BACKEND — 'file', 'rabbitmq', or 'kafka'
+ *   TINA4_QUEUE_URL     — connection URL for rabbitmq/kafka
+ *
+ * Usage:
+ *   // Auto-detect from env (default: file)
+ *   $queue = new Queue(topic: 'tasks');
+ *
+ *   // Explicit backend
+ *   $queue = new Queue(topic: 'tasks', backend: 'rabbitmq');
+ *
+ *   // Legacy usage (still works — uses file backend)
+ *   $queue = new Queue('file', ['path' => 'data/queue']);
  */
 
 namespace Tina4;
@@ -28,25 +40,32 @@ class Queue
     private string $backend;
     private string $basePath;
     private int $maxRetries;
+    private string $topic;
 
     /** @var QueueBackend|null External queue backend (rabbitmq, kafka) */
     private ?QueueBackend $externalBackend = null;
 
     /**
-     * @param string $backend  Queue backend type: 'file', 'rabbitmq', 'kafka'
-     * @param array  $config   Configuration: path, maxRetries, and backend-specific options
+     * Unified Queue constructor.
+     *
+     * @param string $backend    Queue backend type: 'file', 'rabbitmq', 'kafka'
+     * @param array  $config     Configuration: path, maxRetries, and backend-specific options
+     * @param string $topic      Default topic/queue name
      */
-    public function __construct(string $backend = 'file', array $config = [])
+    public function __construct(string $backend = 'file', array $config = [], string $topic = 'default')
     {
         $this->backend = getenv('TINA4_QUEUE_BACKEND') ?: $backend;
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');
         $this->maxRetries = $config['maxRetries'] ?? 3;
+        $this->topic = $topic;
 
         // Initialize external backends
         if ($this->backend === 'rabbitmq') {
-            $this->externalBackend = new RabbitMQBackend($config);
+            $resolvedConfig = $this->resolveRabbitMQConfig($config);
+            $this->externalBackend = new RabbitMQBackend($resolvedConfig);
         } elseif ($this->backend === 'kafka') {
-            $this->externalBackend = new KafkaBackend($config);
+            $resolvedConfig = $this->resolveKafkaConfig($config);
+            $this->externalBackend = new KafkaBackend($resolvedConfig);
         }
     }
 
@@ -63,13 +82,15 @@ class Queue
     /**
      * Push a job onto a queue.
      *
-     * @param string $queue   Queue name
      * @param mixed  $payload Job data (will be JSON-encoded)
+     * @param string $queue   Queue name (defaults to topic set in constructor)
      * @param int    $delay   Delay in seconds before job becomes available
      * @return string Job ID
      */
-    public function push(string $queue, mixed $payload, int $delay = 0): string
+    public function push(mixed $payload, string $queue = '', int $delay = 0): string
     {
+        $queue = $queue ?: $this->topic;
+
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
             $message = [
@@ -104,11 +125,13 @@ class Queue
     /**
      * Pop the next available job from the queue.
      *
-     * @param string $queue Queue name
+     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return array|null Job data or null if empty
      */
-    public function pop(string $queue): ?array
+    public function pop(string $queue = ''): ?array
     {
+        $queue = $queue ?: $this->topic;
+
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
             return $this->externalBackend->dequeue($queue);
@@ -166,12 +189,13 @@ class Queue
     /**
      * Process jobs from a queue using a handler callback.
      *
-     * @param string   $queue   Queue name
      * @param callable $handler Function receiving the job array
+     * @param string   $queue   Queue name (defaults to topic set in constructor)
      * @param array    $options Options: maxJobs (int)
      */
-    public function process(string $queue, callable $handler, array $options = []): void
+    public function process(callable $handler, string $queue = '', array $options = []): void
     {
+        $queue = $queue ?: $this->topic;
         $maxJobs = $options['maxJobs'] ?? null;
         $processed = 0;
 
@@ -204,11 +228,17 @@ class Queue
     /**
      * Get the number of pending jobs in a queue.
      *
-     * @param string $queue Queue name
+     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return int
      */
-    public function size(string $queue): int
+    public function size(string $queue = ''): int
     {
+        $queue = $queue ?: $this->topic;
+
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->size($queue);
+        }
+
         $queuePath = $this->queuePath($queue);
         if (!is_dir($queuePath)) {
             return 0;
@@ -230,10 +260,11 @@ class Queue
     /**
      * Clear all pending jobs from a queue.
      *
-     * @param string $queue Queue name
+     * @param string $queue Queue name (defaults to topic set in constructor)
      */
-    public function clear(string $queue): void
+    public function clear(string $queue = ''): void
     {
+        $queue = $queue ?: $this->topic;
         $queuePath = $this->queuePath($queue);
         if (!is_dir($queuePath)) {
             return;
@@ -248,11 +279,12 @@ class Queue
     /**
      * Get all failed jobs from a queue.
      *
-     * @param string $queue Queue name
+     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return array List of failed job arrays
      */
-    public function failed(string $queue): array
+    public function failed(string $queue = ''): array
     {
+        $queue = $queue ?: $this->topic;
         $failedPath = $this->queuePath($queue) . '/failed';
         if (!is_dir($failedPath)) {
             return [];
@@ -322,11 +354,12 @@ class Queue
     /**
      * Get dead letter jobs — failed jobs that exceeded max retries.
      *
-     * @param string $queue Queue name
+     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return array List of dead letter job arrays
      */
-    public function deadLetters(string $queue): array
+    public function deadLetters(string $queue = ''): array
     {
+        $queue = $queue ?: $this->topic;
         $failedPath = $this->queuePath($queue) . '/failed';
         if (!is_dir($failedPath)) {
             return [];
@@ -349,17 +382,13 @@ class Queue
     /**
      * Delete messages by status (completed, failed, dead).
      *
-     * For 'failed' and 'dead', removes from the failed subdirectory.
-     * For 'dead', only removes jobs that exceeded max retries.
-     * For 'failed', only removes jobs that have NOT exceeded max retries.
-     * For 'completed' or 'pending', removes from the main queue directory.
-     *
-     * @param string $queue  Queue name
      * @param string $status Status to purge: 'completed', 'failed', 'dead', 'pending'
+     * @param string $queue  Queue name (defaults to topic set in constructor)
      * @return int Number of jobs purged
      */
-    public function purge(string $queue, string $status): int
+    public function purge(string $status, string $queue = ''): int
     {
+        $queue = $queue ?: $this->topic;
         $count = 0;
 
         if ($status === 'dead') {
@@ -413,11 +442,12 @@ class Queue
     /**
      * Re-queue failed jobs that haven't exceeded max retries back to pending.
      *
-     * @param string $queue Queue name
+     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return int Number of jobs re-queued
      */
-    public function retryFailed(string $queue): int
+    public function retryFailed(string $queue = ''): int
     {
+        $queue = $queue ?: $this->topic;
         $failedPath = $this->queuePath($queue) . '/failed';
         if (!is_dir($failedPath)) {
             return 0;
@@ -459,6 +489,81 @@ class Queue
     public function getBasePath(): string
     {
         return $this->basePath;
+    }
+
+    /**
+     * Get the topic name.
+     */
+    public function getTopic(): string
+    {
+        return $this->topic;
+    }
+
+    /**
+     * Resolve RabbitMQ config from environment variables and TINA4_QUEUE_URL.
+     */
+    private function resolveRabbitMQConfig(array $config): array
+    {
+        $url = getenv('TINA4_QUEUE_URL');
+        if ($url) {
+            $parsed = $this->parseAmqpUrl($url);
+            return array_merge($parsed, $config);
+        }
+        return $config;
+    }
+
+    /**
+     * Resolve Kafka config from environment variables and TINA4_QUEUE_URL.
+     */
+    private function resolveKafkaConfig(array $config): array
+    {
+        $url = getenv('TINA4_QUEUE_URL');
+        if ($url) {
+            $config['brokers'] = str_replace('kafka://', '', $url);
+        }
+        $brokers = getenv('TINA4_KAFKA_BROKERS');
+        if ($brokers) {
+            $config['brokers'] = $brokers;
+        }
+        return $config;
+    }
+
+    /**
+     * Parse an AMQP URL into config array.
+     */
+    private function parseAmqpUrl(string $url): array
+    {
+        $config = [];
+        $url = str_replace(['amqp://', 'amqps://'], '', $url);
+
+        if (str_contains($url, '@')) {
+            [$creds, $rest] = explode('@', $url, 2);
+            if (str_contains($creds, ':')) {
+                [$config['username'], $config['password']] = explode(':', $creds, 2);
+            } else {
+                $config['username'] = $creds;
+            }
+        } else {
+            $rest = $url;
+        }
+
+        if (str_contains($rest, '/')) {
+            [$hostport, $vhost] = explode('/', $rest, 2);
+            if ($vhost) {
+                $config['vhost'] = str_starts_with($vhost, '/') ? $vhost : '/' . $vhost;
+            }
+        } else {
+            $hostport = $rest;
+        }
+
+        if (str_contains($hostport, ':')) {
+            [$config['host'], $port] = explode(':', $hostport, 2);
+            $config['port'] = (int)$port;
+        } elseif ($hostport) {
+            $config['host'] = $hostport;
+        }
+
+        return $config;
     }
 
     /**
