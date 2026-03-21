@@ -291,15 +291,23 @@ class Router
             $finalResponse = $response;
         }
 
-        // Dev overlay injection: inject a floating dev button into HTML responses
+        // Dev toolbar injection: inject a fixed bottom toolbar into HTML responses
         $isDev = DotEnv::getEnv('TINA4_DEBUG', 'false') === 'true';
         if ($isDev && !str_starts_with($request->path, '/__dev') && str_contains($finalResponse->getContentType() ?? '', 'text/html')) {
-            $overlay = DevAdmin::renderOverlayScript();
+            $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
+            $requestId = Log::getRequestId() ?? '';
+            $toolbar = DevAdmin::renderToolbar(
+                method: $request->method,
+                path: $request->path,
+                matchedPattern: $matchedPattern,
+                requestId: $requestId,
+                routeCount: self::count(),
+            );
             $body = $finalResponse->getBody();
             if (str_contains($body, '</body>')) {
-                $finalResponse->setBody(str_replace('</body>', $overlay . "\n</body>", $body));
+                $finalResponse->setBody(str_replace('</body>', $toolbar . "\n</body>", $body));
             } else {
-                $finalResponse->setBody($body . $overlay);
+                $finalResponse->setBody($body . $toolbar);
             }
         }
 

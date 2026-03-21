@@ -339,7 +339,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
     <p class="tagline">This is not a framework</p>
     <div class="actions">
         <a href="https://tina4.com/php" class="btn" target="_blank">Website</a>
-        <a href="/__dev/" class="btn">Dev Admin</a>
+        <a href="/__dev" class="btn">Dev Admin</a>
         <a href="#gallery" class="btn">Gallery</a>
         <a href="https://github.com/tina4stack/tina4-php" class="btn" target="_blank">GitHub</a>
         <a href="https://github.com/tina4stack/tina4-php/stargazers" class="btn" target="_blank">&#11088; Star</a>

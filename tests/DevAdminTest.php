@@ -318,19 +318,25 @@ class DevAdminTest extends TestCase
         $this->assertSame(3, $stats['errors']); // 400, 500, 404
     }
 
-    // ── Overlay Script ──────────────────────────────────────────
+    // ── Dev Toolbar ───────────────────────────────────────────
 
-    public function testOverlayScriptContainsButton(): void
+    public function testToolbarContainsElements(): void
     {
-        $html = DevAdmin::renderOverlayScript();
-        $this->assertStringContainsString('tina4-dev-btn', $html);
-        $this->assertStringContainsString('<script>', $html);
+        $html = DevAdmin::renderToolbar('GET', '/hello', '/hello', 'abc123', 5);
+        $this->assertStringContainsString('tina4-dev-toolbar', $html);
+        $this->assertStringContainsString('Tina4 v', $html);
+        $this->assertStringContainsString('GET', $html);
+        $this->assertStringContainsString('/hello', $html);
+        $this->assertStringContainsString('abc123', $html);
+        $this->assertStringContainsString('5 routes', $html);
+        $this->assertStringContainsString('PHP ' . PHP_VERSION, $html);
     }
 
-    public function testOverlayScriptContainsDevLink(): void
+    public function testToolbarContainsDevLink(): void
     {
-        $html = DevAdmin::renderOverlayScript();
-        $this->assertStringContainsString('/__dev/', $html);
+        $html = DevAdmin::renderToolbar();
+        $this->assertStringContainsString('/__dev', $html);
+        $this->assertStringContainsString('Dashboard', $html);
     }
 
     // ── Dashboard HTML ──────────────────────────────────────────
