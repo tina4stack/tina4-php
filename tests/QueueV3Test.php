@@ -300,4 +300,102 @@ class QueueV3Test extends TestCase
         $jobB = $q->pop('queue_b');
         $this->assertEquals('b', $jobB['payload']['from']);
     }
+
+    // ── Backend switching / topic-based API tests ─────────────
+
+    public function testTopicConstructor(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath], topic: 'emails');
+        $q->push(['to' => 'alice@test.com']);
+        $this->assertEquals(1, $q->size());
+        $job = $q->pop();
+        $this->assertIsArray($job);
+        $this->assertEquals(['to' => 'alice@test.com'], $job['payload']);
+    }
+
+    public function testTopicDefaultsToDefault(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath]);
+        $q->push(['task' => 'hello']);
+        $this->assertEquals(1, $q->size());
+    }
+
+    public function testPushPopWithTopic(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath], topic: 'tasks');
+        $q->push(['action' => 'send']);
+        $q->push(['action' => 'process']);
+        $this->assertEquals(2, $q->size());
+
+        $job = $q->pop();
+        $this->assertEquals('send', $job['payload']['action']);
+        $this->assertEquals(1, $q->size());
+    }
+
+    public function testEnvBackendOverride(): void
+    {
+        // If TINA4_QUEUE_BACKEND is set but we pass 'file' explicitly,
+        // the explicit argument should win
+        putenv('TINA4_QUEUE_BACKEND=file');
+        $q = new Queue('file', ['path' => $this->testPath], topic: 'env_test');
+        $q->push(['task' => 'env']);
+        $this->assertEquals(1, $q->size());
+        putenv('TINA4_QUEUE_BACKEND');
+    }
+
+    public function testGetTopic(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath], topic: 'my_topic');
+        $this->assertEquals('my_topic', $q->getTopic());
+    }
+
+    public function testTopicBasedDeadLetters(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath, 'maxRetries' => 1], topic: 'deadtest');
+        $q->push(['x' => 1]);
+
+        $q->process(function ($job) {
+            throw new \RuntimeException('fail');
+        });
+
+        $dead = $q->deadLetters();
+        $this->assertCount(1, $dead);
+        $this->assertEquals('dead', $dead[0]['status']);
+    }
+
+    public function testTopicBasedRetryFailed(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath, 'maxRetries' => 3], topic: 'retrytest');
+        $q->push(['x' => 1]);
+
+        $q->process(function ($job) {
+            throw new \RuntimeException('fail');
+        });
+
+        $count = $q->retryFailed();
+        $this->assertEquals(1, $count);
+        $this->assertEquals(1, $q->size());
+    }
+
+    public function testTopicBasedPurge(): void
+    {
+        $q = new Queue('file', ['path' => $this->testPath, 'maxRetries' => 3], topic: 'purgetest');
+        $q->push(['x' => 1]);
+
+        $q->process(function ($job) {
+            throw new \RuntimeException('fail');
+        });
+
+        $purged = $q->purge('failed');
+        $this->assertEquals(1, $purged);
+    }
+
+    public function testTopicOverrideInMethods(): void
+    {
+        // You can still pass explicit queue names to methods (legacy compat)
+        $q = new Queue('file', ['path' => $this->testPath], topic: 'default_topic');
+        $q->push(['x' => 1], 'other_topic');
+        $this->assertEquals(0, $q->size()); // default_topic is empty
+        $this->assertEquals(1, $q->size('other_topic')); // other_topic has the job
+    }
 }
