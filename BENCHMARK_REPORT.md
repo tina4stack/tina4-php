@@ -228,3 +228,31 @@ No C extensions. No native binaries. No compile step. Pure Python/PHP/Ruby/JavaS
 | Rails | 4,754 | 4,052 | Puma | 69 | 24/38 |
 
 **Tina4 Ruby on WEBrick is 1.7x faster than Rails on Puma** — with 38 features vs 24, zero deps vs 69.
+
+---
+
+## Dev vs Production — Tina4 All Frameworks (2026-03-21)
+
+| Framework | Dev Server | Dev JSON/s | Prod Server | Prod JSON/s | Prod List/s | Change |
+|-----------|-----------|:---------:|-------------|:---------:|:---------:|:------:|
+| **Tina4 PHP** | php -S | 27,299 | php + OPcache | **27,486** | **16,628** | ~same |
+| **Tina4 Ruby** | WEBrick | 8,139 | Puma | **22,784** | **12,504** | **2.8x ↑** |
+| **Tina4 Node.js** | http single | 57,035 | cluster (8 workers) | 12,488 | **16,958** | ↓ burst |
+| **Tina4 Python** | asyncio | 16,233 | uvicorn | 9,801 | 5,221 | ↓ burst |
+
+### Key Insights
+
+1. **Ruby benefits most from production server** — Puma's multi-threaded C-optimized HTTP parser gives 2.8x improvement over WEBrick
+2. **PHP is already fast** — built-in `php -S` is surprisingly competitive; OPcache helps with complex apps but not simple JSON endpoints
+3. **Python's asyncio server is faster than uvicorn for bursts** — our hand-rolled asyncio server has less overhead than uvicorn's libuv event loop for short-lived connections
+4. **Node.js cluster adds IPC overhead** — for burst benchmarks on a single machine, the inter-process communication cost of 8 workers outweighs the parallelism benefit
+
+### When production servers help
+
+Production servers excel under **sustained high concurrency** (thousands of simultaneous connections), **long-running requests** (database queries, file uploads), and **multi-core utilization** (real traffic from many clients). Burst benchmarks from a single client on localhost don't show these advantages.
+
+### Recommendation
+
+- `tina4 serve` — for development (toolbar, reload, gallery)
+- `tina4 serve --production` — for deployment (auto-installs best server)
+- Production benchmarks should use sustained load tests (wrk2, k6) not burst tests (hey, ab)
