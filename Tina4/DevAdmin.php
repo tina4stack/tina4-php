@@ -493,53 +493,41 @@ class DevAdmin
      * Returns an HTML snippet with a small purple Tina4 button fixed to the
      * bottom-right corner. Clicking it opens /__dev in a new tab.
      */
-    public static function renderOverlayScript(): string
-    {
-        return <<<'HTML'
-<script>
-(function(){
-    if (document.getElementById('tina4-dev-btn')) return;
-    var btn = document.createElement('div');
-    btn.id = 'tina4-dev-btn';
-    btn.innerHTML = '<img src="https://tina4.com/logo.svg" style="width:1.5rem;height:1.5rem" alt="T4">';
-    btn.title = 'Tina4 Dev Admin';
-    btn.style.cssText = 'position:fixed;bottom:1rem;right:1rem;width:2.5rem;height:2.5rem;background:#7b1fa2;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;font-size:0.8rem;font-family:system-ui;z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,0.3);transition:transform 0.15s,opacity 0.15s;opacity:0.5';
-    btn.onmouseover = function(){ this.style.transform='scale(1.1)'; this.style.opacity='1'; };
-    btn.onmouseout = function(){ this.style.transform='scale(1)'; this.style.opacity='0.5'; };
-    btn.onclick = function(){
-        var panel = document.getElementById('tina4-dev-panel');
-        if (panel) { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; return; }
-        var container = document.createElement('div');
-        container.id = 'tina4-dev-panel';
-        container.style.cssText = 'position:fixed;bottom:4rem;right:1rem;width:min(90vw,1200px);height:min(80vh,700px);z-index:99998;transition:all 0.2s';
-        var fsBtn = document.createElement('div');
-        fsBtn.innerHTML = '\u26F6';
-        fsBtn.title = 'Toggle fullscreen';
-        fsBtn.style.cssText = 'position:absolute;top:0.25rem;right:0.25rem;width:1.5rem;height:1.5rem;background:#7b1fa2;color:#fff;border-radius:0.25rem;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.9rem;z-index:99999;opacity:0.7';
-        fsBtn.onmouseover = function(){ this.style.opacity='1'; };
-        fsBtn.onmouseout = function(){ this.style.opacity='0.7'; };
-        var isFullscreen = false;
-        fsBtn.onclick = function(e){
-            e.stopPropagation();
-            isFullscreen = !isFullscreen;
-            if (isFullscreen) {
-                container.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99998;transition:all 0.2s';
-                iframe.style.borderRadius = '0';
-            } else {
-                container.style.cssText = 'position:fixed;bottom:4rem;right:1rem;width:min(90vw,1200px);height:min(80vh,700px);z-index:99998;transition:all 0.2s';
-                iframe.style.borderRadius = '0.5rem';
-            }
-        };
-        var iframe = document.createElement('iframe');
-        iframe.src = '/__dev/';
-        iframe.style.cssText = 'width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';
-        container.appendChild(iframe);
-        container.appendChild(fsBtn);
-        document.body.appendChild(container);
-    };
-    document.body.appendChild(btn);
-})();
-</script>
+    /**
+     * Render the dev toolbar HTML injected before </body> in HTML responses.
+     *
+     * @param string $method HTTP method (GET, POST, etc.)
+     * @param string $path Request path
+     * @param string $matchedPattern Matched route pattern (or "static" / "none")
+     * @param string $requestId Unique request identifier
+     * @param int $routeCount Total number of registered routes
+     */
+    public static function renderToolbar(
+        string $method = 'GET',
+        string $path = '/',
+        string $matchedPattern = '',
+        string $requestId = '',
+        int $routeCount = 0,
+    ): string {
+        $version = App::VERSION;
+        $phpVersion = PHP_VERSION;
+        $safeMethod = htmlspecialchars($method, ENT_QUOTES);
+        $safePath = htmlspecialchars($path, ENT_QUOTES);
+        $safePattern = htmlspecialchars($matchedPattern, ENT_QUOTES);
+        $safeRequestId = htmlspecialchars($requestId, ENT_QUOTES);
+
+        return <<<HTML
+<div id="tina4-dev-toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#333;color:#fff;font-family:monospace;font-size:12px;padding:6px 16px;z-index:99999;display:flex;align-items:center;gap:16px;">
+    <span style="color:#7b1fa2;font-weight:bold;">Tina4 v{$version}</span>
+    <span style="color:#4caf50;">{$safeMethod}</span>
+    <span>{$safePath}</span>
+    <span style="color:#666;">&rarr; {$safePattern}</span>
+    <span style="color:#ffeb3b;">req:{$safeRequestId}</span>
+    <span style="color:#90caf9;">{$routeCount} routes</span>
+    <span style="color:#888;">PHP {$phpVersion}</span>
+    <a href="#" onclick="(function(e){e.preventDefault();var p=document.getElementById('tina4-dev-panel');if(p){p.style.display=p.style.display==='none'?'block':'none';return;}var c=document.createElement('div');c.id='tina4-dev-panel';c.style.cssText='position:fixed;bottom:2rem;right:1rem;width:min(90vw,1200px);height:min(80vh,700px);z-index:99998;transition:all 0.2s';var f=document.createElement('iframe');f.src='/__dev';f.style.cssText='width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';c.appendChild(f);document.body.appendChild(c);})(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
+    <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
+</div>
 HTML;
     }
 
