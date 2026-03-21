@@ -18,6 +18,7 @@
             <file>tests/RequestV3Test.php</file>
             <file>tests/ResponseV3Test.php</file>
             <file>tests/RouterV3Test.php</file>
+            <file>tests/MiddlewareTest.php</file>
             <file>tests/RouteDiscoveryV3Test.php</file>
             <file>tests/SQLite3AdapterTest.php</file>
             <file>tests/DatabaseDriversTest.php</file>
