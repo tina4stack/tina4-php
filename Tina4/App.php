@@ -530,6 +530,34 @@ HTML;
     }
 
     /**
+     * Run the application using the custom Tina4 Server.
+     * Calls start() to register routes, then launches the non-blocking HTTP/WebSocket server.
+     * Falls back to `php -S` if stream_socket_server fails.
+     *
+     * @param string $host Host to bind to (default: 0.0.0.0)
+     * @param int    $port Port to listen on (default: 7146)
+     */
+    public function run(string $host = '0.0.0.0', int $port = 7146): void
+    {
+        $this->start();
+
+        try {
+            $server = new Server($host, $port);
+            $server->start();
+        } catch (\RuntimeException $e) {
+            // Fallback to PHP built-in server
+            Log::warning('Custom server failed, falling back to php -S: ' . $e->getMessage());
+            $docRoot = $this->basePath;
+            $indexFile = $docRoot . DIRECTORY_SEPARATOR . 'index.php';
+            if (is_file($indexFile)) {
+                passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($indexFile));
+            } else {
+                passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot));
+            }
+        }
+    }
+
+    /**
      * Register POSIX signal handlers for graceful shutdown.
      */
     private function registerSignalHandlers(): void
