@@ -159,6 +159,33 @@ Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
 
 ---
 
+## Deployment Size
+
+| Framework | Core Size | With Deps | Competitors |
+|-----------|:---------:|:---------:|------------|
+| Tina4 Python | ~2.4 MB | 2.4 MB (0 deps) | Django 25 MB, Flask 4.2 MB |
+| Tina4 PHP | ~1.0 MB | 1.0 MB (0 deps) | Laravel 50+ MB, Symfony 30+ MB |
+| Tina4 Ruby | ~892 KB | 892 KB (0 deps) | Rails 40+ MB, Sinatra 5 MB |
+| Tina4 Node.js | ~1.8 MB | 1.8 MB (0 deps) | Express 2 MB, NestJS 20+ MB |
+
+Zero dependencies means core size **is** deployment size. No `node_modules` bloat, no `vendor/` sprawl, no `site-packages` explosion.
+
+---
+
+## Cross-Platform Support
+
+All 4 Tina4 frameworks run on:
+
+- **macOS** (Intel + Apple Silicon)
+- **Linux** (x86_64 + ARM64)
+- **Windows** (10/11)
+- **Docker** (any base image with the language runtime)
+- **WSL2**
+
+No C extensions, no native binaries, no compile step required. Pure Python/PHP/Ruby/JavaScript.
+
+---
+
 ## Notes
 
 - Performance numbers are from development servers on Apple Silicon

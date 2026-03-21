@@ -93,6 +93,18 @@ class Frond
 
     private function tokenize(string $source): array
     {
+        // 1. Extract {% raw %}...{% endraw %} blocks before tokenizing
+        $rawBlocks = [];
+        $source = preg_replace_callback(
+            '/\{%-?\s*raw\s*-?%\}(.*?)\{%-?\s*endraw\s*-?%\}/s',
+            function ($m) use (&$rawBlocks) {
+                $idx = count($rawBlocks);
+                $rawBlocks[] = $m[1];
+                return "\x00RAW_{$idx}\x00";
+            },
+            $source
+        );
+
         $tokens = [];
         $pos = 0;
         $len = strlen($source);
@@ -177,6 +189,18 @@ class Frond
                 ];
                 $pos = $end + 2;
             }
+        }
+
+        // Restore raw block placeholders as literal TEXT
+        if (!empty($rawBlocks)) {
+            foreach ($tokens as &$token) {
+                if ($token['type'] === 'TEXT' && str_contains($token['value'], "\x00RAW_")) {
+                    foreach ($rawBlocks as $idx => $content) {
+                        $token['value'] = str_replace("\x00RAW_{$idx}\x00", $content, $token['value']);
+                    }
+                }
+            }
+            unset($token);
         }
 
         // Apply whitespace control
@@ -279,6 +303,9 @@ class Frond
                 return $this->parseBlockDef($rest, $tokens, $pos);
             case 'macro':
                 return $this->parseMacro($rest, $tokens, $pos);
+            case 'from':
+                $pos++;
+                return $this->parseFromImport($rest);
             case 'cache':
                 return $this->parseCache($rest, $tokens, $pos);
             default:
@@ -433,6 +460,17 @@ class Frond
         return ['type' => 'macro', 'name' => $name, 'args' => $args, 'body' => $body];
     }
 
+    private function parseFromImport(string $rest): array
+    {
+        // Parse: "file" import name1, name2
+        if (!preg_match('/^["\'](.+?)["\']\s+import\s+(.+)/', $rest, $m)) {
+            return ['type' => 'text', 'value' => ''];
+        }
+        $file = $m[1];
+        $names = array_map('trim', explode(',', $m[2]));
+        return ['type' => 'from_import', 'file' => $file, 'names' => $names];
+    }
+
     private function parseCache(string $params, array &$tokens, int &$pos): array
     {
         $pos++;
@@ -557,6 +595,10 @@ class Frond
 
             case 'macro':
                 $this->macros[$node['name']] = $node;
+                return '';
+
+            case 'from_import':
+                $this->executeFromImport($node, $data);
                 return '';
 
             case 'cache':
@@ -1544,6 +1586,29 @@ class Frond
             $macroData[$argName] = $argValues[$i] ?? $default;
         }
         return $this->execute($macro['body'], $macroData);
+    }
+
+    /* ─── from import ─── */
+
+    private function executeFromImport(array $node, array &$data): void
+    {
+        $file = $this->templateDir . '/' . $node['file'];
+        if (!is_file($file)) {
+            throw new \RuntimeException("Template not found: $file");
+        }
+        $source = file_get_contents($file);
+        $tokens = $this->tokenize($source);
+        $pos = 0;
+        $ast = $this->parse($tokens, $pos);
+
+        $names = $node['names'];
+
+        // Walk AST for macro definitions
+        foreach ($ast as $astNode) {
+            if ($astNode['type'] === 'macro' && in_array($astNode['name'], $names)) {
+                $this->macros[$astNode['name']] = $astNode;
+            }
+        }
     }
 
     /* ───────────────────── built-in filters ───────────────────── */

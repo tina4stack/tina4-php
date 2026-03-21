@@ -674,6 +674,34 @@ class FrondTest extends TestCase
         $this->assertSame('Title: Default Title', $result);
     }
 
+    public function testExtendsWithLeadingWhitespace(): void
+    {
+        $this->writeTemplate('base3.html', '<html><body>{% block content %}default{% endblock %}</body></html>');
+        $this->writeTemplate('child3.html', "  {% extends \"base3.html\" %}\n{% block content %}<h1>Hello</h1>{% endblock %}");
+        $result = $this->engine->render('child3.html', []);
+        $this->assertStringContainsString('<html><body>', $result);
+        $this->assertStringContainsString('<h1>Hello</h1>', $result);
+    }
+
+    public function testExtendsWithLeadingNewlines(): void
+    {
+        $this->writeTemplate('base4.html', '<html><body>{% block content %}default{% endblock %}</body></html>');
+        $this->writeTemplate('child4.html', "\n\n{% extends \"base4.html\" %}\n{% block content %}<h1>Hello</h1>{% endblock %}");
+        $result = $this->engine->render('child4.html', []);
+        $this->assertStringContainsString('<html><body>', $result);
+        $this->assertStringContainsString('<h1>Hello</h1>', $result);
+    }
+
+    public function testExtendsWithVariablesInBlocks(): void
+    {
+        $this->writeTemplate('base5.html', "<head><title>{% block title %}Default{% endblock %}</title></head>\n<body>{% block content %}{% endblock %}</body>");
+        $this->writeTemplate('error5.html', "\n{% extends \"base5.html\" %}\n{% block title %}Error {{ code }}{% endblock %}\n{% block content %}<div class=\"card\"><h1>{{ code }}</h1><p>{{ msg }}</p></div>{% endblock %}");
+        $result = $this->engine->render('error5.html', ['code' => 500, 'msg' => 'Internal Server Error']);
+        $this->assertStringContainsString('<title>Error 500</title>', $result);
+        $this->assertStringContainsString('<h1>500</h1>', $result);
+        $this->assertStringContainsString('Internal Server Error', $result);
+    }
+
     /* ═══════════ Whitespace Control ═══════════ */
 
     public function testWhitespaceControlVar(): void
@@ -946,5 +974,71 @@ TPL;
         $this->assertNotNull($payload);
         $this->assertSame('form', $payload['type']);
         $this->assertSame('admin', $payload['context']);
+    }
+
+    /* ═══════════ Raw Block ═══════════ */
+
+    public function testRawPreservesVarSyntax(): void
+    {
+        $this->assertSame('{{ name }}', $this->engine->renderString('{% raw %}{{ name }}{% endraw %}', ['name' => 'Alice']));
+    }
+
+    public function testRawPreservesBlockSyntax(): void
+    {
+        $this->assertSame('{% if true %}yes{% endif %}', $this->engine->renderString('{% raw %}{% if true %}yes{% endif %}{% endraw %}'));
+    }
+
+    public function testRawMixedWithNormal(): void
+    {
+        $result = $this->engine->renderString('Hello {{ name }}! {% raw %}{{ not_parsed }}{% endraw %} done', ['name' => 'World']);
+        $this->assertSame('Hello World! {{ not_parsed }} done', $result);
+    }
+
+    public function testMultipleRawBlocks(): void
+    {
+        $result = $this->engine->renderString('{% raw %}{{ a }}{% endraw %} mid {% raw %}{{ b }}{% endraw %}');
+        $this->assertSame('{{ a }} mid {{ b }}', $result);
+    }
+
+    public function testRawBlockMultiline(): void
+    {
+        $src = "{% raw %}\n{{ var }}\n{% tag %}\n{% endraw %}";
+        $this->assertSame("\n{{ var }}\n{% tag %}\n", $this->engine->renderString($src));
+    }
+
+    /* ═══════════ From Import ═══════════ */
+
+    public function testFromImportBasic(): void
+    {
+        $this->writeTemplate('macros.twig', '{% macro greeting(name) %}Hello {{ name }}!{% endmacro %}');
+        $result = $this->engine->renderString('{% from "macros.twig" import greeting %}{{ greeting("World") }}');
+        $this->assertSame('Hello World!', $result);
+    }
+
+    public function testFromImportMultiple(): void
+    {
+        $this->writeTemplate('helpers.twig', '{% macro bold(t) %}B{{ t }}B{% endmacro %}{% macro italic(t) %}I{{ t }}I{% endmacro %}');
+        $result = $this->engine->renderString('{% from "helpers.twig" import bold, italic %}{{ bold("hi") }} {{ italic("there") }}');
+        $this->assertStringContainsString('BhiB', $result);
+        $this->assertStringContainsString('IthereI', $result);
+    }
+
+    public function testFromImportSelective(): void
+    {
+        $this->writeTemplate('mix.twig', '{% macro used(x) %}[{{ x }}]{% endmacro %}{% macro unused(x) %}{{{ x }}}{% endmacro %}');
+        $result = $this->engine->renderString('{% from "mix.twig" import used %}{{ used("ok") }}');
+        $this->assertStringContainsString('[ok]', $result);
+    }
+
+    public function testFromImportSubdirectory(): void
+    {
+        $subdir = $this->templateDir . '/macros';
+        if (!is_dir($subdir)) mkdir($subdir, 0777, true);
+        file_put_contents($subdir . '/forms.twig', '{% macro field(label, name) %}{{ label }}:{{ name }}{% endmacro %}');
+        $result = $this->engine->renderString('{% from "macros/forms.twig" import field %}{{ field("Name", "name") }}');
+        $this->assertStringContainsString('Name:name', $result);
+        // Clean up subdirectory
+        unlink($subdir . '/forms.twig');
+        rmdir($subdir);
     }
 }
