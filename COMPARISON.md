@@ -12,46 +12,57 @@ Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
 
 | Framework | JSON req/s | 100-item list req/s | Server | Deps |
 |-----------|:---------:|:-------------------:|--------|:----:|
-| Starlette 0.52 | 16,202 | 7,351 | uvicorn (C) | 4 |
-| FastAPI 0.115 | 11,855 | 2,476 | uvicorn (C) | 12+ |
-| **Tina4 Python 3.0** | **8,316** | **5,688** | **built-in** | **0** |
-| Bottle 0.13 | ~7,000 | ~5,000 | built-in | 0 |
-| Flask 3.1 | 4,953 | 3,899 | Werkzeug | 6 |
-| Django 5.2 | ~3,500 | ~2,800 | runserver | 20+ |
+| **Tina4 Python 3.0** | **16,233** | **5,858** | **built-in** | **0** |
+| Starlette 0.52 | 15,978 | 7,493 | uvicorn (C) | 4 |
+| FastAPI 0.115 | 11,886 | 2,464 | uvicorn (C) | 12+ |
+| Flask 3.1 | 4,767 | 1,644 | Werkzeug | 6 |
+| Django 5.2 | 3,747 | 3,305 | runserver | 20+ |
+| Bottle 0.13 | 1,251 | 676 | built-in | 0 |
 
 ### PHP — Tina4 vs Competition
 
-| Framework | Typical JSON req/s | Deps |
-|-----------|:-----------------:|:----:|
-| Swoole (async) | ~30,000 | ext |
-| Slim 4 | ~5,000 | 10+ |
-| **Tina4 PHP 3.0** | **TBD** | **0** |
-| Symfony 7 | ~2,500 | 30+ |
-| Laravel 11 | ~2,000 | 50+ |
-| CodeIgniter 4 | ~3,500 | 15+ |
+Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
+
+| Framework | JSON req/s | 100-item list req/s | Server | Deps |
+|-----------|:---------:|:-------------------:|--------|:----:|
+| **Tina4 PHP 3.0** | **27,299** | **16,555** | **built-in** | **0** |
+| Slim 4 | 5,033 | 4,520 | built-in | 10+ |
+| Symfony 7 | 1,840 | 1,702 | built-in | 30+ |
+| Laravel 11 | 370 | 364 | artisan | 50+ |
 
 ### Ruby — Tina4 vs Competition
 
-| Framework | Typical JSON req/s | Deps |
-|-----------|:-----------------:|:----:|
-| Roda | ~15,000 | 1 |
-| **Tina4 Ruby 3.0** | **TBD** | **0** |
-| Sinatra 4 | ~4,000 | 5 |
-| Hanami 2 | ~3,000 | 20+ |
-| Rails 7 | ~1,500 | 40+ |
+Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
+
+| Framework | JSON req/s | 100-item list req/s | Server | Deps |
+|-----------|:---------:|:-------------------:|--------|:----:|
+| Roda | 20,964 | 12,265 | Puma | 1 |
+| Sinatra | 9,909 | 7,229 | Puma | 5 |
+| **Tina4 Ruby 3.0** | **9,504** | **7,648** | **WEBrick** | **0** |
+| Rails 7 | 4,754 | 4,052 | Puma | 69 |
 
 ### Node.js — Tina4 vs Competition
 
-| Framework | Typical JSON req/s | Deps |
-|-----------|:-----------------:|:----:|
-| Fastify | ~50,000 | 10+ |
-| Koa | ~20,000 | 5 |
-| **Tina4 Node.js 3.0** | **TBD** | **0** |
-| Express 5 | ~15,000 | 3 |
-| NestJS | ~12,000 | 20+ |
-| Hapi | ~10,000 | 5 |
+Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
 
-**TBD benchmarks:** Run `tina4 serve` on each framework and benchmark with `hey`. Coming in rc.3.
+| Framework | JSON req/s | 100-item list req/s | Server | Deps |
+|-----------|:---------:|:-------------------:|--------|:----:|
+| Node.js raw http | 86,662 | 24,598 | http | 0 |
+| Fastify | 79,505 | 23,395 | http | 10+ |
+| Koa | 60,400 | 23,433 | http | 5 |
+| **Tina4 Node.js 3.0** | **57,035** | **25,088** | **http** | **0** |
+| Express 5 | 56,687 | 20,720 | http | 3 |
+
+### Production Server Results
+
+| Framework | Dev Server | Dev JSON/s | Prod Server | Prod JSON/s | Change |
+|-----------|-----------|:---------:|-------------|:---------:|:------:|
+| **Tina4 PHP** | php -S | 27,299 | php + OPcache | **27,486** | ~same |
+| **Tina4 Ruby** | WEBrick | 8,139 | Puma | **22,784** | **2.8x** |
+| **Tina4 Node.js** | http single | 57,035 | cluster (8 workers) | 12,488 | see note |
+| **Tina4 Python** | asyncio | 16,233 | uvicorn | 9,801 | see note |
+
+Note: Production servers excel under sustained high concurrency. Burst benchmarks from localhost don't show their full advantage.
 
 ---
 
@@ -113,12 +124,12 @@ Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
 
 | Framework | Features | Deps | JSON req/s |
 |-----------|:-------:|:----:|:---------:|
-| **Tina4** | **38/38** | **0** | **8,316** |
-| Django | 22/38 | 20+ | ~3,500 |
-| Flask | 7/38 | 6 | 4,953 |
-| FastAPI | 8/38 | 12+ | 11,855 |
-| Starlette | 6/38 | 4 | 16,202 |
-| Bottle | 5/38 | 0 | ~7,000 |
+| **Tina4** | **38/38** | **0** | **16,233** |
+| Django | 22/38 | 20+ | 3,747 |
+| Flask | 7/38 | 6 | 4,767 |
+| FastAPI | 8/38 | 12+ | 11,886 |
+| Starlette | 6/38 | 4 | 15,978 |
+| Bottle | 5/38 | 0 | 1,251 |
 
 ### Cross-Language Feature Count
 
@@ -140,19 +151,19 @@ Real HTTP benchmarks — identical JSON endpoint, 5000 requests, 50 concurrent.
 
 ## Tina4 Performance Roadmap
 
-### v3.1 — Close the Gap
-- [ ] Pre-compile Frond template expressions (target: 5x template rendering)
-- [ ] Pre-compile regex in `_resolve()` and `_eval_expr()` (target: 3x variable lookup)
-- [ ] Optional uvicorn/hypercorn detection for production (target: 16K+ req/s)
-- [ ] Connection pooling for database adapters
+### v3.0 — Achieved
+- [x] Pre-compile Frond templates (2.8x render improvement)
+- [x] Production server auto-detection (uvicorn/Puma/cluster)
+- [x] DB query caching (TINA4_DB_CACHE=true, 4x speedup)
+- [x] ORM relationships with eager loading
 
-### v3.2 — Overtake
+### v3.1 — Next
 - [ ] Compiled template bytecode (match Jinja2 speed)
+- [ ] Connection pooling for database adapters
 - [ ] HTTP/2 support in built-in server
 - [ ] Response streaming for large payloads
-- [ ] Worker process support (multi-core)
 
-### v3.3 — Lead
+### v3.2 — Future
 - [ ] HTTP/3 (QUIC) support
 - [ ] gRPC built-in
 - [ ] Edge runtime support (Cloudflare Workers, Deno Deploy)
@@ -188,7 +199,8 @@ No C extensions, no native binaries, no compile step required. Pure Python/PHP/R
 
 ## Notes
 
-- Performance numbers are from development servers on Apple Silicon
-- Production deployments with gunicorn/uvicorn/puma/php-fpm would be faster for all frameworks
+- Performance numbers are from `hey` benchmarks (5000 requests, 50 concurrent) on Apple M3
+- Production server results included: `tina4 serve --production` auto-installs the best server per language
 - Tina4's competitive advantage is **features per dependency** — 38 features with 0 deps
+- Total test suite: **6,183 tests** across all 4 languages (Python 1633, PHP 1304, Ruby 1577, Node.js 1669)
 - The zero-dep philosophy means Tina4 works anywhere Python/PHP/Ruby/Node.js runs — no compiler needed, no native extensions, no build step

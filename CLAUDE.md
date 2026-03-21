@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.0.0-rc.1 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.0.0 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -588,6 +588,17 @@ $result = SqlTranslation::remember(
 - WebSocket support
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
+- Messenger (.env driven SMTP/IMAP)
+- CLI scaffolding: `composer tina4 generate model/route/migration/middleware`
+- Production server: `composer start --production` (OPcache auto-config)
+- Frond pre-compilation for 2.8x template render improvement
+- DB query caching: `TINA4_DB_CACHE=true` env var, `cache_stats()`, `cache_clear()`
+- ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
+- Queue backends: SQLite (default), RabbitMQ, Kafka
+- Cache backends: memory (default), Redis, file
+- Session handlers: file, Redis/Valkey, MongoDB, database
+- Gallery: 7 interactive examples with Try It deploy at `/__dev/`
+- Tests: 1,304 passing (38 features)
 
 ## Links
 

@@ -1205,7 +1205,7 @@ TPL;
             $this->assertSame('Version 1: a', $r1);
 
             // Change file content (touch to update mtime)
-            usleep(50000);
+            sleep(1); // Ensure mtime changes (filesystem resolution is 1s on some OS)
             $this->writeTemplate('changing.html', 'Version 2: {{ v }}');
             clearstatcache();
             $r2 = $this->engine->render('changing.html', ['v' => 'b']);
