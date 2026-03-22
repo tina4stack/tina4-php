@@ -31,9 +31,7 @@
 
 ```bash
 # Install the Tina4 CLI
-# Download from https://github.com/tina4stack/tina4/releases
-# Download from https://github.com/tina4stack/tina4/releases
-cargo install tina4  # or download binary from GitHub releases  # or download binary from GitHub releases
+cargo install tina4  # or download binary from https://github.com/tina4stack/tina4/releases
 
 # Create a project
 tina4 init php ./my-app
