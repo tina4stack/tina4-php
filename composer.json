@@ -1,7 +1,6 @@
 {
     "name": "tina4stack/tina4php",
     "description": "Tina4 PHP — This is not a 4ramework",
-    "version": "3.1.0",
     "license": "MIT",
     "autoload": {
         "psr-4": {
