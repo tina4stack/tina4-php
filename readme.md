@@ -416,11 +416,11 @@ Auto-generate admin interfaces from ORM models with built-in CRUD operations.
 ### Event System
 
 ```php
-\Tina4\Thread::addTrigger("user.created", static function ($name) {
+\Tina4\Events::on("user.created", function ($name) {
     file_put_contents("./log/event.log", "New user: {$name}\n", FILE_APPEND);
 });
 
-\Tina4\Thread::trigger("user.created", ["Alice"]);
+\Tina4\Events::emit("user.created", "Alice");
 ```
 
 ### REST Client
