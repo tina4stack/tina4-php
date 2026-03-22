@@ -42,7 +42,37 @@ cd my-app && tina4 serve
 
 Open http://localhost:7146 — your app is running.
 
-> **Alternative** (without Rust CLI): `composer require tina4stack/tina4php` then create `index.php`
+<details>
+<summary><strong>Without the Tina4 CLI</strong></summary>
+
+```bash
+# 1. Create project
+mkdir my-app && cd my-app
+composer require tina4stack/tina4php
+
+# 2. Create entry point
+cat > index.php << 'EOF'
+<?php
+require_once 'vendor/autoload.php';
+$app = new \Tina4\App(basePath: __DIR__);
+$server = new \Tina4\Server('0.0.0.0', 7146);
+$server->start();
+EOF
+
+# 3. Create .env
+echo 'TINA4_DEBUG=true' > .env
+echo 'TINA4_LOG_LEVEL=ALL' >> .env
+
+# 4. Create route directory
+mkdir -p src/routes
+
+# 5. Run
+php index.php
+```
+
+Open http://localhost:7146
+
+</details>
 
 ---
 
