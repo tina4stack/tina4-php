@@ -20,7 +20,7 @@ class Auth
 
     /**
      * Create a signed JWT token.
-     * Primary method name: getToken(). Alias: createToken().
+     * Primary method name: createToken(). Alias: getToken().
      * Maps to Python: create_token(payload, expiry_minutes)
      *
      * @param array  $payload    Claims to include in the token
@@ -29,7 +29,7 @@ class Auth
      * @param string $algorithm  'HS256' or 'RS256'
      * @return string Encoded JWT (header.payload.signature)
      */
-    public static function getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    public static function createToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
     {
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
@@ -226,10 +226,10 @@ class Auth
             return null;
         }
 
-        // Remove old timing claims — getToken sets fresh ones
+        // Remove old timing claims — createToken sets fresh ones
         unset($payload['iat'], $payload['exp']);
 
-        return self::getToken($payload, $secret, $expiresIn, $algorithm);
+        return self::createToken($payload, $secret, $expiresIn, $algorithm);
     }
 
     /**
@@ -277,11 +277,11 @@ class Auth
     // ── Backward-Compatible Aliases ──────────────────────────────
 
     /**
-     * Alias for getToken() — kept for backward compatibility.
+     * Alias for createToken() — kept for backward compatibility.
      */
-    public static function createToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    public static function getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
     {
-        return self::getToken($payload, $secret, $expiresIn, $algorithm);
+        return self::createToken($payload, $secret, $expiresIn, $algorithm);
     }
 
     /**
