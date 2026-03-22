@@ -27,16 +27,24 @@
 
 ---
 
-## Quickstart
+## Quick Start
 
 ```bash
-composer require tina4stack/tina4php
-composer exec tina4 initialize:run
-composer start
-# -> http://localhost:7146
+# Install the Tina4 CLI
+# Download from https://github.com/tina4stack/tina4/releases
+# Download from https://github.com/tina4stack/tina4/releases
+cargo install tina4  # or download binary from GitHub releases  # or download binary from GitHub releases
+
+# Create a project
+tina4 init php ./my-app
+
+# Run it
+cd my-app && tina4 serve
 ```
 
-That's it. Zero configuration, zero classes, zero boilerplate.
+Open http://localhost:7146 — your app is running.
+
+> **Alternative** (without Rust CLI): `composer require tina4stack/tina4-php` then create `index.php`
 
 ---
 
@@ -109,14 +117,16 @@ my-app/
 Create `src/routes/hello.php`:
 
 ```php
-use Tina4\Get;
+use Tina4\Router;
+use Tina4\Request;
 use Tina4\Response;
 
-Get::add("/api/hello", function (Response $response) {
+Router::get("/api/hello", function (Request $request, Response $response) {
     return $response(["message" => "Hello from Tina4!"], HTTP_OK);
 });
 
-Get::add("/api/hello/{name}", function ($name, Response $response) {
+Router::get("/api/hello/{name}", function (Request $request, Response $response) {
+    $name = $request->params["name"];
     return $response(["message" => "Hello, {$name}!"], HTTP_OK);
 });
 ```
@@ -175,23 +185,23 @@ class User extends \Tina4\ORM
 Create `src/routes/users.php`:
 
 ```php
-use Tina4\Get;
-use Tina4\Post;
+use Tina4\Router;
+use Tina4\Request;
 use Tina4\Response;
 
-Get::add("/api/users", function (Response $response) {
+Router::get("/api/users", function (Request $request, Response $response) {
     $users = (new User())->select("*", 100)->asArray();
     return $response($users, HTTP_OK);
 });
 
-Get::add("/api/users/{id}", function ($id, Response $response) {
+Router::get("/api/users/{id}", function (Request $request, Response $response) {
     $user = new User();
-    $user->load($id);
+    $user->load($request->params["id"]);
     return $response($user->asArray(), HTTP_OK);
 });
 
-Post::add("/api/users", function (Response $response) {
-    $user = new User($_REQUEST);
+Router::post("/api/users", function (Request $request, Response $response) {
+    $user = new User($request->body);
     $user->save();
     return $response($user->asArray(), HTTP_CREATED);
 });
@@ -236,9 +246,9 @@ Create `src/templates/pages/home.twig`:
 Render it from a route:
 
 ```php
-Get::add("/", function (Response $response) {
+Router::get("/", function (Request $request, Response $response) {
     $users = (new User())->select("*", 20)->asArray();
-    return $response(\Tina4\renderTemplate("pages/home.twig", ["title" => "Users", "users" => $users]), HTTP_OK, TEXT_HTML);
+    return $response->template("pages/home.twig", ["title" => "Users", "users" => $users]);
 });
 ```
 
@@ -258,18 +268,19 @@ For the complete step-by-step guide, visit **[tina4.com](https://tina4.com)**.
 ### Routing
 
 ```php
-use Tina4\Route;
+use Tina4\Router;
+use Tina4\Request;
 use Tina4\Response;
 
-Route::get("/api/items", function (Response $response) {
+Router::get("/api/items", function (Request $request, Response $response) {
     return $response(["items" => []], HTTP_OK);
 });
 
-Route::post("/api/webhook", function (Response $response) {
+Router::post("/api/webhook", function (Request $request, Response $response) {
     return $response(["ok" => true], HTTP_OK);
 })->noAuth();
 
-Route::get("/api/admin/stats", function (Response $response) {
+Router::get("/api/admin/stats", function (Request $request, Response $response) {
     return $response(["secret" => true], HTTP_OK);
 })->secure();
 ```
@@ -327,7 +338,7 @@ $result = $db->fetch("SELECT * FROM users WHERE age > ?", 20, 0);
 ### Middleware
 
 ```php
-Route::get("/protected", function (Response $response) {
+Router::get("/protected", function (Request $request, Response $response) {
     return $response(["secret" => true], HTTP_OK);
 })->middleware(["AuthCheck"]);
 ```
@@ -335,10 +346,9 @@ Route::get("/protected", function (Response $response) {
 ### JWT Authentication
 
 ```php
-$auth = new \Tina4\Auth();
-$token = $auth->getToken(["user_id" => 42]);
-$isValid = $auth->validToken($token);
-$payload = $auth->getPayLoad($token);
+$token = \Tina4\Auth::getToken(["user_id" => 42], "your-secret");
+$payload = \Tina4\Auth::validToken($token, "your-secret");
+$claims = \Tina4\Auth::getPayload($token);
 ```
 
 POST/PUT/PATCH/DELETE routes require `Authorization: Bearer <token>` by default. Chain `->noAuth()` to make public, `->secure()` to protect GET routes.
@@ -370,7 +380,7 @@ Auto-generated at `/swagger`:
  * @description Get all users
  * @tags Users
  */
-Route::get("/api/users", function (Response $response) {
+Router::get("/api/users", function (Request $request, Response $response) {
     return $response((new User())->select("*", 100)->asArray(), HTTP_OK);
 });
 ```
