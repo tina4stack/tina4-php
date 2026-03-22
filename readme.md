@@ -42,7 +42,7 @@ cd my-app && tina4 serve
 
 Open http://localhost:7146 — your app is running.
 
-> **Alternative** (without Rust CLI): `composer require tina4stack/tina4-php` then create `index.php`
+> **Alternative** (without Rust CLI): `composer require tina4stack/tina4php` then create `index.php`
 
 ---
 
