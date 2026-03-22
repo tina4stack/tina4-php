@@ -558,6 +558,104 @@ HTML;
     }
 
     /**
+     * Handle a request — universal entry point for any PHP server.
+     *
+     * Makes Tina4 a drop-in for Swoole, RoadRunner, FrankenPHP, ReactPHP, etc.
+     *
+     * Accepts:
+     *   - Tina4\Request object (pass-through)
+     *   - Swoole\HTTP\Request (auto-converted)
+     *   - PSR-7 ServerRequestInterface (auto-converted)
+     *   - Array with 'method', 'path', 'headers', 'body' keys
+     *   - null (reads from PHP globals — $_SERVER, php://input)
+     *
+     * Returns a Tina4\Response that can be sent to any server.
+     *
+     * Usage:
+     *   $app = new \Tina4\App(basePath: __DIR__);
+     *
+     *   // Swoole
+     *   $http->on("request", function($req, $res) use ($app) {
+     *       $response = $app($req);
+     *       $res->status($response->getStatusCode());
+     *       foreach ($response->getHeaders() as $k => $v) $res->header($k, $v);
+     *       $res->end($response->getBody());
+     *   });
+     *
+     *   // RoadRunner
+     *   while ($req = $worker->waitRequest()) {
+     *       $response = $app($req);
+     *       $worker->respond(new \Nyholm\Psr7\Response($response->getStatusCode(), $response->getHeaders(), $response->getBody()));
+     *   }
+     *
+     *   // Direct (PHP-FPM / php -S)
+     *   $app();
+     *
+     * @param mixed $request Request object, array, or null for globals
+     * @return Response
+     */
+    public function __invoke(mixed $request = null): Response
+    {
+        $this->start();
+
+        // Build Tina4 Request from whatever we received
+        if ($request instanceof Request) {
+            $tina4Request = $request;
+        } elseif (is_array($request)) {
+            // Array format: ['method' => 'GET', 'path' => '/api/users', 'headers' => [...], 'body' => '...']
+            $tina4Request = new Request(
+                method: $request['method'] ?? 'GET',
+                path: $request['path'] ?? $request['uri'] ?? '/',
+                headers: $request['headers'] ?? [],
+                body: $request['body'] ?? '',
+                query: $request['query'] ?? [],
+                ip: $request['ip'] ?? '127.0.0.1',
+            );
+        } elseif (is_object($request) && method_exists($request, 'getMethod')) {
+            // PSR-7 ServerRequestInterface
+            $tina4Request = new Request(
+                method: $request->getMethod(),
+                path: $request->getUri()->getPath(),
+                headers: array_map(fn($v) => $v[0] ?? '', $request->getHeaders()),
+                body: (string) $request->getBody(),
+                query: $request->getQueryParams(),
+                ip: $request->getServerParams()['REMOTE_ADDR'] ?? '127.0.0.1',
+            );
+        } elseif (is_object($request) && property_exists($request, 'server')) {
+            // Swoole\HTTP\Request
+            $tina4Request = new Request(
+                method: $request->server['request_method'] ?? 'GET',
+                path: $request->server['request_uri'] ?? '/',
+                headers: $request->header ?? [],
+                body: $request->rawContent() ?: '',
+                query: $request->get ?? [],
+                ip: $request->server['remote_addr'] ?? '127.0.0.1',
+            );
+        } else {
+            // Read from PHP globals (php -S, PHP-FPM, Apache)
+            $tina4Request = Request::fromGlobals();
+        }
+
+        $response = new Response();
+        return Router::dispatch($tina4Request, $response);
+    }
+
+    /**
+     * Handle the current request and send the response to the client.
+     * Use this for PHP-FPM / php -S / Apache where output goes to stdout.
+     */
+    public function handle(): void
+    {
+        $response = $this();
+
+        http_response_code($response->getStatusCode() ?? 200);
+        foreach ($response->getHeaders() as $name => $value) {
+            header("$name: $value");
+        }
+        echo $response->getBody();
+    }
+
+    /**
      * Register POSIX signal handlers for graceful shutdown.
      */
     private function registerSignalHandlers(): void

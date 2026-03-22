@@ -48,6 +48,14 @@ class Request
     public readonly string $contentType;
 
     /**
+     * Create a Request from PHP superglobals (convenience factory).
+     */
+    public static function fromGlobals(): self
+    {
+        return new self();
+    }
+
+    /**
      * Create a Request from PHP superglobals or supplied data.
      *
      * @param string|null $method HTTP method override
