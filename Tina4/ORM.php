@@ -340,7 +340,7 @@ abstract class ORM
      * @param array<string>|null $include Relationship names to include (supports dot notation for nesting)
      * @return array<string, mixed>
      */
-    public function toDict(?array $include = null): array
+    public function toArray(?array $include = null): array
     {
         $result = $this->_data;
 
@@ -395,6 +395,15 @@ abstract class ORM
     public function toArray(): array
     {
         return $this->_data;
+    }
+
+    /**
+     * Alias for toArray() with include support — backward compatibility.
+     * @deprecated Use toArray() instead
+     */
+    public function toDict(?array $include = null): array
+    {
+        return $this->toArray($include);
     }
 
     /**
