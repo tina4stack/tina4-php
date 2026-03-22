@@ -388,17 +388,7 @@ abstract class ORM
     }
 
     /**
-     * Convert the model to an associative array.
-     *
-     * @return array<string, mixed>
-     */
-    public function toArray(): array
-    {
-        return $this->_data;
-    }
-
-    /**
-     * Alias for toArray() with include support — backward compatibility.
+     * Alias for toArray() — backward compatibility with Python/Node.js naming.
      * @deprecated Use toArray() instead
      */
     public function toDict(?array $include = null): array
