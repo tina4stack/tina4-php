@@ -1,0 +1,89 @@
+// Tina4 CSS — Progress Bars
+// Bootstrap-compatible class names, lightweight implementation
+// ============================================================
+
+// Variables
+$progress-height:        1rem !default;
+$progress-height-sm:     0.5rem !default;
+$progress-height-lg:     1.5rem !default;
+$progress-bg:            #e9ecef !default;
+$progress-border-radius: $border-radius !default;
+$progress-font-size:     0.75rem !default;
+
+// Container
+.progress {
+  display: flex;
+  height: $progress-height;
+  overflow: hidden;
+  font-size: $progress-font-size;
+  background-color: $progress-bg;
+  border-radius: $progress-border-radius;
+}
+
+// Size variants
+.progress-sm { height: $progress-height-sm; }
+.progress-lg { height: $progress-height-lg; font-size: $font-size-sm; }
+
+// The filled bar
+.progress-bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  color: $white;
+  text-align: center;
+  white-space: nowrap;
+  background-color: $primary;
+  padding: 0 0.5rem;
+  transition: width 0.6s ease;
+}
+
+// Color variants
+@each $name, $color in $theme-colors {
+  .progress-bar.bg-#{$name} {
+    background-color: $color;
+    @if $name == "warning" or $name == "light" {
+      color: $dark;
+    }
+  }
+}
+
+// Striped
+.progress-bar-striped {
+  background-image: linear-gradient(
+    45deg,
+    rgba($white, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba($white, 0.15) 50%,
+    rgba($white, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+}
+
+// Animated stripes
+.progress-bar-animated {
+  animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+  0%   { background-position: 1rem 0; }
+  100% { background-position: 0 0; }
+}
+
+// Stacked bars — just put multiple .progress-bar inside .progress
+
+// Indeterminate (loading without percentage)
+.progress-indeterminate {
+  .progress-bar {
+    width: 30%;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes progress-indeterminate {
+  0%   { margin-left: -30%; }
+  100% { margin-left: 100%; }
+}
