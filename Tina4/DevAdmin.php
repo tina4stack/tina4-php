@@ -32,6 +32,26 @@ class DevAdmin
             return $response->html(self::renderDashboard());
         });
 
+        // API: Live-reload — returns latest mtime of src/ for browser polling
+        Router::get('/__dev/api/mtime', function (Request $request, Response $response) {
+            $srcDir = getcwd() . '/src';
+            $latest = 0;
+            if (is_dir($srcDir)) {
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+                );
+                foreach ($iterator as $file) {
+                    if ($file->isFile() && !str_contains($file->getPathname(), '__pycache__')) {
+                        $mtime = $file->getMTime();
+                        if ($mtime > $latest) {
+                            $latest = $mtime;
+                        }
+                    }
+                }
+            }
+            return $response->json(['mtime' => $latest]);
+        });
+
         // API: System status (lightweight)
         Router::get('/__dev/api/status', function (Request $request, Response $response) {
             return $response->json([
@@ -620,6 +640,9 @@ class DevAdmin
     <a href="#" onclick="(function(e){e.preventDefault();var p=document.getElementById('tina4-dev-panel');if(p){p.style.display=p.style.display==='none'?'block':'none';return;}var c=document.createElement('div');c.id='tina4-dev-panel';c.style.cssText='position:fixed;bottom:2rem;right:1rem;width:min(90vw,1200px);height:min(80vh,700px);z-index:99998;transition:all 0.2s';var f=document.createElement('iframe');f.src='/__dev';f.style.cssText='width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';c.appendChild(f);document.body.appendChild(c);})(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
     <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
 </div>
+<script>
+(function(){var m=0;setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json()}).then(function(d){if(m&&d.mtime>m){location.reload();}m=d.mtime;}).catch(function(){});},1500);})();
+</script>
 HTML;
     }
 
