@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Tina4\Queue\QueueBackend;
 use Tina4\Queue\RabbitMQBackend;
 use Tina4\Queue\KafkaBackend;
+use Tina4\Queue\MongoBackend;
 
 class QueueBackendTest extends TestCase
 {
@@ -179,5 +180,24 @@ class QueueBackendTest extends TestCase
         $this->assertEquals('confighost', $hostProp->getValue($backend));
 
         putenv('TINA4_RABBITMQ_HOST');
+    }
+
+    // -- MongoBackend implements QueueBackend ---------------------------------
+
+    public function testMongoBackendImplementsInterface(): void
+    {
+        $ref = new \ReflectionClass(MongoBackend::class);
+        $this->assertTrue($ref->implementsInterface(QueueBackend::class));
+    }
+
+    public function testMongoBackendHasRequiredMethods(): void
+    {
+        $this->assertTrue(method_exists(MongoBackend::class, 'enqueue'));
+        $this->assertTrue(method_exists(MongoBackend::class, 'dequeue'));
+        $this->assertTrue(method_exists(MongoBackend::class, 'acknowledge'));
+        $this->assertTrue(method_exists(MongoBackend::class, 'requeue'));
+        $this->assertTrue(method_exists(MongoBackend::class, 'deadLetter'));
+        $this->assertTrue(method_exists(MongoBackend::class, 'size'));
+        $this->assertTrue(method_exists(MongoBackend::class, 'close'));
     }
 }

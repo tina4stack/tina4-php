@@ -9,6 +9,7 @@
 use PHPUnit\Framework\TestCase;
 use Tina4\Session\MongoSessionHandler;
 use Tina4\Session\ValkeySessionHandler;
+use Tina4\Session\DatabaseSessionHandler;
 
 class SessionHandlerTest extends TestCase
 {
@@ -264,5 +265,20 @@ class SessionHandlerTest extends TestCase
         $passProp = $ref->getProperty('password');
         $passProp->setAccessible(true);
         $this->assertNull($passProp->getValue($handler));
+    }
+
+    // -- DatabaseSessionHandler ----------------------------------------------
+
+    public function testDatabaseSessionHandlerExists(): void
+    {
+        $this->assertTrue(class_exists(DatabaseSessionHandler::class));
+    }
+
+    public function testDatabaseSessionHandlerHasRequiredMethods(): void
+    {
+        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'read'));
+        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'write'));
+        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'delete'));
+        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'close'));
     }
 }
