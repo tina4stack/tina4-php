@@ -40,6 +40,15 @@ class App
     ) {
         $this->startTime = microtime(true);
 
+        // Strict mode: convert all PHP warnings/notices to exceptions
+        // so errors like "Undefined array key" are caught immediately
+        set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+            if (!(error_reporting() & $severity)) {
+                return false; // Respect @ suppression operator
+            }
+            throw new \ErrorException($message, 0, $severity, $file, $line);
+        });
+
         // Set base path for static file serving
         Router::$basePath = $this->basePath;
 
