@@ -13,9 +13,10 @@
  *   - 'file'     — JSON files on disk (default)
  *   - 'rabbitmq' — RabbitMQ via raw TCP sockets (AMQP 0-9-1)
  *   - 'kafka'    — Kafka via raw TCP sockets
+ *   - 'mongodb'  — MongoDB via ext-mongodb (also accepts 'mongo')
  *
  * Environment variables:
- *   TINA4_QUEUE_BACKEND — 'file', 'rabbitmq', or 'kafka'
+ *   TINA4_QUEUE_BACKEND — 'file', 'rabbitmq', 'kafka', or 'mongodb'
  *   TINA4_QUEUE_URL     — connection URL for rabbitmq/kafka
  *
  * Usage:
@@ -34,6 +35,7 @@ namespace Tina4;
 use Tina4\Queue\QueueBackend;
 use Tina4\Queue\RabbitMQBackend;
 use Tina4\Queue\KafkaBackend;
+use Tina4\Queue\MongoBackend;
 
 class Queue
 {
@@ -66,6 +68,9 @@ class Queue
         } elseif ($this->backend === 'kafka') {
             $resolvedConfig = $this->resolveKafkaConfig($config);
             $this->externalBackend = new KafkaBackend($resolvedConfig);
+        } elseif ($this->backend === 'mongodb' || $this->backend === 'mongo') {
+            $resolvedConfig = $this->resolveMongoConfig($config);
+            $this->externalBackend = new MongoBackend($resolvedConfig);
         }
     }
 
@@ -558,6 +563,18 @@ class Queue
         if ($url) {
             $parsed = $this->parseAmqpUrl($url);
             return array_merge($parsed, $config);
+        }
+        return $config;
+    }
+
+    /**
+     * Resolve MongoDB config from environment variables and TINA4_QUEUE_URL.
+     */
+    private function resolveMongoConfig(array $config): array
+    {
+        $url = getenv('TINA4_QUEUE_URL');
+        if ($url) {
+            $config['uri'] = $url;
         }
         return $config;
     }
