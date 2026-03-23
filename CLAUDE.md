@@ -582,7 +582,7 @@ $result = SqlTranslation::remember(
 - Inline testing (`Testing`) with assertion builders and test runner
 - SQL dialect translation (`SqlTranslation`) for cross-database portability
 - AI assistant detection (`AI`) with context file scaffolding for 7 tools
-- Queue system with Kafka and RabbitMQ backends
+- Queue system with Kafka, RabbitMQ, and MongoDB backends
 - Session handlers for MongoDB and Valkey/Redis
 - GraphQL query execution
 - WebSocket support
@@ -594,7 +594,7 @@ $result = SqlTranslation::remember(
 - Frond pre-compilation for 2.8x template render improvement
 - DB query caching: `TINA4_DB_CACHE=true` env var, `cache_stats()`, `cache_clear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
-- Queue backends: SQLite (default), RabbitMQ, Kafka
+- Queue backends: SQLite (default), RabbitMQ, Kafka, MongoDB
 - Cache backends: memory (default), Redis, file
 - Session handlers: file, Redis/Valkey, MongoDB, database
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`

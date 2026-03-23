@@ -88,7 +88,7 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 | **Database** | SQLite3, PostgreSQL, MySQL, MSSQL, Firebird -- unified adapter interface, query caching (TINA4_DB_CACHE=true for 4x speedup) |
 | **Auth** | Zero-dep JWT (RS256/HS256), sessions, secure key generation, form tokens |
 | **API** | Swagger/OpenAPI auto-generation, GraphQL with ORM auto-schema and GraphiQL IDE |
-| **Background** | Queue (SQLite/RabbitMQ/Kafka) with priority, delayed jobs, retry, batch processing |
+| **Background** | Queue (SQLite/RabbitMQ/Kafka/MongoDB) with priority, delayed jobs, retry, batch processing |
 | **Real-time** | Swoole HTTP and TCP support |
 | **Frontend** | tina4-css, frond.js helper, SCSS compiler, live reload |
 | **DX** | Dev admin dashboard, error overlay, request inspector, annotation-driven testing |
