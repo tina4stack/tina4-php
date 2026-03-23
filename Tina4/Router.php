@@ -282,6 +282,12 @@ class Router
                 $overlayHtml = ErrorOverlay::render($e, [
                     'REQUEST_METHOD' => $request->method,
                     'REQUEST_URI' => $request->path,
+                    'CONTENT_TYPE' => $request->contentType ?? '',
+                    'REMOTE_ADDR' => $request->ip ?? '',
+                    'QUERY_STRING' => $request->query ?? '',
+                    'headers' => $request->headers ?? [],
+                    'params' => $request->params ?? [],
+                    'body' => is_array($request->body) ? $request->body : [],
                 ]);
                 return $response->html($overlayHtml, 500);
             }

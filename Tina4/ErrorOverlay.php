@@ -82,11 +82,15 @@ class ErrorOverlay
                     $requestPairs[] = [$k, is_string($v) ? $v : json_encode($v)];
                 }
             }
-            // Also include non-$_SERVER style dicts (headers, params)
+            // Also include non-$_SERVER style dicts (headers, params, body)
             foreach (['headers', 'params', 'body'] as $key) {
                 if (isset($request[$key]) && is_array($request[$key])) {
-                    foreach ($request[$key] as $hk => $hv) {
-                        $requestPairs[] = ["$key.$hk", is_string($hv) ? $hv : json_encode($hv)];
+                    if (!empty($request[$key])) {
+                        foreach ($request[$key] as $hk => $hv) {
+                            $requestPairs[] = ["$key.$hk", is_string($hv) ? $hv : json_encode($hv)];
+                        }
+                    } else {
+                        $requestPairs[] = [$key, '(empty)'];
                     }
                 }
             }
