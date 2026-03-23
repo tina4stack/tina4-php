@@ -552,8 +552,15 @@ HTML;
     {
         $this->start();
 
+        $actualPort = self::findAvailablePort($port);
+        if ($actualPort !== $port) {
+            echo "Port {$port} is in use, using port {$actualPort} instead.\n";
+            $port = $actualPort;
+        }
+
         try {
             $server = new Server($host, $port);
+            self::openBrowser("http://localhost:{$port}");
             $server->start();
         } catch (\RuntimeException $e) {
             // Fallback to PHP built-in server
@@ -726,6 +733,36 @@ HTML;
         $db = Database\DatabaseFactory::create($url, $autoCommit);
         self::$database = $db;
         return $db;
+    }
+
+    /**
+     * Find the first available port starting from $start.
+     */
+    private static function findAvailablePort(int $start, int $maxTries = 10): int
+    {
+        for ($i = 0; $i < $maxTries; $i++) {
+            $port = $start + $i;
+            $socket = @stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr);
+            if ($socket !== false) {
+                fclose($socket);
+                return $port;
+            }
+        }
+        return $start; // Fall back to original port and let Server handle the error
+    }
+
+    /**
+     * Open the default browser at the given URL.
+     */
+    private static function openBrowser(string $url): void
+    {
+        if (PHP_OS_FAMILY === 'Darwin') {
+            exec("open " . escapeshellarg($url) . " > /dev/null 2>&1 &");
+        } elseif (PHP_OS_FAMILY === 'Windows') {
+            exec("start " . escapeshellarg($url));
+        } else {
+            exec("xdg-open " . escapeshellarg($url) . " > /dev/null 2>&1 &");
+        }
     }
 
     /**
