@@ -40,6 +40,9 @@ class Server
     /** @var bool Server running flag */
     private bool $running = false;
 
+    /** @var bool Cached debug mode flag (avoid parsing env on every request) */
+    private bool $isDebug = false;
+
     /** @var string Host to bind to */
     private string $host;
 
@@ -62,7 +65,13 @@ class Server
      */
     public function start(): void
     {
-        $context = stream_context_create(['socket' => ['backlog' => 128]]);
+        $context = stream_context_create([
+            'socket' => [
+                'backlog' => 1024,
+                'so_reuseport' => true,
+                'tcp_nodelay' => true,
+            ],
+        ]);
         $this->socket = @stream_socket_server(
             "tcp://{$this->host}:{$this->port}",
             $errno,
@@ -79,6 +88,7 @@ class Server
 
         stream_set_blocking($this->socket, false);
         $this->running = true;
+        $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
 
         // Register signal handlers for graceful shutdown
         if (function_exists('pcntl_signal')) {
@@ -104,7 +114,8 @@ class Server
             $write = null;
             $except = null;
 
-            $changed = @stream_select($read, $write, $except, 0, 200000);
+            // 1ms timeout when idle — low latency without CPU spin
+            $changed = @stream_select($read, $write, $except, 0, 1000);
             if ($changed === false) {
                 break;
             }
@@ -260,9 +271,8 @@ class Server
         $responseBody = $response->getBody();
         $responseHeaders = $response->getHeaders();
 
-        // Dev toolbar injection
-        $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        if ($isDev && str_contains($response->getContentType() ?? '', 'text/html')) {
+        // Dev toolbar injection (uses cached flag — no env parsing per request)
+        if ($this->isDebug && str_contains($response->getContentType() ?? '', 'text/html')) {
             // Toolbar is already injected by Router::dispatch
         }
 
