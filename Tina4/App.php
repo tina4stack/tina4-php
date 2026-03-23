@@ -307,9 +307,11 @@ class App
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
         );
+        $srcDirNorm = str_replace('\\', '/', $srcDir);
         foreach ($iterator as $file) {
             if ($file->isFile()) {
-                $rel = str_replace($srcDir . '/', '', $file->getPathname());
+                $pathname = str_replace('\\', '/', $file->getPathname());
+                $rel = str_replace($srcDirNorm . '/', '', $pathname);
                 if (!file_exists($projectSrc . '/' . $rel)) {
                     return false;
                 }

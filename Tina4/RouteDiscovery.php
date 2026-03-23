@@ -53,7 +53,7 @@ class RouteDiscovery
             return $discovered;
         }
 
-        $routesDir = rtrim($routesDir, '/');
+        $routesDir = rtrim(str_replace('\\', '/', $routesDir), '/');
         [$conventionFiles, $inlineFiles] = self::findRouteFiles($routesDir);
 
         // 1. Convention-based routes (get.php, post.php, etc.)
