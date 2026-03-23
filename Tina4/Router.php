@@ -273,14 +273,23 @@ class Router
             }
         }
 
-        // Invoke the handler — support both (request, response) and (response) signatures
+        // Invoke the handler — support (), (response), (request), or (request, response) signatures
+        // When a single param is type-hinted as Request, pass request; otherwise pass response
         try {
-            $paramCount = (new \ReflectionFunction($route['callback']))->getNumberOfParameters();
-            $handlerResult = match (true) {
-                $paramCount === 0 => ($route['callback'])(),
-                $paramCount === 1 => ($route['callback'])($response),
-                default => ($route['callback'])($request, $response),
-            };
+            $ref = new \ReflectionFunction($route['callback']);
+            $params = $ref->getParameters();
+            $paramCount = count($params);
+            if ($paramCount === 0) {
+                $handlerResult = ($route['callback'])();
+            } elseif ($paramCount === 1) {
+                $type = $params[0]->getType();
+                $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
+                $handlerResult = ($typeName === Request::class || $typeName === 'Tina4\\Request')
+                    ? ($route['callback'])($request)
+                    : ($route['callback'])($response);
+            } else {
+                $handlerResult = ($route['callback'])($request, $response);
+            }
         } catch (\Throwable $e) {
             if (ErrorOverlay::isDebugMode()) {
                 // Rich error overlay with stack trace, source context, and line numbers
