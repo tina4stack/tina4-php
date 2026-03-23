@@ -14,6 +14,7 @@ namespace Tina4;
  * Supported backends:
  *   - 'file' — JSON files in a configurable directory (default: data/sessions)
  *   - 'redis' — Redis via PHP's built-in redis extension
+ *   - 'database' / 'db' — SQL database via Tina4 DatabaseAdapter
  *
  * Environment variables:
  *   TINA4_SESSION_BACKEND  — 'file' or 'redis' (default: 'file')
@@ -252,6 +253,7 @@ class Session
             'redis' => $this->loadFromRedis(),
             'valkey' => $this->loadFromValkey(),
             'mongodb', 'mongo' => $this->loadFromMongo(),
+            'database', 'db' => $this->loadFromDatabase(),
             default => $this->loadFromFile(),
         };
     }
@@ -265,6 +267,7 @@ class Session
             'redis' => $this->saveToRedis(),
             'valkey' => $this->saveToValkey(),
             'mongodb', 'mongo' => $this->saveToMongo(),
+            'database', 'db' => $this->saveToDatabase(),
             default => $this->saveToFile(),
         };
     }
@@ -278,6 +281,7 @@ class Session
             'redis' => $this->removeFromRedis(),
             'valkey' => $this->removeFromValkey(),
             'mongodb', 'mongo' => $this->removeFromMongo(),
+            'database', 'db' => $this->removeFromDatabase(),
             default => $this->removeFromFile(),
         };
     }
@@ -484,5 +488,34 @@ class Session
     private function removeFromMongo(): void
     {
         $this->getMongoHandler()->delete($this->sessionId);
+    }
+
+    // ── Database Backend (delegates to DatabaseSessionHandler) ────
+
+    private ?Session\DatabaseSessionHandler $dbHandler = null;
+
+    private function getDbHandler(): Session\DatabaseSessionHandler
+    {
+        if ($this->dbHandler === null) {
+            $this->dbHandler = new Session\DatabaseSessionHandler();
+        }
+        return $this->dbHandler;
+    }
+
+    private function loadFromDatabase(): void
+    {
+        $data = $this->getDbHandler()->read($this->sessionId);
+        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
+        $this->data['_meta']['last_accessed'] = time();
+    }
+
+    private function saveToDatabase(): void
+    {
+        $this->getDbHandler()->write($this->sessionId, $this->data);
+    }
+
+    private function removeFromDatabase(): void
+    {
+        $this->getDbHandler()->delete($this->sessionId);
     }
 }
