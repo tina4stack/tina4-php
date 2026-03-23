@@ -248,11 +248,12 @@ class Session
      */
     private function load(): void
     {
-        if ($this->backend === 'redis') {
-            $this->loadFromRedis();
-        } else {
-            $this->loadFromFile();
-        }
+        match ($this->backend) {
+            'redis' => $this->loadFromRedis(),
+            'valkey' => $this->loadFromValkey(),
+            'mongodb', 'mongo' => $this->loadFromMongo(),
+            default => $this->loadFromFile(),
+        };
     }
 
     /**
@@ -260,11 +261,12 @@ class Session
      */
     private function save(): void
     {
-        if ($this->backend === 'redis') {
-            $this->saveToRedis();
-        } else {
-            $this->saveToFile();
-        }
+        match ($this->backend) {
+            'redis' => $this->saveToRedis(),
+            'valkey' => $this->saveToValkey(),
+            'mongodb', 'mongo' => $this->saveToMongo(),
+            default => $this->saveToFile(),
+        };
     }
 
     /**
@@ -272,11 +274,12 @@ class Session
      */
     private function removeStorage(): void
     {
-        if ($this->backend === 'redis') {
-            $this->removeFromRedis();
-        } else {
-            $this->removeFromFile();
-        }
+        match ($this->backend) {
+            'redis' => $this->removeFromRedis(),
+            'valkey' => $this->removeFromValkey(),
+            'mongodb', 'mongo' => $this->removeFromMongo(),
+            default => $this->removeFromFile(),
+        };
     }
 
     // ── File Backend ──────────────────────────────────────────────
@@ -423,5 +426,63 @@ class Session
     {
         $redis = $this->getRedis();
         $redis->del($this->getRedisKey());
+    }
+
+    // ── Valkey Backend (delegates to ValkeySessionHandler) ────────
+
+    private ?Session\ValkeySessionHandler $valkeyHandler = null;
+
+    private function getValkeyHandler(): Session\ValkeySessionHandler
+    {
+        if ($this->valkeyHandler === null) {
+            $this->valkeyHandler = new Session\ValkeySessionHandler();
+        }
+        return $this->valkeyHandler;
+    }
+
+    private function loadFromValkey(): void
+    {
+        $data = $this->getValkeyHandler()->read($this->sessionId);
+        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
+        $this->data['_meta']['last_accessed'] = time();
+    }
+
+    private function saveToValkey(): void
+    {
+        $this->getValkeyHandler()->write($this->sessionId, $this->data);
+    }
+
+    private function removeFromValkey(): void
+    {
+        $this->getValkeyHandler()->delete($this->sessionId);
+    }
+
+    // ── MongoDB Backend (delegates to MongoSessionHandler) ────────
+
+    private ?Session\MongoSessionHandler $mongoHandler = null;
+
+    private function getMongoHandler(): Session\MongoSessionHandler
+    {
+        if ($this->mongoHandler === null) {
+            $this->mongoHandler = new Session\MongoSessionHandler();
+        }
+        return $this->mongoHandler;
+    }
+
+    private function loadFromMongo(): void
+    {
+        $data = $this->getMongoHandler()->read($this->sessionId);
+        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
+        $this->data['_meta']['last_accessed'] = time();
+    }
+
+    private function saveToMongo(): void
+    {
+        $this->getMongoHandler()->write($this->sessionId, $this->data);
+    }
+
+    private function removeFromMongo(): void
+    {
+        $this->getMongoHandler()->delete($this->sessionId);
     }
 }
