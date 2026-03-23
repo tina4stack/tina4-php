@@ -11,8 +11,6 @@
  */
 
 \Tina4\Router::get('/api/gallery/crash', function (\Tina4\Request $request, \Tina4\Response $response) {
-    // Simulate a realistic error — accessing a missing key
-    $user = ['name' => 'Alice', 'email' => 'alice@example.com'];
-    $role = $user['role']; // Undefined array key "role" — this line will be highlighted in the overlay
-    return $response->json(['role' => $role]);
+    // Deliberately throw an exception to demo the error overlay
+    throw new \RuntimeException('This is a demo crash from the Tina4 gallery — the error overlay should display this message with a full stack trace, source context, and request details.');
 });
