@@ -358,9 +358,11 @@ class DevAdmin
                             $iterator = new \RecursiveIteratorIterator(
                                 new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
                             );
+                            $srcDirNorm = str_replace('\\', '/', $srcDir);
                             foreach ($iterator as $file) {
                                 if ($file->isFile()) {
-                                    $files[] = str_replace($srcDir . '/', '', $file->getPathname());
+                                    $pathname = str_replace('\\', '/', $file->getPathname());
+                                    $files[] = str_replace($srcDirNorm . '/', '', $pathname);
                                 }
                             }
                             sort($files);
@@ -390,9 +392,12 @@ class DevAdmin
             $iterator = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($gallerySrc, \RecursiveDirectoryIterator::SKIP_DOTS)
             );
+            // Normalise paths for cross-platform compatibility
+            $gallerySrcNorm = str_replace('\\', '/', $gallerySrc);
             foreach ($iterator as $file) {
                 if ($file->isFile()) {
-                    $rel = str_replace($gallerySrc . '/', '', $file->getPathname());
+                    $pathname = str_replace('\\', '/', $file->getPathname());
+                    $rel = str_replace($gallerySrcNorm . '/', '', $pathname);
                     $dest = $projectSrc . '/' . $rel;
                     $destDir = dirname($dest);
                     if (!is_dir($destDir)) {
@@ -401,6 +406,12 @@ class DevAdmin
                     copy($file->getPathname(), $dest);
                     $copied[] = $rel;
                 }
+            }
+
+            // Re-run route discovery so deployed routes are available immediately
+            $routesDir = $projectSrc . '/routes';
+            if (is_dir($routesDir)) {
+                RouteDiscovery::scan($routesDir);
             }
 
             return $response->json(['deployed' => $name, 'files' => $copied]);
