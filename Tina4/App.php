@@ -14,7 +14,7 @@ namespace Tina4;
  */
 class App
 {
-    public const VERSION = '3.2.0';
+    public const VERSION = '3.2.1';
 
     /** @var Database\DatabaseAdapter|null Shared database instance */
     private static ?Database\DatabaseAdapter $database = null;
