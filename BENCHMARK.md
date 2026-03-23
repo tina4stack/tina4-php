@@ -1,44 +1,22 @@
 # Tina4 PHP — Benchmark Report
 
-**Date:** 2026-03-22 | **Machine:** Apple Silicon (ARM64) | **Tool:** `hey` (5000 requests, 50 concurrent, 3 runs, median)
+**Date:** 2026-03-23 | **Machine:** Apple Silicon (ARM64), 8 cores | **Tool:** `hey` (5000 requests, 50 concurrent, 3 runs, median)
 
 ---
 
 ## 1. Performance
 
-Real HTTP benchmarks — identical JSON endpoint, development servers.
-
-### Dev Server (how developers actually run it)
+Real HTTP benchmarks — identical JSON endpoint, all using PHP's built-in dev server (`php -S`).
 
 | Framework | JSON req/s | 100-item list req/s | Server | Deps |
 |-----------|:---------:|:-------------------:|--------|:----:|
-| **Tina4 PHP 3.1** | **40,133** | **25,164** | **custom (stream_select)** | **0** |
-| Slim 4 | 28,572 | 18,003 | php -S | 10 |
-| CodeIgniter 4 | 1,295 | 1,244 | php -S | 15 |
-| Symfony 7 | 1,782 | 1,524 | php -S | 30 |
-| Laravel 11 | 374 | 385 | artisan serve | 50 |
+| **Tina4 PHP 3.1** | **13,472** | **12,995** | **php -S** | **0** |
+| Slim 4 | 5,082 | 3,312 | php -S | 2 |
+| Symfony 7 | 1,589 | 1,305 | php -S | 30+ |
+| CodeIgniter 4 | 1,311 | 1,288 | spark serve | 15+ |
+| Laravel 11 | 257 | 313 | artisan serve | 70+ |
 
-### Production Server (nginx + PHP-FPM + OPcache + JIT)
-
-| Framework | JSON req/s | 100-item list req/s | Server | Change vs Dev |
-|-----------|:---------:|:-------------------:|--------|:-------------:|
-| **Tina4 PHP** | **18,510** | **18,520** | nginx + FPM | — |
-| Slim | 12,714 | 10,454 | nginx + FPM | — |
-| Symfony | 4,517 | 4,245 | nginx + FPM | 2.5x ↑ |
-| CodeIgniter | 4,137 | 2,897 | nginx + FPM | 3.2x ↑ |
-| Laravel | 675 | 736 | nginx + FPM | 1.8x ↑ |
-
-**Key takeaway:** Tina4 PHP's custom server (40K req/s) is faster than all competitors even on production servers. Laravel at 675 req/s on FPM is 60x slower than Tina4.
-
-### Warmup Time
-
-| Framework | Warmup (ms) |
-|-----------|:-----------:|
-| **Tina4** | **54** |
-| Slim | 118 |
-| CodeIgniter | — |
-| Symfony | — |
-| Laravel | 1,755 |
+**Key takeaway:** Tina4 PHP dominates at 13,472 req/s — 2.6x faster than Slim, 8.5x faster than Symfony, and 52x faster than Laravel, while shipping 38 features with 0 dependencies.
 
 ---
 
@@ -98,11 +76,11 @@ Ships with core install, no extra packages needed.
 
 | Framework | Features | Deps | JSON req/s |
 |-----------|:-------:|:----:|:---------:|
-| **Tina4** | **38/38** | **0** | **40,133** |
-| Slim | 6/38 | 10 | 28,572 |
-| CodeIgniter | 14/38 | 15 | 1,295 |
-| Symfony | 18/38 | 30 | 1,782 |
-| Laravel | 25/38 | 50 | 374 |
+| **Tina4** | **38/38** | **0** | **13,472** |
+| Laravel | 25/38 | 70+ | 257 |
+| Symfony | 18/38 | 30+ | 1,589 |
+| CodeIgniter | 14/38 | 15+ | 1,311 |
+| Slim | 6/38 | 2 | 5,082 |
 
 ---
 
@@ -110,11 +88,11 @@ Ships with core install, no extra packages needed.
 
 | Framework | Install Size | Dependencies |
 |-----------|:----------:|:------------:|
-| **Tina4 PHP** | **1.0 MB** | **0** |
-| Slim | 1.3 MB | 10 |
-| CodeIgniter | 8 MB | 10 |
-| Symfony | 11 MB | 30 |
-| Laravel | 77 MB | 50 |
+| **Tina4 PHP** | **~1.5 MB** | **0** |
+| Slim | ~3 MB | 2 |
+| CodeIgniter | ~12 MB | 15+ |
+| Symfony | ~25 MB | 30+ |
+| Laravel | ~50 MB | 70+ |
 
 Zero dependencies means core size **is** deployment size. No `vendor/` sprawl.
 
@@ -124,27 +102,19 @@ Zero dependencies means core size **is** deployment size. No `vendor/` sprawl.
 
 Estimated emissions per HTTP benchmark run (5000 requests on Apple Silicon, 15W TDP).
 
+Formula: `Energy(kWh) = (15W × seconds_for_5000_requests) / 3,600,000` | `CO2(g) = kWh × 475`
+
 | Framework | JSON req/s | Est. Energy (kWh) | Est. CO2 (g) |
 |-----------|:---------:|:-----------------:|:------------:|
-| **Tina4** | 40,133 | 0.0000052 | 0.0025 |
-| Slim | 28,572 | 0.0000073 | 0.0035 |
-| CodeIgniter | 1,295 | 0.0001607 | 0.0763 |
-| Symfony | 1,782 | 0.0001168 | 0.0555 |
-| Laravel | 374 | 0.0005563 | 0.2642 |
+| **Tina4** | 13,472 | 0.0000015 | 0.0007 |
+| Slim | 5,082 | 0.0000041 | 0.0019 |
+| Symfony | 1,589 | 0.0000131 | 0.0062 |
+| CodeIgniter | 1,311 | 0.0000159 | 0.0075 |
+| Laravel | 257 | 0.0000811 | 0.0385 |
 
 *CO2 calculated at world average 475g CO2/kWh. Lower req/s = longer to serve 5000 requests = more energy.*
 
-### Tina4 Test Suite Emissions
-
-| Metric | Value |
-|--------|-------|
-| Test Execution Time | 8.25s |
-| Tests | 1,304 |
-| CO2 per Run | 0.017g |
-| Tests per Second | 152.1 |
-| Annual CI (10 runs/day) | 0.062g CO2/year |
-
-**Carbonah Rating: A+**
+Laravel emits **55x more CO2** per benchmark run than Tina4.
 
 ---
 
