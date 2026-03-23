@@ -273,9 +273,12 @@ class Router
             }
         }
 
-        // Invoke the handler
+        // Invoke the handler — support both (request, response) and (response) signatures
         try {
-            $handlerResult = ($route['callback'])($request, $response);
+            $paramCount = (new \ReflectionFunction($route['callback']))->getNumberOfParameters();
+            $handlerResult = $paramCount === 1
+                ? ($route['callback'])($response)
+                : ($route['callback'])($request, $response);
         } catch (\Throwable $e) {
             if (ErrorOverlay::isDebugMode()) {
                 // Rich error overlay with stack trace, source context, and line numbers
