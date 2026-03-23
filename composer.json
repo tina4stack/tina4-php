@@ -22,7 +22,7 @@
     "scripts": {
         "serve": "@php bin/tina4php serve",
         "start": "@php bin/tina4php serve",
-        "test": "./vendor/bin/phpunit tests --verbose --color",
+        "test": "./vendor/bin/phpunit tests --color",
         "lint": "vendor/bin/phplint --exclude=vendor"
     },
     "config": {
