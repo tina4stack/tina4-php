@@ -6,17 +6,17 @@
 
 ## 1. Performance
 
-Real HTTP benchmarks — identical JSON endpoint, all using PHP's built-in dev server (`php -S`).
+Real HTTP benchmarks — identical JSON endpoint. Tina4 uses its built-in `stream_select` server; competitors use their default dev servers.
 
 | Framework | JSON req/s | 100-item list req/s | Server | Deps |
 |-----------|:---------:|:-------------------:|--------|:----:|
-| **Tina4 PHP 3.1** | **13,472** | **12,995** | **php -S** | **0** |
+| **Tina4 PHP 3.2** | **18,666** | **16,312** | **stream_select (built-in)** | **0** |
 | Slim 4 | 5,082 | 3,312 | php -S | 2 |
 | Symfony 7 | 1,589 | 1,305 | php -S | 30+ |
 | CodeIgniter 4 | 1,311 | 1,288 | spark serve | 15+ |
 | Laravel 11 | 257 | 313 | artisan serve | 70+ |
 
-**Key takeaway:** Tina4 PHP dominates at 13,472 req/s — 2.6x faster than Slim, 8.5x faster than Symfony, and 52x faster than Laravel, while shipping 38 features with 0 dependencies.
+**Key takeaway:** Tina4 PHP dominates at 18,666 req/s — 3.7x faster than Slim, 11.7x faster than Symfony, and 73x faster than Laravel, while shipping 38 features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
 
 ---
 
@@ -76,7 +76,7 @@ Ships with core install, no extra packages needed.
 
 | Framework | Features | Deps | JSON req/s |
 |-----------|:-------:|:----:|:---------:|
-| **Tina4** | **38/38** | **0** | **13,472** |
+| **Tina4** | **38/38** | **0** | **18,666** |
 | Laravel | 25/38 | 70+ | 257 |
 | Symfony | 18/38 | 30+ | 1,589 |
 | CodeIgniter | 14/38 | 15+ | 1,311 |
@@ -106,7 +106,7 @@ Formula: `Energy(kWh) = (15W × seconds_for_5000_requests) / 3,600,000` | `CO2(g
 
 | Framework | JSON req/s | Est. Energy (kWh) | Est. CO2 (g) |
 |-----------|:---------:|:-----------------:|:------------:|
-| **Tina4** | 13,472 | 0.0000015 | 0.0007 |
+| **Tina4** | 18,666 | 0.0000011 | 0.0005 |
 | Slim | 5,082 | 0.0000041 | 0.0019 |
 | Symfony | 1,589 | 0.0000131 | 0.0062 |
 | CodeIgniter | 1,311 | 0.0000159 | 0.0075 |
@@ -114,7 +114,7 @@ Formula: `Energy(kWh) = (15W × seconds_for_5000_requests) / 3,600,000` | `CO2(g
 
 *CO2 calculated at world average 475g CO2/kWh. Lower req/s = longer to serve 5000 requests = more energy.*
 
-Laravel emits **55x more CO2** per benchmark run than Tina4.
+Laravel emits **77x more CO2** per benchmark run than Tina4.
 
 ---
 
