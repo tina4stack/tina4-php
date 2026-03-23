@@ -38,6 +38,10 @@ class RouteDiscovery
     /**
      * Scan a directory and register all discovered routes with the Router.
      *
+     * Supports two conventions:
+     *   1. File-system routing: get.php, post.php, etc. that return a closure
+     *   2. Inline routing: any .php file that calls Router::get() / Router::post() etc. directly
+     *
      * @param string $routesDir The base directory to scan (e.g., src/routes)
      * @return array<int, array{method: string, path: string, file: string}> List of discovered routes
      */
@@ -50,9 +54,10 @@ class RouteDiscovery
         }
 
         $routesDir = rtrim($routesDir, '/');
-        $files = self::findRouteFiles($routesDir);
+        [$conventionFiles, $inlineFiles] = self::findRouteFiles($routesDir);
 
-        foreach ($files as $file) {
+        // 1. Convention-based routes (get.php, post.php, etc.)
+        foreach ($conventionFiles as $file) {
             $relativePath = substr($file, strlen($routesDir));
             $fileName = basename($file);
 
@@ -84,6 +89,16 @@ class RouteDiscovery
             $discovered[] = [
                 'method' => $method,
                 'path' => $urlPath,
+                'file' => $file,
+            ];
+        }
+
+        // 2. Inline route files (any other .php file that registers routes directly)
+        foreach ($inlineFiles as $file) {
+            require_once $file;
+            $discovered[] = [
+                'method' => 'INLINE',
+                'path' => '*',
                 'file' => $file,
             ];
         }
@@ -136,15 +151,20 @@ class RouteDiscovery
     /**
      * Recursively find all route files in a directory.
      *
-     * @return array<string>
+     * Returns two lists:
+     *   [0] Convention files (get.php, post.php, etc.)
+     *   [1] Inline files (any other .php file that registers routes directly)
+     *
+     * @return array{0: array<string>, 1: array<string>}
      */
     private static function findRouteFiles(string $dir): array
     {
-        $files = [];
+        $conventionFiles = [];
+        $inlineFiles = [];
 
         $items = scandir($dir);
         if ($items === false) {
-            return $files;
+            return [$conventionFiles, $inlineFiles];
         }
 
         foreach ($items as $item) {
@@ -155,13 +175,17 @@ class RouteDiscovery
             $path = $dir . '/' . $item;
 
             if (is_dir($path)) {
-                $files = array_merge($files, self::findRouteFiles($path));
+                [$childConvention, $childInline] = self::findRouteFiles($path);
+                $conventionFiles = array_merge($conventionFiles, $childConvention);
+                $inlineFiles = array_merge($inlineFiles, $childInline);
             } elseif (in_array($item, self::ROUTE_FILES, true)) {
-                $files[] = $path;
+                $conventionFiles[] = $path;
+            } elseif (str_ends_with($item, '.php')) {
+                $inlineFiles[] = $path;
             }
         }
 
-        return $files;
+        return [$conventionFiles, $inlineFiles];
     }
 
     /**
