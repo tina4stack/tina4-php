@@ -722,12 +722,12 @@ HTML;
 
     /**
      * Get the shared database instance.
-     * If none is set and DATABASE_URL is configured, auto-creates one via DatabaseFactory.
+     * If none is set and DATABASE_URL is configured, auto-creates one via Database.
      */
     public static function getDatabase(): ?Database\DatabaseAdapter
     {
         if (self::$database === null) {
-            $db = Database\DatabaseFactory::fromEnv('DATABASE_URL');
+            $db = Database\Database::fromEnv('DATABASE_URL');
             if ($db !== null) {
                 self::$database = $db;
             }
@@ -745,7 +745,7 @@ HTML;
      */
     public static function createDatabase(string $url, ?bool $autoCommit = null): Database\DatabaseAdapter
     {
-        $db = Database\DatabaseFactory::create($url, $autoCommit);
+        $db = Database\Database::create($url, $autoCommit);
         self::$database = $db;
         return $db;
     }

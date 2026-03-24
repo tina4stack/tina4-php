@@ -8,7 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\DatabaseUrl;
-use Tina4\Database\DatabaseFactory;
+use Tina4\Database\Database;
 use Tina4\Database\SQLite3Adapter;
 use Tina4\DotEnv;
 
@@ -214,41 +214,41 @@ class DatabaseUrlTest extends TestCase
         $this->assertEquals('p#ss&word', $db->password);
     }
 
-    // --- DatabaseFactory Tests ---
+    // --- Database Tests ---
 
     public function testFactoryCreateSqliteMemory(): void
     {
-        $adapter = DatabaseFactory::create(':memory:');
+        $adapter = Database::create(':memory:');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
     public function testFactoryCreateSqliteMemoryWithScheme(): void
     {
-        $adapter = DatabaseFactory::create('sqlite::memory:');
+        $adapter = Database::create('sqlite::memory:');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
     public function testFactoryCreateSqliteMemoryWithSlashes(): void
     {
-        $adapter = DatabaseFactory::create('sqlite:///:memory:');
+        $adapter = Database::create('sqlite:///:memory:');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
     public function testFactoryCreateSqliteFromPath(): void
     {
-        $adapter = DatabaseFactory::create('sqlite:///tmp/test_factory.db');
+        $adapter = Database::create('sqlite:///tmp/test_factory.db');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
     public function testFactoryCreateSqliteFromBareFilePath(): void
     {
-        $adapter = DatabaseFactory::create('/tmp/test_factory_bare.db');
+        $adapter = Database::create('/tmp/test_factory_bare.db');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
     public function testFactoryCreateSqliteFromSqlite3Extension(): void
     {
-        $adapter = DatabaseFactory::create('/tmp/test_factory.sqlite3');
+        $adapter = Database::create('/tmp/test_factory.sqlite3');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
@@ -257,7 +257,7 @@ class DatabaseUrlTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Cannot determine database type');
 
-        DatabaseFactory::create('not-a-valid-url');
+        Database::create('not-a-valid-url');
     }
 
     public function testFactoryUnsupportedSchemeThrows(): void
@@ -265,12 +265,12 @@ class DatabaseUrlTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unsupported database scheme');
 
-        DatabaseFactory::create('redis://localhost:6379/0');
+        Database::create('redis://localhost:6379/0');
     }
 
     public function testFactorySupportedSchemes(): void
     {
-        $schemes = DatabaseFactory::supportedSchemes();
+        $schemes = Database::supportedSchemes();
 
         $this->assertContains('sqlite', $schemes);
         $this->assertContains('postgres', $schemes);
@@ -281,17 +281,17 @@ class DatabaseUrlTest extends TestCase
 
     public function testFactoryIsSupportedTrue(): void
     {
-        $this->assertTrue(DatabaseFactory::isSupported('sqlite'));
-        $this->assertTrue(DatabaseFactory::isSupported('SQLITE'));
-        $this->assertTrue(DatabaseFactory::isSupported('postgres'));
-        $this->assertTrue(DatabaseFactory::isSupported('mysql'));
+        $this->assertTrue(Database::isSupported('sqlite'));
+        $this->assertTrue(Database::isSupported('SQLITE'));
+        $this->assertTrue(Database::isSupported('postgres'));
+        $this->assertTrue(Database::isSupported('mysql'));
     }
 
     public function testFactoryIsSupportedFalse(): void
     {
-        $this->assertFalse(DatabaseFactory::isSupported('redis'));
-        $this->assertFalse(DatabaseFactory::isSupported('mongodb'));
-        $this->assertFalse(DatabaseFactory::isSupported(''));
+        $this->assertFalse(Database::isSupported('redis'));
+        $this->assertFalse(Database::isSupported('mongodb'));
+        $this->assertFalse(Database::isSupported(''));
     }
 
     public function testFactoryFromEnvReturnsNullWhenNotSet(): void
@@ -300,7 +300,7 @@ class DatabaseUrlTest extends TestCase
         unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
         DotEnv::resetEnv();
 
-        $result = DatabaseFactory::fromEnv();
+        $result = Database::fromEnv();
         $this->assertNull($result);
     }
 
@@ -310,7 +310,7 @@ class DatabaseUrlTest extends TestCase
         putenv('DATABASE_URL=sqlite::memory:');
         DotEnv::resetEnv();
 
-        $result = DatabaseFactory::fromEnv();
+        $result = Database::fromEnv();
         $this->assertInstanceOf(SQLite3Adapter::class, $result);
     }
 
@@ -318,17 +318,17 @@ class DatabaseUrlTest extends TestCase
     {
         // The factory accepts separate username/password params
         // For SQLite these are ignored, but we verify the method signature works
-        $adapter = DatabaseFactory::create(':memory:', null, 'testuser', 'testpass');
+        $adapter = Database::create(':memory:', null, 'testuser', 'testpass');
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
     }
 
     public function testFactoryAutoCommitParam(): void
     {
         // Verify autoCommit parameter is accepted
-        $adapter = DatabaseFactory::create(':memory:', false);
+        $adapter = Database::create(':memory:', false);
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
 
-        $adapter2 = DatabaseFactory::create(':memory:', true);
+        $adapter2 = Database::create(':memory:', true);
         $this->assertInstanceOf(SQLite3Adapter::class, $adapter2);
     }
 

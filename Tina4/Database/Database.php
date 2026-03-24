@@ -24,7 +24,7 @@ use Tina4\DatabaseUrl;
  *   mssql, sqlserver     => MSSQLAdapter
  *   firebird            => FirebirdAdapter
  */
-class DatabaseFactory
+class Database
 {
     /** @var array<string, class-string<DatabaseAdapter>> Maps scheme to adapter class */
     private const ADAPTER_MAP = [
@@ -67,7 +67,7 @@ class DatabaseFactory
         $parts = parse_url($url);
         if ($parts === false || !isset($parts['scheme'])) {
             throw new \InvalidArgumentException(
-                "DatabaseFactory: Cannot determine database type from '{$url}'. "
+                "Database: Cannot determine database type from '{$url}'. "
                 . "Use a URL like 'postgres://user:pass@host/db' or 'sqlite:///path/to/db'."
             );
         }
@@ -76,7 +76,7 @@ class DatabaseFactory
 
         if (!isset(self::ADAPTER_MAP[$scheme])) {
             throw new \InvalidArgumentException(
-                "DatabaseFactory: Unsupported database scheme '{$scheme}'. "
+                "Database: Unsupported database scheme '{$scheme}'. "
                 . 'Supported: ' . implode(', ', array_unique(array_keys(self::ADAPTER_MAP)))
             );
         }

@@ -15,7 +15,7 @@
  *   TINA4_DB_CACHE_TTL=30        # TTL in seconds (default: 30)
  *
  * Usage:
- *   $adapter = DatabaseFactory::create('sqlite:///app.db');
+ *   $adapter = Database::create('sqlite:///app.db');
  *   $db = new CachedDatabase($adapter);
  *   $db->fetch("SELECT * FROM users");   // cached on second call
  *   $db->cacheStats();                   // ["enabled" => true, "hits" => 1, ...]

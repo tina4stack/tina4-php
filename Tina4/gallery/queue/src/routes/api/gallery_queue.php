@@ -13,7 +13,7 @@ function _galleryQueueDb(): \Tina4\Database\DatabaseAdapter
 {
     static $db = null;
     if ($db === null) {
-        $db = \Tina4\Database\DatabaseFactory::create('sqlite:///data/gallery_queue.db');
+        $db = \Tina4\Database\Database::create('sqlite:///data/gallery_queue.db');
         // Ensure queue table exists
         if (!$db->tableExists('tina4_queue')) {
             $db->exec("CREATE TABLE tina4_queue (

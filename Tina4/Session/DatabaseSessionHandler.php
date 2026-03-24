@@ -9,14 +9,14 @@
  * using the Tina4 DatabaseAdapter. Zero external dependencies.
  *
  * Environment variables:
- *   DATABASE_URL              — database connection URL (used by DatabaseFactory::fromEnv())
+ *   DATABASE_URL              — database connection URL (used by Database::fromEnv())
  *   TINA4_SESSION_TTL         — session TTL in seconds (default: 3600)
  */
 
 namespace Tina4\Session;
 
 use Tina4\Database\DatabaseAdapter;
-use Tina4\Database\DatabaseFactory;
+use Tina4\Database\Database;
 
 class DatabaseSessionHandler
 {
@@ -36,7 +36,7 @@ class DatabaseSessionHandler
         if (isset($config['db']) && $config['db'] instanceof DatabaseAdapter) {
             $this->db = $config['db'];
         } else {
-            $db = DatabaseFactory::fromEnv();
+            $db = Database::fromEnv();
             if ($db === null) {
                 throw new \RuntimeException(
                     'DatabaseSessionHandler: No database connection available. '
