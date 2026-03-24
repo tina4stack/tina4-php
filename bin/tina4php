@@ -160,7 +160,7 @@ PHP;
 
         // Create .env
         if (!file_exists($targetDir . '.env')) {
-            file_put_contents($targetDir . '.env', "TINA4_DEBUG_LEVEL=ALL\n");
+            file_put_contents($targetDir . '.env', "TINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=ALL\n");
             echo "  Created .env\n";
         }
 
