@@ -358,7 +358,7 @@ class DevAdmin
 
         // API: Gallery — list available gallery examples
         Router::get('/__dev/api/gallery', function (Request $request, Response $response) {
-            $galleryDir = __DIR__ . '/gallery';
+            $galleryDir = str_replace('\\', '/', __DIR__ . '/gallery');
             $items = [];
             if (is_dir($galleryDir)) {
                 $entries = scandir($galleryDir);
@@ -402,22 +402,20 @@ class DevAdmin
                 return $response->json(['error' => 'No gallery item specified'], 400);
             }
 
-            $gallerySrc = __DIR__ . '/gallery/' . $name . '/src';
+            $gallerySrc = str_replace('\\', '/', __DIR__ . '/gallery/' . $name . '/src');
             if (!is_dir($gallerySrc)) {
                 return $response->json(['error' => "Gallery item '{$name}' not found"], 404);
             }
 
-            $projectSrc = getcwd() . '/src';
+            $projectSrc = str_replace('\\', '/', getcwd() . '/src');
             $copied = [];
             $iterator = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($gallerySrc, \RecursiveDirectoryIterator::SKIP_DOTS)
             );
-            // Normalise paths for cross-platform compatibility
-            $gallerySrcNorm = str_replace('\\', '/', $gallerySrc);
             foreach ($iterator as $file) {
                 if ($file->isFile()) {
                     $pathname = str_replace('\\', '/', $file->getPathname());
-                    $rel = str_replace($gallerySrcNorm . '/', '', $pathname);
+                    $rel = str_replace($gallerySrc . '/', '', $pathname);
                     $dest = $projectSrc . '/' . $rel;
                     $destDir = dirname($dest);
                     if (!is_dir($destDir)) {
