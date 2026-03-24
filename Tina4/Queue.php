@@ -92,7 +92,7 @@ class Job
         ];
 
         file_put_contents(
-            $failedPath . '/' . $this->id . '.json',
+            $failedPath . '/' . $this->id . '.queue-data',
             json_encode($jobData, JSON_PRETTY_PRINT)
         );
     }
@@ -228,7 +228,7 @@ class Queue
             'error' => null,
         ];
 
-        file_put_contents($queuePath . '/' . $id . '.json', json_encode($job, JSON_PRETTY_PRINT));
+        file_put_contents($queuePath . '/' . $id . '.queue-data', json_encode($job, JSON_PRETTY_PRINT));
         return $id;
     }
 
@@ -252,7 +252,7 @@ class Queue
             return null;
         }
 
-        $files = glob($queuePath . '/*.json');
+        $files = glob($queuePath . '/*.queue-data');
         if (empty($files)) {
             return null;
         }
@@ -354,7 +354,7 @@ class Queue
                 $failedPath = $this->queuePath($queue) . '/failed';
                 $this->ensureDir($failedPath);
                 file_put_contents(
-                    $failedPath . '/' . $job['id'] . '.json',
+                    $failedPath . '/' . $job['id'] . '.queue-data',
                     json_encode($job, JSON_PRETTY_PRINT)
                 );
             }
@@ -382,7 +382,7 @@ class Queue
             return 0;
         }
 
-        $files = glob($queuePath . '/*.json');
+        $files = glob($queuePath . '/*.queue-data');
         $count = 0;
 
         foreach ($files as $file) {
@@ -408,7 +408,7 @@ class Queue
             return;
         }
 
-        $files = glob($queuePath . '/*.json');
+        $files = glob($queuePath . '/*.queue-data');
         foreach ($files as $file) {
             unlink($file);
         }
@@ -428,7 +428,7 @@ class Queue
             return [];
         }
 
-        $files = glob($failedPath . '/*.json');
+        $files = glob($failedPath . '/*.queue-data');
         $jobs = [];
 
         foreach ($files as $file) {
@@ -459,7 +459,7 @@ class Queue
 
         foreach ($queues as $queueDir) {
             $failedPath = $queueDir . '/failed';
-            $failedFile = $failedPath . '/' . $jobId . '.json';
+            $failedFile = $failedPath . '/' . $jobId . '.queue-data';
 
             if (file_exists($failedFile)) {
                 $data = json_decode(file_get_contents($failedFile), true);
@@ -477,7 +477,7 @@ class Queue
                 $data['error'] = null;
 
                 file_put_contents(
-                    $queueDir . '/' . $jobId . '.json',
+                    $queueDir . '/' . $jobId . '.queue-data',
                     json_encode($data, JSON_PRETTY_PRINT)
                 );
 
@@ -503,7 +503,7 @@ class Queue
             return [];
         }
 
-        $files = glob($failedPath . '/*.json');
+        $files = glob($failedPath . '/*.queue-data');
         $jobs = [];
 
         foreach ($files as $file) {
@@ -535,7 +535,7 @@ class Queue
                 return 0;
             }
 
-            $files = glob($failedPath . '/*.json');
+            $files = glob($failedPath . '/*.queue-data');
             foreach ($files as $file) {
                 $data = json_decode(file_get_contents($file), true);
                 if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
@@ -549,7 +549,7 @@ class Queue
                 return 0;
             }
 
-            $files = glob($failedPath . '/*.json');
+            $files = glob($failedPath . '/*.queue-data');
             foreach ($files as $file) {
                 $data = json_decode(file_get_contents($file), true);
                 if ($data !== null && ($data['attempts'] ?? 0) < $this->maxRetries) {
@@ -564,7 +564,7 @@ class Queue
                 return 0;
             }
 
-            $files = glob($queuePath . '/*.json');
+            $files = glob($queuePath . '/*.queue-data');
             foreach ($files as $file) {
                 $data = json_decode(file_get_contents($file), true);
                 if ($data !== null && ($data['status'] ?? '') === $status) {
@@ -593,7 +593,7 @@ class Queue
 
         $queuePath = $this->queuePath($queue);
         $count = 0;
-        $files = glob($failedPath . '/*.json');
+        $files = glob($failedPath . '/*.queue-data');
 
         foreach ($files as $file) {
             $data = json_decode(file_get_contents($file), true);
@@ -610,7 +610,7 @@ class Queue
             $data['error'] = null;
 
             file_put_contents(
-                $queuePath . '/' . $data['id'] . '.json',
+                $queuePath . '/' . $data['id'] . '.queue-data',
                 json_encode($data, JSON_PRETTY_PRINT)
             );
 
@@ -691,7 +691,7 @@ class Queue
             return null;
         }
 
-        $files = glob($queuePath . '/*.json');
+        $files = glob($queuePath . '/*.queue-data');
         foreach ($files as $file) {
             $data = json_decode(file_get_contents($file), true);
             if ($data === null || $data['status'] !== 'pending') {
