@@ -196,6 +196,20 @@ class Router
     }
 
     /**
+     * Attach Swagger/OpenAPI metadata to the last registered route.
+     *
+     * @param array $meta Swagger metadata (summary, tags, description, example, etc.)
+     * @return $this
+     */
+    public function swagger(array $meta): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['swagger'] = $meta;
+        }
+        return $this;
+    }
+
+    /**
      * Mark the last registered route as secure (requires valid JWT).
      *
      * @return $this
@@ -411,6 +425,7 @@ class Router
                     'secure' => $route['secure'],
                     'handler' => $handler,
                     'callback' => $route['callback'],
+                    'swagger' => $route['swagger'] ?? [],
                 ];
             }
         }
@@ -541,7 +556,7 @@ class Router
     /**
      * Register a route.
      */
-    private static function addRoute(string $method, string $path, callable $callback): self
+    private static function addRoute(string $method, string $path, callable $callback, array $swagger = []): self
     {
         $fullPath = self::$groupPrefix . '/' . ltrim($path, '/');
         $fullPath = '/' . trim($fullPath, '/');
@@ -566,6 +581,7 @@ class Router
             'secure' => false,
             'catchAll' => $parsed['catchAll'],
             'catchAllName' => $parsed['catchAllName'],
+            'swagger' => $swagger,
         ];
 
         self::$lastRouteMethod = $method;

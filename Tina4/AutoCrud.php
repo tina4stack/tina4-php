@@ -98,25 +98,32 @@ class AutoCrud
 
         foreach ($this->models as $tableName => $modelClass) {
             $basePath = $this->prefix . '/' . $tableName;
+            $prettyName = str_replace('_', ' ', ucwords($tableName, '_'));
+            $example = $this->buildExample($modelClass);
 
             // GET /api/{table} — list
-            Router::get($basePath, $this->createListHandler($modelClass));
+            Router::get($basePath, $this->createListHandler($modelClass))
+                ->swagger(['summary' => "List all {$prettyName}", 'tags' => [$tableName]]);
             $generated[] = ['method' => 'GET', 'path' => $basePath, 'table' => $tableName];
 
             // GET /api/{table}/{id} — get one
-            Router::get($basePath . '/{id}', $this->createGetHandler($modelClass));
+            Router::get($basePath . '/{id}', $this->createGetHandler($modelClass))
+                ->swagger(['summary' => "Get {$prettyName} by ID", 'tags' => [$tableName]]);
             $generated[] = ['method' => 'GET', 'path' => $basePath . '/{id}', 'table' => $tableName];
 
             // POST /api/{table} — create
-            Router::post($basePath, $this->createCreateHandler($modelClass));
+            Router::post($basePath, $this->createCreateHandler($modelClass))
+                ->swagger(['summary' => "Create {$prettyName}", 'tags' => [$tableName], 'example' => $example]);
             $generated[] = ['method' => 'POST', 'path' => $basePath, 'table' => $tableName];
 
             // PUT /api/{table}/{id} — update
-            Router::put($basePath . '/{id}', $this->createUpdateHandler($modelClass));
+            Router::put($basePath . '/{id}', $this->createUpdateHandler($modelClass))
+                ->swagger(['summary' => "Update {$prettyName}", 'tags' => [$tableName], 'example' => $example]);
             $generated[] = ['method' => 'PUT', 'path' => $basePath . '/{id}', 'table' => $tableName];
 
             // DELETE /api/{table}/{id} — delete
-            Router::delete($basePath . '/{id}', $this->createDeleteHandler($modelClass));
+            Router::delete($basePath . '/{id}', $this->createDeleteHandler($modelClass))
+                ->swagger(['summary' => "Delete {$prettyName}", 'tags' => [$tableName]]);
             $generated[] = ['method' => 'DELETE', 'path' => $basePath . '/{id}', 'table' => $tableName];
         }
 
@@ -266,6 +273,51 @@ class AutoCrud
 
             return $response->json(['error' => 'Failed to delete record', 'detail' => $db->error()], 500);
         };
+    }
+
+    /**
+     * Build a sample request body from the ORM model's database columns.
+     *
+     * Generates an associative array with column names as keys and example
+     * values based on column types, suitable for Swagger request body examples.
+     *
+     * @param class-string<ORM> $modelClass
+     * @return array<string, mixed>
+     */
+    private function buildExample(string $modelClass): array
+    {
+        $instance = new $modelClass($this->db);
+        $tableName = $instance->tableName;
+        $primaryKey = $instance->primaryKey ?? 'id';
+        $example = [];
+
+        try {
+            $columns = $this->db->getColumns($tableName);
+            foreach ($columns as $col) {
+                $name = $col['column_name'] ?? $col['name'] ?? '';
+                if ($name === '' || strcasecmp($name, $primaryKey) === 0) {
+                    continue; // Skip primary key
+                }
+                $type = strtolower($col['data_type'] ?? $col['type'] ?? 'text');
+                if (str_contains($type, 'int')) {
+                    $example[$name] = 0;
+                } elseif (str_contains($type, 'float') || str_contains($type, 'double') ||
+                          str_contains($type, 'decimal') || str_contains($type, 'numeric') ||
+                          str_contains($type, 'real')) {
+                    $example[$name] = 0.0;
+                } elseif (str_contains($type, 'bool')) {
+                    $example[$name] = true;
+                } elseif (str_contains($type, 'date') || str_contains($type, 'time')) {
+                    $example[$name] = '2024-01-01T00:00:00';
+                } else {
+                    $example[$name] = 'string';
+                }
+            }
+        } catch (\Throwable $e) {
+            // If column introspection fails, return an empty example
+        }
+
+        return $example;
     }
 
     /**

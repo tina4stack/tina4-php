@@ -92,6 +92,26 @@ class Swagger
                     'deprecated' => false,
                 ];
 
+                // Merge stored swagger metadata (from Router::swagger() or AutoCrud)
+                $swaggerMeta = $route['swagger'] ?? [];
+                if (!empty($swaggerMeta)) {
+                    if (isset($swaggerMeta['summary']) && $docMeta['summary'] === null) {
+                        $docMeta['summary'] = $swaggerMeta['summary'];
+                    }
+                    if (isset($swaggerMeta['description']) && $docMeta['description'] === null) {
+                        $docMeta['description'] = $swaggerMeta['description'];
+                    }
+                    if (isset($swaggerMeta['tags']) && empty($docMeta['tags'])) {
+                        $docMeta['tags'] = $swaggerMeta['tags'];
+                    }
+                    if (isset($swaggerMeta['example']) && empty($docMeta['examples'])) {
+                        $docMeta['examples'][] = $swaggerMeta['example'];
+                    }
+                    if (isset($swaggerMeta['deprecated']) && !$docMeta['deprecated']) {
+                        $docMeta['deprecated'] = $swaggerMeta['deprecated'];
+                    }
+                }
+
                 $operation = [
                     'tags' => !empty($docMeta['tags']) ? $docMeta['tags'] : [$tag],
                     'operationId' => $operationId,
