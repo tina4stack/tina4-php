@@ -10,6 +10,7 @@
  *   tina4php migrate                Run pending migrations
  *   tina4php migrate:create <desc>  Create a migration file
  *   tina4php migrate:rollback       Rollback last batch
+ *   tina4php migrate:status         Show migration status
  *   tina4php seed                   Run seeders from src/seeds/
  *   tina4php routes                 List all registered routes
  *   tina4php test                   Run test suite
@@ -330,6 +331,51 @@ PHP;
         }
         break;
 
+    case 'migrate:status':
+        if ($autoloaded && file_exists($cwd . '/index.php')) {
+            ob_start();
+            include_once $cwd . '/index.php';
+            ob_end_clean();
+        }
+        $migrationsDir = $cwd . '/migrations';
+        if (!is_dir($migrationsDir)) {
+            mkdir($migrationsDir, 0755, true);
+        }
+        if (class_exists('\Tina4\Migration')) {
+            $migration = new \Tina4\Migration($migrationsDir);
+            $status = $migration->status();
+
+            echo "Migration Status\n";
+            echo str_repeat('=', 60) . "\n\n";
+
+            if (!empty($status['completed'])) {
+                echo "Completed:\n";
+                echo str_pad('  Migration', 45) . str_pad('Batch', 8) . "Applied At\n";
+                echo "  " . str_repeat('-', 58) . "\n";
+                foreach ($status['completed'] as $m) {
+                    echo '  ' . str_pad($m['migration'], 43) . str_pad((string)$m['batch'], 8) . ($m['applied_at'] ?? '') . "\n";
+                }
+            } else {
+                echo "Completed: (none)\n";
+            }
+
+            echo "\n";
+
+            if (!empty($status['pending'])) {
+                echo "Pending:\n";
+                foreach ($status['pending'] as $name) {
+                    echo "  {$name}\n";
+                }
+            } else {
+                echo "Pending: (none)\n";
+            }
+
+            echo "\n" . count($status['completed']) . " completed, " . count($status['pending']) . " pending.\n";
+        } else {
+            echo "Migration class not available.\n";
+        }
+        break;
+
     // ────────────────────────────────────────────
     // ROUTES — List registered routes
     // ────────────────────────────────────────────
@@ -479,6 +525,7 @@ PHP;
         echo "  migrate                 Run pending migrations\n";
         echo "  migrate:create <desc>   Create a migration file\n";
         echo "  migrate:rollback        Rollback last batch\n";
+        echo "  migrate:status          Show migration status\n";
         echo "  seed                    Run seeders from src/seeds/\n";
         echo "  routes                  List all registered routes\n";
         echo "  test                    Run test suite\n";

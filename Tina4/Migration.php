@@ -13,9 +13,16 @@ use Tina4\Database\DatabaseAdapter;
 /**
  * Migration engine — reads SQL migration files and applies them in order.
  *
- * Migration files must be named: YYYYMMDDHHMMSS_description.sql
- * Located in src/migrations/ by default.
+ * Migration files can use either naming pattern:
+ *   - YYYYMMDDHHMMSS_description.sql  (timestamp-based)
+ *   - 000001_description.sql          (sequential numbering)
  *
+ * Both patterns sort alphabetically and work identically.
+ * Rollback files use the same base name with a .down.sql extension:
+ *   - YYYYMMDDHHMMSS_description.down.sql
+ *   - 000001_description.down.sql
+ *
+ * Located in src/migrations/ by default.
  * Tracks applied migrations in the tina4_migration table.
  */
 class Migration
@@ -100,6 +107,11 @@ class Migration
     /**
      * Rollback the last batch of migrations.
      *
+     * For each migration being rolled back:
+     *   1. Look for a matching .down.sql file (e.g. 20240101000000_create_users.down.sql)
+     *   2. If found, execute it before removing the tracking record
+     *   3. If not found, log a warning but still remove the tracking record
+     *
      * @return array{rolledBack: array<string>, errors: array<string, string>}
      */
     public function rollback(): array
@@ -123,6 +135,34 @@ class Migration
             $this->db->begin();
 
             try {
+                // Look for a .down.sql file
+                $downFile = $this->getDownFilePath($fileName);
+
+                if ($downFile !== null && file_exists($downFile)) {
+                    $downSql = file_get_contents($downFile);
+
+                    if ($downSql !== false && trim($downSql) !== '') {
+                        $statements = $this->splitStatements($downSql);
+
+                        foreach ($statements as $statement) {
+                            $statement = trim($statement);
+                            if ($statement === '') {
+                                continue;
+                            }
+
+                            $result = $this->db->exec($statement);
+                            if (!$result) {
+                                $error = $this->db->error() ?? 'Unknown error';
+                                throw new \RuntimeException("Rollback SQL failed: {$error}");
+                            }
+                        }
+
+                        Log::info("Executed down migration: " . basename($downFile));
+                    }
+                } else {
+                    Log::warning("No .down.sql file found for {$fileName}, removing tracking record only");
+                }
+
                 // Remove the migration record
                 $this->db->exec(
                     "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration = :name",
@@ -142,6 +182,24 @@ class Migration
         }
 
         return ['rolledBack' => $rolledBack, 'errors' => $errors];
+    }
+
+    /**
+     * Get migration status — lists completed and pending migrations.
+     *
+     * @return array{completed: array<int, array{migration: string, batch: int, applied_at: string}>, pending: array<string>}
+     */
+    public function status(): array
+    {
+        $completed = $this->getAppliedMigrations();
+
+        $pendingFiles = $this->getPendingMigrations();
+        $pending = array_map('basename', $pendingFiles);
+
+        return [
+            'completed' => $completed,
+            'pending' => $pending,
+        ];
     }
 
     /**
@@ -177,7 +235,11 @@ class Migration
     }
 
     /**
-     * Get all migration files sorted by name (timestamp order).
+     * Get all migration files sorted by name (alphabetical/timestamp order).
+     * Excludes .down.sql rollback files.
+     *
+     * Both YYYYMMDDHHMMSS_name.sql and 000001_name.sql patterns are supported
+     * since they both sort correctly in alphabetical order.
      *
      * @return array<string> Full file paths
      */
@@ -192,6 +254,12 @@ class Migration
             return [];
         }
 
+        // Exclude .down.sql files — those are rollback scripts, not up migrations
+        $files = array_filter($files, function (string $file): bool {
+            return !str_ends_with($file, '.down.sql');
+        });
+
+        $files = array_values($files);
         sort($files);
         return $files;
     }
@@ -262,13 +330,156 @@ class Migration
     }
 
     /**
-     * Split SQL content into individual statements by delimiter.
+     * Get the path to the .down.sql file for a given migration filename.
+     *
+     * For "20240101000000_create_users.sql" returns
+     * "{migrationsDir}/20240101000000_create_users.down.sql"
+     *
+     * @return string|null Full path if determinable, null otherwise
+     */
+    private function getDownFilePath(string $migrationFileName): ?string
+    {
+        // Strip .sql extension and add .down.sql
+        if (str_ends_with($migrationFileName, '.sql')) {
+            $baseName = substr($migrationFileName, 0, -4); // remove .sql
+            return $this->migrationsDir . '/' . $baseName . '.down.sql';
+        }
+
+        return null;
+    }
+
+    /**
+     * Split SQL content into individual statements, properly handling:
+     *   - $$ delimited stored procedure/function blocks
+     *   - // delimited blocks
+     *   - Block comments: /* ... * /
+     *   - Line comments: -- ...
+     *   - Quoted strings (don't split on ; inside quotes)
      *
      * @return array<string>
      */
     private function splitStatements(string $sql): array
     {
-        $statements = explode($this->delimiter, $sql);
-        return array_filter(array_map('trim', $statements), fn(string $s) => $s !== '');
+        $statements = [];
+        $current = '';
+        $len = strlen($sql);
+        $i = 0;
+        $inDollarBlock = false;
+        $inSlashBlock = false;
+
+        while ($i < $len) {
+            // Check for $$ delimiter (toggle in/out of dollar-quoted block)
+            if (!$inSlashBlock && $i + 1 < $len && $sql[$i] === '$' && $sql[$i + 1] === '$') {
+                $current .= '$$';
+                $i += 2;
+                $inDollarBlock = !$inDollarBlock;
+                continue;
+            }
+
+            // Check for // delimiter (toggle in/out of slash-delimited block)
+            if (!$inDollarBlock && $i + 1 < $len && $sql[$i] === '/' && $sql[$i + 1] === '/') {
+                $current .= '//';
+                $i += 2;
+                $inSlashBlock = !$inSlashBlock;
+                continue;
+            }
+
+            // Inside a delimited block, consume everything until the closing delimiter
+            if ($inDollarBlock || $inSlashBlock) {
+                $current .= $sql[$i];
+                $i++;
+                continue;
+            }
+
+            // Block comment: /* ... */
+            if ($i + 1 < $len && $sql[$i] === '/' && $sql[$i + 1] === '*') {
+                $endPos = strpos($sql, '*/', $i + 2);
+                if ($endPos !== false) {
+                    $current .= substr($sql, $i, ($endPos + 2) - $i);
+                    $i = $endPos + 2;
+                } else {
+                    // Unterminated block comment — consume rest
+                    $current .= substr($sql, $i);
+                    $i = $len;
+                }
+                continue;
+            }
+
+            // Line comment: -- ...
+            if ($i + 1 < $len && $sql[$i] === '-' && $sql[$i + 1] === '-') {
+                $endPos = strpos($sql, "\n", $i + 2);
+                if ($endPos !== false) {
+                    $current .= substr($sql, $i, ($endPos + 1) - $i);
+                    $i = $endPos + 1;
+                } else {
+                    $current .= substr($sql, $i);
+                    $i = $len;
+                }
+                continue;
+            }
+
+            // Single-quoted string
+            if ($sql[$i] === "'") {
+                $current .= "'";
+                $i++;
+                while ($i < $len) {
+                    if ($sql[$i] === "'" && $i + 1 < $len && $sql[$i + 1] === "'") {
+                        // Escaped quote ''
+                        $current .= "''";
+                        $i += 2;
+                    } elseif ($sql[$i] === "'") {
+                        $current .= "'";
+                        $i++;
+                        break;
+                    } else {
+                        $current .= $sql[$i];
+                        $i++;
+                    }
+                }
+                continue;
+            }
+
+            // Double-quoted identifier
+            if ($sql[$i] === '"') {
+                $current .= '"';
+                $i++;
+                while ($i < $len) {
+                    if ($sql[$i] === '"' && $i + 1 < $len && $sql[$i + 1] === '"') {
+                        $current .= '""';
+                        $i += 2;
+                    } elseif ($sql[$i] === '"') {
+                        $current .= '"';
+                        $i++;
+                        break;
+                    } else {
+                        $current .= $sql[$i];
+                        $i++;
+                    }
+                }
+                continue;
+            }
+
+            // Statement delimiter
+            if ($sql[$i] === $this->delimiter) {
+                $trimmed = trim($current);
+                if ($trimmed !== '') {
+                    $statements[] = $trimmed;
+                }
+                $current = '';
+                $i++;
+                continue;
+            }
+
+            $current .= $sql[$i];
+            $i++;
+        }
+
+        // Don't forget the last statement (may not end with delimiter)
+        $trimmed = trim($current);
+        if ($trimmed !== '') {
+            $statements[] = $trimmed;
+        }
+
+        return $statements;
     }
 }
