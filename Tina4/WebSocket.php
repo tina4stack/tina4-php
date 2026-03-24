@@ -71,16 +71,24 @@ class WebSocket
     }
 
     /**
-     * Broadcast a message to all connected clients.
+     * Broadcast a message to all connected clients on the same path.
+     *
+     * When a path is provided, only clients whose 'path' property matches
+     * will receive the message. When path is null, sends to all clients
+     * (backward compatible).
      *
      * @param string     $message    Message to send
      * @param array|null $excludeIds Client IDs to exclude
+     * @param string|null $path      Only send to clients on this path
      */
-    public function broadcast(string $message, ?array $excludeIds = null): void
+    public function broadcast(string $message, ?array $excludeIds = null, ?string $path = null): void
     {
         $frame = self::encodeFrame($message);
         foreach ($this->clients as $id => $client) {
             if ($excludeIds && in_array($id, $excludeIds)) {
+                continue;
+            }
+            if ($path !== null && ($client['path'] ?? '/') !== $path) {
                 continue;
             }
             $this->writeToSocket($client['socket'], $frame);
@@ -391,6 +399,7 @@ class WebSocket
             'ip' => $peerName ?: 'unknown',
             'connected_at' => time(),
             'buffer' => '',
+            'path' => $headers['_path'] ?? '/',
         ];
 
         // Fire open event

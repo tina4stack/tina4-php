@@ -296,6 +296,17 @@ class Database
     // -------------------------------------------------------------------------
 
     /**
+     * Convenience alias for fromEnv().
+     *
+     * @param string $envKey Environment variable name (default: DATABASE_URL)
+     * @return self|null Null if the env var is not set
+     */
+    public static function getConnection(string $envKey = 'DATABASE_URL'): ?self
+    {
+        return self::fromEnv($envKey);
+    }
+
+    /**
      * Get the list of supported database schemes.
      *
      * @return array<string>
