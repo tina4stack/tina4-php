@@ -390,4 +390,18 @@ class Response
 
         return $this;
     }
+
+    /**
+     * Render a template. Alias for template() — provides cross-framework parity.
+     *
+     * @param string $templateName Template file name (e.g. 'dashboard.twig')
+     * @param array  $data         Variables to pass to the template
+     * @param int    $status       HTTP status code (default 200)
+     * @param string $templateDir  Template directory (default 'src/templates')
+     * @return $this
+     */
+    public function render(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
+    {
+        return $this->template($templateName, $data, $status, $templateDir);
+    }
 }

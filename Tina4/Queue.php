@@ -37,6 +37,89 @@ use Tina4\Queue\RabbitMQBackend;
 use Tina4\Queue\KafkaBackend;
 use Tina4\Queue\MongoBackend;
 
+/**
+ * Job — Wraps a queue job with lifecycle methods.
+ */
+class Job
+{
+    public string $id;
+    public mixed $payload;
+    public string $status;
+    public int $attempts;
+    public ?string $error;
+    private Queue $queue;
+    private string $topic;
+
+    public function __construct(array $data, Queue $queue, string $topic)
+    {
+        $this->id = $data['id'];
+        $this->payload = $data['payload'];
+        $this->status = $data['status'] ?? 'reserved';
+        $this->attempts = $data['attempts'] ?? 0;
+        $this->error = $data['error'] ?? null;
+        $this->queue = $queue;
+        $this->topic = $topic;
+    }
+
+    /**
+     * Mark this job as completed (removes it from the queue).
+     */
+    public function complete(): void
+    {
+        $this->status = 'completed';
+    }
+
+    /**
+     * Mark this job as failed with a reason.
+     */
+    public function fail(string $reason = ''): void
+    {
+        $this->status = 'failed';
+        $this->error = $reason;
+        $this->attempts++;
+
+        $failedPath = $this->queue->getBasePath() . '/' . $this->topic . '/failed';
+        if (!is_dir($failedPath)) {
+            mkdir($failedPath, 0755, true);
+        }
+
+        $jobData = [
+            'id' => $this->id,
+            'payload' => $this->payload,
+            'status' => 'failed',
+            'attempts' => $this->attempts,
+            'error' => $reason,
+        ];
+
+        file_put_contents(
+            $failedPath . '/' . $this->id . '.json',
+            json_encode($jobData, JSON_PRETTY_PRINT)
+        );
+    }
+
+    /**
+     * Reject this job with a reason. Alias for fail().
+     */
+    public function reject(string $reason = ''): void
+    {
+        $this->fail($reason);
+    }
+
+    /**
+     * Get the raw job data as array.
+     */
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'payload' => $this->payload,
+            'status' => $this->status,
+            'attempts' => $this->attempts,
+            'error' => $this->error,
+        ];
+    }
+}
+
 class Queue
 {
     private string $backend;
@@ -536,6 +619,91 @@ class Queue
         }
 
         return $count;
+    }
+
+    /**
+     * Produce a message onto a topic. Convenience wrapper around push().
+     *
+     * @param string $topic   Topic/queue name
+     * @param mixed  $payload Job data
+     * @param int    $delay   Delay in seconds before job becomes available
+     * @return string Job ID
+     */
+    public function produce(string $topic, mixed $payload, int $delay = 0): string
+    {
+        return $this->push($payload, $topic, $delay);
+    }
+
+    /**
+     * Consume jobs from a topic using a generator (yield pattern).
+     *
+     * Usage:
+     *   foreach ($queue->consume('emails') as $job) {
+     *       processEmail($job);
+     *   }
+     *
+     *   // Consume a specific job by ID:
+     *   foreach ($queue->consume('emails', 'job-id-123') as $job) {
+     *       processEmail($job);
+     *   }
+     *
+     * @param string      $topic Topic/queue name (defaults to constructor topic)
+     * @param string|null $id    Optional job ID — only yield this specific job
+     * @return \Generator<array>
+     */
+    public function consume(string $topic = '', ?string $id = null): \Generator
+    {
+        $topic = $topic ?: $this->topic;
+
+        if ($id !== null) {
+            // Consume a specific job by ID
+            $data = $this->popById($topic, $id);
+            if ($data !== null) {
+                yield new Job($data, $this, $topic);
+            }
+            return;
+        }
+
+        // Yield all available jobs
+        while (($data = $this->pop($topic)) !== null) {
+            yield new Job($data, $this, $topic);
+        }
+    }
+
+    /**
+     * Pop a specific job by ID from the queue.
+     *
+     * @param string $queue Queue/topic name
+     * @param string $id    Job ID to find
+     * @return array|null Job data or null if not found
+     */
+    public function popById(string $queue, string $id): ?array
+    {
+        $queue = $queue ?: $this->topic;
+
+        if ($this->externalBackend !== null) {
+            // External backends don't support ID-based pop natively
+            return null;
+        }
+
+        $queuePath = $this->queuePath($queue);
+        if (!is_dir($queuePath)) {
+            return null;
+        }
+
+        $files = glob($queuePath . '/*.json');
+        foreach ($files as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data === null || $data['status'] !== 'pending') {
+                continue;
+            }
+            if ($data['id'] === $id) {
+                unlink($file);
+                return $data;
+            }
+        }
+
+        return null;
     }
 
     /**
