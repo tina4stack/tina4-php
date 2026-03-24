@@ -88,3 +88,13 @@ test.db
 .claude/
 .github_token
 /logs/
+/log/
+/metrics/
+/plan/
+/Dockerfile
+/docker-compose.yml
+/.dockerignore
+/src/public/css/base.css
+/src/public/css/colors.css
+*.db-shm
+*.db-wal
