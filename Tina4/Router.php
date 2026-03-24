@@ -53,6 +53,23 @@ class Router
     private static ?string $lastRouteMethod = null;
 
     /**
+     * Register a global middleware class.
+     *
+     * Delegates to Middleware::use(). The middleware class should follow the
+     * standardized convention with static `before*` and `after*` methods.
+     *
+     * Usage:
+     *   Router::use(\Tina4\Middleware\CorsMiddleware::class);
+     *   Router::use(\Tina4\Middleware\RateLimiter::class);
+     *
+     * @param string $class Fully-qualified middleware class name
+     */
+    public static function use(string $class): void
+    {
+        Middleware::use($class);
+    }
+
+    /**
      * Register a GET route.
      */
     public static function get(string $path, callable $callback): self
@@ -236,6 +253,17 @@ class Router
      */
     public static function dispatch(Request $request, Response $response): Response
     {
+        // Run global middleware "before" hooks
+        $globalMiddleware = Middleware::getGlobal();
+        if (!empty($globalMiddleware)) {
+            [$request, $response] = Middleware::runBefore($globalMiddleware, $request, $response);
+
+            // Short-circuit if a global middleware set an error status
+            if ($response->getStatusCode() >= 400) {
+                return $response;
+            }
+        }
+
         $result = self::match($request->method, $request->path);
 
         if ($result === null) {
@@ -320,6 +348,11 @@ class Router
             $finalResponse = $response->html($handlerResult);
         } else {
             $finalResponse = $response;
+        }
+
+        // Run global middleware "after" hooks
+        if (!empty($globalMiddleware)) {
+            [$request, $finalResponse] = Middleware::runAfter($globalMiddleware, $request, $finalResponse);
         }
 
         // Dev toolbar injection: inject a fixed bottom toolbar into HTML responses

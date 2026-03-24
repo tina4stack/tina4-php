@@ -9,6 +9,8 @@
 namespace Tina4\Middleware;
 
 use Tina4\DotEnv;
+use Tina4\Request;
+use Tina4\Response;
 
 /**
  * In-memory sliding-window rate limiter.
@@ -139,5 +141,71 @@ class RateLimiter
                 unset($this->requests[$ip]);
             }
         }
+    }
+
+    /** @var array<string, array<float>> Static request tracking for the middleware hook */
+    private static array $staticRequests = [];
+
+    /**
+     * Standardized middleware hook — enforces per-IP rate limiting before the route handler.
+     *
+     * Reads configuration from environment variables:
+     *   TINA4_RATE_LIMIT  — max requests per window (default: 100)
+     *   TINA4_RATE_WINDOW — window duration in seconds (default: 60)
+     *
+     * Returns a 429 response if the limit is exceeded, causing a short-circuit.
+     *
+     * @param Request $request
+     * @param Response $response
+     * @return array{0: Request, 1: Response}
+     */
+    public static function beforeRateLimit(Request $request, Response $response): array
+    {
+        $ip = $request->ip;
+        $maxRequests = (int)(DotEnv::getEnv('TINA4_RATE_LIMIT', '100'));
+        $windowSeconds = (int)(DotEnv::getEnv('TINA4_RATE_WINDOW', '60'));
+        $now = microtime(true);
+        $windowStart = $now - $windowSeconds;
+
+        // Initialize or prune expired entries
+        if (!isset(self::$staticRequests[$ip])) {
+            self::$staticRequests[$ip] = [];
+        }
+
+        self::$staticRequests[$ip] = array_values(
+            array_filter(self::$staticRequests[$ip], fn(float $ts): bool => $ts > $windowStart)
+        );
+
+        $currentCount = count(self::$staticRequests[$ip]);
+        $remaining = max(0, $maxRequests - $currentCount);
+
+        $response->header('X-RateLimit-Limit', (string)$maxRequests);
+        $response->header('X-RateLimit-Remaining', (string)$remaining);
+
+        if ($currentCount >= $maxRequests) {
+            // Calculate retry-after from the oldest request still in the window
+            $oldestInWindow = self::$staticRequests[$ip][0] ?? $now;
+            $retryAfter = (int)ceil(($oldestInWindow + $windowSeconds) - $now);
+            $retryAfter = max(1, $retryAfter);
+
+            $response->header('Retry-After', (string)$retryAfter);
+            $response->header('X-RateLimit-Remaining', '0');
+
+            return [$request, $response->status(429)->json(['error' => 'Too Many Requests'])];
+        }
+
+        // Record this request
+        self::$staticRequests[$ip][] = $now;
+        $response->header('X-RateLimit-Remaining', (string)max(0, $maxRequests - count(self::$staticRequests[$ip])));
+
+        return [$request, $response];
+    }
+
+    /**
+     * Reset the static request tracking (for testing).
+     */
+    public static function resetStatic(): void
+    {
+        self::$staticRequests = [];
     }
 }

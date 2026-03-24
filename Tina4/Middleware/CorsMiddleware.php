@@ -9,6 +9,8 @@
 namespace Tina4\Middleware;
 
 use Tina4\DotEnv;
+use Tina4\Request;
+use Tina4\Response;
 
 /**
  * CORS middleware — handles Cross-Origin Resource Sharing headers.
@@ -139,5 +141,40 @@ class CorsMiddleware
     public function getAllowedHeaders(): string
     {
         return $this->allowedHeaders;
+    }
+
+    /**
+     * Standardized middleware hook — sets CORS headers before the route handler.
+     *
+     * Reads configuration from environment variables:
+     *   TINA4_CORS_ORIGINS  — allowed origins (default: "*")
+     *   TINA4_CORS_METHODS  — allowed methods (default: "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+     *   TINA4_CORS_HEADERS  — allowed headers (default: "Content-Type,Authorization,X-Requested-With")
+     *   TINA4_CORS_MAX_AGE  — preflight cache in seconds (default: "86400")
+     *
+     * For OPTIONS preflight requests, returns a 204 response to short-circuit the handler.
+     *
+     * @param Request $request
+     * @param Response $response
+     * @return array{0: Request, 1: Response}
+     */
+    public static function beforeCors(Request $request, Response $response): array
+    {
+        $origins = DotEnv::getEnv('TINA4_CORS_ORIGINS', '*');
+        $methods = DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        $headers = DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Requested-With');
+        $maxAge = DotEnv::getEnv('TINA4_CORS_MAX_AGE', '86400');
+
+        $response->header('Access-Control-Allow-Origin', $origins);
+        $response->header('Access-Control-Allow-Methods', $methods);
+        $response->header('Access-Control-Allow-Headers', $headers);
+        $response->header('Access-Control-Max-Age', $maxAge);
+
+        // Handle OPTIONS preflight — return 204 No Content to short-circuit
+        if (strtoupper($request->method) === 'OPTIONS') {
+            $response->status(204);
+        }
+
+        return [$request, $response];
     }
 }
