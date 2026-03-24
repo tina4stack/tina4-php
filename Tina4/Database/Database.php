@@ -120,15 +120,30 @@ class Database
     /**
      * Fetch results with pagination.
      *
+     * Returns a DatabaseResult object that supports iteration, counting,
+     * array access, and JSON serialisation.
+     *
      * @param string $sql SQL query
      * @param array<mixed> $params Bound parameters
      * @param int $limit Max rows to return
      * @param int $offset Starting offset
-     * @return array{data: array<int, array<string, mixed>>, total: int, limit: int, offset: int}
+     * @return DatabaseResult
      */
-    public function fetch(string $sql, array $params = [], int $limit = 10, int $offset = 0): array
+    public function fetch(string $sql, array $params = [], int $limit = 10, int $offset = 0): DatabaseResult
     {
-        return $this->adapter->fetch($sql, $limit, $offset, $params);
+        $raw = $this->adapter->fetch($sql, $limit, $offset, $params);
+
+        $records = $raw['data'] ?? [];
+        $columns = !empty($records) ? array_keys($records[0]) : [];
+        $total   = $raw['total'] ?? count($records);
+
+        return new DatabaseResult(
+            records: $records,
+            columns: $columns,
+            count:   $total,
+            limit:   $limit,
+            offset:  $offset,
+        );
     }
 
     /**
