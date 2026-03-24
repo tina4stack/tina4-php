@@ -899,17 +899,9 @@ class Frond
         if ($expr === 'false') return false;
         if ($expr === 'none' || $expr === 'null') return null;
 
-        // Check for filter pipe (respecting strings and parens)
-        $filterSplit = $this->splitFilters($expr);
-        if (count($filterSplit) > 1) {
-            $value = $this->evaluateExpression($filterSplit[0], $data);
-            for ($i = 1; $i < count($filterSplit); $i++) {
-                $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
-            }
-            return $value;
-        }
-
-        // Ternary: condition ? true_val : false_val
+        // Ternary MUST be checked before filter pipes so that expressions
+        // like ``products|length != 1 ? "s" : ""`` are parsed correctly.
+        // The ``?`` belongs to the ternary, not to a filter.
         $ternaryPos = $this->findTernary($expr);
         if ($ternaryPos !== false) {
             $condition = trim(substr($expr, 0, $ternaryPos));
@@ -925,6 +917,16 @@ class Frond
                     return $this->evaluateExpression($falseVal, $data);
                 }
             }
+        }
+
+        // Check for filter pipe (respecting strings and parens)
+        $filterSplit = $this->splitFilters($expr);
+        if (count($filterSplit) > 1) {
+            $value = $this->evaluateExpression($filterSplit[0], $data);
+            for ($i = 1; $i < count($filterSplit); $i++) {
+                $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
+            }
+            return $value;
         }
 
         // Jinja2-style inline if: value if condition else other_value
@@ -1521,6 +1523,28 @@ class Frond
         if (isset($this->filters[$filterName])) {
             $fn = $this->filters[$filterName];
             return $fn($value, ...$args);
+        }
+
+        // The filter name may include a trailing comparison operator,
+        // e.g. "length != 1".  Extract the real filter name and the
+        // comparison suffix, apply the filter, then evaluate the comparison.
+        if (preg_match('/^(\w+)\s*(!=|==|>=|<=|>|<)\s*(.+)$/', $filterName, $m2)) {
+            $realFilter = $m2[1];
+            $op = $m2[2];
+            $rightExpr = trim($m2[3]);
+            if (isset($this->filters[$realFilter])) {
+                $value = ($this->filters[$realFilter])($value, ...$args);
+            }
+            $right = $this->evaluateExpression($rightExpr, $data);
+            return match ($op) {
+                '!=' => $value != $right,
+                '==' => $value == $right,
+                '>=' => $value >= $right,
+                '<=' => $value <= $right,
+                '>'  => $value > $right,
+                '<'  => $value < $right,
+                default => false,
+            };
         }
 
         return $value;
