@@ -1922,7 +1922,7 @@ class Frond
             $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
             $ttlMinutes = (int)(DotEnv::getEnv('TINA4_TOKEN_LIMIT') ?? $_ENV['TINA4_TOKEN_LIMIT'] ?? '30');
             $expiresIn = $ttlMinutes * 60;
-            $token = Auth::createToken($payload, $secret, $expiresIn);
+            $token = Auth::getToken($payload, $secret, $expiresIn);
             return self::RAW_MARKER . '<input type="hidden" name="formToken" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
         };
 

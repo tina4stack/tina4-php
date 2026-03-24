@@ -574,7 +574,7 @@ Templates are pre-compiled for 2.8x faster rendering.
 TINA4_DEBUG=true                        # Enable debug mode
 DATABASE_PATH=app.db                    # SQLite database path
 SECRET=your-jwt-secret                  # JWT signing secret
-TINA4_LANGUAGE=en                       # Localization language
+TINA4_LOCALE=en                         # Localization language
 
 [SWAGGER]
 SWAGGER_TITLE=My API                    # Swagger page title

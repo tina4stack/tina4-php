@@ -233,14 +233,14 @@ HTML;
     $secret = \Tina4\DotEnv::getEnv('APP_SECRET', 'demo-secret');
 
     // Generate a JWT
-    $token = \Tina4\Auth::createToken(
+    $token = \Tina4\Auth::getToken(
         payload: ['user_id' => 1, 'role' => 'admin'],
         secret: $secret,
         expiresIn: 3600,
     );
 
     // Validate the JWT
-    $decoded = \Tina4\Auth::validateToken($token, $secret);
+    $decoded = \Tina4\Auth::validToken($token, $secret);
 
     // Get payload without verification
     $unverified = \Tina4\Auth::getPayload($token);

@@ -288,22 +288,22 @@ class SmokeTest extends TestCase
         $secret = 'smoke-test-secret-key';
 
         // Create token
-        $token = Auth::createToken(['sub' => 'user-1', 'role' => 'admin'], $secret, 3600);
+        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $secret, 3600);
         $parts = explode('.', $token);
         $this->assertCount(3, $parts);
 
         // Validate token
-        $payload = Auth::validateToken($token, $secret);
+        $payload = Auth::validToken($token, $secret);
         $this->assertNotNull($payload);
         $this->assertSame('user-1', $payload['sub']);
         $this->assertSame('admin', $payload['role']);
 
         // Expired token rejected
-        $expired = Auth::createToken(['sub' => 'x', 'exp' => time() - 10], $secret, 0);
-        $this->assertNull(Auth::validateToken($expired, $secret));
+        $expired = Auth::getToken(['sub' => 'x', 'exp' => time() - 10], $secret, 0);
+        $this->assertNull(Auth::validToken($expired, $secret));
 
         // Wrong secret rejected
-        $this->assertNull(Auth::validateToken($token, 'wrong-secret'));
+        $this->assertNull(Auth::validToken($token, 'wrong-secret'));
 
         // Password hashing
         $hash = Auth::hashPassword('my-password');
@@ -1305,7 +1305,7 @@ class SmokeTest extends TestCase
     public function testAuthGetPayloadWithoutVerification(): void
     {
         $secret = 'test-secret';
-        $token = Auth::createToken(['user' => 'bob'], $secret);
+        $token = Auth::getToken(['user' => 'bob'], $secret);
         $payload = Auth::getPayload($token);
 
         $this->assertNotNull($payload);
@@ -1322,13 +1322,13 @@ class SmokeTest extends TestCase
     public function testAuthRefreshToken(): void
     {
         $secret = 'refresh-secret';
-        $token = Auth::createToken(['sub' => 'user-1'], $secret, 3600);
+        $token = Auth::getToken(['sub' => 'user-1'], $secret, 3600);
         $newToken = Auth::refreshToken($token, $secret, 7200);
 
         $this->assertNotNull($newToken);
         $this->assertNotSame($token, $newToken);
 
-        $payload = Auth::validateToken($newToken, $secret);
+        $payload = Auth::validToken($newToken, $secret);
         $this->assertSame('user-1', $payload['sub']);
     }
 
@@ -1340,7 +1340,7 @@ class SmokeTest extends TestCase
     public function testAuthAuthenticateRequest(): void
     {
         $secret = 'auth-secret';
-        $token = Auth::createToken(['role' => 'admin'], $secret);
+        $token = Auth::getToken(['role' => 'admin'], $secret);
 
         $payload = Auth::authenticateRequest(
             ['Authorization' => "Bearer {$token}"],
@@ -1369,7 +1369,7 @@ class SmokeTest extends TestCase
         $mw = Auth::middleware($secret);
         $this->assertIsCallable($mw);
 
-        $token = Auth::createToken(['sub' => 'test'], $secret);
+        $token = Auth::getToken(['sub' => 'test'], $secret);
         $req = Request::create(
             method: 'GET',
             path: '/api',

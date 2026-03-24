@@ -124,7 +124,7 @@ class PostProtectionTest extends TestCase
             return $response->json(['created' => true], 201);
         })->secure();
 
-        $token = Auth::createToken(['sub' => 'user-1'], $this->secret);
+        $token = Auth::getToken(['sub' => 'user-1'], $this->secret);
         $request = $this->createRequest('POST', '/api/items', "Bearer $token");
         $response = Router::dispatch($request, new Response());
 
@@ -197,7 +197,7 @@ class PostProtectionTest extends TestCase
             return $response->json(['secret' => true]);
         })->secure();
 
-        $token = Auth::createToken(['sub' => 'admin'], $this->secret);
+        $token = Auth::getToken(['sub' => 'admin'], $this->secret);
         $request = $this->createRequest('GET', '/api/admin/stats', "Bearer $token");
         $response = Router::dispatch($request, new Response());
 

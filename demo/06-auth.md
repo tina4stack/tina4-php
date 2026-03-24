@@ -12,7 +12,7 @@ use Tina4\Auth;
 $secret = 'your-256-bit-secret-key';
 
 // Generate a token with custom payload
-$token = Auth::createToken(
+$token = Auth::getToken(
     payload: ['user_id' => 42, 'role' => 'admin'],
     secret: $secret,
     expiresIn: 3600, // 1 hour in seconds
@@ -22,7 +22,7 @@ echo $token;
 // eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo0Mi...
 
 // Token with no expiration
-$permanentToken = Auth::createToken(
+$permanentToken = Auth::getToken(
     payload: ['api_key' => 'service-account'],
     secret: $secret,
     expiresIn: 0,
@@ -33,7 +33,7 @@ $permanentToken = Auth::createToken(
 
 ```php
 // Verify and decode
-$payload = Auth::validateToken($token, $secret);
+$payload = Auth::validToken($token, $secret);
 
 if ($payload !== null) {
     echo "User ID: " . $payload['user_id'];
@@ -69,7 +69,7 @@ openssl_pkey_export($key, $privateKeyPem);
 $publicKeyPem = openssl_pkey_get_details($key)['key'];
 
 // Sign with private key
-$token = Auth::createToken(
+$token = Auth::getToken(
     payload: ['user_id' => 42],
     secret: $privateKeyPem,
     expiresIn: 3600,
@@ -77,7 +77,7 @@ $token = Auth::createToken(
 );
 
 // Verify with public key
-$payload = Auth::validateToken($token, $publicKeyPem, algorithm: 'RS256');
+$payload = Auth::validToken($token, $publicKeyPem, algorithm: 'RS256');
 ```
 
 ## Password Hashing (PBKDF2)
@@ -189,7 +189,7 @@ Router::post('/auth/login', function (Request $request, Response $response) {
     $secret = $_ENV['JWT_SECRET'];
 
     // Generate JWT
-    $token = Auth::createToken(
+    $token = Auth::getToken(
         payload: ['user_id' => 1, 'email' => $email, 'role' => 'user'],
         secret: $secret,
         expiresIn: 86400, // 24 hours
@@ -201,7 +201,7 @@ Router::post('/auth/login', function (Request $request, Response $response) {
 // Protected endpoint
 Router::get('/auth/me', function (Request $request, Response $response) {
     $token = $request->bearerToken();
-    $payload = Auth::validateToken($token, $_ENV['JWT_SECRET']);
+    $payload = Auth::validToken($token, $_ENV['JWT_SECRET']);
 
     return $response->json(['user' => $payload]);
 })->secure();
@@ -213,5 +213,5 @@ Router::get('/auth/me', function (Request $request, Response $response) {
 - Use RS256 for microservices where the verifier should not have signing capability.
 - PBKDF2 with 100,000 iterations is the default — increase for higher security requirements.
 - The `Auth::middleware()` factory returns `null` for missing/invalid tokens — your wrapping middleware decides the HTTP response.
-- Token `iat` (issued at) and `exp` (expiration) claims are set automatically by `createToken()`.
+- Token `iat` (issued at) and `exp` (expiration) claims are set automatically by `getToken()`.
 - `getPayload()` does NOT verify the signature — use it only for debugging or non-security purposes.
