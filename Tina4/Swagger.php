@@ -81,10 +81,21 @@ class Swagger
                 $tag = self::inferTag($pattern);
                 $operationId = $method . str_replace(['/', '{', '}', '-'], ['_', '', '', '_'], $pattern);
 
+                // Parse docblock annotations from the route callback
+                $docMeta = isset($route['callback']) ? self::parseDocBlock($route['callback']) : [
+                    'description' => null,
+                    'summary' => null,
+                    'tags' => [],
+                    'examples' => [],
+                    'responses' => [],
+                    'params' => [],
+                    'deprecated' => false,
+                ];
+
                 $operation = [
-                    'tags' => [$tag],
+                    'tags' => !empty($docMeta['tags']) ? $docMeta['tags'] : [$tag],
                     'operationId' => $operationId,
-                    'summary' => strtoupper($method) . ' ' . $pattern,
+                    'summary' => $docMeta['summary'] ?? strtoupper($method) . ' ' . $pattern,
                     'responses' => [
                         '200' => [
                             'description' => 'Successful response',
@@ -92,21 +103,106 @@ class Swagger
                     ],
                 ];
 
+                // Add description from docblock
+                if ($docMeta['description'] !== null) {
+                    $operation['description'] = $docMeta['description'];
+                }
+
+                // Mark as deprecated
+                if ($docMeta['deprecated']) {
+                    $operation['deprecated'] = true;
+                }
+
                 // Add path parameters
                 if (!empty($pathParams)) {
                     $operation['parameters'] = $pathParams;
                 }
 
+                // Build parameters and requestBody properties from @param annotations
+                $bodyProperties = [];
+                $bodyRequired = [];
+                $queryParams = [];
+                foreach ($docMeta['params'] as $paramDef) {
+                    // If this param matches a path parameter, update its type/description
+                    $isPathParam = false;
+                    if (isset($operation['parameters'])) {
+                        foreach ($operation['parameters'] as &$existingParam) {
+                            if ($existingParam['name'] === $paramDef['name'] && $existingParam['in'] === 'path') {
+                                $existingParam['schema']['type'] = self::mapParamType($paramDef['type']);
+                                $existingParam['description'] = $paramDef['description'];
+                                $isPathParam = true;
+                                break;
+                            }
+                        }
+                        unset($existingParam);
+                    }
+
+                    if (!$isPathParam) {
+                        // For POST/PUT/PATCH, add to requestBody properties
+                        if (in_array($method, ['post', 'put', 'patch'], true)) {
+                            $bodyProperties[$paramDef['name']] = [
+                                'type' => self::mapParamType($paramDef['type']),
+                                'description' => $paramDef['description'],
+                            ];
+                            if ($paramDef['required']) {
+                                $bodyRequired[] = $paramDef['name'];
+                            }
+                        } else {
+                            // For GET/DELETE, add as query parameters
+                            $queryParams[] = [
+                                'name' => $paramDef['name'],
+                                'in' => 'query',
+                                'required' => $paramDef['required'],
+                                'description' => $paramDef['description'],
+                                'schema' => [
+                                    'type' => self::mapParamType($paramDef['type']),
+                                ],
+                            ];
+                        }
+                    }
+                }
+
+                // Merge query parameters
+                if (!empty($queryParams)) {
+                    if (!isset($operation['parameters'])) {
+                        $operation['parameters'] = [];
+                    }
+                    $operation['parameters'] = array_merge($operation['parameters'], $queryParams);
+                }
+
                 // Add request body hint for methods that accept a body
                 if (in_array($method, ['post', 'put', 'patch'], true)) {
+                    $schema = ['type' => 'object'];
+                    if (!empty($bodyProperties)) {
+                        $schema['properties'] = $bodyProperties;
+                        if (!empty($bodyRequired)) {
+                            $schema['required'] = $bodyRequired;
+                        }
+                    }
+
+                    $jsonContent = ['schema' => $schema];
+
+                    // Add request body example from @example
+                    if (!empty($docMeta['examples'])) {
+                        $jsonContent['example'] = $docMeta['examples'][0];
+                    }
+
                     $operation['requestBody'] = [
                         'description' => 'Request payload',
-                        'required' => false,
+                        'required' => !empty($bodyRequired),
+                        'content' => [
+                            'application/json' => $jsonContent,
+                        ],
+                    ];
+                }
+
+                // Add example responses from @example_response
+                foreach ($docMeta['responses'] as $status => $example) {
+                    $operation['responses'][(string) $status] = [
+                        'description' => self::statusDescription((int) $status),
                         'content' => [
                             'application/json' => [
-                                'schema' => [
-                                    'type' => 'object',
-                                ],
+                                'example' => $example,
                             ],
                         ],
                     ];
@@ -151,6 +247,124 @@ class Swagger
         Router::get('/swagger', function (Request $request, Response $response) {
             return $response->html(self::renderSwaggerUI());
         });
+    }
+
+    /**
+     * Parse docblock annotations from a route callback.
+     *
+     * Supported annotations:
+     *   @description <text>        — operation description
+     *   @summary <text>            — operation summary
+     *   @tags Tag1, Tag2           — operation tags
+     *   @example <json>            — request body example
+     *   @example_response <status> <json> — response example
+     *   @param <type> <name> <Required|Optional> - <description> — parameter
+     *   @deprecated                — marks operation as deprecated
+     *
+     * @param callable $callback The route handler
+     * @return array{description: string|null, summary: string|null, tags: array, examples: array, responses: array, params: array, deprecated: bool}
+     */
+    private static function parseDocBlock(callable $callback): array
+    {
+        $result = [
+            'description' => null,
+            'summary' => null,
+            'tags' => [],
+            'examples' => [],
+            'responses' => [],
+            'params' => [],
+            'deprecated' => false,
+        ];
+
+        try {
+            if (is_array($callback)) {
+                $ref = new \ReflectionMethod($callback[0], $callback[1]);
+            } else {
+                $ref = new \ReflectionFunction($callback);
+            }
+        } catch (\ReflectionException $e) {
+            return $result;
+        }
+
+        $docComment = $ref->getDocComment();
+        if ($docComment === false || $docComment === '') {
+            return $result;
+        }
+
+        // Strip the leading /** and trailing */, then process line by line
+        $lines = preg_split('/\r?\n/', $docComment);
+        $cleanLines = [];
+        foreach ($lines as $line) {
+            // Remove leading whitespace, *, and the opening/closing markers
+            $cleaned = preg_replace('#^\s*/?\*+/?\s?#', '', $line);
+            $cleanLines[] = $cleaned;
+        }
+
+        foreach ($cleanLines as $line) {
+            $trimmed = trim($line);
+
+            // @description <text>
+            if (preg_match('/^@description\s+(.+)$/s', $trimmed, $m)) {
+                $result['description'] = trim($m[1]);
+                continue;
+            }
+
+            // @summary <text>
+            if (preg_match('/^@summary\s+(.+)$/s', $trimmed, $m)) {
+                $result['summary'] = trim($m[1]);
+                continue;
+            }
+
+            // @tags Tag1, Tag2
+            if (preg_match('/^@tags\s+(.+)$/s', $trimmed, $m)) {
+                $result['tags'] = array_map('trim', explode(',', $m[1]));
+                continue;
+            }
+
+            // @example <json>
+            if (preg_match('/^@example\s+(\{.+\}|\[.+\])$/s', $trimmed, $m)) {
+                $decoded = json_decode($m[1], true);
+                if ($decoded !== null) {
+                    $result['examples'][] = $decoded;
+                }
+                continue;
+            }
+
+            // @example_response <status> <json>
+            if (preg_match('/^@example_response\s+(\d{3})\s+(\{.+\}|\[.+\])$/s', $trimmed, $m)) {
+                $status = $m[1];
+                $decoded = json_decode($m[2], true);
+                if ($decoded !== null) {
+                    $result['responses'][$status] = $decoded;
+                }
+                continue;
+            }
+
+            // @param <type> <name> <Required|Optional> - <description>
+            if (preg_match('/^@param\s+(\S+)\s+(\S+)\s+(Required|Optional)\s*-\s*(.+)$/i', $trimmed, $m)) {
+                $result['params'][] = [
+                    'type' => strtolower($m[1]),
+                    'name' => $m[2],
+                    'required' => strtolower($m[3]) === 'required',
+                    'description' => trim($m[4]),
+                ];
+                continue;
+            }
+
+            // @deprecated
+            if ($trimmed === '@deprecated') {
+                $result['deprecated'] = true;
+                continue;
+            }
+        }
+
+        // If no summary but description exists, use first line of description as summary
+        if ($result['summary'] === null && $result['description'] !== null) {
+            $firstLine = strtok($result['description'], "\n");
+            $result['summary'] = $firstLine !== false ? $firstLine : $result['description'];
+        }
+
+        return $result;
     }
 
     /**
@@ -215,6 +429,44 @@ class Swagger
         }
 
         return $first;
+    }
+
+    /**
+     * Map PHP type names to OpenAPI schema types.
+     */
+    private static function mapParamType(string $phpType): string
+    {
+        return match ($phpType) {
+            'int', 'integer' => 'integer',
+            'float', 'double', 'number' => 'number',
+            'bool', 'boolean' => 'boolean',
+            'array' => 'array',
+            default => 'string',
+        };
+    }
+
+    /**
+     * Return a human-readable description for an HTTP status code.
+     */
+    private static function statusDescription(int $code): string
+    {
+        return match ($code) {
+            200 => 'Successful response',
+            201 => 'Created',
+            204 => 'No Content',
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            409 => 'Conflict',
+            422 => 'Unprocessable Entity',
+            429 => 'Too Many Requests',
+            500 => 'Internal Server Error',
+            502 => 'Bad Gateway',
+            503 => 'Service Unavailable',
+            default => 'Response',
+        };
     }
 
     /**

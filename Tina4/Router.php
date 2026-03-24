@@ -410,6 +410,7 @@ class Router
                     'cache' => $route['cache'],
                     'secure' => $route['secure'],
                     'handler' => $handler,
+                    'callback' => $route['callback'],
                 ];
             }
         }
