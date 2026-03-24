@@ -157,7 +157,7 @@ class Request
                     $result[$field][] = [
                         'filename' => $file['name'][$i] ?? '',
                         'type'     => $file['type'][$i] ?? '',
-                        'content'  => base64_encode(file_get_contents($tmpName)),
+                        'content'  => file_get_contents($tmpName),
                         'size'     => $file['size'][$i] ?? 0,
                     ];
                 }
@@ -169,7 +169,7 @@ class Request
                 $result[$field] = [
                     'filename' => $file['name'] ?? '',
                     'type'     => $file['type'] ?? '',
-                    'content'  => base64_encode(file_get_contents($file['tmp_name'])),
+                    'content'  => file_get_contents($file['tmp_name']),
                     'size'     => $file['size'] ?? 0,
                 ];
             }
