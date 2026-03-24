@@ -44,25 +44,175 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
     /** @var int Iterator position */
     private int $position = 0;
 
+    /** @var ?DatabaseAdapter Reference to the database adapter for lazy column queries */
+    private ?DatabaseAdapter $adapter;
+
+    /** @var ?string The SQL query that produced this result */
+    private ?string $sql;
+
+    /** @var ?array Cached column metadata (null until first columnInfo() call) */
+    private ?array $columnInfoCache = null;
+
     /**
      * @param array<int, array<string, mixed>> $records Result rows
      * @param array<int, string> $columns Column names
      * @param int $count Total matching rows
      * @param int $limit Page size
      * @param int $offset Offset
+     * @param ?DatabaseAdapter $adapter Database adapter for lazy column queries
+     * @param ?string $sql The SQL query that produced this result
      */
     public function __construct(
-        array $records = [],
-        array $columns = [],
-        int   $count = 0,
-        int   $limit = 10,
-        int   $offset = 0,
+        array            $records = [],
+        array            $columns = [],
+        int              $count = 0,
+        int              $limit = 10,
+        int              $offset = 0,
+        ?DatabaseAdapter $adapter = null,
+        ?string          $sql = null,
     ) {
         $this->records = $records;
         $this->columns = $columns;
         $this->count   = $count;
         $this->limit   = $limit;
         $this->offset  = $offset;
+        $this->adapter = $adapter;
+        $this->sql     = $sql;
+    }
+
+    // ── Column metadata ──────────────────────────────────────────────
+
+    /**
+     * Return column metadata for the query's table.
+     *
+     * Lazy — only queries the database when explicitly called. Caches the
+     * result so subsequent calls return immediately without re-querying.
+     *
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     */
+    public function columnInfo(): array
+    {
+        if ($this->columnInfoCache !== null) {
+            return $this->columnInfoCache;
+        }
+
+        $table = $this->extractTableFromSql();
+
+        if ($this->adapter !== null && $table !== null) {
+            try {
+                $this->columnInfoCache = $this->queryColumnMetadata($table);
+                return $this->columnInfoCache;
+            } catch (\Throwable) {
+                // Fall through to fallback
+            }
+        }
+
+        $this->columnInfoCache = $this->fallbackColumnInfo();
+        return $this->columnInfoCache;
+    }
+
+    /**
+     * Extract table name from a SQL query using regex.
+     */
+    private function extractTableFromSql(): ?string
+    {
+        if (empty($this->sql)) {
+            return null;
+        }
+
+        if (preg_match('/\bFROM\s+["\']?(\w+)["\']?/i', $this->sql, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/\bINSERT\s+INTO\s+["\']?(\w+)["\']?/i', $this->sql, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/\bUPDATE\s+["\']?(\w+)["\']?/i', $this->sql, $m)) {
+            return $m[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Query the database adapter for column metadata.
+     *
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     */
+    private function queryColumnMetadata(string $table): array
+    {
+        // Try using the adapter's getColumns method
+        try {
+            $rawCols = $this->adapter->getColumns($table);
+            return $this->normalizeAdapterColumns($rawCols);
+        } catch (\Throwable) {
+            // Fall through to fallback
+        }
+
+        return $this->fallbackColumnInfo();
+    }
+
+    /**
+     * Normalize output from adapter->getColumns() to standard format.
+     *
+     * @param array<int, array> $rawCols
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     */
+    private function normalizeAdapterColumns(array $rawCols): array
+    {
+        $columns = [];
+        foreach ($rawCols as $col) {
+            $colType = strtoupper($col['type'] ?? 'UNKNOWN');
+            [$size, $decimals] = $this->parseTypeSize($colType);
+            $columns[] = [
+                'name'        => $col['name'] ?? '',
+                'type'        => preg_replace('/\(.*\)/', '', $colType),
+                'size'        => $size,
+                'decimals'    => $decimals,
+                'nullable'    => $col['nullable'] ?? true,
+                'primary_key' => $col['primary'] ?? $col['primary_key'] ?? false,
+            ];
+        }
+        return $columns;
+    }
+
+    /**
+     * Parse size and decimals from a type string like VARCHAR(255) or NUMERIC(10,2).
+     *
+     * @return array{0: ?int, 1: ?int}
+     */
+    private function parseTypeSize(string $typeStr): array
+    {
+        if (preg_match('/\((\d+)(?:\s*,\s*(\d+))?\)/', $typeStr, $m)) {
+            $size = (int) $m[1];
+            $decimals = isset($m[2]) ? (int) $m[2] : null;
+            return [$size, $decimals];
+        }
+        return [null, null];
+    }
+
+    /**
+     * Derive basic column info from record keys when no adapter is available.
+     *
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     */
+    private function fallbackColumnInfo(): array
+    {
+        $headers = $this->columns;
+        if (empty($headers) && !empty($this->records)) {
+            $headers = array_keys($this->records[0]);
+        }
+        if (empty($headers)) {
+            return [];
+        }
+
+        return array_map(fn(string $name) => [
+            'name'        => $name,
+            'type'        => 'UNKNOWN',
+            'size'        => null,
+            'decimals'    => null,
+            'nullable'    => true,
+            'primary_key' => false,
+        ], $headers);
     }
 
     // ── Conversion methods ──────────────────────────────────────────

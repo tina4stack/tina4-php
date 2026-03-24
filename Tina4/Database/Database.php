@@ -143,6 +143,8 @@ class Database
             count:   $total,
             limit:   $limit,
             offset:  $offset,
+            adapter: $this->adapter,
+            sql:     $sql,
         );
     }
 
