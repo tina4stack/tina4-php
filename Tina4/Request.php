@@ -106,8 +106,8 @@ class Request
         // IP address
         $this->ip = $ip ?? $this->resolveIp();
 
-        // Files
-        $this->files = $files ?? ($_FILES ?? []);
+        // Files — normalise PHP's $_FILES to standard format: filename, type, content, size
+        $this->files = self::normaliseFiles($files ?? ($_FILES ?? []));
     }
 
     /**
@@ -131,6 +131,50 @@ class Request
             ip: $ip,
             files: $files,
         );
+    }
+
+    /**
+     * Normalise PHP's $_FILES array into a consistent format matching all Tina4 frameworks.
+     * Each file becomes: ['filename' => string, 'type' => string, 'content' => string (base64), 'size' => int]
+     */
+    private static function normaliseFiles(array $files): array
+    {
+        $result = [];
+        foreach ($files as $field => $file) {
+            if (!isset($file['tmp_name'])) {
+                // Already normalised or custom format — keep as-is
+                $result[$field] = $file;
+                continue;
+            }
+
+            if (is_array($file['tmp_name'])) {
+                // Multiple files under one field name
+                $result[$field] = [];
+                foreach ($file['tmp_name'] as $i => $tmpName) {
+                    if ($file['error'][$i] !== UPLOAD_ERR_OK || empty($tmpName)) {
+                        continue;
+                    }
+                    $result[$field][] = [
+                        'filename' => $file['name'][$i] ?? '',
+                        'type'     => $file['type'][$i] ?? '',
+                        'content'  => base64_encode(file_get_contents($tmpName)),
+                        'size'     => $file['size'][$i] ?? 0,
+                    ];
+                }
+            } else {
+                // Single file
+                if (($file['error'] ?? 0) !== UPLOAD_ERR_OK || empty($file['tmp_name'])) {
+                    continue;
+                }
+                $result[$field] = [
+                    'filename' => $file['name'] ?? '',
+                    'type'     => $file['type'] ?? '',
+                    'content'  => base64_encode(file_get_contents($file['tmp_name'])),
+                    'size'     => $file['size'] ?? 0,
+                ];
+            }
+        }
+        return $result;
     }
 
     /**
