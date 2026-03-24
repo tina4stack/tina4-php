@@ -35,6 +35,8 @@ class DatabaseSessionHandler
 
         if (isset($config['db']) && $config['db'] instanceof DatabaseAdapter) {
             $this->db = $config['db'];
+        } elseif (isset($config['db']) && $config['db'] instanceof Database) {
+            $this->db = $config['db']->getAdapter();
         } else {
             $db = Database::fromEnv();
             if ($db === null) {
@@ -43,7 +45,7 @@ class DatabaseSessionHandler
                     . 'Pass a DatabaseAdapter via config["db"] or set the DATABASE_URL env var.'
                 );
             }
-            $this->db = $db;
+            $this->db = $db->getAdapter();
         }
     }
 

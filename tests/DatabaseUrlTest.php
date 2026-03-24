@@ -218,38 +218,44 @@ class DatabaseUrlTest extends TestCase
 
     public function testFactoryCreateSqliteMemory(): void
     {
-        $adapter = Database::create(':memory:');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create(':memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryCreateSqliteMemoryWithScheme(): void
     {
-        $adapter = Database::create('sqlite::memory:');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create('sqlite::memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryCreateSqliteMemoryWithSlashes(): void
     {
-        $adapter = Database::create('sqlite:///:memory:');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create('sqlite:///:memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryCreateSqliteFromPath(): void
     {
-        $adapter = Database::create('sqlite:///tmp/test_factory.db');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create('sqlite:///tmp/test_factory.db');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryCreateSqliteFromBareFilePath(): void
     {
-        $adapter = Database::create('/tmp/test_factory_bare.db');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create('/tmp/test_factory_bare.db');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryCreateSqliteFromSqlite3Extension(): void
     {
-        $adapter = Database::create('/tmp/test_factory.sqlite3');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create('/tmp/test_factory.sqlite3');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryInvalidUrlThrows(): void
@@ -311,25 +317,29 @@ class DatabaseUrlTest extends TestCase
         DotEnv::resetEnv();
 
         $result = Database::fromEnv();
-        $this->assertInstanceOf(SQLite3Adapter::class, $result);
+        $this->assertInstanceOf(Database::class, $result);
+        $this->assertInstanceOf(SQLite3Adapter::class, $result->getAdapter());
     }
 
     public function testFactoryCreateWithSeparateCredentials(): void
     {
         // The factory accepts separate username/password params
         // For SQLite these are ignored, but we verify the method signature works
-        $adapter = Database::create(':memory:', null, 'testuser', 'testpass');
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create(':memory:', null, 'testuser', 'testpass');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
     }
 
     public function testFactoryAutoCommitParam(): void
     {
         // Verify autoCommit parameter is accepted
-        $adapter = Database::create(':memory:', false);
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter);
+        $db = Database::create(':memory:', false);
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
 
-        $adapter2 = Database::create(':memory:', true);
-        $this->assertInstanceOf(SQLite3Adapter::class, $adapter2);
+        $db2 = Database::create(':memory:', true);
+        $this->assertInstanceOf(Database::class, $db2);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db2->getAdapter());
     }
 
     // --- DatabaseUrl Additional Alias Tests ---

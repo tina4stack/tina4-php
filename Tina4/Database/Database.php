@@ -11,11 +11,14 @@ namespace Tina4\Database;
 use Tina4\DatabaseUrl;
 
 /**
- * Factory for creating the correct DatabaseAdapter based on a connection string.
+ * Database wrapper that provides a consistent API matching Python/Ruby conventions.
  *
- * Auto-detects the database type from a URL scheme and instantiates the
- * appropriate adapter. All database extensions are optional — clear errors
- * are thrown if the required extension is missing.
+ * Can be used as:
+ *   - Database::create($url)  — static factory (returns Database instance)
+ *   - new Database($url)      — constructor
+ *   - Database::fromEnv()     — from DATABASE_URL env var
+ *
+ * All methods delegate to the internal DatabaseAdapter.
  *
  * Supported schemes:
  *   sqlite              => SQLite3Adapter
@@ -37,16 +40,293 @@ class Database
         'firebird' => FirebirdAdapter::class,
     ];
 
+    /** @var DatabaseAdapter The underlying database adapter */
+    private DatabaseAdapter $adapter;
+
     /**
-     * Create a DatabaseAdapter from a connection URL string.
+     * Create a new Database wrapper instance.
+     *
+     * @param string $url Connection URL (e.g. "sqlite::memory:", "postgres://user:pass@host/db")
+     * @param bool|null $autoCommit Override auto-commit setting
+     * @param string $username Database username
+     * @param string $password Database password
+     */
+    public function __construct(string $url, ?bool $autoCommit = null, string $username = '', string $password = '')
+    {
+        $this->adapter = self::createAdapter($url, $autoCommit, $username, $password);
+    }
+
+    /**
+     * Create a Database instance from a connection URL string.
      *
      * @param string $url Connection URL (e.g. "sqlite::memory:", "pgsql://user:pass@host/db")
+     * @param bool|null $autoCommit Override auto-commit setting
+     * @return self
+     * @throws \InvalidArgumentException If the URL scheme is unsupported
+     * @throws \RuntimeException If the required PHP extension is missing
+     */
+    public static function create(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): self
+    {
+        return new self($url, $autoCommit, $username, $password);
+    }
+
+    /**
+     * Create a Database instance from the DATABASE_URL environment variable.
+     *
+     * @param string $envKey Environment variable name (default: DATABASE_URL)
+     * @param bool|null $autoCommit Override auto-commit setting
+     * @return self|null Null if the env var is not set
+     */
+    public static function fromEnv(string $envKey = 'DATABASE_URL', ?bool $autoCommit = null): ?self
+    {
+        $url = \Tina4\DotEnv::getEnv($envKey);
+
+        if ($url === null || $url === '') {
+            return null;
+        }
+
+        $username = \Tina4\DotEnv::getEnv('DATABASE_USERNAME') ?? '';
+        $password = \Tina4\DotEnv::getEnv('DATABASE_PASSWORD') ?? '';
+
+        return new self($url, $autoCommit, $username, $password);
+    }
+
+    /**
+     * Get the underlying DatabaseAdapter.
+     *
+     * @return DatabaseAdapter
+     */
+    public function getAdapter(): DatabaseAdapter
+    {
+        return $this->adapter;
+    }
+
+    // -------------------------------------------------------------------------
+    // Query methods
+    // -------------------------------------------------------------------------
+
+    /**
+     * Execute a query with parameter binding and return results.
+     *
+     * @param string $sql SQL query
+     * @param array<mixed> $params Bound parameters
+     * @return array<int, array<string, mixed>> Array of associative arrays
+     */
+    public function query(string $sql, array $params = []): array
+    {
+        return $this->adapter->query($sql, $params);
+    }
+
+    /**
+     * Fetch results with pagination.
+     *
+     * @param string $sql SQL query
+     * @param array<mixed> $params Bound parameters
+     * @param int $limit Max rows to return
+     * @param int $offset Starting offset
+     * @return array{data: array<int, array<string, mixed>>, total: int, limit: int, offset: int}
+     */
+    public function fetch(string $sql, array $params = [], int $limit = 10, int $offset = 0): array
+    {
+        return $this->adapter->fetch($sql, $limit, $offset, $params);
+    }
+
+    /**
+     * Run a query and return the first row or null.
+     *
+     * @param string $sql SQL query
+     * @param array<mixed> $params Bound parameters
+     * @return array<string, mixed>|null
+     */
+    public function fetchOne(string $sql, array $params = []): ?array
+    {
+        return $this->adapter->fetchOne($sql, $params);
+    }
+
+    /**
+     * Execute a DDL or data manipulation statement (no result set).
+     *
+     * @param string $sql SQL statement
+     * @param array<mixed> $params Bound parameters
+     * @return bool True on success
+     */
+    public function execute(string $sql, array $params = []): bool
+    {
+        return $this->adapter->execute($sql, $params);
+    }
+
+    /**
+     * Alias for execute() — matches adapter-level naming convention.
+     *
+     * @param string $sql SQL statement
+     * @param array<mixed> $params Bound parameters
+     * @return bool True on success
+     */
+    public function exec(string $sql, array $params = []): bool
+    {
+        return $this->adapter->execute($sql, $params);
+    }
+
+    // -------------------------------------------------------------------------
+    // CRUD convenience methods
+    // -------------------------------------------------------------------------
+
+    /**
+     * Insert a row into a table.
+     *
+     * @param string $table Table name
+     * @param array<string, mixed> $data Column => value pairs
+     * @return bool True on success
+     */
+    public function insert(string $table, array $data): bool
+    {
+        return $this->adapter->insert($table, $data);
+    }
+
+    /**
+     * Update rows in a table.
+     *
+     * @param string $table Table name
+     * @param array<string, mixed> $data Column => value pairs to set
+     * @param array<string, mixed> $filter Column => value pairs for WHERE clause
+     * @return bool True on success
+     */
+    public function update(string $table, array $data, array $filter = []): bool
+    {
+        if (empty($filter)) {
+            return $this->adapter->update($table, $data);
+        }
+
+        $wheres = implode(' AND ', array_map(fn($k) => "{$k} = ?", array_keys($filter)));
+        return $this->adapter->update($table, $data, $wheres, array_values($filter));
+    }
+
+    /**
+     * Delete rows from a table.
+     *
+     * @param string $table Table name
+     * @param array<string, mixed> $filter Column => value pairs for WHERE clause
+     * @return bool True on success
+     */
+    public function delete(string $table, array $filter = []): bool
+    {
+        if (empty($filter)) {
+            return $this->adapter->delete($table);
+        }
+
+        return $this->adapter->delete($table, $filter);
+    }
+
+    // -------------------------------------------------------------------------
+    // Connection & transaction management
+    // -------------------------------------------------------------------------
+
+    /**
+     * Close the database connection.
+     */
+    public function close(): void
+    {
+        $this->adapter->close();
+    }
+
+    /**
+     * Begin a transaction.
+     */
+    public function startTransaction(): void
+    {
+        $this->adapter->startTransaction();
+    }
+
+    /**
+     * Commit the current transaction.
+     */
+    public function commit(): void
+    {
+        $this->adapter->commit();
+    }
+
+    /**
+     * Rollback the current transaction.
+     */
+    public function rollback(): void
+    {
+        $this->adapter->rollback();
+    }
+
+    // -------------------------------------------------------------------------
+    // Schema introspection
+    // -------------------------------------------------------------------------
+
+    /**
+     * Check if a table exists.
+     */
+    public function tableExists(string $tableName): bool
+    {
+        return $this->adapter->tableExists($tableName);
+    }
+
+    /**
+     * Return a list of table names in the database.
+     *
+     * @return array<int, string>
+     */
+    public function getTables(): array
+    {
+        return $this->adapter->getTables();
+    }
+
+    /**
+     * Get the last inserted auto-increment ID.
+     */
+    public function getLastId(): int|string
+    {
+        return $this->adapter->lastInsertId();
+    }
+
+    /**
+     * Get the last error message.
+     */
+    public function error(): ?string
+    {
+        return $this->adapter->error();
+    }
+
+    // -------------------------------------------------------------------------
+    // Static utility methods
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get the list of supported database schemes.
+     *
+     * @return array<string>
+     */
+    public static function supportedSchemes(): array
+    {
+        return array_unique(array_keys(self::ADAPTER_MAP));
+    }
+
+    /**
+     * Check if a scheme is supported.
+     */
+    public static function isSupported(string $scheme): bool
+    {
+        return isset(self::ADAPTER_MAP[strtolower($scheme)]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal adapter factory
+    // -------------------------------------------------------------------------
+
+    /**
+     * Create the raw DatabaseAdapter from a connection URL string.
+     *
+     * @param string $url Connection URL
      * @param bool|null $autoCommit Override auto-commit setting
      * @return DatabaseAdapter
      * @throws \InvalidArgumentException If the URL scheme is unsupported
      * @throws \RuntimeException If the required PHP extension is missing
      */
-    public static function create(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): DatabaseAdapter
+    private static function createAdapter(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): DatabaseAdapter
     {
         // Handle SQLite special cases
         if ($url === ':memory:' || $url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
@@ -98,44 +378,5 @@ class Database
                 autoCommit: $autoCommit,
             ),
         };
-    }
-
-    /**
-     * Create a DatabaseAdapter from the DATABASE_URL environment variable.
-     *
-     * @param string $envKey Environment variable name (default: DATABASE_URL)
-     * @param bool|null $autoCommit Override auto-commit setting
-     * @return DatabaseAdapter|null Null if the env var is not set
-     */
-    public static function fromEnv(string $envKey = 'DATABASE_URL', ?bool $autoCommit = null): ?DatabaseAdapter
-    {
-        $url = \Tina4\DotEnv::getEnv($envKey);
-
-        if ($url === null || $url === '') {
-            return null;
-        }
-
-        $username = \Tina4\DotEnv::getEnv('DATABASE_USERNAME') ?? '';
-        $password = \Tina4\DotEnv::getEnv('DATABASE_PASSWORD') ?? '';
-
-        return self::create($url, $autoCommit, $username, $password);
-    }
-
-    /**
-     * Get the list of supported database schemes.
-     *
-     * @return array<string>
-     */
-    public static function supportedSchemes(): array
-    {
-        return array_unique(array_keys(self::ADAPTER_MAP));
-    }
-
-    /**
-     * Check if a scheme is supported.
-     */
-    public static function isSupported(string $scheme): bool
-    {
-        return isset(self::ADAPTER_MAP[strtolower($scheme)]);
     }
 }

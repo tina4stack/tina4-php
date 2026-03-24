@@ -37,7 +37,7 @@
 \Tina4\Router::get('/api/gallery/db/notes', function (\Tina4\Request $request, \Tina4\Response $response) {
     try {
         $db = \Tina4\Database\Database::create('sqlite:///data/gallery.db');
-        $result = $db->fetch("SELECT * FROM gallery_notes ORDER BY id DESC", 50);
+        $result = $db->fetch("SELECT * FROM gallery_notes ORDER BY id DESC", [], 50);
         return $response->json($result);
     } catch (\Throwable $e) {
         return $response->json(['error' => $e->getMessage()], 500);

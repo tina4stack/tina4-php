@@ -9,7 +9,7 @@
 /**
  * Ensure the queue table exists and return the database connection.
  */
-function _galleryQueueDb(): \Tina4\Database\DatabaseAdapter
+function _galleryQueueDb(): \Tina4\Database\Database
 {
     static $db = null;
     if ($db === null) {
@@ -231,9 +231,9 @@ HTML;
 
     $result = $db->fetch(
         "SELECT * FROM tina4_queue WHERE topic = ? ORDER BY id DESC",
+        ['gallery-tasks'],
         100,
-        0,
-        ['gallery-tasks']
+        0
     );
 
     $messages = [];
@@ -281,9 +281,9 @@ HTML;
     // Find next pending job
     $result = $db->fetch(
         "SELECT * FROM tina4_queue WHERE topic = ? AND status = 'pending' AND available_at <= ? ORDER BY priority DESC, id ASC",
+        ['gallery-tasks', $now],
         1,
-        0,
-        ['gallery-tasks', $now]
+        0
     );
 
     $row = null;
@@ -317,9 +317,9 @@ HTML;
     // Find next pending job
     $result = $db->fetch(
         "SELECT * FROM tina4_queue WHERE topic = ? AND status = 'pending' AND available_at <= ? ORDER BY priority DESC, id ASC",
+        ['gallery-tasks', $now],
         1,
-        0,
-        ['gallery-tasks', $now]
+        0
     );
 
     $row = null;
@@ -360,9 +360,9 @@ HTML;
     // Count how many were retried (approximate)
     $result = $db->fetch(
         "SELECT COUNT(*) as cnt FROM tina4_queue WHERE topic = ? AND status = 'pending'",
+        ['gallery-tasks'],
         1,
-        0,
-        ['gallery-tasks']
+        0
     );
     $retried = 0;
     if ($result !== null) {

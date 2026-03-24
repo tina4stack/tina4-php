@@ -16,8 +16,8 @@ class App
 {
     public const VERSION = '3.2.1';
 
-    /** @var Database\DatabaseAdapter|null Shared database instance */
-    private static ?Database\DatabaseAdapter $database = null;
+    /** @var Database\Database|Database\DatabaseAdapter|null Shared database instance */
+    private static Database\Database|Database\DatabaseAdapter|null $database = null;
 
     /** @var float Application start time for uptime tracking */
     private readonly float $startTime;
@@ -715,7 +715,7 @@ HTML;
     /**
      * Set the shared database instance.
      */
-    public static function setDatabase(Database\DatabaseAdapter $db): void
+    public static function setDatabase(Database\Database|Database\DatabaseAdapter $db): void
     {
         self::$database = $db;
     }
@@ -724,7 +724,7 @@ HTML;
      * Get the shared database instance.
      * If none is set and DATABASE_URL is configured, auto-creates one via Database.
      */
-    public static function getDatabase(): ?Database\DatabaseAdapter
+    public static function getDatabase(): Database\Database|Database\DatabaseAdapter|null
     {
         if (self::$database === null) {
             $db = Database\Database::fromEnv('DATABASE_URL');
@@ -737,13 +737,13 @@ HTML;
     }
 
     /**
-     * Create and set a database adapter from a connection URL.
+     * Create and set a Database wrapper from a connection URL.
      *
      * @param string $url Connection URL (e.g. "pgsql://user:pass@host/db", "sqlite::memory:")
      * @param bool|null $autoCommit Override auto-commit setting
-     * @return Database\DatabaseAdapter The created adapter
+     * @return Database\Database The created Database wrapper
      */
-    public static function createDatabase(string $url, ?bool $autoCommit = null): Database\DatabaseAdapter
+    public static function createDatabase(string $url, ?bool $autoCommit = null): Database\Database
     {
         $db = Database\Database::create($url, $autoCommit);
         self::$database = $db;
