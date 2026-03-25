@@ -279,11 +279,16 @@ class App
             }
         }
 
-        // Check if user has a template for the root
+        // Check if user has a template for the root — register a route to serve it
         $templateDir = $this->basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
         foreach (['index.html', 'index.twig', 'index.php'] as $tpl) {
-            if (is_file($templateDir . DIRECTORY_SEPARATOR . $tpl)) {
-                return; // User has a template, framework should serve it
+            $tplPath = $templateDir . DIRECTORY_SEPARATOR . $tpl;
+            if (is_file($tplPath)) {
+                $file = $tpl;
+                Router::get('/', function (Request $request, Response $response) use ($file) {
+                    return $response->render($file, []);
+                });
+                return;
             }
         }
 
