@@ -25,14 +25,6 @@
   <a href="https://tina4.com">tina4.com</a>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/tests-1304%20passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/carbonah-A%2B%20rated-00cc44" alt="Carbonah A+">
-  <img src="https://img.shields.io/badge/zero--dep-core-blue" alt="Zero Dependencies">
-  <img src="https://img.shields.io/badge/php-8.2%2B-blue" alt="PHP 8.2+">
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT License">
-</p>
-
 ---
 
 ## Quick Start
@@ -103,7 +95,7 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 | **Data** | Migrations with rollback, ORM seeders, fake data generators |
 | **Other** | REST client, localization (i18n), cache (memory/Redis/file), event system, messenger (.env driven), configurable error pages, HTML element builder, health check |
 
-**1,304 tests across 38 built-in features. Zero dependencies. All Carbonah benchmarks rated A+.**
+**1,421 tests across 38 built-in features. Zero dependencies. All Carbonah benchmarks rated A+.**
 
 For full documentation visit **[tina4.com](https://tina4.com)**.
 
