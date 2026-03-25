@@ -639,7 +639,7 @@ class DevAdmin
     <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
 </div>
 <script>
-(function(){var m=0;setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json()}).then(function(d){if(m&&d.mtime>m){location.reload();}m=d.mtime;}).catch(function(){});},1500);})();
+(function(){var ws,t;function connect(){var p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();}catch(x){}};ws.onclose=function(){t=setTimeout(connect,2000);};ws.onerror=function(){ws.close();};}connect();})();
 </script>
 HTML;
     }

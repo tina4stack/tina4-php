@@ -49,6 +49,19 @@ class Server
     /** @var int Port to listen on */
     private int $port;
 
+    // ── Hot reload ──────────────────────────────────────────────
+    /** @var array<string, int> Tracked file modification times */
+    private array $fileMtimes = [];
+
+    /** @var float Last time we scanned files for changes */
+    private float $lastFileCheck = 0;
+
+    /** @var float Seconds between file change scans */
+    private float $fileCheckInterval = 1.0;
+
+    /** @var string[] WebSocket connection IDs subscribed to reload events */
+    private array $reloadSubscribers = [];
+
     /**
      * @param string $host Host to bind to
      * @param int    $port Port to listen on
@@ -90,6 +103,15 @@ class Server
         $this->running = true;
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
 
+        // Register built-in hot reload WebSocket endpoint (dev mode only)
+        if ($this->isDebug) {
+            Router::websocket('/__dev_reload', function ($connection, $data, $event) {
+                // No-op handler — clients just connect to receive reload signals
+            });
+            // Build initial file map
+            $this->detectFileChanges();
+        }
+
         // Register signal handlers for graceful shutdown
         if (function_exists('pcntl_signal')) {
             if (defined('SIGTERM')) {
@@ -120,6 +142,16 @@ class Server
                 break;
             }
             if ($changed === 0) {
+                // Hot reload: check for file changes on idle ticks
+                if ($this->isDebug) {
+                    $now = microtime(true);
+                    if ($now - $this->lastFileCheck >= $this->fileCheckInterval) {
+                        $this->lastFileCheck = $now;
+                        if ($this->detectFileChanges()) {
+                            $this->onFilesChanged();
+                        }
+                    }
+                }
                 continue;
             }
 
@@ -631,5 +663,113 @@ class Server
     public function isRunning(): bool
     {
         return $this->running;
+    }
+
+    // ── Hot Reload ─────────────────────────────────────────────────
+
+    /**
+     * Scan watched directories for file changes.
+     * Compares filemtime() against stored map. Returns true if anything changed.
+     */
+    private function detectFileChanges(): bool
+    {
+        $dirs = ['src', 'migrations'];
+        $extensions = ['php', 'twig', 'html', 'scss', 'css', 'js', 'json'];
+        $changed = false;
+
+        // Also watch .env
+        $envFile = '.env';
+        if (file_exists($envFile)) {
+            $mtime = filemtime($envFile);
+            if (isset($this->fileMtimes[$envFile]) && $this->fileMtimes[$envFile] !== $mtime) {
+                $changed = true;
+                Log::info("Hot reload: .env changed");
+                // Reload env vars
+                DotEnv::load($envFile);
+            }
+            $this->fileMtimes[$envFile] = $mtime;
+        }
+
+        foreach ($dirs as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if (!$file->isFile()) {
+                    continue;
+                }
+                $ext = strtolower($file->getExtension());
+                if (!in_array($ext, $extensions, true)) {
+                    continue;
+                }
+                $path = $file->getPathname();
+                $mtime = $file->getMTime();
+                if (isset($this->fileMtimes[$path]) && $this->fileMtimes[$path] !== $mtime) {
+                    $changed = true;
+                    Log::info("Hot reload: {$path} changed");
+                }
+                $this->fileMtimes[$path] = $mtime;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Called when file changes are detected.
+     * Re-discovers routes and notifies browser clients to reload.
+     */
+    private function onFilesChanged(): void
+    {
+        // Re-discover routes from src/routes/
+        Router::clear();
+        $routeDir = 'src/routes';
+        if (is_dir($routeDir)) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($routeDir, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile() && $file->getExtension() === 'php') {
+                    try {
+                        include_once $file->getPathname();
+                    } catch (\Throwable $e) {
+                        Log::error("Hot reload error: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+
+        // Notify all reload subscribers via WebSocket
+        $this->broadcastReload();
+    }
+
+    /**
+     * Send a reload signal to all connected dev clients via WebSocket.
+     */
+    private function broadcastReload(): void
+    {
+        $message = json_encode(['type' => 'reload', 'timestamp' => time()]);
+        $this->broadcastWebSocket($message, '/__dev_reload');
+        Log::info("Hot reload: browser refresh sent to " . count($this->reloadSubscribers) . " client(s)");
+    }
+
+    /**
+     * Register a WebSocket client as a reload subscriber.
+     * Called when a client connects to /__dev_reload.
+     */
+    public function addReloadSubscriber(string $connectionId): void
+    {
+        $this->reloadSubscribers[$connectionId] = true;
+    }
+
+    /**
+     * Remove a reload subscriber.
+     */
+    public function removeReloadSubscriber(string $connectionId): void
+    {
+        unset($this->reloadSubscribers[$connectionId]);
     }
 }
