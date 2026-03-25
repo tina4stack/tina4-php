@@ -79,6 +79,16 @@ class Request
         $this->headers = $headers ?? self::parseHeaders();
         $this->contentType = $this->headers['content-type'] ?? '';
 
+        // Check upload size limit (default 10 MB)
+        $maxUploadSize = (int)($_ENV['TINA4_MAX_UPLOAD_SIZE'] ?? getenv('TINA4_MAX_UPLOAD_SIZE') ?: 10485760);
+        $contentLength = (int)($this->headers['content-length'] ?? 0);
+        if ($contentLength > $maxUploadSize) {
+            http_response_code(413);
+            throw new \RuntimeException(
+                "Request body ({$contentLength} bytes) exceeds TINA4_MAX_UPLOAD_SIZE ({$maxUploadSize} bytes)"
+            );
+        }
+
         // Parse path
         $uri = $path ?? ($_SERVER['REQUEST_URI'] ?? '/');
         $questionMark = strpos($uri, '?');
