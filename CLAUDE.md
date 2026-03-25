@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.0.0 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.8.0 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -95,7 +95,7 @@ Tina4/                   # Core framework classes (namespace Tina4\)
   DatabaseUrl.php        # Connection URL parser
   Database/              # Database adapters (namespace Tina4\Database\)
     DatabaseAdapter.php  # Adapter interface
-    DatabaseFactory.php  # Factory for creating adapters from URL
+    Database.php         # Factory for creating adapters from URL
     SQLite3Adapter.php   # SQLite3 (ext-sqlite3)
     PostgresAdapter.php  # PostgreSQL (ext-pdo)
     MySQLAdapter.php     # MySQL (ext-pdo)
@@ -138,30 +138,30 @@ Route::any(string $routePath, $function): Route
 ->secure(bool $default = true): Route
 ```
 
-### DatabaseFactory — Database connection (v3)
+### Database — Database connection (v3)
 
-v3 uses `DatabaseFactory::create()` with standardised URL connection strings. Old aliases (`pgsql`, `mariadb`, `fdb`, `sqlite3`, `sqlsrv`) are removed.
+v3 uses `Database::create()` with standardised URL connection strings. Old aliases (`pgsql`, `mariadb`, `fdb`, `sqlite3`, `sqlsrv`) are removed.
 
 Supported schemes: `sqlite`, `postgres`, `postgresql`, `mysql`, `mssql`, `sqlserver`, `firebird`
 
 ```php
-use Tina4\Database\DatabaseFactory;
+use Tina4\Database\Database;
 
 // Create from URL — driver://host:port/database
-$db = DatabaseFactory::create('sqlite:///path/to/app.db');
-$db = DatabaseFactory::create('sqlite::memory:');
-$db = DatabaseFactory::create('postgres://localhost:5432/mydb', username: 'user', password: 'pass');
-$db = DatabaseFactory::create('mysql://localhost:3306/mydb', username: 'root', password: 'secret');
-$db = DatabaseFactory::create('mssql://localhost:1433/mydb', username: 'sa', password: 'pass');
-$db = DatabaseFactory::create('sqlserver://localhost:1433/mydb', username: 'sa', password: 'pass');
-$db = DatabaseFactory::create('firebird://localhost:3050/path/to/db.fdb', username: 'SYSDBA', password: 'masterkey');
+$db = Database::create('sqlite:///path/to/app.db');
+$db = Database::create('sqlite::memory:');
+$db = Database::create('postgres://localhost:5432/mydb', username: 'user', password: 'pass');
+$db = Database::create('mysql://localhost:3306/mydb', username: 'root', password: 'secret');
+$db = Database::create('mssql://localhost:1433/mydb', username: 'sa', password: 'pass');
+$db = Database::create('sqlserver://localhost:1433/mydb', username: 'sa', password: 'pass');
+$db = Database::create('firebird://localhost:3050/path/to/db.fdb', username: 'SYSDBA', password: 'masterkey');
 
 // Create from DATABASE_URL env var (also reads DATABASE_USERNAME, DATABASE_PASSWORD)
-$db = DatabaseFactory::fromEnv();
-$db = DatabaseFactory::fromEnv('CUSTOM_DB_URL');
+$db = Database::fromEnv();
+$db = Database::fromEnv('CUSTOM_DB_URL');
 
 // Auto-commit control — defaults to off (safe). Override per-connection or via env:
-$db = DatabaseFactory::create($url, autoCommit: true);
+$db = Database::create($url, autoCommit: true);
 // Or set TINA4_AUTOCOMMIT=true in .env to enable globally
 
 // Adapter methods (all adapters implement DatabaseAdapter)
@@ -239,7 +239,6 @@ $auth = new \Tina4\Auth();
 Auth::getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
 Auth::validToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
 Auth::getPayload(string $token): ?array
-// Aliases: createToken() -> getToken(), validateToken() -> validToken()
 ```
 
 ### Api — External HTTP client
@@ -394,7 +393,7 @@ $container->reset(): void
 Example:
 ```php
 $container = new \Tina4\Container();
-$container->singleton('db', fn() => \Tina4\Database\DatabaseFactory::create(getenv('DB_URL')));
+$container->singleton('db', fn() => \Tina4\Database\Database::create(getenv('DB_URL')));
 $container->register('mailer', fn() => new MailService());
 $db = $container->get('db');       // same instance every time
 $mailer = $container->get('mailer'); // new instance each time
@@ -598,7 +597,7 @@ $result = SqlTranslation::remember(
 - Cache backends: memory (default), Redis, file
 - Session handlers: file, Redis/Valkey, MongoDB, database
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`
-- Tests: 1,304 passing (38 features)
+- Tests: 1,421 passing (38 features)
 
 ## Links
 
