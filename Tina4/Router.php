@@ -243,10 +243,17 @@ class Router
             if (preg_match($route['regex'], $path, $matches)) {
                 $params = [];
 
-                // Extract named parameters
+                // Extract named parameters with type casting
+                $types = $route['paramTypes'] ?? [];
                 foreach ($route['paramNames'] as $name) {
                     if (isset($matches[$name])) {
-                        $params[$name] = $matches[$name];
+                        $value = $matches[$name];
+                        $type = $types[$name] ?? 'string';
+                        $params[$name] = match ($type) {
+                            'int', 'integer' => (int) $value,
+                            'float', 'number' => (float) $value,
+                            default => $value,
+                        };
                     }
                 }
 
@@ -681,19 +688,30 @@ class Router
         $catchAll = false;
         $catchAllName = null;
 
-        // Replace catch-all params: {name:.*}
-        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*):(\.\*)\}#', function ($m) use (&$paramNames, &$catchAll, &$catchAllName) {
-            $catchAll = true;
-            $catchAllName = $m[1];
-            $paramNames[] = $m[1];
-            return '(?P<' . $m[1] . '>.+)';
-        }, $path);
+        // Replace typed and untyped params: {name}, {name:int}, {name:float}, {name:path}, {name:.*}
+        $paramTypes = [];
+        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}#', function ($m) use (&$paramNames, &$paramTypes, &$catchAll, &$catchAllName) {
+            $name = $m[1];
+            $type = $m[2] ?? 'string';
+            $paramNames[] = $name;
+            $paramTypes[$name] = $type;
 
-        // Replace standard params: {name}
-        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', function ($m) use (&$paramNames) {
-            $paramNames[] = $m[1];
-            return '(?P<' . $m[1] . '>[^/]+)';
-        }, $regex);
+            switch ($type) {
+                case 'int':
+                case 'integer':
+                    return '(?P<' . $name . '>\d+)';
+                case 'float':
+                case 'number':
+                    return '(?P<' . $name . '>[\d.]+)';
+                case 'path':
+                case '.*':
+                    $catchAll = true;
+                    $catchAllName = $name;
+                    return '(?P<' . $name . '>.+)';
+                default:
+                    return '(?P<' . $name . '>[^/]+)';
+            }
+        }, $path);
 
         // Escape forward slashes and anchor
         $regex = '#^' . $regex . '$#';
@@ -701,6 +719,7 @@ class Router
         return [
             'regex' => $regex,
             'paramNames' => $paramNames,
+            'paramTypes' => $paramTypes,
             'catchAll' => $catchAll,
             'catchAllName' => $catchAllName,
         ];
