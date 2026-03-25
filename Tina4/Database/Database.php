@@ -40,8 +40,29 @@ class Database
         'firebird' => FirebirdAdapter::class,
     ];
 
-    /** @var DatabaseAdapter The underlying database adapter */
-    private DatabaseAdapter $adapter;
+    /** @var DatabaseAdapter The underlying database adapter (single-connection mode) */
+    private ?DatabaseAdapter $adapter = null;
+
+    /** @var DatabaseAdapter[] Connection pool (pooled mode) */
+    private array $pool = [];
+
+    /** @var int Pool size (0 = single connection) */
+    private int $poolSize = 0;
+
+    /** @var int Round-robin index for pool rotation */
+    private int $poolIndex = 0;
+
+    /** @var string Connection URL for lazy pool creation */
+    private string $url;
+
+    /** @var bool|null Auto-commit setting for pool connections */
+    private ?bool $autoCommit;
+
+    /** @var string Username for pool connections */
+    private string $dbUsername;
+
+    /** @var string Password for pool connections */
+    private string $dbPassword;
 
     /**
      * Create a new Database wrapper instance.
@@ -50,10 +71,23 @@ class Database
      * @param bool|null $autoCommit Override auto-commit setting
      * @param string $username Database username
      * @param string $password Database password
+     * @param int $pool Number of pooled connections (0 = single connection, N>0 = round-robin pool)
      */
-    public function __construct(string $url, ?bool $autoCommit = null, string $username = '', string $password = '')
+    public function __construct(string $url, ?bool $autoCommit = null, string $username = '', string $password = '', int $pool = 0)
     {
-        $this->adapter = self::createAdapter($url, $autoCommit, $username, $password);
+        $this->url = $url;
+        $this->autoCommit = $autoCommit;
+        $this->dbUsername = $username;
+        $this->dbPassword = $password;
+        $this->poolSize = $pool;
+
+        if ($pool > 0) {
+            // Pooled mode — adapters created lazily via getPooledAdapter()
+            $this->pool = array_fill(0, $pool, null);
+        } else {
+            // Single-connection mode — current behavior
+            $this->adapter = self::createAdapter($url, $autoCommit, $username, $password);
+        }
     }
 
     /**
@@ -61,13 +95,16 @@ class Database
      *
      * @param string $url Connection URL (e.g. "sqlite::memory:", "pgsql://user:pass@host/db")
      * @param bool|null $autoCommit Override auto-commit setting
+     * @param string $username Database username
+     * @param string $password Database password
+     * @param int $pool Number of pooled connections (0 = single, N>0 = round-robin pool)
      * @return self
      * @throws \InvalidArgumentException If the URL scheme is unsupported
      * @throws \RuntimeException If the required PHP extension is missing
      */
-    public static function create(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): self
+    public static function create(string $url, ?bool $autoCommit = null, string $username = '', string $password = '', int $pool = 0): self
     {
-        return new self($url, $autoCommit, $username, $password);
+        return new self($url, $autoCommit, $username, $password, $pool);
     }
 
     /**
@@ -92,13 +129,57 @@ class Database
     }
 
     /**
+     * Get the next adapter — from pool (round-robin) or single connection.
+     *
+     * @return DatabaseAdapter
+     */
+    private function getNextAdapter(): DatabaseAdapter
+    {
+        if ($this->poolSize > 0) {
+            $idx = $this->poolIndex;
+            $this->poolIndex = ($this->poolIndex + 1) % $this->poolSize;
+
+            if ($this->pool[$idx] === null) {
+                $this->pool[$idx] = self::createAdapter(
+                    $this->url, $this->autoCommit, $this->dbUsername, $this->dbPassword
+                );
+            }
+
+            return $this->pool[$idx];
+        }
+
+        return $this->adapter;
+    }
+
+    /**
      * Get the underlying DatabaseAdapter.
+     *
+     * With pooling enabled, returns the next adapter via round-robin.
      *
      * @return DatabaseAdapter
      */
     public function getAdapter(): DatabaseAdapter
     {
-        return $this->adapter;
+        return $this->getNextAdapter();
+    }
+
+    /**
+     * Get pool size (0 = single connection mode).
+     */
+    public function getPoolSize(): int
+    {
+        return $this->poolSize;
+    }
+
+    /**
+     * Get the number of active (created) connections in the pool.
+     */
+    public function getActivePoolCount(): int
+    {
+        if ($this->poolSize === 0) {
+            return $this->adapter !== null ? 1 : 0;
+        }
+        return count(array_filter($this->pool, fn($a) => $a !== null));
     }
 
     // -------------------------------------------------------------------------
@@ -114,7 +195,7 @@ class Database
      */
     public function query(string $sql, array $params = []): array
     {
-        return $this->adapter->query($sql, $params);
+        return $this->getNextAdapter()->query($sql, $params);
     }
 
     /**
@@ -131,7 +212,8 @@ class Database
      */
     public function fetch(string $sql, array $params = [], int $limit = 10, int $offset = 0): DatabaseResult
     {
-        $raw = $this->adapter->fetch($sql, $limit, $offset, $params);
+        $adapter = $this->getNextAdapter();
+        $raw = $adapter->fetch($sql, $limit, $offset, $params);
 
         $records = $raw['data'] ?? [];
         $columns = !empty($records) ? array_keys($records[0]) : [];
@@ -143,7 +225,7 @@ class Database
             count:   $total,
             limit:   $limit,
             offset:  $offset,
-            adapter: $this->adapter,
+            adapter: $adapter,
             sql:     $sql,
         );
     }
@@ -157,7 +239,7 @@ class Database
      */
     public function fetchOne(string $sql, array $params = []): ?array
     {
-        return $this->adapter->fetchOne($sql, $params);
+        return $this->getNextAdapter()->fetchOne($sql, $params);
     }
 
     /**
@@ -169,7 +251,7 @@ class Database
      */
     public function execute(string $sql, array $params = []): bool
     {
-        return $this->adapter->execute($sql, $params);
+        return $this->getNextAdapter()->execute($sql, $params);
     }
 
     /**
@@ -181,7 +263,7 @@ class Database
      */
     public function exec(string $sql, array $params = []): bool
     {
-        return $this->adapter->execute($sql, $params);
+        return $this->getNextAdapter()->execute($sql, $params);
     }
 
     // -------------------------------------------------------------------------
@@ -197,7 +279,7 @@ class Database
      */
     public function insert(string $table, array $data): bool
     {
-        return $this->adapter->insert($table, $data);
+        return $this->getNextAdapter()->insert($table, $data);
     }
 
     /**
@@ -210,12 +292,13 @@ class Database
      */
     public function update(string $table, array $data, array $filter = []): bool
     {
+        $adapter = $this->getNextAdapter();
         if (empty($filter)) {
-            return $this->adapter->update($table, $data);
+            return $adapter->update($table, $data);
         }
 
         $wheres = implode(' AND ', array_map(fn($k) => "{$k} = ?", array_keys($filter)));
-        return $this->adapter->update($table, $data, $wheres, array_values($filter));
+        return $adapter->update($table, $data, $wheres, array_values($filter));
     }
 
     /**
@@ -227,11 +310,12 @@ class Database
      */
     public function delete(string $table, array $filter = []): bool
     {
+        $adapter = $this->getNextAdapter();
         if (empty($filter)) {
-            return $this->adapter->delete($table);
+            return $adapter->delete($table);
         }
 
-        return $this->adapter->delete($table, $filter);
+        return $adapter->delete($table, $filter);
     }
 
     // -------------------------------------------------------------------------
@@ -239,11 +323,20 @@ class Database
     // -------------------------------------------------------------------------
 
     /**
-     * Close the database connection.
+     * Close all database connections (pool or single).
      */
     public function close(): void
     {
-        $this->adapter->close();
+        if ($this->poolSize > 0) {
+            foreach ($this->pool as $i => $adapter) {
+                if ($adapter !== null) {
+                    $adapter->close();
+                    $this->pool[$i] = null;
+                }
+            }
+        } elseif ($this->adapter !== null) {
+            $this->adapter->close();
+        }
     }
 
     /**
@@ -251,7 +344,7 @@ class Database
      */
     public function startTransaction(): void
     {
-        $this->adapter->startTransaction();
+        $this->getNextAdapter()->startTransaction();
     }
 
     /**
@@ -259,7 +352,7 @@ class Database
      */
     public function commit(): void
     {
-        $this->adapter->commit();
+        $this->getNextAdapter()->commit();
     }
 
     /**
@@ -267,7 +360,7 @@ class Database
      */
     public function rollback(): void
     {
-        $this->adapter->rollback();
+        $this->getNextAdapter()->rollback();
     }
 
     // -------------------------------------------------------------------------
@@ -279,7 +372,7 @@ class Database
      */
     public function tableExists(string $tableName): bool
     {
-        return $this->adapter->tableExists($tableName);
+        return $this->getNextAdapter()->tableExists($tableName);
     }
 
     /**
@@ -289,7 +382,7 @@ class Database
      */
     public function getTables(): array
     {
-        return $this->adapter->getTables();
+        return $this->getNextAdapter()->getTables();
     }
 
     /**
@@ -297,7 +390,7 @@ class Database
      */
     public function getLastId(): int|string
     {
-        return $this->adapter->lastInsertId();
+        return $this->getNextAdapter()->lastInsertId();
     }
 
     /**
@@ -305,7 +398,7 @@ class Database
      */
     public function error(): ?string
     {
-        return $this->adapter->error();
+        return $this->getNextAdapter()->error();
     }
 
     // -------------------------------------------------------------------------
