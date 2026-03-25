@@ -86,13 +86,13 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 | **Templates** | Frond engine (Twig-compatible), inheritance, partials, filters, macros, fragment caching, sandboxing |
 | **ORM** | Active Record, typed properties, soft delete, relationships (`hasOne`/`hasMany`/`belongsTo` with eager loading), field mapping, table filters, multi-database |
 | **Database** | SQLite3, PostgreSQL, MySQL, MSSQL, Firebird -- unified adapter interface, query caching (TINA4_DB_CACHE=true for 4x speedup) |
-| **Auth** | Zero-dep JWT (RS256/HS256), sessions, secure key generation, form tokens |
-| **API** | Swagger/OpenAPI auto-generation, GraphQL with ORM auto-schema and GraphiQL IDE |
+| **Auth** | Zero-dep JWT (HS256/RS256), sessions (file/Redis/Valkey/MongoDB/database), password hashing, form tokens |
+| **API** | Swagger/OpenAPI auto-generation, GraphQL with ORM auto-schema and GraphiQL IDE, WSDL/SOAP with auto WSDL |
 | **Background** | Queue (SQLite/RabbitMQ/Kafka/MongoDB) with priority, delayed jobs, retry, batch processing |
-| **Real-time** | Swoole HTTP and TCP support |
-| **Frontend** | tina4-css, frond.js helper, SCSS compiler, live reload |
-| **DX** | Dev admin dashboard, error overlay, request inspector, annotation-driven testing |
-| **Data** | Migrations with rollback, ORM seeders, fake data generators |
+| **Real-time** | Native WebSocket (RFC 6455), stream_select server, per-path routing, connection manager, broadcast |
+| **Frontend** | tina4-css (~24 KB), frond.js helper, SCSS compiler, live reload, CSS hot-reload |
+| **DX** | Dev admin dashboard, error overlay, request inspector, hot-reload (stream_select file watcher), AI tool integration, Carbonah green benchmarks |
+| **Data** | Migrations with rollback and status, 26+ fake data generators, ORM and table seeders |
 | **Other** | REST client, localization (i18n), cache (memory/Redis/file), event system, messenger (.env driven), configurable error pages, HTML element builder, health check |
 
 **1,421 tests across 38 built-in features. Zero dependencies. All Carbonah benchmarks rated A+.**
