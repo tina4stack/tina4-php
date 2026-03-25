@@ -287,6 +287,21 @@ class Router
                 return $staticResponse;
             }
 
+            // Try serving a template file (e.g. /hello -> src/templates/hello.twig or hello.html)
+            if ($request->method === 'GET') {
+                $templateDir = (self::$basePath ?: getcwd()) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
+                $cleanPath = ltrim($request->path, '/');
+                if ($cleanPath === '') {
+                    $cleanPath = 'index';
+                }
+                foreach (['.twig', '.html'] as $ext) {
+                    $tplFile = $cleanPath . $ext;
+                    if (is_file($templateDir . DIRECTORY_SEPARATOR . $tplFile)) {
+                        return $response->render($tplFile, []);
+                    }
+                }
+            }
+
             return self::renderError($response, 404, 'Not Found', $request->path);
         }
 
