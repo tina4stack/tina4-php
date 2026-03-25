@@ -194,6 +194,40 @@ class Response
     }
 
     /**
+     * Standard error response envelope.
+     *
+     * Usage:
+     *   return $response->error("VALIDATION_FAILED", "Email is required", 400);
+     *
+     * @param string $code    Machine-readable error code (e.g. "VALIDATION_FAILED")
+     * @param string $message Human-readable error message
+     * @param int    $status  HTTP status code (default 400)
+     * @return $this
+     */
+    public static function error(string $code, string $message, int $status = 400): array
+    {
+        return [
+            'error' => true,
+            'code' => $code,
+            'message' => $message,
+            'status' => $status,
+        ];
+    }
+
+    /**
+     * Build and send a standard error response (instance method, chainable).
+     *
+     * Usage:
+     *   return $response->sendError("VALIDATION_FAILED", "Email is required", 400);
+     *
+     * @return $this
+     */
+    public function sendError(string $code, string $message, int $status = 400): self
+    {
+        return $this->json(self::error($code, $message, $status), $status);
+    }
+
+    /**
      * Flush the response to the client.
      */
     public function send(): void
