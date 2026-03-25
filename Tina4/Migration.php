@@ -79,6 +79,15 @@ class Migration
                         continue;
                     }
 
+                    // Firebird lacks IF NOT EXISTS for ALTER TABLE ADD.
+                    // Pre-check the system catalogue so duplicate columns are
+                    // silently skipped instead of raising an error.
+                    $skipReason = $this->shouldSkipForFirebird($statement);
+                    if ($skipReason !== null) {
+                        Log::info("Migration {$fileName}: {$skipReason}");
+                        continue;
+                    }
+
                     $result = $this->db->exec($statement);
                     if (!$result) {
                         $error = $this->db->error() ?? 'Unknown error';
@@ -481,5 +490,69 @@ class Migration
         }
 
         return $statements;
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Firebird ALTER TABLE ADD idempotency check
+    // ──────────────────────────────────────────────────────────────
+    // Firebird does not support IF NOT EXISTS for ALTER TABLE ADD.
+    // When a migration adds a column that already exists, Firebird
+    // throws an error and blocks the entire migration. These helpers
+    // detect ALTER TABLE ... ADD statements and query RDB$RELATION_FIELDS
+    // to see if the column is already present. If so, the statement is
+    // silently skipped rather than executed.
+
+    /** Pattern to match ALTER TABLE <table> ADD <column> ... */
+    private const ALTER_ADD_PATTERN =
+        '/^\s*ALTER\s+TABLE\s+(?:"([^"]+)"|(\S+))\s+ADD\s+(?:"([^"]+)"|(\S+))/i';
+
+    /**
+     * Check if the database adapter is Firebird.
+     */
+    private function isFirebird(): bool
+    {
+        return $this->db instanceof \Tina4\Database\FirebirdAdapter;
+    }
+
+    /**
+     * Check if a column already exists in a Firebird table.
+     *
+     * Firebird stores unquoted identifiers in upper-case, so both
+     * the table and column names are uppercased before comparison.
+     */
+    private function firebirdColumnExists(string $table, string $column): bool
+    {
+        $rows = $this->db->query(
+            "SELECT 1 FROM RDB\$RELATION_FIELDS "
+            . "WHERE RDB\$RELATION_NAME = :table AND TRIM(RDB\$FIELD_NAME) = :column",
+            [':table' => strtoupper($table), ':column' => strtoupper($column)]
+        );
+
+        return !empty($rows);
+    }
+
+    /**
+     * If $statement is an ALTER TABLE ... ADD on Firebird and the column
+     * already exists, return a skip reason string. Returns null if the
+     * statement should execute normally.
+     */
+    private function shouldSkipForFirebird(string $statement): ?string
+    {
+        if (!$this->isFirebird()) {
+            return null;
+        }
+
+        if (!preg_match(self::ALTER_ADD_PATTERN, $statement, $m)) {
+            return null;
+        }
+
+        $table = $m[1] !== '' ? $m[1] : $m[2];
+        $column = $m[3] !== '' ? $m[3] : $m[4];
+
+        if ($this->firebirdColumnExists($table, $column)) {
+            return "Column {$column} already exists in {$table}, skipping";
+        }
+
+        return null;
     }
 }
