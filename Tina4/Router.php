@@ -52,6 +52,9 @@ class Router
     /** @var string Method of the last registered route */
     private static ?string $lastRouteMethod = null;
 
+    /** @var array<string, string>|null Cached template lookup: url_path => template_file */
+    private static ?array $templateCache = null;
+
     /**
      * Register a global middleware class.
      *
@@ -289,16 +292,9 @@ class Router
 
             // Try serving a template file (e.g. /hello -> src/templates/hello.twig or hello.html)
             if ($request->method === 'GET') {
-                $templateDir = (self::$basePath ?: getcwd()) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
-                $cleanPath = ltrim($request->path, '/');
-                if ($cleanPath === '') {
-                    $cleanPath = 'index';
-                }
-                foreach (['.twig', '.html'] as $ext) {
-                    $tplFile = $cleanPath . $ext;
-                    if (is_file($templateDir . DIRECTORY_SEPARATOR . $tplFile)) {
-                        return $response->render($tplFile, []);
-                    }
+                $tplFile = self::resolveTemplate($request->path);
+                if ($tplFile !== null) {
+                    return $response->render($tplFile, []);
                 }
             }
 
@@ -614,6 +610,71 @@ class Router
      *
      * @return array{regex: string, paramNames: array<string>, catchAll: bool, catchAllName: string|null}
      */
+    /**
+     * Resolve a URL path to a template file in src/templates/.
+     * In production: uses a cached lookup built once at startup.
+     * In development: checks the filesystem every time for live changes.
+     */
+    private static function resolveTemplate(string $path): ?string
+    {
+        $cleanPath = ltrim($path, '/');
+        if ($cleanPath === '') {
+            $cleanPath = 'index';
+        }
+
+        $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+
+        if ($isDev) {
+            // Dev mode: check filesystem directly so new files are picked up instantly
+            $templateDir = (self::$basePath ?: getcwd()) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
+            foreach (['.twig', '.html'] as $ext) {
+                $tplFile = $cleanPath . $ext;
+                if (is_file($templateDir . DIRECTORY_SEPARATOR . $tplFile)) {
+                    return $tplFile;
+                }
+            }
+            return null;
+        }
+
+        // Production: use cached lookup
+        if (self::$templateCache === null) {
+            self::buildTemplateCache();
+        }
+        return self::$templateCache[$cleanPath] ?? null;
+    }
+
+    /**
+     * Build the template cache by scanning src/templates/ once.
+     * Maps URL paths to template filenames (e.g. 'hello' => 'hello.twig').
+     */
+    private static function buildTemplateCache(): void
+    {
+        self::$templateCache = [];
+        $templateDir = (self::$basePath ?: getcwd()) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
+        if (!is_dir($templateDir)) {
+            return;
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($templateDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+            $ext = $file->getExtension();
+            if ($ext !== 'twig' && $ext !== 'html') {
+                continue;
+            }
+            $relativePath = ltrim(str_replace($templateDir, '', $file->getPathname()), DIRECTORY_SEPARATOR);
+            $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
+            $urlPath = preg_replace('/\.(twig|html)$/', '', $relativePath);
+            // First match wins (.twig takes priority over .html)
+            if (!isset(self::$templateCache[$urlPath])) {
+                self::$templateCache[$urlPath] = $relativePath;
+            }
+        }
+    }
+
     private static function compilePath(string $path): array
     {
         $paramNames = [];
