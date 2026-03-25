@@ -1781,7 +1781,9 @@ class Frond
         $this->filters['json_encode'] = fn($v) => self::RAW_MARKER . json_encode($v, JSON_UNESCAPED_UNICODE);
         $this->filters['json_decode'] = fn($v) => json_decode((string)$v, true);
         $this->filters['base64_encode'] = fn($v) => base64_encode(is_string($v) ? $v : (string)$v);
+        $this->filters['base64encode'] = &$this->filters['base64_encode'];
         $this->filters['base64_decode'] = fn($v) => base64_decode((string)$v);
+        $this->filters['base64decode'] = &$this->filters['base64_decode'];
         $this->filters['data_uri'] = fn($v) => is_array($v) ? self::RAW_MARKER . 'data:' . ($v['type'] ?? 'application/octet-stream') . ';base64,' . base64_encode($v['content'] ?? '') : (string)$v;
         $this->filters['url_encode'] = fn($v) => rawurlencode((string)$v);
 
