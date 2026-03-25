@@ -1,0 +1,50 @@
+{
+  "skill_name": "tina4-developer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm building a blog with Tina4 in Python. I need a Post model with title, body, author_id, and published_at fields, plus routes for listing all posts, getting a single post, creating a post (authenticated), and a template that shows a post with its author name. Show me how to set this up.",
+      "expected_output": "Should provide a complete working setup: ORM model in src/orm/, routes in src/routes/, Frond template in src/templates/, and JWT auth middleware. Should use convention over config, auto-discovery, and smart response types.",
+      "files": [],
+      "expectations": [
+        "Provides an ORM model with the correct fields placed in src/orm/",
+        "Creates route handlers for GET /posts, GET /posts/{id}, and POST /posts",
+        "Places routes in src/routes/ for auto-discovery",
+        "Includes JWT or middleware-based authentication on the create route",
+        "Provides a Frond/Twig template for displaying a post",
+        "Uses smart response types (returning objects auto-converts to JSON)",
+        "Shows the database connection string format from .env"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need to add a contact form to my Tina4 PHP app. When someone submits the form, it should save the message to the database and send an email notification to admin@mysite.com. Show me the full implementation — the template with the form, the route handler, the ORM model, and the email sending.",
+      "expected_output": "Should provide complete working code in PHP: Frond template with form, POST route handler, ContactMessage ORM model, and Email sending. Should follow Tina4 PHP conventions (camelCase methods, PascalCase classes).",
+      "files": [],
+      "expectations": [
+        "Provides a Frond template with an HTML form",
+        "Creates a POST route handler in PHP using Tina4 conventions",
+        "Defines a ContactMessage ORM model in PHP",
+        "Includes email sending using Tina4's built-in Email class",
+        "Uses PHP naming conventions (camelCase methods, PascalCase class)",
+        "Mentions or uses CSRF/form token protection",
+        "File placement follows convention (src/routes/, src/orm/, src/templates/)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to build a real-time dashboard in Tina4 Ruby that shows live order counts updating via WebSocket. When a new order comes in through the API, all connected dashboard clients should see the count update instantly. Show me how.",
+      "expected_output": "Should provide WebSocket setup, an order API route that fires an event, a Frond template with live blocks or frond.js WebSocket integration, and the event listener that triggers the broadcast.",
+      "files": [],
+      "expectations": [
+        "Sets up a WebSocket endpoint using Tina4's websocket decorator/DSL",
+        "Creates an order POST route that triggers an update",
+        "Uses Tina4's event system or direct WebSocket broadcast",
+        "Provides a Frond template with either live blocks or frond.js WebSocket client",
+        "Uses Ruby naming conventions (snake_case methods)",
+        "Shows working code that can be dropped into a Tina4 project",
+        "Mentions the connection string or .env configuration"
+      ]
+    }
+  ]
+}

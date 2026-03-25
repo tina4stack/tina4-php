@@ -85,7 +85,8 @@ test.db
 /src/routes/decorator.php
 /.phpunit.result.cache
 .phpunit.cache
-.claude/
+.claude/*
+!.claude/skills/
 .github_token
 /logs/
 /log/
@@ -102,3 +103,5 @@ demo/.env
 example/.env
 demo/logs/*.log
 tests/logs/*.log
+.claude/settings.local.json
+.claude/worktrees/

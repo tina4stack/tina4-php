@@ -1,0 +1,57 @@
+{
+  "skill_name": "tina4-maintainer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "You are the Tina4 framework maintainer. What do you consider the most important things you need to keep in mind when maintaining the Tina4 frameworks? Rank them in order of priority and explain briefly why each matters.",
+      "expected_output": "A comprehensive ranked list covering security, philosophy ('the best code you write is the code you don't write'), human+AI readability, parity mandate, plan-driven workflow, zero deps, DX, code quality, testing, green code/Carbonah, language versions, conventions, separation of concerns, dashboards, competitive awareness, production-ready defaults, and branch discipline.",
+      "files": [],
+      "expectations": [
+        "Mentions security as a top priority with zero tolerance stance",
+        "References the philosophy 'the best code you write is the code you don't write'",
+        "Mentions human AND AI readability as a core principle",
+        "Describes the parity mandate with Python as reference implementation",
+        "Mentions plan-driven workflow with approval from master maintainer",
+        "States zero third-party dependencies for core features",
+        "Mentions Carbonah green benchmarking and energy per request metrics",
+        "Lists minimum language versions (Python 3.12+, PHP 8.5+, Ruby 4.0.0+, Node.js 25.8.1+)",
+        "Mentions deprecation awareness and proactive refactoring",
+        "Describes branch strategy (main=v2 stable, v3=beta)",
+        "Mentions competitive framework awareness (FastAPI, Laravel, Rails, Hono, etc.)",
+        "Mentions proactive feature gap analysis",
+        "Mentions communication via status dashboards with visual markers"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A junior developer has submitted a PR to the tina4-python v3 branch that adds Redis session support. It uses the 'redis-py' pip package and targets Python 3.10+. The code works but has no tests. As the Tina4 maintainer, what feedback would you give on this PR?",
+      "expected_output": "Should flag multiple issues: third-party dependency violation (redis-py), wrong Python version target (must be 3.12+), missing tests, should check if the feature exists in other languages for parity, should have started with a plan, and should check for security concerns.",
+      "files": [],
+      "expectations": [
+        "Flags the redis-py dependency as violating the zero third-party deps principle",
+        "Flags Python 3.10 as below the 3.12+ minimum",
+        "Flags missing tests as unacceptable (tests alongside code, not after)",
+        "Asks about or mentions parity with PHP, Ruby, and Node.js implementations",
+        "Mentions that a plan should have been created and approved first",
+        "Raises security concerns about session handling",
+        "Suggests using stdlib or built-in approach instead of redis-py",
+        "Frames feedback constructively referencing Tina4 principles"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to compare how Tina4's routing approach stacks up against Hono and FastAPI. What are the key differences, what could Tina4 learn from them, and what should we absolutely NOT adopt? Keep Tina4's principles in mind.",
+      "expected_output": "Should demonstrate competitive awareness, compare routing patterns, identify ideas worth adapting filtered through Tina4 philosophy, and flag things that violate Tina4 principles (complexity, deps, magic).",
+      "files": [],
+      "expectations": [
+        "Compares Tina4 routing patterns with both Hono and FastAPI specifically",
+        "Identifies at least one idea from each framework worth considering for Tina4",
+        "Filters suggestions through Tina4 principles (simplicity, zero deps, code you don't write)",
+        "Flags approaches that would violate Tina4 philosophy (too much magic, too many deps, too complex)",
+        "Considers parity implications across all four languages",
+        "Mentions human AND AI readability as a factor in routing design",
+        "Acknowledges Tina4's convention-over-configuration approach to routing (auto-discovery from src/routes/)"
+      ]
+    }
+  ]
+}
