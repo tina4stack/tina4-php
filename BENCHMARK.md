@@ -1,6 +1,6 @@
 # Tina4 PHP — Benchmark Report
 
-**Date:** 2026-03-25 | **Machine:** Apple Silicon (ARM64), 8 cores | **Tool:** `hey` (5000 requests, 50 concurrent, 3 runs, median)
+**Date:** 2026-03-25 | **Machine:** Apple Silicon (ARM64), 8 cores | **Tool:** `hey` (5000 requests, 50 concurrent, 3 runs, averaged)
 
 ---
 
@@ -10,13 +10,13 @@ Real HTTP benchmarks — identical JSON endpoint. Tina4 uses its built-in `strea
 
 | Framework | JSON req/s | 100-item list req/s | Server | Deps |
 |-----------|:---------:|:-------------------:|--------|:----:|
-| **Tina4 PHP 3.2** | **25,305** | **26,852** | **stream_select (built-in)** | **0** |
+| **Tina4 PHP 3.2** | **28,158** | **18,191** | **stream_select (built-in)** | **0** |
 | Slim 4 | 5,082 | 3,312 | php -S | 2 |
 | Symfony 7 | 1,589 | 1,305 | php -S | 30+ |
 | CodeIgniter 4 | 1,311 | 1,288 | spark serve | 15+ |
 | Laravel 11 | 257 | 313 | artisan serve | 70+ |
 
-**Key takeaway:** Tina4 PHP dominates at 25,305 req/s — 5.0x faster than Slim, 15.9x faster than Symfony, and 98x faster than Laravel, while shipping 38 features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
+**Key takeaway:** Tina4 PHP dominates at 28,158 req/s — 5.5x faster than Slim, 17.7x faster than Symfony, and 110x faster than Laravel, while shipping 38 features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
 
 ---
 
@@ -76,7 +76,7 @@ Ships with core install, no extra packages needed.
 
 | Framework | Features | Deps | JSON req/s |
 |-----------|:-------:|:----:|:---------:|
-| **Tina4** | **38/38** | **0** | **25,305** |
+| **Tina4** | **38/38** | **0** | **28,158** |
 | Laravel | 25/38 | 70+ | 257 |
 | Symfony | 18/38 | 30+ | 1,589 |
 | CodeIgniter | 14/38 | 15+ | 1,311 |
@@ -106,7 +106,7 @@ Formula: `Energy(kWh) = (15W × seconds_for_5000_requests) / 3,600,000` | `CO2(g
 
 | Framework | JSON req/s | Est. Energy (kWh) | Est. CO2 (g) |
 |-----------|:---------:|:-----------------:|:------------:|
-| **Tina4** | 25,305 | 0.0000008 | 0.0004 |
+| **Tina4** | 28,158 | 0.0000007 | 0.0004 |
 | Slim | 5,082 | 0.0000041 | 0.0019 |
 | Symfony | 1,589 | 0.0000131 | 0.0062 |
 | CodeIgniter | 1,311 | 0.0000159 | 0.0075 |
