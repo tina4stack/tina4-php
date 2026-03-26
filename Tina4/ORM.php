@@ -60,6 +60,20 @@ abstract class ORM
     private array $_relCache = [];
 
     /**
+     * Create a fluent QueryBuilder pre-configured for this model's table and database.
+     *
+     * Usage:
+     *   $results = User::query()->where('active = ?', [1])->orderBy('name')->get();
+     *
+     * @return QueryBuilder
+     */
+    public static function query(): QueryBuilder
+    {
+        $instance = new static();
+        return QueryBuilder::from($instance->tableName, $instance->_db);
+    }
+
+    /**
      * Create a new ORM instance.
      *
      * @param DatabaseAdapter|null $db Database adapter
