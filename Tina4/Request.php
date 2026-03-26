@@ -47,6 +47,9 @@ class Request
     /** @var string Content type of the request */
     public readonly string $contentType;
 
+    /** @var Session|null Lazy-loaded session instance */
+    public ?Session $session = null;
+
     /**
      * Create a Request from PHP superglobals (convenience factory).
      */

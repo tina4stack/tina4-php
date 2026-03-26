@@ -277,6 +277,30 @@ class Router
      */
     public static function dispatch(Request $request, Response $response): Response
     {
+        // Auto-start session — read session ID from cookie, lazy-create on first use
+        $sessionCookie = $_COOKIE['tina4_session'] ?? null;
+        $session = new Session();
+        $session->start($sessionCookie);
+        $request->session = $session;
+
+        $result = self::dispatchInner($request, $response);
+
+        // Save session and set cookie after handler runs
+        $session->save();
+        $sid = $session->getSessionId();
+        if ($sid && $sid !== $sessionCookie) {
+            $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
+            header("Set-Cookie: tina4_session={$sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age={$ttl}");
+        }
+
+        return $result;
+    }
+
+    /**
+     * Inner dispatch — handles route matching, middleware, and handler invocation.
+     */
+    private static function dispatchInner(Request $request, Response $response): Response
+    {
         // Run global middleware "before" hooks
         $globalMiddleware = Middleware::getGlobal();
         if (!empty($globalMiddleware)) {
