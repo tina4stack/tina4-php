@@ -13,16 +13,17 @@ All implement the same QueueAdapter interface.
 
 ### Usage (Python)
 ```python
-from tina4 import Queue, Producer, Consumer
+from tina4 import Queue
 
 # Produce
 queue = Queue(topic="emails")
-Producer(queue).produce({"to": "alice@example.com", "subject": "Welcome"})
+queue.produce("emails", {"to": "alice@example.com", "subject": "Welcome"})
 
 # Consume
-for message in Consumer(Queue(topic="emails")).messages():
-    send_email(message.data)
+queue.consume("emails", lambda message: (
+    send_email(message.data),
     message.ack()
+))
 ```
 
 ### Features

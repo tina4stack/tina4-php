@@ -154,17 +154,22 @@ and consume them:
 
 ```python
 # order-service: after saving an order
-Producer(Queue(topic="order-created")).produce({"order_id": order.id})
+queue = Queue(topic="order-created")
+queue.produce("order-created", {"order_id": order.id})
 
 # email-worker: picks it up and sends confirmation
-for message in Consumer(Queue(topic="order-created")).messages():
-    send_confirmation_email(message.data["order_id"])
+queue = Queue(topic="order-created")
+queue.consume("order-created", lambda message: (
+    send_confirmation_email(message.data["order_id"]),
     message.ack()
+))
 
 # payment-processor: also picks it up and charges the card
-for message in Consumer(Queue(topic="order-created")).messages():
-    process_payment(message.data["order_id"])
+queue = Queue(topic="order-created")
+queue.consume("order-created", lambda message: (
+    process_payment(message.data["order_id"]),
     message.ack()
+))
 ```
 
 **When to use this:**

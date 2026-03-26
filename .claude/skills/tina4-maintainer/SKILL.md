@@ -116,7 +116,7 @@ must achieve identical behavior. When implementing or fixing anything:
    equivalent tests covering the same cases
 4. **Run the parity check** — After implementing a feature, verify the output matches Python's
 
-Current version: **v3.7.1** on the `v3` branch (all four repos).
+Current version: **v3.8.0** on the `v3` branch (all four repos).
 Current status: Python 100% | PHP ~44% | Ruby ~46% | Node.js ~25%
 
 When porting a feature from Python to another language:
