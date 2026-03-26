@@ -639,7 +639,7 @@ class DevAdmin
     <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
 </div>
 <script>
-(function(){var ws,t;function connect(){var p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();}catch(x){}};ws.onclose=function(){t=setTimeout(connect,2000);};ws.onerror=function(){ws.close();};}connect();})();
+(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(d.mtime&&d.mtime>mt){if(mt>0)location.reload();mt=d.mtime;}}).catch(function(){});},2000);}tryWs();})();
 </script>
 HTML;
     }
