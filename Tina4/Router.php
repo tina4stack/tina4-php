@@ -357,23 +357,33 @@ class Router
             }
         }
 
-        // Invoke the handler — support (), (response), (request), or (request, response) signatures
-        // When a single param is type-hinted as Request, pass request; otherwise pass response
+        // Invoke the handler — inject path params by name, then request/response
         try {
             $ref = new \ReflectionFunction($route['callback']);
-            $params = $ref->getParameters();
-            $paramCount = count($params);
-            if ($paramCount === 0) {
-                $handlerResult = ($route['callback'])();
-            } elseif ($paramCount === 1) {
-                $type = $params[0]->getType();
-                $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
-                $handlerResult = ($typeName === Request::class || $typeName === 'Tina4\\Request')
-                    ? ($route['callback'])($request)
-                    : ($route['callback'])($response);
-            } else {
-                $handlerResult = ($route['callback'])($request, $response);
+            $refParams = $ref->getParameters();
+            $routeParams = $request->params;
+            $args = [];
+
+            foreach ($refParams as $p) {
+                $name = $p->getName();
+                if (array_key_exists($name, $routeParams)) {
+                    // Path parameter — inject by name
+                    $args[] = $routeParams[$name];
+                } else {
+                    // Not a path param — inject request or response based on type hint
+                    $type = $p->getType();
+                    $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
+                    if ($typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request') {
+                        $args[] = $request;
+                    } else {
+                        $args[] = $response;
+                    }
+                }
             }
+
+            $handlerResult = count($args) === 0
+                ? ($route['callback'])()
+                : ($route['callback'])(...$args);
         } catch (\Throwable $e) {
             if (ErrorOverlay::isDebugMode()) {
                 // Rich error overlay with stack trace, source context, and line numbers
