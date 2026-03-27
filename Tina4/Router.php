@@ -310,13 +310,27 @@ class Router
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
             // SameSite=None requires the Secure flag — browsers reject it otherwise
             $secure = strcasecmp($sameSite, 'None') === 0 || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-            setcookie('tina4_session', $sid, [
-                'expires' => time() + $ttl,
-                'path' => '/',
-                'httponly' => true,
-                'samesite' => $sameSite,
-                'secure' => $secure,
-            ]);
+
+            if (headers_sent()) {
+                // Built-in server mode: headers are managed via the Response object,
+                // so setcookie() would trigger a fatal error. Build the Set-Cookie
+                // header manually and attach it to the Response instead.
+                $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
+                $cookie = "tina4_session={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
+                if ($secure) {
+                    $cookie .= '; Secure';
+                }
+                $result->header('Set-Cookie', $cookie);
+            } else {
+                // Apache/nginx/FPM mode: use PHP's native setcookie()
+                setcookie('tina4_session', $sid, [
+                    'expires' => time() + $ttl,
+                    'path' => '/',
+                    'httponly' => true,
+                    'samesite' => $sameSite,
+                    'secure' => $secure,
+                ]);
+            }
         }
 
         return $result;
