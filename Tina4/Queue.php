@@ -10,7 +10,7 @@
  * Switching from file to RabbitMQ or Kafka is a .env change — no code change needed.
  *
  * Supported backends:
- *   - 'file'     — JSON files on disk (default)
+ *   - 'sqlite'   — SQLite database (default)
  *   - 'rabbitmq' — RabbitMQ via raw TCP sockets (AMQP 0-9-1)
  *   - 'kafka'    — Kafka via raw TCP sockets
  *   - 'mongodb'  — MongoDB via ext-mongodb (also accepts 'mongo')
@@ -137,7 +137,7 @@ class Queue
      * @param array  $config     Configuration: path, maxRetries, and backend-specific options
      * @param string $topic      Default topic/queue name
      */
-    public function __construct(string $backend = 'file', array $config = [], string $topic = 'default')
+    public function __construct(string $backend = 'sqlite', array $config = [], string $topic = 'default')
     {
         $this->backend = getenv('TINA4_QUEUE_BACKEND') ?: $backend;
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');

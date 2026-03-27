@@ -40,6 +40,12 @@ class CsrfMiddleware
      */
     public static function beforeCsrf(Request $request, Response $response): array
     {
+        // Check if CSRF is explicitly disabled via env
+        $csrfEnv = getenv('TINA4_CSRF');
+        if ($csrfEnv !== false && in_array(strtolower($csrfEnv), ['false', '0', 'no'], true)) {
+            return [$request, $response];
+        }
+
         // Skip safe HTTP methods
         $method = strtoupper($request->method ?? 'GET');
         if (in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {

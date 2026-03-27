@@ -17,8 +17,9 @@ use Tina4\Response;
  * Configuration via environment variables:
  *   TINA4_CORS_ORIGINS  — comma-separated allowed origins (default: "*")
  *   TINA4_CORS_METHODS  — comma-separated allowed methods (default: "GET,POST,PUT,PATCH,DELETE,OPTIONS")
- *   TINA4_CORS_HEADERS  — comma-separated allowed headers (default: "Content-Type,Authorization,X-Requested-With")
+ *   TINA4_CORS_HEADERS  — comma-separated allowed headers (default: "Content-Type,Authorization,X-Request-ID")
  *   TINA4_CORS_MAX_AGE  — preflight cache duration in seconds (default: "86400")
+ *   TINA4_CORS_CREDENTIALS — allow credentials (default: "true"); only sent when origin is not "*"
  */
 class CorsMiddleware
 {
@@ -26,17 +27,21 @@ class CorsMiddleware
     private readonly string $allowedMethods;
     private readonly string $allowedHeaders;
     private readonly int $maxAge;
+    private readonly bool $credentials;
 
     public function __construct(
         ?string $origins = null,
         ?string $methods = null,
         ?string $headers = null,
         ?int $maxAge = null,
+        ?bool $credentials = null,
     ) {
         $this->allowedOrigins = $origins ?? DotEnv::getEnv('TINA4_CORS_ORIGINS', '*');
         $this->allowedMethods = $methods ?? DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        $this->allowedHeaders = $headers ?? DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Requested-With');
+        $this->allowedHeaders = $headers ?? DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Request-ID');
         $this->maxAge = $maxAge ?? (int)DotEnv::getEnv('TINA4_CORS_MAX_AGE', '86400');
+        $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'true');
+        $this->credentials = $credentials ?? in_array(strtolower($credentialsEnv), ['true', '1', 'yes'], true);
     }
 
     /**
@@ -59,9 +64,12 @@ class CorsMiddleware
         $headers['Access-Control-Allow-Headers'] = $this->allowedHeaders;
         $headers['Access-Control-Max-Age'] = (string)$this->maxAge;
 
-        // If origin is not wildcard, add Vary header
+        // If origin is not wildcard, add Vary header and credentials
         if ($origin !== '*') {
             $headers['Vary'] = 'Origin';
+            if ($this->credentials) {
+                $headers['Access-Control-Allow-Credentials'] = 'true';
+            }
         }
 
         return $headers;
@@ -149,8 +157,9 @@ class CorsMiddleware
      * Reads configuration from environment variables:
      *   TINA4_CORS_ORIGINS  — allowed origins (default: "*")
      *   TINA4_CORS_METHODS  — allowed methods (default: "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-     *   TINA4_CORS_HEADERS  — allowed headers (default: "Content-Type,Authorization,X-Requested-With")
+     *   TINA4_CORS_HEADERS  — allowed headers (default: "Content-Type,Authorization,X-Request-ID")
      *   TINA4_CORS_MAX_AGE  — preflight cache in seconds (default: "86400")
+     *   TINA4_CORS_CREDENTIALS — allow credentials (default: "true"); only sent when origin is not "*"
      *
      * For OPTIONS preflight requests, returns a 204 response to short-circuit the handler.
      *
@@ -162,13 +171,20 @@ class CorsMiddleware
     {
         $origins = DotEnv::getEnv('TINA4_CORS_ORIGINS', '*');
         $methods = DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        $headers = DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Requested-With');
+        $headers = DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Request-ID');
         $maxAge = DotEnv::getEnv('TINA4_CORS_MAX_AGE', '86400');
+        $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'true');
+        $credentials = in_array(strtolower($credentialsEnv), ['true', '1', 'yes'], true);
 
         $response->header('Access-Control-Allow-Origin', $origins);
         $response->header('Access-Control-Allow-Methods', $methods);
         $response->header('Access-Control-Allow-Headers', $headers);
         $response->header('Access-Control-Max-Age', $maxAge);
+
+        // Add credentials header when origin is not wildcard
+        if ($origins !== '*' && $credentials) {
+            $response->header('Access-Control-Allow-Credentials', 'true');
+        }
 
         // Handle OPTIONS preflight — return 204 No Content to short-circuit
         if (strtoupper($request->method) === 'OPTIONS') {

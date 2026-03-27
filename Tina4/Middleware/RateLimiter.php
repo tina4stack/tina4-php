@@ -15,7 +15,7 @@ use Tina4\Response;
 /**
  * In-memory sliding-window rate limiter.
  * Configuration via environment variables:
- *   TINA4_RATE_LIMIT   — max requests per window (default: 60)
+ *   TINA4_RATE_LIMIT   — max requests per window (default: 100)
  *   TINA4_RATE_WINDOW  — window duration in seconds (default: 60)
  */
 class RateLimiter
@@ -28,7 +28,7 @@ class RateLimiter
 
     public function __construct(?int $limit = null, ?int $window = null)
     {
-        $this->limit = $limit ?? (int)DotEnv::getEnv('TINA4_RATE_LIMIT', '60');
+        $this->limit = $limit ?? (int)DotEnv::getEnv('TINA4_RATE_LIMIT', '100');
         $this->window = $window ?? (int)DotEnv::getEnv('TINA4_RATE_WINDOW', '60');
     }
 

@@ -16,7 +16,7 @@ namespace Tina4;
  * raw spec at /swagger/openapi.json.
  *
  * Env vars (via DotEnv):
- *   SWAGGER_TITLE       — API title (default: "Tina4 PHP API")
+ *   SWAGGER_TITLE       — API title (default: "Tina4 API")
  *   SWAGGER_VERSION     — API version (default: "1.0.0")
  *   SWAGGER_DESCRIPTION — API description (default: "Auto-generated from Tina4 routes")
  */
@@ -29,7 +29,7 @@ class Swagger
      * @param string $version API version string
      * @return array<string, mixed> OpenAPI spec as a nested associative array
      */
-    public static function generateSpec(string $title = 'Tina4 PHP API', string $version = '1.0.0'): array
+    public static function generateSpec(string $title = 'Tina4 API', string $version = '1.0.0'): array
     {
         $title = DotEnv::getEnv('SWAGGER_TITLE', $title) ?? $title;
         $version = DotEnv::getEnv('SWAGGER_VERSION', $version) ?? $version;
@@ -526,7 +526,7 @@ class Swagger
      */
     private static function renderSwaggerUI(): string
     {
-        $title = DotEnv::getEnv('SWAGGER_TITLE', 'Tina4 PHP API') ?? 'Tina4 PHP API';
+        $title = DotEnv::getEnv('SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
 
         return <<<HTML
 <!DOCTYPE html>
