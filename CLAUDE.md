@@ -214,6 +214,8 @@ $user->load();
 $user->delete();
 ```
 
+NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
+
 ### Response — Template rendering
 
 The `Response` object supports rendering Twig templates via the built-in `Frond` engine:
@@ -582,9 +584,9 @@ $result = SqlTranslation::remember(
 - SQL dialect translation (`SqlTranslation`) for cross-database portability
 - AI assistant detection (`AI`) with context file scaffolding for 7 tools
 - Queue system with Kafka, RabbitMQ, and MongoDB backends
-- Session handlers for MongoDB and Valkey/Redis
+- Session handlers for MongoDB and Valkey/Redis. `TINA4_SESSION_SAMESITE` env var (default: Lax)
 - GraphQL query execution
-- WebSocket support
+- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars)
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
 - Messenger (.env driven SMTP/IMAP)
@@ -595,7 +597,11 @@ $result = SqlTranslation::remember(
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
 - Queue backends: file (default), RabbitMQ, Kafka, MongoDB
 - Cache backends: memory (default), Redis, file
-- Session handlers: file, Redis/Valkey, MongoDB, database
+- Session handlers: file, Redis/Valkey, MongoDB, database. `TINA4_SESSION_SAMESITE` env var controls SameSite attribute (default: Lax)
+- QueryBuilder with NoSQL/MongoDB support (`toMongo()`)
+- WebSocket backplane (Redis pub/sub) for horizontal scaling
+- SameSite=Lax default on session cookies (`TINA4_SESSION_SAMESITE`)
+- `tina4 init` generates Dockerfile and .dockerignore
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`
 - Tests: 1,421 passing (38 features)
 
