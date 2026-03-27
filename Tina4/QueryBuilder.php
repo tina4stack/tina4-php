@@ -233,7 +233,7 @@ class QueryBuilder
             $sql,
             $this->limitVal ?? 100,
             $this->offsetVal ?? 0,
-            !empty($allParams) ? $allParams : null
+            $allParams
         );
     }
 
@@ -252,7 +252,7 @@ class QueryBuilder
             $sql,
             1,
             $this->offsetVal ?? 0,
-            !empty($allParams) ? $allParams : null
+            $allParams
         );
 
         if (isset($result['data']) && !empty($result['data'])) {
@@ -283,7 +283,7 @@ class QueryBuilder
             $sql,
             1,
             0,
-            !empty($allParams) ? $allParams : null
+            $allParams
         );
 
         if (isset($result['data'][0]['cnt'])) {
