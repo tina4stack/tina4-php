@@ -137,7 +137,7 @@ class Queue
      * @param array  $config     Configuration: path, maxRetries, and backend-specific options
      * @param string $topic      Default topic/queue name
      */
-    public function __construct(string $backend = 'sqlite', array $config = [], string $topic = 'default')
+    public function __construct(string $backend = 'file', array $config = [], string $topic = 'default')
     {
         $this->backend = getenv('TINA4_QUEUE_BACKEND') ?: $backend;
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');
