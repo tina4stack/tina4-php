@@ -307,7 +307,8 @@ class Router
         $sid = $session->getSessionId();
         if ($sid && $sid !== $sessionCookie) {
             $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
-            header("Set-Cookie: tina4_session={$sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age={$ttl}");
+            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+            header("Set-Cookie: tina4_session={$sid}; Path=/; HttpOnly; SameSite={$sameSite}; Max-Age={$ttl}");
         }
 
         return $result;

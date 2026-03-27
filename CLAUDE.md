@@ -593,7 +593,7 @@ $result = SqlTranslation::remember(
 - Frond pre-compilation for 2.8x template render improvement
 - DB query caching: `TINA4_DB_CACHE=true` env var, `cache_stats()`, `cache_clear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
-- Queue backends: SQLite (default), RabbitMQ, Kafka, MongoDB
+- Queue backends: file (default), RabbitMQ, Kafka, MongoDB
 - Cache backends: memory (default), Redis, file
 - Session handlers: file, Redis/Valkey, MongoDB, database
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`

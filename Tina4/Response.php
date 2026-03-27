@@ -188,7 +188,7 @@ class Response
             'domain' => $options['domain'] ?? '',
             'secure' => $options['secure'] ?? false,
             'httponly' => $options['httponly'] ?? true,
-            'samesite' => $options['samesite'] ?? 'Lax',
+            'samesite' => $options['samesite'] ?? (getenv('TINA4_SESSION_SAMESITE') ?: 'Lax'),
         ];
         return $this;
     }
