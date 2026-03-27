@@ -56,7 +56,7 @@ class QueueV3Test extends TestCase
     {
         $q = $this->makeQueue();
         $q->push('emails', ['to' => 'bob@test.com']);
-        $files = glob($this->testPath . '/emails/*.json');
+        $files = glob($this->testPath . '/emails/*.queue-data');
         $this->assertCount(1, $files);
     }
 

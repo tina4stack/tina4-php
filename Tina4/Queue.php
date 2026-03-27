@@ -181,7 +181,7 @@ class Queue
      * @param int         $delay          Delay in seconds before job becomes available
      * @return string Job ID
      */
-    public function push(mixed $payloadOrQueue, mixed $queueOrPayload = '', int $delay = 0): string
+    public function push(mixed $payloadOrQueue, mixed $queueOrPayload = '', int $delay = 0, int $priority = 0): string
     {
         // Detect calling style:
         // 1. push('queue_name', $payload) — legacy: first arg is string queue name
@@ -225,6 +225,7 @@ class Queue
             'created_at' => $now,
             'attempts' => 0,
             'delay_until' => $delayUntil,
+            'priority' => $priority,
             'error' => null,
         ];
 
@@ -289,6 +290,7 @@ class Queue
 
         $chosen = $candidates[0];
         $job = $chosen['data'];
+        $job['topic'] = $this->topic;
 
         // Mark as reserved and remove from pending
         unlink($chosen['file']);
@@ -364,17 +366,37 @@ class Queue
     }
 
     /**
-     * Get the number of pending jobs in a queue.
+     * Get the number of jobs in a queue filtered by status.
      *
-     * @param string $queue Queue name (defaults to topic set in constructor)
+     * @param string $queue  Queue name (defaults to topic set in constructor)
+     * @param string $status Job status to count ('pending', 'failed')
      * @return int
      */
-    public function size(string $queue = ''): int
+    public function size(string $queue = '', string $status = 'pending'): int
     {
         $queue = $queue ?: $this->topic;
 
         if ($this->externalBackend !== null) {
             return $this->externalBackend->size($queue);
+        }
+
+        if ($status === 'failed') {
+            $failedPath = $this->queuePath($queue) . '/failed';
+            if (!is_dir($failedPath)) {
+                return 0;
+            }
+
+            $files = glob($failedPath . '/*.queue-data');
+            $count = 0;
+
+            foreach ($files as $file) {
+                $data = json_decode(file_get_contents($file), true);
+                if ($data !== null && ($data['status'] ?? '') === 'failed') {
+                    $count++;
+                }
+            }
+
+            return $count;
         }
 
         $queuePath = $this->queuePath($queue);
@@ -387,7 +409,7 @@ class Queue
 
         foreach ($files as $file) {
             $data = json_decode(file_get_contents($file), true);
-            if ($data !== null && $data['status'] === 'pending') {
+            if ($data !== null && ($data['status'] ?? '') === $status) {
                 $count++;
             }
         }
@@ -444,20 +466,25 @@ class Queue
     /**
      * Retry a failed job by moving it back to the pending queue.
      *
-     * @param string $jobId Job ID
+     * @param string      $jobId        Job ID
+     * @param string|null $queue        Queue name (defaults to searching all queues)
+     * @param int         $delaySeconds Delay in seconds before the retried job becomes available
      * @return bool True if job was found and re-queued
      */
-    public function retry(string $jobId): bool
+    public function retry(string $jobId, ?string $queue = null, int $delaySeconds = 0): bool
     {
-        // Search all queue directories for the failed job
-        $basePath = $this->basePath;
-        if (!is_dir($basePath)) {
-            return false;
+        // If a specific queue is given, only search that directory
+        if ($queue !== null) {
+            $queueDirs = [$this->queuePath($queue)];
+        } else {
+            $basePath = $this->basePath;
+            if (!is_dir($basePath)) {
+                return false;
+            }
+            $queueDirs = array_filter(glob($basePath . '/*'), 'is_dir');
         }
 
-        $queues = array_filter(glob($basePath . '/*'), 'is_dir');
-
-        foreach ($queues as $queueDir) {
+        foreach ($queueDirs as $queueDir) {
             $failedPath = $queueDir . '/failed';
             $failedFile = $failedPath . '/' . $jobId . '.queue-data';
 
@@ -472,9 +499,14 @@ class Queue
                     return false;
                 }
 
-                // Reset to pending and move back
+                // Reset to pending, increment attempts, and move back
                 $data['status'] = 'pending';
                 $data['error'] = null;
+                $data['attempts'] = ($data['attempts'] ?? 0) + 1;
+
+                if ($delaySeconds > 0) {
+                    $data['delay_until'] = sprintf('%.6f', microtime(true) + $delaySeconds);
+                }
 
                 file_put_contents(
                     $queueDir . '/' . $jobId . '.queue-data',
