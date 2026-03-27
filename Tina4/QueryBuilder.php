@@ -307,6 +307,168 @@ class QueryBuilder
     }
 
     /**
+     * Convert the fluent builder state into a MongoDB-compatible query document.
+     *
+     * @return array{filter?: array, projection?: array, sort?: array, limit?: int, skip?: int}
+     */
+    public function toMongo(): array
+    {
+        $result = [];
+
+        // -- projection --
+        if ($this->columns !== ['*']) {
+            $projection = [];
+            foreach ($this->columns as $col) {
+                $projection[trim($col)] = 1;
+            }
+            $result['projection'] = $projection;
+        }
+
+        // -- filter --
+        if (!empty($this->wheres)) {
+            $paramIndex = 0;
+            $andConditions = [];
+            $orConditions = [];
+
+            foreach ($this->wheres as $i => [$connector, $condition]) {
+                [$mongoCond, $paramIndex] = $this->parseConditionToMongo($condition, $paramIndex);
+                if ($i === 0 || $connector === 'AND') {
+                    $andConditions[] = $mongoCond;
+                } else {
+                    $orConditions[] = $mongoCond;
+                }
+            }
+
+            if (!empty($orConditions)) {
+                $andMerged = $this->mergeMongoConditions($andConditions);
+                $allBranches = array_merge([$andMerged], $orConditions);
+                $result['filter'] = ['$or' => $allBranches];
+            } else {
+                $result['filter'] = $this->mergeMongoConditions($andConditions);
+            }
+        }
+
+        // -- sort --
+        if (!empty($this->orderByCols)) {
+            $sort = [];
+            foreach ($this->orderByCols as $expr) {
+                $parts = preg_split('/\s+/', trim($expr));
+                $field = $parts[0];
+                $direction = (isset($parts[1]) && strtoupper($parts[1]) === 'DESC') ? -1 : 1;
+                $sort[$field] = $direction;
+            }
+            $result['sort'] = $sort;
+        }
+
+        // -- limit / skip --
+        if ($this->limitVal !== null) {
+            $result['limit'] = $this->limitVal;
+        }
+        if ($this->offsetVal !== null) {
+            $result['skip'] = $this->offsetVal;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Parse a single SQL condition into a MongoDB filter array.
+     *
+     * @return array{0: array, 1: int} [mongoCondition, updatedParamIndex]
+     */
+    private function parseConditionToMongo(string $condition, int $paramIndex): array
+    {
+        $cond = trim($condition);
+
+        // IS NOT NULL
+        if (preg_match('/^(\w+)\s+IS\s+NOT\s+NULL$/i', $cond, $m)) {
+            return [[$m[1] => ['$exists' => true, '$ne' => null]], $paramIndex];
+        }
+
+        // IS NULL
+        if (preg_match('/^(\w+)\s+IS\s+NULL$/i', $cond, $m)) {
+            return [[$m[1] => ['$exists' => false]], $paramIndex];
+        }
+
+        // NOT IN
+        if (preg_match('/^(\w+)\s+NOT\s+IN\s*\(\s*\?\s*\)$/i', $cond, $m)) {
+            $val = $this->params[$paramIndex] ?? [];
+            $values = is_array($val) ? $val : [$val];
+            return [[$m[1] => ['$nin' => $values]], $paramIndex + 1];
+        }
+
+        // IN
+        if (preg_match('/^(\w+)\s+IN\s*\(\s*\?\s*\)$/i', $cond, $m)) {
+            $val = $this->params[$paramIndex] ?? [];
+            $values = is_array($val) ? $val : [$val];
+            return [[$m[1] => ['$in' => $values]], $paramIndex + 1];
+        }
+
+        // LIKE
+        if (preg_match('/^(\w+)\s+LIKE\s+\?$/i', $cond, $m)) {
+            $val = (string)($this->params[$paramIndex] ?? '');
+            $pattern = str_replace(['%', '_'], ['.*', '.'], $val);
+            return [[$m[1] => ['$regex' => $pattern, '$options' => 'i']], $paramIndex + 1];
+        }
+
+        // Comparison operators: >=, <=, <>, !=, >, <, =
+        if (preg_match('/^(\w+)\s*(>=|<=|<>|!=|>|<|=)\s*\?$/', $cond, $m)) {
+            $field = $m[1];
+            $op = $m[2];
+            $val = $this->params[$paramIndex] ?? null;
+
+            $opMap = [
+                '='  => null,
+                '!=' => '$ne',
+                '<>' => '$ne',
+                '>'  => '$gt',
+                '>=' => '$gte',
+                '<'  => '$lt',
+                '<=' => '$lte',
+            ];
+
+            $mongoOp = $opMap[$op] ?? null;
+            if ($mongoOp === null) {
+                return [[$field => $val], $paramIndex + 1];
+            }
+            return [[$field => [$mongoOp => $val]], $paramIndex + 1];
+        }
+
+        // Fallback
+        return [['$where' => $cond], $paramIndex];
+    }
+
+    /**
+     * Merge multiple single-field mongo conditions into one array.
+     * Uses $and if field keys conflict.
+     */
+    private function mergeMongoConditions(array $conditions): array
+    {
+        if (count($conditions) === 1) {
+            return $conditions[0];
+        }
+
+        $merged = [];
+        $hasConflict = false;
+
+        foreach ($conditions as $cond) {
+            foreach ($cond as $key => $val) {
+                if (array_key_exists($key, $merged)) {
+                    $hasConflict = true;
+                    break 2;
+                }
+                $merged[$key] = $val;
+            }
+        }
+
+        if ($hasConflict) {
+            return ['$and' => $conditions];
+        }
+
+        return $merged;
+    }
+
+    /**
      * Build the WHERE clause from accumulated conditions.
      */
     private function buildWhere(): string
