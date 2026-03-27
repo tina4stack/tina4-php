@@ -25,6 +25,12 @@ class Frond
     /** @var array<string, array{tokens: array, ast: array}> Token pre-compilation cache for string templates */
     private array $compiledStrings = [];
 
+    /**
+     * Session ID used by formToken() for CSRF session binding.
+     * Set this before rendering templates to bind tokens to the current session.
+     */
+    public static string $formTokenSessionId = '';
+
     // Sentinel for "raw" (no auto-escape)
     private const RAW_MARKER = "\x00FROND_RAW\x00";
 
@@ -1919,6 +1925,15 @@ class Frond
                 } else {
                     $payload['context'] = $descriptor;
                 }
+            }
+
+            // Include session_id for CSRF session binding
+            $sessionId = self::$formTokenSessionId;
+            if ($sessionId === '' && session_status() === PHP_SESSION_ACTIVE) {
+                $sessionId = session_id();
+            }
+            if ($sessionId !== '') {
+                $payload['session_id'] = $sessionId;
             }
 
             $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
