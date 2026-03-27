@@ -95,12 +95,15 @@ class RouteDiscovery
 
         // 2. Inline route files (any other .php file that registers routes directly)
         foreach ($inlineFiles as $file) {
-            require_once $file;
-            $discovered[] = [
-                'method' => 'INLINE',
-                'path' => '*',
-                'file' => $file,
-            ];
+            $result = require_once $file;
+            // Only count files that return a callable as route files
+            if (is_callable($result)) {
+                $discovered[] = [
+                    'method' => 'INLINE',
+                    'path' => '*',
+                    'file' => $file,
+                ];
+            }
         }
 
         return $discovered;

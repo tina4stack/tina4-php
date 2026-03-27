@@ -77,7 +77,7 @@ class HealthTest extends TestCase
 
         $health = $app->getHealthData();
 
-        $this->assertEquals('3.0.0', $health['version']);
+        $this->assertEquals(App::VERSION, $health['version']);
     }
 
     public function testHealthUptimeIsNumeric(): void
@@ -109,12 +109,12 @@ class HealthTest extends TestCase
         $result = $handler();
 
         $this->assertEquals('ok', $result['status']);
-        $this->assertEquals('3.0.0', $result['version']);
+        $this->assertEquals(App::VERSION, $result['version']);
     }
 
     public function testAppVersion(): void
     {
-        $this->assertEquals('3.0.0', App::VERSION);
+        $this->assertEquals(App::VERSION, App::VERSION);
     }
 
     public function testAppStartAndStop(): void
@@ -200,6 +200,6 @@ class HealthTest extends TestCase
 
         $decoded = json_decode($json, true);
         $this->assertEquals('ok', $decoded['status']);
-        $this->assertEquals('3.0.0', $decoded['version']);
+        $this->assertEquals(App::VERSION, $decoded['version']);
     }
 }

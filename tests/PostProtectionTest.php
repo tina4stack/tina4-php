@@ -9,10 +9,11 @@
  * and auth enforcement via Router::dispatch().
  *
  * Tina4 PHP v3 auth convention:
- *   - Routes are NOT secure by default
- *   - Use ->secure() to require a Bearer token
- *   - Secure routes without a token return 401
- *   - Secure routes with a token pass through
+ *   - Write routes (POST/PUT/PATCH/DELETE) are secure by default
+ *   - Use ->noAuth() to opt out of auth on write routes
+ *   - GET/HEAD/OPTIONS routes are open by default; use ->secure() to require auth
+ *   - Secure routes without a valid JWT token return 401
+ *   - Secure routes with a valid JWT token pass through
  */
 
 use PHPUnit\Framework\TestCase;
@@ -28,11 +29,13 @@ class PostProtectionTest extends TestCase
     protected function setUp(): void
     {
         Router::reset();
+        putenv("SECRET={$this->secret}");
     }
 
     protected function tearDown(): void
     {
         Router::reset();
+        putenv('SECRET');
     }
 
     // ── Secure flag registration ─────────────────────────────────
@@ -153,7 +156,7 @@ class PostProtectionTest extends TestCase
     {
         Router::post('/api/webhook', function ($request, $response) {
             return $response->json(['ok' => true]);
-        });
+        })->noAuth();
 
         $request = $this->createRequest('POST', '/api/webhook');
         $response = Router::dispatch($request, new Response());

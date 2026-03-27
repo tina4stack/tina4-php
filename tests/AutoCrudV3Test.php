@@ -7,6 +7,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
+use Tina4\Auth;
 use Tina4\AutoCrud;
 use Tina4\Database\SQLite3Adapter;
 use Tina4\ORM;
@@ -26,10 +27,12 @@ class CrudItem extends ORM
 class AutoCrudV3Test extends TestCase
 {
     private SQLite3Adapter $db;
+    private string $secret = 'autocrud-test-secret';
 
     protected function setUp(): void
     {
         Router::reset();
+        putenv("SECRET={$this->secret}");
         $this->db = new SQLite3Adapter(':memory:');
         $this->db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT, price REAL)");
     }
@@ -37,6 +40,7 @@ class AutoCrudV3Test extends TestCase
     protected function tearDown(): void
     {
         Router::reset();
+        putenv('SECRET');
         $this->db->close();
     }
 
@@ -99,11 +103,12 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
+        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
         $request = Request::create(
             method: 'POST',
             path: '/api/items',
             body: ['name' => 'Widget', 'category' => 'Tools', 'price' => 9.99],
-            headers: ['content-type' => 'application/json'],
+            headers: ['content-type' => 'application/json', 'authorization' => "Bearer {$token}"],
         );
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
@@ -174,11 +179,12 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
+        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
         $request = Request::create(
             method: 'PUT',
             path: '/api/items/1',
             body: ['name' => 'Widget V2'],
-            headers: ['content-type' => 'application/json'],
+            headers: ['content-type' => 'application/json', 'authorization' => "Bearer {$token}"],
         );
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
@@ -196,7 +202,8 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $request = Request::create(method: 'DELETE', path: '/api/items/1');
+        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $request = Request::create(method: 'DELETE', path: '/api/items/1', headers: ['authorization' => "Bearer {$token}"]);
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
 
@@ -213,7 +220,8 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $request = Request::create(method: 'DELETE', path: '/api/items/999');
+        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $request = Request::create(method: 'DELETE', path: '/api/items/999', headers: ['authorization' => "Bearer {$token}"]);
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
 

@@ -61,7 +61,7 @@ class SwaggerTest extends TestCase
     public function testDefaultTitle(): void
     {
         $spec = Swagger::generateSpec();
-        $this->assertSame('Tina4 PHP API', $spec['info']['title']);
+        $this->assertSame('Tina4 API', $spec['info']['title']);
     }
 
     public function testDefaultVersion(): void

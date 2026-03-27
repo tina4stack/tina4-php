@@ -308,7 +308,15 @@ class Router
         if ($sid && $sid !== $sessionCookie) {
             $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-            header("Set-Cookie: tina4_session={$sid}; Path=/; HttpOnly; SameSite={$sameSite}; Max-Age={$ttl}");
+            // SameSite=None requires the Secure flag — browsers reject it otherwise
+            $secure = strcasecmp($sameSite, 'None') === 0 || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            setcookie('tina4_session', $sid, [
+                'expires' => time() + $ttl,
+                'path' => '/',
+                'httponly' => true,
+                'samesite' => $sameSite,
+                'secure' => $secure,
+            ]);
         }
 
         return $result;

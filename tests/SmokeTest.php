@@ -803,7 +803,7 @@ class SmokeTest extends TestCase
     {
         Router::reset();
         Router::put('/smoke/item/{id}', fn(Request $req, Response $res) =>
-            $res->json(['updated' => $req->params['id']]));
+            $res->json(['updated' => $req->params['id']]))->noAuth();
 
         $request = Request::create(method: 'PUT', path: '/smoke/item/7');
         $response = new Response(testing: true);
@@ -817,7 +817,7 @@ class SmokeTest extends TestCase
     {
         Router::reset();
         Router::patch('/smoke/item/{id}', fn(Request $req, Response $res) =>
-            $res->json(['patched' => $req->params['id']]));
+            $res->json(['patched' => $req->params['id']]))->noAuth();
 
         $request = Request::create(method: 'PATCH', path: '/smoke/item/3');
         $response = new Response(testing: true);
@@ -831,7 +831,7 @@ class SmokeTest extends TestCase
     {
         Router::reset();
         Router::delete('/smoke/item/{id}', fn(Request $req, Response $res) =>
-            $res->json(['deleted' => $req->params['id']]));
+            $res->json(['deleted' => $req->params['id']]))->noAuth();
 
         $request = Request::create(method: 'DELETE', path: '/smoke/item/5');
         $response = new Response(testing: true);
@@ -941,19 +941,23 @@ class SmokeTest extends TestCase
     public function testRouterSecureRouteWithBearerAllowed(): void
     {
         Router::reset();
+        $secret = 'smoke-test-secret';
+        putenv("SECRET={$secret}");
         Router::get('/smoke/secret', fn(Request $req, Response $res) =>
             $res->json(['secret' => 'data'])
         )->secure();
 
+        $token = Auth::getToken(['sub' => 'tester'], $secret);
         $request = Request::create(
             method: 'GET',
             path: '/smoke/secret',
-            headers: ['authorization' => 'Bearer some-valid-token']
+            headers: ['authorization' => "Bearer {$token}"]
         );
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
 
         $this->assertSame('data', $result->getJsonBody()['secret']);
+        putenv('SECRET');
         Router::reset();
     }
 

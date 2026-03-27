@@ -7,6 +7,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
+use Tina4\Auth;
 use Tina4\Router;
 use Tina4\Request;
 use Tina4\Response;
@@ -279,17 +280,21 @@ class RouterV3Test extends TestCase
 
     public function testDispatchSecureRouteWithToken(): void
     {
+        $secret = 'router-test-secret';
+        putenv("SECRET={$secret}");
         Router::get('/secure', fn($req, $res) => $res->json(['ok' => true]))->secure();
 
+        $token = Auth::getToken(['sub' => 'tester'], $secret);
         $request = Request::create(
             method: 'GET',
             path: '/secure',
-            headers: ['authorization' => 'Bearer valid-token-here'],
+            headers: ['authorization' => "Bearer {$token}"],
         );
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
 
         $this->assertSame(200, $result->getStatusCode());
+        putenv('SECRET');
     }
 
     public function testDispatchArrayReturn(): void

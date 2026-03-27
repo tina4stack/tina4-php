@@ -15,7 +15,7 @@ use Tina4\Database\PostgresAdapter;
 use Tina4\Database\MySQLAdapter;
 use Tina4\Database\MSSQLAdapter;
 use Tina4\Database\FirebirdAdapter;
-use Tina4\Database\DatabaseFactory;
+use Tina4\Database\Database;
 use Tina4\Database\SQLite3Adapter;
 
 class DatabaseDriversTest extends TestCase
@@ -70,31 +70,35 @@ class DatabaseDriversTest extends TestCase
 
     public function testFactorySQLiteMemory(): void
     {
-        $db = DatabaseFactory::create('sqlite::memory:');
-        $this->assertInstanceOf(SQLite3Adapter::class, $db);
+        $db = Database::create('sqlite::memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
         $db->close();
     }
 
     public function testFactorySQLiteBareMemory(): void
     {
-        $db = DatabaseFactory::create(':memory:');
-        $this->assertInstanceOf(SQLite3Adapter::class, $db);
+        $db = Database::create(':memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
         $db->close();
     }
 
     public function testFactorySQLiteFilePath(): void
     {
         $path = sys_get_temp_dir() . '/tina4_factory_test_' . uniqid() . '.db';
-        $db = DatabaseFactory::create($path);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db);
+        $db = Database::create($path);
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
         $db->close();
         @unlink($path);
     }
 
     public function testFactorySQLiteUrl(): void
     {
-        $db = DatabaseFactory::create('sqlite:///:memory:');
-        $this->assertInstanceOf(SQLite3Adapter::class, $db);
+        $db = Database::create('sqlite:///:memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
         $db->close();
     }
 
@@ -102,18 +106,18 @@ class DatabaseDriversTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unsupported database scheme');
-        DatabaseFactory::create('oracle://localhost/test');
+        Database::create('oracle://localhost/test');
     }
 
     public function testFactoryInvalidUrl(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        DatabaseFactory::create('not-a-valid-url');
+        Database::create('not-a-valid-url');
     }
 
     public function testFactorySupportedSchemes(): void
     {
-        $schemes = DatabaseFactory::supportedSchemes();
+        $schemes = Database::supportedSchemes();
         $this->assertContains('sqlite', $schemes);
         $this->assertContains('postgres', $schemes);
         $this->assertContains('postgresql', $schemes);
@@ -125,21 +129,21 @@ class DatabaseDriversTest extends TestCase
 
     public function testFactoryIsSupported(): void
     {
-        $this->assertTrue(DatabaseFactory::isSupported('sqlite'));
-        $this->assertTrue(DatabaseFactory::isSupported('postgres'));
-        $this->assertTrue(DatabaseFactory::isSupported('postgresql'));
-        $this->assertTrue(DatabaseFactory::isSupported('mysql'));
-        $this->assertTrue(DatabaseFactory::isSupported('mssql'));
-        $this->assertTrue(DatabaseFactory::isSupported('sqlserver'));
-        $this->assertTrue(DatabaseFactory::isSupported('firebird'));
-        $this->assertFalse(DatabaseFactory::isSupported('pgsql'));
-        $this->assertFalse(DatabaseFactory::isSupported('oracle'));
-        $this->assertFalse(DatabaseFactory::isSupported('cassandra'));
+        $this->assertTrue(Database::isSupported('sqlite'));
+        $this->assertTrue(Database::isSupported('postgres'));
+        $this->assertTrue(Database::isSupported('postgresql'));
+        $this->assertTrue(Database::isSupported('mysql'));
+        $this->assertTrue(Database::isSupported('mssql'));
+        $this->assertTrue(Database::isSupported('sqlserver'));
+        $this->assertTrue(Database::isSupported('firebird'));
+        $this->assertFalse(Database::isSupported('pgsql'));
+        $this->assertFalse(Database::isSupported('oracle'));
+        $this->assertFalse(Database::isSupported('cassandra'));
     }
 
     public function testFactoryFromEnvReturnsNullWhenNotSet(): void
     {
-        $result = DatabaseFactory::fromEnv('TINA4_TEST_DB_NONEXISTENT_' . uniqid());
+        $result = Database::fromEnv('TINA4_TEST_DB_NONEXISTENT_' . uniqid());
         $this->assertNull($result);
     }
 
@@ -378,7 +382,7 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL for live factory test');
         }
 
-        $db = DatabaseFactory::create($url);
+        $db = Database::create($url);
         $this->assertInstanceOf(PostgresAdapter::class, $db);
         $db->close();
     }
@@ -394,7 +398,7 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_MYSQL_URL for live factory test');
         }
 
-        $db = DatabaseFactory::create($url);
+        $db = Database::create($url);
         $this->assertInstanceOf(MySQLAdapter::class, $db);
         $db->close();
     }
@@ -410,7 +414,7 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_MSSQL_URL for live factory test');
         }
 
-        $db = DatabaseFactory::create($url);
+        $db = Database::create($url);
         $this->assertInstanceOf(MSSQLAdapter::class, $db);
         $db->close();
     }
@@ -426,7 +430,7 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL for live factory test');
         }
 
-        $db = DatabaseFactory::create($url);
+        $db = Database::create($url);
         $this->assertInstanceOf(FirebirdAdapter::class, $db);
         $db->close();
     }

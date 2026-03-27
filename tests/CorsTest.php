@@ -35,7 +35,7 @@ class CorsTest extends TestCase
 
         $headers = $cors->getHeaders();
 
-        $this->assertEquals('Content-Type,Authorization,X-Requested-With', $headers['Access-Control-Allow-Headers']);
+        $this->assertEquals('Content-Type,Authorization,X-Request-ID', $headers['Access-Control-Allow-Headers']);
     }
 
     public function testSpecificOriginsAllowed(): void

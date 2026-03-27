@@ -261,7 +261,7 @@ class Session
     /**
      * Save session data to the backend.
      */
-    private function save(): void
+    public function save(): void
     {
         match ($this->backend) {
             'redis' => $this->saveToRedis(),

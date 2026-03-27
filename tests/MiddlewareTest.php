@@ -354,7 +354,7 @@ class MiddlewareTest extends TestCase
     {
         $mwCalled = false;
 
-        Router::post('/api/create', fn($req, $res) => $res->json(['created' => true]))->middleware([
+        Router::post('/api/create', fn($req, $res) => $res->json(['created' => true]))->noAuth()->middleware([
             function () use (&$mwCalled) { $mwCalled = true; return true; },
         ]);
 
@@ -369,7 +369,7 @@ class MiddlewareTest extends TestCase
     {
         $mwCalled = false;
 
-        Router::delete('/api/items/{id}', fn($req, $res) => $res->json(['deleted' => true]))->middleware([
+        Router::delete('/api/items/{id}', fn($req, $res) => $res->json(['deleted' => true]))->noAuth()->middleware([
             function () use (&$mwCalled) { $mwCalled = true; return true; },
         ]);
 
