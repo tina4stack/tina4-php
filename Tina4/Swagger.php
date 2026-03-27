@@ -90,7 +90,17 @@ class Swagger
                     'responses' => [],
                     'params' => [],
                     'deprecated' => false,
+                    'noAuth' => false,
+                    'secured' => false,
                 ];
+
+                // Apply @noauth / @secured annotations to route flags
+                if ($docMeta['noAuth']) {
+                    $route['noAuth'] = true;
+                }
+                if ($docMeta['secured']) {
+                    $route['secure'] = true;
+                }
 
                 // Merge stored swagger metadata (from Router::swagger() or AutoCrud)
                 $swaggerMeta = $route['swagger'] ?? [];
@@ -228,8 +238,14 @@ class Swagger
                     ];
                 }
 
-                // Add security requirement for secure routes
-                if ($route['secure']) {
+                // Add security requirement: write routes are secure by default,
+                // GET/HEAD/OPTIONS are secure only when explicitly marked.
+                $isWriteMethod = in_array($method, ['post', 'put', 'patch', 'delete'], true);
+                $routeRequiresAuth = $isWriteMethod
+                    ? empty($route['noAuth'])
+                    : !empty($route['secure']);
+
+                if ($routeRequiresAuth) {
                     $operation['security'] = [
                         ['bearerAuth' => []],
                     ];
@@ -280,9 +296,11 @@ class Swagger
      *   @example_response <status> <json> — response example
      *   @param <type> <name> <Required|Optional> - <description> — parameter
      *   @deprecated                — marks operation as deprecated
+     *   @noauth                    — opts out of secure-by-default auth on write routes
+     *   @secured                   — requires auth on GET routes
      *
      * @param callable $callback The route handler
-     * @return array{description: string|null, summary: string|null, tags: array, examples: array, responses: array, params: array, deprecated: bool}
+     * @return array{description: string|null, summary: string|null, tags: array, examples: array, responses: array, params: array, deprecated: bool, noAuth: bool, secured: bool}
      */
     private static function parseDocBlock(callable $callback): array
     {
@@ -294,6 +312,8 @@ class Swagger
             'responses' => [],
             'params' => [],
             'deprecated' => false,
+            'noAuth' => false,
+            'secured' => false,
         ];
 
         try {
@@ -374,6 +394,18 @@ class Swagger
             // @deprecated
             if ($trimmed === '@deprecated') {
                 $result['deprecated'] = true;
+                continue;
+            }
+
+            // @noauth — opt out of secure-by-default auth on write routes
+            if ($trimmed === '@noauth') {
+                $result['noAuth'] = true;
+                continue;
+            }
+
+            // @secured — require auth on GET routes
+            if ($trimmed === '@secured') {
+                $result['secured'] = true;
                 continue;
             }
         }

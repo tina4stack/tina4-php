@@ -28,6 +28,7 @@ class Router
      *     middleware: array<callable>,
      *     cache: bool,
      *     secure: bool,
+     *     noAuth: bool,
      *     catchAll: bool,
      *     catchAllName: string|null,
      * }>> Routes indexed by HTTP method
@@ -226,6 +227,22 @@ class Router
     }
 
     /**
+     * Opt out of secure-by-default auth on a write route (POST/PUT/PATCH/DELETE).
+     *
+     * Write routes require a valid Bearer JWT by default. Call noAuth() to
+     * mark the route as publicly accessible without a token.
+     *
+     * @return $this
+     */
+    public function noAuth(): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['noAuth'] = true;
+        }
+        return $this;
+    }
+
+    /**
      * Match a request method and path to a registered route.
      *
      * @return array{route: array, params: array<string, string>}|null
@@ -335,13 +352,36 @@ class Router
         $route = $result['route'];
         $request->params = $result['params'];
 
-        // Check secure route
-        if ($route['secure']) {
+        // ── Auth enforcement ──────────────────────────────────────
+        // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
+        // Use ->noAuth() or @noauth to opt out.
+        // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
+        $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
+        $requiresAuth = false;
+
+        if ($isWriteMethod) {
+            // Write routes require auth unless explicitly opted out
+            $requiresAuth = empty($route['noAuth']);
+        } else {
+            // Read routes require auth only when explicitly marked secure
+            $requiresAuth = !empty($route['secure']);
+        }
+
+        if ($requiresAuth) {
             $token = $request->bearerToken();
+            $secret = getenv('SECRET') ?: '';
+
             if ($token === null) {
-                return self::renderError($response, 401, 'Unauthorized', $request->path);
+                return $response->json(['error' => 'Unauthorized'], 401);
             }
-            // JWT validation would go here — for now, presence of token is enough
+
+            $payload = Auth::validToken($token, $secret);
+            if ($payload === null) {
+                return $response->json(['error' => 'Unauthorized'], 401);
+            }
+
+            // Attach decoded JWT payload to the request for downstream use
+            $request->user = $payload;
         }
 
         // Run middleware chain
@@ -631,6 +671,7 @@ class Router
             'middleware' => self::$groupMiddleware,
             'cache' => false,
             'secure' => false,
+            'noAuth' => false,
             'catchAll' => $parsed['catchAll'],
             'catchAllName' => $parsed['catchAllName'],
             'swagger' => $swagger,
