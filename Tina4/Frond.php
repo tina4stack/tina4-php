@@ -1253,13 +1253,29 @@ class Frond
 
             if ($ch === '(') {
                 // Consume everything up to and including the matching ')'
+                // respecting quotes so that ')' or '.' inside strings are not
+                // mistaken for structural characters.
                 $depth = 1;
                 $current .= $ch;
                 $pos++;
+                $inQuote = false;
+                $quoteChar = '';
                 while ($pos < $len && $depth > 0) {
                     $c = $expr[$pos];
-                    if ($c === '(') $depth++;
-                    elseif ($c === ')') $depth--;
+                    if ($inQuote) {
+                        if ($c === $quoteChar && ($pos === 0 || $expr[$pos - 1] !== '\\')) {
+                            $inQuote = false;
+                        }
+                    } else {
+                        if ($c === '"' || $c === "'") {
+                            $inQuote = true;
+                            $quoteChar = $c;
+                        } elseif ($c === '(') {
+                            $depth++;
+                        } elseif ($c === ')') {
+                            $depth--;
+                        }
+                    }
                     $current .= $c;
                     $pos++;
                 }
