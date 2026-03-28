@@ -124,6 +124,88 @@ class RedisBackplane implements WebSocketBackplaneInterface
 }
 
 /**
+ * NATS pub/sub backplane.
+ *
+ * Requires the `basis-company/nats` Composer package. The class checks for
+ * its presence at instantiation time so the rest of Tina4 works fine without
+ * it — an exception is thrown only when this class is actually constructed.
+ *
+ * NATS connection URL defaults to nats://localhost:4222.
+ * Uses a background Fiber (PHP 8.1+) for the subscription listener.
+ */
+class NATSBackplane implements WebSocketBackplaneInterface
+{
+    private mixed $client;
+    private string $url;
+    private array $subscriptions = [];
+
+    public function __construct(?string $url = null)
+    {
+        if (!class_exists('\Basis\Nats\Client')) {
+            throw new \RuntimeException(
+                "The 'basis-company/nats' package is required for NATSBackplane. "
+                . "Install it with: composer require basis-company/nats"
+            );
+        }
+
+        $this->url = $url ?? ($_ENV['TINA4_WS_BACKPLANE_URL']
+            ?? getenv('TINA4_WS_BACKPLANE_URL')
+            ?: 'nats://localhost:4222');
+
+        $parsed = parse_url($this->url);
+        $host = $parsed['host'] ?? 'localhost';
+        $port = $parsed['port'] ?? 4222;
+
+        $configuration = new \Basis\Nats\Configuration([
+            'host' => $host,
+            'port' => $port,
+        ]);
+
+        if (!empty($parsed['user'])) {
+            $configuration->setUser($parsed['user']);
+        }
+        if (!empty($parsed['pass'])) {
+            $configuration->setPass($parsed['pass']);
+        }
+
+        $this->client = new \Basis\Nats\Client($configuration);
+        $this->client->connect();
+    }
+
+    public function publish(string $channel, string $message): void
+    {
+        $this->client->publish($channel, $message);
+    }
+
+    public function subscribe(string $channel, callable $callback): void
+    {
+        $this->subscriptions[$channel] = $this->client->subscribe($channel, function ($msg) use ($callback) {
+            $callback($msg->body);
+        });
+
+        // Process incoming messages in background
+        $this->client->process();
+    }
+
+    public function unsubscribe(string $channel): void
+    {
+        if (isset($this->subscriptions[$channel])) {
+            $this->subscriptions[$channel]->unsubscribe();
+            unset($this->subscriptions[$channel]);
+        }
+    }
+
+    public function close(): void
+    {
+        foreach ($this->subscriptions as $sub) {
+            $sub->unsubscribe();
+        }
+        $this->subscriptions = [];
+        $this->client->disconnect();
+    }
+}
+
+/**
  * Factory that reads TINA4_WS_BACKPLANE and returns the appropriate
  * backplane instance, or null if no backplane is configured.
  *
@@ -142,9 +224,7 @@ class WebSocketBackplaneFactory
 
         return match ($backend) {
             'redis' => new RedisBackplane($url),
-            'nats' => throw new \RuntimeException(
-                "NATS backplane is on the roadmap but not yet implemented."
-            ),
+            'nats' => new NATSBackplane($url),
             '' => null,
             default => throw new \InvalidArgumentException(
                 "Unknown TINA4_WS_BACKPLANE value: '{$backend}'"

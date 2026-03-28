@@ -286,6 +286,63 @@ class Session
         };
     }
 
+    // ── Garbage Collection ─────────────────────────────────────────
+
+    /**
+     * Garbage-collect expired sessions from the backend.
+     *
+     * Only file and database backends support GC — Redis/Valkey/Mongo
+     * handle TTL-based expiry natively.
+     */
+    public function gc(): void
+    {
+        match ($this->backend) {
+            'database', 'db' => $this->gcDatabase(),
+            'file' => $this->gcFiles(),
+            default => null, // Redis/Valkey/Mongo handle TTL natively
+        };
+    }
+
+    /**
+     * Remove expired file sessions.
+     */
+    private function gcFiles(): void
+    {
+        if (!is_dir($this->storagePath)) {
+            return;
+        }
+
+        $now = time();
+        foreach (glob($this->storagePath . '/*.json') as $file) {
+            try {
+                $content = file_get_contents($file);
+                $data = json_decode($content, true);
+                if (!is_array($data)) {
+                    unlink($file);
+                    continue;
+                }
+
+                $lastAccessed = $data['_meta']['last_accessed'] ?? 0;
+                if ($lastAccessed > 0 && ($now - $lastAccessed) > $this->ttl) {
+                    unlink($file);
+                }
+            } catch (\Throwable) {
+                // Corrupt file — remove it
+                @unlink($file);
+            }
+        }
+    }
+
+    /**
+     * Remove expired database sessions.
+     */
+    private function gcDatabase(): void
+    {
+        if ($this->dbHandler !== null || class_exists(Session\DatabaseSessionHandler::class)) {
+            $this->getDbHandler()->gc($this->ttl);
+        }
+    }
+
     // ── File Backend ──────────────────────────────────────────────
 
     /**

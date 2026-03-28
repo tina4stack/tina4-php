@@ -304,6 +304,15 @@ class Router
 
         // Save session and set cookie after handler runs
         $session->save();
+
+        // Probabilistic garbage collection (~1% of requests)
+        if (random_int(1, 100) === 1) {
+            try {
+                $session->gc();
+            } catch (\Throwable) {
+                // GC failure is non-critical — silently ignore
+            }
+        }
         $sid = $session->getSessionId();
         if ($sid && $sid !== $sessionCookie) {
             $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);

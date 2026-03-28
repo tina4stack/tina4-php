@@ -135,6 +135,22 @@ class DatabaseSessionHandler
     }
 
     /**
+     * Garbage-collect expired sessions from the database.
+     *
+     * @param int $ttl Session TTL in seconds (unused — expiry is absolute)
+     */
+    public function gc(int $ttl): void
+    {
+        $this->ensureTable();
+
+        $now = microtime(true);
+        $this->db->exec(
+            "DELETE FROM tina4_session WHERE expires_at > 0 AND expires_at < {$now}"
+        );
+        $this->db->commit();
+    }
+
+    /**
      * Close the handler (no-op for database — connection managed externally).
      */
     public function close(): void
