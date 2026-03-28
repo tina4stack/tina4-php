@@ -2141,7 +2141,7 @@ class Frond
         $this->filters['to_json'] = fn($v) => self::RAW_MARKER . str_replace(['<', '>', '&'], ['\\u003c', '\\u003e', '\\u0026'], json_encode($v));
         $this->filters['tojson'] = &$this->filters['to_json'];
 
-        // Escape for safe embedding in JavaScript strings
-        $this->filters['js_escape'] = fn($v) => str_replace(["\\", "'", '"', "\n", "\r"], ["\\\\", "\\'", '\\"', "\\n", "\\r"], (string)$v);
+        // Escape for safe embedding in JavaScript strings (marked raw to bypass auto-escaping)
+        $this->filters['js_escape'] = fn($v) => self::RAW_MARKER . str_replace(["\\", "'", '"', "\n", "\r"], ["\\\\", "\\'", '\\"', "\\n", "\\r"], (string)$v);
     }
 }
