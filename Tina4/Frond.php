@@ -1229,7 +1229,7 @@ class Frond
 
         // Handle dotted paths and bracket access
         // First tokenize the path: split on dots and brackets
-        $segments = $this->parseVarPath($expr);
+        $segments = $this->parseVarPath($expr, $data);
         if (empty($segments)) return '';
 
         $current = $data;
@@ -1269,7 +1269,7 @@ class Frond
         return $current;
     }
 
-    private function parseVarPath(string $expr): array
+    private function parseVarPath(string $expr, array &$data = []): array
     {
         $segments = [];
         $len = strlen($expr);
@@ -1320,9 +1320,17 @@ class Frond
                 }
                 $end = strpos($expr, ']', $pos + 1);
                 if ($end === false) break;
-                $idx = substr($expr, $pos + 1, $end - $pos - 1);
-                $idx = trim($idx, " \"'");
-                if (is_numeric($idx)) $idx = (int)$idx;
+                $idx = trim(substr($expr, $pos + 1, $end - $pos - 1));
+                if ((str_starts_with($idx, '"') && str_ends_with($idx, '"')) ||
+                    (str_starts_with($idx, "'") && str_ends_with($idx, "'"))) {
+                    // Quoted string literal — strip quotes
+                    $idx = substr($idx, 1, -1);
+                } elseif (is_numeric($idx)) {
+                    $idx = (int)$idx;
+                } else {
+                    // Resolve as a variable from context
+                    $idx = $this->resolveVariable($idx, $data);
+                }
                 $segments[] = $idx;
                 $pos = $end + 1;
             } else {
