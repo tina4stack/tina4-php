@@ -1206,7 +1206,20 @@ class Frond
 
         $current = $data;
         foreach ($segments as $seg) {
-            if (is_array($current)) {
+            // Check if segment is a method call like name(args)
+            if (is_string($seg) && preg_match('/^(\w+)\((.*)?\)$/s', $seg, $mc)) {
+                $methodName = $mc[1];
+                $argsStr = $mc[2] ?? '';
+                $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
+
+                if (is_array($current) && isset($current[$methodName]) && is_callable($current[$methodName])) {
+                    $current = ($current[$methodName])(...$args);
+                } elseif (is_object($current) && method_exists($current, $methodName)) {
+                    $current = $current->$methodName(...$args);
+                } else {
+                    return '';
+                }
+            } elseif (is_array($current)) {
                 if (array_key_exists($seg, $current)) {
                     $current = $current[$seg];
                 } else {
@@ -1238,7 +1251,19 @@ class Frond
         while ($pos < $len) {
             $ch = $expr[$pos];
 
-            if ($ch === '.') {
+            if ($ch === '(') {
+                // Consume everything up to and including the matching ')'
+                $depth = 1;
+                $current .= $ch;
+                $pos++;
+                while ($pos < $len && $depth > 0) {
+                    $c = $expr[$pos];
+                    if ($c === '(') $depth++;
+                    elseif ($c === ')') $depth--;
+                    $current .= $c;
+                    $pos++;
+                }
+            } elseif ($ch === '.') {
                 if ($current !== '') {
                     $segments[] = $current;
                     $current = '';
