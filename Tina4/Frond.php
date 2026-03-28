@@ -925,6 +925,19 @@ class Frond
         if ($expr === 'false') return false;
         if ($expr === 'none' || $expr === 'null') return null;
 
+        // String literal early-return: if the whole expression is a single
+        // quoted string with no matching quote inside, return the inner text
+        // immediately.  This prevents operator checks (~, ??, comparisons)
+        // from mismatching characters that appear inside the string.
+        if (strlen($expr) >= 2) {
+            $q = $expr[0];
+            if (($q === '"' || $q === "'") && str_ends_with($expr, $q) && !str_contains(substr($expr, 1, -1), $q)) {
+                $inner = substr($expr, 1, -1);
+                $inner = str_replace(['\\n', '\\t', '\\\\', "\\'", '\\"'], ["\n", "\t", "\\", "'", '"'], $inner);
+                return $inner;
+            }
+        }
+
         // Ternary MUST be checked before filter pipes so that expressions
         // like ``products|length != 1 ? "s" : ""`` are parsed correctly.
         // The ``?`` belongs to the ternary, not to a filter.
@@ -965,7 +978,7 @@ class Frond
         }
 
         // Null coalescing: value ?? default
-        $coalPos = $this->findOperator($expr, '??');
+        $coalPos = $this->findOutsideQuotes($expr, '??');
         if ($coalPos !== false) {
             $left = trim(substr($expr, 0, $coalPos));
             $right = trim(substr($expr, $coalPos + 2));
@@ -1032,8 +1045,9 @@ class Frond
             }
         }
 
-        // Comparison operators
+        // Comparison operators (guard: only check if op appears outside quotes)
         foreach (['!=', '==', '<=', '>=', '<', '>'] as $op) {
+            if ($this->findOutsideQuotes($expr, $op) === false) continue;
             $opPos = $this->findComparisonOp($expr, $op);
             if ($opPos !== false) {
                 $left = trim(substr($expr, 0, $opPos));
@@ -1052,22 +1066,19 @@ class Frond
         }
 
         // String concatenation with ~
-        $tildePos = $this->findConcat($expr);
+        $tildePos = $this->findOutsideQuotes($expr, '~');
         if ($tildePos !== false) {
-            $left = trim(substr($expr, 0, $tildePos));
-            $right = trim(substr($expr, $tildePos + 1));
-            $leftVal = $this->evaluateExpression($left, $data);
-            $rightVal = $this->evaluateExpression($right, $data);
-            // Strip raw markers for concat
-            $leftStr = $this->valueToString($leftVal);
-            $rightStr = $this->valueToString($rightVal);
-            if (is_string($leftVal) && str_contains($leftVal, self::RAW_MARKER)) {
-                $leftStr = str_replace(self::RAW_MARKER, '', $leftStr);
+            $parts = $this->splitOutsideQuotes($expr, '~');
+            $result = '';
+            foreach ($parts as $part) {
+                $val = $this->evaluateExpression(trim($part), $data);
+                $str = $this->valueToString($val);
+                if (is_string($val) && str_contains($val, self::RAW_MARKER)) {
+                    $str = str_replace(self::RAW_MARKER, '', $str);
+                }
+                $result .= $str;
             }
-            if (is_string($rightVal) && str_contains($rightVal, self::RAW_MARKER)) {
-                $rightStr = str_replace(self::RAW_MARKER, '', $rightStr);
-            }
-            return $leftStr . $rightStr;
+            return $result;
         }
 
         // Math: +, -, *, //, /, %
@@ -1354,6 +1365,70 @@ class Frond
             if ($ch === ':' && $depth === 0) return $i;
         }
         return false;
+    }
+
+    /**
+     * Find the first occurrence of $needle that is not inside quotes or parentheses.
+     * Returns the index, or false if not found outside quotes.
+     */
+    private function findOutsideQuotes(string $expr, string $needle): int|false
+    {
+        $inQ = null;
+        $depth = 0;
+        $len = strlen($expr);
+        $nLen = strlen($needle);
+        for ($i = 0; $i <= $len - $nLen; $i++) {
+            $ch = $expr[$i];
+            if (($ch === '"' || $ch === "'") && $depth === 0) {
+                if ($inQ === null) {
+                    $inQ = $ch;
+                } elseif ($ch === $inQ) {
+                    $inQ = null;
+                }
+                continue;
+            }
+            if ($inQ !== null) continue;
+            if ($ch === '(') { $depth++; }
+            elseif ($ch === ')') { $depth--; }
+            if ($depth === 0 && substr($expr, $i, $nLen) === $needle) return $i;
+        }
+        return false;
+    }
+
+    /**
+     * Split $expr on $sep only when $sep is outside quotes and parentheses.
+     */
+    private function splitOutsideQuotes(string $expr, string $sep): array
+    {
+        $parts = [];
+        $currentStart = 0;
+        $inQ = null;
+        $depth = 0;
+        $len = strlen($expr);
+        $sepLen = strlen($sep);
+        for ($i = 0; $i <= $len - $sepLen; $i++) {
+            $ch = $expr[$i];
+            if (($ch === '"' || $ch === "'") && $depth === 0) {
+                if ($inQ === null) {
+                    $inQ = $ch;
+                } elseif ($ch === $inQ) {
+                    $inQ = null;
+                }
+                continue;
+            }
+            if ($inQ !== null) continue;
+            if ($ch === '(') { $depth++; }
+            elseif ($ch === ')') { $depth--; }
+            if ($depth === 0 && substr($expr, $i, $sepLen) === $sep) {
+                $parts[] = substr($expr, $currentStart, $i - $currentStart);
+                $i += $sepLen;
+                $currentStart = $i;
+                $i--; // compensate for the for-loop increment
+                continue;
+            }
+        }
+        $parts[] = substr($expr, $currentStart);
+        return $parts;
     }
 
     private function findOperator(string $expr, string $op): int|false
