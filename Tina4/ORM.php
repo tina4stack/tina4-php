@@ -35,6 +35,9 @@ abstract class ORM
     /** @var array<string, string> Map DB column names to PHP property names */
     public array $fieldMapping = [];
 
+    /** @var bool When true, auto-generates fieldMapping from camelCase properties to snake_case DB columns */
+    public bool $autoMap = false;
+
     /** @var bool Whether soft delete is enabled */
     public bool $softDelete = false;
 
@@ -71,6 +74,22 @@ abstract class ORM
     {
         $instance = new static();
         return QueryBuilder::from($instance->tableName, $instance->_db);
+    }
+
+    /**
+     * Convert a snake_case name to camelCase.
+     */
+    private static function snakeToCamel(string $name): string
+    {
+        return lcfirst(str_replace('_', '', ucwords($name, '_')));
+    }
+
+    /**
+     * Convert a camelCase name to snake_case.
+     */
+    private static function camelToSnake(string $name): string
+    {
+        return strtolower(preg_replace('/[A-Z]/', '_$0', lcfirst($name)));
     }
 
     /**
@@ -175,6 +194,23 @@ abstract class ORM
      */
     public function fill(array $data): self
     {
+        // When autoMap is enabled, auto-generate fieldMapping for incoming
+        // snake_case DB columns that map to camelCase property names.
+        // Explicit $fieldMapping entries always take precedence.
+        if ($this->autoMap) {
+            $existingMappedColumns = array_values($this->fieldMapping);
+            foreach (array_keys($data) as $col) {
+                // Skip columns that are already mapped (as values in fieldMapping)
+                if (in_array($col, $existingMappedColumns, true)) {
+                    continue;
+                }
+                $camel = self::snakeToCamel($col);
+                if ($camel !== $col && !isset($this->fieldMapping[$camel])) {
+                    $this->fieldMapping[$camel] = $col;
+                }
+            }
+        }
+
         $reverseMapping = array_flip($this->fieldMapping);
 
         foreach ($data as $key => $value) {
@@ -840,6 +876,19 @@ abstract class ORM
      */
     private function getDbData(): array
     {
+        // When autoMap is enabled, ensure camelCase properties have
+        // snake_case mappings before converting to DB column names.
+        if ($this->autoMap) {
+            foreach (array_keys($this->_data) as $prop) {
+                if (!isset($this->fieldMapping[$prop])) {
+                    $snaked = self::camelToSnake($prop);
+                    if ($snaked !== $prop) {
+                        $this->fieldMapping[$prop] = $snaked;
+                    }
+                }
+            }
+        }
+
         $data = [];
 
         foreach ($this->_data as $prop => $value) {
