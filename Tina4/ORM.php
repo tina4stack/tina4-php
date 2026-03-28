@@ -234,10 +234,14 @@ abstract class ORM
         $pkValue = $this->getPrimaryKeyValue();
 
         if ($this->_exists || ($pkValue !== null && $this->recordExists($pkValue))) {
-            return $this->update();
+            $result = $this->update();
+            $this->_db->commit();
+            return $result;
         }
 
-        return $this->insert();
+        $result = $this->insert();
+        $this->_db->commit();
+        return $result;
     }
 
     /**
@@ -295,6 +299,7 @@ abstract class ORM
             $this->_exists = false;
         }
 
+        $this->_db->commit();
         return $result;
     }
 
@@ -585,6 +590,7 @@ abstract class ORM
             $this->_exists = false;
         }
 
+        $this->_db->commit();
         return $result;
     }
 
@@ -614,6 +620,7 @@ abstract class ORM
             $this->_data['is_deleted'] = 0;
         }
 
+        $this->_db->commit();
         return $result;
     }
 
@@ -783,7 +790,9 @@ abstract class ORM
             $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
         }
 
-        return $this->_db->execute($sql);
+        $result = $this->_db->execute($sql);
+        $this->_db->commit();
+        return $result;
     }
 
     /**
