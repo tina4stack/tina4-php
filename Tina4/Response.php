@@ -14,6 +14,60 @@ namespace Tina4;
  */
 class Response
 {
+    /** @var Frond|null Singleton Frond instance for user templates */
+    private static ?Frond $frond = null;
+
+    /** @var Frond|null Singleton Frond instance for framework templates */
+    private static ?Frond $frameworkFrond = null;
+
+    /**
+     * Get the singleton Frond instance for user templates.
+     * Lazily creates one pointing at 'src/templates' on first call.
+     *
+     * @return Frond
+     */
+    public static function getFrond(): Frond
+    {
+        if (self::$frond === null) {
+            self::$frond = new Frond('src/templates');
+        }
+        return self::$frond;
+    }
+
+    /**
+     * Register a pre-configured Frond engine as the singleton.
+     * Call this at startup to set custom filters/globals before any template renders.
+     *
+     * @param Frond $frond
+     */
+    public static function setFrond(Frond $frond): void
+    {
+        self::$frond = $frond;
+    }
+
+    /**
+     * Get the singleton Frond instance for framework templates (Tina4/templates).
+     * Lazily creates one and syncs custom filters/globals from the user Frond engine.
+     *
+     * @return Frond
+     */
+    public static function getFrameworkFrond(): Frond
+    {
+        if (self::$frameworkFrond === null) {
+            self::$frameworkFrond = new Frond(__DIR__ . '/templates');
+
+            // Sync custom filters and globals from the user engine
+            $userFrond = self::getFrond();
+            foreach ($userFrond->getFilters() as $name => $fn) {
+                self::$frameworkFrond->addFilter($name, $fn);
+            }
+            foreach ($userFrond->getGlobals() as $name => $value) {
+                self::$frameworkFrond->addGlobal($name, $value);
+            }
+        }
+        return self::$frameworkFrond;
+    }
+
     /** @var int HTTP status code */
     private int $statusCode = 200;
 
@@ -415,7 +469,7 @@ class Response
      */
     public function template(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
     {
-        $frond = new Frond($templateDir);
+        $frond = self::getFrond();
         $html = $frond->render($templateName, $data);
 
         $this->statusCode = $status;

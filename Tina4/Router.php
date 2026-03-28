@@ -597,7 +597,7 @@ class Router
         $userTemplateDir = 'src/templates';
         if (is_file($userTemplateDir . '/' . $templateFile)) {
             try {
-                $frond = new Frond($userTemplateDir);
+                $frond = Response::getFrond();
                 $html = $frond->render($templateFile, $data);
                 return $response->html($html, $code);
             } catch (\Throwable $e) {
@@ -609,7 +609,7 @@ class Router
         $frameworkTemplateDir = __DIR__ . '/templates';
         if (is_file($frameworkTemplateDir . '/' . $templateFile)) {
             try {
-                $frond = new Frond($frameworkTemplateDir);
+                $frond = Response::getFrameworkFrond();
                 $html = $frond->render($templateFile, $data);
                 return $response->html($html, $code);
             } catch (\Throwable $e) {

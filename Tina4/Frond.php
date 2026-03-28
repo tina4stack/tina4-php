@@ -124,6 +124,26 @@ class Frond
         $this->globals[$name] = $value;
     }
 
+    /**
+     * Get all registered filters (built-in + custom).
+     *
+     * @return array<string, callable>
+     */
+    public function getFilters(): array
+    {
+        return $this->filters;
+    }
+
+    /**
+     * Get all registered globals (built-in + custom).
+     *
+     * @return array<string, mixed>
+     */
+    public function getGlobals(): array
+    {
+        return $this->globals;
+    }
+
     public function addTest(string $name, callable $fn): void
     {
         $this->tests[$name] = $fn;
