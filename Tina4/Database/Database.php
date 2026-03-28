@@ -394,6 +394,61 @@ class Database
     }
 
     /**
+     * Pre-generate the next available primary key ID using engine-aware strategies.
+     *
+     * - Firebird: auto-creates a generator if missing, then increments it via GEN_ID.
+     * - PostgreSQL: tries nextval() on the standard sequence, falls through to MAX+1.
+     * - SQLite/MySQL/MSSQL: uses MAX(pk) + 1.
+     * - Returns 1 if the table is empty or does not exist.
+     *
+     * @param string $table Table name
+     * @param string $pkColumn Primary key column name
+     * @param string|null $generatorName Firebird generator name override
+     * @return int The next available ID
+     */
+    public function getNextId(string $table, string $pkColumn = 'id', ?string $generatorName = null): int
+    {
+        $adapter = $this->getNextAdapter();
+
+        // Firebird — use generators
+        if ($adapter instanceof FirebirdAdapter) {
+            $genName = $generatorName ?? 'GEN_' . strtoupper($table) . '_ID';
+
+            // Auto-create the generator if it does not exist
+            try {
+                $adapter->execute("CREATE GENERATOR {$genName}");
+            } catch (\Throwable) {
+                // Generator already exists — ignore
+            }
+
+            $row = $adapter->fetchOne("SELECT GEN_ID({$genName}, 1) AS NEXT_ID FROM RDB\$DATABASE");
+            return (int) ($row['NEXT_ID'] ?? $row['next_id'] ?? 1);
+        }
+
+        // PostgreSQL — try sequence first, fall through to MAX
+        if ($adapter instanceof PostgresAdapter) {
+            $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
+            try {
+                $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
+                if ($row !== null && isset($row['next_id'])) {
+                    return (int) $row['next_id'];
+                }
+            } catch (\Throwable) {
+                // No sequence — fall through to MAX
+            }
+        }
+
+        // SQLite / MySQL / MSSQL / PostgreSQL fallback — MAX + 1
+        try {
+            $row = $adapter->fetchOne("SELECT MAX({$pkColumn}) + 1 AS next_id FROM {$table}");
+            $nextId = $row['next_id'] ?? null;
+            return $nextId !== null ? (int) $nextId : 1;
+        } catch (\Throwable) {
+            return 1;
+        }
+    }
+
+    /**
      * Get the last error message.
      */
     public function error(): ?string
