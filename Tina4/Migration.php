@@ -279,14 +279,32 @@ class Migration
     private function ensureMigrationsTable(): void
     {
         if (!$this->db->tableExists(self::MIGRATIONS_TABLE)) {
-            $this->db->exec("
-                CREATE TABLE " . self::MIGRATIONS_TABLE . " (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    migration VARCHAR(255) NOT NULL UNIQUE,
-                    batch INTEGER NOT NULL,
-                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ");
+            if ($this->isFirebird()) {
+                // Firebird: no AUTOINCREMENT, no TEXT type, use generator for IDs
+                try {
+                    $this->db->exec("CREATE GENERATOR GEN_TINA4_MIGRATION_ID");
+                    $this->db->exec("COMMIT");
+                } catch (\Throwable) {
+                    // Generator may already exist
+                }
+                $this->db->exec("
+                    CREATE TABLE " . self::MIGRATIONS_TABLE . " (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        migration VARCHAR(500) NOT NULL UNIQUE,
+                        batch INTEGER NOT NULL,
+                        applied_at VARCHAR(50) DEFAULT CURRENT_TIMESTAMP
+                    )
+                ");
+            } else {
+                $this->db->exec("
+                    CREATE TABLE " . self::MIGRATIONS_TABLE . " (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        migration VARCHAR(255) NOT NULL UNIQUE,
+                        batch INTEGER NOT NULL,
+                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ");
+            }
         }
     }
 
@@ -295,10 +313,22 @@ class Migration
      */
     private function recordMigration(string $fileName, int $batch): void
     {
-        $this->db->exec(
-            "INSERT INTO " . self::MIGRATIONS_TABLE . " (migration, batch) VALUES (:name, :batch)",
-            [':name' => $fileName, ':batch' => $batch]
-        );
+        if ($this->isFirebird()) {
+            // Firebird: generate ID from sequence
+            $rows = $this->db->query(
+                "SELECT GEN_ID(GEN_TINA4_MIGRATION_ID, 1) AS NEXT_ID FROM RDB\$DATABASE"
+            );
+            $nextId = (int)($rows[0]['NEXT_ID'] ?? 1);
+            $this->db->exec(
+                "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
+                [':id' => $nextId, ':name' => $fileName, ':batch' => $batch]
+            );
+        } else {
+            $this->db->exec(
+                "INSERT INTO " . self::MIGRATIONS_TABLE . " (migration, batch) VALUES (:name, :batch)",
+                [':name' => $fileName, ':batch' => $batch]
+            );
+        }
     }
 
     /**
