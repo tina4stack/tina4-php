@@ -933,7 +933,7 @@ class Frond
             $q = $expr[0];
             if (($q === '"' || $q === "'") && str_ends_with($expr, $q) && !str_contains(substr($expr, 1, -1), $q)) {
                 $inner = substr($expr, 1, -1);
-                $inner = str_replace(['\\n', '\\t', '\\\\', "\\'", '\\"'], ["\n", "\t", "\\", "'", '"'], $inner);
+                $inner = $this->processEscapes($inner);
                 return $inner;
             }
         }
@@ -1762,6 +1762,32 @@ class Frond
         return $this->parseFilterArgs($argsStr, $data);
     }
 
+    /**
+     * Process backslash escape sequences in a single pass so that
+     * \\' does not collapse to ' (it should become \').
+     */
+    private function processEscapes(string $s): string
+    {
+        $out = '';
+        $len = strlen($s);
+        for ($i = 0; $i < $len; $i++) {
+            if ($s[$i] === '\\' && $i + 1 < $len) {
+                $next = $s[$i + 1];
+                switch ($next) {
+                    case 'n':  $out .= "\n"; $i++; break;
+                    case 't':  $out .= "\t"; $i++; break;
+                    case '\\': $out .= "\\"; $i++; break;
+                    case "'":  $out .= "'";  $i++; break;
+                    case '"':  $out .= '"';  $i++; break;
+                    default:   $out .= '\\'; break;
+                }
+            } else {
+                $out .= $s[$i];
+            }
+        }
+        return $out;
+    }
+
     /* ─── tests ─── */
 
     private function isKnownTest(string $name): bool
@@ -2110,5 +2136,12 @@ class Frond
         // Also register as filters so {{ "" | formToken }} and {{ "" | form_token }} work
         $this->filters['formToken'] = fn($v) => $formTokenFn((string)($v ?: ''));
         $this->filters['form_token'] = fn($v) => $formTokenFn((string)($v ?: ''));
+
+        // HTML-safe JSON dump (escapes <, >, & as unicode escapes)
+        $this->filters['to_json'] = fn($v) => self::RAW_MARKER . str_replace(['<', '>', '&'], ['\\u003c', '\\u003e', '\\u0026'], json_encode($v));
+        $this->filters['tojson'] = &$this->filters['to_json'];
+
+        // Escape for safe embedding in JavaScript strings
+        $this->filters['js_escape'] = fn($v) => str_replace(["\\", "'", '"', "\n", "\r"], ["\\\\", "\\'", '\\"', "\\n", "\\r"], (string)$v);
     }
 }
