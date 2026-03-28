@@ -1148,10 +1148,27 @@ class Frond
             return range((int)$m[1], (int)$m[2]);
         }
 
-        // Macro or function call: name(args)
-        if (preg_match('/^(\w+)\s*\((.*)?\)$/s', $expr, $m)) {
+        // Macro or function call: name(args) — supports dotted names like user.t("key")
+        if (preg_match('/^([\w.]+)\s*\((.*)?\)$/s', $expr, $m)) {
             $funcName = $m[1];
             $argsStr = $m[2] ?? '';
+
+            // Dotted function name: resolve object, then call method
+            if (str_contains($funcName, '.')) {
+                $lastDot = strrpos($funcName, '.');
+                $objPath = substr($funcName, 0, $lastDot);
+                $methodName = substr($funcName, $lastDot + 1);
+                $obj = $this->resolveVariable($objPath, $data);
+                $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
+                if (is_array($obj) && isset($obj[$methodName]) && is_callable($obj[$methodName])) {
+                    return ($obj[$methodName])(...$args);
+                }
+                if (is_object($obj) && method_exists($obj, $methodName)) {
+                    return $obj->$methodName(...$args);
+                }
+                return '';
+            }
+
             if (isset($this->macros[$funcName])) {
                 return $this->callMacro($funcName, $argsStr, $data);
             }
