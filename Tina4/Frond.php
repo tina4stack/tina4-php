@@ -2217,7 +2217,7 @@ class Frond
     private function registerBuiltinGlobals(): void
     {
         $formTokenFn = static function (string $descriptor = ''): string {
-            $payload = ['type' => 'form'];
+            $payload = ['type' => 'form', 'nonce' => bin2hex(random_bytes(8))];
             if ($descriptor !== '') {
                 if (str_contains($descriptor, '|')) {
                     $parts = explode('|', $descriptor, 2);
