@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.10.23 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.10.24 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 

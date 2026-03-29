@@ -81,24 +81,18 @@ class Frond
         }
 
         $debugMode = strtolower(getenv('TINA4_DEBUG') ?: '') === 'true';
-        $cached = $this->compiled[$template] ?? null;
 
-        if ($cached !== null) {
-            if ($debugMode) {
-                // Dev mode: check if file changed
-                $mtime = filemtime($file);
-                if ($cached['mtime'] === $mtime) {
-                    $data = array_merge($this->globals, $data);
-                    $ast = $this->resolveInheritance($cached['ast'], $data, $template);
-                    return $this->execute($ast, $data);
-                }
-            } else {
-                // Production: skip mtime check, cache is permanent
+        if (!$debugMode) {
+            // Production: use permanent cache (no filesystem checks)
+            $cached = $this->compiled[$template] ?? null;
+            if ($cached !== null) {
                 $data = array_merge($this->globals, $data);
                 $ast = $this->resolveInheritance($cached['ast'], $data, $template);
                 return $this->execute($ast, $data);
             }
         }
+        // Dev mode: skip cache entirely — always re-read and re-tokenize
+        // so edits to partials and extended base templates are detected
 
         // Cache miss — load, tokenize, parse, cache
         $source = file_get_contents($file);
