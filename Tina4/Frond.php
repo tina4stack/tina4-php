@@ -938,6 +938,23 @@ class Frond
             }
         }
 
+        // Parenthesized sub-expression: (expr) — strip parens and evaluate inner
+        if (strlen($expr) >= 2 && $expr[0] === '(' && str_ends_with($expr, ')')) {
+            $depth = 0;
+            $matched = true;
+            for ($pi = 0; $pi < strlen($expr); $pi++) {
+                if ($expr[$pi] === '(') $depth++;
+                elseif ($expr[$pi] === ')') $depth--;
+                if ($depth === 0 && $pi < strlen($expr) - 1) {
+                    $matched = false;
+                    break;
+                }
+            }
+            if ($matched) {
+                return $this->evaluateExpression(substr($expr, 1, -1), $data);
+            }
+        }
+
         // Ternary MUST be checked before filter pipes so that expressions
         // like ``products|length != 1 ? "s" : ""`` are parsed correctly.
         // The ``?`` belongs to the ternary, not to a filter.
@@ -968,13 +985,20 @@ class Frond
             return $value;
         }
 
-        // Jinja2-style inline if: value if condition else other_value
-        if (preg_match('/^(.+?)\s+if\s+(.+?)\s+else\s+(.+)$/', $expr, $inlineIfMatch)) {
-            $condResult = $this->evaluateExpression($inlineIfMatch[2], $data);
-            if ($this->isTruthy($condResult)) {
-                return $this->evaluateExpression($inlineIfMatch[1], $data);
+        // Jinja2-style inline if: value if condition else other_value — quote-aware
+        $ifPos = $this->findOutsideQuotes($expr, ' if ');
+        if ($ifPos !== false) {
+            $elsePos = $this->findOutsideQuotes($expr, ' else ');
+            if ($elsePos !== false && $elsePos > $ifPos) {
+                $valuePart = trim(substr($expr, 0, $ifPos));
+                $condPart = trim(substr($expr, $ifPos + 4, $elsePos - $ifPos - 4));
+                $elsePart = trim(substr($expr, $elsePos + 6));
+                $condResult = $this->evaluateExpression($condPart, $data);
+                if ($this->isTruthy($condResult)) {
+                    return $this->evaluateExpression($valuePart, $data);
+                }
+                return $this->evaluateExpression($elsePart, $data);
             }
-            return $this->evaluateExpression($inlineIfMatch[3], $data);
         }
 
         // Null coalescing: value ?? default
