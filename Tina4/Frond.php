@@ -2216,7 +2216,8 @@ class Frond
 
     private function registerBuiltinGlobals(): void
     {
-        $formTokenFn = static function (string $descriptor = ''): string {
+        // Shared JWT generation logic used by both formToken and formTokenValue
+        $generateFormJwt = static function (string $descriptor = ''): string {
             $payload = ['type' => 'form', 'nonce' => bin2hex(random_bytes(8))];
             if ($descriptor !== '') {
                 if (str_contains($descriptor, '|')) {
@@ -2240,16 +2241,30 @@ class Frond
             $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
             $ttlMinutes = (int)(DotEnv::getEnv('TINA4_TOKEN_LIMIT', '60') ?? '60');
             $expiresIn = $ttlMinutes * 60;
-            $token = Auth::getToken($payload, $secret, $expiresIn);
+            return Auth::getToken($payload, $secret, $expiresIn);
+        };
+
+        // formToken / form_token — returns full <input> element
+        $formTokenFn = static function (string $descriptor = '') use ($generateFormJwt): string {
+            $token = $generateFormJwt($descriptor);
             return self::RAW_MARKER . '<input type="hidden" name="formToken" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+        };
+
+        // formTokenValue / form_token_value — returns just the raw JWT string
+        $formTokenValueFn = static function (string $descriptor = '') use ($generateFormJwt): string {
+            return $generateFormJwt($descriptor);
         };
 
         $this->globals['formToken'] = $formTokenFn;
         $this->globals['form_token'] = $formTokenFn;
+        $this->globals['formTokenValue'] = $formTokenValueFn;
+        $this->globals['form_token_value'] = $formTokenValueFn;
 
         // Also register as filters so {{ "" | formToken }} and {{ "" | form_token }} work
         $this->filters['formToken'] = fn($v) => $formTokenFn((string)($v ?: ''));
         $this->filters['form_token'] = fn($v) => $formTokenFn((string)($v ?: ''));
+        $this->filters['formTokenValue'] = fn($v) => $formTokenValueFn((string)($v ?: ''));
+        $this->filters['form_token_value'] = fn($v) => $formTokenValueFn((string)($v ?: ''));
 
         // HTML-safe JSON dump (escapes <, >, & as unicode escapes)
         $this->filters['to_json'] = fn($v) => self::RAW_MARKER . str_replace(['<', '>', '&'], ['\\u003c', '\\u003e', '\\u0026'], json_encode($v));
