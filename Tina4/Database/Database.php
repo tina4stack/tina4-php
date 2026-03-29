@@ -394,11 +394,87 @@ class Database
     }
 
     /**
+     * Ensure the tina4_sequences table exists for race-safe ID generation.
+     *
+     * @param DatabaseAdapter $adapter
+     */
+    private function ensureSequenceTable(DatabaseAdapter $adapter): void
+    {
+        try {
+            $adapter->execute(
+                'CREATE TABLE IF NOT EXISTS tina4_sequences ('
+                . 'seq_name VARCHAR(200) PRIMARY KEY, '
+                . 'current_value INTEGER DEFAULT 0'
+                . ')'
+            );
+        } catch (\Throwable) {
+            // Table already exists — ignore
+        }
+    }
+
+    /**
+     * Get the next ID from the tina4_sequences table (atomic UPDATE + SELECT).
+     *
+     * If no row exists for the sequence, seeds it from MAX(pkColumn) of the target table.
+     *
+     * @param string $seqName Sequence name (e.g. "users.id")
+     * @param string|null $table Table to seed from
+     * @param string $pkColumn Primary key column to seed from
+     * @param DatabaseAdapter $adapter
+     * @return int The next available ID
+     */
+    private function sequenceNext(string $seqName, ?string $table, string $pkColumn, DatabaseAdapter $adapter): int
+    {
+        $this->ensureSequenceTable($adapter);
+
+        // Check if sequence row exists
+        $row = $adapter->fetchOne(
+            'SELECT current_value FROM tina4_sequences WHERE seq_name = ?',
+            [$seqName]
+        );
+
+        if ($row === null) {
+            // Seed from MAX(pk_column) of the target table
+            $seed = 0;
+            if ($table !== null) {
+                try {
+                    $maxRow = $adapter->fetchOne("SELECT MAX({$pkColumn}) AS max_id FROM {$table}");
+                    if ($maxRow !== null) {
+                        $seed = (int) ($maxRow['max_id'] ?? $maxRow['MAX_ID'] ?? 0);
+                    }
+                } catch (\Throwable) {
+                    // Table does not exist — start from 0
+                }
+            }
+
+            $adapter->execute(
+                'INSERT INTO tina4_sequences (seq_name, current_value) VALUES (?, ?)',
+                [$seqName, $seed]
+            );
+        }
+
+        // Atomic increment
+        $adapter->execute(
+            'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ?',
+            [$seqName]
+        );
+
+        // Read back the new value
+        $row = $adapter->fetchOne(
+            'SELECT current_value FROM tina4_sequences WHERE seq_name = ?',
+            [$seqName]
+        );
+
+        return (int) ($row['current_value'] ?? 1);
+    }
+
+    /**
      * Pre-generate the next available primary key ID using engine-aware strategies.
      *
-     * - Firebird: auto-creates a generator if missing, then increments it via GEN_ID.
-     * - PostgreSQL: tries nextval() on the standard sequence, falls through to MAX+1.
-     * - SQLite/MySQL/MSSQL: uses MAX(pk) + 1.
+     * - Firebird: auto-creates a generator if missing, then increments it via GEN_ID (atomic).
+     * - PostgreSQL: tries nextval() first; if the sequence is missing, auto-creates it
+     *   seeded from MAX(pk), then retries; falls through to sequence table on failure.
+     * - SQLite/MySQL/MSSQL: uses a race-safe tina4_sequences table with atomic UPDATE.
      * - Returns 1 if the table is empty or does not exist.
      *
      * @param string $table Table name
@@ -410,7 +486,7 @@ class Database
     {
         $adapter = $this->getNextAdapter();
 
-        // Firebird — use generators
+        // Firebird — use generators (GEN_ID is atomic)
         if ($adapter instanceof FirebirdAdapter) {
             $genName = $generatorName ?? 'GEN_' . strtoupper($table) . '_ID';
 
@@ -425,7 +501,7 @@ class Database
             return (int) ($row['NEXT_ID'] ?? $row['next_id'] ?? 1);
         }
 
-        // PostgreSQL — try sequence first, fall through to MAX
+        // PostgreSQL — try nextval() first, auto-create sequence if missing
         if ($adapter instanceof PostgresAdapter) {
             $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
             try {
@@ -434,18 +510,30 @@ class Database
                     return (int) $row['next_id'];
                 }
             } catch (\Throwable) {
-                // No sequence — fall through to MAX
+                // Sequence does not exist — try to create it seeded from MAX
+                try {
+                    $seed = 0;
+                    $maxRow = $adapter->fetchOne("SELECT COALESCE(MAX({$pkColumn}), 0) AS max_id FROM {$table}");
+                    if ($maxRow !== null) {
+                        $seed = (int) ($maxRow['max_id'] ?? 0);
+                    }
+
+                    $adapter->execute("CREATE SEQUENCE {$seqName} START WITH " . ($seed + 1));
+                    $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
+                    if ($row !== null && isset($row['next_id'])) {
+                        return (int) $row['next_id'];
+                    }
+                } catch (\Throwable) {
+                    // Fall through to sequence table
+                }
             }
+
+            // PostgreSQL fallback — use sequence table
+            return $this->sequenceNext("{$table}.{$pkColumn}", $table, $pkColumn, $adapter);
         }
 
-        // SQLite / MySQL / MSSQL / PostgreSQL fallback — MAX + 1
-        try {
-            $row = $adapter->fetchOne("SELECT MAX({$pkColumn}) + 1 AS next_id FROM {$table}");
-            $nextId = $row['next_id'] ?? null;
-            return $nextId !== null ? (int) $nextId : 1;
-        } catch (\Throwable) {
-            return 1;
-        }
+        // SQLite / MySQL / MSSQL — use race-safe sequence table
+        return $this->sequenceNext("{$table}.{$pkColumn}", $table, $pkColumn, $adapter);
     }
 
     /**

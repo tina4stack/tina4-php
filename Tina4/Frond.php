@@ -34,6 +34,35 @@ class Frond
     // Sentinel for "raw" (no auto-escape)
     private const RAW_MARKER = "\x00FROND_RAW\x00";
 
+    // Pre-compiled regex patterns
+    private const RE_RAW_BLOCK = '/\{%-?\s*raw\s*-?%\}(.*?)\{%-?\s*endraw\s*-?%\}/s';
+    private const RE_WHITESPACE_SPLIT = '/\s+/';
+    private const RE_ELSEIF_PREFIX = '/^(elseif|elif)\s+/';
+    private const RE_FOR_EXPR = '/^(.+?)\s+in\s+(.+)$/s';
+    private const RE_SET_EXPR = '/^(\w+)\s*=\s*(.+)$/s';
+    private const RE_IGNORE_MISSING = '/\s+ignore\s+missing\s*$/';
+    private const RE_WITH_DATA = '/\s+with\s+(.+)$/s';
+    private const RE_MACRO_SIG = '/^(\w+)\s*\(([^)]*)\)/';
+    private const RE_FROM_IMPORT = '/^["\'](.+?)["\']\s+import\s+(.+)/';
+    private const RE_SPACELESS = '/>\s+</';
+    private const RE_NOT_PREFIX = '/^not\s+(.+)$/s';
+    private const RE_IS_NOT_TEST = '/^(.+?)\s+is\s+not\s+(.+)$/s';
+    private const RE_IS_TEST = '/^(.+?)\s+is\s+(.+)$/s';
+    private const RE_RANGE = '/^(\d+)\.\.(\d+)$/';
+    private const RE_FUNC_CALL = '/^([\w.]+)\s*\((.*)?\)$/s';
+    private const RE_METHOD_CALL = '/^(\w+)\((.*)?\)$/s';
+    private const RE_FILTER_WITH_ARGS = '/^(\w+)\s*\((.+)\)$/s';
+    private const RE_FILTER_COMPARISON = '/^(\w+)\s*(!=|==|>=|<=|>|<)\s*(.+)$/';
+    private const RE_DIVISIBLE_BY = '/^divisible\s*by\s*\(?\s*(.+?)\s*\)?$/';
+    private const RE_DICT_PAIR = '/^(["\']?)(\w+)\1\s*:\s*(.+)$/s';
+    private const RE_SLUG_STRIP = '/[^a-z0-9]+/';
+
+    /** @var array<string, array> Cache for parsed filter chains keyed by expression string */
+    private array $filterChainCache = [];
+
+    /** @var array<string, string[]> Cache for simple dotted path splits (no brackets/parens) */
+    private array $dottedSplitCache = [];
+
     public function __construct(string $templateDir = 'src/templates')
     {
         $this->templateDir = rtrim($templateDir, '/');
@@ -112,6 +141,8 @@ class Frond
     {
         $this->compiled = [];
         $this->compiledStrings = [];
+        $this->filterChainCache = [];
+        $this->dottedSplitCache = [];
     }
 
     public function addFilter(string $name, callable $fn): void
@@ -174,7 +205,7 @@ class Frond
         // 1. Extract {% raw %}...{% endraw %} blocks before tokenizing
         $rawBlocks = [];
         $source = preg_replace_callback(
-            '/\{%-?\s*raw\s*-?%\}(.*?)\{%-?\s*endraw\s*-?%\}/s',
+            self::RE_RAW_BLOCK,
             function ($m) use (&$rawBlocks) {
                 $idx = count($rawBlocks);
                 $rawBlocks[] = $m[1];
@@ -359,7 +390,7 @@ class Frond
 
     private function parseBlock(string $tag, array &$tokens, int &$pos): ?array
     {
-        $tagParts = preg_split('/\s+/', trim($tag), 2);
+        $tagParts = preg_split(self::RE_WHITESPACE_SPLIT, trim($tag), 2);
         $keyword = $tagParts[0];
         $rest = $tagParts[1] ?? '';
 
@@ -412,7 +443,7 @@ class Frond
                 $pos++;
                 break;
             } elseif ($this->tagMatches($tag, 'elseif') || $this->tagMatches($tag, 'elif')) {
-                $cond = preg_replace('/^(elseif|elif)\s+/', '', $tag);
+                $cond = preg_replace(self::RE_ELSEIF_PREFIX, '', $tag);
                 $pos++;
                 $body = $this->parse($tokens, $pos, null, ['elseif', 'elif', 'else', 'endif']);
                 $branches[] = ['condition' => $cond, 'body' => $body];
@@ -436,7 +467,7 @@ class Frond
         $pos++; // skip {% for %}
 
         // Parse "key, value in iterable" or "value in iterable"
-        if (!preg_match('/^(.+?)\s+in\s+(.+)$/s', $expr, $m)) {
+        if (!preg_match(self::RE_FOR_EXPR, $expr, $m)) {
             // fallback
             $body = $this->parse($tokens, $pos, 'endfor');
             $pos++;
@@ -481,7 +512,7 @@ class Frond
     private function parseSet(string $expr): array
     {
         // set name = expression
-        if (preg_match('/^(\w+)\s*=\s*(.+)$/s', $expr, $m)) {
+        if (preg_match(self::RE_SET_EXPR, $expr, $m)) {
             return ['type' => 'set', 'name' => $m[1], 'expr' => trim($m[2])];
         }
         return ['type' => 'text', 'value' => ''];
@@ -491,15 +522,15 @@ class Frond
     {
         // include "file.html" [with {data}] [ignore missing]
         $ignoreMissing = false;
-        if (preg_match('/\s+ignore\s+missing\s*$/', $expr)) {
+        if (preg_match(self::RE_IGNORE_MISSING, $expr)) {
             $ignoreMissing = true;
-            $expr = preg_replace('/\s+ignore\s+missing\s*$/', '', $expr);
+            $expr = preg_replace(self::RE_IGNORE_MISSING, '', $expr);
         }
 
         $withData = null;
-        if (preg_match('/\s+with\s+(.+)$/s', $expr, $m)) {
+        if (preg_match(self::RE_WITH_DATA, $expr, $m)) {
             $withData = trim($m[1]);
-            $expr = preg_replace('/\s+with\s+.+$/s', '', $expr);
+            $expr = preg_replace(self::RE_WITH_DATA, '', $expr);
         }
 
         $file = trim($expr, " \t\n\r\"'");
@@ -530,7 +561,7 @@ class Frond
     {
         $pos++; // skip {% macro %}
         // Parse "name(arg1, arg2)"
-        if (!preg_match('/^(\w+)\s*\(([^)]*)\)/', $sig, $m)) {
+        if (!preg_match(self::RE_MACRO_SIG, $sig, $m)) {
             $body = $this->parse($tokens, $pos, 'endmacro');
             $pos++;
             return ['type' => 'text', 'value' => ''];
@@ -545,7 +576,7 @@ class Frond
     private function parseFromImport(string $rest): array
     {
         // Parse: "file" import name1, name2
-        if (!preg_match('/^["\'](.+?)["\']\s+import\s+(.+)/', $rest, $m)) {
+        if (!preg_match(self::RE_FROM_IMPORT, $rest, $m)) {
             return ['type' => 'text', 'value' => ''];
         }
         $file = $m[1];
@@ -557,7 +588,7 @@ class Frond
     {
         $pos++;
         // Parse "key" ttl
-        $parts = preg_split('/\s+/', trim($params), 2);
+        $parts = preg_split(self::RE_WHITESPACE_SPLIT, trim($params), 2);
         $key = trim($parts[0], "\"'");
         $ttl = isset($parts[1]) ? (int)$parts[1] : 0;
         $body = $this->parse($tokens, $pos, 'endcache');
@@ -789,13 +820,23 @@ class Frond
         $length = count($items);
         $idx = 0;
 
+        // Save any keys we'll overwrite so we can restore after the loop
+        $valueVar = $node['valueVar'];
+        $keyVar = $node['keyVar'];
+        $savedValue = array_key_exists($valueVar, $data) ? $data[$valueVar] : null;
+        $hadValue = array_key_exists($valueVar, $data);
+        $savedKey = ($keyVar !== null && array_key_exists($keyVar, $data)) ? $data[$keyVar] : null;
+        $hadKey = $keyVar !== null && array_key_exists($keyVar, $data);
+        $savedLoop = array_key_exists('loop', $data) ? $data['loop'] : null;
+        $hadLoop = array_key_exists('loop', $data);
+
         foreach ($items as $key => $value) {
-            $loopData = $data; // copy context
-            $loopData[$node['valueVar']] = $value;
-            if ($node['keyVar'] !== null) {
-                $loopData[$node['keyVar']] = $key;
+            // Overlay only the needed keys directly on $data instead of copying
+            $data[$valueVar] = $value;
+            if ($keyVar !== null) {
+                $data[$keyVar] = $key;
             }
-            $loopData['loop'] = [
+            $data['loop'] = [
                 'index' => $idx + 1,
                 'index0' => $idx,
                 'first' => $idx === 0,
@@ -806,12 +847,16 @@ class Frond
                 'even' => ($idx + 1) % 2 === 0,
                 'odd' => ($idx + 1) % 2 === 1,
             ];
-            $out .= $this->execute($node['body'], $loopData);
+            $out .= $this->execute($node['body'], $data);
             $idx++;
         }
 
-        // Propagate any set variables from inside for loop back (except loop-specific vars)
-        // Not standard Twig behavior - variables set in for don't leak out
+        // Restore original context — variables set in for don't leak out (standard Twig behavior)
+        if ($hadValue) { $data[$valueVar] = $savedValue; } else { unset($data[$valueVar]); }
+        if ($keyVar !== null) {
+            if ($hadKey) { $data[$keyVar] = $savedKey; } else { unset($data[$keyVar]); }
+        }
+        if ($hadLoop) { $data['loop'] = $savedLoop; } else { unset($data['loop']); }
 
         return $out;
     }
@@ -883,7 +928,7 @@ class Frond
     private function executeSpaceless(array $node, array &$data): string
     {
         $rendered = $this->execute($node['body'], $data);
-        return preg_replace('/>\s+</', '><', $rendered);
+        return preg_replace(self::RE_SPACELESS, '><', $rendered);
     }
 
     private function executeAutoescape(array $node, array &$data): string
@@ -975,11 +1020,15 @@ class Frond
             }
         }
 
-        // Check for filter pipe (respecting strings and parens)
-        $filterSplit = $this->splitFilters($expr);
+        // Check for filter pipe (respecting strings and parens) — cached
+        $filterSplit = $this->filterChainCache[$expr] ?? null;
+        if ($filterSplit === null) {
+            $filterSplit = $this->splitFilters($expr);
+            $this->filterChainCache[$expr] = $filterSplit;
+        }
         if (count($filterSplit) > 1) {
             $value = $this->evaluateExpression($filterSplit[0], $data);
-            for ($i = 1; $i < count($filterSplit); $i++) {
+            for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
                 $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
             }
             return $value;
@@ -1030,7 +1079,7 @@ class Frond
         }
 
         // not prefix
-        if (preg_match('/^not\s+(.+)$/s', $expr, $m)) {
+        if (preg_match(self::RE_NOT_PREFIX, $expr, $m)) {
             return !$this->isTruthy($this->evaluateExpression($m[1], $data));
         }
 
@@ -1056,12 +1105,12 @@ class Frond
         }
 
         // "is not" tests
-        if (preg_match('/^(.+?)\s+is\s+not\s+(.+)$/s', $expr, $m)) {
+        if (preg_match(self::RE_IS_NOT_TEST, $expr, $m)) {
             return !$this->evaluateTest(trim($m[1]), trim($m[2]), $data);
         }
 
         // "is" tests
-        if (preg_match('/^(.+?)\s+is\s+(.+)$/s', $expr, $m)) {
+        if (preg_match(self::RE_IS_TEST, $expr, $m)) {
             $testName = trim($m[2]);
             // Make sure this isn't a variable that happens to contain "is"
             if ($this->isKnownTest($testName)) {
@@ -1168,12 +1217,12 @@ class Frond
         }
 
         // Range: start..end
-        if (preg_match('/^(\d+)\.\.(\d+)$/', $expr, $m)) {
+        if (preg_match(self::RE_RANGE, $expr, $m)) {
             return range((int)$m[1], (int)$m[2]);
         }
 
         // Macro or function call: name(args) — supports dotted names like user.t("key")
-        if (preg_match('/^([\w.]+)\s*\((.*)?\)$/s', $expr, $m)) {
+        if (preg_match(self::RE_FUNC_CALL, $expr, $m)) {
             $funcName = $m[1];
             $argsStr = $m[2] ?? '';
 
@@ -1259,7 +1308,7 @@ class Frond
         $current = $data;
         foreach ($segments as $seg) {
             // Check if segment is a method call like name(args)
-            if (is_string($seg) && preg_match('/^(\w+)\((.*)?\)$/s', $seg, $mc)) {
+            if (is_string($seg) && preg_match(self::RE_METHOD_CALL, $seg, $mc)) {
                 $methodName = $mc[1];
                 $argsStr = $mc[2] ?? '';
                 $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
@@ -1295,6 +1344,16 @@ class Frond
 
     private function parseVarPath(string $expr, array &$data = []): array
     {
+        // Fast path: simple dotted paths (no brackets or parens) can be cached
+        if (!str_contains($expr, '[') && !str_contains($expr, '(')) {
+            if (isset($this->dottedSplitCache[$expr])) {
+                return $this->dottedSplitCache[$expr];
+            }
+            $segments = explode('.', $expr);
+            $this->dottedSplitCache[$expr] = $segments;
+            return $segments;
+        }
+
         $segments = [];
         $len = strlen($expr);
         $pos = 0;
@@ -1701,7 +1760,7 @@ class Frond
         $filterName = $filterExpr;
         $args = [];
 
-        if (preg_match('/^(\w+)\s*\((.+)\)$/s', $filterExpr, $m)) {
+        if (preg_match(self::RE_FILTER_WITH_ARGS, $filterExpr, $m)) {
             $filterName = $m[1];
             $args = $this->parseFilterArgs($m[2], $data);
         }
@@ -1709,6 +1768,33 @@ class Frond
         // Sandbox check
         if ($this->sandboxed && $this->sandboxFilters !== null && !in_array($filterName, $this->sandboxFilters)) {
             return '';
+        }
+
+        // Inline common no-arg filters — avoid closure dispatch overhead
+        if (empty($args)) {
+            switch ($filterName) {
+                case 'upper':      return strtoupper((string)$value);
+                case 'lower':      return strtolower((string)$value);
+                case 'length':     return is_array($value) ? count($value) : (is_string($value) ? mb_strlen($value) : 0);
+                case 'trim':       return trim((string)$value);
+                case 'ltrim':      return ltrim((string)$value);
+                case 'rtrim':      return rtrim((string)$value);
+                case 'capitalize': return ucfirst(strtolower((string)$value));
+                case 'title':      return mb_convert_case((string)$value, MB_CASE_TITLE);
+                case 'string':     return (string)$value;
+                case 'int':        return (int)$value;
+                case 'float':      return (float)$value;
+                case 'abs':        return abs(is_numeric($value) ? $value : 0);
+                case 'escape':
+                case 'e':          return self::RAW_MARKER . htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                case 'striptags':  return strip_tags((string)$value);
+                case 'nl2br':      return self::RAW_MARKER . nl2br(htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+                case 'keys':       return is_array($value) ? array_keys($value) : [];
+                case 'values':     return is_array($value) ? array_values($value) : [];
+                case 'raw':
+                case 'safe':       return self::RAW_MARKER . (is_string($value) ? str_replace(self::RAW_MARKER, '', $value) : $this->valueToString($value));
+                // Fall through to generic dispatch for other filters
+            }
         }
 
         if (isset($this->filters[$filterName])) {
@@ -1719,7 +1805,7 @@ class Frond
         // The filter name may include a trailing comparison operator,
         // e.g. "length != 1".  Extract the real filter name and the
         // comparison suffix, apply the filter, then evaluate the comparison.
-        if (preg_match('/^(\w+)\s*(!=|==|>=|<=|>|<)\s*(.+)$/', $filterName, $m2)) {
+        if (preg_match(self::RE_FILTER_COMPARISON, $filterName, $m2)) {
             $realFilter = $m2[1];
             $op = $m2[2];
             $rightExpr = trim($m2[3]);
@@ -1835,7 +1921,7 @@ class Frond
     private function evaluateTest(string $valueExpr, string $testExpr, array &$data): bool
     {
         // Handle "divisible by(n)" or "divisible by (n)"
-        if (preg_match('/^divisible\s*by\s*\(?\s*(.+?)\s*\)?$/', $testExpr, $m)) {
+        if (preg_match(self::RE_DIVISIBLE_BY, $testExpr, $m)) {
             $value = $this->evaluateExpression($valueExpr, $data);
             $divisor = $this->evaluateExpression(trim($m[1]), $data);
             if ($divisor == 0) return false;
@@ -1922,7 +2008,7 @@ class Frond
         $result = [];
         foreach ($pairs as $pair) {
             $pair = trim($pair);
-            if (preg_match('/^(["\']?)(\w+)\1\s*:\s*(.+)$/s', $pair, $m)) {
+            if (preg_match(self::RE_DICT_PAIR, $pair, $m)) {
                 $key = $m[2];
                 $val = $this->evaluateExpression(trim($m[3]), $data);
                 $result[$key] = $val;
@@ -2106,7 +2192,7 @@ class Frond
         $this->filters['wordwrap'] = fn($v, $width = 75) => wordwrap((string)$v, (int)$width, "\n", true);
         $this->filters['slug'] = function($v) {
             $s = strtolower((string)$v);
-            $s = preg_replace('/[^a-z0-9]+/', '-', $s);
+            $s = preg_replace(self::RE_SLUG_STRIP, '-', $s);
             return trim($s, '-');
         };
         $this->filters['nl2br'] = fn($v) => self::RAW_MARKER . nl2br(htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
