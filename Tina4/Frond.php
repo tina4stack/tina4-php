@@ -1020,20 +1020,6 @@ class Frond
             }
         }
 
-        // Check for filter pipe (respecting strings and parens) — cached
-        $filterSplit = $this->filterChainCache[$expr] ?? null;
-        if ($filterSplit === null) {
-            $filterSplit = $this->splitFilters($expr);
-            $this->filterChainCache[$expr] = $filterSplit;
-        }
-        if (count($filterSplit) > 1) {
-            $value = $this->evaluateExpression($filterSplit[0], $data);
-            for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
-                $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
-            }
-            return $value;
-        }
-
         // Jinja2-style inline if: value if condition else other_value — quote-aware
         $ifPos = $this->findOutsideQuotes($expr, ' if ');
         if ($ifPos !== false) {
@@ -1136,6 +1122,24 @@ class Frond
                     '>=' => $leftVal >= $rightVal,
                 };
             }
+        }
+
+        // Check for filter pipe (respecting strings and parens) — cached
+        // NOTE: Filter pipes are checked AFTER logical/comparison operators so
+        // that expressions like ``items|length > 0 and name|upper == "ALICE"``
+        // are split on ``and`` first, then each sub-expression processes its
+        // own filter pipes via recursive evaluateExpression calls.
+        $filterSplit = $this->filterChainCache[$expr] ?? null;
+        if ($filterSplit === null) {
+            $filterSplit = $this->splitFilters($expr);
+            $this->filterChainCache[$expr] = $filterSplit;
+        }
+        if (count($filterSplit) > 1) {
+            $value = $this->evaluateExpression($filterSplit[0], $data);
+            for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
+                $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
+            }
+            return $value;
         }
 
         // String concatenation with ~

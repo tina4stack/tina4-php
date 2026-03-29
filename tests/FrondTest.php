@@ -1242,4 +1242,47 @@ TPL;
         $this->assertSame('visible', $r1);
         $this->assertSame('hidden', $r2);
     }
+
+    /* ═══════════ Filters in if-conditions ═══════════ */
+
+    public function testIfFilterLengthGreaterThanZeroNonEmpty(): void
+    {
+        $src = '{% if items|length > 0 %}yes{% else %}no{% endif %}';
+        $this->assertSame('yes', $this->engine->renderString($src, ['items' => ['a', 'b', 'c']]));
+    }
+
+    public function testIfFilterLengthGreaterThanZeroEmpty(): void
+    {
+        $src = '{% if items|length > 0 %}yes{% else %}no{% endif %}';
+        $this->assertSame('no', $this->engine->renderString($src, ['items' => []]));
+    }
+
+    public function testIfFilterLengthEqualsExact(): void
+    {
+        $src = '{% if items|length == 3 %}three{% else %}other{% endif %}';
+        $this->assertSame('three', $this->engine->renderString($src, ['items' => ['a', 'b', 'c']]));
+        $this->assertSame('other', $this->engine->renderString($src, ['items' => ['a', 'b']]));
+    }
+
+    public function testIfFilterUpperEqualsString(): void
+    {
+        $src = '{% if name|upper == "ALICE" %}match{% else %}no{% endif %}';
+        $this->assertSame('match', $this->engine->renderString($src, ['name' => 'alice']));
+        $this->assertSame('no', $this->engine->renderString($src, ['name' => 'bob']));
+    }
+
+    public function testIfCompoundFilterConditions(): void
+    {
+        $src = '{% if items|length >= 2 and name|upper == "ALICE" %}yes{% else %}no{% endif %}';
+        $this->assertSame('yes', $this->engine->renderString($src, ['items' => ['a', 'b', 'c'], 'name' => 'alice']));
+        $this->assertSame('no', $this->engine->renderString($src, ['items' => ['a'], 'name' => 'alice']));
+        $this->assertSame('no', $this->engine->renderString($src, ['items' => ['a', 'b', 'c'], 'name' => 'bob']));
+    }
+
+    public function testIfNonFilterConditionStillWorks(): void
+    {
+        $src = '{% if x > 5 %}big{% else %}small{% endif %}';
+        $this->assertSame('big', $this->engine->renderString($src, ['x' => 10]));
+        $this->assertSame('small', $this->engine->renderString($src, ['x' => 3]));
+    }
 }
