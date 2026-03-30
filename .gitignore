@@ -105,3 +105,7 @@ demo/logs/*.log
 tests/logs/*.log
 .claude/settings.local.json
 .claude/worktrees/
+/data/sessions/
+/data/
+/demo/
+/example/
