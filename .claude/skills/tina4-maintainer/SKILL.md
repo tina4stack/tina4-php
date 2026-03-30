@@ -116,8 +116,8 @@ must achieve identical behavior. When implementing or fixing anything:
    equivalent tests covering the same cases
 4. **Run the parity check** — After implementing a feature, verify the output matches Python's
 
-Current version: **v3.8.0** on the `v3` branch (all four repos).
-Current status: Python 100% | PHP ~44% | Ruby ~46% | Node.js ~25%
+Current version: **v3.10.29** on the `v3` branch (all four repos).
+Current status: Python 100% | PHP ~85% | Ruby ~80% | Node.js ~70%
 
 When porting a feature from Python to another language:
 - Read the Python source and its tests
@@ -202,9 +202,9 @@ template-language convention, not a host-language one.
 ### Language-Specific Idioms
 
 **Python:** Python 3.12+ minimum (never target older versions), async/await everywhere, type hints, ASGI-based, `uv` as package manager
-**PHP:** PHP 8.5+ minimum, Swoole for WebSocket (fallback to stream_socket), ext-openssl for JWT
-**Ruby:** Ruby 4.0.0+ minimum, `?` suffix for predicates, `!` for mutators, OptionParser for CLI
-**Node.js:** Node.js 25.8.1+ minimum, TypeScript-first, ESM-only, file-based routing
+**PHP:** PHP 8.2+ minimum, Swoole for WebSocket (fallback to stream_socket), ext-openssl for JWT
+**Ruby:** Ruby 3.2+ minimum, `?` suffix for predicates, `!` for mutators, OptionParser for CLI
+**Node.js:** Node.js 20+ minimum, TypeScript-first, ESM-only, file-based routing
 
 ### Deprecation Awareness
 
@@ -212,7 +212,7 @@ Stay current with deprecations in all four languages. When working on any Tina4 
 
 - **Actively look for deprecated APIs** — If you encounter deprecated functions, classes, or
   patterns, refactor them immediately. Don't leave deprecation warnings for later.
-- **Use modern replacements** — Python 3.12+, PHP 8.5+, Ruby 4.0.0+, and Node.js 25.8.1+ all
+- **Use modern replacements** — Python 3.12+, PHP 8.2+, Ruby 3.2+, and Node.js 20+ all
   have modern alternatives for deprecated features. Use them.
 - **Flag deprecations you find** — When auditing or reviewing code, surface any deprecated usage
   in your dashboard output so the maintainer can see the full picture.
@@ -459,24 +459,7 @@ Tina4 optimizes for both, because the future of development is humans and AI wor
 
 ## Plan Documents
 
-The full v3 specifications live at `/Users/andrevanzuydam/IdeaProjects/plan/v3/`. When you
-need deep detail beyond what the bundled references provide, read the relevant plan doc:
-
-| Doc | Content |
-|-----|---------|
-| 00-VISION.md | Core principles and inspirations |
-| 01-FEATURE-MATRIX.md | All 78 features across 7 phases |
-| 02-FROND-*.md | Frond template engine full spec |
-| 03-TINA4HELPER-SPEC.md | frond.js frontend helper spec |
-| 04-ARCHITECTURE.md | Full architecture details |
-| 05-GAMEPLAN-PYTHON.md | Python reference implementation |
-| 06-GAMEPLAN-PHP.md | PHP implementation plan |
-| 07-GAMEPLAN-RUBY.md | Ruby implementation plan |
-| 08-GAMEPLAN-NODEJS.md | Node.js implementation plan |
-| 09-AI-REFERENCE-SPEC.md | AI-friendly paradigm reference |
-| 11-QUEUE-SPEC.md | Queue system specification |
-| 12-BENCHMARKS-SPEC.md | Benchmark categories and targets |
-| 14-WEBSOCKET-SPEC.md | WebSocket implementation spec |
+The full v3 specifications are maintained as GitHub issues and the feature matrix in `plan/FEATURES.md` within each repo. When you need deep detail beyond the bundled references, check the relevant CLAUDE.md in the repo root.
 
 ## Repository Locations
 

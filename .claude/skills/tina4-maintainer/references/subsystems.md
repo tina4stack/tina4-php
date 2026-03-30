@@ -13,7 +13,7 @@ All implement the same QueueAdapter interface.
 
 ### Usage (Python)
 ```python
-from tina4 import Queue
+from tina4_python.queue import Queue
 
 # Produce
 queue = Queue(topic="emails")
@@ -84,13 +84,13 @@ changes via event system, re-renders Frond blocks server-side, pushes HTML fragm
 
 ### Python
 ```python
-from tina4 import tina4_auth
+from tina4_python.auth import Auth
 
-token = tina4_auth.get_token({"user_id": 42}, expires_in=3600)  # seconds
-is_valid = tina4_auth.valid_token(token)
-payload = tina4_auth.get_payload(token)
-hashed = tina4_auth.hash_password("mypassword")
-matches = tina4_auth.check_password(hashed, "mypassword")
+token = Auth.get_token({"user_id": 42}, expires_in=3600)
+is_valid = Auth.valid_token(token)
+payload = Auth.get_payload(token)
+hashed = Auth.hash_password("mypassword")
+matches = Auth.check_password(hashed, "mypassword")
 ```
 
 ### Algorithm Auto-Selection
