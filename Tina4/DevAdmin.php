@@ -22,6 +22,9 @@ class DevAdmin
      */
     public static function register(): void
     {
+        // Register PHP error/exception handlers so they are captured in the Error Tracker
+        ErrorTracker::register();
+
         // Dashboard HTML
         Router::get('/__dev', function (Request $request, Response $response) {
             return $response->html(self::renderDashboard());
@@ -67,6 +70,7 @@ class DevAdmin
                 'route_count' => Router::count(),
                 'request_stats' => RequestInspector::stats(),
                 'message_counts' => MessageLog::count(),
+                'health' => ['unresolved' => ErrorTracker::unresolvedCount()],
             ]);
         });
 
@@ -302,20 +306,25 @@ class DevAdmin
         // API: Get errors (broken tracker)
         // Maps to Python: /__dev/api/broken
         Router::get('/__dev/api/broken', function (Request $request, Response $response) {
+            $errors = ErrorTracker::get(true);
+            $unresolved = ErrorTracker::unresolvedCount();
             return $response->json([
-                'errors' => [],
-                'count' => 0,
+                'errors' => $errors,
+                'count' => count($errors),
+                'health' => ['unresolved' => $unresolved],
             ]);
         });
 
         // API: Resolve a tracked error
         Router::post('/__dev/api/broken/resolve', function (Request $request, Response $response) {
             $id = $request->input('id') ?? '';
-            return $response->json(['resolved' => true, 'id' => $id]);
+            $resolved = ErrorTracker::resolve($id);
+            return $response->json(['resolved' => $resolved, 'id' => $id]);
         });
 
         // API: Clear resolved errors
         Router::post('/__dev/api/broken/clear', function (Request $request, Response $response) {
+            ErrorTracker::clearResolved();
             return $response->json(['cleared' => true]);
         });
 
@@ -1396,5 +1405,278 @@ class RequestInspector
     public static function reset(): void
     {
         self::$requests = [];
+    }
+}
+
+
+/**
+ * Tracks PHP errors and uncaught exceptions for the developer dashboard Error Tracker.
+ *
+ * Errors are persisted to a temp file keyed by project directory, so they survive
+ * across requests (PHP built-in server spawns a new process per request).
+ *
+ * Duplicate errors (same type + message + file + line) are grouped into a single
+ * entry with a running count and last_seen timestamp.
+ */
+class ErrorTracker
+{
+    /** @var string Resolved path to the JSON store file */
+    private static string $storePath = '';
+
+    /** @var array<string, array>|null In-memory copy loaded on first use */
+    private static ?array $errors = null;
+
+    /** @var int Maximum error entries to retain */
+    private static int $maxErrors = 200;
+
+    /** @var bool Whether handlers are already registered in this process */
+    private static bool $registered = false;
+
+    // ---------------------------------------------------------------------------
+    // Storage helpers
+    // ---------------------------------------------------------------------------
+
+    private static function getStorePath(): string
+    {
+        if (self::$storePath === '') {
+            self::$storePath = sys_get_temp_dir()
+                . '/tina4_dev_errors_' . md5(getcwd()) . '.json';
+        }
+        return self::$storePath;
+    }
+
+    private static function load(): void
+    {
+        if (self::$errors !== null) {
+            return;
+        }
+        $path = self::getStorePath();
+        if (file_exists($path)) {
+            $raw = @file_get_contents($path);
+            $data = $raw !== false ? json_decode($raw, true) : null;
+            // The file is stored as a JSON array; re-key by fingerprint
+            if (is_array($data)) {
+                self::$errors = [];
+                foreach ($data as $entry) {
+                    if (isset($entry['id'])) {
+                        self::$errors[$entry['id']] = $entry;
+                    }
+                }
+            } else {
+                self::$errors = [];
+            }
+        } else {
+            self::$errors = [];
+        }
+    }
+
+    private static function save(): void
+    {
+        // Trim to max, keeping newest (highest last_seen)
+        if (count(self::$errors) > self::$maxErrors) {
+            $sorted = array_values(self::$errors);
+            usort($sorted, fn($a, $b) => strcmp($b['last_seen'], $a['last_seen']));
+            self::$errors = [];
+            foreach (array_slice($sorted, 0, self::$maxErrors) as $entry) {
+                self::$errors[$entry['id']] = $entry;
+            }
+        }
+
+        @file_put_contents(
+            self::getStorePath(),
+            json_encode(array_values(self::$errors), JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    // ---------------------------------------------------------------------------
+    // Public API
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Capture a PHP error or exception into the tracker.
+     *
+     * Duplicate errors (same type + message + file + line) are de-duplicated:
+     * the count increments and the entry is re-opened if it was resolved.
+     */
+    public static function capture(
+        string $errorType,
+        string $message,
+        string $traceback = '',
+        string $file = '',
+        int $line = 0
+    ): void {
+        self::load();
+
+        $fingerprint = md5($errorType . '|' . $message . '|' . $file . '|' . $line);
+        $now = gmdate('Y-m-d\TH:i:s\Z');
+
+        if (isset(self::$errors[$fingerprint])) {
+            self::$errors[$fingerprint]['count']++;
+            self::$errors[$fingerprint]['last_seen'] = $now;
+            self::$errors[$fingerprint]['resolved'] = false; // Re-open resolved duplicates
+        } else {
+            self::$errors[$fingerprint] = [
+                'id'         => $fingerprint,
+                'error_type' => $errorType,
+                'message'    => $message,
+                'traceback'  => $traceback,
+                'file'       => $file,
+                'line'       => $line,
+                'first_seen' => $now,
+                'last_seen'  => $now,
+                'count'      => 1,
+                'resolved'   => false,
+            ];
+        }
+
+        self::save();
+    }
+
+    /**
+     * Get tracked errors, newest last_seen first.
+     *
+     * @param bool $includeResolved Whether to include resolved errors
+     * @return array<int, array>
+     */
+    public static function get(bool $includeResolved = true): array
+    {
+        self::load();
+        $errors = array_values(self::$errors);
+        if (!$includeResolved) {
+            $errors = array_values(array_filter($errors, fn($e) => !$e['resolved']));
+        }
+        usort($errors, fn($a, $b) => strcmp($b['last_seen'], $a['last_seen']));
+        return $errors;
+    }
+
+    /**
+     * Count unresolved errors.
+     */
+    public static function unresolvedCount(): int
+    {
+        self::load();
+        return count(array_filter(self::$errors, fn($e) => !$e['resolved']));
+    }
+
+    /**
+     * Mark a single error as resolved.
+     *
+     * @param string $id Error fingerprint
+     * @return bool True if found and updated
+     */
+    public static function resolve(string $id): bool
+    {
+        self::load();
+        if (isset(self::$errors[$id])) {
+            self::$errors[$id]['resolved'] = true;
+            self::save();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Remove all resolved errors from the store.
+     */
+    public static function clearResolved(): void
+    {
+        self::load();
+        self::$errors = array_filter(self::$errors, fn($e) => !$e['resolved']);
+        self::save();
+    }
+
+    /**
+     * Remove all tracked errors.
+     */
+    public static function clearAll(): void
+    {
+        self::$errors = [];
+        self::save();
+    }
+
+    /**
+     * Register PHP error and exception handlers to feed the tracker.
+     *
+     * Safe to call multiple times — only registers once per process.
+     * Chains to any previously-registered handlers so ErrorOverlay still works.
+     */
+    public static function register(): void
+    {
+        if (self::$registered) {
+            return;
+        }
+        self::$registered = true;
+
+        // Capture uncaught exceptions
+        $prevException = set_exception_handler(
+            function (\Throwable $e) use (&$prevException): void {
+                self::capture(
+                    get_class($e),
+                    $e->getMessage(),
+                    self::formatTrace($e),
+                    $e->getFile(),
+                    $e->getLine()
+                );
+                if ($prevException !== null) {
+                    ($prevException)($e);
+                }
+            }
+        );
+
+        // Capture PHP errors at ERROR/WARNING level (avoid noise from notices/deprecations)
+        $prevError = set_error_handler(
+            function (int $errno, string $errstr, string $errfile = '', int $errline = 0) use (&$prevError): bool {
+                $capture = $errno & (
+                    E_ERROR | E_WARNING | E_USER_ERROR | E_USER_WARNING | E_RECOVERABLE_ERROR
+                );
+                if ($capture) {
+                    $typeMap = [
+                        E_ERROR             => 'E_ERROR',
+                        E_WARNING           => 'E_WARNING',
+                        E_USER_ERROR        => 'E_USER_ERROR',
+                        E_USER_WARNING      => 'E_USER_WARNING',
+                        E_RECOVERABLE_ERROR => 'E_RECOVERABLE_ERROR',
+                    ];
+                    $type = $typeMap[$errno] ?? "E_{$errno}";
+                    self::capture($type, $errstr, '', $errfile, $errline);
+                }
+                if ($prevError !== null) {
+                    return (bool) ($prevError)($errno, $errstr, $errfile, $errline);
+                }
+                return false;
+            }
+        );
+    }
+
+    /**
+     * Reset the in-memory cache and delete the store file (for testing).
+     */
+    public static function reset(): void
+    {
+        self::$errors = [];
+        self::$registered = false;
+        $path = self::getStorePath();
+        if (file_exists($path)) {
+            @unlink($path);
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Private helpers
+    // ---------------------------------------------------------------------------
+
+    private static function formatTrace(\Throwable $e): string
+    {
+        $lines = [
+            get_class($e) . ': ' . $e->getMessage(),
+            'in ' . $e->getFile() . ':' . $e->getLine(),
+        ];
+        foreach ($e->getTrace() as $i => $frame) {
+            $loc  = ($frame['file'] ?? 'unknown') . ':' . ($frame['line'] ?? 0);
+            $fn   = ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '');
+            $lines[] = "  #{$i} {$loc} {$fn}()";
+        }
+        return implode("\n", $lines);
     }
 }
