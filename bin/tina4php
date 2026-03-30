@@ -548,7 +548,26 @@ DOCKERFILE;
         break;
 
     case 'ai':
-        echo "AI context installation not yet implemented in v3.\n";
+        $installAll = in_array('--all', $args);
+        $force      = in_array('--force', $args);
+        $root       = getcwd();
+
+        echo \Tina4\AI::statusReport($root) . "\n";
+
+        if ($installAll) {
+            $created = \Tina4\AI::installAll($root, $force);
+        } else {
+            $created = \Tina4\AI::installContext($root, null, $force);
+        }
+
+        if (!empty($created)) {
+            echo "Installed Tina4 context:\n";
+            foreach ($created as $f) {
+                echo "  + $f\n";
+            }
+        } else {
+            echo "Context files already exist. Use --force to overwrite.\n";
+        }
         break;
 
     // ────────────────────────────────────────────
