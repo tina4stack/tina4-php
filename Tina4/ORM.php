@@ -233,15 +233,19 @@ abstract class ORM
         $this->_relCache = []; // Clear relationship cache on save
         $pkValue = $this->getPrimaryKeyValue();
 
-        if ($this->_exists || ($pkValue !== null && $this->recordExists($pkValue))) {
-            $result = $this->update();
+        $this->_db->startTransaction();
+        try {
+            if ($this->_exists || ($pkValue !== null && $this->recordExists($pkValue))) {
+                $result = $this->update();
+            } else {
+                $result = $this->insert();
+            }
             $this->_db->commit();
             return $result;
+        } catch (\Exception $e) {
+            $this->_db->rollback();
+            throw $e;
         }
-
-        $result = $this->insert();
-        $this->_db->commit();
-        return $result;
     }
 
     /**
@@ -293,13 +297,18 @@ abstract class ORM
             $sql = "DELETE FROM {$this->tableName} WHERE {$pkColumn} = :id";
         }
 
-        $result = $this->_db->exec($sql, [':id' => $pkValue]);
-
-        if ($result) {
-            $this->_exists = false;
+        $this->_db->startTransaction();
+        try {
+            $result = $this->_db->exec($sql, [':id' => $pkValue]);
+            if ($result) {
+                $this->_exists = false;
+            }
+            $this->_db->commit();
+        } catch (\Exception $e) {
+            $this->_db->rollback();
+            throw $e;
         }
 
-        $this->_db->commit();
         return $result;
     }
 
