@@ -19,3 +19,12 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
+
+      - name: Notify Packagist
+        if: ${{ secrets.PACKAGIST_TOKEN != '' }}
+        env:
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        run: |
+          curl -s -XPOST "https://packagist.org/api/update-package?username=tina4stack&apiToken=${PACKAGIST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"repository":{"url":"https://github.com/tina4stack/tina4-php"}}'
