@@ -402,7 +402,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 <div class="hero">
     <img src="/images/tina4-logo-icon.webp" class="logo" alt="Tina4">
     <h1>Tina4Php</h1>
-    <p class="tagline">This is not a framework</p>
+    <p class="tagline">This Is Now A 4Framework</p>
     <div class="actions">
         <a href="https://tina4.com/php" class="btn" target="_blank">Website</a>
         <a href="/__dev" class="btn">Dev Admin</a>
