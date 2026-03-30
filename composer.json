@@ -1,15 +1,14 @@
 {
     "name": "tina4stack/tina4php",
-    "description": "Tina4 PHP — This is not a 4ramework",
-    "version": "3.10.24",
+    "description": "Tina4 PHP — This Is Now A 4Framework",
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Tina4\\": "Tina4/",
-            "Tina4\\Database\\": "Tina4/Database/",
-            "Tina4\\Middleware\\": "Tina4/Middleware/",
-            "Tina4\\Queue\\": "Tina4/Queue/",
-            "Tina4\\Session\\": "Tina4/Session/"
+            "Tina4\\\\": "Tina4/",
+            "Tina4\\Database\\\\": "Tina4/Database/",
+            "Tina4\\Middleware\\\\": "Tina4/Middleware/",
+            "Tina4\\Queue\\\\": "Tina4/Queue/",
+            "Tina4\\Session\\\\": "Tina4/Session/"
         },
         "files": [
             "Tina4/Constants.php"
