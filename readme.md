@@ -3,14 +3,14 @@
 </p>
 
 <h1 align="center">Tina4 PHP</h1>
-<h3 align="center">This is not a framework</h3>
+<h3 align="center">This Is Now A 4Framework</h3>
 
 <p align="center">
   Laravel joy. PHP speed. 10x less code. Zero third-party dependencies.
 </p>
 
 <p align="center">
-  <a href="https://packagist.org/packages/tina4stack/tina4php"><img src="https://img.shields.io/badge/Packagist-v3.9.1-7b1fa2" alt="Packagist v3.9.1"></a>
+  <a href="https://packagist.org/packages/tina4stack/tina4php"><img src="https://img.shields.io/badge/Packagist-v3.10.25-7b1fa2" alt="Packagist v3.9.1"></a>
   <img src="https://img.shields.io/badge/tests-1%2C421%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/features-38-blue" alt="Features">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero Deps">
