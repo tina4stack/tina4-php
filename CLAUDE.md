@@ -167,7 +167,8 @@ $db = Database::create($url, autoCommit: true);
 
 // Adapter methods (all adapters implement DatabaseAdapter)
 $db->fetch($sql, $limit, $offset): ?DataResult
-$db->exec($sql, $params)
+$db->execute($sql, $params)
+$db->exec($sql, $params)           // alias for execute()
 $db->startTransaction()
 $db->commit($transactionId = null)
 $db->rollback($transactionId = null)
