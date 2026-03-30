@@ -2033,7 +2033,9 @@ class Frond
             }
             $macroData[$argName] = $argValues[$i] ?? $default;
         }
-        return $this->execute($macro['body'], $macroData);
+        // Macro output is already-rendered HTML — mark as raw so auto-escape
+        // doesn't double-encode it when the call is used in an expression.
+        return self::RAW_MARKER . $this->execute($macro['body'], $macroData);
     }
 
     /* ─── from import ─── */

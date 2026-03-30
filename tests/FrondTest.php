@@ -762,6 +762,20 @@ class FrondTest extends TestCase
         $this->assertSame('Hi World', $result);
     }
 
+    public function testMacroHtmlOutput(): void
+    {
+        $tpl = '{% macro link(url, text) %}<a href="{{ url }}">{{ text }}</a>{% endmacro %}{{ link("https://tina4.com", "Tina4") }}';
+        $result = $this->engine->renderString($tpl, []);
+        $this->assertSame('<a href="https://tina4.com">Tina4</a>', $result);
+    }
+
+    public function testMacroNested(): void
+    {
+        $tpl = '{% macro wrap(x) %}<b>{{ x }}</b>{% endmacro %}{% macro btn(label) %}{{ wrap(label) }}{% endmacro %}{{ btn("test") }}';
+        $result = $this->engine->renderString($tpl, []);
+        $this->assertSame('<b>test</b>', $result);
+    }
+
     /* ═══════════ Sandboxing ═══════════ */
 
     public function testSandboxAllowedVariable(): void
