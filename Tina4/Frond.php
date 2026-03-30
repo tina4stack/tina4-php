@@ -1152,8 +1152,8 @@ class Frond
             return $result;
         }
 
-        // Math: +, -, *, //, /, %
-        foreach ([['+', '-'], ['*', '//', '/', '%']] as $ops) {
+        // Math: +, -, *, //, /, %, **
+        foreach ([['+', '-'], ['*', '//', '/', '%', '**']] as $ops) {
             foreach ($ops as $op) {
                 $opPos = $this->findMathOp($expr, $op);
                 if ($opPos !== false) {
@@ -1169,6 +1169,7 @@ class Frond
                             '/' => $rightVal != 0 ? $leftVal / $rightVal : 0,
                             '//' => $rightVal != 0 ? intdiv((int)$leftVal, (int)$rightVal) : 0,
                             '%' => $rightVal != 0 ? $leftVal % $rightVal : 0,
+                            '**' => $leftVal ** $rightVal,
                         };
                     }
                     // + can also concatenate arrays
@@ -1182,6 +1183,7 @@ class Frond
                         '/' => ($rightVal ?? 0) != 0 ? ($leftVal ?? 0) / $rightVal : 0,
                         '//' => ($rightVal ?? 0) != 0 ? intdiv((int)($leftVal ?? 0), (int)$rightVal) : 0,
                         '%' => ($rightVal ?? 0) != 0 ? ($leftVal ?? 0) % $rightVal : 0,
+                        '**' => ($leftVal ?? 0) ** ($rightVal ?? 0),
                     };
                 }
             }
@@ -1681,6 +1683,11 @@ class Frond
                 if ($op === '/' && $opLen === 1) {
                     if ($i + 1 < $len && $expr[$i + 1] === '/') continue;
                     if ($i > 0 && $expr[$i - 1] === '/') continue;
+                }
+                // For *, make sure we don't match **
+                if ($op === '*' && $opLen === 1) {
+                    if ($i + 1 < $len && $expr[$i + 1] === '*') continue;
+                    if ($i > 0 && $expr[$i - 1] === '*') continue;
                 }
                 return $i;
             }

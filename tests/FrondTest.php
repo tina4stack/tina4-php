@@ -634,6 +634,36 @@ class FrondTest extends TestCase
         $this->assertSame('7', $result);
     }
 
+    public function testSetArithmeticAddition(): void
+    {
+        $result = $this->engine->renderString('{% set x = 5 + 3 %}{{ x }}', []);
+        $this->assertSame('8', $result);
+    }
+
+    public function testSetArithmeticSubtraction(): void
+    {
+        $result = $this->engine->renderString('{% set x = 10 - 4 %}{{ x }}', []);
+        $this->assertSame('6', $result);
+    }
+
+    public function testSetArithmeticWithContext(): void
+    {
+        $result = $this->engine->renderString('{% set x = a * b %}{{ x }}', ['a' => 3, 'b' => 7]);
+        $this->assertSame('21', $result);
+    }
+
+    public function testArithmeticFloorDivision(): void
+    {
+        $result = $this->engine->renderString('{{ 7 // 2 }}', []);
+        $this->assertSame('3', $result);
+    }
+
+    public function testArithmeticPower(): void
+    {
+        $result = $this->engine->renderString('{{ 2 ** 3 }}', []);
+        $this->assertSame('8', $result);
+    }
+
     /* ═══════════ Include ═══════════ */
 
     public function testInclude(): void
