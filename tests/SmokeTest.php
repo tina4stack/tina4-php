@@ -70,7 +70,7 @@ class SmokeTest extends TestCase
 
     public function testRouterRegisterAndMatch(): void
     {
-        Router::reset();
+        Router::clear();
 
         Router::get('/smoke/hello', fn() => 'Hello');
         Router::post('/smoke/data', fn() => 'created');
@@ -84,12 +84,12 @@ class SmokeTest extends TestCase
 
         $this->assertNull(Router::match('GET', '/smoke/data'), 'GET should not match POST route');
 
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterExtractParams(): void
     {
-        Router::reset();
+        Router::clear();
 
         Router::get('/smoke/users/{id}', fn() => null);
         $result = Router::match('GET', '/smoke/users/42');
@@ -97,12 +97,12 @@ class SmokeTest extends TestCase
         $this->assertNotNull($result);
         $this->assertSame('42', $result['params']['id']);
 
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterDispatch(): void
     {
-        Router::reset();
+        Router::clear();
 
         Router::get('/smoke/greet/{name}', function (Request $req, Response $res) {
             return $res->json(['greeting' => 'Hello, ' . $req->params['name']]);
@@ -114,7 +114,7 @@ class SmokeTest extends TestCase
 
         $this->assertSame('Hello, World', $result->getJsonBody()['greeting']);
 
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -444,7 +444,7 @@ class SmokeTest extends TestCase
 
     public function testSwaggerGenerateSpec(): void
     {
-        Router::reset();
+        Router::clear();
 
         Router::get('/api/widgets', fn() => null);
         Router::post('/api/widgets', fn() => null);
@@ -461,7 +461,7 @@ class SmokeTest extends TestCase
         $paths = (array) $spec['paths'];
         $this->assertNotEmpty($paths);
 
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -556,7 +556,7 @@ class SmokeTest extends TestCase
 
     public function testAutoCrudRegistersRoutes(): void
     {
-        Router::reset();
+        Router::clear();
 
         $db = new SQLite3Adapter(':memory:');
         $db->exec("CREATE TABLE smoke_items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT)");
@@ -574,7 +574,7 @@ class SmokeTest extends TestCase
         $this->assertNotNull(Router::match('PUT', '/api/smoke_items/1'));
         $this->assertNotNull(Router::match('DELETE', '/api/smoke_items/1'));
 
-        Router::reset();
+        Router::clear();
         $db->close();
     }
 
@@ -801,7 +801,7 @@ class SmokeTest extends TestCase
 
     public function testRouterPutMethod(): void
     {
-        Router::reset();
+        Router::clear();
         Router::put('/smoke/item/{id}', fn(Request $req, Response $res) =>
             $res->json(['updated' => $req->params['id']]))->noAuth();
 
@@ -810,12 +810,12 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame('7', $result->getJsonBody()['updated']);
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterPatchMethod(): void
     {
-        Router::reset();
+        Router::clear();
         Router::patch('/smoke/item/{id}', fn(Request $req, Response $res) =>
             $res->json(['patched' => $req->params['id']]))->noAuth();
 
@@ -824,12 +824,12 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame('3', $result->getJsonBody()['patched']);
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterDeleteMethod(): void
     {
-        Router::reset();
+        Router::clear();
         Router::delete('/smoke/item/{id}', fn(Request $req, Response $res) =>
             $res->json(['deleted' => $req->params['id']]))->noAuth();
 
@@ -838,12 +838,12 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame('5', $result->getJsonBody()['deleted']);
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterAnyMethod(): void
     {
-        Router::reset();
+        Router::clear();
         Router::any('/smoke/universal', fn(Request $req, Response $res) =>
             $res->json(['method' => $req->method]));
 
@@ -851,7 +851,7 @@ class SmokeTest extends TestCase
             $result = Router::match($method, '/smoke/universal');
             $this->assertNotNull($result, "any() should register {$method}");
         }
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -860,7 +860,7 @@ class SmokeTest extends TestCase
 
     public function testRouterGroup(): void
     {
-        Router::reset();
+        Router::clear();
         Router::group('/api/v1', function () {
             Router::get('/users', fn() => 'users');
             Router::get('/items', fn() => 'items');
@@ -869,12 +869,12 @@ class SmokeTest extends TestCase
         $this->assertNotNull(Router::match('GET', '/api/v1/users'));
         $this->assertNotNull(Router::match('GET', '/api/v1/items'));
         $this->assertNull(Router::match('GET', '/users'));
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterNestedGroups(): void
     {
-        Router::reset();
+        Router::clear();
         Router::group('/api', function () {
             Router::group('/v2', function () {
                 Router::get('/widgets', fn() => 'widgets');
@@ -882,7 +882,7 @@ class SmokeTest extends TestCase
         });
 
         $this->assertNotNull(Router::match('GET', '/api/v2/widgets'));
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -891,7 +891,7 @@ class SmokeTest extends TestCase
 
     public function testRouterMiddlewareBlocks(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/smoke/protected', fn(Request $req, Response $res) =>
             $res->json(['ok' => true])
         )->middleware([fn($req, $res) => false]);
@@ -901,12 +901,12 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame(403, $result->getStatusCode());
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterMiddlewareAllows(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/smoke/open', fn(Request $req, Response $res) =>
             $res->json(['allowed' => true])
         )->middleware([fn($req, $res) => true]);
@@ -916,7 +916,7 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertTrue($result->getJsonBody()['allowed']);
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -925,7 +925,7 @@ class SmokeTest extends TestCase
 
     public function testRouterSecureRouteNoBearerReturns401(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/smoke/secret', fn(Request $req, Response $res) =>
             $res->json(['secret' => 'data'])
         )->secure();
@@ -935,12 +935,12 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame(401, $result->getStatusCode());
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterSecureRouteWithBearerAllowed(): void
     {
-        Router::reset();
+        Router::clear();
         $secret = 'smoke-test-secret';
         putenv("SECRET={$secret}");
         Router::get('/smoke/secret', fn(Request $req, Response $res) =>
@@ -958,7 +958,7 @@ class SmokeTest extends TestCase
 
         $this->assertSame('data', $result->getJsonBody()['secret']);
         putenv('SECRET');
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -967,13 +967,13 @@ class SmokeTest extends TestCase
 
     public function testRouterReturns404ForNoMatch(): void
     {
-        Router::reset();
+        Router::clear();
         $request = Request::create(method: 'GET', path: '/nonexistent');
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
 
         $this->assertSame(404, $result->getStatusCode());
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -982,7 +982,7 @@ class SmokeTest extends TestCase
 
     public function testRouterCountAndList(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/a', fn() => null);
         Router::post('/b', fn() => null);
         Router::put('/c', fn() => null);
@@ -995,7 +995,7 @@ class SmokeTest extends TestCase
         $this->assertContains('GET', $methods);
         $this->assertContains('POST', $methods);
         $this->assertContains('PUT', $methods);
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -1004,7 +1004,7 @@ class SmokeTest extends TestCase
 
     public function testRouterHandlerReturnsString(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/smoke/plain', fn(Request $req, Response $res) => '<h1>Hello</h1>');
 
         $request = Request::create(method: 'GET', path: '/smoke/plain');
@@ -1012,12 +1012,12 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertStringContainsString('Hello', $result->getBody());
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterHandlerReturnsArray(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/smoke/arr', fn(Request $req, Response $res) => ['status' => 'ok']);
 
         $request = Request::create(method: 'GET', path: '/smoke/arr');
@@ -1025,7 +1025,7 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame('ok', $result->getJsonBody()['status']);
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -1034,7 +1034,7 @@ class SmokeTest extends TestCase
 
     public function testRouterHandlerExceptionReturns500(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/smoke/crash', fn(Request $req, Response $res) =>
             throw new \RuntimeException('Boom'));
 
@@ -1043,7 +1043,7 @@ class SmokeTest extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame(500, $result->getStatusCode());
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -1422,7 +1422,7 @@ class SmokeTest extends TestCase
 
     public function testRouterCacheFlag(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/cached', fn() => 'ok')->cache();
 
         $list = Router::list();
@@ -1430,12 +1430,12 @@ class SmokeTest extends TestCase
         $cached = array_values($cached);
 
         $this->assertTrue($cached[0]['cache']);
-        Router::reset();
+        Router::clear();
     }
 
     public function testRouterNoCacheFlag(): void
     {
-        Router::reset();
+        Router::clear();
         Router::get('/nocache', fn() => 'ok')->cache()->noCache();
 
         $list = Router::list();
@@ -1443,7 +1443,7 @@ class SmokeTest extends TestCase
         $route = array_values($route);
 
         $this->assertFalse($route[0]['cache']);
-        Router::reset();
+        Router::clear();
     }
 
     // ═════════════════════════════════════════════════════════════════

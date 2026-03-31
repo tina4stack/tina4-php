@@ -18,12 +18,12 @@ class MiddlewareTest extends TestCase
 {
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     protected function tearDown(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     // --- Middleware Chain Execution Order ---

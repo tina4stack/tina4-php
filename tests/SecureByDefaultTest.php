@@ -30,13 +30,13 @@ class SecureByDefaultTest extends TestCase
 
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
         putenv("SECRET={$this->secret}");
     }
 
     protected function tearDown(): void
     {
-        Router::reset();
+        Router::clear();
         putenv('SECRET');
     }
 

@@ -8,12 +8,12 @@ class SwaggerTest extends TestCase
 {
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     protected function tearDown(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     // ── Spec Structure ──────────────────────────────────────────

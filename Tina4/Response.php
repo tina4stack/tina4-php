@@ -469,7 +469,7 @@ class Response
      */
     public function template(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
     {
-        $frond = self::getFrond();
+        $frond = ($templateDir !== 'src/templates') ? new Frond($templateDir) : self::getFrond();
         $html = $frond->render($templateName, $data);
 
         $this->statusCode = $status;

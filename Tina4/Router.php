@@ -666,7 +666,7 @@ class Router
     /**
      * Reset all routes (for testing).
      */
-    public static function reset(): void
+    public static function clear(): void
     {
         self::$routes = [];
         self::$wsRoutes = [];

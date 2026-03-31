@@ -31,7 +31,7 @@ class AutoCrudV3Test extends TestCase
 
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
         putenv("SECRET={$this->secret}");
         $this->db = new SQLite3Adapter(':memory:');
         $this->db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT, price REAL)");
@@ -39,7 +39,7 @@ class AutoCrudV3Test extends TestCase
 
     protected function tearDown(): void
     {
-        Router::reset();
+        Router::clear();
         putenv('SECRET');
         $this->db->close();
     }

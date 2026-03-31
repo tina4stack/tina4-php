@@ -18,12 +18,12 @@ class RouteDiscoveryV3Test extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/tina4_route_discovery_test_' . uniqid();
         mkdir($this->tempDir, 0755, true);
-        Router::reset();
+        Router::clear();
     }
 
     protected function tearDown(): void
     {
-        Router::reset();
+        Router::clear();
         $this->removeDir($this->tempDir);
     }
 

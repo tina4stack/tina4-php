@@ -19,7 +19,7 @@ class WebSocketTest extends TestCase
 {
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     // ── WebSocket handshake (Sec-WebSocket-Accept calculation) ──────
@@ -264,7 +264,7 @@ class WebSocketTest extends TestCase
         Router::websocket('/ws/test', function ($c, $m, $e) {});
         $this->assertCount(1, Router::getWebSocketRoutes());
 
-        Router::reset();
+        Router::clear();
         $this->assertCount(0, Router::getWebSocketRoutes());
     }
 

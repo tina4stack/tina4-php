@@ -16,12 +16,12 @@ class RouterV3Test extends TestCase
 {
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     protected function tearDown(): void
     {
-        Router::reset();
+        Router::clear();
     }
 
     // --- Route Registration ---
@@ -365,7 +365,7 @@ class RouterV3Test extends TestCase
         Router::get('/test', fn() => null);
         $this->assertSame(1, Router::count());
 
-        Router::reset();
+        Router::clear();
         $this->assertSame(0, Router::count());
     }
 }

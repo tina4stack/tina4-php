@@ -725,7 +725,7 @@ class Server
     private function onFilesChanged(): void
     {
         // Re-discover routes from src/routes/
-        Router::reset();
+        Router::clear();
         $routeDir = 'src/routes';
         if (is_dir($routeDir)) {
             $iterator = new \RecursiveIteratorIterator(

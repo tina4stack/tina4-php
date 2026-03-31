@@ -17,7 +17,7 @@ class DevAdminTest extends TestCase
 {
     protected function setUp(): void
     {
-        Router::reset();
+        Router::clear();
         MessageLog::reset();
         RequestInspector::reset();
     }
@@ -25,7 +25,7 @@ class DevAdminTest extends TestCase
     protected function tearDown(): void
     {
         ErrorTracker::reset();
-        Router::reset();
+        Router::clear();
         MessageLog::reset();
         RequestInspector::reset();
     }

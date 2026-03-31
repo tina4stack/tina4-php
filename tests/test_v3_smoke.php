@@ -22,7 +22,7 @@ echo "   ✓ Signal handlers: " . (function_exists('pcntl_signal') ? 'POSIX' : '
 
 // ── 2. Register routes ──
 echo "── 2. Route Registration ──\n";
-\Tina4\Router::reset();
+\Tina4\Router::clear();
 
 \Tina4\Router::get('/', function (\Tina4\Request $req, \Tina4\Response $res) {
     return $res->html('<h1>Tina4 PHP v3</h1>');
