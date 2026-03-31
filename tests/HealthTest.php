@@ -13,6 +13,7 @@ use Tina4\Log;
 class HealthTest extends TestCase
 {
     private string $tempDir;
+    private ?App $app = null;
 
     protected function setUp(): void
     {
@@ -23,8 +24,10 @@ class HealthTest extends TestCase
 
     protected function tearDown(): void
     {
-        restore_error_handler();
-        restore_exception_handler();
+        if ($this->app !== null) {
+            restore_error_handler();
+            $this->app = null;
+        }
         Log::reset();
 
         // Clean up log files
@@ -55,9 +58,9 @@ class HealthTest extends TestCase
 
     public function testHealthDataStructure(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $health = $app->getHealthData();
+        $health = $this->app->getHealthData();
 
         $this->assertArrayHasKey('status', $health);
         $this->assertArrayHasKey('version', $health);
@@ -66,27 +69,27 @@ class HealthTest extends TestCase
 
     public function testHealthStatusIsOk(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $health = $app->getHealthData();
+        $health = $this->app->getHealthData();
 
         $this->assertEquals('ok', $health['status']);
     }
 
     public function testHealthVersionIs3(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $health = $app->getHealthData();
+        $health = $this->app->getHealthData();
 
         $this->assertEquals(App::VERSION, $health['version']);
     }
 
     public function testHealthUptimeIsNumeric(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $health = $app->getHealthData();
+        $health = $this->app->getHealthData();
 
         $this->assertIsFloat($health['uptime']);
         $this->assertGreaterThanOrEqual(0, $health['uptime']);
@@ -94,9 +97,9 @@ class HealthTest extends TestCase
 
     public function testHealthRouteRegistered(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $routes = $app->getRoutes();
+        $routes = $this->app->getRoutes();
 
         $this->assertArrayHasKey('GET', $routes);
         $this->assertArrayHasKey('/health', $routes['GET']);
@@ -104,9 +107,9 @@ class HealthTest extends TestCase
 
     public function testHealthRouteHandlerReturnsCorrectData(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $routes = $app->getRoutes();
+        $routes = $this->app->getRoutes();
         $handler = $routes['GET']['/health'];
         $result = $handler();
 
@@ -121,58 +124,58 @@ class HealthTest extends TestCase
 
     public function testAppStartAndStop(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $this->assertFalse($app->isRunning());
+        $this->assertFalse($this->app->isRunning());
 
-        $app->start();
-        $this->assertTrue($app->isRunning());
+        $this->app->start();
+        $this->assertTrue($this->app->isRunning());
 
-        $app->shutdown();
-        $this->assertFalse($app->isRunning());
+        $this->app->shutdown();
+        $this->assertFalse($this->app->isRunning());
     }
 
     public function testShutdownCallbacks(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
         $called = false;
 
-        $app->onShutdown(function () use (&$called) {
+        $this->app->onShutdown(function () use (&$called) {
             $called = true;
         });
 
-        $app->start();
-        $app->shutdown();
+        $this->app->start();
+        $this->app->shutdown();
 
         $this->assertTrue($called);
     }
 
     public function testShutdownNotCalledWhenNotRunning(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
         $called = false;
 
-        $app->onShutdown(function () use (&$called) {
+        $this->app->onShutdown(function () use (&$called) {
             $called = true;
         });
 
         // Don't start, just shutdown
-        $app->shutdown();
+        $this->app->shutdown();
 
         $this->assertFalse($called);
     }
 
     public function testRouteRegistration(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $app->get('/test', fn() => 'get');
-        $app->post('/test', fn() => 'post');
-        $app->put('/test', fn() => 'put');
-        $app->delete('/test', fn() => 'delete');
-        $app->patch('/test', fn() => 'patch');
+        $this->app->get('/test', fn() => 'get');
+        $this->app->post('/test', fn() => 'post');
+        $this->app->put('/test', fn() => 'put');
+        $this->app->delete('/test', fn() => 'delete');
+        $this->app->patch('/test', fn() => 'patch');
 
-        $routes = $app->getRoutes();
+        $routes = $this->app->getRoutes();
 
         $this->assertArrayHasKey('/test', $routes['GET']);
         $this->assertArrayHasKey('/test', $routes['POST']);
@@ -183,19 +186,19 @@ class HealthTest extends TestCase
 
     public function testMiddlewareRegistration(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
         $middleware = fn() => null;
-        $app->addMiddleware($middleware);
+        $this->app->addMiddleware($middleware);
 
-        $this->assertCount(1, $app->getMiddleware());
+        $this->assertCount(1, $this->app->getMiddleware());
     }
 
     public function testHealthJsonOutput(): void
     {
-        $app = new App(basePath: $this->tempDir);
+        $this->app = new App(basePath: $this->tempDir);
 
-        $health = $app->getHealthData();
+        $health = $this->app->getHealthData();
         $json = json_encode($health);
 
         $this->assertJson($json);

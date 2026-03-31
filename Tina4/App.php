@@ -34,11 +34,15 @@ class App
     /** @var array<callable> Middleware stack */
     private array $middleware = [];
 
+    /** @var bool Whether this instance set an error handler */
+    private bool $errorHandlerSet = false;
+
     public function __construct(
         private readonly string $basePath = '.',
         private readonly bool $development = false,
     ) {
         $this->startTime = microtime(true);
+        $this->errorHandlerSet = true;
 
         // Strict mode: convert all PHP warnings/notices to exceptions
         // so errors like "Undefined array key" are caught immediately
@@ -73,6 +77,14 @@ class App
 
         // Register signal handlers for graceful shutdown
         $this->registerSignalHandlers();
+    }
+
+    public function __destruct()
+    {
+        if ($this->errorHandlerSet) {
+            restore_error_handler();
+            $this->errorHandlerSet = false;
+        }
     }
 
     /**

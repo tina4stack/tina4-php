@@ -6,6 +6,7 @@ require_once __DIR__ . '/../Tina4/DevAdmin.php';
 
 use PHPUnit\Framework\TestCase;
 use Tina4\DevAdmin;
+use Tina4\ErrorTracker;
 use Tina4\MessageLog;
 use Tina4\RequestInspector;
 use Tina4\Router;
@@ -23,8 +24,7 @@ class DevAdminTest extends TestCase
 
     protected function tearDown(): void
     {
-        restore_error_handler();
-        restore_exception_handler();
+        ErrorTracker::reset();
         Router::reset();
         MessageLog::reset();
         RequestInspector::reset();

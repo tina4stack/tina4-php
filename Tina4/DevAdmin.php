@@ -1509,6 +1509,9 @@ class ErrorTracker
     /** @var bool Whether handlers are already registered in this process */
     private static bool $registered = false;
 
+    /** @var int Number of handler pairs pushed by register() */
+    private static int $handlerDepth = 0;
+
     // ---------------------------------------------------------------------------
     // Storage helpers
     // ---------------------------------------------------------------------------
@@ -1684,6 +1687,7 @@ class ErrorTracker
             return;
         }
         self::$registered = true;
+        self::$handlerDepth++;
 
         // Capture uncaught exceptions
         $prevException = set_exception_handler(
@@ -1731,6 +1735,12 @@ class ErrorTracker
      */
     public static function reset(): void
     {
+        // Restore handlers that register() pushed
+        while (self::$handlerDepth > 0) {
+            restore_error_handler();
+            restore_exception_handler();
+            self::$handlerDepth--;
+        }
         self::$errors = [];
         self::$registered = false;
         $path = self::getStorePath();
