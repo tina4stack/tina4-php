@@ -659,6 +659,8 @@ class Frond
         foreach ($ast as $node) {
             if ($node['type'] === 'block') {
                 if (isset($childBlocks[$node['name']])) {
+                    // Store original parent body for parent()/super() support
+                    $node['parentBody'] = $node['body'];
                     $node['body'] = $this->replaceBlocks($childBlocks[$node['name']], $childBlocks);
                 } else {
                     $node['body'] = $this->replaceBlocks($node['body'], $childBlocks);
@@ -715,6 +717,22 @@ class Frond
                 return $this->executeInclude($node, $data);
 
             case 'block':
+                if (!empty($node['parentBody'])) {
+                    // Inject parent()/super() callables for block inheritance
+                    $parentBody = $node['parentBody'];
+                    $engine = $this;
+                    $renderedParent = null;
+                    $getParent = function () use ($engine, $parentBody, &$data, &$renderedParent) {
+                        if ($renderedParent === null) {
+                            $renderedParent = self::RAW_MARKER . $engine->execute($parentBody, $data);
+                        }
+                        return $renderedParent;
+                    };
+                    $blockData = $data;
+                    $blockData['parent'] = $getParent;
+                    $blockData['super'] = $getParent;
+                    return $this->execute($node['body'], $blockData);
+                }
                 return $this->execute($node['body'], $data);
 
             case 'macro':

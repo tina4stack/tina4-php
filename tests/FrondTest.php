@@ -732,6 +732,62 @@ class FrondTest extends TestCase
         $this->assertStringContainsString('Internal Server Error', $result);
     }
 
+    public function testParentIncludesParentBlockContent(): void
+    {
+        $this->writeTemplate('base_p1.html', '{% block content %}Parent Content{% endblock %}');
+        $this->writeTemplate('child_p1.html', '{% extends "base_p1.html" %}{% block content %}{{ parent() }} + Child Content{% endblock %}');
+        $result = $this->engine->render('child_p1.html', []);
+        $this->assertStringContainsString('Parent Content', $result);
+        $this->assertStringContainsString('+ Child Content', $result);
+    }
+
+    public function testSuperIsAliasForParent(): void
+    {
+        $this->writeTemplate('base_p2.html', '{% block content %}Parent Content{% endblock %}');
+        $this->writeTemplate('child_p2.html', '{% extends "base_p2.html" %}{% block content %}{{ super() }} + Child Content{% endblock %}');
+        $result = $this->engine->render('child_p2.html', []);
+        $this->assertStringContainsString('Parent Content', $result);
+        $this->assertStringContainsString('+ Child Content', $result);
+    }
+
+    public function testNoParentMeansFullReplacement(): void
+    {
+        $this->writeTemplate('base_p3.html', '{% block content %}Parent Content{% endblock %}');
+        $this->writeTemplate('child_p3.html', '{% extends "base_p3.html" %}{% block content %}Child Only{% endblock %}');
+        $result = $this->engine->render('child_p3.html', []);
+        $this->assertSame('Child Only', $result);
+    }
+
+    public function testParentWithTemplateVariables(): void
+    {
+        $this->writeTemplate('base_p4.html', '{% block content %}Hello {{ name }}{% endblock %}');
+        $this->writeTemplate('child_p4.html', '{% extends "base_p4.html" %}{% block content %}{{ parent() }} and Goodbye {{ name }}{% endblock %}');
+        $result = $this->engine->render('child_p4.html', ['name' => 'World']);
+        $this->assertStringContainsString('Hello World', $result);
+        $this->assertStringContainsString('and Goodbye World', $result);
+    }
+
+    public function testUnreplacedBlocksKeepParentDefault(): void
+    {
+        $this->writeTemplate('base_p5.html', '{% block title %}Default Title{% endblock %} - {% block content %}Default Content{% endblock %}');
+        $this->writeTemplate('child_p5.html', '{% extends "base_p5.html" %}{% block content %}Custom Content{% endblock %}');
+        $result = $this->engine->render('child_p5.html', []);
+        $this->assertStringContainsString('Default Title', $result);
+        $this->assertStringContainsString('Custom Content', $result);
+        $this->assertStringNotContainsString('Default Content', $result);
+    }
+
+    public function testMultipleBlocksWithParent(): void
+    {
+        $this->writeTemplate('base_p6.html', '{% block header %}Base Header{% endblock %}|{% block footer %}Base Footer{% endblock %}');
+        $this->writeTemplate('child_p6.html', '{% extends "base_p6.html" %}{% block header %}{{ parent() }} + Extra Header{% endblock %}{% block footer %}{{ parent() }} + Extra Footer{% endblock %}');
+        $result = $this->engine->render('child_p6.html', []);
+        $this->assertStringContainsString('Base Header', $result);
+        $this->assertStringContainsString('+ Extra Header', $result);
+        $this->assertStringContainsString('Base Footer', $result);
+        $this->assertStringContainsString('+ Extra Footer', $result);
+    }
+
     /* ═══════════ Whitespace Control ═══════════ */
 
     public function testWhitespaceControlVar(): void
