@@ -57,6 +57,28 @@ class DevAdmin
             return $response->json(['mtime' => $latest, 'file' => $latestFile]);
         });
 
+        // API: Version check — proxy to avoid CORS issues with registry APIs
+        Router::get('/__dev/api/version-check', function (Request $request, Response $response) {
+            $current = App::VERSION;
+            $latest = $current;
+            try {
+                $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
+                $json = @file_get_contents('https://packagist.org/packages/tina4stack/tina4php.json', false, $ctx);
+                if ($json) {
+                    $data = json_decode($json, true);
+                    $versions = array_keys($data['package']['versions'] ?? []);
+                    // Filter to stable versions (vX.Y.Z), sort descending
+                    $stable = array_filter($versions, fn($v) => preg_match('/^v?\d+\.\d+\.\d+$/', $v));
+                    usort($stable, 'version_compare');
+                    $latest = end($stable) ?: $current;
+                    $latest = ltrim($latest, 'v');
+                }
+            } catch (\Throwable) {
+                // Offline or timeout — return current as latest
+            }
+            return $response->json(['current' => $current, 'latest' => $latest]);
+        });
+
         // API: System status (lightweight)
         Router::get('/__dev/api/status', function (Request $request, Response $response) {
             return $response->json([
@@ -667,11 +689,11 @@ function tina4VersionModal(){
     var el=document.getElementById('tina4-ver-latest');
     el.innerHTML='Checking for updates...';
     el.style.color='#888';
-    fetch('https://repo.packagist.org/p2/tina4stack/tina4-php.json')
+    fetch('/__dev/api/version-check')
     .then(function(r){return r.json()})
     .then(function(d){
-        var latest=d['packages']['tina4stack/tina4-php'][0].version.replace(/^v/,'');
-        var current='{$version}';
+        var latest=d.latest;
+        var current=d.current;
         if(latest===current){
             el.innerHTML='Latest: <strong style="color:#a6e3a1;">v'+latest+'</strong> &mdash; You are up to date!';
             el.style.color='#a6e3a1';

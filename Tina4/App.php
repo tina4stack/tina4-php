@@ -686,11 +686,20 @@ HTML;
     {
         $response = $this();
 
+        // Buffer output to prevent "headers already sent" errors
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         http_response_code($response->getStatusCode() ?? 200);
         foreach ($response->getHeaders() as $name => $value) {
-            header("$name: $value");
+            if (!headers_sent()) {
+                header("$name: $value");
+            }
         }
         echo $response->getBody();
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
     }
 
     /**
