@@ -11,7 +11,8 @@
             "Tina4\\Session\\": "Tina4/Session/"
         },
         "files": [
-            "Tina4/Constants.php"
+            "Tina4/Constants.php",
+            "Tina4/MCP.php"
         ]
     },
     "require": {

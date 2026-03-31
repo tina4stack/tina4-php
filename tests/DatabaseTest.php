@@ -249,6 +249,67 @@ class DatabaseTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $lastId);
     }
 
+    // -- getNextId() ------------------------------------------------------------
+
+    public function testGetNextIdEmptyTable(): void
+    {
+        $nextId = $this->db->getNextId('users', 'id');
+        $this->assertSame(1, $nextId);
+    }
+
+    public function testGetNextIdWithExistingRows(): void
+    {
+        $this->db->insert('users', ['id' => 5, 'name' => 'Alice', 'email' => 'alice@test.com']);
+        $this->db->insert('users', ['id' => 10, 'name' => 'Bob', 'email' => 'bob@test.com']);
+
+        $nextId = $this->db->getNextId('users', 'id');
+
+        // Should seed from MAX(id)=10, then increment to 11
+        $this->assertSame(11, $nextId);
+    }
+
+    public function testGetNextIdIncrementsSequentially(): void
+    {
+        $this->db->insert('users', ['id' => 1, 'name' => 'Alice', 'email' => 'alice@test.com']);
+
+        $first = $this->db->getNextId('users', 'id');
+        $second = $this->db->getNextId('users', 'id');
+        $third = $this->db->getNextId('users', 'id');
+
+        // First call seeds from MAX(1) then increments: 2
+        // Subsequent calls just increment: 3, 4
+        $this->assertSame(2, $first);
+        $this->assertSame(3, $second);
+        $this->assertSame(4, $third);
+    }
+
+    public function testGetNextIdNonexistentTable(): void
+    {
+        $nextId = $this->db->getNextId('nonexistent_table', 'id');
+        $this->assertSame(1, $nextId);
+    }
+
+    public function testGetNextIdCreatesSequenceTable(): void
+    {
+        $this->db->getNextId('users', 'id');
+        $this->assertTrue($this->db->tableExists('tina4_sequences'));
+    }
+
+    public function testGetNextIdIsolatedPerTableColumn(): void
+    {
+        $this->db->execute("CREATE TABLE orders (order_id INTEGER PRIMARY KEY, total REAL)");
+        $this->db->insert('users', ['id' => 5, 'name' => 'Alice', 'email' => 'alice@test.com']);
+        $this->db->insert('orders', ['order_id' => 20, 'total' => 99.99]);
+
+        $userId = $this->db->getNextId('users', 'id');
+        $orderId = $this->db->getNextId('orders', 'order_id');
+
+        // users seeded from MAX(id)=5 -> 6
+        $this->assertSame(6, $userId);
+        // orders seeded from MAX(order_id)=20 -> 21
+        $this->assertSame(21, $orderId);
+    }
+
     // -- close() ----------------------------------------------------------------
 
     public function testCloseDoesNotThrow(): void
