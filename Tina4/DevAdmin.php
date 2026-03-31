@@ -639,7 +639,17 @@ class DevAdmin
 
         return <<<HTML
 <div id="tina4-dev-toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#333;color:#fff;font-family:monospace;font-size:12px;padding:6px 16px;z-index:99999;display:flex;align-items:center;gap:16px;">
-    <span style="color:#7b1fa2;font-weight:bold;">Tina4 v{$version}</span>
+    <span id="tina4-ver-btn" style="color:#7b1fa2;font-weight:bold;cursor:pointer;text-decoration:underline dotted;" onclick="tina4VersionModal()" title="Click to check for updates">Tina4 v{$version}</span>
+    <div id="tina4-ver-modal" style="display:none;position:fixed;bottom:3rem;left:1rem;background:#1e1e2e;border:1px solid #7b1fa2;border-radius:8px;padding:16px 20px;z-index:100000;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:monospace;font-size:13px;color:#cdd6f4;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <strong style="color:#89b4fa;">Version Info</strong>
+        <span onclick="document.getElementById('tina4-ver-modal').style.display='none'" style="cursor:pointer;color:#888;">&times;</span>
+      </div>
+      <div id="tina4-ver-body" style="line-height:1.8;">
+        <div>Current: <strong style="color:#a6e3a1;">v{$version}</strong></div>
+        <div id="tina4-ver-latest" style="color:#888;">Checking for updates...</div>
+      </div>
+    </div>
     <span style="color:#4caf50;">{$safeMethod}</span>
     <span>{$safePath}</span>
     <span style="color:#666;">&rarr; {$safePattern}</span>
@@ -649,6 +659,51 @@ class DevAdmin
     <a href="#" onclick="(function(e){e.preventDefault();var p=document.getElementById('tina4-dev-panel');if(p){p.style.display=p.style.display==='none'?'block':'none';return;}var c=document.createElement('div');c.id='tina4-dev-panel';c.style.cssText='position:fixed;bottom:2rem;right:1rem;width:min(90vw,1200px);height:min(80vh,700px);z-index:99998;transition:all 0.2s';var f=document.createElement('iframe');f.src='/__dev';f.style.cssText='width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';c.appendChild(f);document.body.appendChild(c);})(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
     <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
 </div>
+<script>
+function tina4VersionModal(){
+    var m=document.getElementById('tina4-ver-modal');
+    if(m.style.display==='block'){m.style.display='none';return;}
+    m.style.display='block';
+    var el=document.getElementById('tina4-ver-latest');
+    el.innerHTML='Checking for updates...';
+    el.style.color='#888';
+    fetch('https://repo.packagist.org/p2/tina4stack/tina4-php.json')
+    .then(function(r){return r.json()})
+    .then(function(d){
+        var latest=d['packages']['tina4stack/tina4-php'][0].version.replace(/^v/,'');
+        var current='{$version}';
+        if(latest===current){
+            el.innerHTML='Latest: <strong style="color:#a6e3a1;">v'+latest+'</strong> &mdash; You are up to date!';
+            el.style.color='#a6e3a1';
+        }else{
+            var cParts=current.split('.').map(Number);
+            var lParts=latest.split('.').map(Number);
+            var isNewer=false;
+            for(var i=0;i<Math.max(cParts.length,lParts.length);i++){
+                var c=cParts[i]||0,l=lParts[i]||0;
+                if(l>c){isNewer=true;break;}
+                if(l<c)break;
+            }
+            if(isNewer){
+                var breaking=(lParts[0]!==cParts[0]||lParts[1]!==cParts[1]);
+                el.innerHTML='Latest: <strong style="color:#f9e2af;">v'+latest+'</strong>';
+                if(breaking){
+                    el.innerHTML+='<div style="color:#f38ba8;margin-top:6px;">&#9888; Major/minor version change &mdash; check the <a href="https://github.com/tina4stack/tina4-php/releases" target="_blank" style="color:#89b4fa;">changelog</a> for breaking changes before upgrading.</div>';
+                }else{
+                    el.innerHTML+='<div style="color:#f9e2af;margin-top:6px;">Patch update available. Run: <code style="background:#313244;padding:2px 6px;border-radius:3px;">composer update tina4stack/tina4-php</code></div>';
+                }
+            }else{
+                el.innerHTML='Latest: <strong style="color:#a6e3a1;">v'+latest+'</strong> &mdash; You are up to date!';
+                el.style.color='#a6e3a1';
+            }
+        }
+    })
+    .catch(function(){
+        el.innerHTML='Could not check for updates (offline?)';
+        el.style.color='#f38ba8';
+    });
+}
+</script>
 <script>
 (function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){var iv=parseInt('<?php echo (int)(getenv("TINA4_DEV_POLL_INTERVAL") ?: 3000); ?>')||3000;var dbt=null;var cssExts=['.css','.scss'];function apply(d){var f=d.file||'';var isCss=cssExts.some(function(e){return f.endsWith(e)});if(isCss){document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+d.mtime;});}else{location.reload();}}setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(d.mtime&&d.mtime>mt){mt=d.mtime;if(dbt)clearTimeout(dbt);dbt=setTimeout(function(){apply(d);},500);}}).catch(function(){});},iv);}tryWs();})();
 </script>
