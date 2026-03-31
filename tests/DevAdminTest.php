@@ -23,6 +23,8 @@ class DevAdminTest extends TestCase
 
     protected function tearDown(): void
     {
+        restore_error_handler();
+        restore_exception_handler();
         Router::reset();
         MessageLog::reset();
         RequestInspector::reset();

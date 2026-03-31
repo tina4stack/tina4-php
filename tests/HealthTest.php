@@ -23,6 +23,8 @@ class HealthTest extends TestCase
 
     protected function tearDown(): void
     {
+        restore_error_handler();
+        restore_exception_handler();
         Log::reset();
 
         // Clean up log files
