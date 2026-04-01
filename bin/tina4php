@@ -5,7 +5,7 @@
  *
  * Usage:
  *   tina4php init [dir]             Scaffold a new project
- *   tina4php serve [host:port|port]  Start dev server (default: 0.0.0.0:7146)
+ *   tina4php serve [host:port|port]  Start dev server (default: 0.0.0.0:7145)
  *   tina4php start [host:port|port] Alias for serve
  *   tina4php migrate                Run pending migrations
  *   tina4php migrate:create <desc>  Create a migration file
@@ -50,7 +50,7 @@ $frameworkRoot = realpath(__DIR__ . '/..');
 function resolveHostPort(?string $cliArg = null): array
 {
     $defaultHost = '0.0.0.0';
-    $defaultPort = '7146';
+    $defaultPort = '7145';
 
     $host = null;
     $port = null;
@@ -188,9 +188,9 @@ RUN install-php-extensions sqlite3 opcache
 COPY --from=build /app .
 
 ENV HOST=0.0.0.0
-ENV PORT=7146
-EXPOSE 7146
-CMD ["php", "bin/tina4php", "serve", "--host", "0.0.0.0", "--port", "7146"]
+ENV PORT=7145
+EXPOSE 7145
+CMD ["php", "bin/tina4php", "serve", "--host", "0.0.0.0", "--port", "7145"]
 DOCKERFILE;
             file_put_contents($targetDir . 'Dockerfile', $dockerfile);
             echo "  Created Dockerfile\n";
@@ -586,7 +586,7 @@ DOCKERFILE;
         echo "Usage: tina4php <command> [options]\n\n";
         echo "Commands:\n";
         echo "  init [dir]              Scaffold a new project\n";
-        echo "  serve [host:port|port]   Start dev server (default: 0.0.0.0:7146)\n";
+        echo "  serve [host:port|port]   Start dev server (default: 0.0.0.0:7145)\n";
         echo "  start [host:port|port]   Alias for serve\n";
         echo "  migrate                 Run pending migrations\n";
         echo "  migrate:create <desc>   Create a migration file\n";

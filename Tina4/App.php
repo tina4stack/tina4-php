@@ -368,7 +368,7 @@ class App
 
     private static function renderLandingPage(string $version, bool $isDev): string
     {
-        $port = $_SERVER['SERVER_PORT'] ?? getenv('TINA4_PORT') ?: getenv('PORT') ?: '7146';
+        $port = $_SERVER['SERVER_PORT'] ?? getenv('TINA4_PORT') ?: getenv('PORT') ?: '7145';
 
         $btnRestApi = self::galleryBtn('rest-api', '/api/gallery/hello');
         $btnOrm = self::galleryBtn('orm', '/api/gallery/products');
@@ -450,7 +450,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
     <span style="color:#c084fc">return</span> \$response-&gt;json([<span style="color:#4ade80">'message'</span> =&gt; <span style="color:#4ade80">'Hello World!'</span>]);
 });
 
-\$app-&gt;run();  <span style="color:#64748b">// starts on port 7146</span></code></pre>
+\$app-&gt;run();  <span style="color:#64748b">// starts on port 7145</span></code></pre>
     </div>
 </div>
 <div class="gallery">
@@ -587,9 +587,9 @@ HTML;
      * Falls back to `php -S` if stream_socket_server fails.
      *
      * @param string $host Host to bind to (default: 0.0.0.0)
-     * @param int    $port Port to listen on (default: 7146)
+     * @param int    $port Port to listen on (default: 7145)
      */
-    public function run(string $host = '0.0.0.0', int $port = 7146): void
+    public function run(string $host = '0.0.0.0', int $port = 7145): void
     {
         $this->start();
 
