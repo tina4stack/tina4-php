@@ -1,0 +1,72 @@
+{
+  "date": "2026-04-01T09:04:12Z",
+  "machine": "arm64 Darwin",
+  "config": {
+    "runs": 3,
+    "requests": 5000,
+    "concurrency": 50,
+    "warmup": 500
+  },
+  "results": [
+    {
+      "framework": "Tina4 PHP",
+      "language": "php",
+      "json_runs": [
+        29824.9647,
+        29233.1344,
+        29292.7843
+      ],
+      "list_runs": [
+        5009.3165,
+        17308.7966,
+        17489.6494
+      ],
+      "json_median": 29292.7843,
+      "list_median": 17308.7966,
+      "warmup_time_ms": 41.21937503805384,
+      "deps": 0,
+      "features": 38,
+      "server": "php -S"
+    },
+    {
+      "framework": "Slim",
+      "language": "php",
+      "json_runs": [
+        3895.469,
+        5763.5587,
+        5713.8795
+      ],
+      "list_runs": [
+        5016.3449,
+        5055.1949,
+        5028.7905
+      ],
+      "json_median": 5713.8795,
+      "list_median": 5028.7905,
+      "warmup_time_ms": 157.88704197620973,
+      "deps": 10,
+      "features": 6,
+      "server": "php -S"
+    },
+    {
+      "framework": "Laravel",
+      "language": "php",
+      "json_runs": [
+        443.5334,
+        445.807,
+        444.6083
+      ],
+      "list_runs": [
+        440.7449,
+        439.8209,
+        441.1656
+      ],
+      "json_median": 444.6083,
+      "list_median": 440.7449,
+      "warmup_time_ms": 1202.9230410116725,
+      "deps": 50,
+      "features": 25,
+      "server": "artisan serve"
+    }
+  ]
+}
