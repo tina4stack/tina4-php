@@ -15,9 +15,25 @@
  *   tina4php routes                 List all registered routes
  *   tina4php test                   Run test suite
  *   tina4php build                  Build distributable package
- *   tina4php generate <what> <name>  Generate scaffolding (model, route, migration, middleware)
+ *   tina4php generate <what> <name>  Generate scaffolding
  *   tina4php ai [--all]             Detect AI tools and install context
  *   tina4php help                   Show this help
+ *
+ * Generators:
+ *   generate model <Name> [--fields "name:string,price:float"]
+ *   generate route <name> [--model Name]
+ *   generate crud <Name> [--fields "..."]   Model + migration + routes + form + view + test
+ *   generate migration <description>
+ *   generate middleware <Name>
+ *   generate test <name>
+ *   generate form <Name> [--fields "..."]   Form template with typed inputs
+ *   generate view <Name> [--fields "..."]   List + detail templates
+ *   generate auth                           Login/register routes + User model + templates
+ *
+ * Field types: string, int, float, bool, text, datetime, blob
+ * Table names: singular by default (Product -> product)
+ *
+ * https://tina4.com
  */
 
 // ── Resolve paths ──
@@ -43,6 +59,128 @@ foreach ($autoloadPaths as $autoloadFile) {
 
 // Framework root (where the Tina4 source lives)
 $frameworkRoot = realpath(__DIR__ . '/..');
+
+// ── Field type mapping ──
+$FIELD_TYPE_MAP = [
+    'string'   => ['php' => 'string',  'default' => "''",    'sql' => 'VARCHAR(255)', 'nullable' => false],
+    'str'      => ['php' => 'string',  'default' => "''",    'sql' => 'VARCHAR(255)', 'nullable' => false],
+    'int'      => ['php' => 'int',     'default' => 'null',  'sql' => 'INTEGER',      'nullable' => true],
+    'integer'  => ['php' => 'int',     'default' => 'null',  'sql' => 'INTEGER',      'nullable' => true],
+    'float'    => ['php' => 'float',   'default' => 'null',  'sql' => 'DECIMAL(10,2)','nullable' => true],
+    'numeric'  => ['php' => 'float',   'default' => 'null',  'sql' => 'DECIMAL(10,2)','nullable' => true],
+    'decimal'  => ['php' => 'float',   'default' => 'null',  'sql' => 'DECIMAL(10,2)','nullable' => true],
+    'bool'     => ['php' => 'bool',    'default' => 'false', 'sql' => 'TINYINT(1)',   'nullable' => false],
+    'boolean'  => ['php' => 'bool',    'default' => 'false', 'sql' => 'TINYINT(1)',   'nullable' => false],
+    'text'     => ['php' => 'string',  'default' => "''",    'sql' => 'TEXT',         'nullable' => false],
+    'datetime' => ['php' => 'string',  'default' => 'null',  'sql' => 'DATETIME',    'nullable' => true],
+    'blob'     => ['php' => 'string',  'default' => 'null',  'sql' => 'BLOB',        'nullable' => true],
+];
+
+// ── Input type mapping (for form generation) ──
+$INPUT_TYPE_MAP = [
+    'string'   => 'text',
+    'str'      => 'text',
+    'text'     => 'textarea',
+    'int'      => 'number',
+    'integer'  => 'number',
+    'float'    => 'number',
+    'numeric'  => 'number',
+    'decimal'  => 'number',
+    'bool'     => 'checkbox',
+    'boolean'  => 'checkbox',
+    'datetime' => 'datetime-local',
+    'blob'     => 'file',
+];
+
+
+// ── Helper functions ──
+
+/**
+ * CamelCase to snake_case (singular table name).
+ * ProductCategory -> product_category
+ */
+function tableNameFromClass(string $name): string
+{
+    $s1 = preg_replace('/([A-Z]+)([A-Z][a-z])/', '$1_$2', $name);
+    return strtolower(preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $s1));
+}
+
+/**
+ * Parse "name:string,price:float" into [['name','string'], ['price','float']].
+ */
+function parseFields(string $fieldsStr): array
+{
+    if (empty(trim($fieldsStr))) {
+        return [];
+    }
+    $result = [];
+    foreach (explode(',', $fieldsStr) as $part) {
+        $part = trim($part);
+        if (str_contains($part, ':')) {
+            [$name, $type] = explode(':', $part, 2);
+            $result[] = [trim($name), strtolower(trim($type))];
+        } elseif ($part !== '') {
+            $result[] = [$part, 'string'];
+        }
+    }
+    return $result;
+}
+
+/**
+ * Parse --key value and --flag from args. Returns [flags, positional].
+ */
+function parseFlags(array $args): array
+{
+    $flags = [];
+    $positional = [];
+    $i = 0;
+    while ($i < count($args)) {
+        if (str_starts_with($args[$i], '--')) {
+            $key = substr($args[$i], 2);
+            // Check for --key=value
+            if (str_contains($key, '=')) {
+                [$key, $val] = explode('=', $key, 2);
+                $flags[$key] = $val;
+                $i++;
+            } elseif ($i + 1 < count($args) && !str_starts_with($args[$i + 1], '--')) {
+                $flags[$key] = $args[$i + 1];
+                $i += 2;
+            } else {
+                $flags[$key] = true;
+                $i++;
+            }
+        } else {
+            $positional[] = $args[$i];
+            $i++;
+        }
+    }
+    return [$flags, $positional];
+}
+
+/**
+ * Kill any process listening on the given port.
+ */
+function killProcessOnPort(int $port): bool
+{
+    if (PHP_OS_FAMILY === 'Windows') {
+        return false;
+    }
+    $output = @shell_exec("lsof -ti :{$port} 2>/dev/null");
+    if (!empty(trim($output ?? ''))) {
+        $pids = array_filter(explode("\n", trim($output)));
+        foreach ($pids as $pid) {
+            $pid = (int)trim($pid);
+            if ($pid > 0) {
+                @posix_kill($pid, 15); // SIGTERM
+            }
+        }
+        usleep(500000); // 0.5s
+        echo "  Warning: Killed existing process on port {$port} (PID: " . implode(', ', $pids) . ")\n";
+        return true;
+    }
+    return false;
+}
+
 
 // ── Port/host resolution ──
 // Priority: CLI arg > ENV var > default
@@ -219,19 +357,13 @@ DOCKERFILE;
             \Tina4\DotEnv::loadEnv($envFile);
         }
 
-        // Parse --port=XXXX / --host=XXXX flags from $args (highest priority after explicit positional arg)
-        $flagPort = null;
-        $flagHost = null;
-        $positionalArg = null;
-        foreach ($args as $arg) {
-            if (preg_match('/^--port[=:](\S+)$/', $arg, $m)) {
-                $flagPort = $m[1];
-            } elseif (preg_match('/^--host[=:](\S+)$/', $arg, $m)) {
-                $flagHost = $m[1];
-            } elseif (!str_starts_with($arg, '--') && $positionalArg === null) {
-                $positionalArg = $arg;
-            }
-        }
+        // Parse flags from $args
+        [$serveFlags, $servePositional] = parseFlags($args);
+        $flagPort = $serveFlags['port'] ?? null;
+        $flagHost = $serveFlags['host'] ?? null;
+        $noBrowser = isset($serveFlags['no-browser']);
+        $positionalArg = $servePositional[0] ?? null;
+
         [$host, $port] = resolveHostPort($positionalArg);
         if ($flagPort !== null) {
             $port = $flagPort;
@@ -240,6 +372,9 @@ DOCKERFILE;
             $host = $flagHost;
         }
         $port = (int)$port;
+
+        // Kill existing process on port
+        killProcessOnPort($port);
 
         // Find index.php
         if (file_exists($cwd . '/index.php')) {
@@ -299,6 +434,16 @@ DOCKERFILE;
   Dashboard: http://localhost:{$port}/__dev
   Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
 ";
+
+        // Open browser unless --no-browser
+        if (!$noBrowser && $isDebug && PHP_OS_FAMILY !== 'Windows') {
+            $browserUrl = "http://localhost:{$port}";
+            if (PHP_OS_FAMILY === 'Darwin') {
+                @exec("open " . escapeshellarg($browserUrl) . " 2>/dev/null &");
+            } else {
+                @exec("xdg-open " . escapeshellarg($browserUrl) . " 2>/dev/null &");
+            }
+        }
 
         if ($useFrankenPHP) {
             // FrankenPHP for production — natively supports WebSocket
@@ -501,69 +646,65 @@ DOCKERFILE;
         break;
 
     // ────────────────────────────────────────────
-    // AI — Install AI context files
+    // GENERATE — Rich scaffolding (9 generators)
     // ────────────────────────────────────────────
     case 'generate':
         $what = $args[0] ?? null;
-        $genName = $args[1] ?? null;
-        if (!$what || !$genName) {
-            echo "Usage: tina4php generate <what> <name>\n";
-            echo "  Generators: model, route, migration, middleware\n";
+        if (!$what) {
+            echo "Usage: tina4php generate <what> <name> [options]\n";
+            echo "  Generators: model, route, crud, migration, middleware, test, form, view, auth\n";
+            echo "  Options:    --fields \"name:string,price:float\"  --model ModelName\n";
             exit(1);
         }
+
+        // Auth doesn't require a name argument
+        $noNameGenerators = ['auth'];
+        if (!in_array($what, $noNameGenerators) && !isset($args[1])) {
+            echo "Usage: tina4php generate {$what} <name> [options]\n";
+            exit(1);
+        }
+
+        $genName = $args[1] ?? '';
+        [$genFlags, ] = parseFlags(array_slice($args, 2));
+
         switch ($what) {
             case 'model':
-                $dir = 'src/orm';
-                @mkdir($dir, 0755, true);
-                $path = "$dir/$genName.php";
-                if (file_exists($path)) { echo "  File already exists: $path\n"; exit(1); }
-                file_put_contents($path, "<?php\n\nclass $genName extends \\Tina4\\ORM {\n    public ?int \$id = null;\n    public string \$name = '';\n    public string \$email = '';\n}\n");
-                echo "  Created $path\n";
+                generateModel($genName, $genFlags, $FIELD_TYPE_MAP);
                 break;
             case 'route':
-                $routePath = ltrim($genName, '/');
-                $dir = "src/routes/$routePath";
-                @mkdir($dir, 0755, true);
-                $path = rtrim($dir, '/') . '.php';
-                if (file_exists($path)) { echo "  File already exists: $path\n"; exit(1); }
-                $content = "<?php\n\n";
-                $content .= "\\Tina4\\Get::add(\"/$routePath\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"data\" => []]);\n});\n\n";
-                $content .= "\\Tina4\\Get::add(\"/$routePath/{id}\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"data\" => []]);\n});\n\n";
-                $content .= "\\Tina4\\Post::add(\"/$routePath\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"message\" => \"created\"], 201);\n});\n\n";
-                $content .= "\\Tina4\\Put::add(\"/$routePath/{id}\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"message\" => \"updated\"]);\n});\n\n";
-                $content .= "\\Tina4\\Delete::add(\"/$routePath/{id}\", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {\n    return \$response->json([\"message\" => \"deleted\"]);\n});\n";
-                file_put_contents($path, $content);
-                echo "  Created $path\n";
+                generateRoute($genName, $genFlags);
+                break;
+            case 'crud':
+                generateCrud($genName, $genFlags, $FIELD_TYPE_MAP);
                 break;
             case 'migration':
-                $dir = 'migrations';
-                @mkdir($dir, 0755, true);
-                $timestamp = date('YmdHis');
-                $table = preg_replace('/^create_/', '', $genName);
-                if (!str_ends_with($table, 's')) {
-                    $table = str_ends_with($table, 'y') ? substr($table, 0, -1) . 'ies' : $table . 's';
-                }
-                $fileName = "{$timestamp}_{$genName}.sql";
-                $path = "$dir/$fileName";
-                $now = date('Y-m-d H:i:s');
-                file_put_contents($path, "-- Migration: $genName\n-- Created: $now\n\nCREATE TABLE $table (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name TEXT NOT NULL,\n    email TEXT NOT NULL,\n    created_at DATETIME DEFAULT CURRENT_TIMESTAMP\n);\n");
-                echo "  Created $path\n";
+                generateMigration($genName, $genFlags, $FIELD_TYPE_MAP);
                 break;
             case 'middleware':
-                $dir = 'src/middleware';
-                @mkdir($dir, 0755, true);
-                $path = "$dir/$genName.php";
-                if (file_exists($path)) { echo "  File already exists: $path\n"; exit(1); }
-                file_put_contents($path, "<?php\n\nclass $genName extends \\Tina4\\Middleware {\n    public function process(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?\\Tina4\\Response {\n        \$auth = \$request->getHeader(\"Authorization\");\n        if (empty(\$auth)) {\n            return \$response->json([\"error\" => \"Unauthorized\"], 401);\n        }\n        return null;\n    }\n}\n");
-                echo "  Created $path\n";
+                generateMiddleware($genName, $genFlags);
+                break;
+            case 'test':
+                generateTest($genName, $genFlags);
+                break;
+            case 'form':
+                generateForm($genName, $genFlags);
+                break;
+            case 'view':
+                generateView($genName, $genFlags);
+                break;
+            case 'auth':
+                generateAuth($genName, $genFlags, $FIELD_TYPE_MAP);
                 break;
             default:
-                echo "Unknown generator: $what\n";
-                echo "  Available: model, route, migration, middleware\n";
+                echo "Unknown generator: {$what}\n";
+                echo "  Available: model, route, crud, migration, middleware, test, form, view, auth\n";
                 exit(1);
         }
         break;
 
+    // ────────────────────────────────────────────
+    // AI — Install AI context files
+    // ────────────────────────────────────────────
     case 'ai':
         if (isset($args[0]) && strtolower($args[0]) === 'all') {
             \Tina4\AI::installAll($cwd);
@@ -596,8 +737,905 @@ DOCKERFILE;
         echo "  routes                  List all registered routes\n";
         echo "  test                    Run test suite\n";
         echo "  build                   Build distributable package\n";
-        echo "  generate <what> <name>  Generate scaffolding (model, route, migration, middleware)\n";
+        echo "  generate <what> <name>  Generate scaffolding\n";
         echo "  ai [--all]              Detect AI tools and install context\n";
         echo "  help                    Show this help\n";
+        echo "\nGenerators:\n";
+        echo "  generate model <Name> [--fields \"name:string,price:float\"]\n";
+        echo "  generate route <name> [--model Name]\n";
+        echo "  generate crud <Name> [--fields \"...\"]   Model + migration + routes + form + view + test\n";
+        echo "  generate migration <description>\n";
+        echo "  generate middleware <Name>\n";
+        echo "  generate test <name>\n";
+        echo "  generate form <Name> [--fields \"...\"]   Form template with typed inputs\n";
+        echo "  generate view <Name> [--fields \"...\"]   List + detail templates\n";
+        echo "  generate auth                           Login/register routes + User model + templates\n";
+        echo "\nField types: string, int, float, bool, text, datetime, blob\n";
+        echo "Table names: singular by default (Product -> product)\n";
+        echo "\nhttps://tina4.com\n";
         break;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// Generator functions
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate ORM model + matching migration.
+ *
+ * tina4php generate model Product
+ * tina4php generate model Product --fields "name:string,price:float,in_stock:bool"
+ */
+function generateModel(string $name, array $flags, array $fieldTypeMap, bool $skipMigration = false): void
+{
+    $fields = parseFields($flags['fields'] ?? '');
+    $table = tableNameFromClass($name);
+
+    // Build typed property lines
+    $propLines = ["    public ?int \$id = null;"];
+    if (!empty($fields)) {
+        foreach ($fields as [$fname, $ftype]) {
+            $info = $fieldTypeMap[$ftype] ?? $fieldTypeMap['string'];
+            $nullable = $info['nullable'] ? '?' : '';
+            $propLines[] = "    public {$nullable}{$info['php']} \${$fname} = {$info['default']};";
+        }
+    } else {
+        $propLines[] = "    public string \$name = '';";
+    }
+    $propLines[] = "    public ?string \$createdAt = null;";
+
+    // Write model file
+    $dir = 'src/orm';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$name}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $propsStr = implode("\n", $propLines);
+    $content = <<<PHP
+<?php
+
+class {$name} extends \\Tina4\\ORM
+{
+    public string \$tableName = '{$table}';
+    public string \$primaryKey = 'id';
+
+{$propsStr}
+}
+
+PHP;
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+
+    // Generate matching migration (unless --no-migration or caller skipped)
+    if (!$skipMigration && !isset($flags['no-migration'])) {
+        generateMigration("create_{$table}", $flags, $fieldTypeMap, $fields, $table);
+    }
+}
+
+
+/**
+ * Generate CRUD route file with Swagger docblocks.
+ *
+ * tina4php generate route products
+ * tina4php generate route products --model Product
+ */
+function generateRoute(string $name, array $flags): void
+{
+    $routePath = ltrim($name, '/');
+    $singular = rtrim($routePath, 's');
+    if ($singular === $routePath) {
+        $singular = $routePath;
+    }
+    $model = $flags['model'] ?? '';
+    $ucSingular = ucfirst($singular);
+
+    $dir = 'src/routes';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$routePath}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    if ($model) {
+        $content = <<<PHP
+<?php
+
+/**
+ * @description List all {$routePath}
+ * @tags {$routePath}
+ */
+Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$page = (int)(\$request->params['page'] ?? 1);
+        \$perPage = (int)(\$request->params['per_page'] ?? 20);
+        \$offset = (\$page - 1) * \$perPage;
+        \$items = (new {$model}())->select("*", "", [], "", "", "", "", \$perPage, \$offset);
+        return \$response(\$items, 200);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response(["error" => "Failed to list {$routePath}"], 500);
+    }
+});
+
+/**
+ * @description Get a {$singular} by ID
+ * @tags {$routePath}
+ */
+Router::get("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$item = (new {$model}());
+        if (!\$item->load("id = ?", [\$request->params['id']])) {
+            return \$response(["error" => "Not found"], 404);
+        }
+        return \$response(\$item, 200);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response(["error" => "Failed to get {$singular}"], 500);
+    }
+});
+
+/**
+ * @description Create a new {$singular}
+ * @tags {$routePath}
+ */
+Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$item = new {$model}(\$request);
+        \$item->save();
+        return \$response(\$item, 201);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response(["error" => "Failed to create {$singular}"], 500);
+    }
+});
+
+/**
+ * @description Update a {$singular}
+ * @tags {$routePath}
+ */
+Router::put("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$item = new {$model}(\$request);
+        \$item->id = (int)\$request->params['id'];
+        \$item->save();
+        return \$response(\$item, 200);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response(["error" => "Failed to update {$singular}"], 500);
+    }
+});
+
+/**
+ * @description Delete a {$singular}
+ * @tags {$routePath}
+ */
+Router::delete("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$item = new {$model}();
+        if (!\$item->load("id = ?", [\$request->params['id']])) {
+            return \$response(["error" => "Not found"], 404);
+        }
+        \$item->delete();
+        return \$response(null, 204);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response(["error" => "Failed to delete {$singular}"], 500);
+    }
+});
+
+PHP;
+    } else {
+        $content = <<<PHP
+<?php
+
+/**
+ * @description List all {$routePath}
+ * @tags {$routePath}
+ */
+Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    return \$response(["data" => []], 200);
+});
+
+/**
+ * @description Get a {$singular} by ID
+ * @tags {$routePath}
+ */
+Router::get("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    return \$response(["data" => []], 200);
+});
+
+/**
+ * @description Create a new {$singular}
+ * @tags {$routePath}
+ */
+Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    return \$response(["message" => "created"], 201);
+});
+
+/**
+ * @description Update a {$singular}
+ * @tags {$routePath}
+ */
+Router::put("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    return \$response(["message" => "updated"], 200);
+});
+
+/**
+ * @description Delete a {$singular}
+ * @tags {$routePath}
+ */
+Router::delete("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    return \$response(null, 204);
+});
+
+PHP;
+    }
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate full CRUD stack: model + migration + routes + form + view + test.
+ *
+ * tina4php generate crud Product --fields "name:string,price:float"
+ */
+function generateCrud(string $name, array $flags, array $fieldTypeMap): void
+{
+    $table = tableNameFromClass($name);
+    $routeName = $table . 's';
+
+    echo "\n  Generating CRUD for {$name}...\n\n";
+
+    // 1. Model + migration
+    generateModel($name, $flags, $fieldTypeMap);
+
+    // 2. Routes with model
+    generateRoute($routeName, ['model' => $name]);
+
+    // 3. Form
+    generateForm($name, $flags);
+
+    // 4. View (list + detail)
+    generateView($name, $flags);
+
+    // 5. Test
+    generateTest($routeName, ['model' => $name]);
+
+    echo "\n  CRUD generation complete for {$name}.\n";
+    echo "  Run: tina4php migrate\n";
+    echo "  Visit: /swagger to see the API docs\n";
+}
+
+
+/**
+ * Generate a timestamped migration file with UP/DOWN sections + .down.sql.
+ *
+ * tina4php generate migration create_product
+ * tina4php generate migration add_category_to_product
+ */
+function generateMigration(
+    string $name,
+    array $flags,
+    array $fieldTypeMap,
+    ?array $fieldsOverride = null,
+    ?string $tableOverride = null
+): void {
+    $now = new DateTime();
+    $timestamp = $now->format('YmdHis');
+    $dir = 'migrations';
+    @mkdir($dir, 0755, true);
+
+    // Determine table name
+    if ($tableOverride) {
+        $table = $tableOverride;
+    } else {
+        $stripped = $name;
+        foreach (['create_', 'add_', 'drop_'] as $prefix) {
+            if (str_starts_with($stripped, $prefix)) {
+                $stripped = substr($stripped, strlen($prefix));
+                break;
+            }
+        }
+        $table = tableNameFromClass($stripped);
+    }
+
+    // Build SQL columns from fields
+    $fields = $fieldsOverride ?? parseFields($flags['fields'] ?? '');
+    $isCreate = str_starts_with($name, 'create_') || $fieldsOverride !== null;
+
+    $filename = "{$timestamp}_{$name}.sql";
+    $path = "{$dir}/{$filename}";
+
+    if ($isCreate) {
+        $colLines = ["    id INTEGER PRIMARY KEY AUTOINCREMENT"];
+        foreach ($fields as [$fname, $ftype]) {
+            $info = $fieldTypeMap[$ftype] ?? $fieldTypeMap['string'];
+            $sqlDefault = '';
+            if ($info['default'] !== 'null' && $info['default'] !== 'NULL') {
+                $sqlDefault = " DEFAULT {$info['default']}";
+            }
+            $colLines[] = "    {$fname} {$info['sql']}{$sqlDefault}";
+        }
+        $colLines[] = "    created_at DATETIME DEFAULT CURRENT_TIMESTAMP";
+
+        $upSql = "CREATE TABLE IF NOT EXISTS {$table} (\n" . implode(",\n", $colLines) . "\n);";
+        $downSql = "DROP TABLE IF EXISTS {$table};";
+    } else {
+        $upSql = "-- Write your UP migration SQL here\n-- Example: ALTER TABLE {$table} ADD COLUMN new_col VARCHAR(255) DEFAULT '';";
+        $downSql = "-- Write your DOWN rollback SQL here\n-- Example: ALTER TABLE {$table} DROP COLUMN new_col;";
+    }
+
+    $dateStr = $now->format('Y-m-d H:i:s');
+    $content = <<<SQL
+-- Migration: {$name}
+-- Created: {$dateStr}
+
+-- UP
+{$upSql}
+
+-- DOWN
+{$downSql}
+
+SQL;
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+
+    // Also create .down.sql for the migration runner
+    $downPath = "{$dir}/{$timestamp}_{$name}.down.sql";
+    $downContent = <<<SQL
+-- Rollback: {$name}
+-- Created: {$dateStr}
+
+{$downSql}
+
+SQL;
+
+    file_put_contents($downPath, $downContent);
+    echo "  Created {$downPath}\n";
+}
+
+
+/**
+ * Generate middleware with before/after static methods.
+ *
+ * tina4php generate middleware AuthLog
+ */
+function generateMiddleware(string $name, array $flags): void
+{
+    $snake = tableNameFromClass($name);
+    $dir = 'src/middleware';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$name}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $content = <<<PHP
+<?php
+
+/**
+ * {$name} middleware.
+ *
+ * Usage in routes:
+ *   Router::get("/api/protected", function (Request \$request, Response \$response) {
+ *       return \$response(["data" => "protected"], 200);
+ *   })->middleware(['{$name}::before{$name}']);
+ */
+class {$name}
+{
+    /**
+     * Runs before the route handler.
+     *
+     * Return null to continue, or a Response to block.
+     */
+    public static function before{$name}(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?array
+    {
+        \$auth = \$request->getHeader("Authorization");
+        if (empty(\$auth)) {
+            return [\$request, \$response(["error" => "Unauthorized"], 401)];
+        }
+        return [\$request, \$response];
+    }
+
+    /**
+     * Runs after the route handler.
+     */
+    public static function after{$name}(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?array
+    {
+        return [\$request, \$response];
+    }
+}
+
+PHP;
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate a PHPUnit test file.
+ *
+ * tina4php generate test products
+ * tina4php generate test products --model Product
+ */
+function generateTest(string $name, array $flags = []): void
+{
+    $model = $flags['model'] ?? '';
+    $snake = tableNameFromClass($name);
+    $singular = rtrim($snake, 's');
+    if ($singular === $snake) {
+        $singular = $snake;
+    }
+    $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $snake)));
+
+    $dir = 'tests';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$className}Test.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    if ($model) {
+        $content = <<<PHP
+<?php
+
+use PHPUnit\\Framework\\TestCase;
+
+/**
+ * Tests for {$name} CRUD operations.
+ */
+class {$className}Test extends TestCase
+{
+    protected function setUp(): void
+    {
+        // Set up test fixtures
+    }
+
+    protected function tearDown(): void
+    {
+        // Clean up after tests
+    }
+
+    public function testList{$className}(): void
+    {
+        // TODO: implement
+        \$this->assertTrue(true);
+    }
+
+    public function testGet{$className}(): void
+    {
+        // TODO: implement
+        \$this->assertTrue(true);
+    }
+
+    public function testCreate{$className}(): void
+    {
+        // TODO: implement
+        \$this->assertTrue(true);
+    }
+
+    public function testUpdate{$className}(): void
+    {
+        // TODO: implement
+        \$this->assertTrue(true);
+    }
+
+    public function testDelete{$className}(): void
+    {
+        // TODO: implement
+        \$this->assertTrue(true);
+    }
+}
+
+PHP;
+    } else {
+        $content = <<<PHP
+<?php
+
+use PHPUnit\\Framework\\TestCase;
+
+/**
+ * Tests for {$name}.
+ */
+class {$className}Test extends TestCase
+{
+    protected function setUp(): void
+    {
+        // Set up test fixtures
+    }
+
+    protected function tearDown(): void
+    {
+        // Clean up after tests
+    }
+
+    public function testExample(): void
+    {
+        // TODO: replace with real tests
+        \$this->assertTrue(true);
+    }
+}
+
+PHP;
+    }
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate a Twig form template with typed inputs and form_token.
+ *
+ * tina4php generate form Product
+ * tina4php generate form Product --fields "name:string,price:float"
+ */
+function generateForm(string $name, array $flags): void
+{
+    global $INPUT_TYPE_MAP;
+    $fields = parseFields($flags['fields'] ?? '');
+    $table = tableNameFromClass($name);
+    $routeName = $table . 's';
+
+    $dir = 'src/templates/forms';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$table}.twig";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    // Build form fields
+    $fieldHtml = '';
+    $fieldList = !empty($fields) ? $fields : [['name', 'string']];
+    foreach ($fieldList as [$fname, $ftype]) {
+        $itype = $INPUT_TYPE_MAP[$ftype] ?? 'text';
+        $label = ucwords(str_replace('_', ' ', $fname));
+        $step = in_array($ftype, ['float', 'numeric', 'decimal']) ? ' step="0.01"' : '';
+
+        if ($itype === 'textarea') {
+            $fieldHtml .= <<<TWIG
+    <div class="form-group mb-3">
+        <label for="{$fname}">{$label}</label>
+        <textarea id="{$fname}" name="{$fname}" class="form-control" rows="4" placeholder="{$label}">{{ item.{$fname} }}</textarea>
+    </div>
+
+TWIG;
+        } elseif ($itype === 'checkbox') {
+            $fieldHtml .= <<<TWIG
+    <div class="form-group mb-3">
+        <label>
+            <input type="checkbox" id="{$fname}" name="{$fname}" value="1" {% if item.{$fname} %}checked{% endif %}>
+            {$label}
+        </label>
+    </div>
+
+TWIG;
+        } else {
+            $fieldHtml .= <<<TWIG
+    <div class="form-group mb-3">
+        <label for="{$fname}">{$label}</label>
+        <input type="{$itype}" id="{$fname}" name="{$fname}" class="form-control"{$step} value="{{ item.{$fname} }}" placeholder="{$label}">
+    </div>
+
+TWIG;
+        }
+    }
+
+    $content = <<<TWIG
+{% extends "base.twig" %}
+{% block title %}{$name} {% if item.id %}Edit{% else %}Create{% endif %}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h1>{% if item.id %}Edit {$name}{% else %}Create {$name}{% endif %}</h1>
+    <form method="post" action="/api/{$routeName}{% if item.id %}/{{ item.id }}{% endif %}">
+        {{ form_token() }}
+{$fieldHtml}    <button type="submit" class="btn btn-primary">
+        {% if item.id %}Update{% else %}Create{% endif %}
+    </button>
+    <a href="/api/{$routeName}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}
+
+TWIG;
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate list + detail view templates.
+ *
+ * tina4php generate view Product
+ * tina4php generate view Product --fields "name:string,price:float"
+ */
+function generateView(string $name, array $flags): void
+{
+    $fields = parseFields($flags['fields'] ?? '');
+    $table = tableNameFromClass($name);
+    $routeName = $table . 's';
+
+    $dir = 'src/templates/pages';
+    @mkdir($dir, 0755, true);
+
+    $cols = !empty($fields) ? array_map(fn($f) => $f[0], $fields) : ['name'];
+
+    // List view
+    $listPath = "{$dir}/{$routeName}.twig";
+    if (!file_exists($listPath)) {
+        $th = implode("\n                ", array_map(fn($c) => '<th>' . ucwords(str_replace('_', ' ', $c)) . '</th>', $cols));
+        $td = implode("\n                ", array_map(fn($c) => '<td>{{ item.' . $c . ' }}</td>', $cols));
+
+        $listContent = <<<TWIG
+{% extends "base.twig" %}
+{% block title %}{$name}s{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>{$name}s</h1>
+        <a href="/{$routeName}/create" class="btn btn-primary">Add {$name}</a>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                {$th}
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in items %}
+            <tr>
+                <td>{{ item.id }}</td>
+                {$td}
+                <td>
+                    <a href="/{$routeName}/{{ item.id }}" class="btn btn-sm btn-primary">View</a>
+                    <a href="/{$routeName}/{{ item.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+TWIG;
+        file_put_contents($listPath, $listContent);
+        echo "  Created {$listPath}\n";
+    }
+
+    // Detail view
+    $detailPath = "{$dir}/{$table}.twig";
+    if (!file_exists($detailPath)) {
+        $detailFields = implode("\n", array_map(fn($c) =>
+            '    <div class="mb-3"><strong>' . ucwords(str_replace('_', ' ', $c)) . ':</strong> {{ item.' . $c . ' }}</div>',
+            $cols
+        ));
+
+        $detailContent = <<<TWIG
+{% extends "base.twig" %}
+{% block title %}{$name} Detail{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>{$name} #{{ item.id }}</h1>
+        <div>
+            <a href="/{$routeName}/{{ item.id }}/edit" class="btn btn-secondary">Edit</a>
+            <a href="/{$routeName}" class="btn btn-outline-secondary">Back</a>
+        </div>
+    </div>
+{$detailFields}
+</div>
+{% endblock %}
+
+TWIG;
+        file_put_contents($detailPath, $detailContent);
+        echo "  Created {$detailPath}\n";
+    }
+}
+
+
+/**
+ * Generate authentication scaffolding: User model, auth routes, login/register templates, test.
+ *
+ * tina4php generate auth
+ */
+function generateAuth(string $name, array $flags, array $fieldTypeMap): void
+{
+    echo "\n  Generating authentication scaffolding...\n\n";
+
+    // 1. User model + migration
+    generateModel('User', ['fields' => 'email:string,password:string,role:string'], $fieldTypeMap);
+
+    // 2. Auth routes
+    $dir = 'src/routes';
+    @mkdir($dir, 0755, true);
+    $authPath = "{$dir}/auth.php";
+    if (!file_exists($authPath)) {
+        $content = <<<'PHP'
+<?php
+
+/**
+ * @description Register a new user
+ * @tags auth
+ */
+Router::post("/api/auth/register", function (\Tina4\Request $request, \Tina4\Response $response) {
+    try {
+        $body = (array)$request->body;
+        $email = $body['email'] ?? '';
+        $password = $body['password'] ?? '';
+
+        if (empty($email) || empty($password)) {
+            return $response(["error" => "Email and password required"], 400);
+        }
+
+        // Check if user exists
+        $existing = new User();
+        if ($existing->load("email = ?", [$email])) {
+            return $response(["error" => "Email already registered"], 409);
+        }
+
+        // Create user with hashed password
+        $user = new User();
+        $user->email = $email;
+        $user->password = \Tina4\Auth::hashPassword($password);
+        $user->role = 'user';
+        $user->save();
+
+        return $response(["message" => "Registered", "id" => $user->id], 201);
+    } catch (\Throwable $e) {
+        \Tina4\Debug::message($e->getMessage(), TINA4_LOG_ERROR);
+        return $response(["error" => "Registration failed"], 500);
+    }
+})->noCache();
+
+/**
+ * @description Login and receive JWT token
+ * @tags auth
+ */
+Router::post("/api/auth/login", function (\Tina4\Request $request, \Tina4\Response $response) {
+    try {
+        $body = (array)$request->body;
+        $email = $body['email'] ?? '';
+        $password = $body['password'] ?? '';
+
+        $user = new User();
+        if (!$user->load("email = ?", [$email])) {
+            return $response(["error" => "Invalid credentials"], 401);
+        }
+
+        if (!\Tina4\Auth::checkPassword($password, $user->password)) {
+            return $response(["error" => "Invalid credentials"], 401);
+        }
+
+        $secret = getenv('SECRET') ?: 'change-me-in-production';
+        $token = \Tina4\Auth::getToken(
+            ["user_id" => $user->id, "email" => $user->email, "role" => $user->role],
+            $secret
+        );
+        return $response(["token" => $token], 200);
+    } catch (\Throwable $e) {
+        \Tina4\Debug::message($e->getMessage(), TINA4_LOG_ERROR);
+        return $response(["error" => "Login failed"], 500);
+    }
+})->noCache();
+
+/**
+ * @description Get current user profile
+ * @tags auth
+ */
+Router::get("/api/auth/me", function (\Tina4\Request $request, \Tina4\Response $response) {
+    try {
+        $authHeader = $request->getHeader("Authorization");
+        if (empty($authHeader)) {
+            return $response(["error" => "Unauthorized"], 401);
+        }
+
+        $token = str_replace("Bearer ", "", $authHeader);
+        $secret = getenv('SECRET') ?: 'change-me-in-production';
+        $payload = \Tina4\Auth::validToken($token, $secret);
+
+        if ($payload === null) {
+            return $response(["error" => "Invalid token"], 401);
+        }
+
+        $user = new User();
+        if (!$user->load("id = ?", [$payload['user_id'] ?? 0])) {
+            return $response(["error" => "User not found"], 404);
+        }
+
+        return $response(["id" => $user->id, "email" => $user->email, "role" => $user->role], 200);
+    } catch (\Throwable $e) {
+        \Tina4\Debug::message($e->getMessage(), TINA4_LOG_ERROR);
+        return $response(["error" => "Failed to get profile"], 500);
+    }
+})->secure();
+PHP;
+
+        file_put_contents($authPath, $content);
+        echo "  Created {$authPath}\n";
+    }
+
+    // 3. Login template
+    $formsDir = 'src/templates/forms';
+    @mkdir($formsDir, 0755, true);
+    $loginPath = "{$formsDir}/login.twig";
+    if (!file_exists($loginPath)) {
+        $loginContent = <<<'TWIG'
+{% extends "base.twig" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="container mt-4" style="max-width:400px">
+    <h1>Login</h1>
+    <form method="post" action="/api/auth/login">
+        {{ form_token() }}
+        <div class="form-group mb-3">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group mb-3">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Password" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Login</button>
+        <p class="mt-3 text-center"><a href="/register">Create an account</a></p>
+    </form>
+</div>
+{% endblock %}
+TWIG;
+        file_put_contents($loginPath, $loginContent);
+        echo "  Created {$loginPath}\n";
+    }
+
+    // 4. Register template
+    $registerPath = "{$formsDir}/register.twig";
+    if (!file_exists($registerPath)) {
+        $registerContent = <<<'TWIG'
+{% extends "base.twig" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="container mt-4" style="max-width:400px">
+    <h1>Register</h1>
+    <form method="post" action="/api/auth/register">
+        {{ form_token() }}
+        <div class="form-group mb-3">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group mb-3">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="Password" minlength="8" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Register</button>
+        <p class="mt-3 text-center"><a href="/login">Already have an account?</a></p>
+    </form>
+</div>
+{% endblock %}
+TWIG;
+        file_put_contents($registerPath, $registerContent);
+        echo "  Created {$registerPath}\n";
+    }
+
+    // 5. Auth test
+    generateTest('auth', ['model' => 'User']);
+
+    echo "\n  Authentication scaffolding complete.\n";
+    echo "  Run: tina4php migrate\n";
+    echo "  POST /api/auth/register  -- create account\n";
+    echo "  POST /api/auth/login     -- get JWT token\n";
+    echo "  GET  /api/auth/me        -- get profile (requires token)\n";
 }
