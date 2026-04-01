@@ -327,7 +327,7 @@ class RouterV3Test extends TestCase
         Router::post('/b', fn() => null)->secure();
         Router::get('/c', fn() => null)->cache();
 
-        $list = Router::list();
+        $list = Router::getRoutes();
         $this->assertCount(3, $list);
 
         $methods = array_column($list, 'method');

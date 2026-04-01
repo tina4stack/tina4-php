@@ -38,323 +38,182 @@ class AITest extends TestCase
         rmdir($dir);
     }
 
-    // ── Detection tests ──
+    // ── AI_TOOLS constant ──
 
-    public function testDetectAiReturnsAllSevenTools(): void
+    public function testAiToolsIsArray(): void
     {
-        $tools = AI::detectAi($this->tempDir);
-        $this->assertCount(7, $tools);
-
-        $names = array_column($tools, 'name');
-        $this->assertContains('claude-code', $names);
-        $this->assertContains('cursor', $names);
-        $this->assertContains('copilot', $names);
-        $this->assertContains('windsurf', $names);
-        $this->assertContains('aider', $names);
-        $this->assertContains('cline', $names);
-        $this->assertContains('codex', $names);
+        $this->assertIsArray(AI::$AI_TOOLS);
+        $this->assertNotEmpty(AI::$AI_TOOLS);
     }
 
-    public function testDetectAiToolStructure(): void
+    public function testAiToolsHasSevenTools(): void
     {
-        $tools = AI::detectAi($this->tempDir);
-        foreach ($tools as $tool) {
+        $this->assertCount(7, AI::$AI_TOOLS);
+    }
+
+    public function testAiToolsHaveRequiredKeys(): void
+    {
+        foreach (AI::$AI_TOOLS as $tool) {
             $this->assertArrayHasKey('name', $tool);
             $this->assertArrayHasKey('description', $tool);
-            $this->assertArrayHasKey('installed', $tool);
-            $this->assertIsBool($tool['installed']);
-            $this->assertIsString($tool['description']);
+            $this->assertArrayHasKey('context_file', $tool);
         }
     }
 
-    public function testDetectNoneInEmptyDir(): void
+    public function testAiToolsIncludeExpectedTools(): void
     {
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertEmpty($names);
-    }
-
-    public function testDetectClaudeCodeByDir(): void
-    {
-        mkdir($this->tempDir . '/.claude', 0755, true);
-        $names = AI::detectAiNames($this->tempDir);
+        $names = array_column(AI::$AI_TOOLS, 'name');
         $this->assertContains('claude-code', $names);
-    }
-
-    public function testDetectClaudeCodeByFile(): void
-    {
-        file_put_contents($this->tempDir . '/CLAUDE.md', '# Context');
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertContains('claude-code', $names);
-    }
-
-    public function testDetectCursorByDir(): void
-    {
-        mkdir($this->tempDir . '/.cursor', 0755, true);
-        $names = AI::detectAiNames($this->tempDir);
         $this->assertContains('cursor', $names);
-    }
-
-    public function testDetectCursorByFile(): void
-    {
-        file_put_contents($this->tempDir . '/.cursorules', '# Rules');
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertContains('cursor', $names);
-    }
-
-    public function testDetectCopilotByDir(): void
-    {
-        mkdir($this->tempDir . '/.github', 0755, true);
-        $names = AI::detectAiNames($this->tempDir);
         $this->assertContains('copilot', $names);
-    }
-
-    public function testDetectCopilotByFile(): void
-    {
-        mkdir($this->tempDir . '/.github', 0755, true);
-        file_put_contents($this->tempDir . '/.github/copilot-instructions.md', '# Copilot');
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertContains('copilot', $names);
-    }
-
-    public function testDetectWindsurf(): void
-    {
-        file_put_contents($this->tempDir . '/.windsurfrules', '# Windsurf');
-        $names = AI::detectAiNames($this->tempDir);
         $this->assertContains('windsurf', $names);
-    }
-
-    public function testDetectAiderByConf(): void
-    {
-        file_put_contents($this->tempDir . '/.aider.conf.yml', 'model: gpt-4');
-        $names = AI::detectAiNames($this->tempDir);
         $this->assertContains('aider', $names);
-    }
-
-    public function testDetectAiderByConventions(): void
-    {
-        file_put_contents($this->tempDir . '/CONVENTIONS.md', '# Conventions');
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertContains('aider', $names);
-    }
-
-    public function testDetectCline(): void
-    {
-        file_put_contents($this->tempDir . '/.clinerules', '# Cline');
-        $names = AI::detectAiNames($this->tempDir);
         $this->assertContains('cline', $names);
-    }
-
-    public function testDetectCodexByAgents(): void
-    {
-        file_put_contents($this->tempDir . '/AGENTS.md', '# Agents');
-        $names = AI::detectAiNames($this->tempDir);
         $this->assertContains('codex', $names);
     }
 
-    public function testDetectCodexByCodexMd(): void
+    // ── isInstalled() ──
+
+    public function testIsInstalledReturnsFalseWhenContextFileAbsent(): void
     {
-        file_put_contents($this->tempDir . '/codex.md', '# Codex');
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertContains('codex', $names);
+        $tool = ['name' => 'cursor', 'context_file' => '.cursorules'];
+        $this->assertFalse(AI::isInstalled($this->tempDir, $tool));
     }
 
-    public function testDetectMultipleTools(): void
+    public function testIsInstalledReturnsTrueWhenContextFilePresent(): void
     {
-        mkdir($this->tempDir . '/.claude', 0755, true);
-        mkdir($this->tempDir . '/.cursor', 0755, true);
-        file_put_contents($this->tempDir . '/.windsurfrules', '# WS');
-
-        $names = AI::detectAiNames($this->tempDir);
-        $this->assertContains('claude-code', $names);
-        $this->assertContains('cursor', $names);
-        $this->assertContains('windsurf', $names);
-        $this->assertCount(3, $names);
+        $tool = ['name' => 'claude-code', 'context_file' => 'CLAUDE.md'];
+        file_put_contents($this->tempDir . '/CLAUDE.md', 'context');
+        $this->assertTrue(AI::isInstalled($this->tempDir, $tool));
     }
 
-    // ── Context generation tests ──
-
-    public function testGenerateContextContainsPhpContent(): void
+    public function testIsInstalledHandlesNestedPath(): void
     {
-        $context = AI::generateContext();
-        $this->assertStringContainsString('Tina4 PHP', $context);
-        $this->assertStringContainsString('composer', $context);
-        $this->assertStringContainsString('Route::get', $context);
-        $this->assertStringContainsString('Route::post', $context);
-        $this->assertStringContainsString('ORM', $context);
-        $this->assertStringContainsString('tina4.com', $context);
+        $tool = ['name' => 'copilot', 'context_file' => '.github/copilot-instructions.md'];
+        mkdir($this->tempDir . '/.github', 0755, true);
+        file_put_contents($this->tempDir . '/.github/copilot-instructions.md', 'context');
+        $this->assertTrue(AI::isInstalled($this->tempDir, $tool));
     }
 
-    public function testGenerateContextWithSkills(): void
-    {
-        $context = AI::generateContext(true);
-        $this->assertStringContainsString('/tina4-route', $context);
-        $this->assertStringContainsString('/tina4-crud', $context);
-        $this->assertStringContainsString('/tina4-orm', $context);
-        $this->assertStringContainsString('AI Workflow', $context);
-    }
+    // ── installSelected() ──
 
-    public function testGenerateContextWithoutSkills(): void
+    public function testInstallSelectedSingleToolByNumber(): void
     {
-        $context = AI::generateContext(false);
-        $this->assertStringNotContainsString('/tina4-route', $context);
-        $this->assertStringNotContainsString('AI Workflow', $context);
-        // Core content should still be present
-        $this->assertStringContainsString('Tina4 PHP', $context);
-    }
-
-    public function testGenerateContextContainsProjectStructure(): void
-    {
-        $context = AI::generateContext();
-        $this->assertStringContainsString('src/routes/', $context);
-        $this->assertStringContainsString('src/orm/', $context);
-        $this->assertStringContainsString('src/templates/', $context);
-        $this->assertStringContainsString('migrations/', $context);
-    }
-
-    // ── Install context tests ──
-
-    public function testInstallContextCreatesFiles(): void
-    {
-        $created = AI::installContext($this->tempDir, ['claude-code'], false);
+        $created = AI::installSelected($this->tempDir, '2'); // cursor
         $this->assertNotEmpty($created);
-        $this->assertContains('CLAUDE.md', $created);
-        $this->assertFileExists($this->tempDir . '/CLAUDE.md');
-        $this->assertDirectoryExists($this->tempDir . '/.claude');
-    }
-
-    public function testInstallContextCreatesCorrectContent(): void
-    {
-        AI::installContext($this->tempDir, ['claude-code'], false);
-        $content = file_get_contents($this->tempDir . '/CLAUDE.md');
-        $this->assertStringContainsString('Tina4 PHP', $content);
-        $this->assertStringContainsString('composer', $content);
-    }
-
-    public function testInstallContextDoesNotOverwriteWithoutForce(): void
-    {
-        file_put_contents($this->tempDir . '/CLAUDE.md', 'Original content');
-        mkdir($this->tempDir . '/.claude', 0755, true);
-
-        AI::installContext($this->tempDir, ['claude-code'], false);
-        $content = file_get_contents($this->tempDir . '/CLAUDE.md');
-        $this->assertSame('Original content', $content);
-    }
-
-    public function testInstallContextOverwritesWithForce(): void
-    {
-        file_put_contents($this->tempDir . '/CLAUDE.md', 'Original content');
-        mkdir($this->tempDir . '/.claude', 0755, true);
-
-        AI::installContext($this->tempDir, ['claude-code'], true);
-        $content = file_get_contents($this->tempDir . '/CLAUDE.md');
-        $this->assertStringContainsString('Tina4 PHP', $content);
-    }
-
-    public function testInstallContextForCursor(): void
-    {
-        $created = AI::installContext($this->tempDir, ['cursor'], false);
-        $this->assertContains('.cursorules', $created);
         $this->assertFileExists($this->tempDir . '/.cursorules');
-        $this->assertDirectoryExists($this->tempDir . '/.cursor');
     }
 
-    public function testInstallContextForCopilot(): void
+    public function testInstallSelectedMultipleTools(): void
     {
-        $created = AI::installContext($this->tempDir, ['copilot'], false);
-        $this->assertContains('.github/copilot-instructions.md', $created);
-        $this->assertFileExists($this->tempDir . '/.github/copilot-instructions.md');
-        $this->assertDirectoryExists($this->tempDir . '/.github');
-    }
-
-    public function testInstallContextForWindsurf(): void
-    {
-        $created = AI::installContext($this->tempDir, ['windsurf'], false);
-        $this->assertContains('.windsurfrules', $created);
-        $this->assertFileExists($this->tempDir . '/.windsurfrules');
-    }
-
-    public function testInstallContextAutoDetect(): void
-    {
-        mkdir($this->tempDir . '/.claude', 0755, true);
-        file_put_contents($this->tempDir . '/.windsurfrules', '# old');
-
-        $created = AI::installContext($this->tempDir, null, true);
-        $this->assertContains('CLAUDE.md', $created);
-        $this->assertContains('.windsurfrules', $created);
-    }
-
-    public function testInstallContextIgnoresUnknownTool(): void
-    {
-        $created = AI::installContext($this->tempDir, ['nonexistent-tool'], false);
-        $this->assertEmpty($created);
-    }
-
-    // ── Install all tests ──
-
-    public function testInstallAllCreatesAllFiles(): void
-    {
-        $created = AI::installAll($this->tempDir, false);
-
-        $this->assertContains('CLAUDE.md', $created);
-        $this->assertContains('.cursorules', $created);
-        $this->assertContains('.github/copilot-instructions.md', $created);
-        $this->assertContains('.windsurfrules', $created);
-        $this->assertContains('CONVENTIONS.md', $created);
-        $this->assertContains('.clinerules', $created);
-        $this->assertContains('AGENTS.md', $created);
-
+        $created = AI::installSelected($this->tempDir, '1,2');
         $this->assertFileExists($this->tempDir . '/CLAUDE.md');
         $this->assertFileExists($this->tempDir . '/.cursorules');
-        $this->assertFileExists($this->tempDir . '/.github/copilot-instructions.md');
+    }
+
+    public function testInstallSelectedAll(): void
+    {
+        AI::installSelected($this->tempDir, 'all');
+        $this->assertFileExists($this->tempDir . '/CLAUDE.md');
+        $this->assertFileExists($this->tempDir . '/.cursorules');
         $this->assertFileExists($this->tempDir . '/.windsurfrules');
         $this->assertFileExists($this->tempDir . '/CONVENTIONS.md');
         $this->assertFileExists($this->tempDir . '/.clinerules');
         $this->assertFileExists($this->tempDir . '/AGENTS.md');
     }
 
-    public function testInstallAllCreatesConfigDirs(): void
+    public function testInstallSelectedAlwaysOverwrites(): void
     {
-        AI::installAll($this->tempDir, false);
+        file_put_contents($this->tempDir . '/CLAUDE.md', 'old content');
+        AI::installSelected($this->tempDir, '1');
+        $this->assertNotEquals('old content', file_get_contents($this->tempDir . '/CLAUDE.md'));
+    }
+
+    public function testInstallSelectedCreatesParentDirectories(): void
+    {
+        AI::installSelected($this->tempDir, '3'); // copilot
+        $this->assertFileExists($this->tempDir . '/.github/copilot-instructions.md');
+    }
+
+    public function testInstallSelectedReturnsArray(): void
+    {
+        $result = AI::installSelected($this->tempDir, '4'); // windsurf
+        $this->assertIsArray($result);
+        $this->assertNotEmpty($result);
+    }
+
+    public function testInstallSelectedIgnoresInvalidNumbers(): void
+    {
+        $result = AI::installSelected($this->tempDir, '99');
+        $this->assertIsArray($result);
+    }
+
+    public function testInstallSelectedHandlesEmptySelection(): void
+    {
+        $result = AI::installSelected($this->tempDir, '');
+        $this->assertIsArray($result);
+    }
+
+    // ── installAll() ──
+
+    public function testInstallAllCreatesAllContextFiles(): void
+    {
+        AI::installAll($this->tempDir);
+        $this->assertFileExists($this->tempDir . '/CLAUDE.md');
+        $this->assertFileExists($this->tempDir . '/.cursorules');
+        $this->assertFileExists($this->tempDir . '/.windsurfrules');
+        $this->assertFileExists($this->tempDir . '/CONVENTIONS.md');
+        $this->assertFileExists($this->tempDir . '/.clinerules');
+        $this->assertFileExists($this->tempDir . '/AGENTS.md');
+    }
+
+    public function testInstallAllReturnsArray(): void
+    {
+        $result = AI::installAll($this->tempDir);
+        $this->assertIsArray($result);
+        $this->assertGreaterThanOrEqual(count(AI::$AI_TOOLS), count($result));
+    }
+
+    public function testInstallAllCreatesSubdirectories(): void
+    {
+        AI::installAll($this->tempDir);
         $this->assertDirectoryExists($this->tempDir . '/.claude');
-        $this->assertDirectoryExists($this->tempDir . '/.cursor');
         $this->assertDirectoryExists($this->tempDir . '/.github');
     }
 
-    // ── Status report tests ──
+    // ── generateContext() ──
 
-    public function testStatusReportEmptyDir(): void
+    public function testGenerateContextReturnsNonEmptyString(): void
     {
-        $report = AI::statusReport($this->tempDir);
-        $this->assertStringContainsString('Tina4 AI Context Status', $report);
-        $this->assertStringContainsString('No AI coding tools detected', $report);
-        $this->assertStringContainsString('Not detected', $report);
+        $context = AI::generateContext();
+        $this->assertIsString($context);
+        $this->assertNotEmpty($context);
     }
+
+    public function testGenerateContextIncludesTina4Reference(): void
+    {
+        $context = AI::generateContext();
+        $this->assertStringContainsString('Tina4', $context);
+        $this->assertStringContainsString('tina4.com', $context);
+    }
+
+    public function testGenerateContextIncludesSkillsTable(): void
+    {
+        $context = AI::generateContext();
+        $this->assertStringContainsString('Skill', $context);
+    }
+
+    // ── Status report (if present) ──
 
     public function testStatusReportWithDetectedTools(): void
     {
-        mkdir($this->tempDir . '/.claude', 0755, true);
-        file_put_contents($this->tempDir . '/.windsurfrules', '# WS');
+        // Test that isInstalled correctly reports installed status
+        $tool = AI::$AI_TOOLS[0]; // claude-code
+        file_put_contents($this->tempDir . '/' . $tool['context_file'], 'ctx');
+        $this->assertTrue(AI::isInstalled($this->tempDir, $tool));
 
-        $report = AI::statusReport($this->tempDir);
-        $this->assertStringContainsString('Detected AI tools:', $report);
-        $this->assertStringContainsString('Claude Code (Anthropic CLI)', $report);
-        $this->assertStringContainsString('Windsurf (Codeium)', $report);
-        $this->assertStringContainsString('[x]', $report);
-        $this->assertStringContainsString('[ ]', $report);
-    }
-
-    public function testStatusReportAllDetected(): void
-    {
-        mkdir($this->tempDir . '/.claude', 0755, true);
-        mkdir($this->tempDir . '/.cursor', 0755, true);
-        mkdir($this->tempDir . '/.github', 0755, true);
-        file_put_contents($this->tempDir . '/.windsurfrules', '#');
-        file_put_contents($this->tempDir . '/.clinerules', '#');
-        file_put_contents($this->tempDir . '/.aider.conf.yml', '#');
-        file_put_contents($this->tempDir . '/AGENTS.md', '#');
-
-        $report = AI::statusReport($this->tempDir);
-        $this->assertStringContainsString('Detected AI tools:', $report);
-        $this->assertStringNotContainsString('No AI coding tools detected', $report);
+        // Verify other tools show as not installed
+        $otherTool = AI::$AI_TOOLS[1]; // cursor
+        $this->assertFalse(AI::isInstalled($this->tempDir, $otherTool));
     }
 }

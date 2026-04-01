@@ -166,7 +166,7 @@ class DatabaseTest extends TestCase
     {
         $this->db->insert('users', ['id' => 1, 'name' => 'Alice', 'email' => 'old@test.com']);
 
-        $result = $this->db->update('users', ['email' => 'new@test.com'], ['id' => 1]);
+        $result = $this->db->update('users', ['email' => 'new@test.com'], 'id = ?', [1]);
 
         $this->assertTrue($result);
 
@@ -180,7 +180,7 @@ class DatabaseTest extends TestCase
     {
         $this->db->insert('users', ['id' => 1, 'name' => 'Alice', 'email' => 'alice@test.com']);
 
-        $result = $this->db->delete('users', ['id' => 1]);
+        $result = $this->db->delete('users', 'id = ?', [1]);
 
         $this->assertTrue($result);
 
@@ -354,13 +354,13 @@ class DatabaseTest extends TestCase
         $this->assertSame('Alice', $result[0]['name']);
 
         // Update
-        $this->db->update('users', ['name' => 'Alicia'], ['id' => 1]);
+        $this->db->update('users', ['name' => 'Alicia'], 'id = ?', [1]);
 
         $row = $this->db->fetchOne("SELECT * FROM users WHERE id = 1");
         $this->assertSame('Alicia', $row['name']);
 
         // Delete
-        $this->db->delete('users', ['id' => 1]);
+        $this->db->delete('users', 'id = ?', [1]);
 
         $row = $this->db->fetchOne("SELECT * FROM users WHERE id = 1");
         $this->assertNull($row);

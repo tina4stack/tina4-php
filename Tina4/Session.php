@@ -17,14 +17,14 @@ namespace Tina4;
  *   - 'database' / 'db' — SQL database via Tina4 DatabaseAdapter
  *
  * Environment variables:
- *   TINA4_SESSION_BACKEND  — 'file' or 'redis' (default: 'file')
+ *   TINA4_SESSION_HANDLER  — 'file', 'redis', 'valkey', 'mongodb', or 'database' (default: 'file')
  *   TINA4_SESSION_PATH     — file storage path (default: 'data/sessions')
  *   TINA4_SESSION_TTL      — session lifetime in seconds (default: 3600)
  *   TINA4_SESSION_REDIS_URL — Redis connection URL (default: 'tcp://127.0.0.1:6379')
  */
 class Session
 {
-    /** @var string Session backend type ('file' or 'redis') */
+    /** @var string Session handler type ('file', 'redis', 'valkey', 'mongodb', or 'database') */
     private string $backend;
 
     /** @var string Current session ID */
@@ -39,12 +39,6 @@ class Session
     /** @var string File storage path (for file backend) */
     private string $storagePath;
 
-    /** @var string Redis URL (for redis backend) */
-    private string $redisUrl;
-
-    /** @var mixed Redis connection instance */
-    private mixed $redis = null;
-
     /** @var bool Whether a session is active */
     private bool $started = false;
 
@@ -54,10 +48,9 @@ class Session
      */
     public function __construct(string $backend = '', array $config = [])
     {
-        $this->backend = $backend ?: (getenv('TINA4_SESSION_BACKEND') ?: 'file');
+        $this->backend = $backend ?: (getenv('TINA4_SESSION_HANDLER') ?: (getenv('TINA4_SESSION_BACKEND') ?: 'file'));
         $this->ttl = (int)($config['ttl'] ?? getenv('TINA4_SESSION_TTL') ?: 3600);
         $this->storagePath = $config['path'] ?? (getenv('TINA4_SESSION_PATH') ?: 'data/sessions');
-        $this->redisUrl = $config['redis_url'] ?? (getenv('TINA4_SESSION_REDIS_URL') ?: 'tcp://127.0.0.1:6379');
     }
 
     /**
@@ -412,36 +405,16 @@ class Session
         }
     }
 
-    // ── Redis Backend ─────────────────────────────────────────────
+    // ── Redis Backend (delegates to RedisSessionHandler) ────────
 
-    /**
-     * Get or create the Redis connection.
-     *
-     * @return \Redis
-     */
-    private function getRedis(): \Redis
+    private ?Session\RedisSessionHandler $redisHandler = null;
+
+    private function getRedisHandler(): Session\RedisSessionHandler
     {
-        if ($this->redis === null) {
-            $this->redis = new \Redis();
-            $parsed = parse_url($this->redisUrl);
-            $host = $parsed['host'] ?? '127.0.0.1';
-            $port = $parsed['port'] ?? 6379;
-            $this->redis->connect($host, $port);
-
-            if (!empty($parsed['pass'])) {
-                $this->redis->auth($parsed['pass']);
-            }
+        if ($this->redisHandler === null) {
+            $this->redisHandler = new Session\RedisSessionHandler();
         }
-
-        return $this->redis;
-    }
-
-    /**
-     * Get the Redis key for the current session.
-     */
-    private function getRedisKey(): string
-    {
-        return 'tina4:session:' . $this->sessionId;
+        return $this->redisHandler;
     }
 
     /**
@@ -449,21 +422,8 @@ class Session
      */
     private function loadFromRedis(): void
     {
-        $redis = $this->getRedis();
-        $data = $redis->get($this->getRedisKey());
-
-        if ($data === false) {
-            $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-            return;
-        }
-
-        $decoded = json_decode($data, true);
-        if (!is_array($decoded)) {
-            $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-            return;
-        }
-
-        $this->data = $decoded;
+        $data = $this->getRedisHandler()->read($this->sessionId);
+        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         $this->data['_meta']['last_accessed'] = time();
     }
 
@@ -472,12 +432,7 @@ class Session
      */
     private function saveToRedis(): void
     {
-        $redis = $this->getRedis();
-        $redis->setex(
-            $this->getRedisKey(),
-            $this->ttl,
-            json_encode($this->data, JSON_UNESCAPED_SLASHES)
-        );
+        $this->getRedisHandler()->write($this->sessionId, $this->data);
     }
 
     /**
@@ -485,8 +440,7 @@ class Session
      */
     private function removeFromRedis(): void
     {
-        $redis = $this->getRedis();
-        $redis->del($this->getRedisKey());
+        $this->getRedisHandler()->delete($this->sessionId);
     }
 
     // ── Valkey Backend (delegates to ValkeySessionHandler) ────────

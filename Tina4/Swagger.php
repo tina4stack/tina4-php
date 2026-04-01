@@ -11,7 +11,7 @@ namespace Tina4;
 /**
  * Zero-dependency Swagger/OpenAPI 3.0.3 spec generator and UI server.
  *
- * Reads registered routes from Router::list() and produces a compliant
+ * Reads registered routes from Router::getRoutes() and produces a compliant
  * OpenAPI specification. Serves Swagger UI from CDN at /swagger and the
  * raw spec at /swagger/openapi.json.
  *
@@ -54,7 +54,7 @@ class Swagger
             ],
         ];
 
-        $routes = Router::list();
+        $routes = Router::getRoutes();
 
         // Group routes by path pattern
         $grouped = [];

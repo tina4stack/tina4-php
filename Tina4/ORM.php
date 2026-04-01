@@ -249,11 +249,11 @@ abstract class ORM
     }
 
     /**
-     * Load a record by primary key.
+     * Find a record by primary key.
      *
      * @return $this
      */
-    public function load(int|string $id): self
+    public function findById(int|string $id): self
     {
         $this->ensureDb();
         $this->_relCache = []; // Clear relationship cache on reload
@@ -273,6 +273,14 @@ abstract class ORM
         }
 
         return $this;
+    }
+
+    /**
+     * Alias for findById().
+     */
+    public function load(int|string $id): self
+    {
+        return $this->findById($id);
     }
 
     /**
@@ -569,7 +577,7 @@ abstract class ORM
     public function findOrFail(int|string $id): static
     {
         $model = new static($this->_db);
-        $model->load($id);
+        $model->findById($id);
 
         if (!$model->exists()) {
             throw new \RuntimeException("Record not found in {$this->tableName} with {$this->primaryKey} = {$id}");

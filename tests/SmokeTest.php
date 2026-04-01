@@ -988,7 +988,7 @@ class SmokeTest extends TestCase
         Router::put('/c', fn() => null);
 
         $this->assertSame(3, Router::count());
-        $list = Router::list();
+        $list = Router::getRoutes();
         $this->assertCount(3, $list);
 
         $methods = array_column($list, 'method');
@@ -1425,7 +1425,7 @@ class SmokeTest extends TestCase
         Router::clear();
         Router::get('/cached', fn() => 'ok')->cache();
 
-        $list = Router::list();
+        $list = Router::getRoutes();
         $cached = array_filter($list, fn($r) => $r['pattern'] === '/cached');
         $cached = array_values($cached);
 
@@ -1438,7 +1438,7 @@ class SmokeTest extends TestCase
         Router::clear();
         Router::get('/nocache', fn() => 'ok')->cache()->noCache();
 
-        $list = Router::list();
+        $list = Router::getRoutes();
         $route = array_filter($list, fn($r) => $r['pattern'] === '/nocache');
         $route = array_values($route);
 

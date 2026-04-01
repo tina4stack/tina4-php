@@ -521,7 +521,7 @@ class Router
      *
      * @return array<int, array{method: string, pattern: string, middleware: int, cache: bool, secure: bool}>
      */
-    public static function list(): array
+    public static function getRoutes(): array
     {
         $list = [];
 
@@ -567,6 +567,12 @@ class Router
         }
 
         return $list;
+    }
+
+    /** Alias for getRoutes(). */
+    public static function listRoutes(): array
+    {
+        return self::getRoutes();
     }
 
     /**

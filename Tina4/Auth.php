@@ -142,7 +142,7 @@ class Auth
      * @param string      $password   The plaintext password
      * @param string|null $salt       Optional salt (hex-encoded); random if null
      * @param int         $iterations PBKDF2 iteration count
-     * @return string Format: "pbkdf2_sha256:iterations:salt:hash"
+     * @return string Format: "pbkdf2_sha256$iterations$salt$hash"
      */
     public static function hashPassword(string $password, ?string $salt = null, int $iterations = 100000): string
     {
@@ -152,7 +152,7 @@ class Auth
 
         $hash = hash_pbkdf2('sha256', $password, $salt, $iterations, 64, false);
 
-        return "pbkdf2_sha256:$iterations:$salt:$hash";
+        return "pbkdf2_sha256\${$iterations}\${$salt}\${$hash}";
     }
 
     /**
@@ -160,12 +160,12 @@ class Auth
      * Maps to Python: check_password(hashed, password)
      *
      * @param string $password The plaintext password to verify
-     * @param string $hash     The stored hash string (pbkdf2_sha256:iterations:salt:hash)
+     * @param string $hash     The stored hash string (pbkdf2_sha256$iterations$salt$hash)
      * @return bool True if the password matches
      */
     public static function checkPassword(string $password, string $hash): bool
     {
-        $parts = explode(':', $hash);
+        $parts = explode('$', $hash);
         if (count($parts) !== 4 || $parts[0] !== 'pbkdf2_sha256') {
             return false;
         }

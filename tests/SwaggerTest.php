@@ -386,7 +386,7 @@ class SwaggerTest extends TestCase
     public function testRegisterAddsSwaggerRoutes(): void
     {
         Swagger::register();
-        $routes = Router::list();
+        $routes = Router::getRoutes();
         $patterns = array_column($routes, 'pattern');
         $this->assertContains('/swagger', $patterns);
         $this->assertContains('/swagger/openapi.json', $patterns);

@@ -284,7 +284,7 @@ class App
     private function registerLandingPage(): void
     {
         // Check if user already registered a "/" route
-        $routes = Router::list();
+        $routes = Router::getRoutes();
         foreach ($routes as $r) {
             if ($r['pattern'] === '/' && $r['method'] === 'GET') {
                 return; // User has their own landing page

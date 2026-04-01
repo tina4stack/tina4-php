@@ -99,7 +99,7 @@ class DevAdmin
         // API: List all registered routes
         Router::get('/__dev/api/routes', function (Request $request, Response $response) {
             $internalPrefixes = ['/__dev', '/health', '/swagger'];
-            $allRoutes = Router::list();
+            $allRoutes = Router::getRoutes();
             $filtered = array_values(array_filter($allRoutes, function ($route) use ($internalPrefixes) {
                 $pattern = $route['pattern'] ?? '';
                 foreach ($internalPrefixes as $prefix) {
@@ -371,7 +371,7 @@ class DevAdmin
             $output = '';
             switch ($tool) {
                 case 'routes':
-                    $routes = Router::list();
+                    $routes = Router::getRoutes();
                     $output = json_encode($routes, JSON_PRETTY_PRINT);
                     break;
                 case 'test':

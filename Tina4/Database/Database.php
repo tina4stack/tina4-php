@@ -86,7 +86,8 @@ class Database
             $this->pool = array_fill(0, $pool, null);
         } else {
             // Single-connection mode — current behavior
-            $this->adapter = self::createAdapter($url, $autoCommit, $username, $password);
+            $adapter = self::createAdapter($url, $autoCommit, $username, $password);
+            $this->adapter = self::wrapWithCache($adapter);
         }
     }
 
@@ -140,9 +141,10 @@ class Database
             $this->poolIndex = ($this->poolIndex + 1) % $this->poolSize;
 
             if ($this->pool[$idx] === null) {
-                $this->pool[$idx] = self::createAdapter(
+                $adapter = self::createAdapter(
                     $this->url, $this->autoCommit, $this->dbUsername, $this->dbPassword
                 );
+                $this->pool[$idx] = self::wrapWithCache($adapter);
             }
 
             return $this->pool[$idx];
@@ -287,35 +289,28 @@ class Database
      *
      * @param string $table Table name
      * @param array<string, mixed> $data Column => value pairs to set
-     * @param array<string, mixed> $filter Column => value pairs for WHERE clause
+     * @param string $filterSql WHERE clause SQL (e.g. "id = ?", "age > ? AND status = ?")
+     * @param array<mixed> $params Bound parameters for the WHERE clause
      * @return bool True on success
      */
-    public function update(string $table, array $data, array $filter = []): bool
+    public function update(string $table, array $data, string $filterSql = '', array $params = []): bool
     {
         $adapter = $this->getNextAdapter();
-        if (empty($filter)) {
-            return $adapter->update($table, $data);
-        }
-
-        $wheres = implode(' AND ', array_map(fn($k) => "{$k} = ?", array_keys($filter)));
-        return $adapter->update($table, $data, $wheres, array_values($filter));
+        return $adapter->update($table, $data, $filterSql, $params);
     }
 
     /**
      * Delete rows from a table.
      *
      * @param string $table Table name
-     * @param array<string, mixed> $filter Column => value pairs for WHERE clause
+     * @param string $filterSql WHERE clause SQL (e.g. "id = ?")
+     * @param array<mixed> $params Bound parameters for the WHERE clause
      * @return bool True on success
      */
-    public function delete(string $table, array $filter = []): bool
+    public function delete(string $table, string $filterSql = '', array $params = []): bool
     {
         $adapter = $this->getNextAdapter();
-        if (empty($filter)) {
-            return $adapter->delete($table);
-        }
-
-        return $adapter->delete($table, $filter);
+        return $adapter->delete($table, $filterSql, $params);
     }
 
     // -------------------------------------------------------------------------
@@ -575,6 +570,52 @@ class Database
     public static function isSupported(string $scheme): bool
     {
         return isset(self::ADAPTER_MAP[strtolower($scheme)]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Query cache convenience
+    // -------------------------------------------------------------------------
+
+    /**
+     * Wrap an adapter in CachedDatabase if TINA4_DB_CACHE is enabled.
+     *
+     * The CachedDatabase reads TINA4_DB_CACHE and TINA4_DB_CACHE_TTL env vars
+     * internally, so no explicit config is needed here.
+     *
+     * @param DatabaseAdapter $adapter
+     * @return DatabaseAdapter Original adapter or CachedDatabase wrapper
+     */
+    private static function wrapWithCache(DatabaseAdapter $adapter): DatabaseAdapter
+    {
+        if (\Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false')) {
+            return new CachedDatabase($adapter);
+        }
+        return $adapter;
+    }
+
+    /**
+     * Get query cache statistics (if caching is enabled).
+     *
+     * @return array{enabled: bool, hits: int, misses: int, size: int, ttl: int}
+     */
+    public function cacheStats(): array
+    {
+        $adapter = $this->getNextAdapter();
+        if ($adapter instanceof CachedDatabase) {
+            return $adapter->cacheStats();
+        }
+        return ['enabled' => false, 'hits' => 0, 'misses' => 0, 'size' => 0, 'ttl' => 0];
+    }
+
+    /**
+     * Flush the query cache and reset counters.
+     */
+    public function cacheClear(): void
+    {
+        $adapter = $this->getNextAdapter();
+        if ($adapter instanceof CachedDatabase) {
+            $adapter->cacheClear();
+        }
     }
 
     // -------------------------------------------------------------------------

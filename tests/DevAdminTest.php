@@ -35,7 +35,7 @@ class DevAdminTest extends TestCase
     public function testRegisterAddsDevRoutes(): void
     {
         DevAdmin::register();
-        $routes = Router::list();
+        $routes = Router::getRoutes();
         $patterns = array_column($routes, 'pattern');
         $this->assertContains('/__dev', $patterns);
     }
@@ -43,7 +43,7 @@ class DevAdminTest extends TestCase
     public function testRegisterAddsStatusEndpoint(): void
     {
         DevAdmin::register();
-        $routes = Router::list();
+        $routes = Router::getRoutes();
         $patterns = array_column($routes, 'pattern');
         $this->assertContains('/__dev/api/status', $patterns);
     }
@@ -51,45 +51,45 @@ class DevAdminTest extends TestCase
     public function testRegisterAddsRoutesEndpoint(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::list(), 'pattern');
+        $patterns = array_column(Router::getRoutes(), 'pattern');
         $this->assertContains('/__dev/api/routes', $patterns);
     }
 
     public function testRegisterAddsMessagesEndpoint(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::list(), 'pattern');
+        $patterns = array_column(Router::getRoutes(), 'pattern');
         $this->assertContains('/__dev/api/messages', $patterns);
     }
 
     public function testRegisterAddsRequestsEndpoint(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::list(), 'pattern');
+        $patterns = array_column(Router::getRoutes(), 'pattern');
         $this->assertContains('/__dev/api/requests', $patterns);
     }
 
     public function testRegisterAddsMailboxEndpoint(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::list(), 'pattern');
+        $patterns = array_column(Router::getRoutes(), 'pattern');
         $this->assertContains('/__dev/api/mailbox', $patterns);
     }
 
     public function testRegisterAddsSystemEndpoint(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::list(), 'pattern');
+        $patterns = array_column(Router::getRoutes(), 'pattern');
         $this->assertContains('/__dev/api/system', $patterns);
     }
 
     public function testRegisterAddsDuplicateDevRoute(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::list(), 'pattern');
+        $patterns = array_column(Router::getRoutes(), 'pattern');
         // Both /__dev and /__dev/ are registered but Router normalizes trailing slash
         // so both show up as /__dev. Verify at least two GET routes for /__dev exist.
-        $devRoutes = array_filter(Router::list(), fn($r) => $r['pattern'] === '/__dev' && $r['method'] === 'GET');
+        $devRoutes = array_filter(Router::getRoutes(), fn($r) => $r['pattern'] === '/__dev' && $r['method'] === 'GET');
         $this->assertGreaterThanOrEqual(2, count($devRoutes));
     }
 

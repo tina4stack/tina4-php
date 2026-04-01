@@ -231,7 +231,7 @@ class AuthV3Test extends TestCase
     public function testHashPasswordFormat(): void
     {
         $hash = Auth::hashPassword('secret123');
-        $parts = explode(':', $hash);
+        $parts = explode('$', $hash);
 
         $this->assertCount(4, $parts);
         $this->assertEquals('pbkdf2_sha256', $parts[0]);
@@ -261,7 +261,7 @@ class AuthV3Test extends TestCase
     public function testHashPasswordCustomIterations(): void
     {
         $hash = Auth::hashPassword('pass', null, 1000);
-        $parts = explode(':', $hash);
+        $parts = explode('$', $hash);
         $this->assertEquals('1000', $parts[1]);
     }
 

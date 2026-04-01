@@ -55,7 +55,7 @@ echo "── 2. Route Registration ──\n";
     return $res->json(['admin' => true]);
 })->secure();
 
-$routes = \Tina4\Router::list();
+$routes = \Tina4\Router::getRoutes();
 echo "   ✓ " . count($routes) . " routes registered:\n";
 foreach ($routes as $r) {
     $flags = [];

@@ -245,7 +245,7 @@ class WebSocketTest extends TestCase
         Router::get('/hello', function ($req, $res) { return $res->json(['ok' => true]); });
         Router::websocket('/ws/chat', function ($c, $m, $e) {});
 
-        $list = Router::list();
+        $list = Router::getRoutes();
         $methods = array_column($list, 'method');
         $this->assertContains('WS', $methods);
     }
