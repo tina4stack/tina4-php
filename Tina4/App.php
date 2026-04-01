@@ -705,12 +705,16 @@ HTML;
      */
     public function handle(): void
     {
+        // In pure CLI context (migrate, generate, etc.) — just initialise routes.
+        // The CLI includes index.php to pick up user bootstrap code; we must not
+        // echo an HTTP response body or call http_response_code() there.
+        if (php_sapi_name() === 'cli') {
+            $this->start();
+            return;
+        }
+
         $response = $this();
 
-        // Buffer output to prevent "headers already sent" errors
-        if (ob_get_level() === 0) {
-            ob_start();
-        }
         http_response_code($response->getStatusCode() ?? 200);
         foreach ($response->getHeaders() as $name => $value) {
             if (!headers_sent()) {
@@ -718,9 +722,6 @@ HTML;
             }
         }
         echo $response->getBody();
-        if (ob_get_level() > 0) {
-            ob_end_flush();
-        }
     }
 
     /**

@@ -448,6 +448,15 @@ class Response
     }
 
     /**
+     * Allow the response to be cast to a string (e.g. echo $app()).
+     * Note: prefer $app->handle() for proper header sending.
+     */
+    public function __toString(): string
+    {
+        return $this->body;
+    }
+
+    /**
      * Get the decoded JSON body (for testing).
      */
     public function getJsonBody(): mixed

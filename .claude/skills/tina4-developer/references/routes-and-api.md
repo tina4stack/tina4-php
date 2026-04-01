@@ -39,20 +39,25 @@ async def delete_user(request, response):
 
 ### PHP
 ```php
-\Tina4\Get::add("/hello", function(\Tina4\Response $response) {
+use Tina4\Router;
+use Tina4\Request;
+use Tina4\Response;
+
+Router::get("/hello", function(Request $request, Response $response) {
     return $response("Hello World");
 });
 
-\Tina4\Get::add("/users/{id}", function(\Tina4\Response $response, $id) {
-    $user = (new User())->find($id);
-    return $response->json($user);
+Router::get("/users/{id}", function(Request $request, Response $response, string $id) {
+    $user = (new User())->findById($id);
+    return $response($user->toArray());
 });
 
-\Tina4\Post::add("/users", function(\Tina4\Request $request, \Tina4\Response $response) {
-    $user = new User($request->body);
+Router::post("/users", function(Request $request, Response $response) {
+    $user = new User();
+    $user->fill($request->body);
     $user->save();
-    return $response->json($user, 201);
-});
+    return $response($user->toArray(), 201);
+})->secure(false);  // Remove ->secure(false) to require auth
 ```
 
 ### Ruby

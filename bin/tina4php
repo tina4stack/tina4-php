@@ -124,18 +124,8 @@ switch ($command) {
 <?php
 require_once "./vendor/autoload.php";
 
-$app = new \Tina4\App(basePath: __DIR__, development: true);
-$app->start();
-
-// Dispatch when running under PHP built-in server
-if (php_sapi_name() === "cli-server") {
-    $response = \Tina4\Router::dispatch(new \Tina4\Request(), new \Tina4\Response());
-    http_response_code($response->getStatusCode());
-    foreach ($response->getHeaders() as $name => $value) {
-        header("$name: $value");
-    }
-    echo $response->getBody();
-}
+$app = new \Tina4\App(basePath: __DIR__);
+$app->handle();
 PHP;
             file_put_contents($targetDir . 'index.php', $indexContent);
             echo "  Created index.php\n";
@@ -215,7 +205,7 @@ DOCKERFILE;
         echo "\nProject initialized in {$targetDir}\n";
         echo "  cd {$targetDir}\n";
         echo "  composer install\n";
-        echo "  php -S 0.0.0.0:7146 index.php\n";
+        echo "  vendor/bin/tina4php serve\n";
         break;
 
     // ────────────────────────────────────────────
@@ -281,9 +271,17 @@ DOCKERFILE;
             }
         }
 
-        // Count WebSocket routes for display
-        $app = new \Tina4\App(basePath: $cwd, development: $isDebug);
-        $app->start();
+        // Bootstrap the application — include user's index.php if available so that
+        // any initialisation code (DB setup, ORM binding, etc.) runs before the server
+        // starts. handle() is CLI-safe and just calls start() without dispatching HTTP.
+        if (file_exists($cwd . '/index.php')) {
+            ob_start();
+            include_once $cwd . '/index.php';
+            ob_end_clean();
+        } else {
+            $app = new \Tina4\App(basePath: $cwd, development: $isDebug);
+            $app->start();
+        }
         $wsRoutes = \Tina4\Router::getWebSocketRoutes();
         $wsInfo = count($wsRoutes) > 0 ? ' (WebSocket: ' . count($wsRoutes) . ' routes)' : '';
 

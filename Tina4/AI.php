@@ -262,7 +262,7 @@ Tina4/            — Core framework classes (namespace Tina4\)
 
 | Feature | Class | Usage |
 |---------|-------|-------|
-| Routing | Router | `Route::get("/path", function($request, $response) { ... })` |
+| Routing | Router | `Router::get("/path", function($request, $response) { ... })` |
 | ORM | ORM | `class Widget extends \Tina4\ORM { ... }` |
 | Database | Database | `\Tina4\Database\Database::create("sqlite:///app.db")` |
 | Templates | Frond | `$response->template("page.twig", $data)` |
@@ -328,10 +328,16 @@ When using an AI coding assistant with Tina4, these skills are available:
 
 ### Route
 ```php
-Route::post("/api/widgets", function($request, $response) {
+use Tina4\Router;
+
+Router::get("/api/widgets", function(\Tina4\Request $request, \Tina4\Response $response) {
+    return $response(["items" => []]);
+});
+
+Router::post("/api/widgets", function(\Tina4\Request $request, \Tina4\Response $response) {
     $data = $request->body;
     return $response(["created" => true], 201);
-})->secure(false);
+})->secure(false);  // Remove ->secure(false) to require Bearer token auth
 ```
 
 ### ORM Model
