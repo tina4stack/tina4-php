@@ -37,10 +37,19 @@ class App
     /** @var bool Whether this instance set an error handler */
     private bool $errorHandlerSet = false;
 
+    private string $basePath;
+
     public function __construct(
-        private readonly string $basePath = '.',
+        string $basePath = '',
         private readonly bool $development = false,
     ) {
+        // Default basePath to the directory of the entry-point script (index.php),
+        // not the current working directory — the two differ when PHP-CLI or a web
+        // server process is started from a different directory.
+        if ($basePath === '') {
+            $basePath = dirname(realpath($_SERVER['SCRIPT_FILENAME'] ?? '') ?: getcwd());
+        }
+        $this->basePath = $basePath;
         $this->startTime = microtime(true);
         $this->errorHandlerSet = true;
 
@@ -359,7 +368,7 @@ class App
 
     private static function renderLandingPage(string $version, bool $isDev): string
     {
-        $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: '7146';
+        $port = $_SERVER['SERVER_PORT'] ?? getenv('TINA4_PORT') ?: getenv('PORT') ?: '7146';
 
         $btnRestApi = self::galleryBtn('rest-api', '/api/gallery/hello');
         $btnOrm = self::galleryBtn('orm', '/api/gallery/products');

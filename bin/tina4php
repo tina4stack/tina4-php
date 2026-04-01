@@ -72,7 +72,7 @@ function resolveHostPort(?string $cliArg = null): array
         }
     }
     if ($port === null) {
-        $envPort = getenv('PORT');
+        $envPort = getenv('TINA4_PORT') ?: getenv('PORT');
         if ($envPort !== false && $envPort !== '') {
             $port = $envPort;
         }
@@ -223,7 +223,32 @@ DOCKERFILE;
     // ────────────────────────────────────────────
     case 'serve':
     case 'start':
-        [$host, $port] = resolveHostPort($args[0] ?? null);
+        // Load .env BEFORE port resolution so TINA4_PORT from .env is visible to getenv()
+        $envFile = $cwd . DIRECTORY_SEPARATOR . '.env';
+        if (is_file($envFile) && class_exists('\Tina4\DotEnv')) {
+            \Tina4\DotEnv::loadEnv($envFile);
+        }
+
+        // Parse --port=XXXX / --host=XXXX flags from $args (highest priority after explicit positional arg)
+        $flagPort = null;
+        $flagHost = null;
+        $positionalArg = null;
+        foreach ($args as $arg) {
+            if (preg_match('/^--port[=:](\S+)$/', $arg, $m)) {
+                $flagPort = $m[1];
+            } elseif (preg_match('/^--host[=:](\S+)$/', $arg, $m)) {
+                $flagHost = $m[1];
+            } elseif (!str_starts_with($arg, '--') && $positionalArg === null) {
+                $positionalArg = $arg;
+            }
+        }
+        [$host, $port] = resolveHostPort($positionalArg);
+        if ($flagPort !== null) {
+            $port = $flagPort;
+        }
+        if ($flagHost !== null) {
+            $host = $flagHost;
+        }
         $port = (int)$port;
 
         // Find index.php
@@ -239,12 +264,6 @@ DOCKERFILE;
         $isTty = function_exists('posix_isatty') ? posix_isatty(STDOUT) : (getenv('TERM') !== false);
         $color = $isTty ? "\e[35m" : "";
         $reset = $isTty ? "\e[0m" : "";
-
-        // Load .env to read debug settings
-        $envFile = $cwd . DIRECTORY_SEPARATOR . '.env';
-        if (is_file($envFile) && class_exists('\Tina4\DotEnv')) {
-            \Tina4\DotEnv::loadEnv($envFile);
-        }
 
         $isDebug = class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false')) : false;
         $logLevel = (class_exists('\Tina4\DotEnv') ? \Tina4\DotEnv::getEnv('TINA4_LOG_LEVEL', 'DEBUG') : 'DEBUG');

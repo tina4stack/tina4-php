@@ -119,7 +119,7 @@ v3 ships with adapters for SQLite3, MySQL, PostgreSQL, MSSQL (sqlserver), and Fi
 
 ```bash
 composer require tina4stack/tina4php
-composer exec tina4 initialize:run
+vendor/bin/tina4php init
 ```
 
 This creates:
@@ -505,8 +505,7 @@ Set `TINA4_DEBUG=true` in `.env` to enable:
 ## CLI Reference
 
 ```bash
-composer tina4                           # Tina4 menu
-composer exec tina4 initialize:run       # Scaffold a new project
+vendor/bin/tina4php init                 # Scaffold a new project
 composer start                           # Start dev server (default: 7146)
 composer start 8080                      # Start on specific port
 composer start --production              # Auto-use OPcache + best production config
@@ -593,7 +592,7 @@ Tina4 PHP is built from the ground up with no third-party runtime dependencies i
 
 ```bash
 docker run -v $(pwd):/app tina4stack/php:latest composer require tina4stack/tina4php
-docker run -v $(pwd):/app tina4stack/php:latest composer exec tina4 initialize:run
+docker run -v $(pwd):/app tina4stack/php:latest vendor/bin/tina4php init
 docker run -v $(pwd):/app -p7146:7146 tina4stack/php:latest composer start
 ```
 

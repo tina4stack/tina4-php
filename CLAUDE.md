@@ -125,18 +125,18 @@ dockers/                 # Docker configurations
 ### Route — Static route registration
 
 ```php
-Route::get(string $routePath, $function): Route
-Route::post(string $routePath, $function): Route
-Route::put(string $routePath, $function): Route
-Route::patch(string $routePath, $function): Route
-Route::delete(string $routePath, $function): Route
-Route::any(string $routePath, $function): Route
+Router::get(string $routePath, $function): Router
+Router::post(string $routePath, $function): Router
+Router::put(string $routePath, $function): Router
+Router::patch(string $routePath, $function): Router
+Router::delete(string $routePath, $function): Router
+Router::any(string $routePath, $function): Router
 
 // Modifiers (chained)
-->middleware(array $functionNames): Route
-->cache(bool $default = true): Route
-->noCache(bool $default = false): Route
-->secure(bool $default = true): Route
+->middleware(array $functionNames): Router
+->cache(bool $default = true): Router
+->noCache(bool $default = false): Router
+->secure(bool $default = true): Router
 ```
 
 ### Database — Database connection (v3)
@@ -231,7 +231,7 @@ NoSQL support: `toMongo()` generates MongoDB query documents from the same fluen
 The `Response` object supports rendering Twig templates via the built-in `Frond` engine:
 
 ```php
-Route::get("/dashboard", function (Request $request, Response $response) {
+Router::get("/dashboard", function (Request $request, Response $response) {
     return $response->template("dashboard.twig", [
         "title" => "Dashboard",
         "user" => $currentUser,
@@ -371,7 +371,7 @@ $cache->sweep(): int           // Remove expired entries, returns count removed
 Example with route middleware:
 ```php
 $cache = new ResponseCache(['ttl' => 300]);
-Route::get("/api/data", function($request, $response) use ($cache) {
+Router::get("/api/data", function($request, $response) use ($cache) {
     $hit = $cache->lookup('GET', $request->url);
     if ($hit) return $response($hit['body'], $hit['statusCode']);
     $data = expensiveQuery();
