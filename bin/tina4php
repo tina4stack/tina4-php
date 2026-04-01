@@ -408,7 +408,10 @@ DOCKERFILE;
 
         // Bootstrap the application — include user's index.php if available so that
         // any initialisation code (DB setup, ORM binding, etc.) runs before the server
-        // starts. handle() is CLI-safe and just calls start() without dispatching HTTP.
+        // starts. TINA4_CLI_SERVE tells App::run() to skip starting its own server.
+        if (!defined('TINA4_CLI_SERVE')) {
+            define('TINA4_CLI_SERVE', true);
+        }
         if (file_exists($cwd . '/index.php')) {
             ob_start();
             include_once $cwd . '/index.php';

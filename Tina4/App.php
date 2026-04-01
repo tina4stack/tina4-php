@@ -14,7 +14,7 @@ namespace Tina4;
  */
 class App
 {
-    public const VERSION = '3.10.44';
+    public const VERSION = '3.10.45';
 
     /** @var Database\Database|Database\DatabaseAdapter|null Shared database instance */
     private static Database\Database|Database\DatabaseAdapter|null $database = null;
@@ -610,6 +610,11 @@ HTML;
     public function run(string $host = '0.0.0.0', int $port = 7145): void
     {
         $this->start();
+
+        // When called from the CLI serve command, skip starting another server
+        if (defined('TINA4_CLI_SERVE') && TINA4_CLI_SERVE) {
+            return;
+        }
 
         $actualPort = self::findAvailablePort($port);
         if ($actualPort !== $port) {
