@@ -4,7 +4,7 @@
  * Tests for port/host resolution in the CLI serve command.
  *
  * Priority order: CLI arg > ENV var > default
- * Default host: 0.0.0.0   Default port: 7146
+ * Default host: 0.0.0.0   Default port: 7145
  */
 class PortConfigTest extends \PHPUnit\Framework\TestCase
 {
@@ -46,10 +46,10 @@ class PortConfigTest extends \PHPUnit\Framework\TestCase
 
     // ── Default values ──
 
-    public function testDefaultPortIs7146(): void
+    public function testDefaultPortIs7145(): void
     {
         [$host, $port] = resolveHostPort(null);
-        $this->assertSame('7146', $port);
+        $this->assertSame('7145', $port);
     }
 
     public function testDefaultHostIs0000(): void
@@ -73,7 +73,7 @@ class PortConfigTest extends \PHPUnit\Framework\TestCase
         putenv('HOST=192.168.1.100');
         [$host, $port] = resolveHostPort(null);
         $this->assertSame('192.168.1.100', $host);
-        $this->assertSame('7146', $port, 'Port should stay default when only HOST is set');
+        $this->assertSame('7145', $port, 'Port should stay default when only HOST is set');
     }
 
     public function testBothEnvVarsRespected(): void

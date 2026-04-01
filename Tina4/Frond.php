@@ -1052,15 +1052,17 @@ class Frond
             return str_contains($expr, '.') ? (float)$expr : (int)$expr;
         }
 
-        // Quoted string with embedded quotes (fallback)
+        // Quoted string with escaped embedded quotes (fallback)
         if ((str_starts_with($expr, '"') && str_ends_with($expr, '"'))
             || (str_starts_with($expr, "'") && str_ends_with($expr, "'"))) {
+            $q = $expr[0];
             $inner = substr($expr, 1, -1);
-            return str_replace(
-                ['\\n', '\\t', '\\\\', "\\'", '\\"'],
-                ["\n", "\t", "\\", "'", '"'],
-                $inner
-            );
+            // Only treat as a string literal if the inner part has no
+            // unescaped same-quote characters.  An unescaped quote means
+            // this is actually an expression (e.g. "Hello" ~ " " ~ "World").
+            if (!preg_match('/(?<!\\\\)' . preg_quote($q, '/') . '/', $inner)) {
+                return $this->processEscapes($inner);
+            }
         }
 
         return self::NOT_MATCHED;

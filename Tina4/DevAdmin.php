@@ -81,6 +81,15 @@ class DevAdmin
 
         // API: System status (lightweight)
         Router::get('/__dev/api/status', function (Request $request, Response $response) {
+            $dbTableCount = 0;
+            try {
+                $db = App::getDatabase();
+                if ($db !== null) {
+                    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+                    $dbTableCount = count($tables);
+                }
+            } catch (\Throwable) {
+            }
             return $response->json([
                 'php_version' => PHP_VERSION,
                 'memory_usage_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
@@ -90,6 +99,7 @@ class DevAdmin
                 'version' => App::VERSION,
                 'sapi' => PHP_SAPI,
                 'route_count' => Router::count(),
+                'db_tables' => $dbTableCount,
                 'request_stats' => RequestInspector::stats(),
                 'message_counts' => MessageLog::count(),
                 'health' => ['unresolved' => ErrorTracker::unresolvedCount()],
@@ -161,7 +171,7 @@ class DevAdmin
             return $response->json(['cleared' => true]);
         });
 
-        // API: Run a database query
+        // API: Run a database query (supports multi-statement SQL)
         Router::post('/__dev/api/query', function (Request $request, Response $response) {
             $query = trim($request->input('query') ?? $request->input('sql') ?? '');
             $queryType = $request->input('type') ?? 'sql';
@@ -182,22 +192,49 @@ class DevAdmin
                 }
             }
 
-            // SQL mode — safety: only allow SELECT in dev mode
-            $firstWord = strtoupper(strtok($query, " \t\n\r"));
-            if (!in_array($firstWord, ['SELECT', 'PRAGMA', 'EXPLAIN', 'SHOW', 'DESCRIBE'], true)) {
-                return $response->json(['error' => 'Only SELECT queries are allowed in the dev dashboard'], 400);
-            }
+            // SQL mode — split multiple statements on semicolons
             try {
                 $db = App::getDatabase();
                 if ($db === null) {
                     return $response->json(['error' => 'No database configured'], 400);
                 }
-                $result = $db->query($query);
-                return $response->json([
-                    'columns' => !empty($result) ? array_keys($result[0]) : [],
-                    'rows' => $result,
-                    'count' => count($result),
-                ]);
+
+                $statements = array_filter(array_map('trim', explode(';', $query)));
+
+                if (count($statements) === 1) {
+                    $stmt = $statements[0];
+                    $firstWord = strtoupper(strtok($stmt, " \t\n\r"));
+                    $isRead = in_array($firstWord, ['SELECT', 'PRAGMA', 'EXPLAIN', 'SHOW', 'DESCRIBE'], true);
+
+                    if ($isRead) {
+                        $result = $db->query($stmt);
+                        return $response->json([
+                            'columns' => !empty($result) ? array_keys($result[0]) : [],
+                            'rows' => $result,
+                            'count' => count($result),
+                        ]);
+                    }
+                }
+
+                // Execute all statements (single write or multi-statement batch) in transaction
+                $totalAffected = 0;
+                $db->startTransaction();
+                try {
+                    foreach ($statements as $stmt) {
+                        $ok = $db->execute($stmt);
+                        if ($ok === false) {
+                            $err = method_exists($db, 'error') ? $db->error() : 'Statement failed';
+                            throw new \RuntimeException($err ?: 'Statement failed');
+                        }
+                        $totalAffected++;
+                    }
+                    $db->commit();
+                } catch (\Throwable $e) {
+                    $db->rollback();
+                    return $response->json(['error' => $e->getMessage()], 400);
+                }
+
+                return $response->json(['affected' => $totalAffected, 'success' => true]);
             } catch (\Throwable $e) {
                 return $response->json(['error' => $e->getMessage()], 400);
             }
@@ -1015,33 +1052,46 @@ code, .mono { font-family: var(--mono); font-size: 0.82rem; }
         <h2>Database</h2>
         <button class="btn btn-sm" onclick="loadTables()">Refresh</button>
     </div>
-    <div class="flex gap-md p-md">
-        <div class="flex-1">
-            <div class="flex gap-sm items-center mb-sm">
-                <select id="query-type" class="input">
-                    <option value="sql">SQL</option>
-                    <option value="graphql">GraphQL</option>
-                </select>
-                <button class="btn btn-sm btn-primary" onclick="runQuery()">Run</button>
-                <span class="text-sm text-muted">Ctrl+Enter</span>
-            </div>
-            <textarea id="query-input" rows="4" placeholder="SELECT * FROM users LIMIT 20" class="input input-mono" style="width:100%"></textarea>
-            <div id="query-error" class="hidden" style="color:var(--danger);font-size:0.75rem;margin-top:0.25rem"></div>
-        </div>
-        <div style="width:180px">
-            <div class="text-sm text-muted" style="font-weight:600;margin-bottom:0.5rem">Tables</div>
+    <div style="display:flex;height:calc(100vh - 140px);overflow:hidden">
+        <!-- Left: Tables navigation -->
+        <div style="width:200px;min-width:200px;border-right:1px solid var(--border);padding:0.5rem;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem">
+            <div class="text-sm text-muted" style="font-weight:600">Tables</div>
             <div id="table-list" class="text-sm"></div>
-            <div style="margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
-                <div class="text-sm text-muted" style="font-weight:600;margin-bottom:0.5rem">Seed Data</div>
-                <select id="seed-table" class="input" style="width:100%;margin-bottom:0.25rem"><option value="">Pick table...</option></select>
+            <div style="border-top:1px solid var(--border);padding-top:0.5rem;margin-top:auto">
+                <div class="text-sm text-muted" style="font-weight:600;margin-bottom:0.25rem">Seed Data</div>
+                <select id="seed-table" class="input" style="width:100%;margin-bottom:0.25rem;font-size:0.75rem"><option value="">Pick table...</option></select>
                 <div class="flex gap-sm items-center">
-                    <input type="number" id="seed-count" class="input" value="10" min="1" max="1000" style="width:60px">
+                    <input type="number" id="seed-count" class="input" value="10" min="1" max="1000" style="width:60px;font-size:0.75rem">
                     <button class="btn btn-sm btn-success" onclick="seedTable()">Seed</button>
                 </div>
             </div>
         </div>
+        <!-- Right: Query + Results -->
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:0.5rem">
+            <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.25rem">
+                <select id="query-type" class="input" style="width:auto;font-size:0.75rem">
+                    <option value="sql">SQL</option>
+                    <option value="graphql">GraphQL</option>
+                </select>
+                <span class="text-sm text-muted">Limit</span>
+                <select id="query-limit" class="input" style="width:70px;font-size:0.75rem">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="500">500</option>
+                    <option value="0">All</option>
+                </select>
+                <button class="btn btn-sm btn-primary" onclick="runQuery()">Run</button>
+                <button class="btn btn-sm" id="btn-csv" onclick="copyResults('csv',this)" title="Copy results as CSV">Copy CSV</button>
+                <button class="btn btn-sm" id="btn-json" onclick="copyResults('json',this)" title="Copy results as JSON">Copy JSON</button>
+                <button class="btn btn-sm" onclick="pasteData()" title="Paste tab-separated data as INSERTs">Paste</button>
+                <span class="text-sm text-muted">Ctrl+Enter</span>
+            </div>
+            <textarea id="query-input" rows="3" placeholder="SELECT * FROM users LIMIT 20" class="input input-mono" style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
+            <div id="query-error" class="hidden" style="color:var(--danger);font-size:0.75rem;margin-top:0.25rem"></div>
+            <div id="query-results" style="flex:1;overflow:auto;margin-top:0.25rem;font-size:0.75rem"></div>
+        </div>
     </div>
-    <div id="query-results" style="overflow-x:auto"></div>
 </div>
 
 <!-- Requests Panel -->

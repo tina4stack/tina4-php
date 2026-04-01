@@ -108,8 +108,13 @@ class SQLite3Adapter implements DatabaseAdapter
             $countResult = $this->query($countSql, $params);
             $total = (int)($countResult[0]['total'] ?? 0);
 
-            // Fetch paginated results
-            $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            // Apply pagination — skip if SQL already has LIMIT
+            $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
+            if (stripos($sqlNoComments, 'LIMIT') !== false) {
+                $pagedSql = $sql;
+            } else {
+                $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            }
             $data = $this->query($pagedSql, $params);
 
             return [

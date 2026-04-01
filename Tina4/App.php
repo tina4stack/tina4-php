@@ -14,7 +14,7 @@ namespace Tina4;
  */
 class App
 {
-    public const VERSION = '3.10.43';
+    public const VERSION = '3.10.44';
 
     /** @var Database\Database|Database\DatabaseAdapter|null Shared database instance */
     private static Database\Database|Database\DatabaseAdapter|null $database = null;
@@ -416,6 +416,8 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 .gallery-card p{font-size:0.85rem;color:#94a3b8;line-height:1.5}
 .gallery-card .try-btn{display:inline-block;margin-top:0.75rem;padding:0.3rem 0.8rem;background:#7b1fa2;color:#fff;border:none;border-radius:0.375rem;font-size:0.75rem;font-weight:600;cursor:pointer;transition:opacity 0.15s}
 .gallery-card .try-btn:hover{opacity:0.85}
+@keyframes wiggle{0%{transform:rotate(0deg)}15%{transform:rotate(14deg)}30%{transform:rotate(-10deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-4deg)}75%{transform:rotate(2deg)}100%{transform:rotate(0deg)}}
+.star-wiggle{display:inline-block;transform-origin:center}
 </style>
 </head>
 <body>
@@ -429,7 +431,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
         <a href="/__dev" class="btn">Dev Admin</a>
         <a href="#gallery" class="btn">Gallery</a>
         <a href="https://github.com/tina4stack/tina4-php" class="btn" target="_blank">GitHub</a>
-        <a href="https://github.com/tina4stack/tina4-php/stargazers" class="btn" target="_blank">&#11088; Star</a>
+        <a href="https://github.com/tina4stack/tina4-php/stargazers" class="btn" target="_blank"><span class="star-wiggle">&#9734;</span> Star</a>
     </div>
     <div class="status">
         <span><span class="dot"></span>Server running</span>
@@ -573,6 +575,22 @@ function deployGallery(name, tryUrl) {
         alert('Deploy failed — check console');
     });
 }
+</script>
+<script>
+(function(){
+    var star=document.querySelector('.star-wiggle');
+    if(!star)return;
+    function doWiggle(){
+        star.style.animation='wiggle 1.2s ease-in-out';
+        star.addEventListener('animationend',function onEnd(){
+            star.removeEventListener('animationend',onEnd);
+            star.style.animation='none';
+            var delay=3000+Math.random()*15000;
+            setTimeout(doWiggle,delay);
+        });
+    }
+    setTimeout(doWiggle,3000);
+})();
 </script>
 </body>
 </html>

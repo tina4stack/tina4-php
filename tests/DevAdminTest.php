@@ -355,4 +355,182 @@ class DevAdminTest extends TestCase
         $html = DevAdmin::renderDashboard();
         $this->assertStringContainsString('dev-tab', $html);
     }
+
+    // ── Status API: db_tables field ────────────────────────────────
+
+    public function testStatusIncludesDbTables(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        $db->exec("CREATE TABLE test_status_a (id INTEGER PRIMARY KEY)");
+        $db->exec("CREATE TABLE test_status_b (id INTEGER PRIMARY KEY)");
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        // Find the status route handler and call it
+        $callback = $this->findRouteCallback('GET', '/__dev/api/status');
+        $this->assertNotNull($callback, 'Status route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/status');
+        $response = new Response(true);
+
+        /** @var Response $result */
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        // db_tables should be an integer >= 2 (we created 2 tables)
+        $this->assertArrayHasKey('db_tables', $json);
+        $this->assertIsInt($json['db_tables']);
+        $this->assertGreaterThanOrEqual(2, $json['db_tables']);
+
+        $db->close();
+    }
+
+    // ── Multi-statement SQL execution ──────────────────────────────
+
+    public function testQueryMultiStatement(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('POST', '/__dev/api/query');
+        $this->assertNotNull($callback, 'Query route should be registered');
+
+        // Multi-statement: CREATE + INSERT + INSERT
+        $request = Request::create('POST', '/__dev/api/query', body: [
+            'query' => "CREATE TABLE test_multi (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO test_multi (id, name) VALUES (1, 'Alice'); INSERT INTO test_multi (id, name) VALUES (2, 'Bob')",
+            'type' => 'sql',
+        ]);
+        $response = new Response(true);
+
+        /** @var Response $result */
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+        $this->assertTrue($json['success'] ?? false, 'Multi-statement should succeed');
+
+        // Verify data was inserted by running a SELECT
+        $request2 = Request::create('POST', '/__dev/api/query', body: [
+            'query' => 'SELECT * FROM test_multi',
+            'type' => 'sql',
+        ]);
+        $response2 = new Response(true);
+
+        /** @var Response $result2 */
+        $result2 = $callback($request2, $response2);
+        $json2 = json_decode($result2->getBody(), true);
+        $this->assertCount(2, $json2['rows']);
+
+        $db->close();
+    }
+
+    // ── Multi-statement rollback on error ──────────────────────────
+
+    public function testQueryMultiStatementRollback(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        $db->exec("CREATE TABLE test_rb (id INTEGER PRIMARY KEY, name TEXT)");
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('POST', '/__dev/api/query');
+        $this->assertNotNull($callback);
+
+        // Batch with a bad statement — should rollback
+        $request = Request::create('POST', '/__dev/api/query', body: [
+            'query' => "INSERT INTO test_rb (id, name) VALUES (1, 'Alice'); INSERT INTO nonexistent_table (x) VALUES (1)",
+            'type' => 'sql',
+        ]);
+        $response = new Response(true);
+
+        /** @var Response $result */
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+        $this->assertArrayHasKey('error', $json, 'Failed batch should return error');
+
+        $db->close();
+    }
+
+    // ── Database tab HTML ──────────────────────────────────────────
+
+    public function testDashboardSplitScreenLayout(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('table-list', $html);
+        $this->assertStringContainsString('query-results', $html);
+        $this->assertStringContainsString('query-input', $html);
+    }
+
+    public function testDashboardCopyButtons(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('Copy CSV', $html);
+        $this->assertStringContainsString('Copy JSON', $html);
+        $this->assertStringContainsString('Paste', $html);
+    }
+
+    public function testDashboardLimitDropdown(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('query-limit', $html);
+        $this->assertStringContainsString('<option value="20">20</option>', $html);
+        $this->assertStringContainsString('<option value="0">All</option>', $html);
+    }
+
+    public function testDashboardSeedControls(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('seed-table', $html);
+        $this->assertStringContainsString('seed-count', $html);
+        $this->assertStringContainsString('seedTable()', $html);
+    }
+
+    // ── Helper ─────────────────────────────────────────────────────
+
+    private function findRouteCallback(string $method, string $pattern): ?callable
+    {
+        foreach (Router::getRoutes() as $route) {
+            if ($route['pattern'] === $pattern && $route['method'] === $method) {
+                return $route['callback'];
+            }
+        }
+        return null;
+    }
+}
+
+// ── SQLite LIMIT dedup ─────────────────────────────────────────────
+
+class SQLiteLimitDedupTest extends TestCase
+{
+    public function testFetchWithExistingLimitDoesNotDouble(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        $db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)");
+        for ($i = 0; $i < 10; $i++) {
+            $db->exec("INSERT INTO items (id, name) VALUES ({$i}, 'item{$i}')");
+        }
+
+        // SQL already has LIMIT — should NOT add another
+        $result = $db->fetch("SELECT * FROM items LIMIT 3");
+        $this->assertCount(3, $result['data']);
+
+        $db->close();
+    }
+
+    public function testFetchWithoutLimitAddsDefault(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        $db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)");
+        for ($i = 0; $i < 30; $i++) {
+            $db->exec("INSERT INTO items (id, name) VALUES ({$i}, 'item{$i}')");
+        }
+
+        // No LIMIT in SQL — adapter adds default (10)
+        $result = $db->fetch("SELECT * FROM items");
+        $this->assertCount(10, $result['data']);
+
+        $db->close();
+    }
 }
