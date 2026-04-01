@@ -1338,31 +1338,36 @@ function renderBubbleChart(files,depGraph){
     depGraph=depGraph||{};
     var W=container.offsetWidth||900,H=Math.max(450,Math.min(650,W*0.45));
     var maxLoc=Math.max.apply(null,files.map(function(f){return f.loc}))||1;
+    var maxDeps=Math.max.apply(null,files.map(function(f){return f.dep_count||0}))||1;
     var maxCC=Math.max.apply(null,files.map(function(f){return f.complexity||0}))||1;
     var minR=14,maxR=Math.min(70,W/10);
     // Composite health colour: complexity + tests + dependencies
     function healthColor(f){
-        var cc=Math.min((f.complexity||0)/maxCC,1);
-        var tested=f.has_tests?1:0;
-        var deps=Math.min((f.dep_count||0)/10,1);
-        var score=cc*0.5+(1-tested)*0.3+deps*0.2;
+        // Absolute thresholds
+        var cc=Math.min((f.avg_complexity||0)/10,1); // 10+ avg complexity = max risk
+        var untested=f.has_tests?0:1;
+        var deps=Math.min((f.dep_count||0)/5,1); // 5+ deps = max risk
+        // Score: 0=healthy(green) 1=risky(red). Deps count negative (more=worse)
+        var score=cc*0.4+untested*0.4+deps*0.2;
         score=Math.max(0,Math.min(1,score));
-        var r=Math.round(34+score*200);
-        var g=Math.round(197-score*160);
-        var b2=Math.round(94-score*50);
-        return 'rgb('+r+','+g+','+b2+')';
+        // green(120) -> amber(40) -> red(0)
+        var hue=Math.round(120*(1-score));
+        var sat=Math.round(70+score*30);
+        var lit=Math.round(42+18*(1-score));
+        return 'hsl('+hue+','+sat+'%,'+lit+'%)';
     }
     // Build path->index lookup
     var pathIdx={};
     files.forEach(function(f,i){pathIdx[f.path]=i;});
     // Spiral placement
-    var sorted=files.slice().sort(function(a,b){return a.loc-b.loc});
+    function sizeScore(f){return (f.loc/maxLoc)*0.4+((f.avg_complexity||0)/10)*0.4+((f.dep_count||0)/maxDeps)*0.2;}
+    var sorted=files.slice().sort(function(a,b){return sizeScore(a)-sizeScore(b)});
     var cx=W/2,cy=H/2;
     var bubbles=[];
     var angle=0,spiralR=0;
     for(var i=0;i<sorted.length;i++){
         var f=sorted[i];
-        var r=minR+Math.sqrt(f.loc/maxLoc)*(maxR-minR);
+        var r=minR+Math.sqrt(sizeScore(f))*(maxR-minR);
         var color=healthColor(f);
         var placed=false;
         for(var attempt=0;attempt<800;attempt++){
@@ -1381,70 +1386,90 @@ function renderBubbleChart(files,depGraph){
         }
         if(!placed){bubbles.push({x:cx+(Math.random()-0.5)*W*0.3,y:cy+(Math.random()-0.5)*H*0.3,vx:0,vy:0,r:r,color:color,f:f});}
     }
-    // Build edge list from dependency graph
+    // Build edge list from dependency graph — match by filename not full path
     var edges=[];
+    function basename(p){var n=p.replace(/\\\\/g,'/').split('/').pop();var d=n.lastIndexOf('.');return(d>0?n.substring(0,d):n).toLowerCase();}
+    var nameIdx={};
+    bubbles.forEach(function(b,i){nameIdx[basename(b.f.path)]=i;});
     Object.keys(depGraph).forEach(function(src){
         var srcIdx=null;
         bubbles.forEach(function(b,i){if(b.f.path===src)srcIdx=i;});
         if(srcIdx===null)return;
         (depGraph[src]||[]).forEach(function(tgt){
-            var tgtIdx=null;
-            bubbles.forEach(function(b,i){if(b.f.path===tgt)tgtIdx=i;});
-            if(tgtIdx!==null&&srcIdx!==tgtIdx)edges.push([srcIdx,tgtIdx]);
+            var tgtName=tgt.split('.').pop().toLowerCase();
+            var tgtIdx=nameIdx[tgtName];
+            if(tgtIdx!==undefined&&srcIdx!==tgtIdx)edges.push([srcIdx,tgtIdx]);
         });
     });
     // Canvas
     var canvas=document.createElement('canvas');
     canvas.width=W;canvas.height=H;
     canvas.style.cssText='display:block;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#0f172a';
-    container.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem"><h3 style="margin:0;color:var(--primary)">Code Landscape</h3><span style="font-size:0.7rem;color:var(--muted)">Drag bubbles | Dbl-click to drill down | Size=LOC | Colour=health | \u24c9=tested | \u24b9=deps</span></div>';
+    container.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem"><h3 style="margin:0;color:var(--primary)">Code Landscape</h3><span style="font-size:0.7rem;color:var(--muted)">Drag bubbles | Click to drill down | Size=LOC | Colour=health | T=tested | D=deps</span></div>';
     container.appendChild(canvas);
     var ctx=canvas.getContext('2d');
     var hoveredIdx=-1,dragIdx=-1,dragOX=0,dragOY=0;
     // Physics
     function simulate(){
-        var damping=0.92,springK=0.005,repulse=800;
+        var damping=0.65,springK=0.002,repulse=40,gravity=0.008;
+        var cx=W/2,cy=H/2;
+        // Gravity: pull all bubbles toward center, bigger = stronger pull
+        bubbles.forEach(function(b,idx){
+            if(idx===dragIdx)return;
+            var dx=cx-b.x,dy=cy-b.y;
+            var sizeFactor=0.3+(b.r/maxR)*0.7;
+            var pull=gravity*sizeFactor*sizeFactor;
+            b.vx+=dx*pull;b.vy+=dy*pull;
+        });
+        // Spring forces along edges
         edges.forEach(function(e){
             var a=bubbles[e[0]],b=bubbles[e[1]];
             var dx=b.x-a.x,dy=b.y-a.y;
             var dist=Math.sqrt(dx*dx+dy*dy)||1;
-            var rest=a.r+b.r+40;
+            var rest=a.r+b.r+20;
             var force=(dist-rest)*springK;
             var fx=dx/dist*force,fy=dy/dist*force;
             if(e[0]!==dragIdx){a.vx+=fx;a.vy+=fy;}
             if(e[1]!==dragIdx){b.vx-=fx;b.vy-=fy;}
         });
+        // Soft repulsion
         for(var i=0;i<bubbles.length;i++){
             for(var j=i+1;j<bubbles.length;j++){
                 var a=bubbles[i],b=bubbles[j];
                 var dx=b.x-a.x,dy=b.y-a.y;
                 var dist=Math.sqrt(dx*dx+dy*dy)||1;
-                var minDist=a.r+b.r+4;
-                if(dist<minDist*3){
-                    var force=repulse/(dist*dist);
+                var minDist=a.r+b.r+20;
+                if(dist<minDist){
+                    var force=repulse*(minDist-dist)/minDist;
                     var fx=dx/dist*force,fy=dy/dist*force;
                     if(i!==dragIdx){a.vx-=fx;a.vy-=fy;}
                     if(j!==dragIdx){b.vx+=fx;b.vy+=fy;}
                 }
             }
         }
+        // Apply velocity + damping + boundary
         bubbles.forEach(function(b,idx){
             if(idx===dragIdx)return;
             b.vx*=damping;b.vy*=damping;
+            // Cap velocity
+            var maxV=2;
+            if(b.vx>maxV)b.vx=maxV;if(b.vx<-maxV)b.vx=-maxV;
+            if(b.vy>maxV)b.vy=maxV;if(b.vy<-maxV)b.vy=-maxV;
             b.x+=b.vx;b.y+=b.vy;
             b.x=Math.max(b.r+2,Math.min(W-b.r-2,b.x));
             b.y=Math.max(b.r+25,Math.min(H-b.r-2,b.y));
         });
     }
-    function fileName(path){return path.replace(/\\/g,'/').split('/').pop().replace(/\.[^.]+$/,'');}
+    function fileName(path){return path.replace(/\\\\/g,'/').split('/').pop().replace(/\\.[^.]+$/,'');}
     // Draw
     function draw(){
         simulate();
         ctx.clearRect(0,0,W,H);
+        ctx.save();ctx.translate(panX,panY);ctx.scale(zoom,zoom);
         // Grid
-        ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
-        for(var gx=0;gx<W;gx+=50){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
-        for(var gy=0;gy<H;gy+=50){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+        ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1/zoom;
+        for(var gx=0;gx<W/zoom;gx+=50){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H/zoom);ctx.stroke();}
+        for(var gy=0;gy<H/zoom;gy+=50){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W/zoom,gy);ctx.stroke();}
         // Dependency arrows
         edges.forEach(function(e){
             var a=bubbles[e[0]],b=bubbles[e[1]];
@@ -1455,10 +1480,10 @@ function renderBubbleChart(files,depGraph){
             ctx.moveTo(a.x+dx/dist*a.r,a.y+dy/dist*a.r);
             var ex=b.x-dx/dist*b.r,ey=b.y-dy/dist*b.r;
             ctx.lineTo(ex,ey);
-            ctx.strokeStyle=highlighted?'rgba(139,180,250,0.6)':'rgba(255,255,255,0.1)';
-            ctx.lineWidth=highlighted?2:1;ctx.stroke();
+            ctx.strokeStyle=highlighted?'rgba(139,180,250,0.9)':'rgba(255,255,255,0.3)';
+            ctx.lineWidth=highlighted?3:1.5;ctx.stroke();
             // Arrowhead
-            var aLen=highlighted?10:6;
+            var aLen=highlighted?14:8;
             var aAngle=Math.atan2(dy,dx);
             ctx.beginPath();
             ctx.moveTo(ex,ey);
@@ -1471,9 +1496,10 @@ function renderBubbleChart(files,depGraph){
             var isHovered=(idx===hoveredIdx);
             var drawR=isHovered?b.r+4:b.r;
             if(isHovered){ctx.beginPath();ctx.arc(b.x,b.y,drawR+8,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fill();}
+            // Matte flat bubble
             ctx.beginPath();ctx.arc(b.x,b.y,drawR,0,Math.PI*2);
-            ctx.fillStyle=b.color;ctx.globalAlpha=isHovered?0.95:0.7;ctx.fill();
-            ctx.globalAlpha=1;ctx.strokeStyle=b.color;ctx.lineWidth=isHovered?2.5:1.5;ctx.stroke();
+            ctx.fillStyle=b.color;ctx.globalAlpha=isHovered?1.0:0.85;ctx.fill();
+            ctx.globalAlpha=1;ctx.strokeStyle=isHovered?'rgba(255,255,255,0.6)':'rgba(255,255,255,0.25)';ctx.lineWidth=isHovered?2.5:1.5;ctx.stroke();
             // Label
             var name=fileName(b.f.path);
             if(drawR>16){
@@ -1487,13 +1513,24 @@ function renderBubbleChart(files,depGraph){
                     ctx.fillText('CC:'+b.f.complexity+' MI:'+b.f.maintainability,b.x,b.y+fs*2);
                 }
             }
-            // Markers: T (tested) and D (dependencies)
-            var markers='';
-            if(b.f.has_tests)markers+='\u24c9';
-            if(b.f.dep_count>0)markers+='\u24b9';
-            if(markers&&drawR>12){
-                ctx.fillStyle='rgba(255,255,255,0.85)';ctx.font='bold '+Math.max(7,drawR*0.25)+'px sans-serif';
-                ctx.textAlign='center';ctx.fillText(markers,b.x,b.y-drawR+Math.max(7,drawR*0.25)+1);
+            // Markers: T (tested) and D (dependencies) — inverted badges
+            var mfs=Math.max(9,drawR*0.3);
+            var mrad=mfs*0.7;
+            var mpad=mrad*2.4;
+            var my=b.y-drawR+mrad+3;
+            if(drawR>14&&b.f.has_tests){
+                var mx=b.x-(b.f.dep_count>0?mpad*0.5:0);
+                ctx.beginPath();ctx.arc(mx,my,mrad,0,Math.PI*2);
+                ctx.fillStyle='#16a34a';ctx.fill();
+                ctx.fillStyle='#fff';ctx.font='bold '+mfs+'px sans-serif';ctx.textAlign='center';
+                ctx.fillText('T',mx,my+mfs*0.35);
+            }
+            if(drawR>14&&b.f.dep_count>0){
+                var mx2=b.x+(b.f.has_tests?mpad*0.5:0);
+                ctx.beginPath();ctx.arc(mx2,my,mrad,0,Math.PI*2);
+                ctx.fillStyle='#ea580c';ctx.fill();
+                ctx.fillStyle='#fff';ctx.font='bold '+mfs+'px sans-serif';ctx.textAlign='center';
+                ctx.fillText('D',mx2,my+mfs*0.35);
             }
             b._drawX=b.x;b._drawY=b.y;b._drawR=drawR;
         });
@@ -1502,43 +1539,76 @@ function renderBubbleChart(files,depGraph){
         bubbles.forEach(function(b){totalLoc+=b.f.loc;if(b.f.has_tests)testedCount++;});
         var avgMI=bubbles.reduce(function(s,b){return s+b.f.maintainability;},0)/totalFiles;
         ctx.fillStyle='rgba(255,255,255,0.35)';ctx.font='11px monospace';ctx.textAlign='right';
+        ctx.restore();
+        ctx.fillStyle='rgba(255,255,255,0.35)';ctx.font='11px monospace';ctx.textAlign='right';
         ctx.fillText(totalFiles+' files | '+totalLoc.toLocaleString()+' LOC | MI:'+avgMI.toFixed(1)+' | Tested:'+testedCount+'/'+totalFiles,W-12,H-10);
         window._metricsAnimFrame=requestAnimationFrame(draw);
     }
     draw();
-    // Mouse events — hover + drag
+    // Mouse events — hover + drag bubbles + right-click pan
+    var panning=false,panStartX=0,panStartY=0;
+    canvas.addEventListener('contextmenu',function(e){e.preventDefault();});
     canvas.addEventListener('mousemove',function(e){
         var rect=canvas.getBoundingClientRect();
         var mx=e.clientX-rect.left,my=e.clientY-rect.top;
+        if(panning){
+            panX+=(mx-panStartX);panY+=(my-panStartY);
+            panStartX=mx;panStartY=my;return;
+        }
         if(dragIdx>=0){
-            bubbles[dragIdx].x=mx-dragOX;bubbles[dragIdx].y=my-dragOY;
+            var wmx=(mx-panX)/zoom,wmy=(my-panY)/zoom;
+            bubbles[dragIdx].x=wmx-dragOX;bubbles[dragIdx].y=wmy-dragOY;
             bubbles[dragIdx].vx=0;bubbles[dragIdx].vy=0;return;
         }
+        var wmx2=(mx-panX)/zoom,wmy2=(my-panY)/zoom;
         hoveredIdx=-1;
         for(var i=bubbles.length-1;i>=0;i--){
             var b=bubbles[i];
-            var dx=mx-b._drawX,dy=my-b._drawY;
-            if(Math.sqrt(dx*dx+dy*dy)<=b._drawR){hoveredIdx=i;break;}
+            var dx=wmx2-b.x,dy=wmy2-b.y;
+            if(Math.sqrt(dx*dx+dy*dy)<=b.r){hoveredIdx=i;break;}
         }
-        canvas.style.cursor=hoveredIdx>=0?'grab':'default';
+        canvas.style.cursor=panning?'move':hoveredIdx>=0?'grab':'default';
     });
     canvas.addEventListener('mousedown',function(e){
+        var rect=canvas.getBoundingClientRect();
+        var mx=e.clientX-rect.left,my=e.clientY-rect.top;
+        if(e.button===2){
+            panning=true;panStartX=mx;panStartY=my;
+            canvas.style.cursor='move';return;
+        }
         if(hoveredIdx>=0){
             dragIdx=hoveredIdx;
-            var rect=canvas.getBoundingClientRect();
-            dragOX=e.clientX-rect.left-bubbles[dragIdx].x;
-            dragOY=e.clientY-rect.top-bubbles[dragIdx].y;
+            var wmx=(mx-panX)/zoom;
+            var wmy=(my-panY)/zoom;
+            dragOX=wmx-bubbles[dragIdx].x;
+            dragOY=wmy-bubbles[dragIdx].y;
             canvas.style.cursor='grabbing';
         }
     });
     canvas.addEventListener('mouseup',function(){
+        if(panning){panning=false;canvas.style.cursor='default';}
         if(dragIdx>=0){canvas.style.cursor='grab';dragIdx=-1;}
     });
-    canvas.addEventListener('mouseleave',function(){hoveredIdx=-1;dragIdx=-1;});
+    canvas.addEventListener('mouseleave',function(){hoveredIdx=-1;dragIdx=-1;panning=false;});
     canvas.addEventListener('dblclick',function(e){
         if(hoveredIdx<0)return;
         drillDownFile(bubbles[hoveredIdx].f.path);
     });
+    // Zoom with mouse wheel
+    var zoom=1.0,panX=0,panY=0;
+    canvas.addEventListener('wheel',function(e){
+        e.preventDefault();
+        var rect=canvas.getBoundingClientRect();
+        var mx=(e.clientX-rect.left-panX)/zoom;
+        var my=(e.clientY-rect.top-panY)/zoom;
+        var oldZoom=zoom;
+        zoom*=e.deltaY<0?1.08:0.93;
+        zoom=Math.max(0.5,Math.min(2.5,zoom));
+        panX+=(mx*oldZoom-mx*zoom);
+        panY+=(my*oldZoom-my*zoom);
+        bubbles.forEach(function(b){});
+    },{passive:false});
+    bubbles.forEach(function(b){b._baseR=b.r;});
 }
 function drillDownFile(path){
     var dd=document.getElementById('metrics-drilldown');
