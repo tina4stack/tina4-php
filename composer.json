@@ -1,6 +1,6 @@
 {
     "name": "tina4stack/tina4php",
-    "description": "Tina4 PHP — This Is Now A 4Framework",
+    "description": "Tina4 for PHP — 54 built-in features, zero dependencies",
     "license": "MIT",
     "autoload": {
         "psr-4": {
