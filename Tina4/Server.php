@@ -685,7 +685,7 @@ class Server
                 $changed = true;
                 Log::info("Hot reload: .env changed");
                 // Reload env vars
-                DotEnv::load($envFile);
+                DotEnv::loadEnv($envFile);
             }
             $this->fileMtimes[$envFile] = $mtime;
         }
