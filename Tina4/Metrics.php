@@ -315,6 +315,8 @@ class Metrics
                 "coupling_afferent" => $ca,
                 "coupling_efferent" => $ce,
                 "instability" => round($instability, 3),
+                "has_tests" => self::hasMatchingTest($relPath),
+                "dep_count" => $ce,
             ];
         }
 
@@ -1087,5 +1089,27 @@ class Metrics
         }
         // Always use forward slashes so paths are consistent across platforms
         return str_replace('\\', '/', $rel);
+    }
+
+    /**
+     * Check whether a matching test file exists for a given source file.
+     *
+     * @param string $relPath Relative path (e.g. "Tina4/Auth.php")
+     * @return bool
+     */
+    private static function hasMatchingTest(string $relPath): bool
+    {
+        $name = pathinfo($relPath, PATHINFO_FILENAME);
+        $patterns = [
+            "tests/{$name}Test.php",
+            "tests/{$name}V3Test.php",
+            "tests/test_{$name}.php",
+        ];
+        foreach ($patterns as $p) {
+            if (file_exists($p)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
