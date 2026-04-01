@@ -67,11 +67,11 @@ class DevAdmin
                 if ($json) {
                     $data = json_decode($json, true);
                     $versions = array_keys($data['package']['versions'] ?? []);
-                    // Filter to stable versions (vX.Y.Z), sort descending
+                    // Filter to stable versions (vX.Y.Z), strip v prefix, sort
                     $stable = array_filter($versions, fn($v) => preg_match('/^v?\d+\.\d+\.\d+$/', $v));
+                    $stable = array_map(fn($v) => ltrim($v, 'v'), $stable);
                     usort($stable, 'version_compare');
                     $latest = end($stable) ?: $current;
-                    $latest = ltrim($latest, 'v');
                 }
             } catch (\Throwable) {
                 // Offline or timeout — return current as latest
