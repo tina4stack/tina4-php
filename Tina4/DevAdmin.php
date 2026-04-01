@@ -1335,11 +1335,12 @@ function miColor(mi){
 function renderBubbleChart(files){
     var container=document.getElementById('metrics-bubble');
     if(!files||!files.length){container.innerHTML='<p style="color:var(--muted);padding:1rem">No files to analyze</p>';return;}
-    var W=container.offsetWidth||900,H=Math.max(450,Math.min(650,W*0.45));
+    var W=container.offsetWidth||900,H=Math.max(500,Math.min(700,W*0.55));
     var maxLoc=Math.max.apply(null,files.map(function(f){return f.loc}))||1;
     var minR=14,maxR=Math.min(70,W/10);
-    var sorted=files.slice().sort(function(a,b){return a.loc-b.loc});
-    var cx=W/2,cy=H/2;
+    // Place largest bubbles first so small ones fill the gaps
+    var sorted=files.slice().sort(function(a,b){return b.loc-a.loc});
+    var cx=0,cy=0; // world-space centre; we centre the view after placement
     var bubbles=[];
     var angle=0,spiralR=0;
     for(var i=0;i<sorted.length;i++){
@@ -1347,87 +1348,117 @@ function renderBubbleChart(files){
         var r=minR+Math.sqrt(f.loc/maxLoc)*(maxR-minR);
         var color=miColor(f.maintainability||0);
         var placed=false;
-        for(var attempt=0;attempt<800;attempt++){
+        for(var attempt=0;attempt<5000;attempt++){
             var px=cx+spiralR*Math.cos(angle);
             var py=cy+spiralR*Math.sin(angle);
             var collides=false;
             for(var j=0;j<bubbles.length;j++){
-                var dx=px-bubbles[j].x,dy=py-bubbles[j].y;
-                if(Math.sqrt(dx*dx+dy*dy)<r+bubbles[j].r+2){collides=true;break;}
+                var ddx=px-bubbles[j].x,ddy=py-bubbles[j].y;
+                if(Math.sqrt(ddx*ddx+ddy*ddy)<r+bubbles[j].r+3){collides=true;break;}
             }
-            if(!collides&&px>r+2&&px<W-r-2&&py>r+25&&py<H-r-2){
-                bubbles.push({x:px,y:py,r:r,color:color,f:f,angle:Math.random()*Math.PI*2,speed:0.3+Math.random()*0.5,drift:2+Math.random()*3});
-                placed=true;break;
-            }
-            angle+=0.2;spiralR+=0.04;
+            angle+=0.2;spiralR+=0.05;
+            if(!collides){bubbles.push({x:px,y:py,r:r,color:color,f:f});placed=true;break;}
         }
-        if(!placed){bubbles.push({x:cx+(Math.random()-0.5)*W*0.3,y:cy+(Math.random()-0.5)*H*0.3,r:r,color:color,f:f,angle:Math.random()*Math.PI*2,speed:0.3+Math.random()*0.5,drift:2+Math.random()*3});}
+        // If still not placed after 5000 attempts, skip — prevents forced overlaps
+        if(!placed){console.warn('Could not place bubble for '+f.path);}
     }
+    // Centre the packed cluster in the viewport
+    if(bubbles.length){
+        var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+        bubbles.forEach(function(b){minX=Math.min(minX,b.x-b.r);minY=Math.min(minY,b.y-b.r);maxX=Math.max(maxX,b.x+b.r);maxY=Math.max(maxY,b.y+b.r);});
+        var shiftX=W/2-(minX+maxX)/2,shiftY=H/2-(minY+maxY)/2;
+        bubbles.forEach(function(b){b.x+=shiftX;b.y+=shiftY;});
+    }
+    // Zoom / pan state
+    var scale=1,offX=0,offY=0;
+    var isPanning=false,panMoved=false,panStartX=0,panStartY=0,panOffX=0,panOffY=0;
     var canvas=document.createElement('canvas');
     canvas.width=W;canvas.height=H;
-    canvas.style.cssText='display:block;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#0f172a';
-    container.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem"><h3 style="margin:0;color:var(--primary)">Code Landscape</h3><span style="font-size:0.7rem;color:var(--muted)">Click a bubble to drill down | Size=LOC | <span style="color:#22c55e">Green</span>=maintainable <span style="color:#eab308">Yellow</span>=moderate <span style="color:#ef4444">Red</span>=needs work</span></div>';
+    canvas.style.cssText='display:block;border:1px solid var(--border);border-radius:8px;cursor:grab;background:#0f172a';
+    container.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem"><h3 style="margin:0;color:var(--primary)">Code Landscape</h3><span style="font-size:0.7rem;color:var(--muted)">Scroll to zoom · Drag to pan · Click to drill down | Size=LOC | <span style="color:#22c55e">Green</span>=maintainable <span style="color:#eab308">Yellow</span>=moderate <span style="color:#ef4444">Red</span>=needs work</span></div>';
     container.appendChild(canvas);
     var ctx=canvas.getContext('2d');
     var hoveredIdx=-1;
-    var t=0;
+    function fileName(path){return path.replace(/\\/g,'/').split('/').pop().replace(/\.[^.]+$/,'');}
     function draw(){
-        t+=0.016;
         ctx.clearRect(0,0,W,H);
-        ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
-        for(var gx=0;gx<W;gx+=50){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
-        for(var gy=0;gy<H;gy+=50){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+        ctx.save();
+        ctx.translate(offX,offY);
+        ctx.scale(scale,scale);
         bubbles.forEach(function(b,idx){
-            var ox=Math.sin(t*b.speed+b.angle)*b.drift;
-            var oy=Math.cos(t*b.speed*0.7+b.angle+1)*b.drift*0.6;
-            var bx=b.x+ox,by=b.y+oy;
             var isHovered=(idx===hoveredIdx);
             var drawR=isHovered?b.r+4:b.r;
             if(isHovered){
-                ctx.beginPath();ctx.arc(bx,by,drawR+8,0,Math.PI*2);
+                ctx.beginPath();ctx.arc(b.x,b.y,drawR+8,0,Math.PI*2);
                 ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fill();
             }
-            ctx.beginPath();ctx.arc(bx,by,drawR,0,Math.PI*2);
-            ctx.fillStyle=b.color;ctx.globalAlpha=isHovered?0.95:0.7;ctx.fill();
-            ctx.globalAlpha=1;ctx.strokeStyle=b.color;ctx.lineWidth=isHovered?2.5:1.5;ctx.stroke();
-            var name=b.f.path.split('/').pop().replace('.php','');
-            if(drawR>16){
+            ctx.beginPath();ctx.arc(b.x,b.y,drawR,0,Math.PI*2);
+            ctx.fillStyle=b.color;ctx.globalAlpha=isHovered?0.95:0.75;ctx.fill();
+            ctx.globalAlpha=1;ctx.strokeStyle=b.color;ctx.lineWidth=(isHovered?2.5:1.5)/scale;ctx.stroke();
+            if(drawR*scale>12){
+                var name=fileName(b.f.path);
                 var fs=Math.max(8,Math.min(13,drawR*0.38));
                 ctx.fillStyle='#fff';ctx.font='600 '+fs+'px monospace';ctx.textAlign='center';
-                ctx.fillText(name,bx,by-2);
+                ctx.fillText(name,b.x,b.y-2);
                 ctx.fillStyle='rgba(255,255,255,0.65)';ctx.font=(fs-1)+'px monospace';
-                ctx.fillText(b.f.loc+' LOC',bx,by+fs);
+                ctx.fillText(b.f.loc+' LOC',b.x,b.y+fs);
                 if(isHovered&&drawR>25){
                     ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font=(fs-2)+'px monospace';
-                    ctx.fillText('CC:'+b.f.complexity+' MI:'+b.f.maintainability,bx,by+fs*2);
+                    ctx.fillText('CC:'+b.f.complexity+' MI:'+b.f.maintainability,b.x,b.y+fs*2);
                 }
             }
-            b._drawX=bx;b._drawY=by;b._drawR=drawR;
         });
-        var totalLoc=0,totalFiles=bubbles.length;
-        bubbles.forEach(function(b){totalLoc+=b.f.loc});
-        var avgMI=bubbles.reduce(function(s,b){return s+b.f.maintainability},0)/totalFiles;
+        ctx.restore();
+        var totalLoc=0;bubbles.forEach(function(b){totalLoc+=b.f.loc;});
+        var avgMI=bubbles.reduce(function(s,b){return s+b.f.maintainability;},0)/bubbles.length;
         ctx.fillStyle='rgba(255,255,255,0.35)';ctx.font='11px monospace';ctx.textAlign='right';
-        ctx.fillText(totalFiles+' files | '+totalLoc.toLocaleString()+' LOC | Avg MI: '+avgMI.toFixed(1),W-12,H-10);
+        ctx.fillText(bubbles.length+' files | '+totalLoc.toLocaleString()+' LOC | Avg MI: '+avgMI.toFixed(1),W-12,H-10);
         window._metricsAnimFrame=requestAnimationFrame(draw);
     }
     draw();
-    canvas.addEventListener('mousemove',function(e){
+    // Mouse wheel — zoom towards cursor
+    canvas.addEventListener('wheel',function(e){
+        e.preventDefault();
         var rect=canvas.getBoundingClientRect();
         var mx=e.clientX-rect.left,my=e.clientY-rect.top;
+        var factor=e.deltaY<0?1.1:0.9;
+        var ns=Math.max(0.2,Math.min(8,scale*factor));
+        offX=mx-(mx-offX)*(ns/scale);
+        offY=my-(my-offY)*(ns/scale);
+        scale=ns;
+    },{passive:false});
+    // Pan — mousedown/move/up
+    canvas.addEventListener('mousedown',function(e){
+        if(e.button!==0)return;
+        isPanning=true;panMoved=false;
+        panStartX=e.clientX;panStartY=e.clientY;panOffX=offX;panOffY=offY;
+        canvas.style.cursor='grabbing';
+    });
+    // Clean up previous global listeners if any
+    if(window._metricsMoveHandler){document.removeEventListener('mousemove',window._metricsMoveHandler);document.removeEventListener('mouseup',window._metricsUpHandler);}
+    window._metricsMoveHandler=function(e){
+        if(isPanning){
+            var dx=e.clientX-panStartX,dy=e.clientY-panStartY;
+            if(Math.abs(dx)+Math.abs(dy)>3)panMoved=true;
+            offX=panOffX+dx;offY=panOffY+dy;return;
+        }
+        var rect=canvas.getBoundingClientRect();
+        var mx=e.clientX-rect.left,my=e.clientY-rect.top;
+        var wx=(mx-offX)/scale,wy=(my-offY)/scale;
         hoveredIdx=-1;
         for(var i=bubbles.length-1;i>=0;i--){
-            var b=bubbles[i];
-            var dx=mx-b._drawX,dy=my-b._drawY;
-            if(Math.sqrt(dx*dx+dy*dy)<=b._drawR){hoveredIdx=i;break;}
+            var b=bubbles[i];var ddx=wx-b.x,ddy=wy-b.y;
+            if(Math.sqrt(ddx*ddx+ddy*ddy)<=b.r){hoveredIdx=i;break;}
         }
-        canvas.style.cursor=hoveredIdx>=0?'pointer':'default';
-    });
-    canvas.addEventListener('mouseleave',function(){hoveredIdx=-1;});
-    canvas.addEventListener('click',function(e){
-        if(hoveredIdx<0)return;
-        var f=bubbles[hoveredIdx].f;
-        drillDownFile(f.path);
+        canvas.style.cursor=hoveredIdx>=0?'pointer':'grab';
+    };
+    window._metricsUpHandler=function(){isPanning=false;canvas.style.cursor=hoveredIdx>=0?'pointer':'grab';};
+    document.addEventListener('mousemove',window._metricsMoveHandler);
+    document.addEventListener('mouseup',window._metricsUpHandler);
+    canvas.addEventListener('mouseleave',function(){if(!isPanning)hoveredIdx=-1;});
+    canvas.addEventListener('click',function(){
+        if(panMoved||hoveredIdx<0)return;
+        drillDownFile(bubbles[hoveredIdx].f.path);
     });
 }
 function drillDownFile(path){
@@ -1459,6 +1490,17 @@ function drillDownFile(path){
                 html+='<span style="width:70px;text-align:right;color:'+color+';font-weight:600">CC:'+f.complexity+'</span>';
                 html+='<span style="width:60px;text-align:right;color:var(--muted)">'+f.loc+' LOC</span>';
                 html+='<span style="width:30px;text-align:right;color:var(--muted)">L'+f.line+'</span>';
+                html+='</div>';
+            });
+            html+='</div>';
+        }
+        if(d.warnings&&d.warnings.length){
+            html+='<h3 style="margin:0.75rem 0 0.25rem;color:#eab308;font-size:0.85rem">&#9888; Warnings</h3>';
+            html+='<div style="display:flex;flex-direction:column;gap:4px">';
+            d.warnings.forEach(function(w){
+                html+='<div style="display:flex;gap:8px;align-items:center;padding:4px 8px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:4px;font-size:0.75rem">';
+                html+='<span style="color:#eab308;font-family:var(--mono)">L'+w.line+'</span>';
+                html+='<span style="color:var(--text)">'+w.message+'</span>';
                 html+='</div>';
             });
             html+='</div>';

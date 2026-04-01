@@ -356,8 +356,16 @@ class Metrics
      */
     public static function fileDetail(string $filePath): array
     {
+        // Normalize path separators — paths coming from the browser are always
+        // forward-slash even on Windows, but the filesystem may need either.
+        $filePath = str_replace('\\', '/', $filePath);
         if (!file_exists($filePath)) {
-            return ["error" => "File not found: {$filePath}"];
+            // Also try with native directory separator as a fallback
+            $native = str_replace('/', DIRECTORY_SEPARATOR, $filePath);
+            if (!file_exists($native)) {
+                return ["error" => "File not found: {$filePath}"];
+            }
+            $filePath = $native;
         }
 
         $source = @file_get_contents($filePath);
@@ -394,15 +402,56 @@ class Metrics
         // Sort by complexity descending
         usort($functions, fn($a, $b) => $b["complexity"] - $a["complexity"]);
 
-        // Count classes
+        // Count classes and detect empty ones
         $classes = 0;
-        for ($i = 0, $count = count($tokens); $i < $count; $i++) {
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_CLASS) {
-                $prev = self::findPrevMeaningfulToken($tokens, $i);
-                if ($prev !== null && is_array($prev) && $prev[0] === T_NEW) {
-                    continue;
+        $warnings = [];
+        $tokenCount = count($tokens);
+        for ($i = 0; $i < $tokenCount; $i++) {
+            if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_CLASS) {
+                continue;
+            }
+            $prev = self::findPrevMeaningfulToken($tokens, $i);
+            if ($prev !== null && is_array($prev) && $prev[0] === T_NEW) {
+                continue;
+            }
+            $classes++;
+            // Find opening brace of class body
+            $depth = 0;
+            $bodyStart = null;
+            $hasBody = false;
+            for ($j = $i + 1; $j < $tokenCount; $j++) {
+                $t = $tokens[$j];
+                if ($t === '{') {
+                    if ($depth === 0) {
+                        $bodyStart = $j;
+                    }
+                    $depth++;
+                } elseif ($t === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        // Scan between bodyStart and $j for non-whitespace tokens
+                        for ($k = $bodyStart + 1; $k < $j; $k++) {
+                            if (is_array($tokens[$k]) && $tokens[$k][0] !== T_WHITESPACE && $tokens[$k][0] !== T_COMMENT && $tokens[$k][0] !== T_DOC_COMMENT) {
+                                $hasBody = true;
+                                break;
+                            }
+                        }
+                        if (!$hasBody) {
+                            $nameToken = self::findNextMeaningfulToken($tokens, $i);
+                            $className = is_array($nameToken) ? $nameToken[1] : '(anonymous)';
+                            $line = is_array($tokens[$i]) ? $tokens[$i][2] : 0;
+                            $warnings[] = ["type" => "empty_class", "message" => "Class '{$className}' has no body", "line" => $line];
+                        }
+                        break;
+                    }
                 }
-                $classes++;
+            }
+        }
+
+        // Warn on empty methods (loc === 0 or only braces)
+        foreach ($functions as $fn) {
+            if ($fn["loc"] <= 1) {
+                $warnings[] = ["type" => "empty_method", "message" => "Method '{$fn['name']}' appears to be empty", "line" => $fn["line"]];
             }
         }
 
@@ -416,6 +465,7 @@ class Metrics
             "classes" => $classes,
             "functions" => $functions,
             "imports" => $imports,
+            "warnings" => $warnings,
         ];
     }
 
@@ -1031,8 +1081,11 @@ class Metrics
         $cwd = getcwd();
         if ($cwd !== false && str_starts_with($absolutePath, $cwd)) {
             $rel = substr($absolutePath, strlen($cwd));
-            return ltrim($rel, DIRECTORY_SEPARATOR);
+            $rel = ltrim($rel, '/\\');
+        } else {
+            $rel = $absolutePath;
         }
-        return $absolutePath;
+        // Always use forward slashes so paths are consistent across platforms
+        return str_replace('\\', '/', $rel);
     }
 }
