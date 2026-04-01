@@ -1,0 +1,234 @@
+# tina4-php — LLM Context
+
+Tina4 PHP v3.10.40. 54 built-in features, zero external dependencies. Web framework for PHP 8.2+.
+Routes, ORM, templates, auth, queue, websocket, graphql, WSDL — all built in.
+
+Install: composer require tina4stack/tina4php
+Version: 3.10.40
+Default port: 7146
+
+---
+
+## Router
+
+Route files go in src/routes/ and are auto-discovered.
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function($request, $response) {
+    return $response->json(["users" => []], 200);
+});
+
+Router::post("/api/users", function($request, $response) {
+    $body = $request->body;
+    return $response->json(["created" => $body["name"]], 201);
+});
+
+Router::get("/api/users/{id}", function($request, $response) {
+    $id = $request->params["id"];
+    return $response->json(["id" => $id]);
+});
+
+// Auth: POST/PUT/DELETE require auth by default
+// Use ->noAuth() to make public
+Router::post("/api/public", function($request, $response) {
+    return $response->json(["open" => true]);
+})->noAuth();
+
+// Use ->secure() to protect a GET route
+Router::get("/api/private", function($request, $response) {
+    return $response->json(["secret" => true]);
+})->secure();
+
+// Template rendering
+Router::get("/dashboard", function($request, $response) {
+    return $response->template("dashboard.twig", ["title" => "Dashboard"]);
+});
+
+// Wildcard routes
+Router::get("/api/files/*", function($request, $response) { ... });
+```
+
+---
+
+## Database
+
+```php
+use Tina4\Database;
+
+$db = Database::getConnection("sqlite:///app.db"); // or postgres://, mysql://, mssql://, firebird://
+
+$result = $db->fetch("SELECT * FROM users WHERE active = ?", [true], 10, 0);
+$row = $db->fetchOne("SELECT * FROM users WHERE id = ?", [1]);
+$db->execute("INSERT INTO users (name) VALUES (?)", ["Alice"]);
+$db->insert("users", ["name" => "Alice"]);
+$db->update("users", ["id" => 1, "name" => "Bob"]);
+$db->delete("users", ["id" => 1]);
+$nextId = $db->getNextId("users"); // race-safe atomic ID generation
+```
+
+---
+
+## ORM
+
+```php
+class User extends \Tina4\ORM {
+    public $tableName = "users";
+    public $primaryKey = "id";
+
+    public $id;
+    public $name;
+    public $email;
+    public $createdAt;
+
+    // Field mapping (snake_case DB → camelCase PHP)
+    public $fieldMapping = [
+        "created_at" => "createdAt"
+    ];
+}
+
+// Usage
+$user = new User();
+$user->name = "Alice";
+$user->save();
+
+$user = (new User())->load("id = ?", [1]);
+$user->delete();
+
+$users = (new User())->select("*", "active = ?", [true], "name", 10, 0);
+$user->asArray();  // to array
+$user->asObject(); // to object
+```
+
+---
+
+## Frond (Templates)
+
+```php
+use Tina4\Frond;
+
+$html = Frond::render("page.twig", ["title" => "Home", "items" => $items]);
+```
+
+Templates use Twig syntax. Located in src/templates/.
+
+---
+
+## Auth
+
+```php
+use Tina4\Auth;
+
+$token = Auth::getToken(["user_id" => 1, "role" => "admin"]);
+$payload = Auth::validToken($token); // returns array or null
+$hashed = Auth::hashPassword("secret");
+$valid = Auth::checkPassword("secret", $hashed);
+```
+
+---
+
+## Queue
+
+```php
+use Tina4\Queue;
+
+$queue = new Queue("emails", 3); // topic, max_retries
+$queue->push(["to" => "alice@example.com", "subject" => "Hello"]);
+
+foreach ($queue->consume("emails") as $job) {
+    process($job->payload);
+    $job->complete(); // or $job->fail("reason")
+}
+
+$queue->produce("other_topic", ["data" => "value"]);
+$dead = $queue->deadLetters();
+```
+
+Backends: file (default), RabbitMQ, Kafka, MongoDB — configured via TINA4_QUEUE_BACKEND env var.
+
+---
+
+## API Client
+
+```php
+use Tina4\Api;
+
+$api = new Api("https://api.example.com");
+$result = $api->get("/users"); // returns ["httpCode" => 200, "body" => [...]]
+$api->post("/users", ["name" => "Alice"]);
+$api->setBearerToken("token123");
+```
+
+---
+
+## Events
+
+```php
+use Tina4\Events;
+
+Events::on("user.created", function($user) {
+    echo "Welcome {$user['name']}";
+});
+
+Events::emit("user.created", ["name" => "Alice"]);
+Events::once("app.ready", function() { echo "Started!"; });
+```
+
+---
+
+## Migration
+
+```php
+use Tina4\Migration;
+
+Migration::migrate($db);
+Migration::create("add users table");
+```
+
+SQL files in migrations/ directory.
+
+---
+
+## Project Structure
+
+```
+src/
+  routes/       # Auto-discovered route files
+  orm/          # ORM model definitions
+  templates/    # Frond/Twig templates
+  public/       # Static files served at /
+  app/          # Shared helpers and services
+  services/     # Service layer classes
+migrations/     # SQL migration files
+tests/          # PHPUnit test files
+vendor/         # Composer dependencies
+index.php       # Entry point
+.env            # Environment variables
+```
+
+---
+
+## Entry Point (index.php)
+
+```php
+<?php
+require_once "./vendor/autoload.php";
+$app = new \Tina4\App(basePath: __DIR__, development: true);
+$app->start();
+```
+
+---
+
+## Known Gotchas
+
+1. Route methods are static: `Router::get()` not `$router->get()`
+2. POST/PUT/DELETE require auth by default. Chain `->noAuth()` to make public
+3. GET is public by default. Chain `->secure()` to protect
+4. ORM uses `asArray()` not `toArray()` for array conversion
+5. Database `fetch()` params are positional: `fetch(sql, params, limit, offset)` not named
+6. Queue job payload accessed via `$job->payload` not `$job->data`
+7. Import via `use Tina4\ClassName` — PSR-4 autoloading
+8. Templates are Twig syntax (not Blade, not PHP)
+9. Default port: 7146
+10. `$response->json()` not `response()` — PHP uses method call

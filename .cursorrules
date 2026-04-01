@@ -1,0 +1,35 @@
+# tina4-php — Cursor Rules
+
+Tina4 PHP v3.10.40. 54 built-in features, zero external dependencies. PHP 8.2+.
+
+## Key Patterns
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function($request, $response) {
+    return $response->json(["users" => []], 200);
+});
+
+Router::post("/api/users", function($request, $response) {
+    return $response->json(["created" => $request->body["name"]], 201);
+})->noAuth();
+```
+
+## Critical Rules
+
+- Route methods are static: `Router::get()` not `$router->get()`
+- POST/PUT/DELETE require auth by default — chain `->noAuth()` to make public
+- GET is public by default — chain `->secure()` to protect
+- ORM conversion: `asArray()` not `toArray()`
+- Queue job payload: `$job->payload` not `$job->data`
+- Namespace: `Tina4\` — e.g., `Tina4\Router`, `Tina4\ORM`, `Tina4\Auth`
+- Templates are Twig syntax (not Blade)
+- Default port: 7146
+- Entry point: `new \Tina4\App(basePath: __DIR__); $app->start();`
+
+## Project Structure
+
+Routes in `src/routes/`, ORM in `src/orm/`, templates in `src/templates/`, static in `src/public/`.
+
+See llms.txt for complete API reference.

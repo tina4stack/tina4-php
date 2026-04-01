@@ -55,11 +55,17 @@ tina4js init    # Node.js
 The `tina4` binary is the single entry point for all CLI operations — init, serve, migrate,
 seed, test, build, deploy. Always use it.
 
-**NEVER hand-create project files on initial setup.** Always run `tina4 init` (or the
-language-specific alias) to bootstrap a project. The binary creates the correct directory
-structure, starter files, .env template, and bin/ scripts. If you manually create
-`src/routes/`, `src/orm/`, `.env` etc. by hand, you'll miss framework files and get
-broken behavior. The init command exists for a reason — use it.
+**Prefer `tina4 init` for new projects.** The CLI creates the correct directory structure,
+starter files, .env template, and bin/ scripts. However, if the developer sets up manually
+(no CLI installed yet), the minimum entry point files are:
+
+- **Python:** `app.py` — `from tina4_python.core import run; run()`
+- **PHP:** `index.php` — `new \Tina4\App(basePath: __DIR__); $app->start();`
+- **Ruby:** `app.rb` — `Tina4.initialize!(__dir__); Tina4::WebServer.new(app, port: 7147).start`
+- **Node.js:** `app.ts` — `import { startServer } from "@tina4/core"; startServer({ port, host });`
+
+Plus `mkdir -p src/routes src/templates src/public` and a `.env` with `TINA4_DEBUG=true`.
+See each framework's getting-started chapter for the full manual setup walkthrough.
 
 ```bash
 tina4 init          # Scaffolds the full project structure
