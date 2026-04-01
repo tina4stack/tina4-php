@@ -96,10 +96,9 @@ class AI
             }
         }
 
-        $context = self::generateContext();
-
         foreach ($indices as $idx) {
             $tool = self::$AI_TOOLS[$idx];
+            $context = self::generateContext($tool['name']);
             $files = self::installForTool($rootPath, $tool, $context);
             $created = array_merge($created, $files);
         }
@@ -220,19 +219,338 @@ class AI
     }
 
     /**
-     * Generate the universal Tina4 PHP context document for any AI assistant.
+     * Generate tool-specific Tina4 PHP context for an AI assistant.
      */
-    public static function generateContext(): string
+    public static function generateContext(string $toolName = 'claude-code'): string
     {
-        return <<<'CONTEXT'
-# Tina4 PHP — AI Context
+        $version = App::VERSION;
 
-This project uses **Tina4 PHP**, a lightweight, batteries-included web framework
-with zero third-party dependencies for core features.
+        switch ($toolName) {
+            case 'claude-code':
+                return self::generateClaudeCodeContext();
 
-**Documentation:** https://tina4.com
+            case 'cursor':
+                return self::generateCursorContext($version);
 
-## Quick Start
+            case 'copilot':
+                return self::generateCopilotContext($version);
+
+            case 'windsurf':
+                return self::generateWindsurfContext($version);
+
+            case 'aider':
+                return self::generateAiderContext($version);
+
+            case 'cline':
+                return self::generateClineContext($version);
+
+            case 'codex':
+                return self::generateCodexContext($version);
+
+            default:
+                return self::generateCursorContext($version);
+        }
+    }
+
+    /**
+     * Claude Code: return the existing CLAUDE.md from the framework root.
+     */
+    private static function generateClaudeCodeContext(): string
+    {
+        $frameworkRoot = dirname(__DIR__);
+        $claudeMdPath = $frameworkRoot . '/CLAUDE.md';
+        if (file_exists($claudeMdPath)) {
+            return file_get_contents($claudeMdPath);
+        }
+        // Fallback if CLAUDE.md is missing
+        return "# Tina4 PHP\n\nSee https://tina4.com for documentation.\n";
+    }
+
+    /**
+     * Cursor context (~45 lines): header, route + ORM examples, conventions, features, docs link.
+     */
+    private static function generateCursorContext(string $version): string
+    {
+        return <<<CONTEXT
+# Tina4 PHP v{$version}
+
+Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
+
+## Route Example
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["users" => []]);
+});
+
+Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["created" => \$request->body["name"]], 201);
+})->noAuth();
+```
+
+## ORM Example
+
+```php
+class User extends \Tina4\ORM {
+    public \$tableName = "users";
+    public \$primaryKey = "id";
+}
+```
+
+## Conventions
+
+1. Routes return \$response() — always \$response(data) not Response::json()
+2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
+3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
+4. Every template extends base.twig
+5. All schema changes via migrations — never create tables in route code
+6. Use built-in features — never install packages for things Tina4 already provides
+7. Service pattern — complex logic in src/app/, routes stay thin
+
+## Built-in Features
+
+Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
+
+## Documentation
+
+https://tina4.com
+CONTEXT;
+    }
+
+    /**
+     * GitHub Copilot context (~30 lines): short header, route example, conventions, features.
+     */
+    private static function generateCopilotContext(string $version): string
+    {
+        return <<<CONTEXT
+# Tina4 PHP v{$version}
+
+Zero-dependency PHP web framework. Docs: https://tina4.com
+
+## Route Example
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["users" => []]);
+});
+```
+
+## Conventions
+
+1. Routes return \$response() — always \$response(data) not Response::json()
+2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
+3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
+4. Every template extends base.twig
+5. All schema changes via migrations — never create tables in route code
+6. Use built-in features — never install packages for things Tina4 already provides
+7. Service pattern — complex logic in src/app/, routes stay thin
+
+## Built-in Features
+
+Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
+CONTEXT;
+    }
+
+    /**
+     * Windsurf context (~60 lines): like cursor but with project structure added.
+     */
+    private static function generateWindsurfContext(string $version): string
+    {
+        return <<<CONTEXT
+# Tina4 PHP v{$version}
+
+Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
+
+## Project Structure
+
+```
+src/routes/    — Route handlers (auto-discovered)
+src/orm/       — ORM models
+src/templates/ — Twig templates
+src/app/       — Service classes
+src/scss/      — SCSS (auto-compiled)
+src/public/    — Static assets
+src/seeds/     — Database seeders
+migrations/    — SQL migration files
+tests/         — PHPUnit tests
+```
+
+## Route Example
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["users" => []]);
+});
+
+Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["created" => \$request->body["name"]], 201);
+})->noAuth();
+```
+
+## ORM Example
+
+```php
+class User extends \Tina4\ORM {
+    public \$tableName = "users";
+    public \$primaryKey = "id";
+}
+```
+
+## Conventions
+
+1. Routes return \$response() — always \$response(data) not Response::json()
+2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
+3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
+4. Every template extends base.twig
+5. All schema changes via migrations — never create tables in route code
+6. Use built-in features — never install packages for things Tina4 already provides
+7. Service pattern — complex logic in src/app/, routes stay thin
+
+## Built-in Features
+
+Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
+
+## Documentation
+
+https://tina4.com
+CONTEXT;
+    }
+
+    /**
+     * Aider context (~58 lines): conventions-focused with patterns and structure.
+     */
+    private static function generateAiderContext(string $version): string
+    {
+        return <<<CONTEXT
+# Tina4 PHP v{$version} — Conventions
+
+Zero-dependency PHP web framework. Docs: https://tina4.com
+
+## Conventions
+
+1. Routes return \$response() — always \$response(data) not Response::json()
+2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
+3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
+4. Every template extends base.twig
+5. All schema changes via migrations — never create tables in route code
+6. Use built-in features — never install packages for things Tina4 already provides
+7. Service pattern — complex logic in src/app/, routes stay thin
+
+## Patterns
+
+### Route
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["users" => []]);
+});
+
+Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["created" => \$request->body["name"]], 201);
+})->noAuth();
+```
+
+### ORM
+
+```php
+class User extends \Tina4\ORM {
+    public \$tableName = "users";
+    public \$primaryKey = "id";
+}
+```
+
+## Project Structure
+
+```
+src/routes/    — Route handlers (auto-discovered)
+src/orm/       — ORM models
+src/templates/ — Twig templates
+src/app/       — Service classes
+src/scss/      — SCSS (auto-compiled)
+src/public/    — Static assets
+src/seeds/     — Database seeders
+migrations/    — SQL migration files
+tests/         — PHPUnit tests
+```
+
+## Built-in Features
+
+Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
+CONTEXT;
+    }
+
+    /**
+     * Cline context (~42 lines): like cursor.
+     */
+    private static function generateClineContext(string $version): string
+    {
+        return <<<CONTEXT
+# Tina4 PHP v{$version}
+
+Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
+
+## Route Example
+
+```php
+use Tina4\Router;
+
+Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["users" => []]);
+});
+
+Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["created" => \$request->body["name"]], 201);
+})->noAuth();
+```
+
+## ORM Example
+
+```php
+class User extends \Tina4\ORM {
+    public \$tableName = "users";
+    public \$primaryKey = "id";
+}
+```
+
+## Conventions
+
+1. Routes return \$response() — always \$response(data) not Response::json()
+2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
+3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
+4. Every template extends base.twig
+5. All schema changes via migrations — never create tables in route code
+6. Use built-in features — never install packages for things Tina4 already provides
+7. Service pattern — complex logic in src/app/, routes stay thin
+
+## Built-in Features
+
+Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
+
+## Documentation
+
+https://tina4.com
+CONTEXT;
+    }
+
+    /**
+     * OpenAI Codex context (~70 lines): task-oriented with CLI commands and full structure.
+     */
+    private static function generateCodexContext(string $version): string
+    {
+        return <<<CONTEXT
+# Tina4 PHP v{$version}
+
+Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
+
+## CLI Commands
 
 ```bash
 composer install              # Install dependencies
@@ -245,123 +563,57 @@ bin/tina4php routes           # List all registered routes
 ## Project Structure
 
 ```
-src/routes/       — Route handlers (auto-discovered, one per resource)
-src/orm/          — ORM models (one per file, filename = class name)
-src/templates/    — Twig templates (extends base.twig)
-src/app/          — Shared helpers and service classes
-src/scss/         — SCSS files (auto-compiled to public/css/)
-src/public/       — Static assets served at /
-src/locales/      — Translation JSON files
-src/seeds/        — Database seeder scripts
-migrations/       — SQL migration files (sequential numbered)
-tests/            — PHPUnit test files
-Tina4/            — Core framework classes (namespace Tina4\)
+src/routes/    — Route handlers (auto-discovered)
+src/orm/       — ORM models
+src/templates/ — Twig templates
+src/app/       — Service classes
+src/scss/      — SCSS (auto-compiled)
+src/public/    — Static assets
+src/seeds/     — Database seeders
+migrations/    — SQL migration files
+tests/         — PHPUnit tests
 ```
 
-## Built-in Features (No External Packages Needed)
+## Route Example
 
-| Feature | Class | Usage |
-|---------|-------|-------|
-| Routing | Router | `Router::get("/path", function($request, $response) { ... })` |
-| ORM | ORM | `class Widget extends \Tina4\ORM { ... }` |
-| Database | Database | `\Tina4\Database\Database::create("sqlite:///app.db")` |
-| Templates | Frond | `$response->template("page.twig", $data)` |
-| JWT Auth | Auth | `new \Tina4\Auth()` |
-| REST API Client | Api | `new \Tina4\Api("https://api.example.com")` |
-| GraphQL | GraphQL | `new \Tina4\GraphQL()` |
-| WebSocket | WebSocket | `new \Tina4\WebSocket()` |
-| SOAP/WSDL | WSDL | `new \Tina4\WSDL()` |
-| Email (SMTP+IMAP) | Messenger | `new \Tina4\Messenger()` |
-| Background Queue | Queue | `new \Tina4\Queue()` |
-| SCSS Compilation | ScssCompiler | Auto-compiled from src/scss/ |
-| Migrations | Migration | `new \Tina4\Migration()` |
-| Seeder | FakeData | `new \Tina4\FakeData()` |
-| i18n | I18n | `new \Tina4\I18n()` |
-| Swagger/OpenAPI | Swagger | Auto-generated at /swagger |
-| Sessions | Session | `\Tina4\Session::get($key)` / `::set($key, $value)` |
-| Middleware | Middleware | `->middleware([MyMiddleware::class])` |
-| HTML Builder | HtmlElement | `new \Tina4\HtmlElement("div", ["class" => "card"])` |
-| Events | Events | `Events::on("user.created", $callback)` |
-| DI Container | Container | `$container->singleton("db", fn() => ...)` |
-| Response Cache | ResponseCache | `new \Tina4\Middleware\ResponseCache()` |
-| Error Overlay | ErrorOverlay | `ErrorOverlay::render($exception)` |
-| Inline Testing | Testing | `Testing::tests([...], $fn, "name")` |
-
-## Key Conventions
-
-1. **Routes return `$response()`** — always use `$response($data)` not `json_encode()`
-2. **GET routes are public**, POST/PUT/PATCH/DELETE require auth by default
-3. **Use `->secure(false)`** to make write routes public, `->secure()` to protect GET routes
-4. **Every template extends `base.twig`** — no standalone HTML pages
-5. **No inline styles** — use SCSS in `src/scss/` with CSS variables
-6. **No hardcoded colors** — use `var(--primary)`, `var(--text)`, etc.
-7. **All schema changes via migrations** — never create tables in route code
-8. **Service pattern** — complex logic goes in `src/services/` classes, routes stay thin
-9. **Use built-in features** — never install packages for things Tina4 already provides
-10. **PSR-4 autoloading** — namespace `Tina4\` for core, `\` for user app code
-
-## AI Workflow — Available Skills
-
-When using an AI coding assistant with Tina4, these skills are available:
-
-| Skill | Description |
-|-------|-------------|
-| `/tina4-route` | Create a new route with proper decorators and auth |
-| `/tina4-orm` | Create an ORM model with migration |
-| `/tina4-crud` | Generate complete CRUD (migration, ORM, routes, template, tests) |
-| `/tina4-auth` | Set up JWT authentication with login/register |
-| `/tina4-api` | Create an external API integration |
-| `/tina4-queue` | Set up background job processing |
-| `/tina4-template` | Create a server-rendered template page |
-| `/tina4-graphql` | Set up a GraphQL endpoint |
-| `/tina4-websocket` | Set up WebSocket communication |
-| `/tina4-wsdl` | Create a SOAP/WSDL service |
-| `/tina4-messenger` | Set up email send/receive |
-| `/tina4-test` | Write tests for a feature |
-| `/tina4-migration` | Create a database migration |
-| `/tina4-seed` | Generate fake data for development |
-| `/tina4-i18n` | Set up internationalization |
-| `/tina4-scss` | Set up SCSS stylesheets |
-| `/tina4-frontend` | Set up a frontend framework |
-
-## Common Patterns
-
-### Route
 ```php
 use Tina4\Router;
 
-Router::get("/api/widgets", function(\Tina4\Request $request, \Tina4\Response $response) {
-    return $response(["items" => []]);
+Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["users" => []]);
 });
 
-Router::post("/api/widgets", function(\Tina4\Request $request, \Tina4\Response $response) {
-    $data = $request->body;
-    return $response(["created" => true], 201);
-})->secure(false);  // Remove ->secure(false) to require Bearer token auth
+Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
+    return \$response(["created" => \$request->body["name"]], 201);
+})->noAuth();
 ```
 
-### ORM Model
+## ORM Example
+
 ```php
-class Widget extends \Tina4\ORM {
-    public $tableName = "widgets";
-    public $primaryKey = "id";
-    public ?int $id = null;
-    public ?string $name = null;
+class User extends \Tina4\ORM {
+    public \$tableName = "users";
+    public \$primaryKey = "id";
 }
 ```
 
-### Template
-```twig
-{% extends "base.twig" %}
-{% block content %}
-<div class="container">
-    <h1>{{ title }}</h1>
-    {% for item in items %}
-        <p>{{ item.name }}</p>
-    {% endfor %}
-</div>
-{% endblock %}
-```
+## Conventions
+
+1. Routes return \$response() — always \$response(data) not Response::json()
+2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
+3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
+4. Every template extends base.twig
+5. All schema changes via migrations — never create tables in route code
+6. Use built-in features — never install packages for things Tina4 already provides
+7. Service pattern — complex logic in src/app/, routes stay thin
+
+## Built-in Features
+
+Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
+
+## Documentation
+
+https://tina4.com
 CONTEXT;
     }
 
