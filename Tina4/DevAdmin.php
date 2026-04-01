@@ -389,6 +389,22 @@ class DevAdmin
             return $response->json(['tool' => $tool, 'output' => $output]);
         });
 
+        // API: Metrics — quick metrics
+        Router::get('/__dev/api/metrics', function (Request $request, Response $response) {
+            return $response->json(Metrics::quickMetrics());
+        });
+
+        // API: Metrics — full analysis
+        Router::get('/__dev/api/metrics/full', function (Request $request, Response $response) {
+            return $response->json(Metrics::fullAnalysis());
+        });
+
+        // API: Metrics — file detail
+        Router::get('/__dev/api/metrics/file', function (Request $request, Response $response) {
+            $path = $request->input('path') ?? '';
+            return $response->json(Metrics::fileDetail($path));
+        });
+
         // API: Gallery — list available gallery examples
         Router::get('/__dev/api/gallery', function (Request $request, Response $response) {
             $galleryDir = str_replace('\\', '/', __DIR__ . '/gallery');
@@ -678,7 +694,7 @@ class DevAdmin
     <span style="color:#ffeb3b;">req:{$safeRequestId}</span>
     <span style="color:#90caf9;">{$routeCount} routes</span>
     <span style="color:#888;">PHP {$phpVersion}</span>
-    <a href="#" onclick="(function(e){e.preventDefault();var p=document.getElementById('tina4-dev-panel');if(p){p.style.display=p.style.display==='none'?'block':'none';return;}var c=document.createElement('div');c.id='tina4-dev-panel';c.style.cssText='position:fixed;bottom:2rem;right:1rem;width:min(90vw,1200px);height:min(80vh,700px);z-index:99998;transition:all 0.2s';var f=document.createElement('iframe');f.src='/__dev';f.style.cssText='width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';c.appendChild(f);document.body.appendChild(c);})(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
+    <a href="#" onclick="(function(e){e.preventDefault();var p=document.getElementById('tina4-dev-panel');if(p){p.style.display=p.style.display==='none'?'block':'none';return;}var c=document.createElement('div');c.id='tina4-dev-panel';c.style.cssText='position:fixed;top:3rem;left:0;right:0;bottom:2rem;z-index:99998;transition:all 0.2s';var f=document.createElement('iframe');f.src='/__dev';f.style.cssText='width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';c.appendChild(f);document.body.appendChild(c);})(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
     <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
 </div>
 <script>
@@ -762,6 +778,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .dev-header {
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+    position: sticky; top: 0; z-index: 100;
 }
 .dev-header h1 { font-size: 1rem; font-weight: 600; }
 .dev-header .badge {
@@ -771,6 +788,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .dev-tabs {
     display: flex; gap: 0; background: var(--surface);
     border-bottom: 1px solid var(--border); overflow-x: auto;
+    position: sticky; top: 2.75rem; z-index: 100;
 }
 .dev-tab {
     padding: 0.6rem 1rem; cursor: pointer; font-size: 0.8rem;
@@ -784,10 +802,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
     background: var(--border); color: var(--muted); padding: 0.1rem 0.4rem;
     border-radius: 0.75rem; font-size: 0.65rem; margin-left: 0.25rem;
 }
-.dev-content { padding: 1rem; max-width: 1400px; }
+.dev-content { padding: 0.25rem; }
 .dev-panel {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); overflow: hidden;
+    border-radius: var(--radius); overflow: visible;
 }
 .dev-panel-header {
     padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
@@ -910,6 +928,7 @@ code, .mono { font-family: var(--mono); font-size: 0.82rem; }
     <button class="dev-tab" onclick="showTab('system', event)">System</button>
     <button class="dev-tab" onclick="showTab('tools', event)">Tools</button>
     <button class="dev-tab" onclick="showTab('connections', event)">Connections</button>
+    <button class="dev-tab" onclick="showTab('metrics', event)">Metrics</button>
     <button class="dev-tab" onclick="showTab('chat', event)">Tina4</button>
 </div>
 
@@ -1248,6 +1267,30 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<!-- Metrics Panel -->
+<div id="panel-metrics" class="dev-panel hidden">
+    <div class="dev-panel-header">
+        <h2>Code Metrics</h2>
+        <div>
+            <button class="btn btn-sm" onclick="loadAllMetrics()">Refresh</button>
+        </div>
+    </div>
+    <div id="metrics-bubble" style="margin:1rem;"></div>
+    <div id="metrics-drilldown" style="margin:0 1rem;display:none;"></div>
+    <div id="metrics-quick" class="sys-grid"></div>
+    <div id="metrics-largest" style="margin-top:1rem;"></div>
+    <div id="metrics-tables" style="margin-top:1rem;padding:0 1rem 1rem;overflow-x:auto;">
+        <h3 style="margin:1rem 0 0.5rem;color:var(--primary);">File Analysis</h3>
+        <div id="metrics-heatmap"></div>
+        <h3 style="margin:1rem 0 0.5rem;color:var(--primary);">Most Complex Functions</h3>
+        <div id="metrics-complex"></div>
+        <h3 style="margin:1rem 0 0.5rem;color:var(--primary);">Coupling Analysis</h3>
+        <div id="metrics-coupling"></div>
+        <h3 style="margin:1rem 0 0.5rem;color:var(--primary);">Violations</h3>
+        <div id="metrics-violations"></div>
+    </div>
+</div>
+
 <!-- Chat Panel (Tina4) -->
 <div id="panel-chat" class="dev-panel hidden">
     <div class="dev-panel-header">
@@ -1276,6 +1319,226 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script src="/js/tina4-dev-admin.min.js"></script>
+<script>
+// ── Metrics Panel JS ──
+var _metricsFullData=null;
+function miColor(mi){
+    if(mi>=60) return 'rgb('+(Math.round(34+(1-((mi-60)/40))*186))+','+(Math.round(197-(1-((mi-60)/40))*50))+',0)';
+    if(mi>=30) return 'rgb('+(Math.round(220+((60-mi)/30)*19))+','+(Math.round(180-((60-mi)/30)*112))+',0)';
+    return 'rgb(239,'+(Math.round(68-mi*2))+',0)';
+}
+function renderBubbleChart(files){
+    var container=document.getElementById('metrics-bubble');
+    if(!files||!files.length){container.innerHTML='<p style="color:var(--muted);padding:1rem">No files to analyze</p>';return;}
+    var W=container.offsetWidth||900,H=Math.max(450,Math.min(650,W*0.45));
+    var maxLoc=Math.max.apply(null,files.map(function(f){return f.loc}))||1;
+    var minR=14,maxR=Math.min(70,W/10);
+    var sorted=files.slice().sort(function(a,b){return a.loc-b.loc});
+    var cx=W/2,cy=H/2;
+    var bubbles=[];
+    var angle=0,spiralR=0;
+    for(var i=0;i<sorted.length;i++){
+        var f=sorted[i];
+        var r=minR+Math.sqrt(f.loc/maxLoc)*(maxR-minR);
+        var color=miColor(f.maintainability||0);
+        var placed=false;
+        for(var attempt=0;attempt<800;attempt++){
+            var px=cx+spiralR*Math.cos(angle);
+            var py=cy+spiralR*Math.sin(angle);
+            var collides=false;
+            for(var j=0;j<bubbles.length;j++){
+                var dx=px-bubbles[j].x,dy=py-bubbles[j].y;
+                if(Math.sqrt(dx*dx+dy*dy)<r+bubbles[j].r+2){collides=true;break;}
+            }
+            if(!collides&&px>r+2&&px<W-r-2&&py>r+25&&py<H-r-2){
+                bubbles.push({x:px,y:py,r:r,color:color,f:f,angle:Math.random()*Math.PI*2,speed:0.3+Math.random()*0.5,drift:2+Math.random()*3});
+                placed=true;break;
+            }
+            angle+=0.2;spiralR+=0.04;
+        }
+        if(!placed){bubbles.push({x:cx+(Math.random()-0.5)*W*0.3,y:cy+(Math.random()-0.5)*H*0.3,r:r,color:color,f:f,angle:Math.random()*Math.PI*2,speed:0.3+Math.random()*0.5,drift:2+Math.random()*3});}
+    }
+    var canvas=document.createElement('canvas');
+    canvas.width=W;canvas.height=H;
+    canvas.style.cssText='display:block;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#0f172a';
+    container.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem"><h3 style="margin:0;color:var(--primary)">Code Landscape</h3><span style="font-size:0.7rem;color:var(--muted)">Click a bubble to drill down | Size=LOC | <span style="color:#22c55e">Green</span>=maintainable <span style="color:#eab308">Yellow</span>=moderate <span style="color:#ef4444">Red</span>=needs work</span></div>';
+    container.appendChild(canvas);
+    var ctx=canvas.getContext('2d');
+    var hoveredIdx=-1;
+    var t=0;
+    function draw(){
+        t+=0.016;
+        ctx.clearRect(0,0,W,H);
+        ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+        for(var gx=0;gx<W;gx+=50){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+        for(var gy=0;gy<H;gy+=50){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+        bubbles.forEach(function(b,idx){
+            var ox=Math.sin(t*b.speed+b.angle)*b.drift;
+            var oy=Math.cos(t*b.speed*0.7+b.angle+1)*b.drift*0.6;
+            var bx=b.x+ox,by=b.y+oy;
+            var isHovered=(idx===hoveredIdx);
+            var drawR=isHovered?b.r+4:b.r;
+            if(isHovered){
+                ctx.beginPath();ctx.arc(bx,by,drawR+8,0,Math.PI*2);
+                ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fill();
+            }
+            ctx.beginPath();ctx.arc(bx,by,drawR,0,Math.PI*2);
+            ctx.fillStyle=b.color;ctx.globalAlpha=isHovered?0.95:0.7;ctx.fill();
+            ctx.globalAlpha=1;ctx.strokeStyle=b.color;ctx.lineWidth=isHovered?2.5:1.5;ctx.stroke();
+            var name=b.f.path.split('/').pop().replace('.php','');
+            if(drawR>16){
+                var fs=Math.max(8,Math.min(13,drawR*0.38));
+                ctx.fillStyle='#fff';ctx.font='600 '+fs+'px monospace';ctx.textAlign='center';
+                ctx.fillText(name,bx,by-2);
+                ctx.fillStyle='rgba(255,255,255,0.65)';ctx.font=(fs-1)+'px monospace';
+                ctx.fillText(b.f.loc+' LOC',bx,by+fs);
+                if(isHovered&&drawR>25){
+                    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font=(fs-2)+'px monospace';
+                    ctx.fillText('CC:'+b.f.complexity+' MI:'+b.f.maintainability,bx,by+fs*2);
+                }
+            }
+            b._drawX=bx;b._drawY=by;b._drawR=drawR;
+        });
+        var totalLoc=0,totalFiles=bubbles.length;
+        bubbles.forEach(function(b){totalLoc+=b.f.loc});
+        var avgMI=bubbles.reduce(function(s,b){return s+b.f.maintainability},0)/totalFiles;
+        ctx.fillStyle='rgba(255,255,255,0.35)';ctx.font='11px monospace';ctx.textAlign='right';
+        ctx.fillText(totalFiles+' files | '+totalLoc.toLocaleString()+' LOC | Avg MI: '+avgMI.toFixed(1),W-12,H-10);
+        window._metricsAnimFrame=requestAnimationFrame(draw);
+    }
+    draw();
+    canvas.addEventListener('mousemove',function(e){
+        var rect=canvas.getBoundingClientRect();
+        var mx=e.clientX-rect.left,my=e.clientY-rect.top;
+        hoveredIdx=-1;
+        for(var i=bubbles.length-1;i>=0;i--){
+            var b=bubbles[i];
+            var dx=mx-b._drawX,dy=my-b._drawY;
+            if(Math.sqrt(dx*dx+dy*dy)<=b._drawR){hoveredIdx=i;break;}
+        }
+        canvas.style.cursor=hoveredIdx>=0?'pointer':'default';
+    });
+    canvas.addEventListener('mouseleave',function(){hoveredIdx=-1;});
+    canvas.addEventListener('click',function(e){
+        if(hoveredIdx<0)return;
+        var f=bubbles[hoveredIdx].f;
+        drillDownFile(f.path);
+    });
+}
+function drillDownFile(path){
+    var dd=document.getElementById('metrics-drilldown');
+    dd.style.display='block';
+    dd.innerHTML='<div class="dev-panel" style="margin-bottom:1rem"><div class="dev-panel-header"><h2>'+path+'</h2><button class="btn btn-sm" onclick="document.getElementById(&#39;metrics-drilldown&#39;).style.display=&#39;none&#39;">Close</button></div><div class="p-md"><p style="color:var(--muted)">Loading file analysis...</p></div></div>';
+    fetch('/__dev/api/metrics/file?path='+encodeURIComponent(path)).then(function(r){return r.json()}).then(function(d){
+        if(d.error){dd.querySelector('.p-md').innerHTML='<p style="color:var(--danger)">'+d.error+'</p>';return;}
+        var html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.5rem;margin-bottom:1rem">';
+        html+='<div class="sys-card"><div class="label">LOC</div><div class="value">'+d.loc+'</div></div>';
+        html+='<div class="sys-card"><div class="label">Total Lines</div><div class="value">'+d.total_lines+'</div></div>';
+        html+='<div class="sys-card"><div class="label">Classes</div><div class="value">'+d.classes+'</div></div>';
+        html+='<div class="sys-card"><div class="label">Functions</div><div class="value">'+(d.functions?d.functions.length:0)+'</div></div>';
+        html+='<div class="sys-card"><div class="label">Imports</div><div class="value">'+(d.imports?d.imports.length:0)+'</div></div>';
+        html+='</div>';
+        if(d.functions&&d.functions.length){
+            html+='<h3 style="margin:0.5rem 0;color:var(--primary);font-size:0.85rem">Cyclomatic Complexity by Function</h3>';
+            // Mini bar chart for complexity
+            var maxCC=Math.max.apply(null,d.functions.map(function(f){return f.complexity}))||1;
+            html+='<div style="display:flex;flex-direction:column;gap:4px">';
+            d.functions.forEach(function(f){
+                var pct=Math.max(3,f.complexity/maxCC*100);
+                var color=f.complexity>20?'#ef4444':f.complexity>10?'#eab308':f.complexity>5?'#3b82f6':'#22c55e';
+                html+='<div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-family:var(--mono)">';
+                html+='<span style="width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="'+f.name+'">'+f.name+'</span>';
+                html+='<div style="flex:1;height:16px;background:var(--bg);border-radius:3px;overflow:hidden;position:relative">';
+                html+='<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px;transition:width 0.3s"></div>';
+                html+='</div>';
+                html+='<span style="width:70px;text-align:right;color:'+color+';font-weight:600">CC:'+f.complexity+'</span>';
+                html+='<span style="width:60px;text-align:right;color:var(--muted)">'+f.loc+' LOC</span>';
+                html+='<span style="width:30px;text-align:right;color:var(--muted)">L'+f.line+'</span>';
+                html+='</div>';
+            });
+            html+='</div>';
+        }
+        if(d.imports&&d.imports.length){
+            html+='<h3 style="margin:0.75rem 0 0.25rem;color:var(--primary);font-size:0.85rem">Dependencies</h3>';
+            html+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+            d.imports.forEach(function(imp){
+                html+='<span style="padding:2px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:0.7rem;font-family:var(--mono)">'+imp+'</span>';
+            });
+            html+='</div>';
+        }
+        dd.querySelector('.p-md').innerHTML=html;
+    }).catch(function(e){
+        dd.querySelector('.p-md').innerHTML='<p style="color:var(--danger)">Error: '+e.message+'</p>';
+    });
+    dd.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function loadAllMetrics(){
+    if(window._metricsAnimFrame)cancelAnimationFrame(window._metricsAnimFrame);
+    var el=document.getElementById('metrics-quick');
+    el.innerHTML='<div class="sys-card"><div class="value">Loading...</div></div>';
+    fetch('/__dev/api/metrics').then(function(r){return r.json()}).then(function(d){
+        if(d.error){el.innerHTML='<div class="sys-card"><div class="value" style="color:var(--danger)">'+d.error+'</div></div>';return;}
+        el.innerHTML=
+            '<div class="sys-card"><div class="label">PHP Files</div><div class="value">'+d.file_count+'</div></div>'+
+            '<div class="sys-card"><div class="label">Lines of Code</div><div class="value">'+d.total_loc.toLocaleString()+'</div></div>'+
+            '<div class="sys-card"><div class="label">Comment Lines</div><div class="value">'+d.total_comment.toLocaleString()+'</div></div>'+
+            '<div class="sys-card"><div class="label">Blank Lines</div><div class="value">'+d.total_blank.toLocaleString()+'</div></div>'+
+            '<div class="sys-card"><div class="label">Classes</div><div class="value">'+d.classes+'</div></div>'+
+            '<div class="sys-card"><div class="label">Functions</div><div class="value">'+d.functions+'</div></div>'+
+            '<div class="sys-card"><div class="label">Routes</div><div class="value">'+d.route_count+'</div></div>'+
+            '<div class="sys-card"><div class="label">ORM Models</div><div class="value">'+d.orm_count+'</div></div>'+
+            '<div class="sys-card"><div class="label">Templates</div><div class="value">'+d.template_count+'</div></div>'+
+            '<div class="sys-card"><div class="label">Migrations</div><div class="value">'+d.migration_count+'</div></div>';
+    }).catch(function(e){el.innerHTML='<div class="sys-card"><div class="value" style="color:var(--danger)">Error: '+e.message+'</div></div>';});
+    document.getElementById('metrics-bubble').innerHTML='<p style="color:var(--muted);padding:1rem">Analyzing codebase...</p>';
+    fetch('/__dev/api/metrics/full').then(function(r){return r.json()}).then(function(d){
+        _metricsFullData=d;
+        if(d.error){document.getElementById('metrics-bubble').innerHTML='<p style="color:var(--danger);padding:1rem">'+d.error+'</p>';return;}
+        renderBubbleChart(d.file_metrics);
+        var hm=document.getElementById('metrics-heatmap');
+        var rows=d.file_metrics.map(function(f){
+            var color=miColor(f.maintainability);
+            var barW=Math.max(2,Math.min(100,f.maintainability));
+            return '<tr style="cursor:pointer" onclick="drillDownFile(&#39;'+f.path+'&#39;)"><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+color+';margin-right:6px"></span>'+f.path+'</td><td>'+f.loc+'</td><td>'+f.complexity+'</td><td>'+f.avg_complexity+'</td><td><div style="display:flex;align-items:center;gap:6px"><div style="width:'+barW+'px;height:6px;border-radius:3px;background:'+color+'"></div><span>'+f.maintainability+'</span></div></td><td>'+f.instability+'</td></tr>';
+        }).join('');
+        hm.innerHTML='<table style="width:100%"><thead><tr><th>File</th><th>LOC</th><th>CC</th><th>Avg CC</th><th>MI</th><th>Instab.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+        var cf=document.getElementById('metrics-complex');
+        var frows=d.most_complex_functions.map(function(f){
+            var color=f.complexity>20?'#ef4444':f.complexity>10?'#eab308':'#22c55e';
+            return '<tr style="cursor:pointer" onclick="drillDownFile(&#39;'+f.file+'&#39;)"><td><span style="color:'+color+';font-weight:bold">'+f.complexity+'</span></td><td>'+f.name+'</td><td>'+f.file+':'+f.line+'</td><td>'+f.loc+'</td></tr>';
+        }).join('');
+        cf.innerHTML='<table style="width:100%"><thead><tr><th>CC</th><th>Function</th><th>File</th><th>LOC</th></tr></thead><tbody>'+frows+'</tbody></table>';
+        var cp=document.getElementById('metrics-coupling');
+        var crows=d.file_metrics.filter(function(f){return f.coupling_afferent>0||f.coupling_efferent>0}).map(function(f){
+            return '<tr style="cursor:pointer" onclick="drillDownFile(&#39;'+f.path+'&#39;)"><td>'+f.path+'</td><td>'+f.coupling_afferent+'</td><td>'+f.coupling_efferent+'</td><td>'+f.instability+'</td></tr>';
+        }).join('');
+        cp.innerHTML=crows?'<table style="width:100%"><thead><tr><th>File</th><th>Ca (in)</th><th>Ce (out)</th><th>Instability</th></tr></thead><tbody>'+crows+'</tbody></table>':'<p style="color:var(--muted)">No coupling data</p>';
+        var vl=document.getElementById('metrics-violations');
+        if(d.violations&&d.violations.length){
+            var vrows=d.violations.map(function(v){
+                var icon=v.type==='error'?'&#9888;':'&#9432;';
+                var color=v.type==='error'?'#ef4444':'#eab308';
+                return '<tr style="cursor:pointer" onclick="drillDownFile(&#39;'+v.file+'&#39;)"><td style="color:'+color+'">'+icon+'</td><td>'+v.message+'</td><td>'+v.file+(v.line?':'+v.line:'')+'</td></tr>';
+            }).join('');
+            vl.innerHTML='<table style="width:100%"><thead><tr><th></th><th>Issue</th><th>Location</th></tr></thead><tbody>'+vrows+'</tbody></table>';
+        }else{
+            vl.innerHTML='<p style="color:#22c55e">&#10003; No violations found</p>';
+        }
+    }).catch(function(e){
+        document.getElementById('metrics-bubble').innerHTML='<p style="color:var(--danger);padding:1rem">Error: '+e.message+'</p>';
+    });
+}
+var _metricsLoaded=false;
+var _origShowTab=typeof showTab==='function'?showTab:null;
+if(_origShowTab){
+    showTab=function(name){
+        _origShowTab(name);
+        if(name==='metrics'&&!_metricsLoaded){_metricsLoaded=true;loadAllMetrics();}
+    };
+}
+var metricsTab=document.querySelector('[onclick*="metrics"]');
+if(metricsTab)metricsTab.addEventListener('click',function(){if(!_metricsLoaded){_metricsLoaded=true;loadAllMetrics();}});
+</script>
 <script>
 // Self-diagnostic — detect if the external JS failed to load
 (function() {

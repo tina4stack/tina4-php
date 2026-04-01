@@ -99,13 +99,10 @@ test.db
 /src/public/css/colors.css
 *.db-shm
 *.db-wal
-demo/.env
 example/.env
-demo/logs/*.log
 tests/logs/*.log
 .claude/settings.local.json
 .claude/worktrees/
 /data/sessions/
 /data/
-/demo/
 /example/

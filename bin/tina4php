@@ -548,25 +548,13 @@ DOCKERFILE;
         break;
 
     case 'ai':
-        $installAll = in_array('--all', $args);
-        $force      = in_array('--force', $args);
-        $root       = getcwd();
-
-        echo \Tina4\AI::statusReport($root) . "\n";
-
-        if ($installAll) {
-            $created = \Tina4\AI::installAll($root, $force);
+        if (isset($args[0]) && strtolower($args[0]) === 'all') {
+            \Tina4\AI::installAll($cwd);
         } else {
-            $created = \Tina4\AI::installContext($root, null, $force);
-        }
-
-        if (!empty($created)) {
-            echo "Installed Tina4 context:\n";
-            foreach ($created as $f) {
-                echo "  + $f\n";
+            $selection = \Tina4\AI::showMenu($cwd);
+            if ($selection) {
+                \Tina4\AI::installSelected($cwd, $selection);
             }
-        } else {
-            echo "Context files already exist. Use --force to overwrite.\n";
         }
         break;
 
