@@ -1385,4 +1385,436 @@ TPL;
         $this->assertSame('big', $this->engine->renderString($src, ['x' => 10]));
         $this->assertSame('small', $this->engine->renderString($src, ['x' => 3]));
     }
+
+    /* ═══════════ Comparison Operators in If ═══════════ */
+
+    public function testIfGreaterThan(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if x > 5 %}yes{% endif %}', ['x' => 10]));
+    }
+
+    public function testIfLessThan(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if x < 5 %}yes{% endif %}', ['x' => 3]));
+    }
+
+    public function testIfGreaterThanOrEqual(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if x >= 5 %}yes{% endif %}', ['x' => 5]));
+    }
+
+    public function testIfNotEqual(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if x != 5 %}yes{% endif %}', ['x' => 3]));
+    }
+
+    public function testIfAndOperator(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if a and b %}yes{% endif %}', ['a' => true, 'b' => true]));
+        $this->assertSame('', $this->engine->renderString('{% if a and b %}yes{% endif %}', ['a' => true, 'b' => false]));
+    }
+
+    public function testIfOrOperator(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if a or b %}yes{% endif %}', ['a' => false, 'b' => true]));
+    }
+
+    public function testIfNotOperator(): void
+    {
+        $this->assertSame('show', $this->engine->renderString('{% if not hidden %}show{% endif %}', ['hidden' => false]));
+    }
+
+    public function testIfNestedIf(): void
+    {
+        $tpl = '{% if a %}{% if b %}both{% endif %}{% endif %}';
+        $this->assertSame('both', $this->engine->renderString($tpl, ['a' => true, 'b' => true]));
+    }
+
+    /* ═══════════ For Loop Extended ═══════════ */
+
+    public function testForLoopKeyValue(): void
+    {
+        $tpl = '{% for k, v in data %}{{ k }}={{ v }} {% endfor %}';
+        $result = $this->engine->renderString($tpl, ['data' => ['a' => 1, 'b' => 2]]);
+        $this->assertStringContainsString('a=1', $result);
+        $this->assertStringContainsString('b=2', $result);
+    }
+
+    public function testForLoopEvenOddExtended(): void
+    {
+        $tpl = '{% for i in items %}{% if loop.even %}E{% else %}O{% endif %}{% endfor %}';
+        $this->assertSame('OEOE', $this->engine->renderString($tpl, ['items' => [1, 2, 3, 4]]));
+    }
+
+    /* ═══════════ Filter Edge Cases ═══════════ */
+
+    public function testFilterLengthEqualsZero(): void
+    {
+        $src = '{% if items|length == 0 %}empty{% else %}has{% endif %}';
+        $this->assertSame('empty', $this->engine->renderString($src, ['items' => []]));
+    }
+
+    public function testFilterLengthNotEquals(): void
+    {
+        $src = '{% if items|length != 1 %}multi{% else %}single{% endif %}';
+        $this->assertSame('multi', $this->engine->renderString($src, ['items' => [1, 2]]));
+    }
+
+    public function testFilterStringLength(): void
+    {
+        $src = '{% if name|length > 3 %}long{% else %}short{% endif %}';
+        $this->assertSame('long', $this->engine->renderString($src, ['name' => 'Alice']));
+    }
+
+    public function testFilterFirstComparison(): void
+    {
+        $src = '{% if items|first == 1 %}yes{% else %}no{% endif %}';
+        $this->assertSame('yes', $this->engine->renderString($src, ['items' => [1, 2, 3]]));
+    }
+
+    public function testFilterLastComparison(): void
+    {
+        $src = '{% if items|last == 3 %}yes{% else %}no{% endif %}';
+        $this->assertSame('yes', $this->engine->renderString($src, ['items' => [1, 2, 3]]));
+    }
+
+    public function testFilterWithOrOperator(): void
+    {
+        $src = '{% if items|length == 0 or name|upper == "BOB" %}match{% else %}nope{% endif %}';
+        $this->assertSame('match', $this->engine->renderString($src, ['items' => [1], 'name' => 'Bob']));
+    }
+
+    public function testFilterWithSpaces(): void
+    {
+        $src = '{% if items | length > 0 %}yes{% else %}no{% endif %}';
+        $this->assertSame('yes', $this->engine->renderString($src, ['items' => [1]]));
+    }
+
+    public function testFilterTruthyCheck(): void
+    {
+        $this->assertSame('yes', $this->engine->renderString('{% if items %}yes{% else %}no{% endif %}', ['items' => [1]]));
+        $this->assertSame('no', $this->engine->renderString('{% if items %}yes{% else %}no{% endif %}', ['items' => []]));
+    }
+
+    public function testFilterInElseif(): void
+    {
+        $src = '{% if items|length == 0 %}empty{% elseif items|length == 1 %}one{% else %}many{% endif %}';
+        $this->assertSame('one', $this->engine->renderString($src, ['items' => [42]]));
+    }
+
+    /* ═══════════ Set with concat ═══════════ */
+
+    public function testSetWithConcat(): void
+    {
+        $result = $this->engine->renderString('{% set msg = "Hi " ~ name %}{{ msg }}', ['name' => 'Alice']);
+        $this->assertSame('Hi Alice', $result);
+    }
+
+    /* ═══════════ Dynamic Dict Key Access ═══════════ */
+
+    public function testVariableKeyViaSet(): void
+    {
+        $ctx = ['balances' => ['9600.000' => 342120.0]];
+        $result = $this->engine->renderString('{% set k = "9600.000" %}{{ balances[k] }}', $ctx);
+        $this->assertSame('342120', $result);
+    }
+
+    public function testVariableKeyFromLoop(): void
+    {
+        $ctx = [
+            'balances' => ['A' => 100, 'B' => 200],
+            'items' => [['code' => 'A'], ['code' => 'B']],
+        ];
+        $result = $this->engine->renderString('{% for i in items %}{{ balances[i.code] }},{% endfor %}', $ctx);
+        $this->assertSame('100,200,', $result);
+    }
+
+    public function testStringLiteralKeyStillWorks(): void
+    {
+        $ctx = ['data' => ['key' => 'val']];
+        $this->assertSame('val', $this->engine->renderString('{{ data["key"] }}', $ctx));
+    }
+
+    public function testIntKeyStillWorks(): void
+    {
+        $this->assertSame('20', $this->engine->renderString('{{ items[1] }}', ['items' => [10, 20, 30]]));
+    }
+
+    public function testNestedVariableKey(): void
+    {
+        $ctx = ['lookup' => ['x' => 'found'], 'config' => ['key' => 'x']];
+        $result = $this->engine->renderString('{{ lookup[config.key] }}', $ctx);
+        $this->assertSame('found', $result);
+    }
+
+    /* ═══════════ Tilde Concatenation with Ternary ═══════════ */
+
+    public function testTildeWithTernary(): void
+    {
+        $ctx = ['contact_type' => 'customer'];
+        $result = $this->engine->renderString('{{ "/path?type=" ~ (contact_type ? contact_type : "all") }}', $ctx);
+        $this->assertSame('/path?type=customer', $result);
+    }
+
+    public function testTildeTernaryFalseBranch(): void
+    {
+        $result = $this->engine->renderString('{{ "/path?type=" ~ (contact_type ? contact_type : "all") }}', []);
+        $this->assertSame('/path?type=all', $result);
+    }
+
+    public function testQuestionMarkInUrlString(): void
+    {
+        $result = $this->engine->renderString('{{ "/search?q=hello" }}', []);
+        $this->assertSame('/search?q=hello', $result);
+    }
+
+    public function testTildeConcatWithUrlQuery(): void
+    {
+        $ctx = ['base' => '/api', 'sort' => 'name'];
+        $result = $this->engine->renderString('{{ base ~ "?sort=" ~ sort }}', $ctx);
+        $this->assertSame('/api?sort=name', $result);
+    }
+
+    /* ═══════════ Parent / Super in Block Inheritance ═══════════ */
+
+    public function testParentIncludesParentContent(): void
+    {
+        $this->writeTemplate('base_p.html', '<head>{% block head %}<title>Base</title>{% endblock %}</head>');
+        $this->writeTemplate('child_p.html', '{% extends "base_p.html" %}{% block head %}{{ parent() }}<link href="/app.css">{% endblock %}');
+        $result = $this->engine->render('child_p.html', []);
+        $this->assertStringContainsString('<title>Base</title>', $result);
+        $this->assertStringContainsString('/app.css', $result);
+    }
+
+    public function testSuperIsAlias(): void
+    {
+        $this->writeTemplate('base_s.html', '{% block footer %}Base Footer{% endblock %}');
+        $this->writeTemplate('child_s.html', '{% extends "base_s.html" %}{% block footer %}{{ super() }} | Child{% endblock %}');
+        $result = $this->engine->render('child_s.html', []);
+        $this->assertStringContainsString('Base Footer', $result);
+        $this->assertStringContainsString('Child', $result);
+    }
+
+    public function testNoParentFullReplace(): void
+    {
+        $this->writeTemplate('base_r.html', '{% block content %}OLD{% endblock %}');
+        $this->writeTemplate('child_r.html', '{% extends "base_r.html" %}{% block content %}NEW{% endblock %}');
+        $result = $this->engine->render('child_r.html', []);
+        $this->assertStringContainsString('NEW', $result);
+        $this->assertStringNotContainsString('OLD', $result);
+    }
+
+    public function testParentWithVariables(): void
+    {
+        $this->writeTemplate('base_v.html', '{% block greeting %}Hello {{ name }}{% endblock %}');
+        $this->writeTemplate('child_v.html', '{% extends "base_v.html" %}{% block greeting %}{{ parent() }}! Welcome back.{% endblock %}');
+        $result = $this->engine->render('child_v.html', ['name' => 'Alice']);
+        $this->assertStringContainsString('Hello Alice', $result);
+        $this->assertStringContainsString('Welcome back', $result);
+    }
+
+    public function testParentNotCalledReturnsChildOnly(): void
+    {
+        $this->writeTemplate('base_nc.html', '{% block nav %}Parent Nav{% endblock %} | {% block body %}Parent Body{% endblock %}');
+        $this->writeTemplate('child_nc.html', '{% extends "base_nc.html" %}{% block body %}Child Body{% endblock %}');
+        $result = $this->engine->render('child_nc.html', []);
+        $this->assertStringContainsString('Parent Nav', $result);
+        $this->assertStringContainsString('Child Body', $result);
+        $this->assertStringNotContainsString('Parent Body', $result);
+    }
+
+    public function testMultipleBlocksWithParentExtended(): void
+    {
+        $this->writeTemplate('base_m2.html', '{% block css %}base.css{% endblock %} {% block js %}base.js{% endblock %}');
+        $this->writeTemplate('child_m2.html', '{% extends "base_m2.html" %}{% block css %}{{ parent() }} app.css{% endblock %}{% block js %}{{ parent() }} app.js{% endblock %}');
+        $result = $this->engine->render('child_m2.html', []);
+        $this->assertStringContainsString('base.css', $result);
+        $this->assertStringContainsString('app.css', $result);
+        $this->assertStringContainsString('base.js', $result);
+        $this->assertStringContainsString('app.js', $result);
+    }
+
+    /* ═══════════ Default Filter ═══════════ */
+
+    public function testDefaultFilterNone(): void
+    {
+        $this->assertSame('N/A', $this->engine->renderString('{{ v|default("N/A") }}', []));
+    }
+
+    public function testDefaultFilterEmptyString(): void
+    {
+        $this->assertSame('N/A', $this->engine->renderString('{{ v|default("N/A") }}', ['v' => '']));
+    }
+
+    public function testDefaultFilterHasValue(): void
+    {
+        $this->assertSame('ok', $this->engine->renderString('{{ v|default("N/A") }}', ['v' => 'ok']));
+    }
+
+    /* ═══════════ Slug Filter ═══════════ */
+
+    public function testSlugFilter(): void
+    {
+        $result = $this->engine->renderString('{{ text|slug }}', ['text' => 'Hello World!']);
+        $this->assertStringContainsString('hello', $result);
+        $this->assertStringContainsString('-', $result);
+    }
+
+    /* ═══════════ Truncate Filter ═══════════ */
+
+    public function testTruncateFilterLong(): void
+    {
+        $result = $this->engine->renderString('{{ text|truncate(5) }}', ['text' => 'Hello World']);
+        $this->assertTrue(strlen($result) < strlen('Hello World'));
+    }
+
+    public function testTruncateFilterShort(): void
+    {
+        $result = $this->engine->renderString('{{ text|truncate(100) }}', ['text' => 'Hi']);
+        $this->assertSame('Hi', $result);
+    }
+
+    /* ═══════════ Wordwrap Filter ═══════════ */
+
+    public function testWordwrapFilter(): void
+    {
+        $result = $this->engine->renderString('{{ text|wordwrap(5) }}', ['text' => 'Hello World Test']);
+        $this->assertStringContainsString("\n", $result);
+    }
+
+    /* ═══════════ Number Format Filter ═══════════ */
+
+    public function testNumberFormatFilter(): void
+    {
+        $result = $this->engine->renderString('{{ val|number_format(2) }}', ['val' => 1234.5]);
+        $this->assertStringContainsString('1', $result);
+        $this->assertStringContainsString('.', $result);
+    }
+
+    /* ═══════════ URL Encode Filter ═══════════ */
+
+    public function testUrlEncodeFilter(): void
+    {
+        $result = $this->engine->renderString('{{ text|url_encode }}', ['text' => 'hello world']);
+        // PHP rawurlencode uses %20, urlencode uses +
+        $this->assertTrue(
+            str_contains($result, '%20') || str_contains($result, '+'),
+            'URL encode should replace spaces with %20 or +'
+        );
+    }
+
+    /* ═══════════ Base64 Filters ═══════════ */
+
+    public function testBase64EncodeFilter(): void
+    {
+        $result = $this->engine->renderString('{{ text|base64_encode }}', ['text' => 'hello']);
+        $this->assertSame('aGVsbG8=', $result);
+    }
+
+    public function testBase64DecodeFilter(): void
+    {
+        $result = $this->engine->renderString('{{ text|base64_decode }}', ['text' => 'aGVsbG8=']);
+        $this->assertSame('hello', $result);
+    }
+
+    /* ═══════════ SHA256 Filter ═══════════ */
+
+    public function testSha256Filter(): void
+    {
+        $result = $this->engine->renderString('{{ text|sha256 }}', ['text' => 'hello']);
+        $this->assertEquals(64, strlen($result));
+    }
+
+    /* ═══════════ Int/Float/String Cast Filters ═══════════ */
+
+    public function testIntFilter(): void
+    {
+        $this->assertSame('42', $this->engine->renderString('{{ val|int }}', ['val' => '42.7']));
+    }
+
+    public function testFloatFilter(): void
+    {
+        $result = $this->engine->renderString('{{ val|float }}', ['val' => '42.5']);
+        $this->assertStringContainsString('42.5', $result);
+    }
+
+    public function testStringFilter(): void
+    {
+        $this->assertSame('42', $this->engine->renderString('{{ val|string }}', ['val' => 42]));
+    }
+
+    /* ═══════════ Unique / Map / Column / Batch Filters ═══════════ */
+
+    public function testUniqueFilter(): void
+    {
+        $result = $this->engine->renderString('{{ items|unique|join(", ") }}', ['items' => [1, 2, 2, 3, 3]]);
+        $this->assertStringContainsString('1', $result);
+        $this->assertStringContainsString('2', $result);
+        $this->assertStringContainsString('3', $result);
+    }
+
+    public function testMapFilter(): void
+    {
+        $result = $this->engine->renderString(
+            '{{ items|map("name")|join(", ") }}',
+            ['items' => [['name' => 'Alice'], ['name' => 'Bob']]]
+        );
+        $this->assertStringContainsString('Alice', $result);
+        $this->assertStringContainsString('Bob', $result);
+    }
+
+    public function testColumnFilter(): void
+    {
+        $result = $this->engine->renderString(
+            '{{ items|column("id")|join(", ") }}',
+            ['items' => [['id' => 1, 'name' => 'a'], ['id' => 2, 'name' => 'b']]]
+        );
+        $this->assertStringContainsString('1', $result);
+        $this->assertStringContainsString('2', $result);
+    }
+
+    public function testBatchFilter(): void
+    {
+        $result = $this->engine->renderString(
+            '{% for batch in items|batch(2) %}{{ batch|join(",") }};{% endfor %}',
+            ['items' => [1, 2, 3, 4, 5]]
+        );
+        $this->assertStringContainsString('1,2', $result);
+        $this->assertStringContainsString('3,4', $result);
+    }
+
+    /* ═══════════ Abs / Round Filters ═══════════ */
+
+    public function testAbsFilter(): void
+    {
+        $this->assertSame('5', $this->engine->renderString('{{ val|abs }}', ['val' => -5]));
+    }
+
+    public function testRoundFilter(): void
+    {
+        $result = $this->engine->renderString('{{ val|round(1) }}', ['val' => 3.456]);
+        $this->assertSame('3.5', $result);
+    }
+
+    public function testRoundNoDecimalsFilter(): void
+    {
+        $result = $this->engine->renderString('{{ val|round }}', ['val' => 3.7]);
+        $this->assertSame('4', $result);
+    }
+
+    /* ═══════════ Keys / Values Filters ═══════════ */
+
+    public function testKeysFilter(): void
+    {
+        $result = $this->engine->renderString('{{ v|keys|join(", ") }}', ['v' => ['a' => 1, 'b' => 2]]);
+        $this->assertStringContainsString('a', $result);
+        $this->assertStringContainsString('b', $result);
+    }
+
+    public function testValuesFilter(): void
+    {
+        $result = $this->engine->renderString('{{ v|values|join(", ") }}', ['v' => ['a' => 1, 'b' => 2]]);
+        $this->assertStringContainsString('1', $result);
+        $this->assertStringContainsString('2', $result);
+    }
 }

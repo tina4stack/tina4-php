@@ -1,4 +1,4 @@
-# Tina4 PHP v3.10.45 — Conventions
+# Tina4 PHP v3.10.46 — Conventions
 
 Zero-dependency PHP web framework. Docs: https://tina4.com
 

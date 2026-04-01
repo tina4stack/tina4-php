@@ -330,4 +330,135 @@ class MigrationV3Test extends TestCase
         $this->assertSame('20240101000000_first.sql', $result['applied'][0]);
         $this->assertSame('20240102000000_second.sql', $result['applied'][1]);
     }
+
+    // --- Pending status ---
+
+    public function testGetPendingAndAppliedStatus(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_orders.sql',
+            'CREATE TABLE orders (id INTEGER PRIMARY KEY)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $pending = $migration->getPendingMigrations();
+        $this->assertCount(1, $pending);
+
+        $migration->migrate();
+        $pending2 = $migration->getPendingMigrations();
+        $this->assertCount(0, $pending2);
+        $applied = $migration->getAppliedMigrations();
+        $this->assertCount(1, $applied);
+    }
+
+    // --- Multi-statement with rollback on failure ---
+
+    public function testMultiStatementWithSemicolons(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_multi.sql',
+            "CREATE TABLE t1 (id INTEGER PRIMARY KEY);\n" .
+            "INSERT INTO t1 (id) VALUES (1);\n" .
+            "CREATE TABLE t2 (id INTEGER PRIMARY KEY);"
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+
+        $this->assertCount(1, $result['applied']);
+        $this->assertTrue($this->db->tableExists('t1'));
+        $this->assertTrue($this->db->tableExists('t2'));
+    }
+
+    // --- SQL with comments ---
+
+    public function testSqlWithLineComments(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_comments.sql',
+            "-- This is a comment\n" .
+            "CREATE TABLE commented (id INTEGER PRIMARY KEY);\n" .
+            "-- Another comment\n"
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+
+        $this->assertCount(1, $result['applied']);
+        $this->assertTrue($this->db->tableExists('commented'));
+    }
+
+    // --- Description sanitization in migration filenames ---
+
+    public function testMigrationFileFiltersSqlOnly(): void
+    {
+        file_put_contents($this->migrationsDir . '/20240101000000_a.sql', 'SELECT 1');
+        file_put_contents($this->migrationsDir . '/not_a_migration.txt', 'nope');
+        file_put_contents($this->migrationsDir . '/readme.md', '# readme');
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $files = $migration->getMigrationFiles();
+
+        $this->assertCount(1, $files);
+    }
+
+    // --- Rollback removes migration records (verify via count) ---
+
+    public function testRollbackClearsAppliedRecords(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_rb.sql',
+            'CREATE TABLE rb (id INTEGER PRIMARY KEY)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->migrate();
+        $this->assertCount(1, $migration->getAppliedMigrations());
+
+        $migration->rollback();
+        $this->assertCount(0, $migration->getAppliedMigrations());
+    }
+
+    // --- Error stops further migrations ---
+
+    public function testErrorInMiddleStopsFurtherMigrations(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_good.sql',
+            'CREATE TABLE good_table (id INTEGER PRIMARY KEY)'
+        );
+        file_put_contents(
+            $this->migrationsDir . '/20240102000000_bad_err.sql',
+            'THIS IS INVALID SQL'
+        );
+        file_put_contents(
+            $this->migrationsDir . '/20240103000000_after.sql',
+            'CREATE TABLE after_table (id INTEGER PRIMARY KEY)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+
+        $this->assertCount(1, $result['applied']);
+        $this->assertNotEmpty($result['errors']);
+        $this->assertFalse($this->db->tableExists('after_table'));
+    }
+
+    // --- Applied migrations have data ---
+
+    public function testAppliedMigrationsHaveData(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_ts_test.sql',
+            'CREATE TABLE ts_test (id INTEGER PRIMARY KEY)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->migrate();
+
+        $applied = $migration->getAppliedMigrations();
+        $this->assertCount(1, $applied);
+        $this->assertArrayHasKey('migration', $applied[0]);
+        $this->assertArrayHasKey('batch', $applied[0]);
+    }
 }

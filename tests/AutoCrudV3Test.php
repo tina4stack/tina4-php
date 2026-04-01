@@ -277,4 +277,139 @@ class AutoCrudV3Test extends TestCase
         // Without filter, all() is used which doesn't support sorting
         $this->assertSame(200, $result->getStatusCode());
     }
+
+    // --- Pagination tests ---
+
+    public function testPaginationDefaultLimit(): void
+    {
+        for ($i = 1; $i <= 15; $i++) {
+            $this->db->exec("INSERT INTO items (name) VALUES (:name)", [':name' => "Item{$i}"]);
+        }
+
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $request = Request::create(method: 'GET', path: '/api/items?limit=5&offset=0');
+        $response = new Response(testing: true);
+        $result = Router::dispatch($request, $response);
+
+        $this->assertSame(200, $result->getStatusCode());
+        $body = $result->getJsonBody();
+        $this->assertCount(5, $body['data']);
+        $this->assertSame(15, $body['total']);
+    }
+
+    public function testPaginationSecondPage(): void
+    {
+        for ($i = 1; $i <= 8; $i++) {
+            $this->db->exec("INSERT INTO items (name) VALUES (:name)", [':name' => "Item{$i}"]);
+        }
+
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $request = Request::create(method: 'GET', path: '/api/items?limit=5&offset=5');
+        $response = new Response(testing: true);
+        $result = Router::dispatch($request, $response);
+
+        $this->assertSame(200, $result->getStatusCode());
+        $body = $result->getJsonBody();
+        $this->assertCount(3, $body['data']); // 8 - 5 = 3
+    }
+
+    // --- Multiple filter values ---
+
+    public function testListWithFilterMultipleResults(): void
+    {
+        $this->db->exec("INSERT INTO items (name, category) VALUES ('Hammer', 'Tools')");
+        $this->db->exec("INSERT INTO items (name, category) VALUES ('Wrench', 'Tools')");
+        $this->db->exec("INSERT INTO items (name, category) VALUES ('Apple', 'Food')");
+        $this->db->exec("INSERT INTO items (name, category) VALUES ('Banana', 'Food')");
+
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $request = Request::create(
+            method: 'GET',
+            path: '/api/items',
+            query: ['filter' => ['category' => 'Food']],
+        );
+        $response = new Response(testing: true);
+        $result = Router::dispatch($request, $response);
+
+        $body = $result->getJsonBody();
+        $this->assertCount(2, $body['data']);
+    }
+
+    // --- Update non-existent item ---
+
+    public function testUpdateNonExistent(): void
+    {
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $request = Request::create(
+            method: 'PUT',
+            path: '/api/items/999',
+            body: ['name' => 'Ghost'],
+            headers: ['content-type' => 'application/json', 'authorization' => "Bearer {$token}"],
+        );
+        $response = new Response(testing: true);
+        $result = Router::dispatch($request, $response);
+
+        $this->assertSame(404, $result->getStatusCode());
+    }
+
+    // --- List empty table ---
+
+    public function testListEmptyTable(): void
+    {
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $request = Request::create(method: 'GET', path: '/api/items');
+        $response = new Response(testing: true);
+        $result = Router::dispatch($request, $response);
+
+        $this->assertSame(200, $result->getStatusCode());
+        $body = $result->getJsonBody();
+        $this->assertCount(0, $body['data']);
+        $this->assertSame(0, $body['total']);
+    }
+
+    // --- Create multiple items ---
+
+    public function testCreateMultipleItems(): void
+    {
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+
+        for ($i = 1; $i <= 3; $i++) {
+            $request = Request::create(
+                method: 'POST',
+                path: '/api/items',
+                body: ['name' => "Item{$i}", 'category' => 'Test'],
+                headers: ['content-type' => 'application/json', 'authorization' => "Bearer {$token}"],
+            );
+            $response = new Response(testing: true);
+            $result = Router::dispatch($request, $response);
+            $this->assertSame(201, $result->getStatusCode());
+        }
+
+        // Verify all 3 exist
+        $request = Request::create(method: 'GET', path: '/api/items');
+        $response = new Response(testing: true);
+        $result = Router::dispatch($request, $response);
+        $body = $result->getJsonBody();
+        $this->assertSame(3, $body['total']);
+    }
 }

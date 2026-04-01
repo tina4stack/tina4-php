@@ -200,4 +200,323 @@ class QueueBackendTest extends TestCase
         $this->assertTrue(method_exists(MongoBackend::class, 'size'));
         $this->assertTrue(method_exists(MongoBackend::class, 'close'));
     }
+
+    // -- RabbitMQ default config -------------------------------------------
+
+    public function testRabbitMQBackendDefaultConfig(): void
+    {
+        $backend = new RabbitMQBackend();
+
+        $ref = new \ReflectionClass($backend);
+
+        $hostProp = $ref->getProperty('host');
+        $hostProp->setAccessible(true);
+        $this->assertEquals('localhost', $hostProp->getValue($backend));
+
+        $portProp = $ref->getProperty('port');
+        $portProp->setAccessible(true);
+        $this->assertEquals(5672, $portProp->getValue($backend));
+
+        $userProp = $ref->getProperty('username');
+        $userProp->setAccessible(true);
+        $this->assertEquals('guest', $userProp->getValue($backend));
+
+        $passProp = $ref->getProperty('password');
+        $passProp->setAccessible(true);
+        $this->assertEquals('guest', $passProp->getValue($backend));
+
+        $vhostProp = $ref->getProperty('vhost');
+        $vhostProp->setAccessible(true);
+        $this->assertEquals('/', $vhostProp->getValue($backend));
+    }
+
+    public function testRabbitMQBackendCustomConfig(): void
+    {
+        $backend = new RabbitMQBackend([
+            'host' => 'rabbitmq.example.com',
+            'port' => 5673,
+            'username' => 'admin',
+            'password' => 'secret',
+            'vhost' => '/test',
+        ]);
+
+        $ref = new \ReflectionClass($backend);
+
+        $hostProp = $ref->getProperty('host');
+        $hostProp->setAccessible(true);
+        $this->assertEquals('rabbitmq.example.com', $hostProp->getValue($backend));
+
+        $portProp = $ref->getProperty('port');
+        $portProp->setAccessible(true);
+        $this->assertEquals(5673, $portProp->getValue($backend));
+
+        $userProp = $ref->getProperty('username');
+        $userProp->setAccessible(true);
+        $this->assertEquals('admin', $userProp->getValue($backend));
+
+        $passProp = $ref->getProperty('password');
+        $passProp->setAccessible(true);
+        $this->assertEquals('secret', $passProp->getValue($backend));
+
+        $vhostProp = $ref->getProperty('vhost');
+        $vhostProp->setAccessible(true);
+        $this->assertEquals('/test', $vhostProp->getValue($backend));
+    }
+
+    public function testRabbitMQBackendHasConnectMethod(): void
+    {
+        $this->assertTrue(method_exists(RabbitMQBackend::class, 'connect'));
+    }
+
+    public function testRabbitMQBackendCloseWithoutConnect(): void
+    {
+        $backend = new RabbitMQBackend();
+        $backend->close(); // Should not throw
+        $this->assertTrue(true);
+    }
+
+    // -- Kafka default config ------------------------------------------------
+
+    public function testKafkaBackendDefaultConfig(): void
+    {
+        $backend = new KafkaBackend();
+
+        $ref = new \ReflectionClass($backend);
+
+        $brokersProp = $ref->getProperty('brokers');
+        $brokersProp->setAccessible(true);
+        $this->assertEquals('localhost:9092', $brokersProp->getValue($backend));
+
+        $groupProp = $ref->getProperty('groupId');
+        $groupProp->setAccessible(true);
+        $this->assertEquals('tina4_consumer_group', $groupProp->getValue($backend));
+    }
+
+    public function testKafkaBackendCustomConfig(): void
+    {
+        $backend = new KafkaBackend([
+            'brokers' => 'kafka1:9092,kafka2:9092',
+            'group_id' => 'my-app',
+        ]);
+
+        $ref = new \ReflectionClass($backend);
+
+        $brokersProp = $ref->getProperty('brokers');
+        $brokersProp->setAccessible(true);
+        $this->assertEquals('kafka1:9092,kafka2:9092', $brokersProp->getValue($backend));
+
+        $groupProp = $ref->getProperty('groupId');
+        $groupProp->setAccessible(true);
+        $this->assertEquals('my-app', $groupProp->getValue($backend));
+    }
+
+    public function testKafkaBackendHasConnectMethod(): void
+    {
+        $this->assertTrue(method_exists(KafkaBackend::class, 'connect'));
+    }
+
+    public function testKafkaBackendCloseWithoutConnect(): void
+    {
+        $backend = new KafkaBackend();
+        $backend->close(); // Should not throw
+        $this->assertTrue(true);
+    }
+
+    // -- Env var tests -------------------------------------------------------
+
+    public function testRabbitMQBackendEnvVarVhost(): void
+    {
+        putenv('TINA4_RABBITMQ_VHOST=/envvhost');
+
+        $backend = new RabbitMQBackend();
+
+        $ref = new \ReflectionClass($backend);
+        $vhostProp = $ref->getProperty('vhost');
+        $vhostProp->setAccessible(true);
+        $this->assertEquals('/envvhost', $vhostProp->getValue($backend));
+
+        putenv('TINA4_RABBITMQ_VHOST');
+    }
+
+    public function testRabbitMQBackendEnvVarUsername(): void
+    {
+        putenv('TINA4_RABBITMQ_USERNAME=envuser');
+        putenv('TINA4_RABBITMQ_PASSWORD=envpass');
+
+        $backend = new RabbitMQBackend();
+
+        $ref = new \ReflectionClass($backend);
+
+        $userProp = $ref->getProperty('username');
+        $userProp->setAccessible(true);
+        $this->assertEquals('envuser', $userProp->getValue($backend));
+
+        $passProp = $ref->getProperty('password');
+        $passProp->setAccessible(true);
+        $this->assertEquals('envpass', $passProp->getValue($backend));
+
+        putenv('TINA4_RABBITMQ_USERNAME');
+        putenv('TINA4_RABBITMQ_PASSWORD');
+    }
+
+    public function testKafkaBackendEnvVarClientId(): void
+    {
+        $backend = new KafkaBackend();
+
+        $ref = new \ReflectionClass($backend);
+        $clientProp = $ref->getProperty('clientId');
+        $clientProp->setAccessible(true);
+        $this->assertEquals('tina4-php', $clientProp->getValue($backend));
+    }
+
+    // -- Interface parameter counts -----------------------------------------
+
+    public function testQueueBackendEnqueueParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('enqueue');
+        $this->assertEquals(2, $method->getNumberOfParameters());
+        $params = $method->getParameters();
+        $this->assertEquals('topic', $params[0]->getName());
+        $this->assertEquals('message', $params[1]->getName());
+    }
+
+    public function testQueueBackendDequeueParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('dequeue');
+        $this->assertEquals(1, $method->getNumberOfParameters());
+        $this->assertEquals('topic', $method->getParameters()[0]->getName());
+    }
+
+    public function testQueueBackendAcknowledgeParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('acknowledge');
+        $this->assertEquals(2, $method->getNumberOfParameters());
+    }
+
+    public function testQueueBackendRequeueParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('requeue');
+        $this->assertEquals(2, $method->getNumberOfParameters());
+    }
+
+    public function testQueueBackendDeadLetterParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('deadLetter');
+        $this->assertEquals(2, $method->getNumberOfParameters());
+    }
+
+    public function testQueueBackendSizeParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('size');
+        $this->assertEquals(1, $method->getNumberOfParameters());
+    }
+
+    public function testQueueBackendCloseParameterCount(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('close');
+        $this->assertEquals(0, $method->getNumberOfParameters());
+    }
+
+    // -- Return types -------------------------------------------------------
+
+    public function testQueueBackendEnqueueReturnsString(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('enqueue');
+        $returnType = $method->getReturnType();
+        $this->assertNotNull($returnType);
+        $this->assertEquals('string', $returnType->getName());
+    }
+
+    public function testQueueBackendDequeueReturnsNullableArray(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('dequeue');
+        $returnType = $method->getReturnType();
+        $this->assertNotNull($returnType);
+        $this->assertTrue($returnType->allowsNull());
+    }
+
+    public function testQueueBackendSizeReturnsInt(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('size');
+        $returnType = $method->getReturnType();
+        $this->assertNotNull($returnType);
+        $this->assertEquals('int', $returnType->getName());
+    }
+
+    public function testQueueBackendCloseReturnsVoid(): void
+    {
+        $ref = new \ReflectionClass(QueueBackend::class);
+        $method = $ref->getMethod('close');
+        $returnType = $method->getReturnType();
+        $this->assertNotNull($returnType);
+        $this->assertEquals('void', $returnType->getName());
+    }
+
+    // -- MongoBackend config -------------------------------------------------
+
+    public function testMongoBackendHasConnectMethod(): void
+    {
+        $this->assertTrue(method_exists(MongoBackend::class, 'connect') || method_exists(MongoBackend::class, 'enqueue'));
+        // MongoBackend connects lazily; verify enqueue exists
+        $this->assertTrue(method_exists(MongoBackend::class, 'enqueue'));
+    }
+
+    public function testMongoBackendRequiresMongodbExtension(): void
+    {
+        if (extension_loaded('mongodb')) {
+            $this->markTestSkipped('ext-mongodb is installed — cannot test missing extension error');
+        }
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('mongodb');
+        new MongoBackend();
+    }
+
+    // -- Config override priority -------------------------------------------
+
+    public function testKafkaConfigOverridesEnvVars(): void
+    {
+        putenv('TINA4_KAFKA_BROKERS=env-broker:9092');
+
+        $backend = new KafkaBackend(['brokers' => 'config-broker:9092']);
+
+        $ref = new \ReflectionClass($backend);
+        $brokersProp = $ref->getProperty('brokers');
+        $brokersProp->setAccessible(true);
+        $this->assertEquals('config-broker:9092', $brokersProp->getValue($backend));
+
+        putenv('TINA4_KAFKA_BROKERS');
+    }
+
+    public function testRabbitMQBackendEnvVarOverrideOrder(): void
+    {
+        putenv('TINA4_RABBITMQ_HOST=envhost');
+        putenv('TINA4_RABBITMQ_PORT=15672');
+
+        $backend = new RabbitMQBackend(['host' => 'confighost']);
+
+        $ref = new \ReflectionClass($backend);
+
+        $hostProp = $ref->getProperty('host');
+        $hostProp->setAccessible(true);
+        $this->assertEquals('confighost', $hostProp->getValue($backend));
+
+        // Port should still come from env since not specified in config
+        $portProp = $ref->getProperty('port');
+        $portProp->setAccessible(true);
+        $this->assertEquals(15672, $portProp->getValue($backend));
+
+        putenv('TINA4_RABBITMQ_HOST');
+        putenv('TINA4_RABBITMQ_PORT');
+    }
 }

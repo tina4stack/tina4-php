@@ -143,4 +143,105 @@ class FormTokenTest extends TestCase
         $this->assertSame('checkout', $payload['context']);
         $this->assertSame('order_123', $payload['ref']);
     }
+
+    /* ═══════════ JWT structure tests ═══════════ */
+
+    public function testTokenHasIatClaim(): void
+    {
+        $output = $this->engine->renderString('{{ form_token() }}');
+        $token = $this->extractToken($output);
+        $payload = $this->decodeJwtPayload($token);
+        $this->assertArrayHasKey('iat', $payload);
+        $this->assertIsInt($payload['iat']);
+    }
+
+    public function testTokenHasExpClaim(): void
+    {
+        $output = $this->engine->renderString('{{ form_token() }}');
+        $token = $this->extractToken($output);
+        $payload = $this->decodeJwtPayload($token);
+        $this->assertArrayHasKey('exp', $payload);
+        $this->assertGreaterThan($payload['iat'], $payload['exp']);
+    }
+
+    public function testEachRenderProducesUniqueToken(): void
+    {
+        $output1 = $this->engine->renderString('{{ form_token() }}');
+        sleep(1);
+        $output2 = $this->engine->renderString('{{ form_token() }}');
+        $token1 = $this->extractToken($output1);
+        $token2 = $this->extractToken($output2);
+        $this->assertNotEquals($token1, $token2);
+    }
+
+    public function testTokenSignatureValidates(): void
+    {
+        $output = $this->engine->renderString('{{ form_token() }}');
+        $token = $this->extractToken($output);
+        $payload = \Tina4\Auth::validToken($token, 'test-secret-key');
+        $this->assertNotNull($payload);
+        $this->assertSame('form', $payload['type']);
+    }
+
+    /* ═══════════ Descriptor edge cases ═══════════ */
+
+    public function testEmptyStringDescriptor(): void
+    {
+        $output = $this->engine->renderString('{{ form_token("") }}');
+        $token = $this->extractToken($output);
+        $payload = $this->decodeJwtPayload($token);
+        $this->assertSame('form', $payload['type']);
+        $this->assertArrayNotHasKey('context', $payload);
+    }
+
+    public function testDescriptorWithSpecialChars(): void
+    {
+        $output = $this->engine->renderString('{{ form_token("user-profile_v2") }}');
+        $token = $this->extractToken($output);
+        $payload = $this->decodeJwtPayload($token);
+        $this->assertSame('user-profile_v2', $payload['context']);
+    }
+
+    public function testDescriptorWithMultiplePipes(): void
+    {
+        $output = $this->engine->renderString('{{ form_token("checkout|order_123|extra") }}');
+        $token = $this->extractToken($output);
+        $payload = $this->decodeJwtPayload($token);
+        $this->assertSame('checkout', $payload['context']);
+        // split('|', 2) means ref gets the rest
+        $this->assertStringContainsString('order_123', $payload['ref']);
+    }
+
+    public function testHiddenInputNameAttribute(): void
+    {
+        $output = $this->engine->renderString('{{ form_token() }}');
+        $this->assertStringContainsString('name="formToken"', $output);
+    }
+
+    public function testHiddenInputTypeAttribute(): void
+    {
+        $output = $this->engine->renderString('{{ form_token() }}');
+        $this->assertStringContainsString('type="hidden"', $output);
+    }
+
+    public function testFormTokenInTemplateWithOtherContent(): void
+    {
+        $output = $this->engine->renderString('<form>{{ form_token() }}<button>Submit</button></form>');
+        $this->assertStringContainsString('<form>', $output);
+        $this->assertStringContainsString('<input type="hidden" name="formToken"', $output);
+        $this->assertStringContainsString('<button>Submit</button>', $output);
+        $this->assertStringContainsString('</form>', $output);
+    }
+
+    public function testFormTokenUsesSecretEnv(): void
+    {
+        $output = $this->engine->renderString('{{ form_token() }}');
+        $token = $this->extractToken($output);
+        // Should validate with the same secret
+        $payload = \Tina4\Auth::validToken($token, 'test-secret-key');
+        $this->assertNotNull($payload);
+        // Should NOT validate with a different secret
+        $wrongPayload = \Tina4\Auth::validToken($token, 'wrong-secret');
+        $this->assertNull($wrongPayload);
+    }
 }

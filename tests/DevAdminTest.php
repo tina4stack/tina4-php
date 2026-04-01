@@ -487,6 +487,274 @@ class DevAdminTest extends TestCase
         $this->assertStringContainsString('seedTable()', $html);
     }
 
+    // ── Dashboard HTML: tabs ──────────────────────────────────────
+
+    public function testDashboardContainsAllTabs(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        foreach (['Routes', 'Queue', 'Mailbox', 'Messages', 'Database'] as $tab) {
+            $this->assertStringContainsString($tab, $html);
+        }
+    }
+
+    public function testDashboardContainsRequestInspector(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('Requests', $html);
+    }
+
+    public function testDashboardContainsErrorTracker(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('Errors', $html);
+    }
+
+    public function testDashboardContainsSystemOverview(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('System', $html);
+    }
+
+    public function testDashboardNoExternalDependencies(): void
+    {
+        $html = strtolower(DevAdmin::renderDashboard());
+        $this->assertStringNotContainsString('cdn.', $html);
+        $this->assertStringNotContainsString('unpkg', $html);
+        $this->assertStringNotContainsString('jsdelivr', $html);
+    }
+
+    public function testDashboardUsesCssVariables(): void
+    {
+        $html = DevAdmin::renderDashboard();
+        $this->assertStringContainsString('<style>', $html);
+        $this->assertStringContainsString('var(--', $html);
+    }
+
+    // ── Toolbar rendering ──────────────────────────────────────
+
+    public function testToolbarNoExternalDeps(): void
+    {
+        $html = strtolower(DevAdmin::renderToolbar());
+        $this->assertStringNotContainsString('cdn.', $html);
+    }
+
+    public function testToolbarWithContext(): void
+    {
+        $html = DevAdmin::renderToolbar('POST', '/api/users', '/api/users/{id}', 'req-456', 10);
+        $this->assertStringContainsString('POST', $html);
+        $this->assertStringContainsString('/api/users', $html);
+        $this->assertStringContainsString('req-456', $html);
+        $this->assertStringContainsString('10 routes', $html);
+    }
+
+    public function testToolbarShowsPhpVersion(): void
+    {
+        $html = DevAdmin::renderToolbar();
+        $this->assertStringContainsString('PHP', $html);
+    }
+
+    // ── API Handler: routes ──────────────────────────────────────
+
+    public function testRoutesEndpointReturnsRoutes(): void
+    {
+        DevAdmin::register();
+        Router::get('/test/hello', function ($req, $resp) { return $resp('ok'); });
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/routes');
+        $this->assertNotNull($callback, 'Routes API should exist');
+
+        $request = Request::create('GET', '/__dev/api/routes');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertIsArray($json);
+        $this->assertNotEmpty($json);
+    }
+
+    // ── API Handler: messages ──────────────────────────────────────
+
+    public function testMessagesEndpointReturnsMessages(): void
+    {
+        MessageLog::log('test', 'info', 'From test');
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/messages');
+        $this->assertNotNull($callback);
+
+        $request = Request::create('GET', '/__dev/api/messages');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('messages', $json);
+        $this->assertGreaterThanOrEqual(1, count($json['messages']));
+    }
+
+    // ── API Handler: requests ──────────────────────────────────────
+
+    public function testRequestsEndpointReturnsData(): void
+    {
+        RequestInspector::capture('GET', '/test', 200, 5.0);
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/requests');
+        $this->assertNotNull($callback);
+
+        $request = Request::create('GET', '/__dev/api/requests');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('requests', $json);
+        $this->assertArrayHasKey('stats', $json);
+        $this->assertSame(1, $json['stats']['total']);
+    }
+
+    // ── API Handler: system ──────────────────────────────────────
+
+    public function testSystemEndpointReturnsPhpVersion(): void
+    {
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/system');
+        $this->assertNotNull($callback);
+
+        $request = Request::create('GET', '/__dev/api/system');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('php_version', $json);
+    }
+
+    // ── MessageLog: limit parameter ──────────────────────────────
+
+    public function testMessageLogLimit(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            MessageLog::log('test', 'info', "Message {$i}");
+        }
+        $msgs = MessageLog::get();
+        // get() returns all by default — at least 20
+        $this->assertGreaterThanOrEqual(20, count($msgs));
+    }
+
+    public function testMessageLogStructure(): void
+    {
+        MessageLog::log('test', 'warn', 'Hello');
+        $msg = MessageLog::get()[0];
+        $this->assertArrayHasKey('id', $msg);
+        $this->assertArrayHasKey('timestamp', $msg);
+        $this->assertSame('test', $msg['category']);
+        $this->assertSame('warn', $msg['level']);
+        $this->assertSame('Hello', $msg['message']);
+    }
+
+    // ── ErrorTracker ────────────────────────────────────────────
+
+    public function testErrorTrackerCaptureAndGet(): void
+    {
+        ErrorTracker::capture('ValueError', 'bad input');
+        $entries = ErrorTracker::get();
+        $this->assertGreaterThanOrEqual(1, count($entries));
+        $this->assertSame('ValueError', $entries[0]['error_type']);
+        $this->assertSame('bad input', $entries[0]['message']);
+        $this->assertSame(1, $entries[0]['count']);
+    }
+
+    public function testErrorTrackerDedupIncrementsCount(): void
+    {
+        ErrorTracker::capture('ValueError', 'dup error', '', 'test.php', 10);
+        ErrorTracker::capture('ValueError', 'dup error', '', 'test.php', 10);
+        $entries = ErrorTracker::get();
+        // Find the entry with 'dup error'
+        $found = array_values(array_filter($entries, fn($e) => $e['message'] === 'dup error'));
+        $this->assertCount(1, $found);
+        $this->assertSame(2, $found[0]['count']);
+    }
+
+    public function testErrorTrackerDifferentErrorsSeparate(): void
+    {
+        ErrorTracker::capture('ValueError', 'error A', '', 'a.php', 1);
+        ErrorTracker::capture('TypeError', 'error B', '', 'b.php', 2);
+        $entries = ErrorTracker::get();
+        $types = array_column($entries, 'error_type');
+        $this->assertContains('ValueError', $types);
+        $this->assertContains('TypeError', $types);
+    }
+
+    public function testErrorTrackerResolve(): void
+    {
+        ErrorTracker::capture('RuntimeError', 'crash', '', 'c.php', 5);
+        $entries = ErrorTracker::get();
+        $id = $entries[0]['id'];
+
+        $result = ErrorTracker::resolve($id);
+        $this->assertTrue($result);
+
+        $entries = ErrorTracker::get();
+        $found = array_values(array_filter($entries, fn($e) => $e['id'] === $id));
+        $this->assertTrue($found[0]['resolved']);
+    }
+
+    public function testErrorTrackerResolveNonexistent(): void
+    {
+        $this->assertFalse(ErrorTracker::resolve('nonexistent_fingerprint'));
+    }
+
+    public function testErrorTrackerClearResolved(): void
+    {
+        ErrorTracker::capture('Error', 'fixed', '', 'f.php', 1);
+        ErrorTracker::capture('Error', 'still broken', '', 'g.php', 2);
+        $entries = ErrorTracker::get();
+        $fixedId = null;
+        foreach ($entries as $e) {
+            if ($e['message'] === 'fixed') {
+                $fixedId = $e['id'];
+                break;
+            }
+        }
+        $this->assertNotNull($fixedId);
+        ErrorTracker::resolve($fixedId);
+        ErrorTracker::clearResolved();
+
+        $entries = ErrorTracker::get();
+        foreach ($entries as $e) {
+            $this->assertFalse($e['resolved']);
+        }
+    }
+
+    public function testErrorTrackerUnresolvedCount(): void
+    {
+        ErrorTracker::capture('Error', 'one', '', 'h.php', 1);
+        ErrorTracker::capture('Error', 'two', '', 'i.php', 2);
+        $entries = ErrorTracker::get();
+        $twoId = null;
+        foreach ($entries as $e) {
+            if ($e['message'] === 'two') {
+                $twoId = $e['id'];
+                break;
+            }
+        }
+        ErrorTracker::resolve($twoId);
+
+        $unresolved = ErrorTracker::unresolvedCount();
+        $this->assertGreaterThanOrEqual(1, $unresolved);
+    }
+
+    public function testErrorTrackerTracebackStored(): void
+    {
+        ErrorTracker::capture('Error', 'msg', "line 42\nline 43", 'trace.php', 42);
+        $entries = ErrorTracker::get();
+        $found = array_values(array_filter($entries, fn($e) => $e['message'] === 'msg'));
+        $this->assertStringContainsString('line 42', $found[0]['traceback']);
+    }
+
     // ── Helper ─────────────────────────────────────────────────────
 
     private function findRouteCallback(string $method, string $pattern): ?callable

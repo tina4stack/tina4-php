@@ -333,4 +333,148 @@ class ServiceRunnerV3Test extends TestCase
         ServiceRunner::reset();
         $this->assertEmpty(ServiceRunner::list());
     }
+
+    // ---------------------------------------------------------------
+    // Cron parsing: step on wildcard additional tests
+    // ---------------------------------------------------------------
+
+    public function testCronStepOnWildcardMinutes(): void
+    {
+        $at00 = new \DateTime('2026-03-20 10:00:00');
+        $at15 = new \DateTime('2026-03-20 10:15:00');
+        $at30 = new \DateTime('2026-03-20 10:30:00');
+        $at07 = new \DateTime('2026-03-20 10:07:00');
+
+        $this->assertTrue(ServiceRunner::matchCron('*/15 * * * *', $at00));
+        $this->assertTrue(ServiceRunner::matchCron('*/15 * * * *', $at15));
+        $this->assertTrue(ServiceRunner::matchCron('*/15 * * * *', $at30));
+        $this->assertFalse(ServiceRunner::matchCron('*/15 * * * *', $at07));
+    }
+
+    // ---------------------------------------------------------------
+    // Cron: day of week matching
+    // ---------------------------------------------------------------
+
+    public function testCronDayOfWeek(): void
+    {
+        // 2026-03-16 is a Monday (1), 2026-03-22 is a Sunday (0)
+        $monday = new \DateTime('2026-03-16 10:00:00');
+        $sunday = new \DateTime('2026-03-22 10:00:00');
+
+        $this->assertTrue(ServiceRunner::matchCron('0 10 * * 1', $monday));
+        $this->assertFalse(ServiceRunner::matchCron('0 10 * * 1', $sunday));
+    }
+
+    // ---------------------------------------------------------------
+    // Service lifecycle: max retries
+    // ---------------------------------------------------------------
+
+    public function testMaxRetriesDefault(): void
+    {
+        ServiceRunner::register('retries_default', function ($ctx) {});
+        $list = ServiceRunner::list();
+        $this->assertEquals(3, $list['retries_default']['options']['maxRetries']);
+    }
+
+    public function testMaxRetriesCustom(): void
+    {
+        ServiceRunner::register('retries_custom', function ($ctx) {}, [
+            'maxRetries' => 10,
+        ]);
+        $list = ServiceRunner::list();
+        $this->assertEquals(10, $list['retries_custom']['options']['maxRetries']);
+    }
+
+    // ---------------------------------------------------------------
+    // Service lifecycle: timeout
+    // ---------------------------------------------------------------
+
+    public function testTimeoutDefault(): void
+    {
+        ServiceRunner::register('timeout_default', function ($ctx) {});
+        $list = ServiceRunner::list();
+        $this->assertEquals(0, $list['timeout_default']['options']['timeout']);
+    }
+
+    public function testTimeoutCustom(): void
+    {
+        ServiceRunner::register('timeout_custom', function ($ctx) {}, [
+            'timeout' => 120,
+        ]);
+        $list = ServiceRunner::list();
+        $this->assertEquals(120, $list['timeout_custom']['options']['timeout']);
+    }
+
+    // ---------------------------------------------------------------
+    // Service: daemon option
+    // ---------------------------------------------------------------
+
+    public function testDaemonDefaultFalse(): void
+    {
+        ServiceRunner::register('not_daemon', function ($ctx) {});
+        $list = ServiceRunner::list();
+        $this->assertFalse($list['not_daemon']['options']['daemon']);
+    }
+
+    public function testDaemonTrue(): void
+    {
+        ServiceRunner::register('is_daemon', function ($ctx) {}, [
+            'daemon' => true,
+        ]);
+        $list = ServiceRunner::list();
+        $this->assertTrue($list['is_daemon']['options']['daemon']);
+    }
+
+    // ---------------------------------------------------------------
+    // Service listing
+    // ---------------------------------------------------------------
+
+    public function testListContainsServiceName(): void
+    {
+        ServiceRunner::register('my_service', function ($ctx) {});
+        $list = ServiceRunner::list();
+        $this->assertArrayHasKey('my_service', $list);
+        $this->assertEquals('my_service', $list['my_service']['name']);
+    }
+
+    public function testListContainsAllFields(): void
+    {
+        ServiceRunner::register('full_service', function ($ctx) {}, [
+            'timing' => '* * * * *',
+        ]);
+        $list = ServiceRunner::list();
+        $svc = $list['full_service'];
+        $this->assertArrayHasKey('name', $svc);
+        $this->assertArrayHasKey('running', $svc);
+        $this->assertArrayHasKey('pid', $svc);
+        $this->assertArrayHasKey('options', $svc);
+    }
+
+    // ---------------------------------------------------------------
+    // Error handling: discover with invalid service files
+    // ---------------------------------------------------------------
+
+    public function testDiscoverSkipsNonPhpFiles(): void
+    {
+        $serviceDir = $this->tmpDir . '/svc_txt';
+        mkdir($serviceDir, 0755, true);
+
+        file_put_contents($serviceDir . '/readme.txt', 'Not a PHP file');
+
+        $discovered = ServiceRunner::discover($serviceDir);
+        $this->assertEmpty($discovered);
+    }
+
+    // ---------------------------------------------------------------
+    // PID file: overwrite
+    // ---------------------------------------------------------------
+
+    public function testPidFileOverwrite(): void
+    {
+        ServiceRunner::writePidFile('overwrite_pid', 111);
+        ServiceRunner::writePidFile('overwrite_pid', 222);
+
+        $pidFile = ServiceRunner::pidFilePath('overwrite_pid');
+        $this->assertEquals('222', file_get_contents($pidFile));
+    }
 }

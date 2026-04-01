@@ -143,4 +143,111 @@ class CorsTest extends TestCase
 
         $this->assertArrayNotHasKey('Access-Control-Allow-Origin', $headers);
     }
+
+    // -- Credentials header ---------------------------------------------------
+
+    public function testCredentialsHeaderForSpecificOrigin(): void
+    {
+        $cors = new CorsMiddleware(origins: 'http://app.com', credentials: true);
+
+        $headers = $cors->getHeaders('http://app.com');
+
+        $this->assertArrayHasKey('Access-Control-Allow-Credentials', $headers);
+        $this->assertEquals('true', $headers['Access-Control-Allow-Credentials']);
+    }
+
+    public function testNoCredentialsHeaderForWildcard(): void
+    {
+        $cors = new CorsMiddleware(credentials: true);
+
+        $headers = $cors->getHeaders('http://example.com');
+
+        // Credentials must not be sent with wildcard origin
+        $this->assertArrayNotHasKey('Access-Control-Allow-Credentials', $headers);
+    }
+
+    // -- Multiple origins matching -------------------------------------------
+
+    public function testMultipleOriginsMatch(): void
+    {
+        $cors = new CorsMiddleware(origins: 'https://a.com,https://b.com');
+
+        $headers = $cors->getHeaders('https://b.com');
+        $this->assertEquals('https://b.com', $headers['Access-Control-Allow-Origin']);
+
+        $headers2 = $cors->getHeaders('https://c.com');
+        $this->assertArrayNotHasKey('Access-Control-Allow-Origin', $headers2);
+    }
+
+    // -- Preflight case insensitive ------------------------------------------
+
+    public function testPreflightCaseInsensitive(): void
+    {
+        $cors = new CorsMiddleware();
+        $this->assertTrue($cors->isPreflight('OPTIONS'));
+        $this->assertTrue($cors->isPreflight('Options'));
+        $this->assertTrue($cors->isPreflight('options'));
+    }
+
+    // -- Default max age -----------------------------------------------------
+
+    public function testDefaultMaxAge(): void
+    {
+        $cors = new CorsMiddleware();
+        $headers = $cors->getHeaders();
+        $this->assertArrayHasKey('Access-Control-Max-Age', $headers);
+    }
+
+    // -- Custom max age zero -------------------------------------------------
+
+    public function testMaxAgeZero(): void
+    {
+        $cors = new CorsMiddleware(maxAge: 0);
+        $headers = $cors->getHeaders();
+        $this->assertEquals('0', $headers['Access-Control-Max-Age']);
+    }
+
+    // -- Default headers include X-Request-ID --------------------------------
+
+    public function testDefaultHeadersIncludeXRequestId(): void
+    {
+        $cors = new CorsMiddleware();
+        $headers = $cors->getHeaders();
+        $this->assertStringContainsString('X-Request-ID', $headers['Access-Control-Allow-Headers']);
+    }
+
+    // -- Handle returns correct structure for preflight ----------------------
+
+    public function testHandlePreflightStructure(): void
+    {
+        $cors = new CorsMiddleware();
+        $result = $cors->handle('OPTIONS', 'http://example.com');
+
+        $this->assertArrayHasKey('preflight', $result);
+        $this->assertArrayHasKey('headers', $result);
+        $this->assertTrue($result['preflight']);
+        $this->assertArrayHasKey('Access-Control-Allow-Methods', $result['headers']);
+        $this->assertArrayHasKey('Access-Control-Allow-Headers', $result['headers']);
+        $this->assertArrayHasKey('Access-Control-Max-Age', $result['headers']);
+    }
+
+    // -- Handle non-preflight includes origin --------------------------------
+
+    public function testHandleNonPreflightIncludesOrigin(): void
+    {
+        $cors = new CorsMiddleware();
+        $result = $cors->handle('POST', 'http://example.com');
+
+        $this->assertFalse($result['preflight']);
+        $this->assertEquals('*', $result['headers']['Access-Control-Allow-Origin']);
+    }
+
+    // -- Wildcard origin with any request origin -----------------------------
+
+    public function testWildcardOriginWithAnyRequestOrigin(): void
+    {
+        $cors = new CorsMiddleware();
+        $this->assertEquals('*', $cors->getHeaders('https://anything.example.com')['Access-Control-Allow-Origin']);
+        $this->assertEquals('*', $cors->getHeaders('http://localhost:3000')['Access-Control-Allow-Origin']);
+    }
 }

@@ -140,4 +140,79 @@ class RateLimiterTest extends TestCase
         // Should still have the entry since it's within the window
         $this->assertEquals(1, $limiter->getRequestCount('127.0.0.1'));
     }
+
+    // -- Sliding window behavior (requests expire after window) ---------------
+
+    public function testSlidingWindowBehavior(): void
+    {
+        $limiter = new RateLimiter(limit: 10, window: 1);
+
+        // Make several requests
+        $limiter->check('10.0.0.1');
+        $limiter->check('10.0.0.1');
+        $limiter->check('10.0.0.1');
+
+        $this->assertEquals(3, $limiter->getRequestCount('10.0.0.1'));
+
+        // After window expires, requests should be cleaned up
+        sleep(2);
+        $limiter->cleanup();
+        $this->assertEquals(0, $limiter->getRequestCount('10.0.0.1'));
+    }
+
+    // -- Custom limits per limiter instance ----------------------------------
+
+    public function testCustomLimitsPerInstance(): void
+    {
+        $limiter1 = new RateLimiter(limit: 5, window: 60);
+        $limiter2 = new RateLimiter(limit: 100, window: 60);
+
+        $this->assertEquals(5, $limiter1->getLimit());
+        $this->assertEquals(100, $limiter2->getLimit());
+    }
+
+    // -- Reset clears specific IP -------------------------------------------
+
+    public function testResetOnlyAffectsThisLimiter(): void
+    {
+        $limiter = new RateLimiter(limit: 10, window: 60);
+
+        $limiter->check('10.0.0.1');
+        $limiter->check('10.0.0.2');
+        $limiter->reset();
+
+        $this->assertEquals(0, $limiter->getRequestCount('10.0.0.1'));
+        $this->assertEquals(0, $limiter->getRequestCount('10.0.0.2'));
+    }
+
+    // -- Rate limit headers contain Retry-After when exceeded ----------------
+
+    public function testRetryAfterHeaderWhenExceeded(): void
+    {
+        $limiter = new RateLimiter(limit: 1, window: 60);
+
+        $limiter->check('127.0.0.1');
+        $result = $limiter->check('127.0.0.1');
+
+        $this->assertFalse($result['allowed']);
+        $this->assertArrayHasKey('Retry-After', $result['headers']);
+        $retryAfter = (int)$result['headers']['Retry-After'];
+        $this->assertGreaterThan(0, $retryAfter);
+        $this->assertLessThanOrEqual(60, $retryAfter);
+    }
+
+    // -- Multiple IPs can be tracked concurrently ----------------------------
+
+    public function testMultipleIpsTrackedConcurrently(): void
+    {
+        $limiter = new RateLimiter(limit: 10, window: 60);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $limiter->check("10.0.0.{$i}");
+        }
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->assertEquals(1, $limiter->getRequestCount("10.0.0.{$i}"));
+        }
+    }
 }

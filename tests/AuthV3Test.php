@@ -353,6 +353,182 @@ class AuthV3Test extends TestCase
         $this->assertNull($result);
     }
 
+    // ── Authenticate Request ──────────────────────────────────────
+
+    public function testAuthenticateRequestValidBearer(): void
+    {
+        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $this->secret);
+        $result = Auth::authenticateRequest(['Authorization' => "Bearer $token"], $this->secret);
+
+        $this->assertNotNull($result);
+        $this->assertEquals('user-1', $result['sub']);
+        $this->assertEquals('admin', $result['role']);
+    }
+
+    public function testAuthenticateRequestLowercaseHeader(): void
+    {
+        $token = Auth::getToken(['sub' => 'user-2'], $this->secret);
+        $result = Auth::authenticateRequest(['authorization' => "Bearer $token"], $this->secret);
+
+        $this->assertNotNull($result);
+        $this->assertEquals('user-2', $result['sub']);
+    }
+
+    public function testAuthenticateRequestMissingHeader(): void
+    {
+        $result = Auth::authenticateRequest([], $this->secret);
+        $this->assertNull($result);
+    }
+
+    public function testAuthenticateRequestInvalidBearer(): void
+    {
+        $result = Auth::authenticateRequest(['Authorization' => 'Bearer invalid.token.here'], $this->secret);
+        $this->assertNull($result);
+    }
+
+    public function testAuthenticateRequestNonBearerScheme(): void
+    {
+        $result = Auth::authenticateRequest(['Authorization' => 'Basic dXNlcjpwYXNz'], $this->secret);
+        $this->assertNull($result);
+    }
+
+    public function testAuthenticateRequestEmptyHeader(): void
+    {
+        $result = Auth::authenticateRequest(['Authorization' => ''], $this->secret);
+        $this->assertNull($result);
+    }
+
+    // ── Validate API Key ────────────────────────────────────────
+
+    public function testValidateApiKeyCorrect(): void
+    {
+        $this->assertTrue(Auth::validateApiKey('test-key-123', 'test-key-123'));
+    }
+
+    public function testValidateApiKeyWrong(): void
+    {
+        $this->assertFalse(Auth::validateApiKey('wrong-key', 'correct-key'));
+    }
+
+    public function testValidateApiKeyNoExpected(): void
+    {
+        $this->assertFalse(Auth::validateApiKey('anything'));
+    }
+
+    public function testValidateApiKeyEmptyExpected(): void
+    {
+        $this->assertFalse(Auth::validateApiKey('key', ''));
+    }
+
+    public function testValidateApiKeyCaseSensitive(): void
+    {
+        $this->assertTrue(Auth::validateApiKey('MyKey123', 'MyKey123'));
+        $this->assertFalse(Auth::validateApiKey('mykey123', 'MyKey123'));
+    }
+
+    // ── Token Refresh ───────────────────────────────────────────
+
+    public function testRefreshTokenValid(): void
+    {
+        $original = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $this->secret, 3600);
+        sleep(1); // Ensure different iat
+        $refreshed = Auth::refreshToken($original, $this->secret, 7200);
+
+        $this->assertNotNull($refreshed);
+        $this->assertNotSame($original, $refreshed);
+
+        $payload = Auth::validToken($refreshed, $this->secret);
+        $this->assertNotNull($payload);
+        $this->assertEquals('user-1', $payload['sub']);
+        $this->assertEquals('admin', $payload['role']);
+    }
+
+    public function testRefreshTokenInvalid(): void
+    {
+        $result = Auth::refreshToken('bad.token.here', $this->secret);
+        $this->assertNull($result);
+    }
+
+    public function testRefreshTokenNewExpiry(): void
+    {
+        $original = Auth::getToken(['sub' => '1'], $this->secret, 60);
+        $refreshed = Auth::refreshToken($original, $this->secret, 7200);
+
+        $payload = Auth::validToken($refreshed, $this->secret);
+        $this->assertNotNull($payload);
+        $this->assertEquals($payload['iat'] + 7200, $payload['exp']);
+    }
+
+    // ── RS256 Additional Tests ─────────────────────────────────────
+
+    public function testRS256TokenExpiry(): void
+    {
+        $config = ['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA];
+        $keyPair = openssl_pkey_new($config);
+        openssl_pkey_export($keyPair, $privateKey);
+        $publicKeyDetails = openssl_pkey_get_details($keyPair);
+        $publicKey = $publicKeyDetails['key'];
+
+        $token = Auth::getToken(
+            ['sub' => 'test', 'exp' => time() - 10],
+            $privateKey,
+            0,
+            'RS256'
+        );
+
+        $payload = Auth::validToken($token, $publicKey, 'RS256');
+        $this->assertNull($payload); // Expired
+    }
+
+    // ── Password Edge Cases ──────────────────────────────────────
+
+    public function testLongPassword(): void
+    {
+        $longPw = str_repeat('a', 10000);
+        $hash = Auth::hashPassword($longPw);
+        $this->assertTrue(Auth::checkPassword($longPw, $hash));
+    }
+
+    public function testCheckPasswordWrongPrefix(): void
+    {
+        $this->assertFalse(Auth::checkPassword('password', 'bcrypt$100$salt$hash'));
+    }
+
+    // ── JWT Edge Cases ───────────────────────────────────────────
+
+    public function testTwoPartToken(): void
+    {
+        $this->assertNull(Auth::validToken('header.payload', $this->secret));
+    }
+
+    public function testFourPartToken(): void
+    {
+        $this->assertNull(Auth::validToken('a.b.c.d', $this->secret));
+    }
+
+    public function testGetPayloadTwoParts(): void
+    {
+        $this->assertNull(Auth::getPayload('a.b'));
+    }
+
+    // ── JWT Standard Claims ──────────────────────────────────────
+
+    public function testSubClaimPreserved(): void
+    {
+        $token = Auth::getToken(['sub' => 'user:1', 'iss' => 'tina4'], $this->secret);
+        $payload = Auth::validToken($token, $this->secret);
+        $this->assertEquals('user:1', $payload['sub']);
+        $this->assertEquals('tina4', $payload['iss']);
+    }
+
+    public function testCustomClaimsPreserved(): void
+    {
+        $token = Auth::getToken(['roles' => ['admin', 'editor'], 'org' => 'acme'], $this->secret);
+        $payload = Auth::validToken($token, $this->secret);
+        $this->assertEquals(['admin', 'editor'], $payload['roles']);
+        $this->assertEquals('acme', $payload['org']);
+    }
+
     // ── Helper ────────────────────────────────────────────────────
 
     /**

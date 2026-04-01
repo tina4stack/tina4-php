@@ -173,4 +173,84 @@ class ScssV3Test extends TestCase
         $css = $this->compiler->compile('');
         $this->assertSame('', $css);
     }
+
+    // -- Import with underscore partial prefix --------------------------------
+
+    public function testImportPartialNotCompiledStandalone(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/tina4_scss_import_' . uniqid();
+        mkdir($tempDir, 0777, true);
+
+        file_put_contents($tempDir . '/_helpers.scss', '.helper { display: block; }');
+        file_put_contents($tempDir . '/app.scss', '.app { color: red; }');
+
+        $compiler = new ScssCompiler();
+        $css = $compiler->compileFile($tempDir . '/app.scss');
+        $this->assertStringContainsString('.app', $css);
+
+        unlink($tempDir . '/_helpers.scss');
+        unlink($tempDir . '/app.scss');
+        rmdir($tempDir);
+    }
+
+    // -- Mixin without parameters (basic test expansion) ----------------------
+
+    public function testMixinWithoutParamsExpands(): void
+    {
+        $scss = '@mixin clearfix { overflow: hidden; display: block; } .container { @include clearfix; color: blue; }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('overflow: hidden', $css);
+        $this->assertStringContainsString('display: block', $css);
+        $this->assertStringContainsString('color: blue', $css);
+    }
+
+    // -- Variable used in multiple properties --------------------------------
+
+    public function testVariableInMultiplePlaces(): void
+    {
+        $scss = '$primary: blue; .btn { color: $primary; border: 1px solid $primary; }';
+        $css = $this->compiler->compile($scss);
+        $numBlue = substr_count($css, 'blue');
+        $this->assertGreaterThanOrEqual(2, $numBlue);
+    }
+
+    // -- Multiple selectors in nesting ---------------------------------------
+
+    public function testMultipleSelectorsInNestingBothExpanded(): void
+    {
+        $scss = '.parent { h1, h2 { color: blue; } }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('.parent h1', $css);
+        $this->assertStringContainsString('.parent h2', $css);
+    }
+
+    // -- Math subtraction ----------------------------------------------------
+
+    public function testMathSubtraction(): void
+    {
+        $scss = '.box { margin: 20px - 5px; }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('15px', $css);
+    }
+
+    // -- Media query within nesting produces correct output ------------------
+
+    public function testMediaQueryNestingCorrectOutput(): void
+    {
+        $scss = '.container { width: 960px; @media (max-width: 768px) { width: 100%; } }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('@media', $css);
+        $this->assertStringContainsString('max-width: 768px', $css);
+        $this->assertStringContainsString('width: 100%', $css);
+        $this->assertStringContainsString('width: 960px', $css);
+    }
+
+    // -- Comment only input produces no rules --------------------------------
+
+    public function testCommentOnlyInput(): void
+    {
+        $scss = "// Just a comment\n// Another comment";
+        $css = $this->compiler->compile($scss);
+        $this->assertStringNotContainsString('Just a comment', $css);
+    }
 }

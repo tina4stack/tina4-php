@@ -82,7 +82,7 @@ class CsrfMiddleware
         }
 
         // Reject if token is in query string (security risk)
-        $query = $request->params ?? $request->query ?? [];
+        $query = $request->query ?? $request->params ?? [];
         if (is_array($query) && !empty($query['formToken'])) {
             error_log('[Tina4 CSRF] Token found in query string — rejected for security');
             return [$request, $response->error(

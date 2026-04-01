@@ -190,4 +190,88 @@ class I18nV3Test extends TestCase
         $i18n = new I18n($this->tempDir, 'en');
         $this->assertSame('deep value', $i18n->t('a.b.c'));
     }
+
+    // -- Fallback from non-default locale to default --------------------------
+
+    public function testFallbackNestedKeyFromNonDefault(): void
+    {
+        $this->writeLocale('en', [
+            'nav' => ['home' => 'Home', 'about' => 'About'],
+        ]);
+        $this->writeLocale('fr', [
+            'nav' => ['home' => 'Accueil'],
+        ]);
+        $i18n = new I18n($this->tempDir, 'en');
+        $i18n->setLocale('fr');
+        // 'nav.about' not in fr, should fall back to en
+        $this->assertSame('About', $i18n->t('nav.about'));
+    }
+
+    // -- Missing key returns key in non-default locale -----------------------
+
+    public function testMissingKeyReturnsKeyInNonDefaultLocale(): void
+    {
+        $this->writeLocale('en', ['greeting' => 'Hello']);
+        $this->writeLocale('fr', ['greeting' => 'Bonjour']);
+        $i18n = new I18n($this->tempDir, 'en');
+        $i18n->setLocale('fr');
+        $this->assertSame('totally.missing.key', $i18n->t('totally.missing.key'));
+    }
+
+    // -- Third locale with fallback -------------------------------------------
+
+    public function testThirdLocaleGreeting(): void
+    {
+        $this->writeLocale('en', ['greeting' => 'Hello', 'farewell' => 'Goodbye']);
+        $this->writeLocale('de', ['greeting' => 'Hallo']);
+        $i18n = new I18n($this->tempDir, 'en');
+        $i18n->setLocale('de');
+        $this->assertSame('Hallo', $i18n->t('greeting'));
+    }
+
+    public function testThirdLocaleFallsBackToDefault(): void
+    {
+        $this->writeLocale('en', ['greeting' => 'Hello', 'farewell' => 'Goodbye']);
+        $this->writeLocale('de', ['greeting' => 'Hallo']);
+        $i18n = new I18n($this->tempDir, 'en');
+        $i18n->setLocale('de');
+        // 'farewell' not in de, should fall back to en
+        $this->assertSame('Goodbye', $i18n->t('farewell'));
+    }
+
+    // -- Interpolation missing placeholder ----------------------------------
+
+    public function testInterpolationMissingPlaceholder(): void
+    {
+        $this->writeLocale('en', ['welcome' => 'Welcome, {name}!']);
+        $i18n = new I18n($this->tempDir, 'en');
+        // Pass nothing for {name} — should not crash
+        $result = $i18n->t('welcome');
+        $this->assertStringContainsString('Welcome', $result);
+    }
+
+    // -- French interpolation ------------------------------------------------
+
+    public function testFrenchInterpolation(): void
+    {
+        $this->writeLocale('en', ['welcome' => 'Welcome, {name}!']);
+        $this->writeLocale('fr', ['welcome' => 'Bienvenue, {name}!']);
+        $i18n = new I18n($this->tempDir, 'en');
+        $i18n->setLocale('fr');
+        $this->assertSame('Bienvenue, Alice!', $i18n->t('welcome', ['name' => 'Alice']));
+    }
+
+    // -- Available locales sorted --------------------------------------------
+
+    public function testAvailableLocalesSorted(): void
+    {
+        $this->writeLocale('en', ['a' => 'b']);
+        $this->writeLocale('fr', ['a' => 'c']);
+        $this->writeLocale('de', ['a' => 'd']);
+        $i18n = new I18n($this->tempDir, 'en');
+        $locales = $i18n->getAvailableLocales();
+        $sorted = $locales;
+        sort($sorted);
+        $this->assertSame($sorted, $locales);
+    }
 }

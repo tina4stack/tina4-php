@@ -158,4 +158,97 @@ class HtmlElementTest extends TestCase
         $html = $_div(['class' => 'nav'], $_a(['href' => '/'], 'Home'));
         $this->assertSame('<div class="nav"><a href="/">Home</a></div>', (string) $html);
     }
+
+    // -- Additional nesting tests --------------------------------------------
+
+    public function testDeeplyNestedElements(): void
+    {
+        $span = new HtmlElement('span', [], ['deep']);
+        $p = new HtmlElement('p', [], [$span]);
+        $div = new HtmlElement('div', ['class' => 'wrap'], [$p]);
+        $this->assertSame('<div class="wrap"><p><span>deep</span></p></div>', (string) $div);
+    }
+
+    // -- Tag lowercased -------------------------------------------------------
+
+    public function testTagLowercased(): void
+    {
+        $el = new HtmlElement('DIV');
+        $this->assertSame('<div></div>', (string) $el);
+    }
+
+    // -- Additional void tags ------------------------------------------------
+
+    public function testHrVoidTag(): void
+    {
+        $el = new HtmlElement('hr');
+        $this->assertSame('<hr>', (string) $el);
+    }
+
+    public function testMetaVoidTag(): void
+    {
+        $el = new HtmlElement('meta', ['charset' => 'utf-8']);
+        $this->assertSame('<meta charset="utf-8">', (string) $el);
+    }
+
+    public function testLinkVoidTag(): void
+    {
+        $el = new HtmlElement('link', ['rel' => 'stylesheet', 'href' => '/style.css']);
+        $html = (string) $el;
+        $this->assertStringContainsString('rel="stylesheet"', $html);
+        $this->assertStringContainsString('href="/style.css"', $html);
+        $this->assertStringNotContainsString('</link>', $html);
+    }
+
+    // -- Text child rendering -------------------------------------------------
+
+    public function testTextChildRendered(): void
+    {
+        $el = new HtmlElement('p', [], ['Hello World']);
+        $result = (string) $el;
+        $this->assertStringContainsString('Hello World', $result);
+    }
+
+    // -- Html element child not double-escaped --------------------------------
+
+    public function testHtmlElementChildNotDoubleEscaped(): void
+    {
+        $inner = new HtmlElement('em', [], ['bold']);
+        $outer = new HtmlElement('p', [], [$inner]);
+        $this->assertSame('<p><em>bold</em></p>', (string) $outer);
+    }
+
+    // -- Builder with list children ------------------------------------------
+
+    public function testInvokeWithListChildren(): void
+    {
+        $items = [new HtmlElement('li', [], ['a']), new HtmlElement('li', [], ['b'])];
+        $ul = (new HtmlElement('ul'))($items);
+        $this->assertSame('<ul><li>a</li><li>b</li></ul>', (string) $ul);
+    }
+
+    // -- Paragraph with text --------------------------------------------------
+
+    public function testParagraphWithText(): void
+    {
+        $el = new HtmlElement('p', [], ['Some text']);
+        $this->assertSame('<p>Some text</p>', (string) $el);
+    }
+
+    // -- Helpers table tag exists ---------------------------------------------
+
+    public function testHelpersIncludeTableTag(): void
+    {
+        $helpers = HtmlElement::helpers();
+        $this->assertArrayHasKey('_table', $helpers);
+    }
+
+    // -- repr same as str -----------------------------------------------------
+
+    public function testReprSameAsStr(): void
+    {
+        $el = new HtmlElement('div', ['id' => 'r'], ['ok']);
+        // In PHP, __toString is the only string conversion
+        $this->assertSame((string) $el, (string) $el);
+    }
 }

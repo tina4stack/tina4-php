@@ -57,6 +57,7 @@
             <file>tests/StaticFilesTest.php</file>
             <file>tests/MetricsTest.php</file>
             <file>tests/CLIScaffoldingTest.php</file>
+            <file>tests/CsrfMiddlewareTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>

@@ -434,4 +434,530 @@ class DatabaseDriversTest extends TestCase
         $this->assertInstanceOf(FirebirdAdapter::class, $db);
         $db->close();
     }
+
+    // ── Connection URL Parsing ──────────────────────────────────────
+
+    public function testDatabaseUrlPostgresql(): void
+    {
+        $url = new \Tina4\DatabaseUrl('postgresql://alice:secret@db.example.com:5433/myapp');
+        $this->assertEquals('postgresql', $url->scheme);
+        $this->assertEquals('db.example.com', $url->host);
+        $this->assertEquals(5433, $url->port);
+        $this->assertEquals('alice', $url->username);
+        $this->assertEquals('secret', $url->password);
+        $this->assertEquals('myapp', $url->database);
+    }
+
+    public function testDatabaseUrlMysql(): void
+    {
+        $url = new \Tina4\DatabaseUrl('mysql://root:pass123@mysql-server:3307/shop');
+        $this->assertEquals('mysql', $url->scheme);
+        $this->assertEquals('mysql-server', $url->host);
+        $this->assertEquals(3307, $url->port);
+        $this->assertEquals('root', $url->username);
+        $this->assertEquals('pass123', $url->password);
+        $this->assertEquals('shop', $url->database);
+    }
+
+    public function testDatabaseUrlMssql(): void
+    {
+        $url = new \Tina4\DatabaseUrl('mssql://sa:MyPass@mssql-host:1434/warehouse');
+        $this->assertEquals('mssql', $url->scheme);
+        $this->assertEquals('mssql-host', $url->host);
+        $this->assertEquals(1434, $url->port);
+        $this->assertEquals('sa', $url->username);
+        $this->assertEquals('MyPass', $url->password);
+    }
+
+    public function testDatabaseUrlFirebird(): void
+    {
+        $url = new \Tina4\DatabaseUrl('firebird://SYSDBA:masterkey@fbhost:3050/var/lib/firebird/data/app.fdb');
+        $this->assertEquals('firebird', $url->scheme);
+        $this->assertEquals('fbhost', $url->host);
+        $this->assertEquals(3050, $url->port);
+        $this->assertEquals('SYSDBA', $url->username);
+        $this->assertEquals('masterkey', $url->password);
+    }
+
+    public function testDatabaseUrlPostgresqlDefaults(): void
+    {
+        $url = new \Tina4\DatabaseUrl('postgresql://localhost/testdb');
+        $this->assertEquals('localhost', $url->host);
+        $this->assertEquals('testdb', $url->database);
+    }
+
+    public function testDatabaseUrlGetDsn(): void
+    {
+        $url = new \Tina4\DatabaseUrl('postgres://user:pass@host:5432/mydb');
+        $dsn = $url->getDsn();
+        $this->assertStringContainsString('host', $dsn);
+        $this->assertStringContainsString('5432', $dsn);
+    }
+
+    // ── SQLite CRUD Tests ───────────────────────────────────────────
+
+    public function testSQLiteInsertAndFetch(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_crud (id INTEGER PRIMARY KEY, name VARCHAR(100))");
+        $adapter->exec("INSERT INTO _test_crud (id, name) VALUES (1, 'Alice')");
+
+        $rows = $adapter->query("SELECT * FROM _test_crud WHERE name = 'Alice'");
+        $this->assertNotEmpty($rows);
+        $this->assertEquals('Alice', $rows[0]['name']);
+
+        $db->close();
+    }
+
+    public function testSQLiteUpdate(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_upd (id INTEGER PRIMARY KEY, name VARCHAR(100))");
+        $adapter->exec("INSERT INTO _test_upd (id, name) VALUES (1, 'Alice')");
+        $adapter->exec("UPDATE _test_upd SET name = 'Bob' WHERE id = 1");
+
+        $rows = $adapter->query("SELECT * FROM _test_upd WHERE id = 1");
+        $this->assertNotEmpty($rows);
+        $this->assertEquals('Bob', $rows[0]['name']);
+
+        $db->close();
+    }
+
+    public function testSQLiteDelete(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_del (id INTEGER PRIMARY KEY, name VARCHAR(100))");
+        $adapter->exec("INSERT INTO _test_del (id, name) VALUES (1, 'Alice')");
+        $adapter->exec("DELETE FROM _test_del WHERE id = 1");
+
+        $result = $adapter->fetch("SELECT * FROM _test_del", 10);
+        $this->assertTrue($result === null || empty($result->records));
+
+        $db->close();
+    }
+
+    public function testSQLiteTableExists(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_exists (id INTEGER PRIMARY KEY)");
+
+        $this->assertTrue($adapter->tableExists('_test_exists'));
+        $this->assertFalse($adapter->tableExists('_nonexistent_table'));
+
+        $db->close();
+    }
+
+    public function testSQLiteGetDatabase(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $result = $adapter->getDatabase();
+        // getDatabase() returns the database path for SQLite
+        $this->assertNotNull($result);
+        $this->assertSame(':memory:', $result);
+
+        $db->close();
+    }
+
+    public function testSQLiteTransactionRollback(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_tx (id INTEGER PRIMARY KEY, name VARCHAR(100))");
+
+        // Start a new transaction, insert, then rollback
+        $adapter->startTransaction();
+        $adapter->exec("INSERT INTO _test_tx (id, name) VALUES (1, 'Alice')");
+        $adapter->rollback();
+
+        $result = $adapter->fetch("SELECT * FROM _test_tx", 10);
+        $this->assertTrue($result === null || empty($result->records));
+
+        $db->close();
+    }
+
+    public function testSQLiteTransactionCommit(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_txc (id INTEGER PRIMARY KEY, name VARCHAR(100))");
+
+        $adapter->startTransaction();
+        $adapter->exec("INSERT INTO _test_txc (id, name) VALUES (1, 'Alice')");
+        $adapter->commit();
+
+        $rows = $adapter->query("SELECT * FROM _test_txc WHERE id = 1");
+        $this->assertNotEmpty($rows);
+        $this->assertEquals('Alice', $rows[0]['name']);
+
+        $db->close();
+    }
+
+    public function testSQLiteCloseAndReopen(): void
+    {
+        $path = sys_get_temp_dir() . '/tina4_close_reopen_' . uniqid() . '.db';
+        $db = Database::create($path, autoCommit: true);
+        $adapter = $db->getAdapter();
+        $adapter->exec("CREATE TABLE _test_reopen (id INTEGER PRIMARY KEY, val TEXT)");
+        $adapter->exec("INSERT INTO _test_reopen (id, val) VALUES (1, 'hello')");
+        $db->close();
+
+        // Reopen
+        $db2 = Database::create($path, autoCommit: true);
+        $adapter2 = $db2->getAdapter();
+        $rows = $adapter2->query("SELECT * FROM _test_reopen WHERE id = 1");
+        $this->assertNotEmpty($rows);
+        $this->assertEquals('hello', $rows[0]['val']);
+        $db2->close();
+
+        @unlink($path);
+    }
+
+    public function testFactoryFromEnvWithSQLite(): void
+    {
+        $path = sys_get_temp_dir() . '/tina4_env_test_' . uniqid() . '.db';
+        putenv("TINA4_TEST_ENV_DB_URL=sqlite:///{$path}");
+
+        $db = Database::fromEnv('TINA4_TEST_ENV_DB_URL');
+        $this->assertNotNull($db);
+        $this->assertInstanceOf(Database::class, $db);
+        $db->close();
+
+        putenv('TINA4_TEST_ENV_DB_URL');
+        @unlink($path);
+    }
+
+    // ── Adapter Method Existence ────────────────────────────────────
+
+    public function testSQLite3AdapterHasRequiredMethods(): void
+    {
+        $methods = ['fetch', 'exec', 'execute', 'startTransaction', 'commit', 'rollback',
+                     'tableExists', 'getDatabase', 'close'];
+        foreach ($methods as $method) {
+            $this->assertTrue(
+                method_exists(SQLite3Adapter::class, $method),
+                "SQLite3Adapter missing method: {$method}"
+            );
+        }
+    }
+
+    public function testPostgresAdapterHasRequiredMethods(): void
+    {
+        $methods = ['fetch', 'execute', 'startTransaction', 'commit', 'rollback',
+                     'tableExists', 'getDatabase', 'close'];
+        foreach ($methods as $method) {
+            $this->assertTrue(
+                method_exists(PostgresAdapter::class, $method),
+                "PostgresAdapter missing method: {$method}"
+            );
+        }
+    }
+
+    public function testMySQLAdapterHasRequiredMethods(): void
+    {
+        $methods = ['fetch', 'execute', 'startTransaction', 'commit', 'rollback',
+                     'tableExists', 'getDatabase', 'close'];
+        foreach ($methods as $method) {
+            $this->assertTrue(
+                method_exists(MySQLAdapter::class, $method),
+                "MySQLAdapter missing method: {$method}"
+            );
+        }
+    }
+
+    public function testMSSQLAdapterHasRequiredMethods(): void
+    {
+        $methods = ['fetch', 'execute', 'startTransaction', 'commit', 'rollback',
+                     'tableExists', 'getDatabase', 'close'];
+        foreach ($methods as $method) {
+            $this->assertTrue(
+                method_exists(MSSQLAdapter::class, $method),
+                "MSSQLAdapter missing method: {$method}"
+            );
+        }
+    }
+
+    public function testFirebirdAdapterHasRequiredMethods(): void
+    {
+        $methods = ['fetch', 'execute', 'startTransaction', 'commit', 'rollback',
+                     'tableExists', 'getDatabase', 'close'];
+        foreach ($methods as $method) {
+            $this->assertTrue(
+                method_exists(FirebirdAdapter::class, $method),
+                "FirebirdAdapter missing method: {$method}"
+            );
+        }
+    }
+
+    // ── SQL Translation additional tests ────────────────────────────
+
+    public function testSqlTranslationConcatPipesToFunc(): void
+    {
+        $result = \Tina4\SqlTranslation::concatPipesToFunc(
+            "SELECT first_name || ' ' || last_name FROM users"
+        );
+        $this->assertStringContainsString('CONCAT', $result);
+        $this->assertStringNotContainsString('||', $result);
+    }
+
+    public function testSqlTranslationAutoIncrementSQLite(): void
+    {
+        $result = \Tina4\SqlTranslation::autoIncrementSyntax(
+            "CREATE TABLE test (id INTEGER AUTOINCREMENT, name TEXT)",
+            'sqlite'
+        );
+        $this->assertIsString($result);
+    }
+
+    public function testSqlTranslationAutoIncrementMySQL(): void
+    {
+        $result = \Tina4\SqlTranslation::autoIncrementSyntax(
+            "CREATE TABLE test (id INTEGER AUTOINCREMENT, name TEXT)",
+            'mysql'
+        );
+        $this->assertIsString($result);
+    }
+
+    public function testSqlTranslationFirebirdBooleanAndIlike(): void
+    {
+        $translated = \Tina4\SqlTranslation::translate(
+            "SELECT * FROM users WHERE active = TRUE AND name ILIKE '%bob%' AND deleted = FALSE",
+            'firebird'
+        );
+        $this->assertStringContainsString('1', $translated);
+        $this->assertStringContainsString('0', $translated);
+        $this->assertStringContainsString('LOWER', $translated);
+        $this->assertStringNotContainsString('TRUE', $translated);
+        $this->assertStringNotContainsString('FALSE', $translated);
+        $this->assertStringNotContainsString('ILIKE', $translated);
+    }
+
+    public function testSqlTranslationFirebirdLimitOnlyToRows(): void
+    {
+        $translated = \Tina4\SqlTranslation::translate(
+            "SELECT * FROM users LIMIT 10",
+            'firebird'
+        );
+        $this->assertStringContainsString('ROWS', $translated);
+        $this->assertStringNotContainsString('LIMIT', $translated);
+    }
+
+    public function testSqlTranslationMssqlBooleanToIntDirect(): void
+    {
+        // MSSQL translate() doesn't apply booleanToInt; test the function directly
+        $translated = \Tina4\SqlTranslation::booleanToInt(
+            "SELECT * FROM users WHERE active = TRUE AND deleted = FALSE"
+        );
+        $this->assertStringContainsString('1', $translated);
+        $this->assertStringContainsString('0', $translated);
+    }
+
+    public function testSqlTranslationQueryKey(): void
+    {
+        $key1 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users", []);
+        $key2 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users", []);
+        $key3 = \Tina4\SqlTranslation::queryKey("SELECT * FROM products", []);
+        $this->assertEquals($key1, $key2);
+        $this->assertNotEquals($key1, $key3);
+    }
+
+    public function testSqlTranslationCacheSetAndGet(): void
+    {
+        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SqlTranslation::cacheSet('test_key', ['result' => 42], 60);
+        $value = \Tina4\SqlTranslation::cacheGet('test_key');
+        $this->assertEquals(['result' => 42], $value);
+        \Tina4\SqlTranslation::cacheClear();
+    }
+
+    public function testSqlTranslationCacheSize(): void
+    {
+        \Tina4\SqlTranslation::cacheClear();
+        $this->assertEquals(0, \Tina4\SqlTranslation::cacheSize());
+        \Tina4\SqlTranslation::cacheSet('key1', 'val1', 60);
+        $this->assertEquals(1, \Tina4\SqlTranslation::cacheSize());
+        \Tina4\SqlTranslation::cacheClear();
+    }
+
+    public function testSqlTranslationCacheClear(): void
+    {
+        \Tina4\SqlTranslation::cacheSet('key1', 'val1', 60);
+        \Tina4\SqlTranslation::cacheSet('key2', 'val2', 60);
+        \Tina4\SqlTranslation::cacheClear();
+        $this->assertEquals(0, \Tina4\SqlTranslation::cacheSize());
+    }
+
+    public function testSqlTranslationRemember(): void
+    {
+        \Tina4\SqlTranslation::cacheClear();
+        $callCount = 0;
+        $factory = function () use (&$callCount) {
+            $callCount++;
+            return 'expensive_result';
+        };
+
+        $result1 = \Tina4\SqlTranslation::remember('remember_key', 60, $factory);
+        $result2 = \Tina4\SqlTranslation::remember('remember_key', 60, $factory);
+
+        $this->assertEquals('expensive_result', $result1);
+        $this->assertEquals('expensive_result', $result2);
+        $this->assertEquals(1, $callCount); // Factory called only once
+
+        \Tina4\SqlTranslation::cacheClear();
+    }
+
+    // ── Database.create auto-commit ─────────────────────────────────
+
+    public function testFactoryAutoCommitDefault(): void
+    {
+        $db = Database::create('sqlite::memory:');
+        $this->assertInstanceOf(Database::class, $db);
+        $db->close();
+    }
+
+    public function testFactoryAutoCommitExplicit(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $this->assertInstanceOf(Database::class, $db);
+        $db->close();
+    }
+
+    // ── Additional SQL Translation tests ────────────────────────────
+
+    public function testSqlTranslationMssqlBooleanToIntDirect2(): void
+    {
+        // MSSQL translate() only applies limitToTop — test booleanToInt directly
+        $translated = \Tina4\SqlTranslation::booleanToInt(
+            "WHERE active = TRUE AND disabled = FALSE"
+        );
+        $this->assertStringNotContainsString('TRUE', $translated);
+        $this->assertStringNotContainsString('FALSE', $translated);
+        $this->assertStringContainsString('1', $translated);
+        $this->assertStringContainsString('0', $translated);
+    }
+
+    public function testSqlTranslationFirebirdAutoIncrement(): void
+    {
+        $translated = \Tina4\SqlTranslation::translate(
+            "CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT)",
+            'firebird'
+        );
+        $this->assertStringNotContainsString('AUTOINCREMENT', $translated);
+    }
+
+    public function testSqlTranslationMysqlAutoIncrement(): void
+    {
+        $translated = \Tina4\SqlTranslation::autoIncrementSyntax(
+            "CREATE TABLE items (id INTEGER AUTOINCREMENT, name TEXT)",
+            'mysql'
+        );
+        $this->assertStringContainsString('AUTO_INCREMENT', $translated);
+        $this->assertStringNotContainsString('AUTOINCREMENT', $translated);
+    }
+
+    public function testSqlTranslationCacheGetMissReturnsNull(): void
+    {
+        \Tina4\SqlTranslation::cacheClear();
+        $value = \Tina4\SqlTranslation::cacheGet('nonexistent_key');
+        $this->assertNull($value);
+    }
+
+    public function testSqlTranslationCacheSweep(): void
+    {
+        \Tina4\SqlTranslation::cacheClear();
+        // Set with very short TTL
+        \Tina4\SqlTranslation::setCacheTtl(0);
+        \Tina4\SqlTranslation::cacheSet('sweep_key', 'val', 0);
+        // Sweep should remove expired entries
+        $swept = \Tina4\SqlTranslation::cacheSweep();
+        $this->assertIsInt($swept);
+        \Tina4\SqlTranslation::cacheClear();
+    }
+
+    public function testSqlTranslationRegisterAndApplyCustomFunction(): void
+    {
+        \Tina4\SqlTranslation::clearFunctions();
+        \Tina4\SqlTranslation::registerFunction('NOW', function ($sql) {
+            return str_ireplace('NOW()', 'CURRENT_TIMESTAMP', $sql);
+        });
+        $result = \Tina4\SqlTranslation::applyFunctionMappings('SELECT NOW() FROM dual');
+        $this->assertStringContainsString('CURRENT_TIMESTAMP', $result);
+        $this->assertStringNotContainsString('NOW()', $result);
+        \Tina4\SqlTranslation::clearFunctions();
+    }
+
+    public function testSqlTranslationQueryKeyWithParams(): void
+    {
+        $key1 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users WHERE id = ?", [1]);
+        $key2 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users WHERE id = ?", [2]);
+        $this->assertNotEquals($key1, $key2); // Different params = different keys
+    }
+
+    // ── SQLite multiple inserts and fetch with offset ──────────────
+
+    public function testSQLiteFetchWithLimit(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_page (id INTEGER PRIMARY KEY, name VARCHAR(100))");
+        for ($i = 1; $i <= 10; $i++) {
+            $adapter->exec("INSERT INTO _test_page (id, name) VALUES ({$i}, 'Item{$i}')");
+        }
+
+        $result = $adapter->fetch("SELECT * FROM _test_page ORDER BY id", 3);
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertCount(3, $result['data']);
+        $this->assertEquals(10, $result['total']);
+
+        $db->close();
+    }
+
+    // ── Factory supported schemes comprehensive ───────────────────
+
+    public function testFactoryAllSchemesSupported(): void
+    {
+        $expected = ['sqlite', 'postgres', 'postgresql', 'mysql', 'mssql', 'sqlserver', 'firebird'];
+        foreach ($expected as $scheme) {
+            $this->assertTrue(
+                Database::isSupported($scheme),
+                "Scheme '{$scheme}' should be supported"
+            );
+        }
+    }
+
+    // ── Multiple SQLite operations within transaction ─────────────
+
+    public function testSQLiteMultipleOperationsInTransaction(): void
+    {
+        $db = Database::create('sqlite::memory:', autoCommit: true);
+        $adapter = $db->getAdapter();
+
+        $adapter->exec("CREATE TABLE _test_multi (id INTEGER PRIMARY KEY, val TEXT)");
+
+        $adapter->startTransaction();
+        $adapter->exec("INSERT INTO _test_multi (id, val) VALUES (1, 'a')");
+        $adapter->exec("INSERT INTO _test_multi (id, val) VALUES (2, 'b')");
+        $adapter->exec("UPDATE _test_multi SET val = 'x' WHERE id = 1");
+        $adapter->commit();
+
+        $rows = $adapter->query("SELECT * FROM _test_multi ORDER BY id");
+        $this->assertCount(2, $rows);
+        $this->assertEquals('x', $rows[0]['val']);
+        $this->assertEquals('b', $rows[1]['val']);
+
+        $db->close();
+    }
 }

@@ -1,4 +1,4 @@
-# Tina4 PHP v3.10.45
+# Tina4 PHP v3.10.46
 
 Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
 

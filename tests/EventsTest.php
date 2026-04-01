@@ -261,4 +261,99 @@ class EventsTest extends TestCase
         $this->assertEquals(['kept'], Events::emit('keep'));
         $this->assertEmpty(Events::emit('remove'));
     }
+
+    // ── once with data ─────────────────────────────────
+
+    public function testOnceReceivesData(): void
+    {
+        $received = null;
+        Events::once('data.event', function ($data) use (&$received) {
+            $received = $data;
+        });
+
+        Events::emit('data.event', ['key' => 'value']);
+        $this->assertEquals(['key' => 'value'], $received);
+
+        $received = null;
+        Events::emit('data.event', ['key' => 'other']);
+        $this->assertNull($received); // once — not called again
+    }
+
+    // ── emit with multiple data types ──────────────────
+
+    public function testEmitWithStringData(): void
+    {
+        $received = null;
+        Events::on('str.event', function ($val) use (&$received) {
+            $received = $val;
+        });
+
+        Events::emit('str.event', 'hello world');
+        $this->assertSame('hello world', $received);
+    }
+
+    public function testEmitWithIntData(): void
+    {
+        $received = null;
+        Events::on('int.event', function ($val) use (&$received) {
+            $received = $val;
+        });
+
+        Events::emit('int.event', 42);
+        $this->assertSame(42, $received);
+    }
+
+    // ── remove nonexistent listener no error ──────────
+
+    public function testOffNonexistentListenerNoError(): void
+    {
+        $fn = function () { return 'a'; };
+        Events::on('test.off', $fn);
+
+        $other = function () { return 'b'; };
+        Events::off('test.off', $other); // remove a listener that wasn't added
+
+        // Original should still be there
+        $results = Events::emit('test.off');
+        $this->assertEquals(['a'], $results);
+    }
+
+    // ── once auto-removed after fire ────────────────────
+
+    public function testOnceAutoRemovedFromListeners(): void
+    {
+        Events::once('auto.remove', fn() => 'x');
+
+        $this->assertCount(1, Events::listeners('auto.remove'));
+        Events::emit('auto.remove');
+        $this->assertCount(0, Events::listeners('auto.remove'));
+    }
+
+    // ── emit returns all results in order ──────────────
+
+    public function testEmitReturnsAllResultsInOrder(): void
+    {
+        Events::on('multi.result', fn() => 'A', 10);
+        Events::on('multi.result', fn() => 'B', 5);
+        Events::on('multi.result', fn() => 'C', 1);
+
+        $results = Events::emit('multi.result');
+        $this->assertEquals(['A', 'B', 'C'], $results);
+    }
+
+    // ── events count after operations ──────────────────
+
+    public function testEventsCountAfterOperations(): void
+    {
+        Events::on('e1', fn() => null);
+        Events::on('e2', fn() => null);
+        Events::on('e3', fn() => null);
+
+        $this->assertCount(3, Events::events());
+
+        Events::off('e2');
+        $names = Events::events();
+        $this->assertContains('e1', $names);
+        $this->assertContains('e3', $names);
+    }
 }
