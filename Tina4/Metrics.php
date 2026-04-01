@@ -19,6 +19,27 @@ class Metrics
 
     private const CACHE_TTL = 60;
 
+    // ── Root Resolution ───────────────────────────────────────────
+
+    /**
+     * Pick the right directory to scan.
+     *
+     * If src/ has PHP files, scan the user's project code.
+     * Otherwise, scan the framework itself — so the bubble chart is never empty.
+     *
+     * @param string $root Default root directory
+     * @return string Resolved root path
+     */
+    private static function resolveRoot(string $root = "src"): string
+    {
+        $rootPath = realpath($root);
+        if ($rootPath !== false && is_dir($rootPath) && count(self::globRecursive($rootPath, "*.php")) > 0) {
+            return $root;
+        }
+        // Fallback: scan the framework package itself
+        return __DIR__;
+    }
+
     // ── Quick Metrics ──────────────────────────────────────────────
 
     /**
@@ -29,6 +50,7 @@ class Metrics
      */
     public static function quickMetrics(string $root = "src"): array
     {
+        $root = self::resolveRoot($root);
         $rootPath = realpath($root);
         if ($rootPath === false || !is_dir($rootPath)) {
             return ["error" => "Directory not found: {$root}"];
@@ -208,6 +230,7 @@ class Metrics
      */
     public static function fullAnalysis(string $root = "src"): array
     {
+        $root = self::resolveRoot($root);
         $currentHash = self::filesHash($root);
         $now = microtime(true);
 
@@ -333,6 +356,10 @@ class Metrics
         $totalMi = array_sum(array_column($fileMetrics, "maintainability"));
         $avgMi = count($fileMetrics) > 0 ? $totalMi / count($fileMetrics) : 0;
 
+        // Detect if we're scanning framework or project
+        $frameworkDir = realpath(__DIR__);
+        $scanningFramework = ($rootPath === $frameworkDir || str_starts_with($rootPath, $frameworkDir . DIRECTORY_SEPARATOR));
+
         $result = [
             "files_analyzed" => count($fileMetrics),
             "total_functions" => count($allFunctions),
@@ -342,6 +369,8 @@ class Metrics
             "file_metrics" => $fileMetrics,
             "violations" => $violations,
             "dependency_graph" => $importGraph,
+            "scan_mode" => $scanningFramework ? "framework" : "project",
+            "scan_root" => $rootPath,
         ];
 
         self::$fullCache = ["hash" => $currentHash, "data" => $result, "time" => $now];
