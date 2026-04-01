@@ -974,47 +974,131 @@ class Frond
 
     /* ───────────────────── expression evaluator ───────────────────── */
 
+    /** Sentinel returned by helpers when the expression doesn't match. */
+    private const NOT_MATCHED = '__NOT_MATCHED__';
+
     private function evaluateExpression(string $expr, array &$data): mixed
     {
         $expr = trim($expr);
         if ($expr === '') return '';
+
+        // 1. Literals (strings, numbers, booleans, null)
+        $v = $this->evaluateLiteral($expr);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 2. Parenthesized sub-expression
+        $v = $this->evaluateParenthesized($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 3. Ternary (? :) and inline-if
+        $v = $this->evaluateTernary($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 4. Null coalescing (??)
+        $v = $this->evaluateNullCoalesce($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 5. Logical operators (or, and, not)
+        $v = $this->evaluateLogical($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 6. Comparisons (==, !=, <, >, <=, >=, in, not in, is, is not)
+        $v = $this->evaluateComparison($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 7. Filter pipes
+        $v = $this->evaluateFilterPipe($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 8. String concatenation (~)
+        $v = $this->evaluateConcat($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 9. Arithmetic (+, -, *, /, //, %, **)
+        $v = $this->evaluateArithmetic($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 10. Collection literals ([...], {...}) and ranges
+        $v = $this->evaluateCollectionLiteral($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 11. Function / macro calls
+        $v = $this->evaluateFunctionCall($expr, $data);
+        if ($v !== self::NOT_MATCHED) return $v;
+
+        // 12. Variable resolution (fallback)
+        return $this->resolveVariable($expr, $data);
+    }
+
+    /* ── helper: literal evaluation ── */
+
+    private function evaluateLiteral(string $expr): mixed
+    {
         if ($expr === 'true') return true;
         if ($expr === 'false') return false;
         if ($expr === 'none' || $expr === 'null') return null;
 
-        // String literal early-return: if the whole expression is a single
-        // quoted string with no matching quote inside, return the inner text
-        // immediately.  This prevents operator checks (~, ??, comparisons)
-        // from mismatching characters that appear inside the string.
+        // Simple quoted string (no embedded same-quote)
         if (strlen($expr) >= 2) {
             $q = $expr[0];
-            if (($q === '"' || $q === "'") && str_ends_with($expr, $q) && !str_contains(substr($expr, 1, -1), $q)) {
-                $inner = substr($expr, 1, -1);
-                $inner = $this->processEscapes($inner);
-                return $inner;
+            if (($q === '"' || $q === "'") && str_ends_with($expr, $q)
+                && !str_contains(substr($expr, 1, -1), $q)) {
+                return $this->processEscapes(substr($expr, 1, -1));
             }
         }
 
-        // Parenthesized sub-expression: (expr) — strip parens and evaluate inner
-        if (strlen($expr) >= 2 && $expr[0] === '(' && str_ends_with($expr, ')')) {
-            $depth = 0;
-            $matched = true;
-            for ($pi = 0; $pi < strlen($expr); $pi++) {
-                if ($expr[$pi] === '(') $depth++;
-                elseif ($expr[$pi] === ')') $depth--;
-                if ($depth === 0 && $pi < strlen($expr) - 1) {
-                    $matched = false;
-                    break;
-                }
-            }
-            if ($matched) {
-                return $this->evaluateExpression(substr($expr, 1, -1), $data);
-            }
+        // Numeric literal
+        if (is_numeric($expr)) {
+            return str_contains($expr, '.') ? (float)$expr : (int)$expr;
         }
 
-        // Ternary MUST be checked before filter pipes so that expressions
-        // like ``products|length != 1 ? "s" : ""`` are parsed correctly.
-        // The ``?`` belongs to the ternary, not to a filter.
+        // Quoted string with embedded quotes (fallback)
+        if ((str_starts_with($expr, '"') && str_ends_with($expr, '"'))
+            || (str_starts_with($expr, "'") && str_ends_with($expr, "'"))) {
+            $inner = substr($expr, 1, -1);
+            return str_replace(
+                ['\\n', '\\t', '\\\\', "\\'", '\\"'],
+                ["\n", "\t", "\\", "'", '"'],
+                $inner
+            );
+        }
+
+        return self::NOT_MATCHED;
+    }
+
+    /* ── helper: parenthesized sub-expression ── */
+
+    private function evaluateParenthesized(string $expr, array &$data): mixed
+    {
+        if (strlen($expr) < 2 || $expr[0] !== '(' || !str_ends_with($expr, ')')) {
+            return self::NOT_MATCHED;
+        }
+        if ($this->matchedParens($expr)) {
+            return $this->evaluateExpression(substr($expr, 1, -1), $data);
+        }
+        return self::NOT_MATCHED;
+    }
+
+    /**
+     * Check whether the outer parentheses of $expr are a matched pair
+     * that wraps the entire expression.
+     */
+    private function matchedParens(string $expr): bool
+    {
+        $depth = 0;
+        for ($i = 0, $len = strlen($expr); $i < $len; $i++) {
+            if ($expr[$i] === '(') $depth++;
+            elseif ($expr[$i] === ')') $depth--;
+            if ($depth === 0 && $i < $len - 1) return false;
+        }
+        return true;
+    }
+
+    /* ── helper: ternary and inline-if ── */
+
+    private function evaluateTernary(string $expr, array &$data): mixed
+    {
+        // C-style ternary: condition ? trueVal : falseVal
         $ternaryPos = $this->findTernary($expr);
         if ($ternaryPos !== false) {
             $condition = trim(substr($expr, 0, $ternaryPos));
@@ -1024,15 +1108,13 @@ class Frond
                 $trueVal = trim(substr($rest, 0, $colonPos));
                 $falseVal = trim(substr($rest, $colonPos + 1));
                 $condResult = $this->evaluateExpression($condition, $data);
-                if ($this->isTruthy($condResult)) {
-                    return $this->evaluateExpression($trueVal, $data);
-                } else {
-                    return $this->evaluateExpression($falseVal, $data);
-                }
+                return $this->isTruthy($condResult)
+                    ? $this->evaluateExpression($trueVal, $data)
+                    : $this->evaluateExpression($falseVal, $data);
             }
         }
 
-        // Jinja2-style inline if: value if condition else other_value — quote-aware
+        // Jinja2-style inline if: value if condition else other_value
         $ifPos = $this->findOutsideQuotes($expr, ' if ');
         if ($ifPos !== false) {
             $elsePos = $this->findOutsideQuotes($expr, ' else ');
@@ -1040,25 +1122,33 @@ class Frond
                 $valuePart = trim(substr($expr, 0, $ifPos));
                 $condPart = trim(substr($expr, $ifPos + 4, $elsePos - $ifPos - 4));
                 $elsePart = trim(substr($expr, $elsePos + 6));
-                $condResult = $this->evaluateExpression($condPart, $data);
-                if ($this->isTruthy($condResult)) {
-                    return $this->evaluateExpression($valuePart, $data);
-                }
-                return $this->evaluateExpression($elsePart, $data);
+                return $this->isTruthy($this->evaluateExpression($condPart, $data))
+                    ? $this->evaluateExpression($valuePart, $data)
+                    : $this->evaluateExpression($elsePart, $data);
             }
         }
 
-        // Null coalescing: value ?? default
-        $coalPos = $this->findOutsideQuotes($expr, '??');
-        if ($coalPos !== false) {
-            $left = trim(substr($expr, 0, $coalPos));
-            $right = trim(substr($expr, $coalPos + 2));
-            $leftVal = $this->evaluateExpressionSafe($left, $data);
-            if ($leftVal !== null) return $leftVal;
-            return $this->evaluateExpression($right, $data);
-        }
+        return self::NOT_MATCHED;
+    }
 
-        // Logical: or
+    /* ── helper: null coalescing ── */
+
+    private function evaluateNullCoalesce(string $expr, array &$data): mixed
+    {
+        $coalPos = $this->findOutsideQuotes($expr, '??');
+        if ($coalPos === false) return self::NOT_MATCHED;
+
+        $left = trim(substr($expr, 0, $coalPos));
+        $right = trim(substr($expr, $coalPos + 2));
+        $leftVal = $this->evaluateExpressionSafe($left, $data);
+        return $leftVal !== null ? $leftVal : $this->evaluateExpression($right, $data);
+    }
+
+    /* ── helper: logical operators (or, and, not) ── */
+
+    private function evaluateLogical(string $expr, array &$data): mixed
+    {
+        // or
         $orPos = $this->findLogicalOp($expr, ' or ');
         if ($orPos !== false) {
             $left = trim(substr($expr, 0, $orPos));
@@ -1067,7 +1157,7 @@ class Frond
                 || $this->isTruthy($this->evaluateExpression($right, $data));
         }
 
-        // Logical: and
+        // and
         $andPos = $this->findLogicalOp($expr, ' and ');
         if ($andPos !== false) {
             $left = trim(substr($expr, 0, $andPos));
@@ -1081,25 +1171,33 @@ class Frond
             return !$this->isTruthy($this->evaluateExpression($m[1], $data));
         }
 
-        // Comparisons: ==, !=, <=, >=, <, >, in, not in
-        // "not in" check
+        return self::NOT_MATCHED;
+    }
+
+    /* ── helper: comparisons ── */
+
+    private function evaluateComparison(string $expr, array &$data): mixed
+    {
+        // "not in"
         $notInPos = $this->findLogicalOp($expr, ' not in ');
         if ($notInPos !== false) {
             $left = trim(substr($expr, 0, $notInPos));
             $right = trim(substr($expr, $notInPos + 8));
-            $leftVal = $this->evaluateExpression($left, $data);
-            $rightVal = $this->evaluateExpression($right, $data);
-            return !$this->checkIn($leftVal, $rightVal);
+            return !$this->checkIn(
+                $this->evaluateExpression($left, $data),
+                $this->evaluateExpression($right, $data)
+            );
         }
 
-        // "in" check
+        // "in"
         $inPos = $this->findLogicalOp($expr, ' in ');
         if ($inPos !== false) {
             $left = trim(substr($expr, 0, $inPos));
             $right = trim(substr($expr, $inPos + 4));
-            $leftVal = $this->evaluateExpression($left, $data);
-            $rightVal = $this->evaluateExpression($right, $data);
-            return $this->checkIn($leftVal, $rightVal);
+            return $this->checkIn(
+                $this->evaluateExpression($left, $data),
+                $this->evaluateExpression($right, $data)
+            );
         }
 
         // "is not" tests
@@ -1110,176 +1208,185 @@ class Frond
         // "is" tests
         if (preg_match(self::RE_IS_TEST, $expr, $m)) {
             $testName = trim($m[2]);
-            // Make sure this isn't a variable that happens to contain "is"
             if ($this->isKnownTest($testName)) {
                 return $this->evaluateTest(trim($m[1]), $testName, $data);
             }
         }
 
-        // Comparison operators (guard: only check if op appears outside quotes)
+        // Comparison operators: !=, ==, <=, >=, <, >
         foreach (['!=', '==', '<=', '>=', '<', '>'] as $op) {
             if ($this->findOutsideQuotes($expr, $op) === false) continue;
             $opPos = $this->findComparisonOp($expr, $op);
             if ($opPos !== false) {
-                $left = trim(substr($expr, 0, $opPos));
-                $right = trim(substr($expr, $opPos + strlen($op)));
-                $leftVal = $this->evaluateExpression($left, $data);
-                $rightVal = $this->evaluateExpression($right, $data);
+                $leftVal = $this->evaluateExpression(trim(substr($expr, 0, $opPos)), $data);
+                $rightVal = $this->evaluateExpression(trim(substr($expr, $opPos + strlen($op))), $data);
                 return match($op) {
                     '==' => $leftVal == $rightVal,
                     '!=' => $leftVal != $rightVal,
-                    '<' => $leftVal < $rightVal,
-                    '>' => $leftVal > $rightVal,
+                    '<'  => $leftVal < $rightVal,
+                    '>'  => $leftVal > $rightVal,
                     '<=' => $leftVal <= $rightVal,
                     '>=' => $leftVal >= $rightVal,
                 };
             }
         }
 
-        // Check for filter pipe (respecting strings and parens) — cached
-        // NOTE: Filter pipes are checked AFTER logical/comparison operators so
-        // that expressions like ``items|length > 0 and name|upper == "ALICE"``
-        // are split on ``and`` first, then each sub-expression processes its
-        // own filter pipes via recursive evaluateExpression calls.
+        return self::NOT_MATCHED;
+    }
+
+    /* ── helper: filter pipes ── */
+
+    private function evaluateFilterPipe(string $expr, array &$data): mixed
+    {
         $filterSplit = $this->filterChainCache[$expr] ?? null;
         if ($filterSplit === null) {
             $filterSplit = $this->splitFilters($expr);
             $this->filterChainCache[$expr] = $filterSplit;
         }
-        if (count($filterSplit) > 1) {
-            $value = $this->evaluateExpression($filterSplit[0], $data);
-            for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
-                $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
-            }
-            return $value;
-        }
+        if (count($filterSplit) <= 1) return self::NOT_MATCHED;
 
-        // String concatenation with ~
-        $tildePos = $this->findOutsideQuotes($expr, '~');
-        if ($tildePos !== false) {
-            $parts = $this->splitOutsideQuotes($expr, '~');
-            $result = '';
-            foreach ($parts as $part) {
-                $val = $this->evaluateExpression(trim($part), $data);
-                $str = $this->valueToString($val);
-                if (is_string($val) && str_contains($val, self::RAW_MARKER)) {
-                    $str = str_replace(self::RAW_MARKER, '', $str);
-                }
-                $result .= $str;
-            }
-            return $result;
+        $value = $this->evaluateExpression($filterSplit[0], $data);
+        for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
+            $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
         }
+        return $value;
+    }
 
-        // Math: +, -, *, //, /, %, **
+    /* ── helper: string concatenation (~) ── */
+
+    private function evaluateConcat(string $expr, array &$data): mixed
+    {
+        if ($this->findOutsideQuotes($expr, '~') === false) {
+            return self::NOT_MATCHED;
+        }
+        $parts = $this->splitOutsideQuotes($expr, '~');
+        $result = '';
+        foreach ($parts as $part) {
+            $val = $this->evaluateExpression(trim($part), $data);
+            $str = $this->valueToString($val);
+            if (is_string($val) && str_contains($val, self::RAW_MARKER)) {
+                $str = str_replace(self::RAW_MARKER, '', $str);
+            }
+            $result .= $str;
+        }
+        return $result;
+    }
+
+    /* ── helper: arithmetic ── */
+
+    private function evaluateArithmetic(string $expr, array &$data): mixed
+    {
         foreach ([['+', '-'], ['*', '//', '/', '%', '**']] as $ops) {
             foreach ($ops as $op) {
                 $opPos = $this->findMathOp($expr, $op);
-                if ($opPos !== false) {
-                    $left = trim(substr($expr, 0, $opPos));
-                    $right = trim(substr($expr, $opPos + strlen($op)));
-                    $leftVal = $this->evaluateExpression($left, $data);
-                    $rightVal = $this->evaluateExpression($right, $data);
-                    if (is_numeric($leftVal) && is_numeric($rightVal)) {
-                        return match($op) {
-                            '+' => $leftVal + $rightVal,
-                            '-' => $leftVal - $rightVal,
-                            '*' => $leftVal * $rightVal,
-                            '/' => $rightVal != 0 ? $leftVal / $rightVal : 0,
-                            '//' => $rightVal != 0 ? intdiv((int)$leftVal, (int)$rightVal) : 0,
-                            '%' => $rightVal != 0 ? $leftVal % $rightVal : 0,
-                            '**' => $leftVal ** $rightVal,
-                        };
-                    }
-                    // + can also concatenate arrays
-                    if ($op === '+' && is_array($leftVal) && is_array($rightVal)) {
-                        return array_merge($leftVal, $rightVal);
-                    }
-                    return match($op) {
-                        '+' => ($leftVal ?? 0) + ($rightVal ?? 0),
-                        '-' => ($leftVal ?? 0) - ($rightVal ?? 0),
-                        '*' => ($leftVal ?? 0) * ($rightVal ?? 0),
-                        '/' => ($rightVal ?? 0) != 0 ? ($leftVal ?? 0) / $rightVal : 0,
-                        '//' => ($rightVal ?? 0) != 0 ? intdiv((int)($leftVal ?? 0), (int)$rightVal) : 0,
-                        '%' => ($rightVal ?? 0) != 0 ? ($leftVal ?? 0) % $rightVal : 0,
-                        '**' => ($leftVal ?? 0) ** ($rightVal ?? 0),
-                    };
+                if ($opPos === false) continue;
+
+                $leftVal = $this->evaluateExpression(trim(substr($expr, 0, $opPos)), $data);
+                $rightVal = $this->evaluateExpression(trim(substr($expr, $opPos + strlen($op))), $data);
+
+                // Array merge for +
+                if ($op === '+' && is_array($leftVal) && is_array($rightVal)) {
+                    return array_merge($leftVal, $rightVal);
                 }
+
+                return $this->applyMathOp(
+                    $op,
+                    is_numeric($leftVal) ? $leftVal : ($leftVal ?? 0),
+                    is_numeric($rightVal) ? $rightVal : ($rightVal ?? 0)
+                );
             }
         }
 
-        // Parenthesized expression
-        if (str_starts_with($expr, '(') && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
+        // Fallback parenthesized expression (after operators)
+        if (str_starts_with($expr, '(')
+            && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
             return $this->evaluateExpression(substr($expr, 1, -1), $data);
         }
 
-        // Numeric literal
-        if (is_numeric($expr)) {
-            return str_contains($expr, '.') ? (float)$expr : (int)$expr;
-        }
+        return self::NOT_MATCHED;
+    }
 
-        // String literal
-        if ((str_starts_with($expr, '"') && str_ends_with($expr, '"'))
-            || (str_starts_with($expr, "'") && str_ends_with($expr, "'"))) {
-            $inner = substr($expr, 1, -1);
-            // Handle escape sequences
-            $inner = str_replace(['\\n', '\\t', '\\\\', "\\'", '\\"'], ["\n", "\t", "\\", "'", '"'], $inner);
-            return $inner;
-        }
+    /** Apply a single math operator to two numeric operands. */
+    private function applyMathOp(string $op, mixed $l, mixed $r): int|float
+    {
+        return match($op) {
+            '+'  => $l + $r,
+            '-'  => $l - $r,
+            '*'  => $l * $r,
+            '/'  => $r != 0 ? $l / $r : 0,
+            '//' => $r != 0 ? intdiv((int)$l, (int)$r) : 0,
+            '%'  => $r != 0 ? $l % $r : 0,
+            '**' => $l ** $r,
+        };
+    }
 
-        // Array/dict literal: [a, b, c] or {key: value}
+    /* ── helper: collection literals ── */
+
+    private function evaluateCollectionLiteral(string $expr, array &$data): mixed
+    {
         if (str_starts_with($expr, '[') && str_ends_with($expr, ']')) {
             return $this->parseArrayLiteral(substr($expr, 1, -1), $data);
         }
         if (str_starts_with($expr, '{') && str_ends_with($expr, '}')) {
             return $this->parseDictLiteral(substr($expr, 1, -1), $data);
         }
-
-        // Range: start..end
         if (preg_match(self::RE_RANGE, $expr, $m)) {
             return range((int)$m[1], (int)$m[2]);
         }
+        return self::NOT_MATCHED;
+    }
 
-        // Macro or function call: name(args) — supports dotted names like user.t("key")
-        if (preg_match(self::RE_FUNC_CALL, $expr, $m)) {
-            $funcName = $m[1];
-            $argsStr = $m[2] ?? '';
+    /* ── helper: function / macro calls ── */
 
-            // Dotted function name: resolve object, then call method
-            if (str_contains($funcName, '.')) {
-                $lastDot = strrpos($funcName, '.');
-                $objPath = substr($funcName, 0, $lastDot);
-                $methodName = substr($funcName, $lastDot + 1);
-                $obj = $this->resolveVariable($objPath, $data);
-                $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
-                if (is_array($obj) && isset($obj[$methodName]) && is_callable($obj[$methodName])) {
-                    return ($obj[$methodName])(...$args);
-                }
-                if (is_object($obj) && method_exists($obj, $methodName)) {
-                    return $obj->$methodName(...$args);
-                }
-                return '';
-            }
+    private function evaluateFunctionCall(string $expr, array &$data): mixed
+    {
+        if (!preg_match(self::RE_FUNC_CALL, $expr, $m)) {
+            return self::NOT_MATCHED;
+        }
 
-            if (isset($this->macros[$funcName])) {
-                return $this->callMacro($funcName, $argsStr, $data);
-            }
-            // Check globals for callable functions (e.g. formToken, form_token)
-            if (isset($data[$funcName]) && is_callable($data[$funcName])) {
-                $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
-                return ($data[$funcName])(...$args);
-            }
-            // Could be range() or other built-in
-            if ($funcName === 'range') {
-                $args = $this->parseArgs($argsStr, $data);
-                if (count($args) >= 2) {
-                    $step = $args[2] ?? 1;
-                    return range($args[0], $args[1], $step);
-                }
+        $funcName = $m[1];
+        $argsStr = $m[2] ?? '';
+
+        // Dotted function name: resolve object, then call method
+        if (str_contains($funcName, '.')) {
+            return $this->evaluateDottedCall($funcName, $argsStr, $data);
+        }
+
+        if (isset($this->macros[$funcName])) {
+            return $this->callMacro($funcName, $argsStr, $data);
+        }
+
+        if (isset($data[$funcName]) && is_callable($data[$funcName])) {
+            $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
+            return ($data[$funcName])(...$args);
+        }
+
+        if ($funcName === 'range') {
+            $args = $this->parseArgs($argsStr, $data);
+            if (count($args) >= 2) {
+                return range($args[0], $args[1], $args[2] ?? 1);
             }
         }
 
-        // Variable resolution
-        return $this->resolveVariable($expr, $data);
+        return self::NOT_MATCHED;
+    }
+
+    /** Resolve a dotted method call like user.t("key"). */
+    private function evaluateDottedCall(string $funcName, string $argsStr, array &$data): mixed
+    {
+        $lastDot = strrpos($funcName, '.');
+        $objPath = substr($funcName, 0, $lastDot);
+        $methodName = substr($funcName, $lastDot + 1);
+        $obj = $this->resolveVariable($objPath, $data);
+        $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
+
+        if (is_array($obj) && isset($obj[$methodName]) && is_callable($obj[$methodName])) {
+            return ($obj[$methodName])(...$args);
+        }
+        if (is_object($obj) && method_exists($obj, $methodName)) {
+            return $obj->$methodName(...$args);
+        }
+        return '';
     }
 
     private function evaluateExpressionSafe(string $expr, array &$data): mixed
