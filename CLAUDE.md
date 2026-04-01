@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.10.40 — 54 built-in features, zero dependencies. See https://tina4.com for full documentation.
+Version 3.10.41 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -221,6 +221,7 @@ $user = new User($request);
 $user->save();
 $user->load();
 $user->delete();
+$user->selectOne(string $sql, array $params = [], ?array $include = null): ?static  // Raw SQL, returns first match or null
 ```
 
 NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
@@ -614,8 +615,7 @@ $result = SqlTranslation::remember(
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
-- Tests: 1,427 passing (54 features)
-- Version: 3.10.40
+- Tests: 1,427 passing (38 features)
 
 ## Links
 

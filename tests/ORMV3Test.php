@@ -222,6 +222,26 @@ class ORMV3Test extends TestCase
         $this->assertSame('Alice', $results[1]->name);
     }
 
+    public function testSelectOne(): void
+    {
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Alice', 'alice@test.com')");
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Bob', 'bob@test.com')");
+
+        $user = new TestUser($this->db);
+        $result = $user->selectOne("SELECT * FROM users WHERE name = ?", ['Alice']);
+
+        $this->assertInstanceOf(TestUser::class, $result);
+        $this->assertSame('Alice', $result->name);
+    }
+
+    public function testSelectOneReturnsNullWhenNotFound(): void
+    {
+        $user = new TestUser($this->db);
+        $result = $user->selectOne("SELECT * FROM users WHERE name = ?", ['Nonexistent']);
+
+        $this->assertNull($result);
+    }
+
     // --- All ---
 
     public function testAll(): void

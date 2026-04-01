@@ -256,19 +256,17 @@ abstract class ORM
     public function findById(int|string $id): self
     {
         $this->ensureDb();
-        $this->_relCache = []; // Clear relationship cache on reload
+        $this->_relCache = [];
 
         $pkColumn = $this->getDbColumn($this->primaryKey);
-        $sql = "SELECT * FROM {$this->tableName} WHERE {$pkColumn} = :id";
-
+        $sql = "SELECT * FROM {$this->tableName} WHERE {$pkColumn} = ?";
         if ($this->softDelete) {
             $sql .= " AND is_deleted = 0";
         }
 
-        $rows = $this->_db->query($sql, [':id' => $id]);
-
-        if (!empty($rows)) {
-            $this->fill($rows[0]);
+        $result = $this->selectOne($sql, [$id]);
+        if ($result !== null) {
+            $this->fill($result->getData());
             $this->_exists = true;
         }
 
@@ -534,6 +532,35 @@ abstract class ORM
         }
 
         return $models;
+    }
+
+    /**
+     * Return a single ORM instance for a raw SQL query, or null if no rows match.
+     * Maps to Python: select_one(sql, params, include)
+     *
+     * @param string     $sql     Raw SELECT SQL
+     * @param array      $params  Bound parameters
+     * @param array|null $include Relationship names to eager-load (dot notation supported)
+     * @return static|null
+     */
+    public function selectOne(string $sql, array $params = [], ?array $include = null): ?static
+    {
+        $this->ensureDb();
+        $row = $this->_db->fetchOne($sql, $params);
+        if ($row === null) {
+            return null;
+        }
+        $model = new static($this->_db);
+        $model->fill($row);
+        $model->_exists = true;
+        if ($include !== null) {
+            $adapter = $this->_db instanceof Database
+                ? $this->_db->getAdapter()
+                : $this->_db;
+            $instances = [$model];
+            static::eagerLoad($instances, $include, $adapter);
+        }
+        return $model;
     }
 
     /**
