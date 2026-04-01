@@ -532,6 +532,33 @@ class Database
     }
 
     /**
+     * Execute a SQL statement with multiple parameter arrays in a single transaction.
+     *
+     * Each entry in $paramSets is passed to execute() as bound parameters.
+     * If any execution fails, the transaction is rolled back and the exception is re-thrown.
+     *
+     * @param string $sql SQL statement with placeholders
+     * @param array<int, array<mixed>> $paramSets Array of parameter arrays
+     * @return array<int, bool> Array of execute() results
+     * @throws \Exception If any execution fails (transaction is rolled back)
+     */
+    public function executeMany(string $sql, array $paramSets): array
+    {
+        $results = [];
+        $this->startTransaction();
+        try {
+            foreach ($paramSets as $params) {
+                $results[] = $this->execute($sql, $params);
+            }
+            $this->commit();
+        } catch (\Exception $e) {
+            $this->rollback();
+            throw $e;
+        }
+        return $results;
+    }
+
+    /**
      * Get the last error message.
      */
     public function error(): ?string

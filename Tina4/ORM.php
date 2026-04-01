@@ -77,6 +77,22 @@ abstract class ORM
     }
 
     /**
+     * Create a new record from an associative array and persist it immediately.
+     *
+     * Usage:
+     *   $user = User::create(['name' => 'Alice', 'email' => 'alice@example.com']);
+     *
+     * @param array<string, mixed> $data Column => value pairs
+     * @return static The saved ORM instance
+     */
+    public static function create(array $data = []): static
+    {
+        $instance = new static(data: $data);
+        $instance->save();
+        return $instance;
+    }
+
+    /**
      * Convert a snake_case name to camelCase.
      */
     private static function snakeToCamel(string $name): string

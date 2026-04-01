@@ -154,6 +154,45 @@ class Events
     }
 
     /**
+     * Emit an event asynchronously — listeners are called but exceptions are silently caught.
+     *
+     * In PHP there is no true non-blocking async, so this fires listeners sequentially
+     * but swallows any exceptions to avoid interrupting the caller.
+     *
+     * @param string $event Event name
+     * @param mixed ...$args Arguments passed to each listener
+     */
+    public static function emitAsync(string $event, mixed ...$args): void
+    {
+        if (!isset(self::$listeners[$event])) {
+            return;
+        }
+
+        $toRemove = [];
+
+        foreach (self::$listeners[$event] as $index => $entry) {
+            try {
+                call_user_func_array($entry['callback'], $args);
+            } catch (\Exception $e) {
+                // Async emit silently catches errors
+            }
+
+            if ($entry['once']) {
+                $toRemove[] = $index;
+            }
+        }
+
+        // Remove one-time listeners (reverse order to preserve indices)
+        foreach (array_reverse($toRemove) as $index) {
+            array_splice(self::$listeners[$event], $index, 1);
+        }
+
+        if (empty(self::$listeners[$event])) {
+            unset(self::$listeners[$event]);
+        }
+    }
+
+    /**
      * Remove all listeners for all events.
      */
     public static function clear(): void
