@@ -119,7 +119,7 @@ class Server
         // AI dual-port: open port+1 when TINA4_DEBUG=true and TINA4_NO_AI_PORT is not set
         $noAiPort = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_AI_PORT', 'false'));
         if ($this->isDebug && !$noAiPort) {
-            $this->aiPort = $this->port + 1;
+            $this->aiPort = $this->port + 1000;
             try {
                 $ctx = stream_context_create([
                     'socket' => [
@@ -137,12 +137,12 @@ class Server
                 );
                 if ($this->aiSocket) {
                     stream_set_blocking($this->aiSocket, false);
-                    echo "  AI Port:   http://localhost:{$this->aiPort} (no-reload)\n";
+                    echo "  Test Port: http://localhost:{$this->aiPort} (stable — no hot-reload)\n";
                 } else {
-                    echo "  AI Port:   SKIPPED (port {$this->aiPort} in use)\n";
+                    echo "  Test Port: SKIPPED (port {$this->aiPort} in use)\n";
                 }
             } catch (\Throwable $e) {
-                echo "  AI Port:   SKIPPED ({$e->getMessage()})\n";
+                echo "  Test Port: SKIPPED ({$e->getMessage()})\n";
             }
         }
 
