@@ -274,15 +274,28 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
     /**
      * Return a pagination-friendly associative array.
      *
-     * @return array{records: array, count: int, limit: int, offset: int}
+     * Includes both canonical keys and aliases for backwards compatibility
+     * with clients that use either naming convention.
+     *
+     * @return array{records: array, data: array, count: int, total: int, limit: int, per_page: int, offset: int, page: int, totalPages: int, total_pages: int}
      */
     public function toPaginate(): array
     {
+        $limit      = $this->limit > 0 ? $this->limit : 1;
+        $page       = (int) floor($this->offset / $limit) + 1;
+        $totalPages = (int) ceil($this->count / $limit);
+
         return [
-            'records' => $this->records,
-            'count'   => $this->count,
-            'limit'   => $this->limit,
-            'offset'  => $this->offset,
+            'records'     => $this->records,
+            'data'        => $this->records,       // alias for records
+            'count'       => $this->count,
+            'total'       => $this->count,          // alias for count
+            'limit'       => $this->limit,
+            'per_page'    => $this->limit,          // alias for limit
+            'offset'      => $this->offset,
+            'page'        => $page,                 // computed: floor(offset/limit) + 1
+            'totalPages'  => $totalPages,           // computed: ceil(count/limit)
+            'total_pages' => $totalPages,           // snake_case alias
         ];
     }
 

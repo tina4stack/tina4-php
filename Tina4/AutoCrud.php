@@ -150,8 +150,10 @@ class AutoCrud
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
 
-            $limit = (int)($request->query['limit'] ?? 10);
-            $offset = (int)($request->query['offset'] ?? 0);
+            // Accept limit/offset (canonical) or per_page/page (aliases)
+            $limit  = (int)($request->query['limit'] ?? $request->query['per_page'] ?? 10);
+            $page   = (int)($request->query['page'] ?? 1);
+            $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
 
             // Build filter from query params
             $filter = [];
