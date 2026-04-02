@@ -710,6 +710,24 @@ class Router
             self::$routes[$method] = [];
         }
 
+        // Parse docblock annotations on the callback for @noauth / @secured
+        $noAuth = false;
+        $secure = false;
+        try {
+            $ref = new \ReflectionFunction($callback);
+            $doc = $ref->getDocComment();
+            if ($doc !== false) {
+                if (preg_match('/@noauth\b/i', $doc)) {
+                    $noAuth = true;
+                }
+                if (preg_match('/@secured\b/i', $doc)) {
+                    $secure = true;
+                }
+            }
+        } catch (\Throwable) {
+            // Not a closure or reflection failed — ignore
+        }
+
         self::$routes[$method][] = [
             'pattern' => $fullPath,
             'regex' => $parsed['regex'],
@@ -717,8 +735,8 @@ class Router
             'callback' => $callback,
             'middleware' => self::$groupMiddleware,
             'cache' => false,
-            'secure' => false,
-            'noAuth' => false,
+            'secure' => $secure,
+            'noAuth' => $noAuth,
             'catchAll' => $parsed['catchAll'],
             'catchAllName' => $parsed['catchAllName'],
             'swagger' => $swagger,
