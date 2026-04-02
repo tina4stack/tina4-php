@@ -362,6 +362,7 @@ DOCKERFILE;
         $flagPort = $serveFlags['port'] ?? null;
         $flagHost = $serveFlags['host'] ?? null;
         $noBrowser = isset($serveFlags['no-browser']);
+        $isProduction = isset($serveFlags['production']);
         $positionalArg = $servePositional[0] ?? null;
 
         [$host, $port] = resolveHostPort($positionalArg);
@@ -397,8 +398,8 @@ DOCKERFILE;
         $serverName = 'tina4-server';
         $useFrankenPHP = false;
 
-        if (!$isDebug) {
-            // Check for FrankenPHP in production mode
+        if ($isProduction) {
+            // Check for FrankenPHP only when --production is explicitly requested
             $frankenphp = trim(shell_exec('which frankenphp 2>/dev/null') ?? '');
             if (!empty($frankenphp)) {
                 $serverName = 'frankenphp';
