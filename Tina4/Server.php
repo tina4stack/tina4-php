@@ -85,6 +85,58 @@ class Server
     }
 
     /**
+     * Kill whatever process is listening on the given port.
+     *
+     * Uses lsof on macOS/Linux and netstat + taskkill on Windows.
+     * Throws RuntimeException if the port cannot be freed.
+     */
+    private function freePort(int $port): void
+    {
+        echo "  Port {$port} in use — killing existing process...\n";
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $output = [];
+            exec('netstat -ano', $output);
+            $pid = null;
+            foreach ($output as $line) {
+                if (str_contains($line, ":{$port}") &&
+                    (str_contains($line, 'LISTENING') || str_contains($line, 'ESTABLISHED'))) {
+                    $parts = preg_split('/\s+/', trim($line));
+                    $last = end($parts);
+                    if (ctype_digit($last)) {
+                        $pid = (int)$last;
+                        break;
+                    }
+                }
+            }
+            if ($pid !== null) {
+                exec("taskkill /PID {$pid} /F");
+            } else {
+                throw new \RuntimeException("Could not free port {$port}: no PID found");
+            }
+        } else {
+            $pids = [];
+            exec("lsof -ti :{$port}", $pids);
+            if (empty($pids)) {
+                // Nothing found — port may have freed itself
+                return;
+            }
+            foreach ($pids as $pid) {
+                $pid = trim($pid);
+                if (ctype_digit($pid) && function_exists('posix_kill')) {
+                    posix_kill((int)$pid, defined('SIGTERM') ? SIGTERM : 15);
+                } elseif (ctype_digit($pid)) {
+                    exec("kill -15 {$pid}");
+                }
+            }
+        }
+
+        // Give the OS a moment to reclaim the port
+        usleep(500000);
+        echo "  Port {$port} freed\n";
+    }
+
+    /**
      * Start the server event loop.
      * Blocks indefinitely, handling HTTP and WebSocket connections.
      */
@@ -106,8 +158,20 @@ class Server
         );
 
         if (!$this->socket) {
+            // Port is in use — kill the occupying process and try once more
+            $this->freePort($this->port);
+            $this->socket = @stream_socket_server(
+                "tcp://{$this->host}:{$this->port}",
+                $errno,
+                $errstr,
+                STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+                $context
+            );
+        }
+
+        if (!$this->socket) {
             throw new \RuntimeException(
-                "Failed to start server on {$this->host}:{$this->port}: {$errstr} ({$errno})"
+                "Could not free port {$this->port}: {$errstr} ({$errno})"
             );
         }
 
