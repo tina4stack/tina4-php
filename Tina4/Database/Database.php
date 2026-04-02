@@ -26,6 +26,7 @@ use Tina4\DatabaseUrl;
  *   mysql               => MySQLAdapter
  *   mssql, sqlserver     => MSSQLAdapter
  *   firebird            => FirebirdAdapter
+ *   mongodb, pymongo    => MongoDBAdapter
  */
 class Database
 {
@@ -38,6 +39,8 @@ class Database
         'mssql' => MSSQLAdapter::class,
         'sqlserver' => MSSQLAdapter::class,
         'firebird' => FirebirdAdapter::class,
+        'mongodb' => MongoDBAdapter::class,
+        'pymongo' => MongoDBAdapter::class,
     ];
 
     /** @var DatabaseAdapter The underlying database adapter (single-connection mode) */
@@ -527,8 +530,84 @@ class Database
             return $this->sequenceNext("{$table}.{$pkColumn}", $table, $pkColumn, $adapter);
         }
 
+        // MongoDB — atomic findOneAndUpdate on tina4_sequences collection
+        if ($adapter instanceof MongoDBAdapter) {
+            return $this->mongoNextId($table, $pkColumn, $adapter);
+        }
+
         // SQLite / MySQL / MSSQL — use race-safe sequence table
         return $this->sequenceNext("{$table}.{$pkColumn}", $table, $pkColumn, $adapter);
+    }
+
+    /**
+     * Get the next ID for MongoDB using an atomic findOneAndUpdate on the
+     * tina4_sequences collection (race-safe, no transactions required).
+     *
+     * @param string $table Table / collection name
+     * @param string $pkColumn Primary key column name
+     * @param MongoDBAdapter $adapter
+     * @return int The next available ID
+     */
+    private function mongoNextId(string $table, string $pkColumn, MongoDBAdapter $adapter): int
+    {
+        $seqName = "{$table}.{$pkColumn}";
+        $db = $adapter->getDatabase();
+
+        if ($db === null) {
+            return 1;
+        }
+
+        try {
+            $sequences = $db->selectCollection('tina4_sequences');
+
+            // Seed from the maximum existing value if sequence row does not exist yet
+            $existing = $sequences->findOne(
+                ['_id' => $seqName],
+                ['typeMap' => ['root' => 'array', 'document' => 'array']]
+            );
+
+            if ($existing === null) {
+                $seed = 0;
+                try {
+                    $collection = $db->selectCollection($table);
+                    $maxDoc = $collection->findOne(
+                        [],
+                        [
+                            'sort'    => [$pkColumn => -1],
+                            'typeMap' => ['root' => 'array', 'document' => 'array'],
+                        ]
+                    );
+                    if ($maxDoc !== null && isset($maxDoc[$pkColumn])) {
+                        $seed = (int) $maxDoc[$pkColumn];
+                    }
+                } catch (\Throwable) {
+                    // Collection may not exist yet
+                }
+
+                // upsert the seed so findOneAndUpdate below starts from the right value
+                $sequences->updateOne(
+                    ['_id' => $seqName],
+                    ['$setOnInsert' => ['_id' => $seqName, 'current_value' => $seed]],
+                    ['upsert' => true]
+                );
+            }
+
+            // Atomic increment — findOneAndUpdate returns the document AFTER the update
+            $result = $sequences->findOneAndUpdate(
+                ['_id' => $seqName],
+                ['$inc' => ['current_value' => 1]],
+                [
+                    'upsert'         => true,
+                    'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
+                    'typeMap'        => ['root' => 'array', 'document' => 'array'],
+                ]
+            );
+
+            return (int) ($result['current_value'] ?? 1);
+        } catch (\Throwable $e) {
+            // Fallback to 1 on any unexpected error
+            return 1;
+        }
     }
 
     /**
@@ -707,6 +786,12 @@ class Database
                 $url,
                 username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
                 password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
+                autoCommit: $autoCommit,
+            ),
+            MongoDBAdapter::class => new MongoDBAdapter(
+                $url,
+                username: $username,
+                password: $password,
                 autoCommit: $autoCommit,
             ),
         };
