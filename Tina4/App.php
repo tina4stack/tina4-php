@@ -14,7 +14,7 @@ namespace Tina4;
  */
 class App
 {
-    public const VERSION = '3.10.48';
+    public const VERSION = '3.10.49';
 
     /** @var Database\Database|Database\DatabaseAdapter|null Shared database instance */
     private static Database\Database|Database\DatabaseAdapter|null $database = null;
@@ -43,11 +43,10 @@ class App
         string $basePath = '',
         private readonly bool $development = false,
     ) {
-        // Default basePath to the directory of the entry-point script (index.php),
-        // not the current working directory — the two differ when PHP-CLI or a web
-        // server process is started from a different directory.
+        // Default basePath to current working directory. This works correctly
+        // whether called from index.php or via the CLI (tina4php serve).
         if ($basePath === '') {
-            $basePath = dirname(realpath($_SERVER['SCRIPT_FILENAME'] ?? '') ?: getcwd());
+            $basePath = getcwd();
         }
         $this->basePath = $basePath;
         $this->startTime = microtime(true);
