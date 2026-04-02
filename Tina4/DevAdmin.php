@@ -69,11 +69,12 @@ class DevAdmin
             $latest = $current;
             try {
                 $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
-                $json = @file_get_contents('https://packagist.org/packages/tina4stack/tina4php.json', false, $ctx);
+                $json = @file_get_contents('https://repo.packagist.org/p2/tina4stack/tina4php.json', false, $ctx);
                 if ($json) {
                     $data = json_decode($json, true);
-                    $versions = array_keys($data['package']['versions'] ?? []);
-                    // Filter to stable versions (vX.Y.Z), strip v prefix, sort
+                    $packages = $data['packages']['tina4stack/tina4php'] ?? [];
+                    $versions = array_column($packages, 'version');
+                    // Filter: stable only (no dev, no rc, no x)
                     $stable = array_filter($versions, fn($v) => preg_match('/^v?\d+\.\d+\.\d+$/', $v));
                     $stable = array_map(fn($v) => ltrim($v, 'v'), $stable);
                     usort($stable, 'version_compare');
