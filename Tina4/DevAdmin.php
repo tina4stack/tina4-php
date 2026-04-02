@@ -482,7 +482,7 @@ class DevAdmin
         });
 
         // API: Gallery — deploy a gallery example into the running project
-        Router::post('/__dev/api/gallery/deploy', function (Request $request, Response $response) {
+        (Router::post('/__dev/api/gallery/deploy', function (Request $request, Response $response) {
             $name = $request->input('name') ?? '';
             if ($name === '') {
                 return $response->json(['error' => 'No gallery item specified'], 400);
@@ -519,7 +519,7 @@ class DevAdmin
             }
 
             return $response->json(['deployed' => $name, 'files' => $copied]);
-        });
+        }))->noAuth();
 
         // API: Chat (placeholder)
         Router::post('/__dev/api/chat', function (Request $request, Response $response) {

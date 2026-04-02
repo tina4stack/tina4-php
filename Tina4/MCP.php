@@ -986,7 +986,7 @@ class McpDevTools
         $server->registerTool('system_info', function () use ($projectRoot) {
             return [
                 'framework' => 'tina4-php',
-                'version' => '3.10.49',
+                'version' => '3.10.50',
                 'php' => PHP_VERSION,
                 'platform' => PHP_OS,
                 'cwd' => $projectRoot,

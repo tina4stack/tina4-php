@@ -111,7 +111,7 @@ class PostgresAdapter implements DatabaseAdapter
         }
     }
 
-    public function fetch(string $sql, int $limit = 10, int $offset = 0, array $params = []): array
+    public function fetch(string $sql, int $limit = 100, int $offset = 0, array $params = []): array
     {
         $this->ensureOpen();
         $this->lastError = null;

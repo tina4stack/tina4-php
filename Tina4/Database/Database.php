@@ -212,7 +212,7 @@ class Database
      * @param int $offset Starting offset
      * @return DatabaseResult
      */
-    public function fetch(string $sql, array $params = [], int $limit = 10, int $offset = 0): DatabaseResult
+    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
     {
         $adapter = $this->getNextAdapter();
         $raw = $adapter->fetch($sql, $limit, $offset, $params);

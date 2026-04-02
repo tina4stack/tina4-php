@@ -256,6 +256,29 @@ switch ($command) {
             }
         }
 
+        // Copy framework public assets into the project so they're visible
+        $frameworkPublic = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR;
+        $projectPublic = $targetDir . 'src' . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR;
+        $assetsToCopy = [
+            'css' . DIRECTORY_SEPARATOR . 'tina4.css',
+            'css' . DIRECTORY_SEPARATOR . 'tina4.min.css',
+            'js' . DIRECTORY_SEPARATOR . 'tina4.min.js',
+            'js' . DIRECTORY_SEPARATOR . 'frond.min.js',
+            'images' . DIRECTORY_SEPARATOR . 'tina4-logo-icon.webp',
+        ];
+        foreach ($assetsToCopy as $asset) {
+            $src = $frameworkPublic . $asset;
+            $dst = $projectPublic . $asset;
+            $dstDir = dirname($dst);
+            if (!is_dir($dstDir)) {
+                mkdir($dstDir, 0755, true);
+            }
+            if (file_exists($src) && !file_exists($dst)) {
+                copy($src, $dst);
+                echo "  Copied {$asset}\n";
+            }
+        }
+
         // Create index.php
         if (!file_exists($targetDir . 'index.php')) {
             $indexContent = <<<'PHP'
@@ -439,8 +462,9 @@ DOCKERFILE;
   Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
 ";
 
-        // Open browser unless --no-browser
-        if (!$noBrowser && $isDebug && PHP_OS_FAMILY !== 'Windows') {
+        // Open browser unless --no-browser or TINA4_NO_BROWSER env
+        $envNoBrowser = in_array(strtolower(getenv('TINA4_NO_BROWSER') ?: ''), ['true', '1', 'yes'], true);
+        if (!$noBrowser && !$envNoBrowser && $isDebug && PHP_OS_FAMILY !== 'Windows') {
             $browserUrl = "http://localhost:{$port}";
             if (PHP_OS_FAMILY === 'Darwin') {
                 @exec("open " . escapeshellarg($browserUrl) . " 2>/dev/null &");

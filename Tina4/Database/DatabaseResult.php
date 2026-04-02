@@ -66,7 +66,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
         array            $records = [],
         array            $columns = [],
         int              $count = 0,
-        int              $limit = 10,
+        int              $limit = 100,
         int              $offset = 0,
         ?DatabaseAdapter $adapter = null,
         ?string          $sql = null,

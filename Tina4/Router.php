@@ -275,8 +275,12 @@ class Router
                 }
 
                 // Extract catch-all parameter
-                if ($route['catchAll'] && $route['catchAllName'] !== null && isset($matches[$route['catchAllName']])) {
-                    $params[$route['catchAllName']] = $matches[$route['catchAllName']];
+                if ($route['catchAll'] && $route['catchAllName'] !== null) {
+                    if ($route['catchAllName'] === '*' && isset($matches['__wildcard__'])) {
+                        $params['*'] = $matches['__wildcard__'];
+                    } elseif (isset($matches[$route['catchAllName']])) {
+                        $params[$route['catchAllName']] = $matches[$route['catchAllName']];
+                    }
                 }
 
                 return [
@@ -385,13 +389,18 @@ class Router
         $request->params = $result['params'];
 
         // ── Auth enforcement ──────────────────────────────────────
+        // Dev admin routes (/__dev/) are always public — no auth required.
         // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
         // Use ->noAuth() or @noauth to opt out.
         // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
+        $isDevAdmin = str_starts_with($request->url, '/__dev');
         $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $requiresAuth = false;
 
-        if ($isWriteMethod) {
+        if ($isDevAdmin) {
+            // Dev admin routes never require auth
+            $requiresAuth = false;
+        } elseif ($isWriteMethod) {
             // Write routes require auth unless explicitly opted out
             $requiresAuth = empty($route['noAuth']);
         } else {
@@ -800,6 +809,14 @@ class Router
         $paramNames = [];
         $catchAll = false;
         $catchAllName = null;
+
+        // Support bare * wildcard: /docs/* becomes a catch-all with key "*"
+        if (preg_match('#/\*$#', $path)) {
+            $path = preg_replace('#/\*$#', '/(?P<__wildcard__>.+)', $path);
+            $paramNames[] = '*';
+            $catchAll = true;
+            $catchAllName = '*';
+        }
 
         // Replace typed and untyped params: {name}, {name:int}, {name:float}, {name:path}, {name:.*}
         $paramTypes = [];
