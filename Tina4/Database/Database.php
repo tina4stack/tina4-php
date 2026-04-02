@@ -27,6 +27,7 @@ use Tina4\DatabaseUrl;
  *   mssql, sqlserver     => MSSQLAdapter
  *   firebird            => FirebirdAdapter
  *   mongodb, pymongo    => MongoDBAdapter
+ *   odbc                => ODBCAdapter
  */
 class Database
 {
@@ -41,6 +42,7 @@ class Database
         'firebird' => FirebirdAdapter::class,
         'mongodb' => MongoDBAdapter::class,
         'pymongo' => MongoDBAdapter::class,
+        'odbc' => ODBCAdapter::class,
     ];
 
     /** @var DatabaseAdapter The underlying database adapter (single-connection mode) */
@@ -792,6 +794,13 @@ class Database
                 $url,
                 username: $username,
                 password: $password,
+                autoCommit: $autoCommit,
+            ),
+            ODBCAdapter::class => new ODBCAdapter(
+                // Strip leading slashes from the path — everything after odbc:/// is the DSN/connection string
+                ltrim($parts['path'] ?? '', '/'),
+                username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : ''),
+                password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : ''),
                 autoCommit: $autoCommit,
             ),
         };
