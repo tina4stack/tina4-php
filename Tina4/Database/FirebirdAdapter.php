@@ -449,7 +449,7 @@ class FirebirdAdapter implements DatabaseAdapter
                 'port' => $parts['port'] ?? 3050,
                 'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
                 'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
-                'database' => ltrim($parts['path'] ?? '', '/'),
+                'database' => ($rawPath = $parts['path'] ?? '') !== '' ? substr($rawPath, 1) : '',
             ];
         }
 

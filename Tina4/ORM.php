@@ -97,6 +97,7 @@ abstract class ORM
      */
     private static function snakeToCamel(string $name): string
     {
+        $name = strtolower($name); // normalise uppercase column names (Firebird/Oracle)
         return lcfirst(str_replace('_', '', ucwords($name, '_')));
     }
 
@@ -1236,8 +1237,17 @@ abstract class ORM
      */
     private function ensureDb(): void
     {
-        if ($this->_db === null) {
-            throw new \RuntimeException('ORM: No database adapter set. Call setDb() first.');
+        if ($this->_db !== null) {
+            return;
         }
+
+        // Try auto-discovery from DATABASE_URL
+        $discovered = \Tina4\Database\Database::fromEnv();
+        if ($discovered !== null) {
+            $this->_db = $discovered;
+            return;
+        }
+
+        throw new \RuntimeException('ORM: No database connection. Call setDb() first or set DATABASE_URL in .env');
     }
 }

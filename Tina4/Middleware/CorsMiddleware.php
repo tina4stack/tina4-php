@@ -176,14 +176,34 @@ class CorsMiddleware
         $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'true');
         $credentials = in_array(strtolower($credentialsEnv), ['true', '1', 'yes'], true);
 
-        $response->header('Access-Control-Allow-Origin', $origins);
+        // Resolve a single allowed origin from the request's Origin header.
+        // The CORS spec forbids a comma-separated list in Access-Control-Allow-Origin.
+        $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? null;
+        $allowedList = array_map('trim', explode(',', $origins));
+        $isWildcard = in_array('*', $allowedList, true);
+
+        if ($isWildcard) {
+            $resolvedOrigin = '*';
+        } elseif ($requestOrigin !== null && in_array($requestOrigin, $allowedList, true)) {
+            $resolvedOrigin = $requestOrigin;
+        } else {
+            $resolvedOrigin = null;
+        }
+
+        if ($resolvedOrigin !== null) {
+            $response->header('Access-Control-Allow-Origin', $resolvedOrigin);
+        }
+
         $response->header('Access-Control-Allow-Methods', $methods);
         $response->header('Access-Control-Allow-Headers', $headers);
         $response->header('Access-Control-Max-Age', $maxAge);
 
-        // Add credentials header when origin is not wildcard
-        if ($origins !== '*' && $credentials) {
-            $response->header('Access-Control-Allow-Credentials', 'true');
+        // Add Vary and credentials headers when origin is not wildcard
+        if ($resolvedOrigin !== '*') {
+            $response->header('Vary', 'Origin');
+            if ($resolvedOrigin !== null && $credentials) {
+                $response->header('Access-Control-Allow-Credentials', 'true');
+            }
         }
 
         // Handle OPTIONS preflight — return 204 No Content to short-circuit

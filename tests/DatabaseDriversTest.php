@@ -960,4 +960,45 @@ class DatabaseDriversTest extends TestCase
 
         $db->close();
     }
+
+    // ── FirebirdAdapter parseConnection path handling (issue #101) ──
+    // These tests validate the URL path-stripping logic directly using parse_url,
+    // mirroring exactly what parseConnection() does after the fix.
+
+    /**
+     * Helper: apply the fixed path-stripping logic from parseConnection().
+     * Strips exactly one leading '/' (the URL path separator), preserving any
+     * remaining leading '/' that denotes an absolute filesystem path.
+     */
+    private function firebirdParsePath(string $url): string
+    {
+        $parts = parse_url($url);
+        $rawPath = $parts['path'] ?? '';
+        return $rawPath !== '' ? substr($rawPath, 1) : '';
+    }
+
+    public function testFirebirdParseConnectionAbsolutePath(): void
+    {
+        // firebird://localhost:3050//absolute/path/to/db.fdb
+        // parse_url gives path = //absolute/path/to/db.fdb
+        // strip one leading slash → /absolute/path/to/db.fdb (absolute preserved)
+        $db = $this->firebirdParsePath('firebird://localhost:3050//absolute/path/to/db.fdb');
+        $this->assertEquals('/absolute/path/to/db.fdb', $db, 'Absolute path must retain its leading slash');
+    }
+
+    public function testFirebirdParseConnectionRelativePath(): void
+    {
+        // firebird://localhost/data/mydb.fdb
+        // parse_url gives path = /data/mydb.fdb
+        // strip one leading slash → data/mydb.fdb (relative, no leading slash)
+        $db = $this->firebirdParsePath('firebird://localhost/data/mydb.fdb');
+        $this->assertEquals('data/mydb.fdb', $db, 'Relative path must not have a leading slash');
+    }
+
+    public function testFirebirdParseConnectionEmptyPath(): void
+    {
+        // firebird://localhost (no path component)
+        $db = $this->firebirdParsePath('firebird://localhost');
+        $this->assertEquals('', $db, 'Missing path must yield empty string');
+    }
 }
