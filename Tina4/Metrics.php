@@ -1133,6 +1133,7 @@ class Metrics
             "tests/{$name}Test.php",
             "tests/{$name}V3Test.php",
             "tests/test_{$name}.php",
+            "test/{$name}Test.php",
         ];
         foreach ($patterns as $p) {
             if (file_exists($p)) {
