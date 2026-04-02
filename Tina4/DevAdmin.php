@@ -18,6 +18,12 @@ namespace Tina4;
 class DevAdmin
 {
     /**
+     * When true, renderToolbar() omits the hot-reload WebSocket/polling script.
+     * Set by Server before dispatching requests arriving on the AI port.
+     */
+    public static bool $suppressReload = false;
+
+    /**
      * Register all /__dev routes. Call from App::start() when in development mode.
      */
     public static function register(): void
@@ -712,7 +718,7 @@ class DevAdmin
         $safePattern = htmlspecialchars($matchedPattern, ENT_QUOTES);
         $safeRequestId = htmlspecialchars($requestId, ENT_QUOTES);
 
-        return <<<HTML
+        $toolbar = <<<HTML
 <div id="tina4-dev-toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#333;color:#fff;font-family:monospace;font-size:12px;padding:6px 16px;z-index:99999;display:flex;align-items:center;gap:16px;">
     <span id="tina4-ver-btn" style="color:#7b1fa2;font-weight:bold;cursor:pointer;text-decoration:underline dotted;" onclick="tina4VersionModal()" title="Click to check for updates">Tina4 v{$version}</span>
     <div id="tina4-ver-modal" style="display:none;position:fixed;bottom:3rem;left:1rem;background:#1e1e2e;border:1px solid #7b1fa2;border-radius:8px;padding:16px 20px;z-index:100000;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:monospace;font-size:13px;color:#cdd6f4;">
@@ -784,10 +790,17 @@ function tina4VersionModal(){
     });
 }
 </script>
-<script>
-(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){var iv=parseInt('<?php echo (int)(getenv("TINA4_DEV_POLL_INTERVAL") ?: 3000); ?>')||3000;var dbt=null;var cssExts=['.css','.scss'];function apply(d){var f=d.file||'';var isCss=cssExts.some(function(e){return f.endsWith(e)});if(isCss){document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+d.mtime;});}else{location.reload();}}setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(d.mtime&&d.mtime>mt){mt=d.mtime;if(dbt)clearTimeout(dbt);dbt=setTimeout(function(){apply(d);},500);}}).catch(function(){});},iv);}tryWs();})();
-</script>
 HTML;
+
+        if (!self::$suppressReload) {
+            $toolbar .= <<<'RELOADSCRIPT'
+<script>
+(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){var iv=parseInt('3000')||3000;var dbt=null;var cssExts=['.css','.scss'];function apply(d){var f=d.file||'';var isCss=cssExts.some(function(e){return f.endsWith(e)});if(isCss){document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+d.mtime;});}else{location.reload();}}setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(d.mtime&&d.mtime>mt){mt=d.mtime;if(dbt)clearTimeout(dbt);dbt=setTimeout(function(){apply(d);},500);}}).catch(function(){});},iv);}tryWs();})();
+</script>
+RELOADSCRIPT;
+        }
+
+        return $toolbar;
     }
 
     /**

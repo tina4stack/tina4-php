@@ -37,6 +37,15 @@ class Server
     /** @var array<int, string> Map socket resource ID => WebSocket connection ID */
     private array $wsSocketMap = [];
 
+    /** @var resource|null AI port server socket (port+1, debug mode only) */
+    private $aiSocket = null;
+
+    /** @var array<int, true> Socket resource IDs that connected via the AI port */
+    private array $aiPortConnections = [];
+
+    /** @var int AI port number (port+1 when active, 0 otherwise) */
+    private int $aiPort = 0;
+
     /** @var bool Server running flag */
     private bool $running = false;
 
@@ -107,6 +116,36 @@ class Server
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         $this->noReload = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_RELOAD', 'false'));
 
+        // AI dual-port: open port+1 when TINA4_DEBUG=true and TINA4_NO_AI_PORT is not set
+        $noAiPort = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_AI_PORT', 'false'));
+        if ($this->isDebug && !$noAiPort) {
+            $this->aiPort = $this->port + 1;
+            try {
+                $ctx = stream_context_create([
+                    'socket' => [
+                        'backlog' => 128,
+                        'so_reuseport' => true,
+                        'tcp_nodelay' => true,
+                    ],
+                ]);
+                $this->aiSocket = @stream_socket_server(
+                    "tcp://{$this->host}:{$this->aiPort}",
+                    $errno,
+                    $errstr,
+                    STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+                    $ctx
+                );
+                if ($this->aiSocket) {
+                    stream_set_blocking($this->aiSocket, false);
+                    echo "  AI Port:   http://localhost:{$this->aiPort} (no-reload)\n";
+                } else {
+                    echo "  AI Port:   SKIPPED (port {$this->aiPort} in use)\n";
+                }
+            } catch (\Throwable $e) {
+                echo "  AI Port:   SKIPPED ({$e->getMessage()})\n";
+            }
+        }
+
         // Register built-in hot reload WebSocket endpoint (dev mode only, unless TINA4_NO_RELOAD=true)
         if ($this->isDebug && !$this->noReload) {
             Router::websocket('/__dev_reload', function ($connection, $data, $event) {
@@ -137,6 +176,9 @@ class Server
             }
 
             $read = array_merge([$this->socket], $this->clients);
+            if ($this->aiSocket !== null) {
+                $read[] = $this->aiSocket;
+            }
             $write = null;
             $except = null;
 
@@ -169,6 +211,16 @@ class Server
                         $this->clients[$resourceId] = $client;
                         $this->buffers[$resourceId] = '';
                     }
+                } elseif ($socket === $this->aiSocket) {
+                    // Accept new AI port connection
+                    $client = @stream_socket_accept($this->aiSocket, 0);
+                    if ($client) {
+                        stream_set_blocking($client, false);
+                        $resourceId = (int)$client;
+                        $this->clients[$resourceId] = $client;
+                        $this->buffers[$resourceId] = '';
+                        $this->aiPortConnections[$resourceId] = true;
+                    }
                 } elseif ($this->isWebSocketClient($socket)) {
                     // WebSocket data
                     $this->handleWebSocketFrame($socket);
@@ -195,6 +247,14 @@ class Server
     public function stop(): void
     {
         $this->running = false;
+    }
+
+    /**
+     * Check if a socket connected via the AI port.
+     */
+    private function isAiPortConnection($socket): bool
+    {
+        return isset($this->aiPortConnections[(int)$socket]);
     }
 
     /**
@@ -256,6 +316,12 @@ class Server
 
         // Check for WebSocket upgrade
         if (strtolower($headers['upgrade'] ?? '') === 'websocket') {
+            // Block /__dev_reload on the AI port — no live reload for AI clients
+            $upgradePath = $headers['_path'] ?? '/';
+            if ($this->isAiPortConnection($client) && $upgradePath === '/__dev_reload') {
+                $this->sendHttpError($client, 404, 'No WebSocket handler registered for this path');
+                return;
+            }
             $this->handleWebSocketUpgrade($client, $headers);
             return;
         }
@@ -298,8 +364,16 @@ class Server
             headers: $this->buildHeaderArray($headers),
         );
 
+        // Suppress hot-reload script for AI port connections
+        if ($this->isAiPortConnection($client)) {
+            DevAdmin::$suppressReload = true;
+        }
+
         // Dispatch through Tina4 Router
         $response = Router::dispatch($request, new Response());
+
+        // Restore reload suppression flag
+        DevAdmin::$suppressReload = false;
 
         // Build HTTP response
         $statusCode = $response->getStatusCode();
@@ -517,6 +591,7 @@ class Server
         unset($this->wsSocketMap[$resourceId]);
         unset($this->clients[$resourceId]);
         unset($this->buffers[$resourceId]);
+        unset($this->aiPortConnections[$resourceId]);
         @fclose($socket);
     }
 
@@ -535,6 +610,7 @@ class Server
 
         unset($this->clients[$resourceId]);
         unset($this->buffers[$resourceId]);
+        unset($this->aiPortConnections[$resourceId]);
         @fclose($socket);
     }
 
@@ -617,6 +693,12 @@ class Server
         if ($this->socket) {
             @fclose($this->socket);
             $this->socket = null;
+        }
+
+        // Close AI port socket
+        if ($this->aiSocket) {
+            @fclose($this->aiSocket);
+            $this->aiSocket = null;
         }
     }
 
