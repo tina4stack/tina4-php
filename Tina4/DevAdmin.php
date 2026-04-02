@@ -65,7 +65,7 @@ class DevAdmin
 
         // API: Version check — proxy to avoid CORS issues with registry APIs
         Router::get('/__dev/api/version-check', function (Request $request, Response $response) {
-            $current = App::VERSION;
+            $current = App::$VERSION;
             $latest = $current;
             try {
                 $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
@@ -103,7 +103,7 @@ class DevAdmin
                 'peak_memory_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
                 'uptime_seconds' => round(microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)), 2),
                 'framework' => 'tina4-php',
-                'version' => App::VERSION,
+                'version' => App::$VERSION,
                 'sapi' => PHP_SAPI,
                 'route_count' => Router::count(),
                 'db_tables' => $dbTableCount,
@@ -564,7 +564,7 @@ class DevAdmin
                 ],
                 'framework' => [
                     'name' => 'tina4-php',
-                    'version' => App::VERSION,
+                    'version' => App::$VERSION,
                     'route_count' => Router::count(),
                 ],
             ]);
@@ -712,7 +712,7 @@ class DevAdmin
         string $requestId = '',
         int $routeCount = 0,
     ): string {
-        $version = App::VERSION;
+        $version = App::$VERSION;
         $phpVersion = PHP_VERSION;
         $safeMethod = htmlspecialchars($method, ENT_QUOTES);
         $safePath = htmlspecialchars($path, ENT_QUOTES);

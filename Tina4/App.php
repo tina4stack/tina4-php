@@ -14,7 +14,43 @@ namespace Tina4;
  */
 class App
 {
-    public const VERSION = '3.10.50';
+    /** @var string Framework version — read from composer.json at runtime */
+    public static string $VERSION = '0.0.0';
+
+    /**
+     * Resolve the version from the installed composer package.
+     */
+    private static function resolveVersion(): string
+    {
+        // Try installed package's composer.json
+        $paths = [
+            __DIR__ . '/../composer.json',
+            __DIR__ . '/../../composer.json',
+        ];
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                $data = json_decode(file_get_contents($path), true);
+                if (!empty($data['version'])) {
+                    return $data['version'];
+                }
+            }
+        }
+        // Try composer installed.json (Packagist installs)
+        $installed = __DIR__ . '/../vendor/composer/installed.json';
+        if (!file_exists($installed)) {
+            $installed = __DIR__ . '/../../vendor/composer/installed.json';
+        }
+        if (file_exists($installed)) {
+            $data = json_decode(file_get_contents($installed), true);
+            $packages = $data['packages'] ?? $data;
+            foreach ($packages as $pkg) {
+                if (($pkg['name'] ?? '') === 'tina4stack/tina4php') {
+                    return $pkg['version'] ?? '0.0.0';
+                }
+            }
+        }
+        return '0.0.0';
+    }
 
     /** @var Database\Database|Database\DatabaseAdapter|null Shared database instance */
     private static Database\Database|Database\DatabaseAdapter|null $database = null;
@@ -50,6 +86,11 @@ class App
         }
         $this->basePath = $basePath;
         $this->startTime = microtime(true);
+
+        // Resolve version dynamically from composer metadata
+        if (self::$VERSION === '0.0.0') {
+            self::$VERSION = self::resolveVersion();
+        }
         $this->errorHandlerSet = true;
 
         // Strict mode: convert all PHP warnings/notices to exceptions
@@ -167,7 +208,7 @@ class App
     {
         return [
             'status' => 'ok',
-            'version' => self::VERSION,
+            'version' => self::$VERSION,
             'uptime' => round(microtime(true) - $this->startTime, 2),
             'framework' => 'tina4-php',
         ];
@@ -258,7 +299,7 @@ class App
         // Register default landing page if no "/" route exists
         $this->registerLandingPage();
 
-        Log::info('Tina4 v' . self::VERSION . ' started', [
+        Log::info('Tina4 v' . self::$VERSION . ' started', [
             'base_path' => $this->basePath,
             'development' => $this->development,
         ]);
@@ -313,7 +354,7 @@ class App
         }
 
         $isDev = $this->isDevelopment();
-        $version = self::VERSION;
+        $version = self::$VERSION;
 
         Router::get('/', function (Request $request, Response $response) use ($isDev, $version) {
             return $response->html(self::renderLandingPage($version, $isDev));

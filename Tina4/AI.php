@@ -223,7 +223,7 @@ class AI
      */
     public static function generateContext(string $toolName = 'claude-code'): string
     {
-        $version = App::VERSION;
+        $version = App::$VERSION;
 
         switch ($toolName) {
             case 'claude-code':

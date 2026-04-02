@@ -460,7 +460,7 @@ DOCKERFILE;
  / /  / / / / / /_/ /__  __/
 /_/  /_/_/ /_/\\__,_/  /_/
 {$reset}
-  Tina4 PHP v" . \Tina4\App::VERSION . " — This is not a framework
+  Tina4 PHP v" . \Tina4\App::$VERSION . " — This is not a framework
 
   Server:    http://{$host}:{$port} ({$serverName}){$wsInfo}
   Swagger:   http://localhost:{$port}/swagger

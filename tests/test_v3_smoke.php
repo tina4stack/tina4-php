@@ -14,7 +14,7 @@ $app = new \Tina4\App(
     basePath: __DIR__,
     development: true,
 );
-echo "   ✓ App created (v" . \Tina4\App::VERSION . ")\n";
+echo "   ✓ App created (v" . \Tina4\App::$VERSION . ")\n";
 echo "   ✓ .env loaded (TINA4_DEBUG=" . \Tina4\DotEnv::getEnv('TINA4_DEBUG') . ")\n";
 echo "   ✓ Logger configured\n";
 echo "   ✓ Health check registered at /health\n";
@@ -31,7 +31,7 @@ echo "── 2. Route Registration ──\n";
 \Tina4\Router::get('/api/hello', function (\Tina4\Request $req, \Tina4\Response $res) {
     return $res->json([
         'message' => 'Hello from Tina4 v3!',
-        'version' => \Tina4\App::VERSION,
+        'version' => \Tina4\App::$VERSION,
         'php'     => PHP_VERSION,
     ]);
 });
