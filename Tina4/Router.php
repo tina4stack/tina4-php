@@ -393,7 +393,7 @@ class Router
         // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
         // Use ->noAuth() or @noauth to opt out.
         // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
-        $isDevAdmin = str_starts_with($request->url, '/__dev');
+        $isDevAdmin = str_starts_with($request->url, '/__dev') || str_starts_with($request->url, '/api/gallery/') || str_starts_with($request->url, '/gallery/');
         $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $requiresAuth = false;
 

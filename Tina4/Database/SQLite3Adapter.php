@@ -330,7 +330,16 @@ class SQLite3Adapter implements DatabaseAdapter
     public function commit(): void
     {
         $this->ensureOpen();
-        $this->db->exec('COMMIT');
+        if ($this->db->querySingle('SELECT 1') !== null) {
+            try {
+                $this->db->exec('COMMIT');
+            } catch (\SQLite3Exception $e) {
+                // No transaction active — safe to ignore
+                if (!str_contains($e->getMessage(), 'no transaction is active')) {
+                    throw $e;
+                }
+            }
+        }
     }
 
     public function rollback(): void
