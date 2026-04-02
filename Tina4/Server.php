@@ -43,6 +43,9 @@ class Server
     /** @var bool Cached debug mode flag (avoid parsing env on every request) */
     private bool $isDebug = false;
 
+    /** @var bool Cached no-reload flag — disables file watcher and WebSocket live reload */
+    private bool $noReload = false;
+
     /** @var string Host to bind to */
     private string $host;
 
@@ -102,9 +105,10 @@ class Server
         stream_set_blocking($this->socket, false);
         $this->running = true;
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+        $this->noReload = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_RELOAD', 'false'));
 
-        // Register built-in hot reload WebSocket endpoint (dev mode only)
-        if ($this->isDebug) {
+        // Register built-in hot reload WebSocket endpoint (dev mode only, unless TINA4_NO_RELOAD=true)
+        if ($this->isDebug && !$this->noReload) {
             Router::websocket('/__dev_reload', function ($connection, $data, $event) {
                 // No-op handler — clients just connect to receive reload signals
             });
@@ -142,8 +146,8 @@ class Server
                 break;
             }
             if ($changed === 0) {
-                // Hot reload: check for file changes on idle ticks
-                if ($this->isDebug) {
+                // Hot reload: check for file changes on idle ticks (skipped when TINA4_NO_RELOAD=true)
+                if ($this->isDebug && !$this->noReload) {
                     $now = microtime(true);
                     if ($now - $this->lastFileCheck >= $this->fileCheckInterval) {
                         $this->lastFileCheck = $now;

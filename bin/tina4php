@@ -385,7 +385,13 @@ DOCKERFILE;
         $flagPort = $serveFlags['port'] ?? null;
         $flagHost = $serveFlags['host'] ?? null;
         $noBrowser = isset($serveFlags['no-browser']);
+        $noReload = isset($serveFlags['no-reload']);
         $isProduction = isset($serveFlags['production']);
+
+        if ($noReload) {
+            putenv('TINA4_NO_RELOAD=true');
+            $_ENV['TINA4_NO_RELOAD'] = 'true';
+        }
         $positionalArg = $servePositional[0] ?? null;
 
         [$host, $port] = resolveHostPort($positionalArg);
