@@ -17,6 +17,7 @@
  *   tina4php build                  Build distributable package
  *   tina4php generate <what> <name>  Generate scaffolding
  *   tina4php ai [--all]             Detect AI tools and install context
+ *   tina4php console                Drop into an interactive PHP REPL with Tina4 loaded
  *   tina4php help                   Show this help
  *
  * Generators:
@@ -751,6 +752,50 @@ DOCKERFILE;
         break;
 
     // ────────────────────────────────────────────
+    // CONSOLE — Interactive PHP REPL with Tina4 loaded
+    // ────────────────────────────────────────────
+    case 'console':
+        require_once $cwd . '/vendor/autoload.php';
+
+        // Load .env
+        \Tina4\DotEnv::load($cwd);
+
+        // Initialize app
+        $app = new \Tina4\App(basePath: $cwd);
+
+        // Try database
+        $db = null;
+        $dbUrl = \Tina4\DotEnv::getEnv('DATABASE_URL');
+        if ($dbUrl) {
+            try {
+                $db = \Tina4\Database\Database::create($dbUrl);
+                echo "  Database: {$dbUrl}\n";
+            } catch (\Throwable $e) {
+                echo "  Database: failed ({$e->getMessage()})\n";
+            }
+        }
+
+        echo "\n  Tina4 PHP Console\n";
+        echo "  Type PHP code (without <?php). Framework is loaded.\n";
+        echo "  Available: \$db, \$app, Router, ORM, Auth, Api\n";
+        echo "  Exit: Ctrl+D or exit\n\n";
+
+        // Simple REPL loop
+        while (true) {
+            $line = readline('tina4> ');
+            if ($line === false) break;
+            if (trim($line) === 'exit') break;
+            readline_add_history($line);
+            try {
+                eval($line . ';');
+                echo "\n";
+            } catch (\Throwable $e) {
+                echo "Error: " . $e->getMessage() . "\n";
+            }
+        }
+        break;
+
+    // ────────────────────────────────────────────
     // HELP
     // ────────────────────────────────────────────
     case 'help':
@@ -773,6 +818,7 @@ DOCKERFILE;
         echo "  build                   Build distributable package\n";
         echo "  generate <what> <name>  Generate scaffolding\n";
         echo "  ai [--all]              Detect AI tools and install context\n";
+        echo "  console                 Interactive PHP REPL with Tina4 loaded\n";
         echo "  help                    Show this help\n";
         echo "\nGenerators:\n";
         echo "  generate model <Name> [--fields \"name:string,price:float\"]\n";
