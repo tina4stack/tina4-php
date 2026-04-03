@@ -291,16 +291,24 @@ abstract class ORM
     }
 
     /**
-     * Alias for selectOne().
+     * Load a record into this instance via selectOne.
+     *
+     * Returns true if a record was found and loaded, false otherwise.
      *
      * @param string $sql    Raw SQL query
      * @param array  $params Bind parameters
      * @param ?array $include Relationship names to eager-load
-     * @return ?static
+     * @return bool
      */
-    public function load(string $sql, array $params = [], ?array $include = null): ?static
+    public function load(string $sql, array $params = [], ?array $include = null): bool
     {
-        return $this->selectOne($sql, $params, $include);
+        $result = $this->selectOne($sql, $params, $include);
+        if ($result === null) {
+            return false;
+        }
+        $this->fill($result->getData());
+        $this->_exists = true;
+        return true;
     }
 
     /**
