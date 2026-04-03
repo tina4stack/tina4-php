@@ -62,6 +62,7 @@ class Database
 
     /** @var bool|null Auto-commit setting for pool connections */
     private ?bool $autoCommit;
+    private ?string $lastError = null;
 
     /** @var string Username for pool connections */
     private string $dbUsername;
@@ -260,6 +261,7 @@ class Database
     {
         try {
             $result = $this->getNextAdapter()->execute($sql, $params);
+            $this->lastError = null;
             $upper = strtoupper(trim($sql));
             if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
                 str_starts_with($upper, 'EXEC ') || str_starts_with($upper, 'SELECT ')) {
@@ -267,6 +269,7 @@ class Database
             }
             return true;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             return false;
         }
     }
@@ -393,6 +396,14 @@ class Database
     public function getTables(): array
     {
         return $this->getNextAdapter()->getTables();
+    }
+
+    /**
+     * Return the last execute() error message, or null.
+     */
+    public function getError(): ?string
+    {
+        return $this->lastError;
     }
 
     /**
