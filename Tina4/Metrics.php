@@ -17,6 +17,9 @@ class Metrics
     /** @var array{hash: string, data: ?array, time: float} */
     private static array $fullCache = ["hash" => "", "data" => null, "time" => 0];
 
+    /** Stores the resolved scan root so fileDetail() can locate framework files. */
+    private static string $lastScanRoot = "";
+
     private const CACHE_TTL = 60;
 
     // ── Root Resolution ───────────────────────────────────────────
@@ -34,9 +37,11 @@ class Metrics
     {
         $rootPath = realpath($root);
         if ($rootPath !== false && is_dir($rootPath) && count(self::globRecursive($rootPath, "*.php")) > 0) {
+            self::$lastScanRoot = $rootPath;
             return $root;
         }
         // Fallback: scan the framework package itself
+        self::$lastScanRoot = __DIR__;
         return __DIR__;
     }
 
@@ -390,6 +395,13 @@ class Metrics
         // Normalize path separators — paths coming from the browser are always
         // forward-slash even on Windows, but the filesystem may need either.
         $filePath = str_replace('\\', '/', $filePath);
+        if (!file_exists($filePath) && self::$lastScanRoot !== '') {
+            // Try resolving relative to the last scan root (framework mode)
+            $candidate = self::$lastScanRoot . '/' . $filePath;
+            if (file_exists($candidate)) {
+                $filePath = $candidate;
+            }
+        }
         if (!file_exists($filePath)) {
             // Also try with native directory separator as a fallback
             $native = str_replace('/', DIRECTORY_SEPARATOR, $filePath);
