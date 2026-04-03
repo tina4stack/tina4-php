@@ -217,11 +217,37 @@ class User extends \Tina4\ORM {
     public $tableFilter = "";      // Default WHERE clause
 }
 
+// Instance methods
 $user = new User($request);
-$user->save();
-$user->load($sql, $params, $include);      // Alias for selectOne()
-$user->delete();
-$user->selectOne(string $sql, array $params = [], ?array $include = null): ?static  // Raw SQL, returns first match or null
+$user->save(): bool                    // Insert or update
+$user->delete(): bool                  // Soft-delete if enabled, else hard delete
+$user->forceDelete(): bool             // Hard delete (bypasses soft-delete)
+$user->restore(): bool                 // Restore soft-deleted record
+$user->load($sql, $params, $include): bool  // selectOne into $this; true if found
+$user->validate(): array               // Validate fields; empty = valid
+$user->exists(): bool                  // Is this record persisted?
+$user->toArray($include): array        // Convert to assoc array (aliases: toDict, toObject)
+$user->toList(): array                 // Convert to indexed array of values
+$user->toJson(): string                // Convert to JSON string
+$user->hasOne($relatedClass, $foreignKey): ?ORM
+$user->hasMany($relatedClass, $foreignKey, $limit, $offset): array
+$user->belongsTo($relatedClass, $foreignKey): ?ORM
+
+// Instance methods that query
+$user->findById($id): self             // Find by PK, populates $this
+$user->find($filter, $limit, $offset, $orderBy): array
+$user->select($sql, $params, $limit, $offset): array
+$user->selectOne($sql, $params, $include): ?static
+$user->where($filterSql, $params, $limit, $offset): array
+$user->all($limit, $offset): array
+$user->findOrFail($id): static         // Find or throw exception
+$user->withTrashed($filter, $params, $limit, $offset): array
+$user->scope($name, $filterSql, $params): array
+$user->createTable($columns): bool
+
+// Static methods
+User::create($data): static            // Create + save in one call
+User::query(): QueryBuilder            // Fluent query builder
 ```
 
 NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
