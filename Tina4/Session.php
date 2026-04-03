@@ -188,24 +188,24 @@ class Session
      * @param string $key   The flash key
      * @param mixed  $value The flash value
      */
-    public function flash(string $key, mixed $value): void
-    {
-        $this->data["_flash_$key"] = $value;
-        $this->save();
-    }
-
     /**
-     * Get flash data and remove it (one-time read).
+     * Dual-mode flash: set with value, get+remove without.
      *
-     * @param string $key     The flash key
-     * @param mixed  $default Default value if not found
-     * @return mixed
+     *   $session->flash("message", "Saved!")  // set
+     *   $session->flash("message")            // get + auto-remove → "Saved!"
      */
-    public function getFlash(string $key, mixed $default = null): mixed
+    public function flash(string $key, mixed $value = null): mixed
     {
         $flashKey = "_flash_$key";
+        if ($value !== null) {
+            // Set mode
+            $this->data[$flashKey] = $value;
+            $this->save();
+            return null;
+        }
+        // Get mode — read and remove
         if (!array_key_exists($flashKey, $this->data)) {
-            return $default;
+            return null;
         }
 
         $value = $this->data[$flashKey];
@@ -213,6 +213,15 @@ class Session
         $this->save();
 
         return $value;
+    }
+
+    /**
+     * Get flash data by key (alias for flash(key) without value).
+     */
+    public function getFlash(string $key, mixed $default = null): mixed
+    {
+        $result = $this->flash($key);
+        return $result !== null ? $result : $default;
     }
 
     /**
