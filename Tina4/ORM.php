@@ -435,12 +435,15 @@ abstract class ORM
 
     /**
      * Convert the model to a dictionary (associative array).
-     * Maps to Python: to_dict()
+     *
+     * Optionally includes relationships via dot notation:
+     *   $user->toDict(['posts', 'profile'])
+     *   $user->toDict(['posts.comments'])
      *
      * @param array<string>|null $include Relationship names to include (supports dot notation for nesting)
      * @return array<string, mixed>
      */
-    public function toArray(?array $include = null): array
+    public function toDict(?array $include = null): array
     {
         $result = $this->_data;
 
@@ -478,6 +481,16 @@ abstract class ORM
     }
 
     /**
+     * Alias for toDict() — PHP-idiomatic name.
+     *
+     * @return array<string, mixed>
+     */
+    public function toAssoc(?array $include = null): array
+    {
+        return $this->toDict($include);
+    }
+
+    /**
      * Convert the model to an object (alias for toDict).
      *
      * @return array<string, mixed>
@@ -488,30 +501,35 @@ abstract class ORM
     }
 
     /**
-     * Alias for toArray() — backward compatibility with Python/Node.js naming.
-     * @deprecated Use toArray() instead
-     */
-    public function toDict(?array $include = null): array
-    {
-        return $this->toArray($include);
-    }
-
-    /**
      * Convert the model to an indexed list of values (keys stripped).
+     * Matches Python/Ruby/Node.js toArray() semantics.
      *
      * @return array<int, mixed>
      */
-    public function toList(): array
+    public function toArray(): array
     {
         return array_values($this->_data);
     }
 
     /**
-     * Convert the model to a JSON string.
+     * Alias for toArray().
+     *
+     * @return array<int, mixed>
      */
-    public function toJson(): string
+    public function toList(): array
     {
-        return json_encode($this->_data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        return $this->toArray();
+    }
+
+    /**
+     * Convert the model to a JSON string.
+     *
+     * @param array<string>|null $include Relationship names to include (supports dot notation)
+     */
+    public function toJson(?array $include = null): string
+    {
+        $data = $this->toDict($include);
+        return json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     }
 
     /**

@@ -169,7 +169,7 @@ class AutoCrud
 
             if (!empty($filter)) {
                 $models = $model->find($filter, $limit, $offset, $orderBy);
-                $data = array_map(fn(ORM $m) => $m->toArray(), $models);
+                $data = array_map(fn(ORM $m) => $m->toDict(), $models);
                 return $response->json([
                     'data' => $data,
                     'total' => count($data),
@@ -179,7 +179,7 @@ class AutoCrud
             }
 
             $result = $model->all($limit, $offset);
-            $data = array_map(fn(ORM $m) => $m->toArray(), $result['data']);
+            $data = array_map(fn(ORM $m) => $m->toDict(), $result['data']);
 
             return $response->json([
                 'data' => $data,
@@ -205,7 +205,7 @@ class AutoCrud
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
-            return $response->json($model->toArray());
+            return $response->json($model->toDict());
         };
     }
 
@@ -221,7 +221,7 @@ class AutoCrud
             $model = new $modelClass($db, $data);
 
             if ($model->save()) {
-                return $response->json($model->toArray(), 201);
+                return $response->json($model->toDict(), 201);
             }
 
             return $response->json(['error' => 'Failed to create record', 'detail' => $db->error()], 500);
@@ -247,7 +247,7 @@ class AutoCrud
             $model->fill($data);
 
             if ($model->save()) {
-                return $response->json($model->toArray());
+                return $response->json($model->toDict());
             }
 
             return $response->json(['error' => 'Failed to update record', 'detail' => $db->error()], 500);

@@ -307,7 +307,7 @@ class ORMV3Test extends TestCase
         $user->name = 'Alice';
         $user->email = 'alice@test.com';
 
-        $arr = $user->toArray();
+        $arr = $user->toDict();
         $this->assertSame('Alice', $arr['name']);
         $this->assertSame('alice@test.com', $arr['email']);
     }
@@ -885,7 +885,7 @@ class ORMV3Test extends TestCase
         $user->email = 'alice@test.com';
         $user->age = 30;
 
-        $arr = $user->toArray();
+        $arr = $user->toDict();
         $this->assertSame('Alice', $arr['name']);
         $this->assertSame('alice@test.com', $arr['email']);
         $this->assertSame(30, $arr['age']);

@@ -141,8 +141,8 @@ class SmokeTest extends TestCase
         $this->assertTrue($loaded->exists());
         $this->assertSame('Widget', $loaded->name);
 
-        // toArray
-        $arr = $loaded->toArray();
+        // toDict (associative array)
+        $arr = $loaded->toDict();
         $this->assertSame('Widget', $arr['name']);
         $this->assertSame('Tools', $arr['category']);
 
