@@ -758,7 +758,7 @@ DOCKERFILE;
         require_once $cwd . '/vendor/autoload.php';
 
         // Load .env
-        \Tina4\DotEnv::load($cwd);
+        \Tina4\DotEnv::loadEnv($cwd . '/.env');
 
         // Initialize app
         $app = new \Tina4\App(basePath: $cwd);
