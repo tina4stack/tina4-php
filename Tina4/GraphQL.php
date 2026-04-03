@@ -139,7 +139,7 @@ class GraphQL
      *
      * @return string
      */
-    public function schema(): string
+    public function schemaSdl(): string
     {
         $sdl = '';
 
@@ -170,6 +170,22 @@ class GraphQL
         }
 
         return $sdl;
+    }
+
+    /**
+     * Return schema metadata for debugging.
+     */
+    public function introspect(): array
+    {
+        $queries = [];
+        foreach ($this->queries as $name => $config) {
+            $queries[$name] = ['type' => $config['type'], 'args' => $config['args'] ?? []];
+        }
+        $mutations = [];
+        foreach ($this->mutations as $name => $config) {
+            $mutations[$name] = ['type' => $config['type'], 'args' => $config['args'] ?? []];
+        }
+        return ['types' => $this->types, 'queries' => $queries, 'mutations' => $mutations];
     }
 
     /**
