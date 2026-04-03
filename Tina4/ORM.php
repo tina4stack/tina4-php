@@ -800,9 +800,38 @@ abstract class ORM
      * @param array $params Bound parameters
      * @return array<int, static>
      */
-    public function scope(string $name, string $filterSql, array $params = []): array
+    /**
+     * Register a reusable query scope on the class.
+     *
+     * Usage:
+     *   (new User())->scope("active", "active = ?", [1]);
+     *   $users = User::active();           // calls where("active = ?", [1])
+     *   $users = User::active(10, 5);      // with limit/offset
+     *
+     * @param string $name      Scope name — becomes a static method on the class
+     * @param string $filterSql WHERE clause
+     * @param array  $params    Bind parameters
+     */
+    public function scope(string $name, string $filterSql, array $params = []): void
     {
-        return $this->where($filterSql, $params);
+        static::$_scopes[$name] = ['filter' => $filterSql, 'params' => $params];
+    }
+
+    /** @var array<string, array{filter: string, params: array}> */
+    protected static array $_scopes = [];
+
+    /**
+     * Magic static call handler for registered scopes.
+     */
+    public static function __callStatic(string $name, array $arguments): array
+    {
+        if (isset(static::$_scopes[$name])) {
+            $scope = static::$_scopes[$name];
+            $limit = $arguments[0] ?? 20;
+            $offset = $arguments[1] ?? 0;
+            return (new static())->where($scope['filter'], $scope['params'], $limit, $offset);
+        }
+        throw new \BadMethodCallException("Scope '{$name}' is not defined on " . static::class);
     }
 
     /**
