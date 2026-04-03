@@ -219,8 +219,7 @@ class User extends \Tina4\ORM {
 
 $user = new User($request);
 $user->save();
-$user->load($id);                          // Load by primary key
-$user->load("email = ?", ["a@b.com"]);     // Load by filter (first match)
+$user->load($sql, $params, $include);      // Alias for selectOne()
 $user->delete();
 $user->selectOne(string $sql, array $params = [], ?array $include = null): ?static  // Raw SQL, returns first match or null
 ```
