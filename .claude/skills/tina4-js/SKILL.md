@@ -296,6 +296,58 @@ html`
 </form>`;
 ```
 
+### File Upload
+
+Use `api.upload()` for multipart file uploads. Do NOT use `api.post()` — it sends JSON.
+
+```ts
+import { signal, html } from 'tina4js';
+import { api } from 'tina4js/api';
+
+const status = signal('');
+const uploading = signal(false);
+
+const handleUpload = async (e: Event) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    uploading.value = true;
+    status.value = '';
+    try {
+        const form = new FormData();
+        form.append('avatar', file);
+        form.append('name', 'Alice');  // extra fields work too
+        const result = await api.upload('/api/upload', form);
+        status.value = 'Uploaded!';
+    } catch (err) {
+        status.value = 'Upload failed';
+    }
+    uploading.value = false;
+};
+
+html`
+    <input type="file" @change=${handleUpload} ?disabled=${uploading} />
+    <p>${status}</p>
+`;
+```
+
+**Key points:**
+- `api.upload(path, formData)` — sends FormData with multipart/form-data
+- Do NOT set Content-Type header — the browser sets it with the boundary
+- Auth uses Bearer token in header (not formToken in body)
+- Backend receives files in `request.files` (raw bytes, not base64)
+
+**If you don't use the tina4-js api client**, use native `fetch()`:
+```ts
+const form = new FormData();
+form.append('file', fileInput.files[0]);
+const token = localStorage.getItem('tina4_token');
+await fetch('/api/upload', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,  // Do NOT set Content-Type
+});
+```
+
 ### List with Add/Remove
 ```ts
 const items = signal<{ id: number; text: string }[]>([]);

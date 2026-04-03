@@ -252,6 +252,32 @@ User::query(): QueryBuilder            // Fluent query builder
 
 NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
 
+### File Uploads
+
+Multipart file uploads are available via `$request->files` (array keyed by field name). Each file is an array:
+
+```php
+// $request->files["avatar"] =>
+[
+    "fieldName" => "avatar",
+    "filename" => "photo.png",
+    "type" => "image/png",
+    "content" => "...",       // raw binary — NOT base64
+    "size" => 102400
+]
+```
+
+```php
+Router::post("/api/upload", function (Request $request, Response $response) {
+    $file = $request->files["avatar"] ?? null;
+    if (!$file) return $response->json(["error" => "No file"], 400);
+    file_put_contents("src/public/uploads/{$file['filename']}", $file["content"]);
+    return $response->json(["ok" => true]);
+});
+```
+
+Max upload size: `TINA4_MAX_UPLOAD_SIZE` env var (default 10MB).
+
 ### Response — Template rendering
 
 The `Response` object supports rendering Twig templates via the built-in `Frond` engine:
