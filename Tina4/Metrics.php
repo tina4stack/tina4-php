@@ -155,7 +155,7 @@ class Metrics
             $totalClasses += $classes;
             $totalFunctions += $functions;
 
-            $relPath = self::relativePath($file);
+            $relPath = self::relativePath($file, $rootPath);
             $fileDetails[] = [
                 "path" => $relPath,
                 "loc" => $loc,
@@ -265,7 +265,7 @@ class Metrics
                 continue;
             }
 
-            $relPath = self::relativePath($file);
+            $relPath = self::relativePath($file, $rootPath);
             $lines = explode("\n", $source);
             $loc = 0;
             foreach ($lines as $line) {
@@ -1102,16 +1102,17 @@ class Metrics
     }
 
     /**
-     * Get a path relative to the current working directory.
+     * Get a path relative to the given root directory.
      *
      * @param string $absolutePath Absolute file path
+     * @param string $root         Scan root (absolute or relative)
      * @return string Relative path
      */
-    private static function relativePath(string $absolutePath): string
+    private static function relativePath(string $absolutePath, string $root = ""): string
     {
-        $cwd = getcwd();
-        if ($cwd !== false && str_starts_with($absolutePath, $cwd)) {
-            $rel = substr($absolutePath, strlen($cwd));
+        $base = $root !== "" ? (realpath($root) ?: $root) : (getcwd() ?: "");
+        if ($base !== "" && str_starts_with($absolutePath, $base)) {
+            $rel = substr($absolutePath, strlen($base));
             $rel = ltrim($rel, '/\\');
         } else {
             $rel = $absolutePath;
