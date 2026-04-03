@@ -296,7 +296,7 @@ class DatabaseUrlTest extends TestCase
     public function testFactoryIsSupportedFalse(): void
     {
         $this->assertFalse(Database::isSupported('redis'));
-        $this->assertFalse(Database::isSupported('mongodb'));
+        $this->assertFalse(Database::isSupported('ftp'));
         $this->assertFalse(Database::isSupported(''));
     }
 
