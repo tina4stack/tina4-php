@@ -683,12 +683,22 @@ class Queue
      * @param string|null $id    Optional job ID — only yield this specific job
      * @return \Generator<array>
      */
-    public function consume(string $topic = '', ?string $id = null): \Generator
+    /**
+     * Consume jobs from a topic using a long-running generator.
+     *
+     * Polls the queue continuously. When empty, sleeps for $pollInterval
+     * seconds before polling again. No external while-loop or sleep needed.
+     *
+     * @param string $topic        Queue topic (defaults to constructor topic)
+     * @param ?string $id          Optional job ID — single yield, no polling
+     * @param float $pollInterval  Seconds to sleep when queue is empty (default 1.0)
+     */
+    public function consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0): \Generator
     {
         $topic = $topic ?: $this->topic;
 
         if ($id !== null) {
-            // Consume a specific job by ID
+            // Consume a specific job by ID — single yield, no polling
             $data = $this->popById($topic, $id);
             if ($data !== null) {
                 yield new Job($data, $this, $topic);
@@ -696,8 +706,17 @@ class Queue
             return;
         }
 
-        // Yield all available jobs
-        while (($data = $this->pop($topic)) !== null) {
+        // pollInterval=0 → single-pass drain (returns when empty)
+        // pollInterval>0 → long-running poll (sleeps when empty, never returns)
+        while (true) {
+            $data = $this->pop($topic);
+            if ($data === null) {
+                if ($pollInterval <= 0) {
+                    break;
+                }
+                usleep((int)($pollInterval * 1_000_000));
+                continue;
+            }
             yield new Job($data, $this, $topic);
         }
     }
