@@ -146,10 +146,11 @@ class I18n
         $locales = [];
         $files = scandir($this->localeDir);
         foreach ($files as $file) {
-            if (str_ends_with($file, '.json')) {
-                $locales[] = substr($file, 0, -5);
+            if (str_ends_with($file, '.json') || str_ends_with($file, '.yml') || str_ends_with($file, '.yaml')) {
+                $locales[] = pathinfo($file, PATHINFO_FILENAME);
             }
         }
+        $locales = array_unique($locales);
         sort($locales);
         return $locales;
     }
@@ -175,7 +176,56 @@ class I18n
             }
         }
 
+        // Try YAML (.yml or .yaml)
+        foreach (['.yml', '.yaml'] as $ext) {
+            $yamlPath = $this->localeDir . '/' . $locale . $ext;
+            if (is_file($yamlPath)) {
+                $content = file_get_contents($yamlPath);
+                if ($content !== false) {
+                    $data = self::parseSimpleYaml($content);
+                    $this->translations[$locale] = $this->flatten($data);
+                    return;
+                }
+            }
+        }
+
         $this->translations[$locale] = [];
+    }
+
+    /**
+     * Zero-dep YAML parser for simple key: value locale files.
+     */
+    private static function parseSimpleYaml(string $text): array
+    {
+        $result = [];
+        $currentParent = null;
+        foreach (explode("\n", $text) as $line) {
+            $stripped = trim($line);
+            if ($stripped === '' || str_starts_with($stripped, '#')) {
+                continue;
+            }
+            $indent = strlen($line) - strlen(ltrim($line));
+            $colonPos = strpos($stripped, ':');
+            if ($colonPos === false) {
+                continue;
+            }
+            $key = trim(substr($stripped, 0, $colonPos));
+            $value = trim(substr($stripped, $colonPos + 1));
+            // Strip quotes
+            if ($value !== '' && ($value[0] === '"' || $value[0] === "'") && $value[-1] === $value[0]) {
+                $value = substr($value, 1, -1);
+            }
+            if ($value === '') {
+                $currentParent = $key;
+                $result[$key] = [];
+            } elseif ($indent > 0 && $currentParent !== null && is_array($result[$currentParent] ?? null)) {
+                $result[$currentParent][$key] = $value;
+            } else {
+                $currentParent = null;
+                $result[$key] = $value;
+            }
+        }
+        return $result;
     }
 
     /**
