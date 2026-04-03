@@ -170,7 +170,7 @@ class MySQLAdapter implements DatabaseAdapter
         return $rows[0] ?? null;
     }
 
-    public function execute(string $sql, array $params = []): bool
+    public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         $this->ensureOpen();
         $this->lastError = null;

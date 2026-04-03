@@ -254,11 +254,21 @@ class Database
      *
      * @param string $sql SQL statement
      * @param array<mixed> $params Bound parameters
-     * @return bool True on success
+     * @return bool|DatabaseResult True/false for writes, DatabaseResult for RETURNING/stored proc
      */
-    public function execute(string $sql, array $params = []): bool
+    public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
-        return $this->getNextAdapter()->execute($sql, $params);
+        try {
+            $result = $this->getNextAdapter()->execute($sql, $params);
+            $upper = strtoupper(trim($sql));
+            if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
+                str_starts_with($upper, 'EXEC ') || str_starts_with($upper, 'SELECT ')) {
+                return $result instanceof DatabaseResult ? $result : new DatabaseResult(records: is_array($result) ? $result : []);
+            }
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**

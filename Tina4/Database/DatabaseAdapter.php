@@ -68,9 +68,9 @@ interface DatabaseAdapter
      *
      * @param string $sql SQL statement
      * @param array<mixed> $params Bound parameters
-     * @return bool True on success
+     * @return bool|DatabaseResult True on success, DatabaseResult for RETURNING/stored proc queries
      */
-    public function execute(string $sql, array $params = []): bool;
+    public function execute(string $sql, array $params = []): bool|DatabaseResult;
 
     /**
      * Build and execute an INSERT statement.

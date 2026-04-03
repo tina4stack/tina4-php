@@ -160,7 +160,7 @@ class ODBCAdapter implements DatabaseAdapter
         }
     }
 
-    public function execute(string $sql, array $params = []): bool
+    public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         $this->ensureOpen();
         $this->lastError = null;

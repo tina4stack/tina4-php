@@ -168,7 +168,7 @@ class SQLite3Adapter implements DatabaseAdapter
         }
     }
 
-    public function execute(string $sql, array $params = []): bool
+    public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         return $this->exec($sql, $params);
     }

@@ -150,7 +150,7 @@ class CachedDatabase implements DatabaseAdapter
         return $this->adapter->fetchOne($sql, $params);
     }
 
-    public function execute(string $sql, array $params = []): bool
+    public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         if ($this->enabled) {
             $this->cacheInvalidate();
