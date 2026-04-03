@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Tina4 PHP</h1>
-<h3 align="center">This Is Now A 4Framework</h3>
+<h3 align="center">The Intelligent Native Application 4ramework</h3>
 
 <p align="center">
   54 built-in features. Zero dependencies. One require, everything works.
@@ -484,7 +484,7 @@ https://opensource.org/licenses/MIT
 
 ---
 
-<p align="center"><b>Tina4</b> -- The framework that keeps out of the way of your coding.</p>
+<p align="center"><b>Tina4 — The Intelligent Native Application 4ramework</b><br>Simple. Fast. Human. &middot; Built for AI. Built for you.</p>
 
 ---
 

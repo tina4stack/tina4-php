@@ -558,3 +558,49 @@ When discussing any work on Tina4, always clarify which branch context applies:
 If the user doesn't specify, ask. If the context is obvious (e.g., porting a new feature),
 state it explicitly: "This targets the development branch for v3." Never leave branch
 context ambiguous.
+
+
+## VitePress Documentation Gotchas
+
+When updating tina4-documentation (VitePress site), these rules prevent hours of debugging:
+
+### tina4-book vs tina4-documentation
+- **tina4-book** = source of truth for chapter content. Plain markdown, no Vue processing.
+- **tina4-documentation** = VitePress site. Vue processes ALL markdown as Vue components.
+- **Never blindly copy** from tina4-book to tina4-documentation. Files with `${}` or `{{}}` need escaping.
+
+### Vue Template Syntax Conflicts
+VitePress treats markdown as Vue templates. These characters break pages:
+
+| Syntax | Problem | Fix |
+|--------|---------|-----|
+| `{{ }}` in prose | Vue tries to evaluate as expression | Encode as `&#123;&#123; &#125;&#125;` or wrap section in `<div v-pre>` |
+| `${}` in prose | Vue tries to evaluate as JS template literal | Encode `$` as `&#36;` in prose. In headings, wrap in backticks: `` `${value}` `` |
+| `{{ }}` in code blocks | Safe — VitePress auto-wraps code blocks in v-pre | No action needed |
+| `${}` in code blocks | Safe — VitePress auto-wraps code blocks in v-pre | No action needed |
+
+### Escaping Rules
+1. **Fenced code blocks** (` ```lang ... ``` `) are auto-protected. No escaping needed.
+2. **Prose** (headings, paragraphs, tables, inline code) needs escaping.
+3. **Headings with `${}`**: wrap in backticks — `## Static Values -- \`${value}\``
+4. **Prose with `${}`**: encode `$` as `&#36;` — renders as `$` but Vue ignores it.
+5. **Prose with `{{ }}`**: encode as `&#123;&#123;` or wrap surrounding section in `<div v-pre>`.
+6. **`<div v-pre>` placement**: must come AFTER the first `#` heading, never before it. VitePress needs the heading for page metadata.
+
+### VitePress Version
+The docs site uses VitePress 2.0.0-alpha.15. Do not upgrade without testing — the config API changed between v1 and v2.
+
+### Language `env` Warnings
+`The language 'env' is not loaded` warnings on startup are cosmetic — `.env` code blocks fall back to `txt` highlighting. Not an error.
+
+### Sidebar Grouping
+The sidebar uses `SECTION_RANGES` in `docs/.vitepress/config.mts` to group chapters:
+```
+Foundations: 1-10, Building Apps: 11-19, APIs & Protocols: 20-24,
+Advanced: 25-28, Developer Tools: 29-31, Operations: 32-34,
+Releases: 35, Appendix: 36-37
+```
+
+### Title Overrides
+Chapter titles are auto-generated from filenames. Override ugly titles in `TITLE_OVERRIDES` in config.mts.
+

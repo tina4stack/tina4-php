@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Tina4 - This is not a 4ramework.
+ * Tina4 — The Intelligent Native Application 4ramework
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  */
@@ -465,7 +465,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 <div class="hero">
     <img src="/images/tina4-logo-icon.webp" class="logo" alt="Tina4">
     <h1>Tina4Php</h1>
-    <p class="tagline">This Is Now A 4Framework</p>
+    <p class="tagline">The Intelligent Native Application 4ramework</p>
     <div class="actions">
         <a href="https://tina4.com/php" class="btn" target="_blank">Website</a>
         <a href="/__dev" class="btn">Dev Admin</a>
