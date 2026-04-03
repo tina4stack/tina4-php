@@ -29,14 +29,21 @@ class Auth
      * @param string $algorithm  'HS256' or 'RS256'
      * @return string Encoded JWT (header.payload.signature)
      */
-    public static function getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
+    public static function getToken(array $payload, ?string $secret = null, float $expiresIn = 60, string $algorithm = 'HS256'): string
     {
+        if ($secret === null) {
+            $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
+            if ($secret === '') {
+                trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
+            }
+        }
+
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
         $now = time();
         $payload['iat'] = $now;
         if ($expiresIn > 0) {
-            $payload['exp'] = $now + $expiresIn;
+            $payload['exp'] = $now + (int)($expiresIn * 60);
         }
 
         $segments = [];
@@ -61,8 +68,14 @@ class Auth
      * @param string $algorithm 'HS256' or 'RS256'
      * @return array|null Decoded payload on success, null on failure
      */
-    public static function validToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+    public static function validToken(string $token, ?string $secret = null, string $algorithm = 'HS256'): ?array
     {
+        if ($secret === null) {
+            $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
+            if ($secret === '') {
+                trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
+            }
+        }
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             return null;
@@ -144,7 +157,7 @@ class Auth
      * @param int         $iterations PBKDF2 iteration count
      * @return string Format: "pbkdf2_sha256$iterations$salt$hash"
      */
-    public static function hashPassword(string $password, ?string $salt = null, int $iterations = 100000): string
+    public static function hashPassword(string $password, ?string $salt = null, int $iterations = 260000): string
     {
         if ($salt === null) {
             $salt = bin2hex(random_bytes(16));
@@ -219,7 +232,7 @@ class Auth
      * @param string $algorithm 'HS256' or 'RS256'
      * @return string|null New JWT on success, null if original token is invalid
      */
-    public static function refreshToken(string $token, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): ?string
+    public static function refreshToken(string $token, ?string $secret = null, float $expiresIn = 60, string $algorithm = 'HS256'): ?string
     {
         $payload = self::validToken($token, $secret, $algorithm);
         if ($payload === null) {
@@ -241,16 +254,26 @@ class Auth
      * @param string $algorithm 'HS256' or 'RS256'
      * @return array|null Decoded payload on success, null on failure
      */
-    public static function authenticateRequest(array $headers, string $secret, string $algorithm = 'HS256'): ?array
+    public static function authenticateRequest(array $headers, ?string $secret = null, string $algorithm = 'HS256'): ?array
     {
         $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
 
-        if (!str_starts_with($authHeader, 'Bearer ')) {
-            return null;
+        if (str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+
+            // Try JWT first
+            $payload = self::validToken($token, $secret, $algorithm);
+            if ($payload !== null) {
+                return $payload;
+            }
+
+            // Fallback: treat Bearer value as API key
+            if (self::validateApiKey($token)) {
+                return ['_auth' => 'api_key'];
+            }
         }
 
-        $token = substr($authHeader, 7);
-        return self::validToken($token, $secret, $algorithm);
+        return null;
     }
 
     /**
