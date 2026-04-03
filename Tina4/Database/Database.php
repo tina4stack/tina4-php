@@ -399,6 +399,17 @@ class Database
     }
 
     /**
+     * Return column information for a table.
+     *
+     * @param string $tableName Table name
+     * @return array<int, array{name: string, type: string, nullable: bool}>
+     */
+    public function getColumns(string $tableName): array
+    {
+        return $this->getNextAdapter()->getColumns($tableName);
+    }
+
+    /**
      * Return the last execute() error message, or null.
      */
     public function getError(): ?string
