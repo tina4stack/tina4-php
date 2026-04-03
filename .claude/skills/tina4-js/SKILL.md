@@ -393,6 +393,53 @@ independently.
 Each island is a standard Tina4Element that calls `customElements.define()` at the bottom of
 its file. The IIFE bundle provides the framework globally; island scripts just use it.
 
+## Routing — IMPORTANT: {param} not :param
+
+tina4-js uses **curly brace** syntax for route parameters — NOT Express-style colons.
+
+```ts
+import { route, router } from 'tina4js';
+
+// Static route
+route('/', () => html`<h1>Home</h1>`);
+
+// Route with parameters — use {name}, NOT :name
+route('/users/{id}', ({ id }) => html`<p>User ${id}</p>`);
+route('/user/{userId}/post/{postId}', ({ userId, postId }) =>
+  html`<p>User ${userId}, Post ${postId}</p>`
+);
+
+// Catch-all / 404
+route('*', () => html`<h1>404 — Not Found</h1>`);
+
+// Route guards (auth protection)
+route('/admin', {
+  guard: () => isLoggedIn.value || '/login',  // return true to allow, or redirect path
+  handler: () => html`<admin-panel></admin-panel>`,
+});
+
+// Async routes (loading states)
+route('/data', async () => {
+  const data = await fetch('/api/data').then(r => r.json());
+  return html`<p>${data.message}</p>`;
+});
+
+// Start the router
+router.start({ target: '#app', mode: 'hash' });  // or mode: 'history'
+
+// Listen for route changes
+router.on('change', ({ path, params, pattern, durationMs }) => {
+  console.log(`Navigated to ${path} in ${durationMs}ms`);
+});
+
+// Navigate programmatically
+router.navigate('/users/42');
+```
+
+**Common mistake:** Using Express-style `:id` instead of `{id}`. The route will never match.
+
+**Navigation:** Use standard `<a href="#/path">` links (hash mode) or `<a href="/path">` (history mode). The router intercepts clicks automatically.
+
 ## Cloudflare Workers
 
 tina4-js runs on Cloudflare Workers with Durable Objects for WebSocket state. The IIFE bundle
