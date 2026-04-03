@@ -219,35 +219,39 @@ class User extends \Tina4\ORM {
 
 // Instance methods
 $user = new User($request);
-$user->save(): bool                    // Insert or update
-$user->delete(): bool                  // Soft-delete if enabled, else hard delete
-$user->forceDelete(): bool             // Hard delete (bypasses soft-delete)
-$user->restore(): bool                 // Restore soft-deleted record
+$user->save(): static|false            // Returns $this on success (fluent), false on failure
+$user->delete(): bool
+$user->forceDelete(): bool
+$user->restore(): bool
 $user->load($sql, $params, $include): bool  // selectOne into $this; true if found
-$user->validate(): array               // Validate fields; empty = valid
-$user->exists(): bool                  // Is this record persisted?
-$user->toArray($include): array        // Convert to assoc array (aliases: toDict, toObject)
-$user->toList(): array                 // Convert to indexed array of values
-$user->toJson(): string                // Convert to JSON string
+$user->validate(): array               // Empty = valid
+$user->exists(): bool
+$user->toDict($include): array         // Primary dict method (aliases: toAssoc, toObject)
+$user->toAssoc($include): array        // Alias for toDict
+$user->toArray(): array                // Flat indexed list of values
+$user->toList(): array                 // Alias for toArray
+$user->toJson($include): string        // JSON string with optional relationship include
 $user->hasOne($relatedClass, $foreignKey): ?ORM
 $user->hasMany($relatedClass, $foreignKey, $limit, $offset): array
 $user->belongsTo($relatedClass, $foreignKey): ?ORM
 
-// Instance methods that query
-$user->findById($id): self             // Find by PK, populates $this
+// Instance methods that query (also work as User()->where(...))
+$user->findById($id): self
 $user->find($filter, $limit, $offset, $orderBy): array
 $user->select($sql, $params, $limit, $offset): array
 $user->selectOne($sql, $params, $include): ?static
 $user->where($filterSql, $params, $limit, $offset): array
 $user->all($limit, $offset): array
-$user->findOrFail($id): static         // Find or throw exception
+$user->count($conditions, $params): int
+$user->findOrFail($id): static
 $user->withTrashed($filter, $params, $limit, $offset): array
-$user->scope($name, $filterSql, $params): array
+$user->scope($name, $filterSql, $params): void  // Registers reusable named method: User::active()
 $user->createTable($columns): bool
 
 // Static methods
-User::create($data): static            // Create + save in one call
-User::query(): QueryBuilder            // Fluent query builder
+User::create($data): static
+User::query(): QueryBuilder
+User::active($limit, $offset): array   // Example scope (after scope('active', 'active=1'))
 ```
 
 NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
@@ -277,6 +281,59 @@ Router::post("/api/upload", function (Request $request, Response $response) {
 ```
 
 Max upload size: `TINA4_MAX_UPLOAD_SIZE` env var (default 10MB).
+
+### Auth
+
+```php
+// expires_in is in MINUTES (default 60). Reads SECRET from env if not passed.
+Auth::getToken($payload, $secret=null, $expiresIn=60): string
+Auth::validToken($token, $secret=null): ?array
+Auth::getPayload($token): ?array
+Auth::refreshToken($token, $secret=null, $expiresIn=60): ?string
+Auth::hashPassword($password, $salt=null, $iterations=260000): string  // PBKDF2-SHA256, $ delimiter
+Auth::checkPassword($password, $hash): bool
+Auth::validateApiKey($provided, $expected=null): bool  // reads TINA4_API_KEY from env
+Auth::authenticateRequest($headers, $secret=null): ?array  // Bearer JWT, falls back to API key
+```
+
+### Session
+
+```php
+$session->start($sessionId=null): string
+$session->get($key, $default=null): mixed
+$session->set($key, $value): void
+$session->delete($key): void
+$session->has($key): bool
+$session->all(): array
+$session->clear(): void
+$session->destroy(): void
+$session->regenerate(): string
+$session->flash($key, $value=null): mixed   // Dual-mode: set with value, get+remove without
+$session->getFlash($key, $default=null): mixed
+$session->save(): void
+$session->cookieHeader($name='tina4_session'): string
+$session->getSessionId(): string
+$session->gc(): void
+```
+
+Backends: file, redis, valkey, mongodb, database.
+
+### Database extras
+
+```php
+$db->execute($sql, $params): bool|DatabaseResult  // bool for writes, DatabaseResult for RETURNING/CALL/EXEC
+$db->getLastId(): int|string
+$db->getError(): ?string
+$db->getColumns($tableName): array
+```
+
+### Request extras
+
+```php
+$request->cookies  // Parsed from Cookie header
+$request->query    // Query string params
+$response->xml($content, $status): self
+```
 
 ### Response — Template rendering
 
