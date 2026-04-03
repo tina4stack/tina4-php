@@ -19,6 +19,15 @@ class WebSocketConnection
     /** The WebSocket path this connection is on */
     public readonly string $path;
 
+    /** Client IP address */
+    public readonly string $ip;
+
+    /** HTTP headers from the upgrade request */
+    public readonly array $headers;
+
+    /** Route params extracted from path pattern */
+    public readonly array $params;
+
     /** @var resource The underlying socket */
     private $socket;
 
@@ -26,17 +35,30 @@ class WebSocketConnection
     private ?Server $server;
 
     /**
-     * @param string   $id     Unique connection ID
-     * @param string   $path   WebSocket route path
-     * @param resource $socket Raw socket resource
-     * @param Server|null $server Server reference for broadcast
+     * @param string      $id      Unique connection ID
+     * @param string      $path    WebSocket route path
+     * @param resource    $socket  Raw socket resource
+     * @param Server|null $server  Server reference for broadcast
+     * @param string      $ip      Client IP address
+     * @param array       $headers HTTP headers from upgrade request
+     * @param array       $params  Route params from path pattern
      */
-    public function __construct(string $id, string $path, $socket, ?Server $server = null)
-    {
+    public function __construct(
+        string $id,
+        string $path,
+        $socket,
+        ?Server $server = null,
+        string $ip = '',
+        array $headers = [],
+        array $params = [],
+    ) {
         $this->id = $id;
         $this->path = $path;
         $this->socket = $socket;
         $this->server = $server;
+        $this->ip = $ip;
+        $this->headers = $headers;
+        $this->params = $params;
     }
 
     /**
