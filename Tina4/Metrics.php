@@ -1129,17 +1129,62 @@ class Metrics
     private static function hasMatchingTest(string $relPath): bool
     {
         $name = pathinfo($relPath, PATHINFO_FILENAME);
-        $patterns = [
-            "tests/{$name}Test.php",
-            "tests/{$name}V3Test.php",
-            "tests/test_{$name}.php",
-            "test/{$name}Test.php",
-        ];
-        foreach ($patterns as $p) {
-            if (file_exists($p)) {
-                return true;
+        // Parent directory name (e.g. "Database" from "Database/SQLite3Adapter.php")
+        $parentDir = basename(dirname($relPath));
+        $parentModule = ($parentDir !== '.' && $parentDir !== '') ? $parentDir : '';
+
+        // Stage 1: Filename matching — test_module, moduleTest, moduleSpec patterns
+        $testDirs = ['tests', 'test'];
+        foreach ($testDirs as $td) {
+            $patterns = [
+                "{$td}/{$name}Test.php",
+                "{$td}/{$name}V3Test.php",
+                "{$td}/test_{$name}.php",
+                "{$td}/{$name}_test.php",
+                "{$td}/{$name}_spec.php",
+            ];
+            // Also check parent-named tests (tests/DatabaseTest.php covers Database/SQLite3Adapter.php)
+            if ($parentModule && strtolower($parentModule) !== strtolower($name)) {
+                $patterns[] = "{$td}/{$parentModule}Test.php";
+                $patterns[] = "{$td}/{$parentModule}sTest.php";
+                $patterns[] = "{$td}/test_{$parentModule}.php";
+            }
+            foreach ($patterns as $p) {
+                if (file_exists($p)) {
+                    return true;
+                }
             }
         }
+
+        // Stage 2+3: Content scan — check if any test file references this module
+        // Build the class name from the filename (already CamelCase in PHP, e.g. SQLite3Adapter)
+        $className = $name;
+        // Also build a namespace-like path for import matching
+        // e.g. "Database/SQLite3Adapter.php" → "Database\\SQLite3Adapter"
+        $namespacePath = str_replace('/', '\\', pathinfo($relPath, PATHINFO_DIRNAME) . '\\' . $name);
+        $namespacePath = ltrim(str_replace('.\\', '\\', $namespacePath), '\\');
+
+        foreach ($testDirs as $td) {
+            if (!is_dir($td)) {
+                continue;
+            }
+            $testFiles = self::globRecursive($td, '*.php');
+            foreach ($testFiles as $testFile) {
+                $content = @file_get_contents($testFile);
+                if ($content === false) {
+                    continue;
+                }
+                // Stage 2: path/namespace matching
+                if ($namespacePath && str_contains($content, $namespacePath)) {
+                    return true;
+                }
+                // Stage 3: class name or module name mention
+                if (preg_match('/\b' . preg_quote($className, '/') . '\b/', $content)) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 }
