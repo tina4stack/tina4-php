@@ -47,6 +47,9 @@ class Request
     /** @var string Content type of the request */
     public readonly string $contentType;
 
+    /** @var array<string, string> Parsed cookies from Cookie header */
+    public readonly array $cookies;
+
     /** @var Session|null Lazy-loaded session instance */
     public ?Session $session = null;
 
@@ -81,6 +84,19 @@ class Request
         $this->method = strtoupper($method ?? ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
         $this->headers = $headers ?? self::parseHeaders();
         $this->contentType = $this->headers['content-type'] ?? '';
+
+        // Parse cookies
+        $cookieStr = $this->headers['cookie'] ?? '';
+        $parsedCookies = [];
+        if ($cookieStr) {
+            foreach (explode(';', $cookieStr) as $pair) {
+                $parts = explode('=', trim($pair), 2);
+                if (count($parts) === 2) {
+                    $parsedCookies[trim($parts[0])] = trim($parts[1]);
+                }
+            }
+        }
+        $this->cookies = $parsedCookies;
 
         // Check upload size limit (default 10 MB)
         $maxUploadSize = (int)($_ENV['TINA4_MAX_UPLOAD_SIZE'] ?? getenv('TINA4_MAX_UPLOAD_SIZE') ?: 10485760);

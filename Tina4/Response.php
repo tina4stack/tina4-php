@@ -216,6 +216,17 @@ class Response
     }
 
     /**
+     * Return an XML response.
+     */
+    public function xml(string $content, int $status = 200): self
+    {
+        $this->statusCode = $status;
+        $this->headers['Content-Type'] = 'application/xml; charset=UTF-8';
+        $this->body = $content;
+        return $this;
+    }
+
+    /**
      * Send a redirect response.
      *
      * @return $this
