@@ -244,25 +244,30 @@ abstract class ORM
      *
      * @return bool True on success
      */
-    public function save(): bool
+    /**
+     * Insert or update. Returns $this on success (fluent), false on failure.
+     */
+    public function save(): static|false
     {
         $this->ensureDb();
-        $this->_relCache = []; // Clear relationship cache on save
+        $this->_relCache = [];
         $pkValue = $this->getPrimaryKeyValue();
 
         $this->_db->startTransaction();
         try {
             if ($this->_exists || ($pkValue !== null && $this->recordExists($pkValue))) {
-                $result = $this->update();
+                $this->update();
             } else {
-                $result = $this->insert();
+                $this->insert();
             }
             $this->_db->commit();
-            return $result;
         } catch (\Exception $e) {
             $this->_db->rollback();
-            throw $e;
+            return false;
         }
+
+        $this->_exists = true;
+        return $this;
     }
 
     /**
