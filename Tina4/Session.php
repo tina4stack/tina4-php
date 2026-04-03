@@ -235,6 +235,15 @@ class Session
     }
 
     /**
+     * Return a Set-Cookie header value for this session.
+     */
+    public function cookieHeader(string $cookieName = 'tina4_session'): string
+    {
+        $sameSite = $_ENV['TINA4_SESSION_SAMESITE'] ?? getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+        return "{$cookieName}={$this->sessionId}; Path=/; HttpOnly; SameSite={$sameSite}; Max-Age={$this->ttl}";
+    }
+
+    /**
      * Check if the session is started.
      *
      * @return bool
