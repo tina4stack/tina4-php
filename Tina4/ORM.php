@@ -439,6 +439,37 @@ abstract class ORM
     }
 
     /**
+     * Count records matching conditions (respects soft delete and tableFilter).
+     *
+     * @param ?string $conditions Optional WHERE clause
+     * @param array   $params     Bind parameters
+     * @return int
+     */
+    public function count(?string $conditions = null, array $params = []): int
+    {
+        $this->ensureDb();
+
+        $whereParts = [];
+        if ($this->softDelete) {
+            $whereParts[] = "is_deleted = 0";
+        }
+        if ($this->tableFilter) {
+            $whereParts[] = $this->tableFilter;
+        }
+        if ($conditions !== null) {
+            $whereParts[] = "({$conditions})";
+        }
+
+        $sql = "SELECT COUNT(*) as cnt FROM {$this->tableName}";
+        if (!empty($whereParts)) {
+            $sql .= " WHERE " . implode(" AND ", $whereParts);
+        }
+
+        $row = $this->_db->fetchOne($sql, $params);
+        return $row ? (int)$row['cnt'] : 0;
+    }
+
+    /**
      * Convert the model to a dictionary (associative array).
      *
      * Optionally includes relationships via dot notation:
