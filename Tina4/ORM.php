@@ -291,11 +291,51 @@ abstract class ORM
     }
 
     /**
-     * Alias for findById().
+     * Load a record into this instance.
+     *
+     * Supports two calling styles:
+     *   $model->load(42)                         — load by primary key
+     *   $model->load("email = ?", ["a@b.com"])   — load by filter (first match)
+     *
+     * @param int|string $filterOrId Primary key value or SQL WHERE clause
+     * @param array $params          Bind parameters (when using filter mode)
+     * @return bool True if a record was found and loaded
      */
-    public function load(int|string $id): self
+    public function load(int|string|null $filterOrId = null, array $params = []): bool
     {
-        return $this->findById($id);
+        $this->ensureDb();
+        $this->_relCache = [];
+
+        if ($filterOrId === null) {
+            $filterOrId = $this->{$this->primaryKey} ?? null;
+            if ($filterOrId === null) {
+                return false;
+            }
+        }
+
+        if (is_int($filterOrId) || is_numeric($filterOrId)) {
+            // PK-based load
+            $pkColumn = $this->getDbColumn($this->primaryKey);
+            $sql = "SELECT * FROM {$this->tableName} WHERE {$pkColumn} = ?";
+            $queryParams = [$filterOrId];
+        } else {
+            // Filter-based load
+            $sql = "SELECT * FROM {$this->tableName} WHERE {$filterOrId}";
+            $queryParams = $params;
+        }
+
+        if ($this->softDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+
+        $result = $this->selectOne($sql, $queryParams);
+        if ($result !== null) {
+            $this->fill($result->getData());
+            $this->_exists = true;
+            return true;
+        }
+
+        return false;
     }
 
     /**
