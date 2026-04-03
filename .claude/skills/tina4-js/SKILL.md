@@ -61,6 +61,23 @@ ${0}          // Renders "0"
 Never use `${condition && html`...`}` — if condition is `false`, you get the text "false" in your DOM.
 Always use the ternary: `${() => condition ? html`...` : null}`
 
+### CRITICAL: Never Put Inputs Inside Reactive Blocks
+
+**This is the #1 developer mistake.** Putting `<input>`, `<textarea>`, or `<select>` inside `${() => ...}` causes them to lose focus on every keystroke because the reactive block destroys and recreates the entire subtree.
+
+```ts
+// WRONG — input inside reactive block, destroyed on every keystroke
+html`${() => html`<input .value=${name} @input=${(e) => { name.value = e.target.value; }} />`}`
+
+// RIGHT — input in static template, only computed output is reactive
+html`
+  <input .value=${name} @input=${(e) => { name.value = e.target.value; }} />
+  <p>${() => name.value ? `Hello, ${name.value}!` : 'Type your name'}</p>
+`
+```
+
+**The rule:** Form elements go in the static template. Use `.value`, `@input`, `?disabled` bindings for reactivity. Only conditional messages, dynamic lists, and computed text go in `${() => ...}` blocks.
+
 ### Rule 2: New References for Objects/Arrays
 
 ```ts
