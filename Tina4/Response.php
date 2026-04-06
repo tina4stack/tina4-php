@@ -332,6 +332,89 @@ class Response
     }
 
     /**
+     * Stream response from a generator or callable for Server-Sent Events (SSE).
+     *
+     * Usage:
+     *   Router::get("/events", function ($request, $response) {
+     *       return $response->stream(function () {
+     *           for ($i = 0; $i < 10; $i++) {
+     *               yield "data: message {$i}\n\n";
+     *               sleep(1);
+     *           }
+     *       });
+     *   });
+     *
+     * @param callable $source Generator function that yields string chunks
+     * @param string $contentType Content type (default: text/event-stream)
+     * @return self
+     */
+    public function stream(callable $source, string $contentType = 'text/event-stream'): self
+    {
+        if ($this->testing) {
+            // In testing mode, collect all chunks into body
+            $gen = $source();
+            $this->body = '';
+            foreach ($gen as $chunk) {
+                $this->body .= $chunk;
+            }
+            $this->headers['Content-Type'] = $contentType;
+            $this->sent = true;
+            return $this;
+        }
+
+        $this->sent = true;
+
+        // Disable output buffering
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+
+        // Set time limit to 0 for long-running streams
+        set_time_limit(0);
+
+        // Send headers
+        http_response_code($this->statusCode);
+        header("Content-Type: {$contentType}");
+        header("Cache-Control: no-cache");
+        header("Connection: keep-alive");
+        header("X-Accel-Buffering: no");
+
+        // Send cookies
+        foreach ($this->cookies as $name => $opts) {
+            setcookie($name, $opts['value'], [
+                'expires' => $opts['expires'],
+                'path' => $opts['path'],
+                'domain' => $opts['domain'],
+                'secure' => $opts['secure'],
+                'httponly' => $opts['httponly'],
+                'samesite' => $opts['samesite'],
+            ]);
+        }
+
+        // Send any custom headers
+        foreach ($this->headers as $name => $value) {
+            header("{$name}: {$value}");
+        }
+
+        // Stream chunks from generator
+        $gen = $source();
+        foreach ($gen as $chunk) {
+            echo $chunk;
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
+            flush();
+
+            // Check if client disconnected
+            if (connection_aborted()) {
+                break;
+            }
+        }
+
+        return $this;
+    }
+
+    /**
      * Serve a file as the response.
      *
      * Reads the file, sets the appropriate Content-Type (auto-detected from
