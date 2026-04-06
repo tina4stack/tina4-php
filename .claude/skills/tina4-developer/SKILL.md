@@ -234,6 +234,7 @@ When helping a developer build with Tina4, always follow these:
    - Receive JSON POST body → Automatically parsed into request body
    - Typed route parameters (`{id:int}`, `{price:float}`, `{slug:path}`) auto-convert values
    - Template fallback: `/hello` auto-serves `src/templates/hello.twig` if no route matches
+   - `response.stream()` → SSE/streaming with chunked transfer encoding
    - No manual `json.dumps()`, `json_encode()`, or `JSON.stringify()` needed
 
 4. **Same patterns across languages** — Show examples in whichever language the developer is

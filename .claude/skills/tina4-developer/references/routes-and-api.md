@@ -101,6 +101,7 @@ The framework infers what you want:
 - Call `response.render("template.twig", data)` → Frond template rendering
 - Call `response.redirect("/path")` → HTTP redirect
 - Call `response.file("path/to/file")` → File download
+- Call `response.stream(generator, content_type)` → SSE/streaming response
 
 ## Template Fallback Routing
 
@@ -241,3 +242,75 @@ Built-in via `CorsMiddleware`. Configure in `.env` or it defaults to allowing al
 ## Rate Limiting
 
 Built-in via `RateLimiter`. No configuration needed for sensible defaults. Override in `.env` if needed.
+
+## SSE / Streaming
+
+Send real-time events to the browser using Server-Sent Events. The framework handles chunked
+transfer encoding, keep-alive, and the `text/event-stream` content type automatically.
+
+### PHP
+```php
+Router::get("/events", function (Request $request, Response $response) {
+    $response->stream(function () {
+        for ($i = 0; $i < 10; $i++) {
+            echo "data: event {$i}\n\n";
+            ob_flush();
+            flush();
+            sleep(1);
+        }
+    }, 'text/event-stream');
+});
+```
+
+### Python
+```python
+from tina4 import get
+import asyncio
+
+@get("/events")
+async def stream_events(request, response):
+    async def event_generator():
+        for i in range(10):
+            yield f"data: event {i}\n\n"
+            await asyncio.sleep(1)
+    return response.stream(event_generator(), content_type="text/event-stream")
+```
+
+### Ruby
+```ruby
+get "/events" do |request, response|
+  response.stream(content_type: "text/event-stream") do |out|
+    10.times do |i|
+      out << "data: event #{i}\n\n"
+      sleep 1
+    end
+  end
+end
+```
+
+### Node.js (TypeScript)
+```typescript
+import { get } from 'tina4';
+
+export const events = get('/events', async (req, res) => {
+  async function* eventGenerator() {
+    for (let i = 0; i < 10; i++) {
+      yield `data: event ${i}\n\n`;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  return res.stream(eventGenerator(), 'text/event-stream');
+});
+```
+
+### Client-Side (JavaScript)
+```javascript
+const source = new EventSource('/events');
+source.onmessage = (event) => {
+    console.log(event.data);
+};
+source.onerror = () => source.close();
+```
+
+The default content type is `text/event-stream`. Pass a different content type for generic
+streaming (e.g., `application/json` for newline-delimited JSON).

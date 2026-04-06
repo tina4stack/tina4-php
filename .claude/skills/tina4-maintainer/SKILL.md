@@ -116,7 +116,7 @@ must achieve identical behavior. When implementing or fixing anything:
    equivalent tests covering the same cases
 4. **Run the parity check** — After implementing a feature, verify the output matches Python's
 
-Current version: **v3.10.29** on the `v3` branch (all four repos).
+Current version: **v3.10.70** on the `v3` branch (all four repos).
 Current status: Python 100% | PHP ~85% | Ruby ~80% | Node.js ~70%
 
 When porting a feature from Python to another language:
@@ -295,7 +295,7 @@ Read the bundled reference files for deep dives on specific subsystems:
 - **`references/frond-and-frontend.md`** — The Frond template engine spec and frond.js frontend
   helper. Read this when working on templates, live blocks, or frontend integration.
 
-- **`references/subsystems.md`** — Queue, WebSocket, Auth/JWT, Sessions, GraphQL, WSDL, SCSS,
+- **`references/subsystems.md`** — Queue, WebSocket, SSE/Streaming, Auth/JWT, Sessions, GraphQL, WSDL, SCSS,
   i18n, Seeder, CRUD, Email, Events. Read this when working on any extended feature.
 
 - **`references/cli-and-deployment.md`** — CLI commands, debug overlay, .broken file system,

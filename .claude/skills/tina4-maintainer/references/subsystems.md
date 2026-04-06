@@ -78,6 +78,71 @@ changes via event system, re-renders Frond blocks server-side, pushes HTML fragm
 
 ---
 
+## SSE / Streaming
+
+Server-Sent Events for real-time data push over HTTP. Zero-dependency, built into the response object.
+Uses chunked transfer encoding with `text/event-stream` content type and automatic connection keep-alive.
+
+### PHP
+```php
+Router::get("/events", function (Request $request, Response $response) {
+    $response->stream(function () {
+        for ($i = 0; $i < 10; $i++) {
+            echo "data: event {$i}\n\n";
+            ob_flush();
+            flush();
+            sleep(1);
+        }
+    }, 'text/event-stream');
+});
+```
+
+### Python
+```python
+@get("/events")
+async def stream_events(request, response):
+    async def event_generator():
+        for i in range(10):
+            yield f"data: event {i}\n\n"
+            await asyncio.sleep(1)
+    return response.stream(event_generator(), content_type="text/event-stream")
+```
+
+### Ruby
+```ruby
+get "/events" do |request, response|
+  response.stream(content_type: "text/event-stream") do |out|
+    10.times do |i|
+      out << "data: event #{i}\n\n"
+      sleep 1
+    end
+  end
+end
+```
+
+### Node.js (TypeScript)
+```typescript
+export const events = get('/events', async (req, res) => {
+  async function* eventGenerator() {
+    for (let i = 0; i < 10; i++) {
+      yield `data: event ${i}\n\n`;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  return res.stream(eventGenerator(), 'text/event-stream');
+});
+```
+
+### Features
+- Chunked transfer encoding handled automatically
+- Connection keep-alive managed by the framework
+- Default content type: `text/event-stream`
+- Supports any content type for generic streaming (e.g., `application/json` for NDJSON)
+- Client auto-reconnect via standard `EventSource` API
+- Integrates with the event system for broadcasting data changes
+
+---
+
 ## Authentication / JWT
 
 **BREAKING (v3.7.1):** `token_expiry` renamed to `expires_in`. `validate_token` renamed to `valid_token`.
