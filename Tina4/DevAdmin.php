@@ -31,14 +31,22 @@ class DevAdmin
         // Register PHP error/exception handlers so they are captured in the Error Tracker
         ErrorTracker::register();
 
-        // Dashboard HTML
-        Router::get('/__dev', function (Request $request, Response $response) {
-            return $response->html(self::renderDashboard());
+        // Serve the SPA JS bundle from framework's built-in assets
+        Router::get('/__dev/js/tina4-dev-admin.min.js', function (Request $request, Response $response) {
+            $jsPath = __DIR__ . '/../src/public/js/tina4-dev-admin.min.js';
+            if (file_exists($jsPath)) {
+                return $response->header('Content-Type', 'application/javascript')->html(file_get_contents($jsPath));
+            }
+            return $response->text('tina4-dev-admin.min.js not found', 404);
         });
 
-        // Trailing-slash redirect
-        Router::get('/__dev/', function (Request $request, Response $response) {
-            return $response->html(self::renderDashboard());
+        // Dashboard — unified SPA
+        $spa = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Tina4 Dev Admin</title></head><body><div id="app" data-framework="php" data-color="#8b5cf6"></div><script src="/__dev/js/tina4-dev-admin.min.js"></script></body></html>';
+        Router::get('/__dev', function (Request $request, Response $response) use ($spa) {
+            return $response->html($spa);
+        });
+        Router::get('/__dev/', function (Request $request, Response $response) use ($spa) {
+            return $response->html($spa);
         });
 
         // API: Live-reload — returns latest mtime of src/ for browser polling
