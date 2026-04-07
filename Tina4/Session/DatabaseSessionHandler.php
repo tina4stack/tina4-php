@@ -61,6 +61,7 @@ class DatabaseSessionHandler
 
         $result = $this->db->fetch(
             "SELECT data, expires_at FROM tina4_session WHERE session_id = '{$sessionId}'",
+            [],
             1
         );
 
@@ -101,6 +102,7 @@ class DatabaseSessionHandler
         // Check if session already exists
         $existing = $this->db->fetch(
             "SELECT session_id FROM tina4_session WHERE session_id = '{$sessionId}'",
+            [],
             1
         );
 

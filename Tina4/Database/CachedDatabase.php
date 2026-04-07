@@ -116,7 +116,7 @@ class CachedDatabase implements DatabaseAdapter
         return $this->adapter->query($sql, $params);
     }
 
-    public function fetch(string $sql, int $limit = 100, int $offset = 0, array $params = []): array
+    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array
     {
         if ($this->enabled) {
             $key = $this->cacheKey($sql . ":L{$limit}:O{$offset}", $params);
@@ -125,12 +125,12 @@ class CachedDatabase implements DatabaseAdapter
                 $this->hits++;
                 return $cached;
             }
-            $result = $this->adapter->fetch($sql, $limit, $offset, $params);
+            $result = $this->adapter->fetch($sql, $params, $limit, $offset);
             $this->cacheSet($key, $result);
             $this->misses++;
             return $result;
         }
-        return $this->adapter->fetch($sql, $limit, $offset, $params);
+        return $this->adapter->fetch($sql, $params, $limit, $offset);
     }
 
     public function fetchOne(string $sql, array $params = []): ?array

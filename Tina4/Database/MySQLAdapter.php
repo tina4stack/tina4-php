@@ -134,7 +134,7 @@ class MySQLAdapter implements DatabaseAdapter
         }
     }
 
-    public function fetch(string $sql, int $limit = 100, int $offset = 0, array $params = []): array
+    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array
     {
         $this->ensureOpen();
         $this->lastError = null;

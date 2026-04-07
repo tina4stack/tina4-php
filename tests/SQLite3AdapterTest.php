@@ -110,7 +110,7 @@ class SQLite3AdapterTest extends TestCase
             ]);
         }
 
-        $result = $this->db->fetch("SELECT * FROM users ORDER BY id", 10, 0);
+        $result = $this->db->fetch("SELECT * FROM users ORDER BY id", [], 10, 0);
 
         $this->assertCount(10, $result['data']);
         $this->assertSame(25, $result['total']);
@@ -124,7 +124,7 @@ class SQLite3AdapterTest extends TestCase
             $this->db->exec("INSERT INTO users (name) VALUES (:name)", [':name' => "User{$i}"]);
         }
 
-        $result = $this->db->fetch("SELECT * FROM users ORDER BY id", 10, 10);
+        $result = $this->db->fetch("SELECT * FROM users ORDER BY id", [], 10, 10);
 
         $this->assertCount(10, $result['data']);
         $this->assertSame(25, $result['total']);
@@ -137,7 +137,7 @@ class SQLite3AdapterTest extends TestCase
             $this->db->exec("INSERT INTO users (name) VALUES (:name)", [':name' => "User{$i}"]);
         }
 
-        $result = $this->db->fetch("SELECT * FROM users ORDER BY id", 10, 20);
+        $result = $this->db->fetch("SELECT * FROM users ORDER BY id", [], 10, 20);
 
         $this->assertCount(5, $result['data']);
     }

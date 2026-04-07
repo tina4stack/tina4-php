@@ -1,0 +1,204 @@
+<?php
+/**
+ * Tina4 - This is not a 4ramework.
+ * Copy-right 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
+/**
+ * @description Testing the system
+ */
+use function Tina4\renderTemplate;
+
+
+\Tina4\Middleware::add("sanitizeRequests", function($andre, \Tina4\Response $response, \Tina4\Request $request) {
+    //echo "<pre>";
+   // echo "Hello?";
+    //print_r ($request);
+});
+
+\Tina4\Middleware::add("authenticate", function($ok, $one, $two, \Tina4\Response $response, \Tina4\Request &$request) {
+    $request->params["JONATHAN"] = "OK!";
+    $andre = "Hello!";
+});
+
+
+
+/**
+ * @middleware sanitizeRequests, authenticate, something, checkAccount
+ * @secure admin
+ */
+\Tina4\Get::add("/test/{andre}/{ok}", function($andre, $ok, \Tina4\Request $request, \Tina4\Response $response){
+    //$html = $request->params["gameRef"];
+    echo "OK! {$ok}";
+    $html  = "<pre>Testing middleware ($andre)". print_r ($response, 1).print_r ($request, 1)."</pre>";
+    return $response ($html, HTTP_OK, APPLICATION_JSON, ["MY-HEADER:Hello", "OTHER-HEADER:Hello"]);
+}); //->middleware(["sanitizeRequests", "authenticate", "something"]);
+
+\Tina4\Get::add("/formToken", static function(\Tina4\Request $request){
+
+    $a = \Tina4\getFormToken("");
+
+
+
+    return (new \Tina4\Response()) ($a);
+});
+
+\Tina4\Get::add("/testing/classes", ["TestClass", "someRouter"]);
+
+/**
+ * @secure people,users,admin
+ */
+\Tina4\Get::add("/test2/xml", function(\Tina4\Response $response, \Tina4\Request $request){
+    if ($request->security == "people") {
+
+    }
+
+    $random = rand(1, 100);
+
+    $stuff= ["testing xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"" => [["one" => "one"], ["one" => $random]]];
+
+    return $response ($stuff, HTTP_OK, APPLICATION_XML);
+})::noCache();
+
+/**
+ * @description Testing the system
+ * @example {"id": 1, "name": "Hello"}
+ * @content-type application/json
+ */
+\Tina4\Get::add("/test/hello", function(\Tina4\Response $response, \Tina4\Request $request){
+
+    $element = [1,2,3, rand(100, 1000)];
+
+    return $response ("", HTTP_BAD_REQUEST);
+
+});
+
+\Tina4\Post::add("/stripe/webhook", function(\Tina4\Response $response, \Tina4\Request $request){
+    file_put_contents("./log/test.txt", print_r($request->headers, 1), FILE_APPEND);
+    file_put_contents("./log/test.txt", $request->rawRequest, FILE_APPEND);
+    $sections = explode(",", $request->headers["stripe-signature"]);
+    $key = explode("=", $sections[0])[1];
+    file_put_contents('./log/test.txt', hash_hmac('sha256', $key.".".file_get_contents("php://input"), 'whsec_8N5qx8O4yzDXDSrDek7gmXEIReEqMrLw'), FILE_APPEND);
+
+});
+
+
+\Tina4\Get::add("/token/{hash}", function ($hash, \Tina4\Response $response, \Tina4\Request $request){
+
+    print_r ((new \Tina4\Auth())->getPayLoad($hash));
+});
+
+
+
+
+\Tina4\Get::add("/render/file", function(\Tina4\Response $response, \Tina4\Request $request){
+    //$hello = (new TestClass())->doSomething();
+    $html = \Tina4\renderTemplate("render.twig", ["variables" => ["one" => "One", "two" => "Two"]]);
+
+    return $response ($html);
+});
+
+
+
+
+//Example of rendering a Twig template from a text string
+\Tina4\Get::add("/render/text", function(\Tina4\Response $response, \Tina4\Request $request){
+    $html = \Tina4\renderTemplate("I am a twig template {{ variables.one }} {{ variables.two }}", ["variables" => ["one" => "One", "two" => "Two"]]);
+    return $response ($html);
+});
+
+
+
+
+\Tina4\Thread::addTrigger("orderEvent", function($orderId){
+    //Never tested with comments
+    (new TestClass())->doSomething(); //Never tested stuff like this either
+    echo "Order {$orderId} has been created";
+});
+
+/**
+ * @description Trigger
+ * @asummary Trigger summary
+ * @tags Trigger
+ * @params hello,world
+ */
+\Tina4\Route::get("/trigger/{id}", function($id, \Tina4\Response $response)
+{
+    \Tina4\Thread::trigger("orderEvent", ["orderId" => 21]);
+});
+
+
+
+
+
+\Tina4\Get::add("/api/test/landing", function (\Tina4\Response $response){
+    return $response (\Tina4\renderTemplate("/api/test/grid.twig"), HTTP_OK, TEXT_HTML);
+});
+
+/**
+ * CRUD Prototype Test Modify as needed
+ * Creates  GET @ /path, /path/{id}, - fetch,form for whole or for single
+            POST @ /path, /path/{id} - create & update
+            DELETE @ /path/{id} - delete for single
+ */
+\Tina4\Crud::route ("/api/test", new Test(), function ($action, Test $test, $filter, \Tina4\Request $request) {
+    switch ($action) {
+       case "form":
+       case "fetch":
+            //Return back a form to be submitted to the create
+
+            if ($action == "form") {
+                $title = "Add Test";
+                $savePath =  TINA4_SUB_FOLDER . "/api/test";
+                $content = \Tina4\renderTemplate("/api/test/form.twig", []);
+            } else {
+                $title = "Edit Test";
+                $savePath =  TINA4_SUB_FOLDER . "/api/test/".$test->id;
+                $content = \Tina4\renderTemplate("/api/test/form.twig", ["data" => $test]);
+            }
+
+            return \Tina4\renderTemplate("components/modalForm.twig", ["title" => $title, "onclick" => "if ( $('#testForm').valid() ) { saveForm('testForm', '" .$savePath."', 'message'); $('#formModal').modal('hide');}", "content" => $content]);
+       break;
+       case "read":
+            //Return a dataset to be consumed by the grid with a filter
+            $where = "";
+            if (!empty($filter["where"])) {
+                $where = "{$filter["where"]}";
+            }
+
+            return   $test->select ("*", $filter["length"], $filter["start"])
+                ->where("{$where}")
+                ->orderBy($filter["orderBy"])
+                ->asResult();
+        break;
+        case "create":
+            //Manipulate the $object here
+            $test->firstName = "Hello Cris";
+        break;
+        case "afterCreate":
+           //return needed
+           return (object)["httpCode" => 200, "message" => "<script>testGrid.ajax.reload(null, false); showMessage ('Test Created');</script>"];
+        break;
+        case "update":
+            //Manipulate the $object here
+        break;
+        case "afterUpdate":
+           //return needed
+           return (object)["httpCode" => 200, "message" => "<script>testGrid.ajax.reload(null, false); showMessage ('Test Updated');</script>"];
+        break;
+        case "delete":
+            //Manipulate the $object here
+        break;
+        case "afterDelete":
+            //return needed
+            return (object)["httpCode" => 200, "message" => "<script>testGrid.ajax.reload(null, false); showMessage ('Test Deleted');</script>"];
+        break;
+    }
+});
+
+
+#[Get("/test/route")]
+function testRoute(\Tina4\Response $response) {
+
+    return $response("Hello World");
+}

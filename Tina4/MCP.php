@@ -715,7 +715,7 @@ class McpDevTools
                 return ['error' => 'No database connection: ' . $e->getMessage()];
             }
             // Use the database adapter to get table columns
-            $result = $db->fetch("SELECT * FROM $table", 0, 0);
+            $result = $db->fetch("SELECT * FROM $table", [], 1, 0);
             if ($result && !empty($result->records)) {
                 return array_keys($result->records[0]);
             }

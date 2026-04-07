@@ -231,9 +231,9 @@ class QueryBuilder
 
         return $this->db->fetch(
             $sql,
+            $allParams,
             $this->limitVal ?? 100,
-            $this->offsetVal ?? 0,
-            $allParams
+            $this->offsetVal ?? 0
         );
     }
 
@@ -250,9 +250,9 @@ class QueryBuilder
 
         $result = $this->db->fetch(
             $sql,
+            $allParams,
             1,
-            $this->offsetVal ?? 0,
-            $allParams
+            $this->offsetVal ?? 0
         );
 
         if (isset($result['data']) && !empty($result['data'])) {
@@ -281,9 +281,9 @@ class QueryBuilder
 
         $result = $this->db->fetch(
             $sql,
+            $allParams,
             1,
-            0,
-            $allParams
+            0
         );
 
         if (isset($result['data'][0]['cnt'])) {

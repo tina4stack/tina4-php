@@ -536,7 +536,7 @@ class DatabaseDriversTest extends TestCase
         $adapter->exec("INSERT INTO _test_del (id, name) VALUES (1, 'Alice')");
         $adapter->exec("DELETE FROM _test_del WHERE id = 1");
 
-        $result = $adapter->fetch("SELECT * FROM _test_del", 10);
+        $result = $adapter->fetch("SELECT * FROM _test_del", [], 10);
         $this->assertTrue($result === null || empty($result->records));
 
         $db->close();
@@ -580,7 +580,7 @@ class DatabaseDriversTest extends TestCase
         $adapter->exec("INSERT INTO _test_tx (id, name) VALUES (1, 'Alice')");
         $adapter->rollback();
 
-        $result = $adapter->fetch("SELECT * FROM _test_tx", 10);
+        $result = $adapter->fetch("SELECT * FROM _test_tx", [], 10);
         $this->assertTrue($result === null || empty($result->records));
 
         $db->close();
@@ -916,7 +916,7 @@ class DatabaseDriversTest extends TestCase
             $adapter->exec("INSERT INTO _test_page (id, name) VALUES ({$i}, 'Item{$i}')");
         }
 
-        $result = $adapter->fetch("SELECT * FROM _test_page ORDER BY id", 3);
+        $result = $adapter->fetch("SELECT * FROM _test_page ORDER BY id", [], 3);
         $this->assertIsArray($result);
         $this->assertArrayHasKey('data', $result);
         $this->assertCount(3, $result['data']);

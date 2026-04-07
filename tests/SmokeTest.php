@@ -176,7 +176,7 @@ class SmokeTest extends TestCase
         $this->assertSame('Bolt', $rows[0]['name']);
 
         // Fetch with pagination
-        $result = $db->fetch("SELECT * FROM items ORDER BY id", 1, 0);
+        $result = $db->fetch("SELECT * FROM items ORDER BY id", [], 1, 0);
         $this->assertCount(1, $result['data']);
         $this->assertSame(2, $result['total']);
 

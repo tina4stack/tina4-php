@@ -52,8 +52,8 @@ class App
         return '0.0.0';
     }
 
-    /** @var Database\Database|Database\DatabaseAdapter|null Shared database instance */
-    private static Database\Database|Database\DatabaseAdapter|null $database = null;
+    /** @var Database\DatabaseAdapter|null Shared database instance */
+    private static ?Database\DatabaseAdapter $database = null;
 
     /** @var float Application start time for uptime tracking */
     private readonly float $startTime;
@@ -827,7 +827,7 @@ HTML;
     /**
      * Set the shared database instance.
      */
-    public static function setDatabase(Database\Database|Database\DatabaseAdapter $db): void
+    public static function setDatabase(Database\DatabaseAdapter $db): void
     {
         self::$database = $db;
     }
@@ -836,7 +836,7 @@ HTML;
      * Get the shared database instance.
      * If none is set and DATABASE_URL is configured, auto-creates one via Database.
      */
-    public static function getDatabase(): Database\Database|Database\DatabaseAdapter|null
+    public static function getDatabase(): ?Database\DatabaseAdapter
     {
         if (self::$database === null) {
             $db = Database\Database::fromEnv('DATABASE_URL');

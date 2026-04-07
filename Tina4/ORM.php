@@ -392,7 +392,7 @@ abstract class ORM
             $sql .= " ORDER BY {$orderBy}";
         }
 
-        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+        $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
         foreach ($result['data'] as $row) {
@@ -420,7 +420,7 @@ abstract class ORM
             $sql .= " WHERE is_deleted = 0";
         }
 
-        $result = $this->_db->fetch($sql, $limit, $offset);
+        $result = $this->_db->fetch($sql, [], $limit, $offset);
 
         $models = [];
         foreach ($result['data'] as $row) {
@@ -605,7 +605,7 @@ abstract class ORM
     public function select(string $sql, array $params = [], int $limit = 20, int $offset = 0): array
     {
         $this->ensureDb();
-        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+        $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
         foreach ($result['data'] as $row) {
@@ -666,7 +666,7 @@ abstract class ORM
             $sql = "SELECT * FROM {$this->tableName} WHERE ({$filterSql}) AND is_deleted = 0";
         }
 
-        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+        $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
         foreach ($result['data'] as $row) {
@@ -767,7 +767,7 @@ abstract class ORM
         $this->ensureDb();
 
         $sql = "SELECT * FROM {$this->tableName} WHERE {$filterSql}";
-        $result = $this->_db->fetch($sql, $limit, $offset, $params);
+        $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
         foreach ($result['data'] as $row) {
@@ -1186,7 +1186,7 @@ abstract class ORM
                 $relTemplate = new $relatedClass($db);
                 $placeholders = implode(',', array_fill(0, count($pkValues), '?'));
                 $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders})";
-                $result = $db->fetch($sql, count($pkValues) * 1000, 0, $pkValues);
+                $result = $db->fetch($sql, $pkValues, count($pkValues) * 1000, 0);
 
                 $related = [];
                 foreach ($result['data'] as $row) {
@@ -1241,7 +1241,7 @@ abstract class ORM
                 $placeholders = implode(',', array_fill(0, count($fkValues), '?'));
                 $relPk = $relTemplate->primaryKey;
                 $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders})";
-                $result = $db->fetch($sql, count($fkValues) * 10, 0, $fkValues);
+                $result = $db->fetch($sql, $fkValues, count($fkValues) * 10, 0);
 
                 $lookup = [];
                 foreach ($result['data'] as $row) {

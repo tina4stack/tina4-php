@@ -31,7 +31,7 @@ class Migration
     private const MIGRATIONS_TABLE = 'tina4_migration';
 
     public function __construct(
-        private readonly Database\Database|DatabaseAdapter $db,
+        private readonly DatabaseAdapter $db,
         private readonly string $migrationsDir = 'src/migrations',
         private readonly string $delimiter = ';',
     ) {

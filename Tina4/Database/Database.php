@@ -29,7 +29,7 @@ use Tina4\DatabaseUrl;
  *   mongodb, pymongo    => MongoDBAdapter
  *   odbc                => ODBCAdapter
  */
-class Database
+class Database implements DatabaseAdapter
 {
     /** @var array<string, class-string<DatabaseAdapter>> Maps scheme to adapter class */
     private const ADAPTER_MAP = [
@@ -221,7 +221,7 @@ class Database
     public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
     {
         $adapter = $this->getNextAdapter();
-        $raw = $adapter->fetch($sql, $limit, $offset, $params);
+        $raw = $adapter->fetch($sql, $params, $limit, $offset);
 
         $records = $raw['data'] ?? [];
         $columns = !empty($records) ? array_keys($records[0]) : [];
@@ -325,10 +325,10 @@ class Database
      * @param array<mixed> $params Bound parameters for the WHERE clause
      * @return bool True on success
      */
-    public function delete(string $table, string $filterSql = '', array $params = []): bool
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool
     {
         $adapter = $this->getNextAdapter();
-        return $adapter->delete($table, $filterSql, $params);
+        return $adapter->delete($table, $filter, $whereParams);
     }
 
     // -------------------------------------------------------------------------
@@ -338,6 +338,14 @@ class Database
     /**
      * Close all database connections (pool or single).
      */
+    /**
+     * Open the database connection (no-op — connections are opened lazily in the constructor).
+     */
+    public function open(): void
+    {
+        // Connections are opened in the constructor — this satisfies the interface.
+    }
+
     public function close(): void
     {
         if ($this->poolSize > 0) {
@@ -350,6 +358,14 @@ class Database
         } elseif ($this->adapter !== null) {
             $this->adapter->close();
         }
+    }
+
+    /**
+     * Get the last inserted auto-increment ID.
+     */
+    public function lastInsertId(): int|string
+    {
+        return $this->getNextAdapter()->lastInsertId();
     }
 
     /**
@@ -655,20 +671,21 @@ class Database
      * @return array<int, bool> Array of execute() results
      * @throws \Exception If any execution fails (transaction is rolled back)
      */
-    public function executeMany(string $sql, array $paramSets): array
+    public function executeMany(string $sql, array $paramsList = []): int
     {
-        $results = [];
+        $count = 0;
         $this->startTransaction();
         try {
-            foreach ($paramSets as $params) {
-                $results[] = $this->execute($sql, $params);
+            foreach ($paramsList as $params) {
+                $this->execute($sql, $params);
+                $count++;
             }
             $this->commit();
         } catch (\Exception $e) {
             $this->rollback();
             throw $e;
         }
-        return $results;
+        return $count;
     }
 
     /**

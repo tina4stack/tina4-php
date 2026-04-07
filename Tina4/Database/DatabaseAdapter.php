@@ -45,12 +45,12 @@ interface DatabaseAdapter
      * Maps to Python: fetch(sql, params, limit, skip)
      *
      * @param string $sql SQL query
+     * @param array<mixed> $params Bound parameters
      * @param int $limit Max rows to return
      * @param int $offset Starting offset (Python: skip)
-     * @param array<mixed> $params Bound parameters
      * @return array{data: array<int, array<string, mixed>>, total: int, limit: int, offset: int}
      */
-    public function fetch(string $sql, int $limit = 100, int $offset = 0, array $params = []): array;
+    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array|DatabaseResult;
 
     /**
      * Run a query and return the first row or null.
@@ -121,7 +121,7 @@ interface DatabaseAdapter
      * @param array<int, array<mixed>> $paramsList List of parameter arrays
      * @return int Total affected rows
      */
-    public function executeMany(string $sql, array $paramsList = []): int;
+    public function executeMany(string $sql, array $paramsList = []): int|DatabaseResult;
 
     /**
      * Check if a table exists.
