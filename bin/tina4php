@@ -518,8 +518,36 @@ DOCKERFILE;
             mkdir($migrationsDir, 0755, true);
         }
         if (class_exists('\Tina4\Migration')) {
-            $migration = new \Tina4\Migration($migrationsDir);
-            echo $migration->doMigration();
+            $db = \Tina4\App::getDatabase();
+            if ($db === null) {
+                // Try to create from DATABASE_URL env
+                $dbUrl = getenv('DATABASE_URL') ?: (\Tina4\DotEnv::getEnv('DATABASE_URL', '') ?? '');
+                if (!empty($dbUrl)) {
+                    $db = \Tina4\Database\Database::create($dbUrl);
+                    \Tina4\App::setDatabase($db);
+                }
+            }
+            if ($db === null) {
+                echo "Error: No database configured. Set DATABASE_URL in .env\n";
+                exit(1);
+            }
+            $migration = new \Tina4\Migration($db, $migrationsDir);
+            $result = $migration->migrate();
+            if (!empty($result['applied'])) {
+                echo "Applied " . count($result['applied']) . " migration(s):\n";
+                foreach ($result['applied'] as $name) {
+                    echo "  + {$name}\n";
+                }
+            }
+            if (!empty($result['errors'])) {
+                echo "Errors:\n";
+                foreach ($result['errors'] as $name => $err) {
+                    echo "  x {$name}: {$err}\n";
+                }
+            }
+            if (empty($result['applied']) && empty($result['errors'])) {
+                echo "No pending migrations.\n";
+            }
         } else {
             echo "Migration class not available.\n";
         }
@@ -531,12 +559,13 @@ DOCKERFILE;
         if (!is_dir($migrationsDir)) {
             mkdir($migrationsDir, 0755, true);
         }
-        if (class_exists('\Tina4\Migration')) {
-            $migration = new \Tina4\Migration($migrationsDir);
-            echo $migration->createMigration($name, "-- Write your migration SQL here\n");
-        } else {
-            echo "Migration class not available.\n";
-        }
+        // Create migration file — no database needed
+        $timestamp = date('YmdHis');
+        $safeName = preg_replace('/[^a-z0-9_]+/', '_', strtolower(trim($name)));
+        $fileName = "{$timestamp}_{$safeName}.sql";
+        $filePath = $migrationsDir . '/' . $fileName;
+        file_put_contents($filePath, "-- Migration: {$name}\n-- Created: " . date('Y-m-d H:i:s') . "\n\n");
+        echo "Created: migrations/{$fileName}\n";
         break;
 
     case 'migrate:rollback':
@@ -550,7 +579,19 @@ DOCKERFILE;
             mkdir($migrationsDir, 0755, true);
         }
         if (class_exists('\Tina4\Migration')) {
-            $migration = new \Tina4\Migration($migrationsDir);
+            $db = \Tina4\App::getDatabase();
+            if ($db === null) {
+                $dbUrl = getenv('DATABASE_URL') ?: (\Tina4\DotEnv::getEnv('DATABASE_URL', '') ?? '');
+                if (!empty($dbUrl)) {
+                    $db = \Tina4\Database\Database::create($dbUrl);
+                    \Tina4\App::setDatabase($db);
+                }
+            }
+            if ($db === null) {
+                echo "Error: No database configured. Set DATABASE_URL in .env\n";
+                exit(1);
+            }
+            $migration = new \Tina4\Migration($db, $migrationsDir);
             $result = $migration->rollback();
 
             if (empty($result['rolledBack']) && empty($result['errors'])) {
