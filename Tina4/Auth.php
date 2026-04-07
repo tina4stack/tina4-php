@@ -20,8 +20,6 @@ class Auth
 
     /**
      * Create a signed JWT token.
-     * Primary method name: getToken(). Alias: createToken().
-     * Maps to Python: create_token(payload, expiry_minutes)
      *
      * @param array  $payload    Claims to include in the token
      * @param string $secret     Signing secret (HS256) or PEM private key (RS256)
@@ -60,8 +58,6 @@ class Auth
 
     /**
      * Validate a JWT token and return the decoded payload.
-     * Primary method name: validToken(). Alias: validateToken().
-     * Maps to Python: validate_token(token)
      *
      * @param string $token     The JWT string
      * @param string $secret    Signing secret (HS256) or PEM public key (RS256)
@@ -295,24 +291,6 @@ class Auth
         }
 
         return hash_equals($expected, $provided);
-    }
-
-    // ── Backward-Compatible Aliases ──────────────────────────────
-
-    /**
-     * Alias for getToken() — kept for backward compatibility.
-     */
-    public static function createToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
-    {
-        return self::getToken($payload, $secret, $expiresIn, $algorithm);
-    }
-
-    /**
-     * Alias for validToken() — kept for backward compatibility.
-     */
-    public static function validateToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
-    {
-        return self::validToken($token, $secret, $algorithm);
     }
 
     // ── Internal Helpers ──────────────────────────────────────────

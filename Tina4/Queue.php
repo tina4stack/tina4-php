@@ -33,6 +33,7 @@
 namespace Tina4;
 
 use Tina4\Queue\QueueBackend;
+use Tina4\Queue\LiteBackend;
 use Tina4\Queue\RabbitMQBackend;
 use Tina4\Queue\KafkaBackend;
 use Tina4\Queue\MongoBackend;
@@ -127,6 +128,9 @@ class Queue
     private int $maxRetries;
     private string $topic;
 
+    /** @var LiteBackend File-based queue backend */
+    private LiteBackend $liteBackend;
+
     /** @var QueueBackend|null External queue backend (rabbitmq, kafka) */
     private ?QueueBackend $externalBackend = null;
 
@@ -143,6 +147,9 @@ class Queue
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');
         $this->maxRetries = $config['maxRetries'] ?? 3;
         $this->topic = $topic;
+
+        // Always initialise the lite (file) backend
+        $this->liteBackend = new LiteBackend($this->basePath, $this->maxRetries);
 
         // Initialize external backends
         if ($this->backend === 'rabbitmq') {
@@ -211,26 +218,13 @@ class Queue
             return $this->externalBackend->enqueue($queue, $message);
         }
 
-        $queuePath = $this->queuePath($queue);
-        $this->ensureDir($queuePath);
-
-        $id = $this->generateId();
-        $now = $this->now();
-        $delayUntil = $delay > 0 ? sprintf('%.6f', microtime(true) + $delay) : null;
-
-        $job = [
-            'id' => $id,
-            'payload' => $payload,
-            'status' => 'pending',
-            'created_at' => $now,
-            'attempts' => 0,
-            'delay_until' => $delayUntil,
-            'priority' => $priority,
-            'error' => null,
+        $message = [
+            'id'            => $this->generateId(),
+            'payload'       => $payload,
+            'priority'      => $priority,
+            'delay_seconds' => $delay,
         ];
-
-        file_put_contents($queuePath . '/' . $id . '.queue-data', json_encode($job, JSON_PRETTY_PRINT));
-        return $id;
+        return $this->liteBackend->enqueue($queue, $message);
     }
 
     /**
@@ -248,54 +242,7 @@ class Queue
             return $this->externalBackend->dequeue($queue);
         }
 
-        $queuePath = $this->queuePath($queue);
-        if (!is_dir($queuePath)) {
-            return null;
-        }
-
-        $files = glob($queuePath . '/*.queue-data');
-        if (empty($files)) {
-            return null;
-        }
-
-        // Load all pending jobs, sort by created_at
-        $candidates = [];
-        $nowMicro = microtime(true);
-
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data === null || $data['status'] !== 'pending') {
-                continue;
-            }
-
-            // Check delay
-            if (!empty($data['delay_until'])) {
-                $delayTime = (float)$data['delay_until'];
-                if ($delayTime > $nowMicro) {
-                    continue;
-                }
-            }
-
-            $candidates[] = ['file' => $file, 'data' => $data];
-        }
-
-        if (empty($candidates)) {
-            return null;
-        }
-
-        // Sort by created_at ascending
-        usort($candidates, function ($a, $b) {
-            return strcmp($a['data']['created_at'], $b['data']['created_at']);
-        });
-
-        $chosen = $candidates[0];
-        $job = $chosen['data'];
-        $job['topic'] = $this->topic;
-
-        // Mark as reserved and remove from pending
-        unlink($chosen['file']);
-
-        return $job;
+        return $this->liteBackend->dequeue($queue);
     }
 
     /**
@@ -353,12 +300,7 @@ class Queue
                 $job['error'] = $e->getMessage();
                 $job['attempts'] = ($job['attempts'] ?? 0) + 1;
 
-                $failedPath = $this->queuePath($queue) . '/failed';
-                $this->ensureDir($failedPath);
-                file_put_contents(
-                    $failedPath . '/' . $job['id'] . '.queue-data',
-                    json_encode($job, JSON_PRETTY_PRINT)
-                );
+                $this->liteBackend->writeFailed($queue, $job);
             }
 
             $processed++;
@@ -380,41 +322,7 @@ class Queue
             return $this->externalBackend->size($queue);
         }
 
-        if ($status === 'failed') {
-            $failedPath = $this->queuePath($queue) . '/failed';
-            if (!is_dir($failedPath)) {
-                return 0;
-            }
-
-            $files = glob($failedPath . '/*.queue-data');
-            $count = 0;
-
-            foreach ($files as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['status'] ?? '') === 'failed') {
-                    $count++;
-                }
-            }
-
-            return $count;
-        }
-
-        $queuePath = $this->queuePath($queue);
-        if (!is_dir($queuePath)) {
-            return 0;
-        }
-
-        $files = glob($queuePath . '/*.queue-data');
-        $count = 0;
-
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data !== null && ($data['status'] ?? '') === $status) {
-                $count++;
-            }
-        }
-
-        return $count;
+        return $this->liteBackend->count($queue, $status);
     }
 
     /**
@@ -425,15 +333,7 @@ class Queue
     public function clear(string $queue = ''): void
     {
         $queue = $queue ?: $this->topic;
-        $queuePath = $this->queuePath($queue);
-        if (!is_dir($queuePath)) {
-            return;
-        }
-
-        $files = glob($queuePath . '/*.queue-data');
-        foreach ($files as $file) {
-            unlink($file);
-        }
+        $this->liteBackend->clear($queue);
     }
 
     /**
@@ -445,80 +345,19 @@ class Queue
     public function failed(string $queue = ''): array
     {
         $queue = $queue ?: $this->topic;
-        $failedPath = $this->queuePath($queue) . '/failed';
-        if (!is_dir($failedPath)) {
-            return [];
-        }
-
-        $files = glob($failedPath . '/*.queue-data');
-        $jobs = [];
-
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data !== null) {
-                $jobs[] = $data;
-            }
-        }
-
-        return $jobs;
+        return $this->liteBackend->failed($queue);
     }
 
     /**
      * Retry a failed job by moving it back to the pending queue.
      *
-     * @param string      $jobId        Job ID
-     * @param string|null $queue        Queue name (defaults to searching all queues)
-     * @param int         $delaySeconds Delay in seconds before the retried job becomes available
+     * @param string $jobId        Job ID
+     * @param int    $delaySeconds Delay in seconds before the retried job becomes available
      * @return bool True if job was found and re-queued
      */
-    public function retry(string $jobId, ?string $queue = null, int $delaySeconds = 0): bool
+    public function retry(string $jobId, int $delaySeconds = 0): bool
     {
-        // If a specific queue is given, only search that directory
-        if ($queue !== null) {
-            $queueDirs = [$this->queuePath($queue)];
-        } else {
-            $basePath = $this->basePath;
-            if (!is_dir($basePath)) {
-                return false;
-            }
-            $queueDirs = array_filter(glob($basePath . '/*'), 'is_dir');
-        }
-
-        foreach ($queueDirs as $queueDir) {
-            $failedPath = $queueDir . '/failed';
-            $failedFile = $failedPath . '/' . $jobId . '.queue-data';
-
-            if (file_exists($failedFile)) {
-                $data = json_decode(file_get_contents($failedFile), true);
-                if ($data === null) {
-                    return false;
-                }
-
-                // Check max retries
-                if (($data['attempts'] ?? 0) >= $this->maxRetries) {
-                    return false;
-                }
-
-                // Reset to pending, increment attempts, and move back
-                $data['status'] = 'pending';
-                $data['error'] = null;
-                $data['attempts'] = ($data['attempts'] ?? 0) + 1;
-
-                if ($delaySeconds > 0) {
-                    $data['delay_until'] = sprintf('%.6f', microtime(true) + $delaySeconds);
-                }
-
-                file_put_contents(
-                    $queueDir . '/' . $jobId . '.queue-data',
-                    json_encode($data, JSON_PRETTY_PRINT)
-                );
-
-                unlink($failedFile);
-                return true;
-            }
-        }
-
-        return false;
+        return $this->liteBackend->retry($jobId, $this->topic, $delaySeconds);
     }
 
     /**
@@ -530,23 +369,7 @@ class Queue
     public function deadLetters(string $queue = ''): array
     {
         $queue = $queue ?: $this->topic;
-        $failedPath = $this->queuePath($queue) . '/failed';
-        if (!is_dir($failedPath)) {
-            return [];
-        }
-
-        $files = glob($failedPath . '/*.queue-data');
-        $jobs = [];
-
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
-                $data['status'] = 'dead';
-                $jobs[] = $data;
-            }
-        }
-
-        return $jobs;
+        return $this->liteBackend->deadLetters($queue);
     }
 
     /**
@@ -559,54 +382,7 @@ class Queue
     public function purge(string $status, string $queue = ''): int
     {
         $queue = $queue ?: $this->topic;
-        $count = 0;
-
-        if ($status === 'dead') {
-            $failedPath = $this->queuePath($queue) . '/failed';
-            if (!is_dir($failedPath)) {
-                return 0;
-            }
-
-            $files = glob($failedPath . '/*.queue-data');
-            foreach ($files as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
-                    unlink($file);
-                    $count++;
-                }
-            }
-        } elseif ($status === 'failed') {
-            $failedPath = $this->queuePath($queue) . '/failed';
-            if (!is_dir($failedPath)) {
-                return 0;
-            }
-
-            $files = glob($failedPath . '/*.queue-data');
-            foreach ($files as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['attempts'] ?? 0) < $this->maxRetries) {
-                    unlink($file);
-                    $count++;
-                }
-            }
-        } else {
-            // completed, pending, or other statuses — scan main queue directory
-            $queuePath = $this->queuePath($queue);
-            if (!is_dir($queuePath)) {
-                return 0;
-            }
-
-            $files = glob($queuePath . '/*.queue-data');
-            foreach ($files as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['status'] ?? '') === $status) {
-                    unlink($file);
-                    $count++;
-                }
-            }
-        }
-
-        return $count;
+        return $this->liteBackend->purge($status, $queue);
     }
 
     /**
@@ -618,39 +394,7 @@ class Queue
     public function retryFailed(string $queue = ''): int
     {
         $queue = $queue ?: $this->topic;
-        $failedPath = $this->queuePath($queue) . '/failed';
-        if (!is_dir($failedPath)) {
-            return 0;
-        }
-
-        $queuePath = $this->queuePath($queue);
-        $count = 0;
-        $files = glob($failedPath . '/*.queue-data');
-
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data === null) {
-                continue;
-            }
-
-            // Only retry if under max retries (not dead)
-            if (($data['attempts'] ?? 0) >= $this->maxRetries) {
-                continue;
-            }
-
-            $data['status'] = 'pending';
-            $data['error'] = null;
-
-            file_put_contents(
-                $queuePath . '/' . $data['id'] . '.queue-data',
-                json_encode($data, JSON_PRETTY_PRINT)
-            );
-
-            unlink($file);
-            $count++;
-        }
-
-        return $count;
+        return $this->liteBackend->retryFailed($queue);
     }
 
     /**
@@ -728,33 +472,14 @@ class Queue
      * @param string $id    Job ID to find
      * @return array|null Job data or null if not found
      */
-    public function popById(string $queue, string $id): ?array
+    public function popById(string $id): ?array
     {
-        $queue = $queue ?: $this->topic;
-
         if ($this->externalBackend !== null) {
             // External backends don't support ID-based pop natively
             return null;
         }
 
-        $queuePath = $this->queuePath($queue);
-        if (!is_dir($queuePath)) {
-            return null;
-        }
-
-        $files = glob($queuePath . '/*.queue-data');
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data === null || $data['status'] !== 'pending') {
-                continue;
-            }
-            if ($data['id'] === $id) {
-                unlink($file);
-                return $data;
-            }
-        }
-
-        return null;
+        return $this->liteBackend->popById($this->topic, $id);
     }
 
     /**
@@ -853,36 +578,10 @@ class Queue
     }
 
     /**
-     * Build the filesystem path for a named queue.
-     */
-    private function queuePath(string $queue): string
-    {
-        return $this->basePath . '/' . $queue;
-    }
-
-    /**
-     * Ensure a directory exists.
-     */
-    private function ensureDir(string $path): void
-    {
-        if (!is_dir($path)) {
-            mkdir($path, 0755, true);
-        }
-    }
-
-    /**
      * Generate a unique job ID.
      */
     private function generateId(): string
     {
         return bin2hex(random_bytes(8)) . '-' . dechex((int)(microtime(true) * 1000));
-    }
-
-    /**
-     * Current timestamp with microsecond precision.
-     */
-    private function now(): string
-    {
-        return sprintf('%.6f', microtime(true));
     }
 }
