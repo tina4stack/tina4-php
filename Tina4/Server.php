@@ -428,6 +428,35 @@ class Server
             headers: $this->buildHeaderArray($headers),
         );
 
+        // Populate PHP superglobals so user code that reads $_COOKIE, $_GET,
+        // $_POST, $_SERVER, or calls header() works correctly under the built-in
+        // socket server (stream_socket_server bypasses the PHP SAPI layer).
+        $_GET = $queryParams;
+        $_POST = is_array($parsedBody) && in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE']) ? $parsedBody : [];
+        $_COOKIE = [];
+        if (isset($headers['cookie'])) {
+            foreach (explode(';', $headers['cookie']) as $cookiePair) {
+                $cookiePair = trim($cookiePair);
+                if ($cookiePair === '') continue;
+                $eqPos = strpos($cookiePair, '=');
+                if ($eqPos !== false) {
+                    $_COOKIE[urldecode(substr($cookiePair, 0, $eqPos))] = urldecode(substr($cookiePair, $eqPos + 1));
+                }
+            }
+        }
+        $_SERVER['REQUEST_METHOD'] = $method;
+        $_SERVER['REQUEST_URI'] = $rawPath;
+        $_SERVER['QUERY_STRING'] = $queryString;
+        $_SERVER['SERVER_NAME'] = $this->host;
+        $_SERVER['SERVER_PORT'] = (string)$this->port;
+        $_SERVER['HTTP_HOST'] = $headers['host'] ?? "{$this->host}:{$this->port}";
+        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+        foreach ($headers as $hk => $hv) {
+            if ($hk[0] !== '_') {
+                $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $hk))] = $hv;
+            }
+        }
+
         // Suppress hot-reload script for AI port connections
         if ($this->isAiPortConnection($client)) {
             DevAdmin::$suppressReload = true;
