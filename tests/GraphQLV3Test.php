@@ -300,7 +300,7 @@ class GraphQLV3Test extends TestCase
     public function testSchemaSDL(): void
     {
         $gql = $this->makeGql();
-        $sdl = $gql->schema();
+        $sdl = $gql->schemaSdl();
         $this->assertStringContainsString('type User', $sdl);
         $this->assertStringContainsString('type Query', $sdl);
         $this->assertStringContainsString('type Mutation', $sdl);
@@ -312,7 +312,7 @@ class GraphQLV3Test extends TestCase
     {
         $gql = new GraphQL();
         $gql->addQuery('hello', [], 'String', fn() => 'world');
-        $sdl = $gql->schema();
+        $sdl = $gql->schemaSdl();
         $this->assertStringContainsString('type Query', $sdl);
         $this->assertStringNotContainsString('type Mutation', $sdl);
     }

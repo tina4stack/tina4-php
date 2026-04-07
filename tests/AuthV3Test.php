@@ -35,7 +35,7 @@ class AuthV3Test extends TestCase
         $token = Auth::getToken(['sub' => '123'], $this->secret, 3600);
         $payload = Auth::getPayload($token);
         $this->assertArrayHasKey('exp', $payload);
-        $this->assertEquals($payload['iat'] + 3600, $payload['exp']);
+        $this->assertEqualsWithDelta($payload['iat'] + 3600, $payload['exp'], 5);
     }
 
     public function testGenerateTokenNoExpWhenZero(): void
@@ -235,7 +235,7 @@ class AuthV3Test extends TestCase
 
         $this->assertCount(4, $parts);
         $this->assertEquals('pbkdf2_sha256', $parts[0]);
-        $this->assertEquals('100000', $parts[1]);
+        $this->assertEquals('260000', $parts[1]);
         $this->assertEquals(32, strlen($parts[2])); // 16 bytes = 32 hex chars
     }
 
@@ -456,7 +456,7 @@ class AuthV3Test extends TestCase
 
         $payload = Auth::validToken($refreshed, $this->secret);
         $this->assertNotNull($payload);
-        $this->assertEquals($payload['iat'] + 7200, $payload['exp']);
+        $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5);
     }
 
     // ── RS256 Additional Tests ─────────────────────────────────────

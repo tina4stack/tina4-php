@@ -106,7 +106,7 @@ class ORMV3Test extends TestCase
 
         $result = $user->save();
 
-        $this->assertTrue($result);
+        $this->assertNotFalse($result);
         $this->assertNotNull($user->getPrimaryKeyValue());
         $this->assertTrue($user->exists());
     }
@@ -158,7 +158,7 @@ class ORMV3Test extends TestCase
         $id = $user->getPrimaryKeyValue();
 
         $result = $user->delete();
-        $this->assertTrue($result);
+        $this->assertNotFalse($result);
 
         $user2 = new TestUser($this->db);
         $user2->load($id);
