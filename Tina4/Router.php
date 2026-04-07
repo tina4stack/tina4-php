@@ -400,8 +400,12 @@ class Router
         if ($isDevAdmin) {
             // Dev admin routes never require auth
             $requiresAuth = false;
+        } elseif (!empty($route['middleware'])) {
+            // Route has custom middleware — developer handles auth themselves.
+            // Only enforce built-in auth if explicitly marked ->secure().
+            $requiresAuth = !empty($route['secure']);
         } elseif ($isWriteMethod) {
-            // Write routes require auth unless explicitly opted out
+            // Write routes with no custom middleware require auth unless ->noAuth()
             $requiresAuth = empty($route['noAuth']);
         } else {
             // Read routes require auth only when explicitly marked secure
