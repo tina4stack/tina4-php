@@ -1,0 +1,82 @@
+# Tina4 PHP — nginx configuration example
+#
+# Copy this file to your nginx sites-available directory and symlink to sites-enabled:
+#   sudo cp nginx.conf.example /etc/nginx/sites-available/tina4
+#   sudo ln -s /etc/nginx/sites-available/tina4 /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Adjust server_name, root, and fastcgi_pass to match your environment.
+
+server {
+    listen 80;
+    server_name example.com;
+    root /var/www/tina4;
+    index index.php;
+
+    # Block sensitive files and directories
+    location ~ /\.(env|htaccess|htpasswd|git) {
+        deny all;
+        return 404;
+    }
+    location ~ ^/(secrets|cache)/ {
+        deny all;
+        return 404;
+    }
+    location ~ ^/src/(routes|orm|services|app|templates|scss|less)/ {
+        deny all;
+        return 404;
+    }
+
+    # Allow static files from src/public/ (CSS, JS, images, uploads)
+    location /src/public/ {
+        try_files $uri =404;
+    }
+
+    # Front controller — route all non-file requests through index.php
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # PHP-FPM — adjust the socket/port to match your setup
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php-fpm.sock;
+        # For TCP: fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+
+        # Pass Authorization header (required for Bearer tokens)
+        fastcgi_param HTTP_AUTHORIZATION $http_authorization;
+
+        # Timeouts for long-running requests (queues, migrations)
+        fastcgi_read_timeout 300;
+    }
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+}
+
+# Uncomment below for HTTPS (production)
+# server {
+#     listen 443 ssl http2;
+#     server_name example.com;
+#     root /var/www/tina4;
+#     index index.php;
+#
+#     ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+#
+#     # ... same location blocks as above ...
+# }
+#
+# # Redirect HTTP to HTTPS
+# server {
+#     listen 80;
+#     server_name example.com;
+#     return 301 https://$host$request_uri;
+# }
