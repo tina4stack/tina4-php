@@ -784,6 +784,19 @@ HTML;
                 header("$name: $value");
             }
         }
+        // Emit cookies set via $response->cookie()
+        foreach ($response->getCookies() as $name => $opts) {
+            if (!headers_sent()) {
+                setcookie($name, $opts['value'], [
+                    'expires' => $opts['expires'] ?? 0,
+                    'path' => $opts['path'] ?? '/',
+                    'domain' => $opts['domain'] ?? '',
+                    'secure' => $opts['secure'] ?? false,
+                    'httponly' => $opts['httponly'] ?? true,
+                    'samesite' => $opts['samesite'] ?? 'Lax',
+                ]);
+            }
+        }
         echo $response->getBody();
     }
 

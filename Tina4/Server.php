@@ -491,6 +491,27 @@ class Server
         foreach ($responseHeaders as $name => $value) {
             $httpResponse .= "{$name}: {$value}\r\n";
         }
+        // Emit cookies set via $response->cookie()
+        foreach ($response->getCookies() as $name => $opts) {
+            $cookie = urlencode($name) . '=' . urlencode($opts['value']);
+            if (!empty($opts['expires'])) {
+                $cookie .= '; Expires=' . gmdate('D, d M Y H:i:s T', $opts['expires']);
+            }
+            $cookie .= '; Path=' . ($opts['path'] ?? '/');
+            if (!empty($opts['domain'])) {
+                $cookie .= '; Domain=' . $opts['domain'];
+            }
+            if (!empty($opts['secure'])) {
+                $cookie .= '; Secure';
+            }
+            if (!empty($opts['httponly'])) {
+                $cookie .= '; HttpOnly';
+            }
+            if (!empty($opts['samesite'])) {
+                $cookie .= '; SameSite=' . $opts['samesite'];
+            }
+            $httpResponse .= "Set-Cookie: {$cookie}\r\n";
+        }
         $httpResponse .= "\r\n";
         $httpResponse .= $responseBody;
 
