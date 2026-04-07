@@ -67,7 +67,7 @@ class Migration
                 continue;
             }
 
-            $this->db->begin();
+            $this->db->startTransaction();
 
             try {
                 // Split into individual statements
@@ -141,7 +141,7 @@ class Migration
         foreach ($migrations as $migration) {
             $fileName = $migration['migration'];
 
-            $this->db->begin();
+            $this->db->startTransaction();
 
             try {
                 // Look for a .down.sql file
