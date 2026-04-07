@@ -453,7 +453,7 @@ class DevAdmin
 
         // API: Metrics — file detail
         Router::get('/__dev/api/metrics/file', function (Request $request, Response $response) {
-            $path = $request->input('path') ?? '';
+            $path = $request->query['path'] ?? '';
             return $response->json(Metrics::fileDetail($path));
         });
 

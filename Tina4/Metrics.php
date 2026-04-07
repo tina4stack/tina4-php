@@ -392,6 +392,11 @@ class Metrics
      */
     public static function fileDetail(string $filePath): array
     {
+        // Ensure scan root is resolved (each PHP request is a fresh process)
+        if (self::$lastScanRoot === '') {
+            self::resolveRoot();
+        }
+
         // Normalize path separators — paths coming from the browser are always
         // forward-slash even on Windows, but the filesystem may need either.
         $filePath = str_replace('\\', '/', $filePath);
