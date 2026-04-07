@@ -160,12 +160,21 @@ class Router
             $route = &self::$routes[self::$lastRouteMethod][self::$lastRouteIndex];
             $route['middleware'] = array_merge($route['middleware'], $middleware);
 
+            // Custom middleware means developer handles auth — disable built-in
+            // gate unless ->secure() was explicitly called.
+            if (empty($route['secure'])) {
+                $route['noAuth'] = true;
+            }
+
             // If this was registered via any(), apply to all methods
             if ($this->wasAnyRoute()) {
                 foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
                     $idx = $this->findMatchingRoute($method, $route['pattern']);
                     if ($idx !== null) {
                         self::$routes[$method][$idx]['middleware'] = $route['middleware'];
+                        if (empty($route['secure'])) {
+                            self::$routes[$method][$idx]['noAuth'] = true;
+                        }
                     }
                 }
             }
