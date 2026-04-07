@@ -32,10 +32,10 @@ class AuthV3Test extends TestCase
 
     public function testGenerateTokenContainsExp(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret, 3600);
+        $token = Auth::getToken(['sub' => '123'], $this->secret, 60); // 60 minutes
         $payload = Auth::getPayload($token);
         $this->assertArrayHasKey('exp', $payload);
-        $this->assertEqualsWithDelta($payload['iat'] + 3600, $payload['exp'], 5);
+        $this->assertEqualsWithDelta($payload['iat'] + 3600, $payload['exp'], 5); // 60 * 60 = 3600 seconds
     }
 
     public function testGenerateTokenNoExpWhenZero(): void
@@ -452,11 +452,11 @@ class AuthV3Test extends TestCase
     public function testRefreshTokenNewExpiry(): void
     {
         $original = Auth::getToken(['sub' => '1'], $this->secret, 60);
-        $refreshed = Auth::refreshToken($original, $this->secret, 7200);
+        $refreshed = Auth::refreshToken($original, $this->secret, 120); // 120 minutes
 
         $payload = Auth::validToken($refreshed, $this->secret);
         $this->assertNotNull($payload);
-        $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5);
+        $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5); // 120 * 60 = 7200 seconds
     }
 
     // ── RS256 Additional Tests ─────────────────────────────────────

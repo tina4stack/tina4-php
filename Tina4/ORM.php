@@ -305,8 +305,30 @@ abstract class ORM
      * @param ?array $include Relationship names to eager-load
      * @return bool
      */
-    public function load(string $sql, array $params = [], ?array $include = null): bool
+    public function load(?string $filter = null, array $params = [], ?array $include = null): bool
     {
+        $this->ensureDb();
+
+        $sql = "SELECT * FROM {$this->tableName}";
+
+        if ($filter === null) {
+            // No args — use the primary key value already set on this instance
+            $pkValue = $this->getPrimaryKeyValue();
+            if ($pkValue === null) {
+                return false;
+            }
+            $pkColumn = $this->getDbColumn($this->primaryKey);
+            $sql .= " WHERE {$pkColumn} = ?";
+            $params = [$pkValue];
+        } else {
+            // Filter string — WHERE clause without "WHERE"
+            $sql .= " WHERE {$filter}";
+        }
+
+        if ($this->softDelete) {
+            $sql .= ($filter === null ? " AND" : " AND") . " is_deleted = 0";
+        }
+
         $result = $this->selectOne($sql, $params, $include);
         if ($result === null) {
             return false;
@@ -638,11 +660,8 @@ abstract class ORM
         $model->fill($row);
         $model->_exists = true;
         if ($include !== null) {
-            $adapter = $this->_db instanceof Database
-                ? $this->_db->getAdapter()
-                : $this->_db;
             $instances = [$model];
-            static::eagerLoad($instances, $include, $adapter);
+            static::eagerLoad($instances, $include, $this->_db);
         }
         return $model;
     }
@@ -912,7 +931,7 @@ abstract class ORM
         }
 
         $parent = new $relatedClass($this->_db);
-        $parent->load($fkValue);
+        $parent->findById($fkValue);
         return $parent->exists() ? $parent : null;
     }
 
@@ -1306,7 +1325,7 @@ abstract class ORM
         }
 
         $parent = new $relatedClass($this->_db);
-        $parent->load($fkValue);
+        $parent->findById($fkValue);
         return $parent->exists() ? $parent : null;
     }
 

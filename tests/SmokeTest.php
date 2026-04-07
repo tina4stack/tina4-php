@@ -130,14 +130,14 @@ class SmokeTest extends TestCase
         $item = new SmokeItem($db);
         $item->name = 'Widget';
         $item->category = 'Tools';
-        $this->assertTrue($item->save());
+        $this->assertNotFalse($item->save());
         $this->assertTrue($item->exists());
         $id = $item->getPrimaryKeyValue();
         $this->assertNotNull($id);
 
         // Load
         $loaded = new SmokeItem($db);
-        $loaded->load($id);
+        $loaded->load("id = ?", [$id]);
         $this->assertTrue($loaded->exists());
         $this->assertSame('Widget', $loaded->name);
 
@@ -150,7 +150,7 @@ class SmokeTest extends TestCase
         $this->assertTrue($loaded->delete());
 
         $check = new SmokeItem($db);
-        $check->load($id);
+        $check->load("id = ?", [$id]);
         $this->assertFalse($check->exists());
 
         $db->close();
@@ -431,7 +431,7 @@ class SmokeTest extends TestCase
         $gql->fromOrm($model);
 
         // The fromOrm should have created queries — verify schema has the type
-        $sdl = $gql->schema();
+        $sdl = $gql->schemaSdl();
         $this->assertStringContainsString('type SmokeItem', $sdl);
         $this->assertStringContainsString('type Query', $sdl);
 
