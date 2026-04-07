@@ -89,6 +89,7 @@ class ORMV3Test extends TestCase
         $this->db->exec("CREATE TABLE rel_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT, user_id INTEGER)");
         $this->db->exec("CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, post_id INTEGER)");
         $this->db->exec("CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, bio TEXT, user_id INTEGER)");
+        \Tina4\ORM::setGlobalDb($this->db);
     }
 
     protected function tearDown(): void
@@ -372,9 +373,38 @@ class ORMV3Test extends TestCase
     {
         $this->expectException(\RuntimeException::class);
 
-        $user = new TestUser();
-        $user->name = 'Alice';
-        $user->save();
+        // Temporarily clear global DB to test the no-DB error path
+        $savedDb = $this->db;
+        \Tina4\ORM::setGlobalDb(new class implements \Tina4\Database\DatabaseAdapter {
+            // Dummy adapter that throws — we just need setGlobalDb to accept something
+            // so we can test the "no instance db" path
+            public function open(): void {}
+            public function close(): void {}
+            public function query(string $sql, array $params = []): array { return []; }
+            public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array { return []; }
+            public function fetchOne(string $sql, array $params = []): ?array { return null; }
+            public function execute(string $sql, array $params = []): bool|\Tina4\Database\DatabaseResult { return false; }
+            public function insert(string $table, array $data): bool { return false; }
+            public function update(string $table, array $data, string $where = '', array $whereParams = []): bool { return false; }
+            public function delete(string $table, string|array $filter = '', array $whereParams = []): bool { return false; }
+            public function executeMany(string $sql, array $paramsList = []): int { return 0; }
+            public function tableExists(string $table): bool { return false; }
+            public function getColumns(string $table): array { return []; }
+            public function getTables(): array { return []; }
+            public function lastInsertId(): int|string { return 0; }
+            public function startTransaction(): void { throw new \RuntimeException('No DB'); }
+            public function commit(): void {}
+            public function rollback(): void {}
+            public function error(): ?string { return 'No DB'; }
+        });
+
+        try {
+            $user = new TestUser();
+            $user->name = 'Alice';
+            $user->save();
+        } finally {
+            \Tina4\ORM::setGlobalDb($savedDb);
+        }
     }
 
     public function testDeleteWithNoPrimaryKey(): void

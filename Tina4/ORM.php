@@ -50,8 +50,40 @@ abstract class ORM
     /** @var array<string, string> Belongs-to relationships: ['propertyName' => 'ForeignModel.foreign_key'] */
     public array $belongsTo = [];
 
-    /** @var DatabaseAdapter|null Database connection */
+    /** @var DatabaseAdapter|null Instance database connection */
     protected ?DatabaseAdapter $_db = null;
+
+    /** @var DatabaseAdapter|null Global database for static methods (set via ORM::setGlobalDb or App::setDatabase) */
+    private static ?DatabaseAdapter $_globalDb = null;
+
+    /**
+     * Set the global database for all ORM models.
+     * Equivalent to Python's orm_bind(db) or Ruby's Tina4.database = db.
+     */
+    public static function setGlobalDb(DatabaseAdapter $db): void
+    {
+        self::$_globalDb = $db;
+    }
+
+    /**
+     * Resolve the database for static methods.
+     * Checks: instance $_db → global $_globalDb → App::getDatabase() → Database::fromEnv()
+     */
+    protected static function resolveDb(): DatabaseAdapter
+    {
+        if (self::$_globalDb !== null) {
+            return self::$_globalDb;
+        }
+        $appDb = App::getDatabase();
+        if ($appDb !== null) {
+            return $appDb;
+        }
+        $envDb = Database\Database::fromEnv();
+        if ($envDb !== null) {
+            return $envDb;
+        }
+        throw new \RuntimeException('No database configured. Call ORM::setGlobalDb(), App::setDatabase(), or set DATABASE_URL in .env');
+    }
 
     /** @var array<string, mixed> Model data storage */
     private array $_data = [];
@@ -275,24 +307,32 @@ abstract class ORM
      *
      * @return $this
      */
-    public function findById(int|string $id): self
+    /**
+     * Find a single record by primary key.
+     * Can be called statically: User::findById(1)
+     *
+     * @return static|null The found instance or null
+     */
+    public static function findById(int|string $id): ?static
     {
-        $this->ensureDb();
-        $this->_relCache = [];
+        $instance = new static();
+        $db = $instance->_db ?? static::resolveDb();
 
-        $pkColumn = $this->getDbColumn($this->primaryKey);
-        $sql = "SELECT * FROM {$this->tableName} WHERE {$pkColumn} = ?";
-        if ($this->softDelete) {
+        $pkColumn = $instance->getDbColumn($instance->primaryKey);
+        $sql = "SELECT * FROM {$instance->tableName} WHERE {$pkColumn} = ?";
+        if ($instance->softDelete) {
             $sql .= " AND is_deleted = 0";
         }
 
-        $result = $this->selectOne($sql, [$id]);
-        if ($result !== null) {
-            $this->fill($result->getData());
-            $this->_exists = true;
+        $row = $db->fetchOne($sql, [$id]);
+        if ($row === null) {
+            return null;
         }
 
-        return $this;
+        $model = new static($db);
+        $model->fill($row);
+        $model->_exists = true;
+        return $model;
     }
 
     /**
@@ -384,27 +424,36 @@ abstract class ORM
      * @param string|null $orderBy ORDER BY clause
      * @return array<int, static> Array of model instances
      */
-    public function find(array $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null): array
+    /**
+     * Find records by filter dict. Always returns an array.
+     * Can be called statically: User::find(['name' => 'Alice'])
+     * Or on an instance: $user->find(['name' => 'Alice'])
+     *
+     * @param array<string, mixed> $filter Column => value pairs (AND-ed)
+     * @param int $limit Max records
+     * @param int $offset Starting offset
+     * @param string|null $orderBy ORDER BY clause
+     * @return array<int, static>
+     */
+    public static function find(array $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null): array
     {
-        $this->ensureDb();
+        $instance = new static();
+        $db = $instance->_db ?? static::resolveDb();
 
         $conditions = [];
         $params = [];
-        $paramIndex = 0;
 
         foreach ($filter as $key => $value) {
-            $dbColumn = $this->getDbColumn($key);
-            $paramName = ':p' . $paramIndex;
-            $conditions[] = "{$dbColumn} = {$paramName}";
-            $params[$paramName] = $value;
-            $paramIndex++;
+            $dbColumn = $instance->getDbColumn($key);
+            $conditions[] = "{$dbColumn} = ?";
+            $params[] = $value;
         }
 
-        if ($this->softDelete) {
+        if ($instance->softDelete) {
             $conditions[] = "is_deleted = 0";
         }
 
-        $sql = "SELECT * FROM {$this->tableName}";
+        $sql = "SELECT * FROM {$instance->tableName}";
 
         if (!empty($conditions)) {
             $sql .= " WHERE " . implode(' AND ', $conditions);
@@ -414,11 +463,12 @@ abstract class ORM
             $sql .= " ORDER BY {$orderBy}";
         }
 
-        $result = $this->_db->fetch($sql, $params, $limit, $offset);
+        $result = $db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
-        foreach ($result['data'] as $row) {
-            $model = new static($this->_db);
+        $rows = is_array($result) ? ($result['data'] ?? $result) : $result->records;
+        foreach ($rows as $row) {
+            $model = new static($db);
             $model->fill($row);
             $model->_exists = true;
             $models[] = $model;
@@ -704,13 +754,13 @@ abstract class ORM
      *
      * @throws \RuntimeException If the record is not found
      */
-    public function findOrFail(int|string $id): static
+    public static function findOrFail(int|string $id): static
     {
-        $model = new static($this->_db);
-        $model->findById($id);
+        $model = static::findById($id);
 
-        if (!$model->exists()) {
-            throw new \RuntimeException("Record not found in {$this->tableName} with {$this->primaryKey} = {$id}");
+        if ($model === null) {
+            $instance = new static();
+            throw new \RuntimeException("Record not found in {$instance->tableName} with {$instance->primaryKey} = {$id}");
         }
 
         return $model;
@@ -930,9 +980,7 @@ abstract class ORM
             return null;
         }
 
-        $parent = new $relatedClass($this->_db);
-        $parent->findById($fkValue);
-        return $parent->exists() ? $parent : null;
+        return $relatedClass::findById($fkValue);
     }
 
     /**
@@ -1324,9 +1372,7 @@ abstract class ORM
             return null;
         }
 
-        $parent = new $relatedClass($this->_db);
-        $parent->findById($fkValue);
-        return $parent->exists() ? $parent : null;
+        return $relatedClass::findById($fkValue);
     }
 
     /**
@@ -1356,6 +1402,19 @@ abstract class ORM
             return;
         }
 
+        // Try global DB first (set via ORM::setGlobalDb or App::setDatabase)
+        if (self::$_globalDb !== null) {
+            $this->_db = self::$_globalDb;
+            return;
+        }
+
+        // Try App::getDatabase()
+        $appDb = App::getDatabase();
+        if ($appDb !== null) {
+            $this->_db = $appDb;
+            return;
+        }
+
         // Try auto-discovery from DATABASE_URL
         $discovered = \Tina4\Database\Database::fromEnv();
         if ($discovered !== null) {
@@ -1363,6 +1422,6 @@ abstract class ORM
             return;
         }
 
-        throw new \RuntimeException('ORM: No database connection. Call setDb() first or set DATABASE_URL in .env');
+        throw new \RuntimeException('ORM: No database connection. Call ORM::setGlobalDb(), App::setDatabase(), or set DATABASE_URL in .env');
     }
 }

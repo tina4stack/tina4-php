@@ -830,6 +830,7 @@ HTML;
     public static function setDatabase(Database\DatabaseAdapter $db): void
     {
         self::$database = $db;
+        ORM::setGlobalDb($db);
     }
 
     /**
