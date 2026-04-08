@@ -33,6 +33,7 @@ class AutoCrudV3Test extends TestCase
     {
         Router::clear();
         putenv("SECRET={$this->secret}");
+        $_ENV['SECRET'] = $this->secret;
         $this->db = new SQLite3Adapter(':memory:');
         $this->db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT, price REAL)");
         \Tina4\ORM::setGlobalDb($this->db);
@@ -42,6 +43,7 @@ class AutoCrudV3Test extends TestCase
     {
         Router::clear();
         putenv('SECRET');
+        unset($_ENV['SECRET']);
         $this->db->close();
     }
 
@@ -104,7 +106,7 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(
             method: 'POST',
             path: '/api/items',
@@ -180,7 +182,7 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(
             method: 'PUT',
             path: '/api/items/1',
@@ -203,7 +205,7 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(method: 'DELETE', path: '/api/items/1', headers: ['authorization' => "Bearer {$token}"]);
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
@@ -221,7 +223,7 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(method: 'DELETE', path: '/api/items/999', headers: ['authorization' => "Bearer {$token}"]);
         $response = new Response(testing: true);
         $result = Router::dispatch($request, $response);
@@ -353,7 +355,7 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(
             method: 'PUT',
             path: '/api/items/999',
@@ -392,7 +394,7 @@ class AutoCrudV3Test extends TestCase
         $crud->register(CrudItem::class);
         $crud->generateRoutes();
 
-        $token = Auth::getToken(['sub' => 'tester'], $this->secret);
+        $token = Auth::getToken(['sub' => 'tester']);
 
         for ($i = 1; $i <= 3; $i++) {
             $request = Request::create(

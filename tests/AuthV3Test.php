@@ -13,18 +13,29 @@ class AuthV3Test extends TestCase
 {
     private string $secret = 'test-secret-key-for-jwt';
 
+    protected function setUp(): void
+    {
+        $_ENV['SECRET'] = $this->secret;
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_ENV['SECRET']);
+        unset($_ENV['JWT_ALGORITHM']);
+    }
+
     // ── JWT Generation ────────────────────────────────────────────
 
     public function testGenerateTokenReturnsThreeParts(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret);
+        $token = Auth::getToken(['sub' => '123']);
         $parts = explode('.', $token);
         $this->assertCount(3, $parts);
     }
 
     public function testGenerateTokenContainsIat(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret);
+        $token = Auth::getToken(['sub' => '123']);
         $payload = Auth::getPayload($token);
         $this->assertArrayHasKey('iat', $payload);
         $this->assertIsInt($payload['iat']);
@@ -32,22 +43,22 @@ class AuthV3Test extends TestCase
 
     public function testGenerateTokenContainsExp(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret, 60); // 60 minutes
+        $token = Auth::getToken(['sub' => '123'], 3600); // 3600 seconds = 60 minutes
         $payload = Auth::getPayload($token);
         $this->assertArrayHasKey('exp', $payload);
-        $this->assertEqualsWithDelta($payload['iat'] + 3600, $payload['exp'], 5); // 60 * 60 = 3600 seconds
+        $this->assertEqualsWithDelta($payload['iat'] + 3600, $payload['exp'], 5);
     }
 
     public function testGenerateTokenNoExpWhenZero(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret, 0);
+        $token = Auth::getToken(['sub' => '123'], 0);
         $payload = Auth::getPayload($token);
         $this->assertArrayNotHasKey('exp', $payload);
     }
 
     public function testGenerateTokenPreservesCustomClaims(): void
     {
-        $token = Auth::getToken(['sub' => '123', 'role' => 'admin', 'name' => 'Alice'], $this->secret);
+        $token = Auth::getToken(['sub' => '123', 'role' => 'admin', 'name' => 'Alice']);
         $payload = Auth::getPayload($token);
         $this->assertEquals('123', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
@@ -56,7 +67,7 @@ class AuthV3Test extends TestCase
 
     public function testGenerateTokenHeaderIsCorrect(): void
     {
-        $token = Auth::getToken(['sub' => '1'], $this->secret);
+        $token = Auth::getToken(['sub' => '1']);
         $parts = explode('.', $token);
         $header = json_decode(base64_decode(strtr($parts[0], '-_', '+/')), true);
         $this->assertEquals('HS256', $header['alg']);
@@ -67,8 +78,8 @@ class AuthV3Test extends TestCase
 
     public function testVerifyTokenValid(): void
     {
-        $token = Auth::getToken(['sub' => '123', 'role' => 'admin'], $this->secret);
-        $payload = Auth::validToken($token, $this->secret);
+        $token = Auth::getToken(['sub' => '123', 'role' => 'admin']);
+        $payload = Auth::validToken($token);
 
         $this->assertNotNull($payload);
         $this->assertEquals('123', $payload['sub']);
@@ -77,50 +88,53 @@ class AuthV3Test extends TestCase
 
     public function testVerifyTokenWrongSecret(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret);
-        $payload = Auth::validToken($token, 'wrong-secret');
+        // Generate token with correct secret, then switch env to wrong secret for validation
+        $token = Auth::getToken(['sub' => '123']);
+        $_ENV['SECRET'] = 'wrong-secret';
+        $payload = Auth::validToken($token);
+        $_ENV['SECRET'] = $this->secret;
 
         $this->assertNull($payload);
     }
 
     public function testVerifyTokenTampered(): void
     {
-        $token = Auth::getToken(['sub' => '123'], $this->secret);
+        $token = Auth::getToken(['sub' => '123']);
         // Tamper with the payload
         $parts = explode('.', $token);
         $parts[1] = rtrim(strtr(base64_encode('{"sub":"hacked","iat":' . time() . ',"exp":' . (time() + 3600) . '}'), '+/', '-_'), '=');
         $tampered = implode('.', $parts);
 
-        $payload = Auth::validToken($tampered, $this->secret);
+        $payload = Auth::validToken($tampered);
         $this->assertNull($payload);
     }
 
     public function testVerifyTokenExpired(): void
     {
         // Generate a token with exp set in the past
-        $token = Auth::getToken(['sub' => '123', 'exp' => time() - 10], $this->secret, 0);
-        $payload = Auth::validToken($token, $this->secret);
+        $token = Auth::getToken(['sub' => '123', 'exp' => time() - 10], 0);
+        $payload = Auth::validToken($token);
 
         $this->assertNull($payload);
     }
 
     public function testVerifyTokenMalformed(): void
     {
-        $this->assertNull(Auth::validToken('not.a.valid.token', $this->secret));
-        $this->assertNull(Auth::validToken('only-one-part', $this->secret));
-        $this->assertNull(Auth::validToken('', $this->secret));
+        $this->assertNull(Auth::validToken('not.a.valid.token'));
+        $this->assertNull(Auth::validToken('only-one-part'));
+        $this->assertNull(Auth::validToken(''));
     }
 
     public function testVerifyTokenInvalidBase64(): void
     {
-        $this->assertNull(Auth::validToken('abc.!!!.def', $this->secret));
+        $this->assertNull(Auth::validToken('abc.!!!.def'));
     }
 
     // ── JWT Decode Without Verification ───────────────────────────
 
     public function testDecodeTokenWithoutVerification(): void
     {
-        $token = Auth::getToken(['sub' => '456', 'role' => 'user'], $this->secret);
+        $token = Auth::getToken(['sub' => '456', 'role' => 'user']);
         $payload = Auth::getPayload($token);
 
         $this->assertNotNull($payload);
@@ -137,7 +151,7 @@ class AuthV3Test extends TestCase
     public function testDecodeTokenWorksWithExpiredToken(): void
     {
         // Expired tokens should still decode (no verification)
-        $token = Auth::getToken(['sub' => '789', 'exp' => time() - 100], $this->secret, 0);
+        $token = Auth::getToken(['sub' => '789', 'exp' => time() - 100], 0);
         $payload = Auth::getPayload($token);
 
         $this->assertNotNull($payload);
@@ -146,7 +160,7 @@ class AuthV3Test extends TestCase
 
     public function testDecodeTokenWorksWithWrongSignature(): void
     {
-        $token = Auth::getToken(['sub' => '111'], $this->secret);
+        $token = Auth::getToken(['sub' => '111']);
         // Replace signature with garbage
         $parts = explode('.', $token);
         $parts[2] = 'invalid-signature';
@@ -171,22 +185,25 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $token = Auth::getToken(
-            ['sub' => 'rs256-user', 'role' => 'admin'],
-            $privateKey,
-            3600,
-            'RS256'
-        );
+        $_ENV['SECRET'] = $privateKey;
+        $_ENV['JWT_ALGORITHM'] = 'RS256';
+
+        $token = Auth::getToken(['sub' => 'rs256-user', 'role' => 'admin'], 3600);
 
         $this->assertNotEmpty($token);
         $parts = explode('.', $token);
         $this->assertCount(3, $parts);
 
         // Verify with public key
-        $payload = Auth::validToken($token, $publicKey, 'RS256');
+        $_ENV['SECRET'] = $publicKey;
+        $payload = Auth::validToken($token);
         $this->assertNotNull($payload);
         $this->assertEquals('rs256-user', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
+
+        // Restore
+        $_ENV['SECRET'] = $this->secret;
+        unset($_ENV['JWT_ALGORITHM']);
     }
 
     public function testRS256RejectsWrongKey(): void
@@ -201,9 +218,17 @@ class AuthV3Test extends TestCase
         $publicKeyDetails2 = openssl_pkey_get_details($keyPair2);
         $publicKey2 = $publicKeyDetails2['key'];
 
-        // Sign with key1, verify with key2's public key
-        $token = Auth::getToken(['sub' => 'test'], $privateKey1, 3600, 'RS256');
-        $payload = Auth::validToken($token, $publicKey2, 'RS256');
+        $_ENV['SECRET'] = $privateKey1;
+        $_ENV['JWT_ALGORITHM'] = 'RS256';
+        $token = Auth::getToken(['sub' => 'test'], 3600);
+
+        // Verify with wrong public key
+        $_ENV['SECRET'] = $publicKey2;
+        $payload = Auth::validToken($token);
+
+        // Restore
+        $_ENV['SECRET'] = $this->secret;
+        unset($_ENV['JWT_ALGORITHM']);
 
         $this->assertNull($payload);
     }
@@ -214,7 +239,14 @@ class AuthV3Test extends TestCase
         $keyPair = openssl_pkey_new($config);
         openssl_pkey_export($keyPair, $privateKey);
 
-        $token = Auth::getToken(['sub' => '1'], $privateKey, 3600, 'RS256');
+        $_ENV['SECRET'] = $privateKey;
+        $_ENV['JWT_ALGORITHM'] = 'RS256';
+        $token = Auth::getToken(['sub' => '1'], 3600);
+
+        // Restore
+        $_ENV['SECRET'] = $this->secret;
+        unset($_ENV['JWT_ALGORITHM']);
+
         $parts = explode('.', $token);
 
         $remainder = strlen($parts[0]) % 4;
@@ -302,9 +334,9 @@ class AuthV3Test extends TestCase
 
     public function testMiddlewareValidToken(): void
     {
-        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $this->secret);
+        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin']);
 
-        $middleware = Auth::middleware($this->secret);
+        $middleware = Auth::middleware();
 
         // Create a mock request with the Authorization header
         $request = $this->createMockRequest("Bearer $token");
@@ -317,9 +349,9 @@ class AuthV3Test extends TestCase
 
     public function testMiddlewareExpiredToken(): void
     {
-        $token = Auth::getToken(['sub' => 'user-1', 'exp' => time() - 10], $this->secret, 0);
+        $token = Auth::getToken(['sub' => 'user-1', 'exp' => time() - 10], 0);
 
-        $middleware = Auth::middleware($this->secret);
+        $middleware = Auth::middleware();
         $request = $this->createMockRequest("Bearer $token");
 
         $result = $middleware($request);
@@ -328,7 +360,7 @@ class AuthV3Test extends TestCase
 
     public function testMiddlewareMissingToken(): void
     {
-        $middleware = Auth::middleware($this->secret);
+        $middleware = Auth::middleware();
         $request = $this->createMockRequest('');
 
         $result = $middleware($request);
@@ -337,7 +369,7 @@ class AuthV3Test extends TestCase
 
     public function testMiddlewareInvalidBearerFormat(): void
     {
-        $middleware = Auth::middleware($this->secret);
+        $middleware = Auth::middleware();
         $request = $this->createMockRequest('Basic dXNlcjpwYXNz');
 
         $result = $middleware($request);
@@ -346,7 +378,7 @@ class AuthV3Test extends TestCase
 
     public function testMiddlewareInvalidToken(): void
     {
-        $middleware = Auth::middleware($this->secret);
+        $middleware = Auth::middleware();
         $request = $this->createMockRequest('Bearer invalid.token.here');
 
         $result = $middleware($request);
@@ -357,8 +389,8 @@ class AuthV3Test extends TestCase
 
     public function testAuthenticateRequestValidBearer(): void
     {
-        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $this->secret);
-        $result = Auth::authenticateRequest(['Authorization' => "Bearer $token"], $this->secret);
+        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin']);
+        $result = Auth::authenticateRequest(['Authorization' => "Bearer $token"]);
 
         $this->assertNotNull($result);
         $this->assertEquals('user-1', $result['sub']);
@@ -367,8 +399,8 @@ class AuthV3Test extends TestCase
 
     public function testAuthenticateRequestLowercaseHeader(): void
     {
-        $token = Auth::getToken(['sub' => 'user-2'], $this->secret);
-        $result = Auth::authenticateRequest(['authorization' => "Bearer $token"], $this->secret);
+        $token = Auth::getToken(['sub' => 'user-2']);
+        $result = Auth::authenticateRequest(['authorization' => "Bearer $token"]);
 
         $this->assertNotNull($result);
         $this->assertEquals('user-2', $result['sub']);
@@ -376,25 +408,25 @@ class AuthV3Test extends TestCase
 
     public function testAuthenticateRequestMissingHeader(): void
     {
-        $result = Auth::authenticateRequest([], $this->secret);
+        $result = Auth::authenticateRequest([]);
         $this->assertNull($result);
     }
 
     public function testAuthenticateRequestInvalidBearer(): void
     {
-        $result = Auth::authenticateRequest(['Authorization' => 'Bearer invalid.token.here'], $this->secret);
+        $result = Auth::authenticateRequest(['Authorization' => 'Bearer invalid.token.here']);
         $this->assertNull($result);
     }
 
     public function testAuthenticateRequestNonBearerScheme(): void
     {
-        $result = Auth::authenticateRequest(['Authorization' => 'Basic dXNlcjpwYXNz'], $this->secret);
+        $result = Auth::authenticateRequest(['Authorization' => 'Basic dXNlcjpwYXNz']);
         $this->assertNull($result);
     }
 
     public function testAuthenticateRequestEmptyHeader(): void
     {
-        $result = Auth::authenticateRequest(['Authorization' => ''], $this->secret);
+        $result = Auth::authenticateRequest(['Authorization' => '']);
         $this->assertNull($result);
     }
 
@@ -430,14 +462,14 @@ class AuthV3Test extends TestCase
 
     public function testRefreshTokenValid(): void
     {
-        $original = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $this->secret, 3600);
+        $original = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], 3600);
         sleep(1); // Ensure different iat
-        $refreshed = Auth::refreshToken($original, $this->secret, 7200);
+        $refreshed = Auth::refreshToken($original, 7200);
 
         $this->assertNotNull($refreshed);
         $this->assertNotSame($original, $refreshed);
 
-        $payload = Auth::validToken($refreshed, $this->secret);
+        $payload = Auth::validToken($refreshed);
         $this->assertNotNull($payload);
         $this->assertEquals('user-1', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
@@ -445,18 +477,18 @@ class AuthV3Test extends TestCase
 
     public function testRefreshTokenInvalid(): void
     {
-        $result = Auth::refreshToken('bad.token.here', $this->secret);
+        $result = Auth::refreshToken('bad.token.here');
         $this->assertNull($result);
     }
 
     public function testRefreshTokenNewExpiry(): void
     {
-        $original = Auth::getToken(['sub' => '1'], $this->secret, 60);
-        $refreshed = Auth::refreshToken($original, $this->secret, 120); // 120 minutes
+        $original = Auth::getToken(['sub' => '1'], 60);
+        $refreshed = Auth::refreshToken($original, 7200); // 7200 seconds
 
-        $payload = Auth::validToken($refreshed, $this->secret);
+        $payload = Auth::validToken($refreshed);
         $this->assertNotNull($payload);
-        $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5); // 120 * 60 = 7200 seconds
+        $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5);
     }
 
     // ── RS256 Additional Tests ─────────────────────────────────────
@@ -469,15 +501,19 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $token = Auth::getToken(
-            ['sub' => 'test', 'exp' => time() - 10],
-            $privateKey,
-            0,
-            'RS256'
-        );
+        $_ENV['SECRET'] = $privateKey;
+        $_ENV['JWT_ALGORITHM'] = 'RS256';
 
-        $payload = Auth::validToken($token, $publicKey, 'RS256');
-        $this->assertNull($payload); // Expired
+        $token = Auth::getToken(['sub' => 'test', 'exp' => time() - 10], 0);
+
+        $_ENV['SECRET'] = $publicKey;
+        $payload = Auth::validToken($token); // Expired
+
+        // Restore
+        $_ENV['SECRET'] = $this->secret;
+        unset($_ENV['JWT_ALGORITHM']);
+
+        $this->assertNull($payload);
     }
 
     // ── Password Edge Cases ──────────────────────────────────────
@@ -498,12 +534,12 @@ class AuthV3Test extends TestCase
 
     public function testTwoPartToken(): void
     {
-        $this->assertNull(Auth::validToken('header.payload', $this->secret));
+        $this->assertNull(Auth::validToken('header.payload'));
     }
 
     public function testFourPartToken(): void
     {
-        $this->assertNull(Auth::validToken('a.b.c.d', $this->secret));
+        $this->assertNull(Auth::validToken('a.b.c.d'));
     }
 
     public function testGetPayloadTwoParts(): void
@@ -515,16 +551,16 @@ class AuthV3Test extends TestCase
 
     public function testSubClaimPreserved(): void
     {
-        $token = Auth::getToken(['sub' => 'user:1', 'iss' => 'tina4'], $this->secret);
-        $payload = Auth::validToken($token, $this->secret);
+        $token = Auth::getToken(['sub' => 'user:1', 'iss' => 'tina4']);
+        $payload = Auth::validToken($token);
         $this->assertEquals('user:1', $payload['sub']);
         $this->assertEquals('tina4', $payload['iss']);
     }
 
     public function testCustomClaimsPreserved(): void
     {
-        $token = Auth::getToken(['roles' => ['admin', 'editor'], 'org' => 'acme'], $this->secret);
-        $payload = Auth::validToken($token, $this->secret);
+        $token = Auth::getToken(['roles' => ['admin', 'editor'], 'org' => 'acme']);
+        $payload = Auth::validToken($token);
         $this->assertEquals(['admin', 'editor'], $payload['roles']);
         $this->assertEquals('acme', $payload['org']);
     }

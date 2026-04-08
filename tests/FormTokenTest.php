@@ -178,7 +178,7 @@ class FormTokenTest extends TestCase
     {
         $output = $this->engine->renderString('{{ form_token() }}');
         $token = $this->extractToken($output);
-        $payload = \Tina4\Auth::validToken($token, 'test-secret-key');
+        $payload = \Tina4\Auth::validToken($token);
         $this->assertNotNull($payload);
         $this->assertSame('form', $payload['type']);
     }
@@ -238,10 +238,12 @@ class FormTokenTest extends TestCase
         $output = $this->engine->renderString('{{ form_token() }}');
         $token = $this->extractToken($output);
         // Should validate with the same secret
-        $payload = \Tina4\Auth::validToken($token, 'test-secret-key');
+        $payload = \Tina4\Auth::validToken($token);
         $this->assertNotNull($payload);
         // Should NOT validate with a different secret
-        $wrongPayload = \Tina4\Auth::validToken($token, 'wrong-secret');
+        $_ENV['SECRET'] = 'wrong-secret';
+        $wrongPayload = \Tina4\Auth::validToken($token);
+        $_ENV['SECRET'] = 'test-secret-key';
         $this->assertNull($wrongPayload);
     }
 }

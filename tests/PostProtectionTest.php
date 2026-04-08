@@ -30,12 +30,14 @@ class PostProtectionTest extends TestCase
     {
         Router::clear();
         putenv("SECRET={$this->secret}");
+        $_ENV['SECRET'] = $this->secret;
     }
 
     protected function tearDown(): void
     {
         Router::clear();
         putenv('SECRET');
+        unset($_ENV['SECRET']);
     }
 
     // ── Secure flag registration ─────────────────────────────────
@@ -127,7 +129,7 @@ class PostProtectionTest extends TestCase
             return $response->json(['created' => true], 201);
         })->secure();
 
-        $token = Auth::getToken(['sub' => 'user-1'], $this->secret);
+        $token = Auth::getToken(['sub' => 'user-1']);
         $request = $this->createRequest('POST', '/api/items', "Bearer $token");
         $response = Router::dispatch($request, new Response());
 
@@ -200,7 +202,7 @@ class PostProtectionTest extends TestCase
             return $response->json(['secret' => true]);
         })->secure();
 
-        $token = Auth::getToken(['sub' => 'admin'], $this->secret);
+        $token = Auth::getToken(['sub' => 'admin']);
         $request = $this->createRequest('GET', '/api/admin/stats', "Bearer $token");
         $response = Router::dispatch($request, new Response());
 

@@ -114,7 +114,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfAcceptsFormTokenInBody(): void
     {
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
         $response = new Response(true);
 
@@ -126,7 +126,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfAcceptsPutWithValidBodyToken(): void
     {
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('PUT', '/api/items', body: ['formToken' => $token]);
         $response = new Response(true);
 
@@ -140,7 +140,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfAcceptsXFormTokenHeader(): void
     {
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('POST', '/api/items', headers: [
             'X-Form-Token' => $token,
         ]);
@@ -154,7 +154,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfHeaderTakesPrecedenceWhenBodyEmpty(): void
     {
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('POST', '/api/items', body: [], headers: [
             'X-Form-Token' => $token,
         ]);
@@ -170,7 +170,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfRejectsFormTokenInQueryParams(): void
     {
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('POST', '/api/items', query: ['formToken' => $token]);
         $response = new Response(true);
 
@@ -181,7 +181,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfQueryParamRejectionMessage(): void
     {
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('POST', '/api/items', query: ['formToken' => $token]);
         $response = new Response(true);
 
@@ -209,7 +209,7 @@ class CsrfMiddlewareTest extends TestCase
         $expired = Auth::getToken([
             'type' => 'form',
             'exp' => time() - 60,
-        ], $this->secret, 0);
+        ], 0);
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $expired]);
         $response = new Response(true);
 
@@ -220,7 +220,10 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfRejectsWrongSecretToken(): void
     {
-        $wrongToken = Auth::getToken(['type' => 'form'], 'wrong-secret-key', 3600);
+        // Generate token with a different secret than what the middleware will verify with
+        $_ENV['SECRET'] = 'wrong-secret-key';
+        $wrongToken = Auth::getToken(['type' => 'form'], 3600);
+        $_ENV['SECRET'] = $this->secret;
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $wrongToken]);
         $response = new Response(true);
 
@@ -258,7 +261,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testCsrfSkipsBearerAuth(): void
     {
-        $bearerToken = Auth::getToken(['sub' => 'api-client'], $this->secret, 3600);
+        $bearerToken = Auth::getToken(['sub' => 'api-client'], 3600);
         $request = $this->makeRequest('POST', '/api/items', headers: [
             'Authorization' => "Bearer $bearerToken",
         ]);
@@ -290,7 +293,7 @@ class CsrfMiddlewareTest extends TestCase
         $token = Auth::getToken([
             'type' => 'form',
             'session_id' => 'session-abc',
-        ], $this->secret, 3600);
+        ], 3600);
 
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
         $request->session = $this->createMockSession('session-xyz');
@@ -307,7 +310,7 @@ class CsrfMiddlewareTest extends TestCase
         $token = Auth::getToken([
             'type' => 'form',
             'session_id' => $sessionId,
-        ], $this->secret, 3600);
+        ], 3600);
 
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
         $request->session = $this->createMockSession($sessionId);
@@ -322,7 +325,7 @@ class CsrfMiddlewareTest extends TestCase
     public function testCsrfTokenWithoutSessionIdPasses(): void
     {
         // Token with no session_id claim skips session binding check
-        $token = Auth::getToken(['type' => 'form'], $this->secret, 3600);
+        $token = Auth::getToken(['type' => 'form'], 3600);
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
         $response = new Response(true);
 
