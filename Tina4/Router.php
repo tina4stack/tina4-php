@@ -442,13 +442,12 @@ class Router
                 return $response->json(['error' => 'Unauthorized'], 401);
             }
 
-            $payload = Auth::validToken($token, $secret);
-            if ($payload === null) {
+            if (!Auth::validToken($token, $secret)) {
                 return $response->json(['error' => 'Unauthorized'], 401);
             }
 
             // Attach decoded JWT payload to the request for downstream use
-            $request->user = $payload;
+            $request->user = Auth::getPayload($token);
         }
 
         // Run middleware chain

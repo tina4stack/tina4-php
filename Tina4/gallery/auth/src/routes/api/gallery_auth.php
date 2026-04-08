@@ -115,5 +115,5 @@ HTML;
     $token = $request->queryParam('token', '');
     $secret = getenv('SECRET') ?: 'tina4-gallery-secret';
     $valid = \Tina4\Auth::validToken($token, $secret);
-    return $response->json(['valid' => $valid !== null]);
+    return $response->json(['valid' => $valid]);
 });
