@@ -1059,7 +1059,7 @@ TPL;
         $token = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
 
         $secret = $_ENV['SECRET'] ?? 'tina4-default-secret';
-        $payload = \Tina4\Auth::validateToken($token, $secret);
+        $payload = \Tina4\Auth::validToken($token, $secret);
         $this->assertNotNull($payload, 'Token should be valid');
         $this->assertSame('form', $payload['type']);
     }

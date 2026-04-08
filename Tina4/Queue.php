@@ -357,7 +357,9 @@ class Queue
      */
     public function retry(string $jobId, int $delaySeconds = 0): bool
     {
-        return $this->liteBackend->retry($jobId, $this->topic, $delaySeconds);
+        // Pass null so LiteBackend searches all topic subdirectories — the caller
+        // doesn't know which topic the job lives in, only the ID.
+        return $this->liteBackend->retry($jobId, null, $delaySeconds);
     }
 
     /**

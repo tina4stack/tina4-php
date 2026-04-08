@@ -239,23 +239,32 @@ class DatabaseUrlTest extends TestCase
 
     public function testFactoryCreateSqliteFromPath(): void
     {
-        $db = Database::create('sqlite:///tmp/test_factory.db');
+        $path = sys_get_temp_dir() . '/test_factory_' . uniqid() . '.db';
+        $db = Database::create('sqlite:///' . $path);
         $this->assertInstanceOf(Database::class, $db);
         $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $db->close();
+        @unlink($path);
     }
 
     public function testFactoryCreateSqliteFromBareFilePath(): void
     {
-        $db = Database::create('/tmp/test_factory_bare.db');
+        $path = sys_get_temp_dir() . '/test_factory_bare_' . uniqid() . '.db';
+        $db = Database::create($path);
         $this->assertInstanceOf(Database::class, $db);
         $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $db->close();
+        @unlink($path);
     }
 
     public function testFactoryCreateSqliteFromSqlite3Extension(): void
     {
-        $db = Database::create('/tmp/test_factory.sqlite3');
+        $path = sys_get_temp_dir() . '/test_factory_' . uniqid() . '.sqlite3';
+        $db = Database::create($path);
         $this->assertInstanceOf(Database::class, $db);
         $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $db->close();
+        @unlink($path);
     }
 
     public function testFactoryInvalidUrlThrows(): void

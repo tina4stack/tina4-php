@@ -796,7 +796,7 @@ class Database implements DatabaseAdapter
         }
 
         if (str_starts_with($url, 'sqlite:///')) {
-            $path = substr($url, 9);
+            $path = substr($url, 10);
             return new SQLite3Adapter($path, $autoCommit);
         }
 

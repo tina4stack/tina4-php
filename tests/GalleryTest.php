@@ -36,6 +36,7 @@ class GalleryTest extends TestCase
     protected function tearDown(): void
     {
         Router::clear();
+        \Tina4\ErrorTracker::reset();
     }
 
     // ── Helper ───────────────────────────────────────────────────
