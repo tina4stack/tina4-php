@@ -1203,4 +1203,91 @@ class ORMV3Test extends TestCase
         $this->assertSame('RoundTrip', $rows[0]['product_name']);
         $this->assertEquals(42.50, $rows[0]['unit_price'], '', 0.01);
     }
+
+    // --- toObject() returns stdClass (issue #107) --------------------------
+
+    /**
+     * toObject() must return an object (stdClass cast of toDict()).
+     * Regression: method previously returned an array on some ORM code paths.
+     */
+    public function testToObjectReturnsObject(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'ToObjectTest';
+        $user->email = 'toobject@test.com';
+
+        $result = $user->toObject();
+
+        $this->assertIsObject($result, 'toObject() must return an object');
+        $this->assertInstanceOf(\stdClass::class, $result, 'toObject() must return a stdClass instance');
+    }
+
+    /**
+     * toObject() on a saved (populated) model must carry field values.
+     */
+    public function testToObjectCarriesFieldValues(): void
+    {
+        $user = new TestUser($this->db);
+        $user->name = 'Alice';
+        $user->email = 'alice@test.com';
+        $user->save();
+
+        $result = $user->toObject();
+
+        $this->assertIsObject($result);
+        $this->assertInstanceOf(\stdClass::class, $result);
+        // Values should be accessible as object properties
+        $dict = $user->toDict();
+        foreach ($dict as $key => $value) {
+            $this->assertObjectHasProperty($key, $result, "toObject() result should have property '{$key}'");
+            $this->assertSame($value, $result->{$key}, "Property '{$key}' value mismatch in toObject()");
+        }
+    }
+
+    // --- ORM find()/all() normalisation (issue #108) ----------------------
+
+    /**
+     * all() returns a paginated structure; the 'data' key must contain model instances.
+     * This covers the DatabaseResult normalisation path inside the ORM fetch layer.
+     */
+    public function testAllReturnsModelInstances(): void
+    {
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Alpha', 'a@test.com')");
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Beta',  'b@test.com')");
+
+        $page = (new TestUser($this->db))->all();
+
+        $this->assertIsArray($page, 'all() must return an array');
+        $this->assertArrayHasKey('data', $page, 'all() result must have a "data" key');
+        $this->assertGreaterThanOrEqual(2, count($page['data']), 'data should contain at least the 2 inserted rows');
+
+        foreach ($page['data'] as $u) {
+            $this->assertInstanceOf(TestUser::class, $u, 'Each item in data must be a TestUser instance');
+            $this->assertIsString($u->name, 'name must be a string');
+        }
+    }
+
+    /**
+     * find() with no matching column/value must return an empty array without crashing.
+     */
+    public function testFindWithEmptyResultDoesNotCrash(): void
+    {
+        // find() takes an associative array of column => value pairs
+        $results = TestUser::find(['id' => 99999]);
+
+        $this->assertIsArray($results, 'find() must return an array even when no rows match');
+        $this->assertCount(0, $results, 'find() with no matching rows should return an empty array');
+    }
+
+    /**
+     * toDict() chaining on a freshly instantiated model (no DB row) must not crash.
+     * Covers the array/object normalisation path used by find()/all() internally.
+     */
+    public function testToDictOnEmptyModelDoesNotCrash(): void
+    {
+        $user = new TestUser($this->db);
+        $dict = $user->toDict();
+
+        $this->assertIsArray($dict, 'toDict() on an empty model must return an array');
+    }
 }
