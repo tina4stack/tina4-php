@@ -363,12 +363,25 @@ class Router
      */
     private static function dispatchInner(Request $request, Response $response): Response
     {
-        // Run global middleware "before" hooks
+        // Run global middleware "before" hooks.
+        // CORS middleware runs first (separate pass) so CORS headers are always present —
+        // even on short-circuited 4xx responses. This is required by the CORS spec: browsers
+        // must see CORS headers on 401/403 responses or they report a CORS error instead.
         $globalMiddleware = Middleware::getGlobal();
         if (!empty($globalMiddleware)) {
-            [$request, $response] = Middleware::runBefore($globalMiddleware, $request, $response);
+            $corsMiddleware = array_filter($globalMiddleware, fn($c) => is_a($c, \Tina4\Middleware\CorsMiddleware::class, true));
+            $otherMiddleware = array_filter($globalMiddleware, fn($c) => !is_a($c, \Tina4\Middleware\CorsMiddleware::class, true));
 
-            // Short-circuit if a global middleware set an error status
+            if (!empty($corsMiddleware)) {
+                [$request, $response] = Middleware::runBefore(array_values($corsMiddleware), $request, $response);
+            }
+
+            if (!empty($otherMiddleware)) {
+                [$request, $response] = Middleware::runBefore(array_values($otherMiddleware), $request, $response);
+            }
+
+            // Short-circuit if a global middleware set an error status.
+            // CORS headers are already set above, so the browser can read this response.
             if ($response->getStatusCode() >= 400) {
                 return $response;
             }

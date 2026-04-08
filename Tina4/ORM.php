@@ -9,6 +9,7 @@
 namespace Tina4;
 
 use Tina4\Database\DatabaseAdapter;
+use Tina4\SqlTranslation;
 
 /**
  * ORM base class — active record pattern for database models.
@@ -40,6 +41,9 @@ abstract class ORM
 
     /** @var bool Whether soft delete is enabled */
     public bool $softDelete = false;
+
+    /** @var bool When true, auto-registers this model for CRUD route generation via AutoCrud */
+    public bool $autoCrud = false;
 
     /** @var array<string, string> Has-one relationships: ['propertyName' => 'ForeignModel.foreign_key'] */
     public array $hasOne = [];
@@ -153,6 +157,22 @@ abstract class ORM
 
         if (!empty($data)) {
             $this->fill($data);
+        }
+
+        // Auto-register for CRUD if flagged
+        if ($this->autoCrud && $this->tableName !== '') {
+            static $autoCrudRegistered = [];
+            $class = static::class;
+            if (!isset($autoCrudRegistered[$class])) {
+                $autoCrudRegistered[$class] = true;
+                try {
+                    $crud = new AutoCrud($this->_db ?? self::resolveDb());
+                    $crud->register($class);
+                    $crud->generateRoutes();
+                } catch (\Throwable $e) {
+                    // Silently skip if AutoCrud not available or DB not ready
+                }
+            }
         }
     }
 
@@ -313,7 +333,7 @@ abstract class ORM
      *
      * @return static|null The found instance or null
      */
-    public static function findById(int|string $id): ?static
+    public static function findById(int|string $id, ?array $include = null): ?static
     {
         $instance = new static();
         $db = $instance->_db ?? static::resolveDb();
@@ -332,6 +352,10 @@ abstract class ORM
         $model = new static($db);
         $model->fill($row);
         $model->_exists = true;
+        if ($include !== null) {
+            $instances = [$model];
+            static::eagerLoad($instances, $include, $db);
+        }
         return $model;
     }
 
@@ -435,7 +459,7 @@ abstract class ORM
      * @param string|null $orderBy ORDER BY clause
      * @return array<int, static>
      */
-    public static function find(array $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null): array
+    public static function find(array $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null, ?array $include = null): array
     {
         $instance = new static();
         $db = $instance->_db ?? static::resolveDb();
@@ -474,6 +498,10 @@ abstract class ORM
             $models[] = $model;
         }
 
+        if ($include !== null && !empty($models)) {
+            static::eagerLoad($models, $include, $db);
+        }
+
         return $models;
     }
 
@@ -482,7 +510,7 @@ abstract class ORM
      *
      * @return array{data: array<int, static>, total: int, limit: int, offset: int}
      */
-    public function all(int $limit = 100, int $offset = 0): array
+    public function all(int $limit = 100, int $offset = 0, ?array $include = null): array
     {
         $this->ensureDb();
 
@@ -495,11 +523,15 @@ abstract class ORM
         $result = $this->_db->fetch($sql, [], $limit, $offset);
 
         $models = [];
-        foreach ($result['data'] as $row) {
+        foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
             $model->_exists = true;
             $models[] = $model;
+        }
+
+        if ($include !== null && !empty($models)) {
+            static::eagerLoad($models, $include, $this->_db);
         }
 
         return [
@@ -599,13 +631,13 @@ abstract class ORM
     }
 
     /**
-     * Convert the model to an object (alias for toDict).
+     * Convert the model to a stdClass object.
      *
-     * @return array<string, mixed>
+     * @return object
      */
-    public function toObject(): array
+    public function toObject(): object
     {
-        return $this->toDict();
+        return (object) $this->toDict();
     }
 
     /**
@@ -674,17 +706,21 @@ abstract class ORM
      * @param int $offset Starting offset
      * @return array<int, static>
      */
-    public function select(string $sql, array $params = [], int $limit = 20, int $offset = 0): array
+    public function select(string $sql, array $params = [], int $limit = 20, int $offset = 0, ?array $include = null): array
     {
         $this->ensureDb();
         $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
-        foreach ($result['data'] as $row) {
+        foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
             $model->_exists = true;
             $models[] = $model;
+        }
+
+        if ($include !== null && !empty($models)) {
+            static::eagerLoad($models, $include, $this->_db);
         }
 
         return $models;
@@ -726,7 +762,7 @@ abstract class ORM
      * @param int $offset Starting offset
      * @return array<int, static>
      */
-    public function where(string $filterSql, array $params = [], int $limit = 20, int $offset = 0): array
+    public function where(string $filterSql, array $params = [], int $limit = 20, int $offset = 0, ?array $include = null): array
     {
         $this->ensureDb();
 
@@ -738,11 +774,15 @@ abstract class ORM
         $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
-        foreach ($result['data'] as $row) {
+        foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
             $model->_exists = true;
             $models[] = $model;
+        }
+
+        if ($include !== null && !empty($models)) {
+            static::eagerLoad($models, $include, $this->_db);
         }
 
         return $models;
@@ -839,7 +879,7 @@ abstract class ORM
         $result = $this->_db->fetch($sql, $params, $limit, $offset);
 
         $models = [];
-        foreach ($result['data'] as $row) {
+        foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
             $model->_exists = true;
@@ -990,11 +1030,9 @@ abstract class ORM
      * Uses getColumns() on the adapter to introspect, falls back to
      * generating DDL from the model's data keys if the table does not exist.
      *
-     * @param array<string, string> $columns Column definitions: ['name' => 'TEXT', 'age' => 'INTEGER']
-     *                                       If empty, uses existing model data keys with TEXT type.
      * @return bool True on success
      */
-    public function createTable(array $columns = []): bool
+    public function createTable(): bool
     {
         $this->ensureDb();
 
@@ -1002,21 +1040,49 @@ abstract class ORM
             return true;
         }
 
-        if (empty($columns)) {
-            // No column definitions — create a minimal table with just the primary key
-            $pkColumn = $this->getDbColumn($this->primaryKey);
-            $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} ({$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT)";
-        } else {
-            $colDefs = [];
-            foreach ($columns as $colName => $colType) {
-                $colDefs[] = "{$colName} {$colType}";
-            }
-            $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
-        }
+        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} ({$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT)";
 
         $result = $this->_db->execute($sql);
         $this->_db->commit();
         return $result;
+    }
+
+    /**
+     * Run a raw SQL query and cache the results for `$ttl` seconds.
+     * Results are tagged with the model class name so clearCache() invalidates them all.
+     * Maps to Python: cached(sql, params, ttl, limit, offset)
+     *
+     * @param string     $sql    Raw SELECT SQL
+     * @param array      $params Bound parameters
+     * @param int        $ttl    Cache lifetime in seconds (default 60)
+     * @param int        $limit  Max results
+     * @param int        $offset Starting offset
+     * @param array|null $include Relationship names to eager-load
+     * @return array<int, static>
+     */
+    public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 20, int $offset = 0, ?array $include = null): array
+    {
+        $cacheKey = static::class . ':' . SqlTranslation::queryKey($sql, $params) . ":{$limit}:{$offset}";
+        $hit = SqlTranslation::cacheGet($cacheKey);
+        if ($hit !== null) {
+            return $hit;
+        }
+
+        $result = $this->select($sql, $params, $limit, $offset, $include);
+        SqlTranslation::cacheSet($cacheKey, $result, $ttl);
+        return $result;
+    }
+
+    /**
+     * Clear all cached query results for this model class.
+     * Maps to Python: clear_cache()
+     */
+    public function clearCache(): void
+    {
+        // SqlTranslation cache doesn't support tag-based clearing, so we clear all.
+        // For per-model isolation, prefix keys are used but a full clear is the safe option.
+        SqlTranslation::cacheClear();
     }
 
     /**
@@ -1256,7 +1322,7 @@ abstract class ORM
                 $result = $db->fetch($sql, $pkValues, count($pkValues) * 1000, 0);
 
                 $related = [];
-                foreach ($result['data'] as $row) {
+                foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
                     $model = new $relatedClass($db);
                     $model->fill($row);
                     $model->_exists = true;
@@ -1311,7 +1377,7 @@ abstract class ORM
                 $result = $db->fetch($sql, $fkValues, count($fkValues) * 10, 0);
 
                 $lookup = [];
-                foreach ($result['data'] as $row) {
+                foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
                     $model = new $relatedClass($db);
                     $model->fill($row);
                     $model->_exists = true;
