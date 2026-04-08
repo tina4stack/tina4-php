@@ -114,26 +114,50 @@ class Migration
     }
 
     /**
-     * Rollback the last batch of migrations.
+     * Rollback the last N batches of migrations.
      *
      * For each migration being rolled back:
      *   1. Look for a matching .down.sql file (e.g. 20240101000000_create_users.down.sql)
      *   2. If found, execute it before removing the tracking record
      *   3. If not found, log a warning but still remove the tracking record
      *
+     * @param int $steps Number of batches to roll back (default: 1)
      * @return array{rolledBack: array<string>, errors: array<string, string>}
      */
-    public function rollback(): array
+    public function rollback(int $steps = 1): array
     {
         $rolledBack = [];
         $errors = [];
 
-        $lastBatch = $this->getLastBatchNumber();
-        if ($lastBatch === 0) {
-            return ['rolledBack' => $rolledBack, 'errors' => $errors];
+        for ($step = 0; $step < $steps; $step++) {
+            $lastBatch = $this->getLastBatchNumber();
+            if ($lastBatch === 0) {
+                break;
+            }
+
+            $stepResult = $this->rollbackBatch($lastBatch);
+            $rolledBack = array_merge($rolledBack, $stepResult['rolledBack']);
+            $errors = array_merge($errors, $stepResult['errors']);
+
+            if (!empty($stepResult['errors'])) {
+                break;
+            }
         }
 
-        $migrations = $this->getMigrationsForBatch($lastBatch);
+        return ['rolledBack' => $rolledBack, 'errors' => $errors];
+    }
+
+    /**
+     * Rollback a single batch.
+     *
+     * @return array{rolledBack: array<string>, errors: array<string, string>}
+     */
+    private function rollbackBatch(int $batch): array
+    {
+        $rolledBack = [];
+        $errors = [];
+
+        $migrations = $this->getMigrationsForBatch($batch);
 
         // Process in reverse order
         $migrations = array_reverse($migrations);
@@ -271,6 +295,68 @@ class Migration
         $files = array_values($files);
         sort($files);
         return $files;
+    }
+
+    /**
+     * Get list of all applied migrations (alias for getAppliedMigrations).
+     *
+     * @return array<int, array{migration: string, batch: int, applied_at: string}>
+     */
+    public function getApplied(): array
+    {
+        return $this->getAppliedMigrations();
+    }
+
+    /**
+     * Get the list of pending migration filenames (alias for getPendingMigrations).
+     *
+     * @return array<string> Basenames of pending migration files
+     */
+    public function getPending(): array
+    {
+        return array_map('basename', $this->getPendingMigrations());
+    }
+
+    /**
+     * Get all migration files on disk, excluding .down.sql (alias for getMigrationFiles).
+     *
+     * @return array<string> Basenames of all migration files
+     */
+    public function getFiles(): array
+    {
+        return array_map('basename', $this->getMigrationFiles());
+    }
+
+    /**
+     * Create a new migration file with a YYYYMMDDHHMMSS timestamp prefix.
+     *
+     * Creates both the up migration (.sql) and the down migration (.down.sql).
+     *
+     * @param string $description Human-readable description (used in filename)
+     * @return string Path to the created up migration file
+     */
+    public function create(string $description): string
+    {
+        if (!is_dir($this->migrationsDir)) {
+            mkdir($this->migrationsDir, 0755, true);
+        }
+
+        $timestamp = date('YmdHis');
+        $safeName  = preg_replace('/[^a-z0-9]+/', '_', strtolower($description));
+        $safeName  = trim($safeName, '_');
+
+        $upFileName   = "{$timestamp}_{$safeName}.sql";
+        $downFileName = "{$timestamp}_{$safeName}.down.sql";
+        $upPath       = $this->migrationsDir . DIRECTORY_SEPARATOR . $upFileName;
+        $downPath     = $this->migrationsDir . DIRECTORY_SEPARATOR . $downFileName;
+        $createdAt    = date('Y-m-d H:i:s') . ' UTC';
+
+        file_put_contents($upPath, "-- Migration: {$description}\n-- Created: {$createdAt}\n\n");
+        file_put_contents($downPath, "-- Rollback: {$description}\n-- Created: {$createdAt}\n\n");
+
+        Log::info("Created migration: {$upFileName}");
+
+        return $upPath;
     }
 
     /**

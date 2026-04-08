@@ -54,12 +54,12 @@ class Auth
     }
 
     /**
-     * Validate a JWT token and return the decoded payload.
+     * Validate a JWT token's signature and expiry.
      *
      * @param string $token The JWT string
-     * @return array|null Decoded payload on success, null on failure
+     * @return bool True if the token is valid, false otherwise
      */
-    public static function validToken(string $token): ?array
+    public static function validToken(string $token): bool
     {
         $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
         if ($secret === '') {
@@ -68,7 +68,7 @@ class Auth
         $algorithm = $_ENV['JWT_ALGORITHM'] ?? getenv('JWT_ALGORITHM') ?: 'HS256';
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
-            return null;
+            return false;
         }
 
         [$headerB64, $payloadB64, $signatureB64] = $parts;
@@ -79,39 +79,39 @@ class Auth
         if ($algorithm === 'HS256') {
             $expected = self::sign($signingInput, $secret, $algorithm);
             if (!hash_equals($expected, $signatureB64)) {
-                return null;
+                return false;
             }
         } elseif ($algorithm === 'RS256') {
             $sigBytes = self::base64urlDecode($signatureB64);
             $publicKey = openssl_pkey_get_public($secret);
             if ($publicKey === false) {
-                return null;
+                return false;
             }
             $result = openssl_verify($signingInput, $sigBytes, $publicKey, OPENSSL_ALGO_SHA256);
             if ($result !== 1) {
-                return null;
+                return false;
             }
         } else {
-            return null;
+            return false;
         }
 
         // Decode payload
         $payloadJson = self::base64urlDecode($payloadB64);
         if ($payloadJson === false) {
-            return null;
+            return false;
         }
 
         $payload = json_decode($payloadJson, true);
         if (!is_array($payload)) {
-            return null;
+            return false;
         }
 
         // Check expiration
         if (isset($payload['exp']) && time() > $payload['exp']) {
-            return null;
+            return false;
         }
 
-        return $payload;
+        return true;
     }
 
     /**
@@ -119,7 +119,7 @@ class Auth
      * Maps to Python: get_payload(token)
      *
      * @param string $token The JWT string
-     * @return array|null Decoded payload, or null if malformed
+     * @return array<string, mixed>|null Decoded payload, or null if malformed
      */
     public static function getPayload(string $token): ?array
     {
@@ -203,9 +203,10 @@ class Auth
             }
 
             $token = substr($authHeader, 7);
-            $payload = self::validToken($token);
-
-            return $payload; // null if invalid/expired, array if valid
+            if (!self::validToken($token)) {
+                return null; // Invalid/expired token
+            }
+            return self::getPayload($token);
         };
     }
 
@@ -221,7 +222,11 @@ class Auth
      */
     public static function refreshToken(string $token, int $expiresIn = 3600): ?string
     {
-        $payload = self::validToken($token);
+        if (!self::validToken($token)) {
+            return null;
+        }
+
+        $payload = self::getPayload($token);
         if ($payload === null) {
             return null;
         }
@@ -238,7 +243,7 @@ class Auth
      * Secret and algorithm are read from env (SECRET, JWT_ALGORITHM).
      *
      * @param array<string, string> $headers Request headers (key => value)
-     * @return array|null Decoded payload on success, null on failure
+     * @return array<string, mixed>|null Decoded payload on success, null on failure
      */
     public static function authenticateRequest(array $headers): ?array
     {
@@ -248,9 +253,8 @@ class Auth
             $token = substr($authHeader, 7);
 
             // Try JWT first
-            $payload = self::validToken($token);
-            if ($payload !== null) {
-                return $payload;
+            if (self::validToken($token)) {
+                return self::getPayload($token);
             }
 
             // Fallback: treat Bearer value as API key

@@ -79,9 +79,9 @@ class AuthV3Test extends TestCase
     public function testVerifyTokenValid(): void
     {
         $token = Auth::getToken(['sub' => '123', 'role' => 'admin']);
-        $payload = Auth::validToken($token);
 
-        $this->assertNotNull($payload);
+        $this->assertTrue(Auth::validToken($token));
+        $payload = Auth::getPayload($token);
         $this->assertEquals('123', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
     }
@@ -91,10 +91,10 @@ class AuthV3Test extends TestCase
         // Generate token with correct secret, then switch env to wrong secret for validation
         $token = Auth::getToken(['sub' => '123']);
         $_ENV['SECRET'] = 'wrong-secret';
-        $payload = Auth::validToken($token);
+        $result = Auth::validToken($token);
         $_ENV['SECRET'] = $this->secret;
 
-        $this->assertNull($payload);
+        $this->assertFalse($result);
     }
 
     public function testVerifyTokenTampered(): void
@@ -105,29 +105,27 @@ class AuthV3Test extends TestCase
         $parts[1] = rtrim(strtr(base64_encode('{"sub":"hacked","iat":' . time() . ',"exp":' . (time() + 3600) . '}'), '+/', '-_'), '=');
         $tampered = implode('.', $parts);
 
-        $payload = Auth::validToken($tampered);
-        $this->assertNull($payload);
+        $this->assertFalse(Auth::validToken($tampered));
     }
 
     public function testVerifyTokenExpired(): void
     {
         // Generate a token with exp set in the past
         $token = Auth::getToken(['sub' => '123', 'exp' => time() - 10], 0);
-        $payload = Auth::validToken($token);
 
-        $this->assertNull($payload);
+        $this->assertFalse(Auth::validToken($token));
     }
 
     public function testVerifyTokenMalformed(): void
     {
-        $this->assertNull(Auth::validToken('not.a.valid.token'));
-        $this->assertNull(Auth::validToken('only-one-part'));
-        $this->assertNull(Auth::validToken(''));
+        $this->assertFalse(Auth::validToken('not.a.valid.token'));
+        $this->assertFalse(Auth::validToken('only-one-part'));
+        $this->assertFalse(Auth::validToken(''));
     }
 
     public function testVerifyTokenInvalidBase64(): void
     {
-        $this->assertNull(Auth::validToken('abc.!!!.def'));
+        $this->assertFalse(Auth::validToken('abc.!!!.def'));
     }
 
     // ── JWT Decode Without Verification ───────────────────────────
@@ -196,8 +194,8 @@ class AuthV3Test extends TestCase
 
         // Verify with public key
         $_ENV['SECRET'] = $publicKey;
-        $payload = Auth::validToken($token);
-        $this->assertNotNull($payload);
+        $this->assertTrue(Auth::validToken($token));
+        $payload = Auth::getPayload($token);
         $this->assertEquals('rs256-user', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
 
@@ -224,13 +222,13 @@ class AuthV3Test extends TestCase
 
         // Verify with wrong public key
         $_ENV['SECRET'] = $publicKey2;
-        $payload = Auth::validToken($token);
+        $result = Auth::validToken($token);
 
         // Restore
         $_ENV['SECRET'] = $this->secret;
         unset($_ENV['JWT_ALGORITHM']);
 
-        $this->assertNull($payload);
+        $this->assertFalse($result);
     }
 
     public function testRS256HeaderAlgorithm(): void
@@ -469,8 +467,8 @@ class AuthV3Test extends TestCase
         $this->assertNotNull($refreshed);
         $this->assertNotSame($original, $refreshed);
 
-        $payload = Auth::validToken($refreshed);
-        $this->assertNotNull($payload);
+        $this->assertTrue(Auth::validToken($refreshed));
+        $payload = Auth::getPayload($refreshed);
         $this->assertEquals('user-1', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
     }
@@ -486,8 +484,8 @@ class AuthV3Test extends TestCase
         $original = Auth::getToken(['sub' => '1'], 60);
         $refreshed = Auth::refreshToken($original, 7200); // 7200 seconds
 
-        $payload = Auth::validToken($refreshed);
-        $this->assertNotNull($payload);
+        $this->assertTrue(Auth::validToken($refreshed));
+        $payload = Auth::getPayload($refreshed);
         $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5);
     }
 
@@ -507,13 +505,13 @@ class AuthV3Test extends TestCase
         $token = Auth::getToken(['sub' => 'test', 'exp' => time() - 10], 0);
 
         $_ENV['SECRET'] = $publicKey;
-        $payload = Auth::validToken($token); // Expired
+        $result = Auth::validToken($token); // Expired
 
         // Restore
         $_ENV['SECRET'] = $this->secret;
         unset($_ENV['JWT_ALGORITHM']);
 
-        $this->assertNull($payload);
+        $this->assertFalse($result);
     }
 
     // ── Password Edge Cases ──────────────────────────────────────
@@ -534,12 +532,12 @@ class AuthV3Test extends TestCase
 
     public function testTwoPartToken(): void
     {
-        $this->assertNull(Auth::validToken('header.payload'));
+        $this->assertFalse(Auth::validToken('header.payload'));
     }
 
     public function testFourPartToken(): void
     {
-        $this->assertNull(Auth::validToken('a.b.c.d'));
+        $this->assertFalse(Auth::validToken('a.b.c.d'));
     }
 
     public function testGetPayloadTwoParts(): void
@@ -552,7 +550,8 @@ class AuthV3Test extends TestCase
     public function testSubClaimPreserved(): void
     {
         $token = Auth::getToken(['sub' => 'user:1', 'iss' => 'tina4']);
-        $payload = Auth::validToken($token);
+        $this->assertTrue(Auth::validToken($token));
+        $payload = Auth::getPayload($token);
         $this->assertEquals('user:1', $payload['sub']);
         $this->assertEquals('tina4', $payload['iss']);
     }
@@ -560,7 +559,8 @@ class AuthV3Test extends TestCase
     public function testCustomClaimsPreserved(): void
     {
         $token = Auth::getToken(['roles' => ['admin', 'editor'], 'org' => 'acme']);
-        $payload = Auth::validToken($token);
+        $this->assertTrue(Auth::validToken($token));
+        $payload = Auth::getPayload($token);
         $this->assertEquals(['admin', 'editor'], $payload['roles']);
         $this->assertEquals('acme', $payload['org']);
     }

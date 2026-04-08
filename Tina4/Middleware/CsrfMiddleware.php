@@ -74,8 +74,7 @@ class CsrfMiddleware
             $bearerToken = trim(substr($authHeader, 7));
             if ($bearerToken !== '') {
                 $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
-                $payload = Auth::validToken($bearerToken, $secret);
-                if ($payload !== null) {
+                if (Auth::validToken($bearerToken, $secret)) {
                     return [$request, $response];
                 }
             }
@@ -117,15 +116,15 @@ class CsrfMiddleware
 
         // Validate the token
         $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
-        $payload = Auth::validToken($token, $secret);
-
-        if ($payload === null) {
+        if (!Auth::validToken($token, $secret)) {
             return [$request, $response->error(
                 'CSRF_INVALID',
                 'Invalid or missing form token',
                 403
             )];
         }
+
+        $payload = Auth::getPayload($token) ?? [];
 
         // Session binding — if token has session_id, verify it matches
         $tokenSessionId = $payload['session_id'] ?? null;

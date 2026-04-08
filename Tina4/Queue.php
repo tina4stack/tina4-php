@@ -78,24 +78,13 @@ class Job
         $this->status = 'failed';
         $this->error = $reason;
         $this->attempts++;
-
-        $failedPath = $this->queue->getBasePath() . '/' . $this->topic . '/failed';
-        if (!is_dir($failedPath)) {
-            mkdir($failedPath, 0755, true);
-        }
-
-        $jobData = [
+        $this->queue->writeFailed($this->topic, [
             'id' => $this->id,
             'payload' => $this->payload,
             'status' => 'failed',
             'attempts' => $this->attempts,
             'error' => $reason,
-        ];
-
-        file_put_contents(
-            $failedPath . '/' . $this->id . '.queue-data',
-            json_encode($jobData, JSON_PRETTY_PRINT)
-        );
+        ]);
     }
 
     /**
@@ -169,7 +158,7 @@ class Queue
      *
      * @return QueueBackend|null
      */
-    public function getExternalBackend(): ?QueueBackend
+    private function getExternalBackend(): ?QueueBackend
     {
         return $this->externalBackend;
     }
@@ -299,16 +288,30 @@ class Queue
 
     /**
      * Clear all pending jobs from the queue topic.
+     *
+     * @return int Number of jobs cleared
      */
-    public function clear(): void
+    public function clear(): int
     {
+        $count = $this->liteBackend->count($this->topic, 'pending');
         $this->liteBackend->clear($this->topic);
+        return $count;
+    }
+
+    /**
+     * Write a job to the failed store (called by Job::fail).
+     *
+     * @internal Used by Job — not part of the public Queue API
+     */
+    public function writeFailed(string $topic, array $jobData): void
+    {
+        $this->liteBackend->writeFailed($topic, $jobData);
     }
 
     /**
      * Get all failed jobs from the queue topic.
      *
-     * @return array List of failed job arrays
+     * @return array<int, array> List of failed job arrays
      */
     public function failed(): array
     {
@@ -332,7 +335,7 @@ class Queue
     /**
      * Get dead letter jobs — failed jobs that exceeded max retries.
      *
-     * @return array List of dead letter job arrays
+     * @return array<int, array> List of dead letter job arrays
      */
     public function deadLetters(): array
     {
@@ -466,7 +469,7 @@ class Queue
     /**
      * Get the base path for this queue system.
      */
-    public function getBasePath(): string
+    private function getBasePath(): string
     {
         return $this->basePath;
     }

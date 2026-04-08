@@ -292,12 +292,9 @@ abstract class ORM
     }
 
     /**
-     * Save the model — INSERT or UPDATE (upsert).
-     *
-     * @return bool True on success
-     */
-    /**
      * Insert or update. Returns $this on success (fluent), false on failure.
+     *
+     * @return static|false
      */
     public function save(): static|false
     {
@@ -508,7 +505,7 @@ abstract class ORM
     /**
      * Get all records with pagination.
      *
-     * @return array{data: array<int, static>, total: int, limit: int, offset: int}
+     * @return array<int, static>
      */
     public function all(int $limit = 100, int $offset = 0, ?array $include = null): array
     {
@@ -583,6 +580,7 @@ abstract class ORM
      * @param array<string>|null $include Relationship names to include (supports dot notation for nesting)
      * @return array<string, mixed>
      */
+    /** @return array<string, mixed> */
     public function toDict(?array $include = null): array
     {
         $result = $this->_data;
@@ -625,6 +623,7 @@ abstract class ORM
      *
      * @return array<string, mixed>
      */
+    /** @return array<string, mixed> */
     public function toAssoc(?array $include = null): array
     {
         return $this->toDict($include);
@@ -635,6 +634,7 @@ abstract class ORM
      *
      * @return object
      */
+    /** @return object */
     public function toObject(): object
     {
         return (object) $this->toDict();
@@ -646,6 +646,7 @@ abstract class ORM
      *
      * @return array<int, mixed>
      */
+    /** @return array<int, mixed> */
     public function toArray(): array
     {
         return array_values($this->_data);
@@ -656,6 +657,7 @@ abstract class ORM
      *
      * @return array<int, mixed>
      */
+    /** @return array<int, mixed> */
     public function toList(): array
     {
         return $this->toArray();
@@ -895,6 +897,7 @@ abstract class ORM
      *
      * @return array<string> List of validation error messages (empty = valid)
      */
+    /** @return array<int, string> */
     public function validate(): array
     {
         return [];

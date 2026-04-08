@@ -1058,8 +1058,8 @@ TPL;
         preg_match('/value="([^"]+)"/', $result, $matches);
         $token = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
 
-        $payload = \Tina4\Auth::validToken($token);
-        $this->assertNotNull($payload, 'Token should be valid');
+        $this->assertTrue(\Tina4\Auth::validToken($token), 'Token should be valid');
+        $payload = \Tina4\Auth::getPayload($token);
         $this->assertSame('form', $payload['type']);
     }
 

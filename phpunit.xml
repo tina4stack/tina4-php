@@ -61,6 +61,7 @@
             <file>tests/GalleryTest.php</file>
             <file>tests/LiveReloadTest.php</file>
             <file>tests/Issue106Test.php</file>
+            <file>tests/CorsIntegrationTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>
