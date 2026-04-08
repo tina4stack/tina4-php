@@ -175,47 +175,23 @@ class Queue
     }
 
     /**
-     * Push a job onto a queue.
+     * Push a job onto the queue.
      *
-     * Accepts two calling styles:
-     *   $queue->push($payload)                          — uses constructor topic
-     *   $queue->push($payload, 'queue_name')            — explicit queue override
-     *   $queue->push('queue_name', $payload)             — legacy (queue first)
-     *   $queue->push('queue_name', $payload, $delay)     — legacy with delay
-     *
-     * @param mixed       $payloadOrQueue Job data or queue name (string for legacy)
-     * @param mixed       $queueOrPayload Queue name or payload (legacy)
-     * @param int         $delay          Delay in seconds before job becomes available
+     * @param mixed $payload       Job data
+     * @param int   $delay         Delay in seconds before job becomes available
+     * @param int   $priority      Job priority (higher = processed first)
      * @return string Job ID
      */
-    public function push(mixed $payloadOrQueue, mixed $queueOrPayload = '', int $delay = 0, int $priority = 0): string
+    public function push(mixed $payload, int $delay = 0, int $priority = 0): string
     {
-        // Detect calling style:
-        // 1. push('queue_name', $payload) — legacy: first arg is string queue name
-        // 2. push($payload, 'queue_name') — unified: payload first, optional queue override
-        // 3. push($payload) — unified: uses constructor topic
-        if (is_string($payloadOrQueue) && $queueOrPayload !== '') {
-            // Legacy style: push('queue_name', $payload, $delay)
-            $queue = $payloadOrQueue;
-            $payload = $queueOrPayload;
-        } elseif (!is_string($payloadOrQueue) && is_string($queueOrPayload) && $queueOrPayload !== '') {
-            // Unified with override: push($payload, 'queue_name')
-            $payload = $payloadOrQueue;
-            $queue = $queueOrPayload;
-        } else {
-            // Unified style: push($payload) — use topic
-            $payload = $payloadOrQueue;
-            $queue = $this->topic;
-        }
-
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
             $message = [
                 'id' => $this->generateId(),
                 'payload' => $payload,
-                'topic' => $queue,
+                'topic' => $this->topic,
             ];
-            return $this->externalBackend->enqueue($queue, $message);
+            return $this->externalBackend->enqueue($this->topic, $message);
         }
 
         $message = [
@@ -224,7 +200,7 @@ class Queue
             'priority'      => $priority,
             'delay_seconds' => $delay,
         ];
-        return $this->liteBackend->enqueue($queue, $message);
+        return $this->liteBackend->enqueue($this->topic, $message);
     }
 
     /**
@@ -308,21 +284,18 @@ class Queue
     }
 
     /**
-     * Get the number of jobs in a queue filtered by status.
+     * Get the number of jobs in the queue filtered by status.
      *
-     * @param string $queue  Queue name (defaults to topic set in constructor)
      * @param string $status Job status to count ('pending', 'failed')
      * @return int
      */
-    public function size(string $queue = '', string $status = 'pending'): int
+    public function size(string $status = 'pending'): int
     {
-        $queue = $queue ?: $this->topic;
-
         if ($this->externalBackend !== null) {
-            return $this->externalBackend->size($queue);
+            return $this->externalBackend->size($this->topic);
         }
 
-        return $this->liteBackend->count($queue, $status);
+        return $this->liteBackend->count($this->topic, $status);
     }
 
     /**
@@ -378,13 +351,11 @@ class Queue
      * Delete messages by status (completed, failed, dead).
      *
      * @param string $status Status to purge: 'completed', 'failed', 'dead', 'pending'
-     * @param string $queue  Queue name (defaults to topic set in constructor)
      * @return int Number of jobs purged
      */
-    public function purge(string $status, string $queue = ''): int
+    public function purge(string $status): int
     {
-        $queue = $queue ?: $this->topic;
-        return $this->liteBackend->purge($status, $queue);
+        return $this->liteBackend->purge($status, $this->topic);
     }
 
     /**
@@ -400,7 +371,8 @@ class Queue
     }
 
     /**
-     * Produce a message onto a topic. Convenience wrapper around push().
+     * Produce a message onto a named topic. Use when you need to push to a
+     * topic other than the one set in the constructor.
      *
      * @param string $topic   Topic/queue name
      * @param mixed  $payload Job data
@@ -409,7 +381,22 @@ class Queue
      */
     public function produce(string $topic, mixed $payload, int $delay = 0): string
     {
-        return $this->push($payload, $topic, $delay);
+        if ($this->externalBackend !== null) {
+            $message = [
+                'id'      => $this->generateId(),
+                'payload' => $payload,
+                'topic'   => $topic,
+            ];
+            return $this->externalBackend->enqueue($topic, $message);
+        }
+
+        $message = [
+            'id'            => $this->generateId(),
+            'payload'       => $payload,
+            'priority'      => 0,
+            'delay_seconds' => $delay,
+        ];
+        return $this->liteBackend->enqueue($topic, $message);
     }
 
     /**
