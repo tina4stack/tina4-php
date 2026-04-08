@@ -21,27 +21,24 @@ class Auth
     /**
      * Create a signed JWT token.
      *
-     * @param array  $payload    Claims to include in the token
-     * @param string $secret     Signing secret (HS256) or PEM private key (RS256)
-     * @param int    $expiresIn  Token lifetime in seconds (0 = no expiry)
-     * @param string $algorithm  'HS256' or 'RS256'
+     * @param array $payload   Claims to include in the token
+     * @param int   $expiresIn Token lifetime in seconds (0 = no expiry, default 3600)
      * @return string Encoded JWT (header.payload.signature)
      */
-    public static function getToken(array $payload, ?string $secret = null, float $expiresIn = 60, string $algorithm = 'HS256'): string
+    public static function getToken(array $payload, int $expiresIn = 3600): string
     {
-        if ($secret === null) {
-            $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
-            if ($secret === '') {
-                trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
-            }
+        $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
+        if ($secret === '') {
+            trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
         }
 
+        $algorithm = $_ENV['JWT_ALGORITHM'] ?? getenv('JWT_ALGORITHM') ?: 'HS256';
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
         $now = time();
         $payload['iat'] = $now;
         if ($expiresIn > 0) {
-            $payload['exp'] = $now + (int)($expiresIn * 60);
+            $payload['exp'] = $now + $expiresIn;
         }
 
         $segments = [];
@@ -59,19 +56,16 @@ class Auth
     /**
      * Validate a JWT token and return the decoded payload.
      *
-     * @param string $token     The JWT string
-     * @param string $secret    Signing secret (HS256) or PEM public key (RS256)
-     * @param string $algorithm 'HS256' or 'RS256'
+     * @param string $token The JWT string
      * @return array|null Decoded payload on success, null on failure
      */
-    public static function validToken(string $token, ?string $secret = null, string $algorithm = 'HS256'): ?array
+    public static function validToken(string $token): ?array
     {
-        if ($secret === null) {
-            $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
-            if ($secret === '') {
-                trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
-            }
+        $secret = $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
+        if ($secret === '') {
+            trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
         }
+        $algorithm = $_ENV['JWT_ALGORITHM'] ?? getenv('JWT_ALGORITHM') ?: 'HS256';
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             return null;
@@ -195,14 +189,13 @@ class Auth
      * The middleware extracts the Bearer token from the Authorization header,
      * verifies it, and attaches the decoded payload to the request attributes.
      * Returns a 401 response if the token is missing, invalid, or expired.
+     * Secret and algorithm are read from env (SECRET, JWT_ALGORITHM).
      *
-     * @param string $secret    Signing secret (HS256) or PEM public key (RS256)
-     * @param string $algorithm 'HS256' or 'RS256'
      * @return callable Middleware function (Request $request) => ?array
      */
-    public static function middleware(string $secret, string $algorithm = 'HS256'): callable
+    public static function middleware(): callable
     {
-        return function (object $request) use ($secret, $algorithm): ?array {
+        return function (object $request): ?array {
             $authHeader = $request->header('Authorization') ?? '';
 
             if (!str_starts_with($authHeader, 'Bearer ')) {
@@ -210,7 +203,7 @@ class Auth
             }
 
             $token = substr($authHeader, 7);
-            $payload = self::validToken($token, $secret, $algorithm);
+            $payload = self::validToken($token);
 
             return $payload; // null if invalid/expired, array if valid
         };
@@ -220,17 +213,15 @@ class Auth
 
     /**
      * Refresh a JWT token — validate then re-sign with fresh expiry.
-     * Maps to Python: refresh_token(token, expiry_minutes)
+     * Maps to Python: refresh_token(token, expires_in)
      *
      * @param string $token     The existing JWT
-     * @param string $secret    Signing secret
      * @param int    $expiresIn New lifetime in seconds (default 3600)
-     * @param string $algorithm 'HS256' or 'RS256'
      * @return string|null New JWT on success, null if original token is invalid
      */
-    public static function refreshToken(string $token, ?string $secret = null, float $expiresIn = 60, string $algorithm = 'HS256'): ?string
+    public static function refreshToken(string $token, int $expiresIn = 3600): ?string
     {
-        $payload = self::validToken($token, $secret, $algorithm);
+        $payload = self::validToken($token);
         if ($payload === null) {
             return null;
         }
@@ -238,19 +229,18 @@ class Auth
         // Remove old timing claims — getToken sets fresh ones
         unset($payload['iat'], $payload['exp']);
 
-        return self::getToken($payload, $secret, $expiresIn, $algorithm);
+        return self::getToken($payload, $expiresIn);
     }
 
     /**
      * Authenticate a request by extracting and validating the Bearer token.
      * Maps to Python: authenticate_request(headers)
+     * Secret and algorithm are read from env (SECRET, JWT_ALGORITHM).
      *
      * @param array<string, string> $headers Request headers (key => value)
-     * @param string $secret Signing secret
-     * @param string $algorithm 'HS256' or 'RS256'
      * @return array|null Decoded payload on success, null on failure
      */
-    public static function authenticateRequest(array $headers, ?string $secret = null, string $algorithm = 'HS256'): ?array
+    public static function authenticateRequest(array $headers): ?array
     {
         $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
 
@@ -258,7 +248,7 @@ class Auth
             $token = substr($authHeader, 7);
 
             // Try JWT first
-            $payload = self::validToken($token, $secret, $algorithm);
+            $payload = self::validToken($token);
             if ($payload !== null) {
                 return $payload;
             }

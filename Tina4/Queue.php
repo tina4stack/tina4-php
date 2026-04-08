@@ -206,19 +206,16 @@ class Queue
     /**
      * Pop the next available job from the queue.
      *
-     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return array|null Job data or null if empty
      */
-    public function pop(string $queue = ''): ?array
+    public function pop(): ?array
     {
-        $queue = $queue ?: $this->topic;
-
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
-            return $this->externalBackend->dequeue($queue);
+            return $this->externalBackend->dequeue($this->topic);
         }
 
-        return $this->liteBackend->dequeue($queue);
+        return $this->liteBackend->dequeue($this->topic);
     }
 
     /**
@@ -263,7 +260,9 @@ class Queue
         $processed = 0;
 
         while ($maxJobs === null || $processed < $maxJobs) {
-            $job = $this->pop($queue);
+            $job = $this->externalBackend !== null
+                ? $this->externalBackend->dequeue($queue)
+                : $this->liteBackend->dequeue($queue);
             if ($job === null) {
                 break;
             }
@@ -299,26 +298,21 @@ class Queue
     }
 
     /**
-     * Clear all pending jobs from a queue.
-     *
-     * @param string $queue Queue name (defaults to topic set in constructor)
+     * Clear all pending jobs from the queue topic.
      */
-    public function clear(string $queue = ''): void
+    public function clear(): void
     {
-        $queue = $queue ?: $this->topic;
-        $this->liteBackend->clear($queue);
+        $this->liteBackend->clear($this->topic);
     }
 
     /**
-     * Get all failed jobs from a queue.
+     * Get all failed jobs from the queue topic.
      *
-     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return array List of failed job arrays
      */
-    public function failed(string $queue = ''): array
+    public function failed(): array
     {
-        $queue = $queue ?: $this->topic;
-        return $this->liteBackend->failed($queue);
+        return $this->liteBackend->failed($this->topic);
     }
 
     /**
@@ -338,13 +332,11 @@ class Queue
     /**
      * Get dead letter jobs — failed jobs that exceeded max retries.
      *
-     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return array List of dead letter job arrays
      */
-    public function deadLetters(string $queue = ''): array
+    public function deadLetters(): array
     {
-        $queue = $queue ?: $this->topic;
-        return $this->liteBackend->deadLetters($queue);
+        return $this->liteBackend->deadLetters($this->topic);
     }
 
     /**
@@ -361,13 +353,11 @@ class Queue
     /**
      * Re-queue failed jobs that haven't exceeded max retries back to pending.
      *
-     * @param string $queue Queue name (defaults to topic set in constructor)
      * @return int Number of jobs re-queued
      */
-    public function retryFailed(string $queue = ''): int
+    public function retryFailed(): int
     {
-        $queue = $queue ?: $this->topic;
-        return $this->liteBackend->retryFailed($queue);
+        return $this->liteBackend->retryFailed($this->topic);
     }
 
     /**
@@ -442,7 +432,9 @@ class Queue
         // pollInterval=0 → single-pass drain (returns when empty)
         // pollInterval>0 → long-running poll (sleeps when empty, never returns)
         while (true) {
-            $data = $this->pop($topic);
+            $data = $this->externalBackend !== null
+                ? $this->externalBackend->dequeue($topic)
+                : $this->liteBackend->dequeue($topic);
             if ($data === null) {
                 if ($pollInterval <= 0) {
                     break;
