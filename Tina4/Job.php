@@ -51,22 +51,13 @@ class Job
         $this->error = $reason;
         $this->attempts++;
 
-        $failedPath = $this->queue->getBasePath() . '/' . $this->topic . '/failed';
-        if (!is_dir($failedPath)) {
-            mkdir($failedPath, 0755, true);
-        }
-
-        $jobData = [
+        $this->queue->writeFailed($this->topic, [
             'id' => $this->id,
             'payload' => $this->payload,
             'status' => 'failed',
             'attempts' => $this->attempts,
             'error' => $reason,
-        ];
-
-        file_put_contents(
-            $failedPath . '/' . $this->id . '.queue-data',
-            json_encode($jobData, JSON_PRETTY_PRINT)
+        ]
         );
     }
 
