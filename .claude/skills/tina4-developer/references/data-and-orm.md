@@ -2,19 +2,21 @@
 
 ## Defining Models
 
-Drop a model file in `src/orm/` and it's auto-registered.
+Drop a model file in `src/orm/` and it's auto-registered. In v3, **declare public properties directly** — no field descriptors needed.
 
 ### Python
 ```python
-from tina4_python.orm import ORM
-from tina4_python.orm.fields import IntegerField, StringField, TextField, BooleanField
+from tina4_python import ORM
 
 class User(ORM):
-    id = IntegerField(primary_key=True, auto_increment=True)
-    name = StringField()
-    email = StringField()
-    bio = TextField(default="")
-    is_active = BooleanField(default=True)
+    table_name = "users"
+    primary_key = "id"
+
+    id: int = None
+    name: str = None
+    email: str = None
+    bio: str = ""
+    is_active: bool = True
 ```
 
 ### PHP
@@ -22,202 +24,262 @@ class User(ORM):
 class User extends \Tina4\ORM {
     public $tableName = "users";
     public $primaryKey = "id";
-    public ?int $id = null;
-    public string $name = '';
-    public string $email = '';
-    public bool $isActive = true;
+
+    public $id;
+    public $name;
+    public $email;
+    public $bio = "";
+    public $isActive = true;
 }
 ```
 
 ### Ruby
 ```ruby
 class User < Tina4::ORM
-  field :id, type: :integer, primary_key: true, auto_increment: true
-  field :name, type: :string
-  field :email, type: :string
-  field :is_active, type: :boolean, default: true
+  self.table_name = "users"
+  self.primary_key = "id"
+
+  attr_accessor :id, :name, :email, :bio, :is_active
 end
 ```
 
 ### Node.js
 ```typescript
-export default class User {
+import { BaseModel } from 'tina4-nodejs';
+
+export class User extends BaseModel {
   static tableName = "users";
-  static fields = {
-    id:       { type: "integer" as const, primaryKey: true, autoIncrement: true },
-    name:     { type: "string"  as const, required: true },
-    email:    { type: "string"  as const, required: true },
-    isActive: { type: "boolean" as const, default: true },
-  };
+  static primaryKey = "id";
+
+  id?: number;
+  name?: string;
+  email?: string;
+  isActive?: boolean;
 }
-```
-
-## Database Setup (once at boot)
-
-The database is bound globally at application startup — it is **never** passed to individual ORM calls.
-
-### Python
-```python
-from tina4_python.database import Database
-from tina4_python.orm import orm_bind
-
-db = Database("sqlite:///data/app.db")
-orm_bind(db)   # binds db to ALL ORM subclasses globally
-```
-
-### PHP
-```php
-$db = \Tina4\Database\Database::create('sqlite:///data/app.db');
-\Tina4\App::setDatabase($db);
-```
-
-### Ruby
-```ruby
-db = Tina4::Database.new("sqlite:///data/app.db")
-Tina4.database = db
-```
-
-### Node.js
-```typescript
-import { initDatabase } from "@tina4/orm";
-await initDatabase({ url: "sqlite:///data/app.db" });
 ```
 
 ## CRUD Operations
 
+> **v3 API** — `find_by_id(id)` for ID lookup, `find(filter)` for filtered lists.
+> Do NOT use the v2 query builder chain (`select("*").fetch()`) — it no longer exists.
+
 ### Create
+
 ```python
 # Python
 user = User({"name": "Alice", "email": "alice@example.com"})
-user.save()
+saved = user.save()   # returns self (fluent) on success, False on failure
+```
+```php
+// PHP
+$user = new User(["name" => "Alice", "email" => "alice@example.com"]);
+$saved = $user->save();   // returns $this on success, false on failure
 
-# PHP
-$user = new User();
-$user->name = "Alice";
-$user->email = "alice@example.com";
-$user->save();
-
+// Static factory
+$user = User::create(["name" => "Alice", "email" => "alice@example.com"]);
+```
+```ruby
 # Ruby
 user = User.new(name: "Alice", email: "alice@example.com")
-user.save
-
-# Node.js — auto-CRUD route or direct SQL via adapter
+user.save   # returns self or false
+```
+```typescript
+// Node.js
+const user = new User({ name: "Alice", email: "alice@example.com" });
+await user.save();
 ```
 
-### Read
+### Read — by ID
+
 ```python
 # Python
-user = User()
-user.load("id = ?", [1])          # load by filter
-
-result = User().select(filter="is_active = ?", params=[True], limit=10)
-rows = result.data
-
-# PHP
-$user = new User();
-$user->load("id = ?", [1]);
-
-$result = (new User())->select("*", 100);  # returns DataResult
-
+user = User().find_by_id(1)         # returns instance or None
+```
+```php
+// PHP
+$user = (new User())->findById(1);    // returns instance or null
+$user = (new User())->findOrFail(1);  // throws if not found
+```
+```ruby
 # Ruby
-user = User.find(1)
-users = User.where("is_active = ?", true).all
+user = User.new.find_by_id(1)
+```
+```typescript
+// Node.js
+const user = await User.findById(1);
+```
+
+### Read — filtered list
+
+```python
+# Python — find() takes a filter dict or SQL string
+users = User().find({"is_active": True})
+users = User().find("is_active = 1", limit=20, offset=0)
+users = User().all(limit=50)                         # all records
+user  = User().select_one("email = ?", ["alice@example.com"])  # single
+```
+```php
+// PHP
+$users = (new User())->find(["is_active" => true]);
+$users = (new User())->find("is_active = 1", limit: 20, offset: 0);
+$users = (new User())->all(limit: 50);
+$users = (new User())->where("email = ?", ["alice@example.com"]);
+$user  = (new User())->selectOne("email = ?", ["alice@example.com"]);
+```
+```ruby
+# Ruby
+users = User.new.find(is_active: true)
+users = User.new.all(limit: 50)
+user  = User.new.find_one("email = ?", ["alice@example.com"])
+```
+```typescript
+// Node.js
+const users = await User.find({ isActive: true });
+const users = await User.all({ limit: 50 });
 ```
 
 ### Update
+
 ```python
-user = User()
-user.load("id = ?", [1])
+# Python
+user = User().find_by_id(1)
 user.name = "Alice Smith"
 user.save()
 ```
+```php
+// PHP
+$user = (new User())->findById(1);
+$user->name = "Alice Smith";
+$user->save();
+```
 
 ### Delete
+
 ```python
-user = User()
-user.load("id = ?", [1])
+# Python
+user = User().find_by_id(1)
 user.delete()
+```
+```php
+// PHP
+$user = (new User())->findById(1);
+$user->delete();
+```
+
+### Serialisation
+
+```python
+# Python
+user.to_dict()    # {"id": 1, "name": "Alice", ...}
+user.to_json()    # '{"id": 1, "name": "Alice", ...}'
+user.to_array()   # [1, "Alice", ...]
+```
+```php
+// PHP
+$user->toDict();   // same as toAssoc()
+$user->toJson();
+$user->toArray();  // flat indexed list
+```
+
+## Relationships
+
+```python
+class Post(ORM):
+    id = IntegerField(primary_key=True, auto_increment=True)
+    user_id = IntegerField()
+    title = StringField()
+    has_one = [{"User": "user_id"}]
+
+class User(ORM):
+    id = IntegerField(primary_key=True, auto_increment=True)
+    name = StringField()
+    has_many = [{"Post": "user_id"}]
+
+# Access:
+user = User().find_by_id(1)
+posts = user.posts        # All posts by this user
+post  = Post().find_by_id(1)
+author = post.user        # The post's author
 ```
 
 ## Soft Delete
 
 ```python
-# Python
 class Article(ORM):
-    soft_delete = True   # adds deleted_at column
+    soft_delete = True  # Adds deleted_at column
 
-article = Article()
-article.load("id = ?", [1])
-article.delete()         # sets deleted_at (keeps row)
-article.restore()        # clears deleted_at
-article.force_delete()   # removes row permanently
+article = Article().find_by_id(1)
+article.delete()              # Sets deleted_at (soft)
+article.restore()             # Clears deleted_at
+article.force_delete()        # Actually removes from DB
+
+# Default queries exclude deleted records
+articles = Article().all()
+# Include deleted:
+articles = Article().with_trashed()
 ```
 
-```php
-// PHP
-class Article extends \Tina4\ORM {
-    public bool $softDelete = true;
-}
+## Pagination
 
-$article = new Article();
-$article->load("id = ?", [1]);
-$article->delete();       // sets deleted_at
-$article->restore();      // clears deleted_at
-$article->forceDelete();  // hard delete
+`find()`, `all()`, and `where()` accept `limit` and `offset`:
+```python
+users = User().all(limit=20, offset=40)   # page 3 at 20/page
+```
+
+For paginated JSON responses the result includes metadata:
+```json
+{
+    "data": [...],
+    "total": 100,
+    "page": 3,
+    "per_page": 20,
+    "total_pages": 5
+}
 ```
 
 ## Raw SQL
 
-For complex queries use the database adapter directly:
-
+For complex queries, bypass the ORM:
 ```python
-# Python
-from tina4_python.database import Database
+from tina4 import Database
 
-db = Database("sqlite:///data/app.db")
-result = db.fetch(
+db = Database.from_env()
+results = db.fetch(
     "SELECT u.*, COUNT(p.id) as post_count FROM users u "
-    "LEFT JOIN posts p ON p.user_id = u.id GROUP BY u.id",
-    limit=20
+    "LEFT JOIN posts p ON p.user_id = u.id GROUP BY u.id HAVING post_count > ?",
+    [5]
 )
-for row in result.data:
-    print(row)
-```
-
-```php
-// PHP
-$db = \Tina4\Database\Database::create('sqlite:///data/app.db');
-$result = $db->fetch("SELECT * FROM users WHERE is_active = ?", 10, 0);
-foreach ($result->data as $row) { ... }
 ```
 
 ## Database Connection Strings
 
-Same `scheme://host/database` format in every language:
+Same format in every language (set in `.env` as `DATABASE_URL`):
 ```
-sqlite:///data/app.db           # SQLite (relative path)
-sqlite::memory:                 # SQLite in-memory
-postgres://user:pass@host:5432/mydb
-mysql://user:pass@host:3306/mydb
-mssql://user:pass@host:1433/mydb
-firebird://user:pass@host:3050/path/to/db.fdb
-```
-
-Set in `.env`:
-```env
-DATABASE_URL=sqlite:///data/app.db
+sqlite://data/app.db
+postgres://user:password@localhost:5432/mydb
+mysql://user:password@localhost:3306/mydb
+mssql://user:password@localhost:1433/mydb
+firebird://user:password@localhost:3050/mydb
 ```
 
-**Not** `sqlite3:` — that is the old v2 format. **Not** `DATABASE_NAME` — the env var is `DATABASE_URL`.
+```python
+# Python
+from tina4 import Database
+db = Database.from_env()  # reads DATABASE_URL
+```
+```php
+// PHP
+$db = \Tina4\Database\Database::fromEnv();  // reads DATABASE_URL
+```
 
 ## Migrations
 
 ```bash
-tina4 migrate:create "create users table"   # Creates SQL file in src/migrations/
+tina4 migrate:create "create users table"   # Creates SQL file
 tina4 migrate                                # Runs pending migrations
 ```
 
-Migration files are versioned SQL in `src/migrations/`:
+Migration files are versioned SQL in `src/migrations/`. Write standard SQL:
 ```sql
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,16 +291,31 @@ CREATE TABLE users (
 
 ## Seeding
 
+```bash
+tina4 seed:create "initial users"   # Creates seed file
+tina4 seed                           # Runs all seeds
+```
+
 Quick seeding with fake data:
 ```python
-from tina4_python.seeder import FakeData, seed_table
+from tina4 import FakeData, seed_orm
 
 fake = FakeData()
 fake.name()     # "Alice Johnson"
 fake.email()    # "alice.johnson@example.com"
 
-seed_table(db, "users", 50, {
-    "name": lambda: fake.name(),
-    "email": lambda: fake.email(),
-})
+seed_orm(User, count=50)  # Bulk seed from field types
+```
+
+## Auto-CRUD
+
+Generate a full admin CRUD interface with one call:
+```python
+@get("/api/users/crud")
+async def user_crud(request, response):
+    return CRUD.to_crud(request, {
+        "sql": "SELECT * FROM users",
+        "title": "User Management",
+        "primary_key": "id"
+    })
 ```

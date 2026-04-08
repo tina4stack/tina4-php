@@ -116,8 +116,7 @@ must achieve identical behavior. When implementing or fixing anything:
    equivalent tests covering the same cases
 4. **Run the parity check** — After implementing a feature, verify the output matches Python's
 
-Current version: **v3.10.70** on the `v3` branch (all four repos).
-Current status: Python 100% | PHP ~85% | Ruby ~80% | Node.js ~70%
+Current status: Python 100% | PHP ~50% | Ruby ~50% | Node.js ~35%
 
 When porting a feature from Python to another language:
 - Read the Python source and its tests
@@ -202,9 +201,9 @@ template-language convention, not a host-language one.
 ### Language-Specific Idioms
 
 **Python:** Python 3.12+ minimum (never target older versions), async/await everywhere, type hints, ASGI-based, `uv` as package manager
-**PHP:** PHP 8.2+ minimum, Swoole for WebSocket (fallback to stream_socket), ext-openssl for JWT
-**Ruby:** Ruby 3.2+ minimum, `?` suffix for predicates, `!` for mutators, OptionParser for CLI
-**Node.js:** Node.js 20+ minimum, TypeScript-first, ESM-only, file-based routing
+**PHP:** PHP 8.5+ minimum, Swoole for WebSocket (fallback to stream_socket), ext-openssl for JWT
+**Ruby:** Ruby 4.0.0+ minimum, `?` suffix for predicates, `!` for mutators, OptionParser for CLI
+**Node.js:** Node.js 25.8.1+ minimum, TypeScript-first, ESM-only, file-based routing
 
 ### Deprecation Awareness
 
@@ -212,7 +211,7 @@ Stay current with deprecations in all four languages. When working on any Tina4 
 
 - **Actively look for deprecated APIs** — If you encounter deprecated functions, classes, or
   patterns, refactor them immediately. Don't leave deprecation warnings for later.
-- **Use modern replacements** — Python 3.12+, PHP 8.2+, Ruby 3.2+, and Node.js 20+ all
+- **Use modern replacements** — Python 3.12+, PHP 8.5+, Ruby 4.0.0+, and Node.js 25.8.1+ all
   have modern alternatives for deprecated features. Use them.
 - **Flag deprecations you find** — When auditing or reviewing code, surface any deprecated usage
   in your dashboard output so the maintainer can see the full picture.
@@ -237,7 +236,7 @@ secure by default. This is non-negotiable.
   file operations. Use `realpath()` / `os.path.realpath()` and verify the result is inside the
   expected directory.
 - **JWT security** — Always verify signatures. Never decode without validation. Use the `SECRET`
-  env var for HS256 or key files for RS256 (auto-selected), never hardcode keys.
+  env var, never hardcode keys. Prefer RS256 for production.
 - **Header injection** — Sanitize any user input that ends up in HTTP headers or redirect URLs.
 - **Dependency security** — Zero third-party deps means a smaller attack surface. Keep it that way.
   If a stdlib function has a known vulnerability in an older version, the minimum version targets
@@ -295,7 +294,7 @@ Read the bundled reference files for deep dives on specific subsystems:
 - **`references/frond-and-frontend.md`** — The Frond template engine spec and frond.js frontend
   helper. Read this when working on templates, live blocks, or frontend integration.
 
-- **`references/subsystems.md`** — Queue, WebSocket, SSE/Streaming, Auth/JWT, Sessions, GraphQL, WSDL, SCSS,
+- **`references/subsystems.md`** — Queue, WebSocket, Auth/JWT, Sessions, GraphQL, WSDL, SCSS,
   i18n, Seeder, CRUD, Email, Events. Read this when working on any extended feature.
 
 - **`references/cli-and-deployment.md`** — CLI commands, debug overlay, .broken file system,
@@ -459,7 +458,24 @@ Tina4 optimizes for both, because the future of development is humans and AI wor
 
 ## Plan Documents
 
-The full v3 specifications are maintained as GitHub issues and the feature matrix in `plan/FEATURES.md` within each repo. When you need deep detail beyond the bundled references, check the relevant CLAUDE.md in the repo root.
+The full v3 specifications live at `/Users/andrevanzuydam/IdeaProjects/plan/v3/`. When you
+need deep detail beyond what the bundled references provide, read the relevant plan doc:
+
+| Doc | Content |
+|-----|---------|
+| 00-VISION.md | Core principles and inspirations |
+| 01-FEATURE-MATRIX.md | All 78 features across 7 phases |
+| 02-FROND-*.md | Frond template engine full spec |
+| 03-TINA4HELPER-SPEC.md | frond.js frontend helper spec |
+| 04-ARCHITECTURE.md | Full architecture details |
+| 05-GAMEPLAN-PYTHON.md | Python reference implementation |
+| 06-GAMEPLAN-PHP.md | PHP implementation plan |
+| 07-GAMEPLAN-RUBY.md | Ruby implementation plan |
+| 08-GAMEPLAN-NODEJS.md | Node.js implementation plan |
+| 09-AI-REFERENCE-SPEC.md | AI-friendly paradigm reference |
+| 11-QUEUE-SPEC.md | Queue system specification |
+| 12-BENCHMARKS-SPEC.md | Benchmark categories and targets |
+| 14-WEBSOCKET-SPEC.md | WebSocket implementation spec |
 
 ## Repository Locations
 
@@ -558,49 +574,3 @@ When discussing any work on Tina4, always clarify which branch context applies:
 If the user doesn't specify, ask. If the context is obvious (e.g., porting a new feature),
 state it explicitly: "This targets the development branch for v3." Never leave branch
 context ambiguous.
-
-
-## VitePress Documentation Gotchas
-
-When updating tina4-documentation (VitePress site), these rules prevent hours of debugging:
-
-### tina4-book vs tina4-documentation
-- **tina4-book** = source of truth for chapter content. Plain markdown, no Vue processing.
-- **tina4-documentation** = VitePress site. Vue processes ALL markdown as Vue components.
-- **Never blindly copy** from tina4-book to tina4-documentation. Files with `${}` or `{{}}` need escaping.
-
-### Vue Template Syntax Conflicts
-VitePress treats markdown as Vue templates. These characters break pages:
-
-| Syntax | Problem | Fix |
-|--------|---------|-----|
-| `{{ }}` in prose | Vue tries to evaluate as expression | Encode as `&#123;&#123; &#125;&#125;` or wrap section in `<div v-pre>` |
-| `${}` in prose | Vue tries to evaluate as JS template literal | Encode `$` as `&#36;` in prose. In headings, wrap in backticks: `` `${value}` `` |
-| `{{ }}` in code blocks | Safe — VitePress auto-wraps code blocks in v-pre | No action needed |
-| `${}` in code blocks | Safe — VitePress auto-wraps code blocks in v-pre | No action needed |
-
-### Escaping Rules
-1. **Fenced code blocks** (` ```lang ... ``` `) are auto-protected. No escaping needed.
-2. **Prose** (headings, paragraphs, tables, inline code) needs escaping.
-3. **Headings with `${}`**: wrap in backticks — `## Static Values -- \`${value}\``
-4. **Prose with `${}`**: encode `$` as `&#36;` — renders as `$` but Vue ignores it.
-5. **Prose with `{{ }}`**: encode as `&#123;&#123;` or wrap surrounding section in `<div v-pre>`.
-6. **`<div v-pre>` placement**: must come AFTER the first `#` heading, never before it. VitePress needs the heading for page metadata.
-
-### VitePress Version
-The docs site uses VitePress 2.0.0-alpha.15. Do not upgrade without testing — the config API changed between v1 and v2.
-
-### Language `env` Warnings
-`The language 'env' is not loaded` warnings on startup are cosmetic — `.env` code blocks fall back to `txt` highlighting. Not an error.
-
-### Sidebar Grouping
-The sidebar uses `SECTION_RANGES` in `docs/.vitepress/config.mts` to group chapters:
-```
-Foundations: 1-10, Building Apps: 11-19, APIs & Protocols: 20-24,
-Advanced: 25-28, Developer Tools: 29-31, Operations: 32-34,
-Releases: 35, Appendix: 36-37
-```
-
-### Title Overrides
-Chapter titles are auto-generated from filenames. Override ugly titles in `TITLE_OVERRIDES` in config.mts.
-

@@ -39,25 +39,20 @@ async def delete_user(request, response):
 
 ### PHP
 ```php
-use Tina4\Router;
-use Tina4\Request;
-use Tina4\Response;
-
-Router::get("/hello", function(Request $request, Response $response) {
+\Tina4\Get::add("/hello", function(\Tina4\Response $response) {
     return $response("Hello World");
 });
 
-Router::get("/users/{id}", function(Request $request, Response $response, string $id) {
-    $user = (new User())->findById($id);
-    return $response($user->toArray());
+\Tina4\Get::add("/users/{id}", function(\Tina4\Response $response, $id) {
+    $user = (new User())->find($id);
+    return $response->json($user);
 });
 
-Router::post("/users", function(Request $request, Response $response) {
-    $user = new User();
-    $user->fill($request->body);
+\Tina4\Post::add("/users", function(\Tina4\Request $request, \Tina4\Response $response) {
+    $user = new User($request->body);
     $user->save();
-    return $response($user->toArray(), 201);
-})->secure(false);  // Remove ->secure(false) to require auth
+    return $response->json($user, 201);
+});
 ```
 
 ### Ruby
@@ -101,15 +96,6 @@ The framework infers what you want:
 - Call `response.render("template.twig", data)` → Frond template rendering
 - Call `response.redirect("/path")` → HTTP redirect
 - Call `response.file("path/to/file")` → File download
-- Call `response.stream(generator, content_type)` → SSE/streaming response
-
-## Template Fallback Routing
-
-If no explicit route matches, Tina4 automatically looks for a matching template in
-`src/templates/`. For example, a request to `/hello` will serve `src/templates/hello.twig`
-or `src/templates/hello.html` if either exists. No route handler required.
-
-This is useful for simple static or semi-static pages where a full route handler is overkill.
 
 ## Path Parameters
 
@@ -120,27 +106,6 @@ async def user_post(request, response):
     user_id = request.params["id"]
     post_id = request.params["postId"]
 ```
-
-### Typed Route Parameters
-
-Add a type suffix to auto-convert parameters to the correct type in the handler:
-
-```python
-@get("/users/{id:int}")
-async def get_user(request, response):
-    user_id = request.params["id"]   # Already an int, no manual casting
-
-@get("/products/{price:float}")
-async def by_price(request, response):
-    price = request.params["price"]  # Already a float
-
-@get("/docs/{path:path}")
-async def serve_doc(request, response):
-    file_path = request.params["path"]  # Matches multi-segment paths like "a/b/c"
-```
-
-Supported types: `{name:int}`, `{name:float}`, `{name:path}`. Without a type suffix,
-parameters remain strings (existing behavior).
 
 ## Query Parameters
 
@@ -155,36 +120,15 @@ async def search(request, response):
 
 ## Middleware
 
-Apply authentication, logging, or other cross-cutting concerns. Middleware classes use the
-naming convention `before_*` / `after_*` for their hook methods.
+Apply authentication, logging, or other cross-cutting concerns:
 
-### Built-in Middleware
-
-Tina4 ships 3 middleware classes ready to use:
-
-| Class | Purpose |
-|-------|---------|
-| `CorsMiddleware` | Handles CORS headers and preflight requests |
-| `RateLimiter` | Rate-limits requests (configurable via `.env`) |
-| `RequestLogger` | Logs request method, path, status, and duration |
-
-```python
-from tina4 import middleware, CorsMiddleware, RateLimiter, RequestLogger
-
-@middleware(CorsMiddleware, RateLimiter, RequestLogger)
-@get("/api/data")
-async def get_data(request, response):
-    return response({"items": [...]})
-```
-
-### Custom Middleware
-
+### Python
 ```python
 from tina4 import middleware
 
 class AuthCheck:
     @staticmethod
-    async def before_request(request, response):
+    async def before(request, response):
         token = request.headers.get("Authorization")
         if not token:
             return request, response.json({"error": "Unauthorized"}, 401)
@@ -237,80 +181,8 @@ Frond.config({ csrfToken: document.querySelector('meta[name="csrf-token"]').cont
 
 ## CORS
 
-Built-in via `CorsMiddleware`. Configure in `.env` or it defaults to allowing all origins in development.
+Built-in. Configure in `.env` or it defaults to allowing all origins in development.
 
 ## Rate Limiting
 
-Built-in via `RateLimiter`. No configuration needed for sensible defaults. Override in `.env` if needed.
-
-## SSE / Streaming
-
-Send real-time events to the browser using Server-Sent Events. The framework handles chunked
-transfer encoding, keep-alive, and the `text/event-stream` content type automatically.
-
-### PHP
-```php
-Router::get("/events", function (Request $request, Response $response) {
-    $response->stream(function () {
-        for ($i = 0; $i < 10; $i++) {
-            echo "data: event {$i}\n\n";
-            ob_flush();
-            flush();
-            sleep(1);
-        }
-    }, 'text/event-stream');
-});
-```
-
-### Python
-```python
-from tina4 import get
-import asyncio
-
-@get("/events")
-async def stream_events(request, response):
-    async def event_generator():
-        for i in range(10):
-            yield f"data: event {i}\n\n"
-            await asyncio.sleep(1)
-    return response.stream(event_generator(), content_type="text/event-stream")
-```
-
-### Ruby
-```ruby
-get "/events" do |request, response|
-  response.stream(content_type: "text/event-stream") do |out|
-    10.times do |i|
-      out << "data: event #{i}\n\n"
-      sleep 1
-    end
-  end
-end
-```
-
-### Node.js (TypeScript)
-```typescript
-import { get } from 'tina4';
-
-export const events = get('/events', async (req, res) => {
-  async function* eventGenerator() {
-    for (let i = 0; i < 10; i++) {
-      yield `data: event ${i}\n\n`;
-      await new Promise(r => setTimeout(r, 1000));
-    }
-  }
-  return res.stream(eventGenerator(), 'text/event-stream');
-});
-```
-
-### Client-Side (JavaScript)
-```javascript
-const source = new EventSource('/events');
-source.onmessage = (event) => {
-    console.log(event.data);
-};
-source.onerror = () => source.close();
-```
-
-The default content type is `text/event-stream`. Pass a different content type for generic
-streaming (e.g., `application/json` for newline-delimited JSON).
+Built-in. No configuration needed for sensible defaults. Override in `.env` if needed.

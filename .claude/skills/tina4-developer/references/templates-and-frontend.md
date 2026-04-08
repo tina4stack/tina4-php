@@ -4,10 +4,6 @@
 
 Tina4 uses Frond, a Twig-compatible template engine. Templates go in `src/templates/`.
 
-**Template caching:** In production, compiled templates are cached for performance. In
-development mode, Frond uses live filesystem lookups so changes are reflected immediately
-without restarting the server.
-
 ### Rendering
 ```python
 @get("/")
@@ -59,12 +55,7 @@ async def home(request, response):
 {{ date | date("Y-m-d") }}        → Formatted date
 {{ text | slug }}                  → url-friendly-slug
 {{ created | timeago }}            → "3 hours ago"
-{{ data | base64encode }}          → Base64-encoded string
-{{ encoded | base64decode }}       → Decoded from Base64
 ```
-
-`base64encode` / `base64decode` are filter aliases — use them for encoding data in templates
-(e.g., inline images, token payloads).
 
 All filter names use **snake_case** regardless of language.
 
@@ -124,18 +115,6 @@ A lightweight (<10KB) JavaScript library that works with all Tina4 backends. Inc
 ```html
 <script src="/js/frond.js"></script>
 ```
-
-## tina4js.min.js — Reactive Frontend Bundle
-
-A bundled reactive frontend library (13.6KB) available in all backend repos. Use it for
-signal-based reactivity and Web Components without a build step:
-```html
-<script src="/js/tina4js.min.js"></script>
-```
-
-This is the **tina4-js** library pre-bundled and ready to use. It provides signals, reactive
-components, and Web Component support. Use `frond.js` for server-rendered helpers and
-`tina4js.min.js` for reactive SPAs — do not use both in the same feature.
 
 ### HTTP Requests
 ```javascript

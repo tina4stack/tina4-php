@@ -35,46 +35,20 @@ my-app/
 └── tests/            # Test files
 ```
 
-### Bootstrapping with the `tina4` Binary
-
-All frameworks are bootstrapped using the unified `tina4` CLI binary. It auto-detects the
-language from context or you can use the language-specific aliases:
-
+Start a project:
 ```bash
-# Unified binary (auto-detects or prompts for language)
-tina4 init
-tina4 serve
-
-# Language-specific aliases (same binary, explicit language)
 tina4py init    # Python
 tina4php init   # PHP
 tina4rb init    # Ruby
 tina4js init    # Node.js
 ```
 
-The `tina4` binary is the single entry point for all CLI operations — init, serve, migrate,
-seed, test, build, deploy. Always use it.
-
-**Prefer `tina4 init` for new projects.** The CLI creates the correct directory structure,
-starter files, .env template, and bin/ scripts. However, if the developer sets up manually
-(no CLI installed yet), the minimum entry point files are:
-
-- **Python:** `app.py` — `from tina4_python.core import run; run()`
-- **PHP:** `index.php` — `new \Tina4\App(basePath: __DIR__); $app->start();`
-- **Ruby:** `app.rb` — `Tina4.initialize!(__dir__); Tina4::WebServer.new(app, port: 7147).start`
-- **Node.js:** `app.ts` — `import { startServer } from "@tina4/core"; startServer({ port, host });`
-
-Plus `mkdir -p src/routes src/templates src/public` and a `.env` with `TINA4_DEBUG=true`.
-See each framework's getting-started chapter for the full manual setup walkthrough.
-
+Run the dev server:
 ```bash
-tina4 init          # Scaffolds the full project structure
-tina4 serve         # Dev server with hot reload + debug overlay + Swagger at /swagger
-tina4 migrate       # Run pending database migrations
-tina4 seed          # Run data seeders
-tina4 test          # Run test suite
-tina4 build         # Build Docker image
-tina4 stage         # Build + push + deploy (~30s)
+tina4py serve   # Python  (or: uv run tina4 serve)
+tina4php serve  # PHP
+tina4rb serve   # Ruby
+tina4js serve   # Node.js
 ```
 
 That's it. You get hot reload, debug overlay, and Swagger docs at `/swagger` automatically.
@@ -132,8 +106,6 @@ Browser ←→ Reactive Frontend ←→ Tina4 API Routes ←→ Database
 - Routes return objects/dicts (auto-converted to JSON)
 - Swagger auto-generated at `/swagger` — the frontend team's contract
 - **tina4-js** is the preferred frontend — sub-3KB, signals-based, Web Components, no build step
-- A bundled `tina4js.min.js` (13.6KB) is available in all backend repos — include it with
-  `<script src="/js/tina4js.min.js"></script>` for reactive frontends without a build step
 - But React, Preact, Vue, Svelte, or any other frontend framework works too
 - Static frontend files go in `src/public/` or are served from a separate build
 
@@ -160,22 +132,17 @@ and consume them:
 
 ```python
 # order-service: after saving an order
-queue = Queue(topic="order-created")
-queue.produce("order-created", {"order_id": order.id})
+Producer(Queue(topic="order-created")).produce({"order_id": order.id})
 
 # email-worker: picks it up and sends confirmation
-queue = Queue(topic="order-created")
-queue.consume("order-created", lambda message: (
-    send_confirmation_email(message.data["order_id"]),
+for message in Consumer(Queue(topic="order-created")).messages():
+    send_confirmation_email(message.data["order_id"])
     message.ack()
-))
 
 # payment-processor: also picks it up and charges the card
-queue = Queue(topic="order-created")
-queue.consume("order-created", lambda message: (
-    process_payment(message.data["order_id"]),
+for message in Consumer(Queue(topic="order-created")).messages():
+    process_payment(message.data["order_id"])
     message.ack()
-))
 ```
 
 **When to use this:**
@@ -232,9 +199,6 @@ When helping a developer build with Tina4, always follow these:
    - Return a string → HTML response
    - Return a number → Status code
    - Receive JSON POST body → Automatically parsed into request body
-   - Typed route parameters (`{id:int}`, `{price:float}`, `{slug:path}`) auto-convert values
-   - Template fallback: `/hello` auto-serves `src/templates/hello.twig` if no route matches
-   - `response.stream()` → SSE/streaming with chunked transfer encoding
    - No manual `json.dumps()`, `json_encode()`, or `JSON.stringify()` needed
 
 4. **Same patterns across languages** — Show examples in whichever language the developer is
@@ -258,22 +222,17 @@ Never write code that targets older versions. Use modern language features.
 
 Read these when you need detailed patterns for a specific area:
 
-- **`references/routes-and-api.md`** — Routing (incl. typed parameters, template fallback),
-  built-in middleware (CorsMiddleware, RateLimiter, RequestLogger), request/response, API
-  design, Swagger docs. Read this for any HTTP/API work.
+- **`references/routes-and-api.md`** — Routing, middleware, request/response, API design,
+  Swagger docs. Read this for any HTTP/API work.
 
-- **`references/data-and-orm.md`** — ORM models, Database class, DatabaseResult, migrations,
-  seeding, queries, relationships, pagination (use `offset`, not `skip`). Read this for any
-  data work.
+- **`references/data-and-orm.md`** — ORM models, database connections, migrations, seeding,
+  queries, relationships, pagination. Read this for any data work.
 
-- **`references/templates-and-frontend.md`** — Frond templates (with caching), live blocks,
-  frond.js helper, tina4js.min.js reactive bundle, base64 filters, forms, CRUD tables,
-  WebSocket. Read this for any UI/frontend work.
+- **`references/templates-and-frontend.md`** — Frond templates, live blocks, frond.js helper,
+  forms, CRUD tables, WebSocket. Read this for any UI/frontend work.
 
-- **`references/auth-and-services.md`** — JWT authentication (HS256/RS256 auto-select,
-  `expires_in`, `valid_token`), sessions (incl. Redis handler, `session.clear()`), queue
-  system (`.queue-data` files), email, GraphQL, WSDL, events, caching, i18n. Read this for
-  auth or background services.
+- **`references/auth-and-services.md`** — JWT authentication, sessions, queue system, email,
+  GraphQL, WSDL, events, caching, i18n. Read this for auth or background services.
 
 ## Environment Configuration
 
@@ -285,7 +244,7 @@ DATABASE_NAME=sqlite3:data/app.db
 TINA4_DEBUG=true
 TINA4_DEBUG_LEVEL=DEBUG
 TINA4_LANGUAGE=en
-TINA4_SESSION_HANDLER=file        # file, redis, valkey, mongodb, database
+TINA4_SESSION_HANDLER=file
 SWAGGER_TITLE=My API
 ```
 

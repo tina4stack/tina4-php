@@ -2,48 +2,73 @@
 
 ## Queue System
 
-Database-backed, production-grade. Designed to handle 1M visitors without RabbitMQ/Kafka.
+File-backed, production-grade, zero-dependency. Designed to handle 1M visitors without RabbitMQ/Kafka.
 
 ### Backends
-- **DatabaseQueue** (core, zero-dep) — uses atomic SQL operations per database
-- **RabbitMQQueue** (optional)
-- **KafkaQueue** (optional)
+- **LiteBackend** (core, zero-dep) — file-based queue (JSON files on disk), lives in `queue_backends/lite_backend.*` in each framework
+- **RabbitMQBackend** (optional)
+- **KafkaBackend** (optional)
+- **MongoBackend** (optional)
 
-All implement the same QueueAdapter interface.
+All implement the same `QueueBackend` interface.
 
-### Usage (Python)
+### File Structure (each framework)
+```
+queue/
+  __init__.py (or Queue.php / queue.rb / queue.ts)  — Queue class
+  job.py (or Job.php / job.rb / job.ts)              — Job class (separate file)
+  lite_backend.py (or LiteBackend.php / lite_backend.rb / liteBackend.ts)  — LiteBackend (separate file)
+```
+
+### Instance-Scoped API (all 4 frameworks)
+
+Queue methods use `self.topic` / `@topic` / `$this->topic` — **no queue name params on public methods**.
+
 ```python
-from tina4_python.queue import Queue
+# Python
+from tina4_python import Queue
 
-# Produce
-queue = Queue(topic="emails")
-queue.produce("emails", {"to": "alice@example.com", "subject": "Welcome"})
+q = Queue(topic="emails", path="./data")
+job_id = q.push({"to": "alice@example.com"}, delay=0, priority=0)
+job    = q.pop()                   # atomically claim next pending job
+job    = q.pop_by_id(job_id)       # claim a specific job by ID
+count  = q.size("pending")
+q.clear()                          # remove all pending jobs
+jobs   = q.failed()                # list failed jobs
+q.retry(job_id, delay_seconds=0)   # requeue a failed job
+q.retry_failed()                   # requeue all failed jobs
+jobs   = q.dead_letters()          # jobs exceeding max retries
+q.purge("failed")                  # delete jobs by status
+```
 
-# Consume
-queue.consume("emails", lambda message: (
-    send_email(message.data),
-    message.ack()
-))
+### Job Serialisation (all 4 frameworks)
+```python
+job.to_array()   # [id, topic, payload, priority, attempts]
+job.to_hash()    # {"id": ..., "topic": ..., "payload": ..., ...}
+job.to_json()    # JSON string of to_hash()
+```
+
+### Consume (generator / async generator)
+```python
+# Python — consume all pending jobs forever
+for job in q.consume():
+    process(job.payload)
+    job.complete()
+
+# with ID shortcut
+for job in q.consume(job_id="abc123"):
+    process(job.payload)
+    job.complete()
 ```
 
 ### Features
 - Priority queues (higher number = higher priority)
-- Delayed jobs (`delay_until` timestamp)
-- Retry with exponential backoff (configurable max retries)
+- Delayed jobs (`delay` seconds)
+- Retry with configurable max retries
 - Dead letter queue for permanently failed messages
-- Stale job recovery (60-second sweep)
-- Retrieve by ID, search/filter messages
-- Requeue to different queues (preserves `original_queue`)
-- Failover chains between backends
-- Circuit breaker for external backends
-- Batch processing
+- Retrieve by ID (`pop_by_id`)
+- `failed()`, `clear()`, `retry()`, `retry_failed()`, `dead_letters()`, `purge()`
 - Auto-cleanup (completed messages purged after 7 days)
-- Queue file extension: `.queue-data` (changed from `.json` in v3.7.1)
-
-### Atomic Pop Operations
-- SQLite/PostgreSQL/Firebird: `UPDATE ... RETURNING`
-- PostgreSQL/MySQL: `FOR UPDATE SKIP LOCKED`
-- MSSQL: `READPAST`
 
 ### Performance Targets
 5,000 push/sec | 2,000 pop/sec | 10+ concurrent workers | 1M+ queue depth | <10ms latency
@@ -78,90 +103,40 @@ changes via event system, re-renders Frond blocks server-side, pushes HTML fragm
 
 ---
 
-## SSE / Streaming
-
-Server-Sent Events for real-time data push over HTTP. Zero-dependency, built into the response object.
-Uses chunked transfer encoding with `text/event-stream` content type and automatic connection keep-alive.
-
-### PHP
-```php
-Router::get("/events", function (Request $request, Response $response) {
-    $response->stream(function () {
-        for ($i = 0; $i < 10; $i++) {
-            echo "data: event {$i}\n\n";
-            ob_flush();
-            flush();
-            sleep(1);
-        }
-    }, 'text/event-stream');
-});
-```
-
-### Python
-```python
-@get("/events")
-async def stream_events(request, response):
-    async def event_generator():
-        for i in range(10):
-            yield f"data: event {i}\n\n"
-            await asyncio.sleep(1)
-    return response.stream(event_generator(), content_type="text/event-stream")
-```
-
-### Ruby
-```ruby
-get "/events" do |request, response|
-  response.stream(content_type: "text/event-stream") do |out|
-    10.times do |i|
-      out << "data: event #{i}\n\n"
-      sleep 1
-    end
-  end
-end
-```
-
-### Node.js (TypeScript)
-```typescript
-export const events = get('/events', async (req, res) => {
-  async function* eventGenerator() {
-    for (let i = 0; i < 10; i++) {
-      yield `data: event ${i}\n\n`;
-      await new Promise(r => setTimeout(r, 1000));
-    }
-  }
-  return res.stream(eventGenerator(), 'text/event-stream');
-});
-```
-
-### Features
-- Chunked transfer encoding handled automatically
-- Connection keep-alive managed by the framework
-- Default content type: `text/event-stream`
-- Supports any content type for generic streaming (e.g., `application/json` for NDJSON)
-- Client auto-reconnect via standard `EventSource` API
-- Integrates with the event system for broadcasting data changes
-
----
-
 ## Authentication / JWT
 
-**BREAKING (v3.7.1):** `token_expiry` renamed to `expires_in`. `validate_token` renamed to `valid_token`.
+### Canonical method names (all 4 frameworks — no aliases)
+
+| Method | Python | PHP | Ruby | Node |
+|--------|--------|-----|------|------|
+| Create token | `get_token(payload, expires_in)` | `Auth::getToken($payload, $secret, $expiresIn)` | `get_token(payload, expires_in:)` | `getToken(payload, secret, expiresIn)` |
+| Validate token | `valid_token(token)` | `Auth::validToken($token, $secret)` | `valid_token(token)` | `validToken(token, secret)` |
+| Get payload | `get_payload(token)` | `Auth::getPayload($token)` | `get_payload(token)` | `getPayload(token)` |
+| Hash password | `hash_password(pw)` | `Auth::hashPassword($pw)` | `hash_password(pw)` | `hashPassword(pw)` |
+| Check password | `check_password(pw, hash)` | `Auth::checkPassword($pw, $hash)` | `check_password(pw, hash)` | `checkPassword(pw, hash)` |
+| Validate API key | `validate_api_key(provided, expected)` | `Auth::validateApiKey($provided, $expected)` | `validate_api_key(provided, expected)` | `validateApiKey(provided, expected)` |
+| Authenticate request | `authenticate_request(headers)` | `Auth::authenticateRequest($headers)` | `authenticate_request(headers)` | `authenticateRequest(headers)` |
+| Refresh token | `refresh_token(token, expires_in)` | `Auth::refreshToken($token, $secret, $expiresIn)` | `refresh_token(token)` | `refreshToken(token, secret, expiresIn)` |
+
+**No `createToken` or `validateToken` aliases exist in any framework** — they were removed. Use `getToken`/`validToken`.
 
 ### Python
 ```python
-from tina4_python.auth import Auth
+from tina4 import tina4_auth
 
-token = Auth.get_token({"user_id": 42}, expires_in=3600)
-is_valid = Auth.valid_token(token)
-payload = Auth.get_payload(token)
-hashed = Auth.hash_password("mypassword")
-matches = Auth.check_password(hashed, "mypassword")
+token    = tina4_auth.get_token({"user_id": 42})        # HS256 signed with SECRET env var
+is_valid = tina4_auth.valid_token(token)
+payload  = tina4_auth.get_payload(token)
+hashed   = tina4_auth.hash_password("mypassword")
+matches  = tina4_auth.check_password(hashed, "mypassword")
 ```
 
-### Algorithm Auto-Selection
-- If `SECRET` env var is set → **HS256** (symmetric, simpler)
-- If `secrets/private.pem` + `secrets/public.pem` exist → **RS256** (asymmetric, production)
-- Both HS256 and RS256 are fully supported across all four languages
+Supports both HS256 and RS256 algorithms. Node `Auth` class wraps standalone functions:
+```typescript
+import { Auth, getToken, validToken } from "tina4-nodejs";
+Auth.getToken(payload, secret);   // same as standalone getToken()
+Auth.validToken(token, secret);   // same as standalone validToken()
+```
 
 ---
 
