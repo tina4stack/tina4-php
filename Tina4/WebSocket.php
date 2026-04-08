@@ -37,8 +37,11 @@ class WebSocket
     /** @var array<string, callable> Event handlers: open, message, close, error */
     private array $handlers = [];
 
-    /** @var array<string, array> Connected clients: clientId => [socket, ip, connected_at, buffer] */
+    /** @var array<string, array> Connected clients: clientId => [socket, ip, connected_at, buffer, path, rooms] */
     private array $clients = [];
+
+    /** @var array<string, array<string>> Rooms: roomName => [clientId, ...] */
+    private array $rooms = [];
 
     /** @var resource|null Server socket */
     private $server = null;
@@ -108,6 +111,98 @@ class WebSocket
         }
         $frame = self::encodeFrame($message);
         $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
+    }
+
+    // ── Rooms ──────────────────────────────────────────────────
+
+    /**
+     * Add a client to a named room.
+     *
+     * @param string $clientId Client ID
+     * @param string $roomName Room name
+     */
+    public function joinRoom(string $clientId, string $roomName): void
+    {
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+        if (!isset($this->rooms[$roomName])) {
+            $this->rooms[$roomName] = [];
+        }
+        if (!in_array($clientId, $this->rooms[$roomName], true)) {
+            $this->rooms[$roomName][] = $clientId;
+            $this->clients[$clientId]['rooms'][] = $roomName;
+        }
+    }
+
+    /**
+     * Remove a client from a named room.
+     *
+     * @param string $clientId Client ID
+     * @param string $roomName Room name
+     */
+    public function leaveRoom(string $clientId, string $roomName): void
+    {
+        if (isset($this->rooms[$roomName])) {
+            $this->rooms[$roomName] = array_values(
+                array_filter($this->rooms[$roomName], fn($id) => $id !== $clientId)
+            );
+            if (empty($this->rooms[$roomName])) {
+                unset($this->rooms[$roomName]);
+            }
+        }
+        if (isset($this->clients[$clientId])) {
+            $this->clients[$clientId]['rooms'] = array_values(
+                array_filter($this->clients[$clientId]['rooms'], fn($r) => $r !== $roomName)
+            );
+        }
+    }
+
+    /**
+     * Return the list of client IDs in a room.
+     *
+     * @param string $roomName Room name
+     * @return string[]
+     */
+    public function getRoomConnections(string $roomName): array
+    {
+        return $this->rooms[$roomName] ?? [];
+    }
+
+    /**
+     * Return the number of clients in a room.
+     *
+     * @param string $roomName Room name
+     * @return int
+     */
+    public function roomCount(string $roomName): int
+    {
+        return count($this->rooms[$roomName] ?? []);
+    }
+
+    /**
+     * Broadcast a message to all clients in a room.
+     *
+     * @param string     $roomName   Room name
+     * @param string     $message    Message to send
+     * @param array|null $excludeIds Client IDs to exclude
+     */
+    public function broadcastToRoom(string $roomName, string $message, ?array $excludeIds = null): void
+    {
+        $members = $this->rooms[$roomName] ?? [];
+        if (empty($members)) {
+            return;
+        }
+        $frame = self::encodeFrame($message);
+        foreach ($members as $clientId) {
+            if ($excludeIds && in_array($clientId, $excludeIds, true)) {
+                continue;
+            }
+            if (!isset($this->clients[$clientId])) {
+                continue;
+            }
+            $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
+        }
     }
 
     /**
@@ -400,6 +495,7 @@ class WebSocket
             'connected_at' => time(),
             'buffer' => '',
             'path' => $headers['_path'] ?? '/',
+            'rooms' => [],
         ];
 
         // Fire open event
@@ -473,6 +569,16 @@ class WebSocket
         }
 
         $socket = $this->clients[$clientId]['socket'];
+        foreach ($this->clients[$clientId]['rooms'] as $roomName) {
+            if (isset($this->rooms[$roomName])) {
+                $this->rooms[$roomName] = array_values(
+                    array_filter($this->rooms[$roomName], fn($id) => $id !== $clientId)
+                );
+                if (empty($this->rooms[$roomName])) {
+                    unset($this->rooms[$roomName]);
+                }
+            }
+        }
         @fclose($socket);
         unset($this->clients[$clientId]);
 

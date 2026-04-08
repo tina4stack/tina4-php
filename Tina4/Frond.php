@@ -410,7 +410,7 @@ class Frond
                 $pos++;
                 return $this->parseFromImport($rest);
             case 'cache':
-                return $this->parseCache($rest, $tokens, $pos);
+                return $this->handleCache($rest, $tokens, $pos);
             case 'spaceless':
                 return $this->parseSpaceless($tokens, $pos);
             case 'autoescape':
@@ -578,7 +578,7 @@ class Frond
         return ['type' => 'from_import', 'file' => $file, 'names' => $names];
     }
 
-    private function parseCache(string $params, array &$tokens, int &$pos): array
+    private function handleCache(string $params, array &$tokens, int &$pos): array
     {
         $pos++;
         // Parse "key" ttl
@@ -744,7 +744,7 @@ class Frond
                 return '';
 
             case 'cache':
-                return $this->executeCache($node, $data);
+                return $this->renderCache($node, $data);
 
             case 'spaceless':
                 return $this->executeSpaceless($node, $data);
@@ -914,7 +914,7 @@ class Frond
         return $this->execute($ast, $includeData);
     }
 
-    private function executeCache(array $node, array &$data): string
+    private function renderCache(array $node, array &$data): string
     {
         if ($this->sandboxed && $this->sandboxTags !== null && !in_array('cache', $this->sandboxTags)) {
             return '';

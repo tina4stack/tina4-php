@@ -666,3 +666,224 @@ class WebSocketV3Test extends TestCase
         $this->assertNotFalse(base64_decode($result, true));
     }
 }
+
+// ── Rooms / Namespaces ───────────────────────────────────────────────────────
+
+/**
+ * Extends WebSocket to inject test clients without a live server loop.
+ */
+class TestableWebSocket extends WebSocket
+{
+    public function injectClient(string $id, $socket, string $path = '/'): void
+    {
+        $setter = Closure::bind(function () use ($id, $socket, $path) {
+            $this->clients[$id] = [
+                'socket'       => $socket,
+                'ip'           => '127.0.0.1',
+                'connected_at' => time(),
+                'buffer'       => '',
+                'path'         => $path,
+                'rooms'        => [],
+            ];
+        }, $this, WebSocket::class);
+        $setter();
+    }
+
+    public function getClientsRaw(): array
+    {
+        $getter = Closure::bind(fn() => $this->clients, $this, WebSocket::class);
+        return $getter();
+    }
+}
+
+class WebSocketRoomsTest extends TestCase
+{
+    private TestableWebSocket $ws;
+
+    protected function setUp(): void
+    {
+        $this->ws = new TestableWebSocket();
+    }
+
+    private function makeSocket(): mixed
+    {
+        return fopen('php://memory', 'r+');
+    }
+
+    // ── Room count ───────────────────────────────────────────────
+
+    public function testRoomCountZeroForUnknownRoom(): void
+    {
+        $this->assertSame(0, $this->ws->roomCount('ghost'));
+    }
+
+    public function testRoomCountReflectsJoinedMembers(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->injectClient('b', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('b', 'chat');
+        $this->assertSame(2, $this->ws->roomCount('chat'));
+    }
+
+    public function testRoomCountDecreasesOnLeave(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->leaveRoom('a', 'chat');
+        $this->assertSame(0, $this->ws->roomCount('chat'));
+    }
+
+    // ── joinRoom ─────────────────────────────────────────────────
+
+    public function testJoinRoomAddsClientToRoom(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+
+        $this->assertContains('a', $this->ws->getRoomConnections('chat'));
+        $clients = $this->ws->getClientsRaw();
+        $this->assertContains('chat', $clients['a']['rooms']);
+    }
+
+    public function testJoinRoomIsIdempotent(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('a', 'chat');
+        $this->assertSame(1, $this->ws->roomCount('chat'));
+    }
+
+    public function testClientInMultipleRooms(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('a', 'lobby');
+
+        $clients = $this->ws->getClientsRaw();
+        $this->assertContains('chat', $clients['a']['rooms']);
+        $this->assertContains('lobby', $clients['a']['rooms']);
+        $this->assertSame(1, $this->ws->roomCount('chat'));
+        $this->assertSame(1, $this->ws->roomCount('lobby'));
+    }
+
+    // ── leaveRoom ────────────────────────────────────────────────
+
+    public function testLeaveRoomRemovesClientFromRoom(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->leaveRoom('a', 'chat');
+
+        $this->assertNotContains('a', $this->ws->getRoomConnections('chat'));
+        $clients = $this->ws->getClientsRaw();
+        $this->assertNotContains('chat', $clients['a']['rooms']);
+    }
+
+    public function testLeaveRoomNonMemberIsNoOp(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->leaveRoom('a', 'nonexistent'); // must not throw
+        $this->assertSame(0, $this->ws->roomCount('nonexistent'));
+    }
+
+    public function testLeavingOneRoomKeepsOthers(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('a', 'lobby');
+        $this->ws->leaveRoom('a', 'chat');
+
+        $clients = $this->ws->getClientsRaw();
+        $this->assertNotContains('chat', $clients['a']['rooms']);
+        $this->assertContains('lobby', $clients['a']['rooms']);
+        $this->assertSame(0, $this->ws->roomCount('chat'));
+        $this->assertSame(1, $this->ws->roomCount('lobby'));
+    }
+
+    // ── getRoomConnections ────────────────────────────────────────
+
+    public function testGetRoomConnectionsReturnsOnlyMembers(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->injectClient('b', $this->makeSocket());
+        $this->ws->injectClient('c', $this->makeSocket());
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('b', 'chat');
+
+        $members = $this->ws->getRoomConnections('chat');
+        $this->assertContains('a', $members);
+        $this->assertContains('b', $members);
+        $this->assertNotContains('c', $members);
+    }
+
+    public function testGetRoomConnectionsEmptyForUnknownRoom(): void
+    {
+        $this->assertSame([], $this->ws->getRoomConnections('ghost'));
+    }
+
+    public function testRoomEmptyAfterLastMemberLeaves(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->joinRoom('a', 'temp');
+        $this->ws->leaveRoom('a', 'temp');
+        $this->assertSame([], $this->ws->getRoomConnections('temp'));
+    }
+
+    public function testMultipleConnectionsDifferentRooms(): void
+    {
+        $this->ws->injectClient('a', $this->makeSocket());
+        $this->ws->injectClient('b', $this->makeSocket());
+        $this->ws->joinRoom('a', 'alpha');
+        $this->ws->joinRoom('b', 'beta');
+
+        $this->assertNotContains('b', $this->ws->getRoomConnections('alpha'));
+        $this->assertNotContains('a', $this->ws->getRoomConnections('beta'));
+    }
+
+    // ── broadcastToRoom ───────────────────────────────────────────
+
+    public function testBroadcastToRoomSendsToMembersOnly(): void
+    {
+        $s1 = fopen('php://memory', 'r+');
+        $s2 = fopen('php://memory', 'r+');
+        $s3 = fopen('php://memory', 'r+');
+        $this->ws->injectClient('a', $s1);
+        $this->ws->injectClient('b', $s2);
+        $this->ws->injectClient('c', $s3); // not in room
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('b', 'chat');
+
+        $this->ws->broadcastToRoom('chat', 'hello room');
+
+        fseek($s1, 0);
+        fseek($s2, 0);
+        fseek($s3, 0);
+        $this->assertNotEmpty(stream_get_contents($s1), 'Member a should receive data');
+        $this->assertNotEmpty(stream_get_contents($s2), 'Member b should receive data');
+        $this->assertEmpty(stream_get_contents($s3), 'Non-member c must not receive data');
+    }
+
+    public function testBroadcastToRoomExcludesSpecifiedIds(): void
+    {
+        $s1 = fopen('php://memory', 'r+');
+        $s2 = fopen('php://memory', 'r+');
+        $this->ws->injectClient('a', $s1);
+        $this->ws->injectClient('b', $s2);
+        $this->ws->joinRoom('a', 'chat');
+        $this->ws->joinRoom('b', 'chat');
+
+        $this->ws->broadcastToRoom('chat', 'msg', excludeIds: ['a']);
+
+        fseek($s1, 0);
+        fseek($s2, 0);
+        $this->assertEmpty(stream_get_contents($s1), 'Excluded a must not receive data');
+        $this->assertNotEmpty(stream_get_contents($s2), 'Member b should receive data');
+    }
+
+    public function testBroadcastToRoomEmptyRoomDoesNotThrow(): void
+    {
+        $this->ws->broadcastToRoom('ghost', 'msg');
+        $this->assertTrue(true);
+    }
+}

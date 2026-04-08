@@ -706,7 +706,7 @@ $result = SqlTranslation::remember(
 - Queue system with Kafka, RabbitMQ, and MongoDB backends
 - Session handlers for MongoDB and Valkey/Redis. `TINA4_SESSION_SAMESITE` env var (default: Lax)
 - GraphQL query execution
-- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars)
+- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars). Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
 - Messenger (.env driven SMTP/IMAP)
