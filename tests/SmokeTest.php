@@ -286,24 +286,27 @@ class SmokeTest extends TestCase
     public function testAuthJwtAndPasswordHash(): void
     {
         $secret = 'smoke-test-secret-key';
+        $_ENV['SECRET'] = $secret;
 
         // Create token
-        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], $secret, 3600);
+        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], expiresIn: 3600);
         $parts = explode('.', $token);
         $this->assertCount(3, $parts);
 
         // Validate token
-        $payload = Auth::validToken($token, $secret);
+        $payload = Auth::validToken($token);
         $this->assertNotNull($payload);
         $this->assertSame('user-1', $payload['sub']);
         $this->assertSame('admin', $payload['role']);
 
         // Expired token rejected
-        $expired = Auth::getToken(['sub' => 'x', 'exp' => time() - 10], $secret, 0);
-        $this->assertNull(Auth::validToken($expired, $secret));
+        $expired = Auth::getToken(['sub' => 'x', 'exp' => time() - 10], expiresIn: 0);
+        $this->assertNull(Auth::validToken($expired));
 
         // Wrong secret rejected
-        $this->assertNull(Auth::validToken($token, 'wrong-secret'));
+        $_ENV['SECRET'] = 'wrong-secret';
+        $this->assertNull(Auth::validToken($token));
+        $_ENV['SECRET'] = $secret;
 
         // Password hashing
         $hash = Auth::hashPassword('my-password');
@@ -351,24 +354,24 @@ class SmokeTest extends TestCase
         $queuePath = sys_get_temp_dir() . '/tina4_smoke_queue_' . bin2hex(random_bytes(4));
         mkdir($queuePath, 0755, true);
 
-        $q = new Queue('file', ['path' => $queuePath]);
+        $q = new Queue('file', ['path' => $queuePath], topic: 'emails');
 
         // Push
-        $id = $q->push('emails', ['to' => 'alice@test.com', 'subject' => 'Hello']);
+        $id = $q->push(['to' => 'alice@test.com', 'subject' => 'Hello']);
         $this->assertIsString($id);
         $this->assertNotEmpty($id);
-        $this->assertSame(1, $q->size('emails'));
+        $this->assertSame(1, $q->size());
 
         // Pop
-        $job = $q->pop('emails');
+        $job = $q->pop();
         $this->assertIsArray($job);
         $this->assertSame('alice@test.com', $job['payload']['to']);
         $this->assertSame('Hello', $job['payload']['subject']);
         $this->assertSame('pending', $job['status']);
-        $this->assertSame(0, $q->size('emails'));
+        $this->assertSame(0, $q->size());
 
         // Pop on empty returns null
-        $this->assertNull($q->pop('emails'));
+        $this->assertNull($q->pop());
 
         // Cleanup
         $this->removeDirRecursive($queuePath);
@@ -947,7 +950,7 @@ class SmokeTest extends TestCase
             $res->json(['secret' => 'data'])
         )->secure();
 
-        $token = Auth::getToken(['sub' => 'tester'], $secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(
             method: 'GET',
             path: '/smoke/secret',
@@ -1309,7 +1312,8 @@ class SmokeTest extends TestCase
     public function testAuthGetPayloadWithoutVerification(): void
     {
         $secret = 'test-secret';
-        $token = Auth::getToken(['user' => 'bob'], $secret);
+        $_ENV['SECRET'] = $secret;
+        $token = Auth::getToken(['user' => 'bob']);
         $payload = Auth::getPayload($token);
 
         $this->assertNotNull($payload);
@@ -1326,29 +1330,31 @@ class SmokeTest extends TestCase
     public function testAuthRefreshToken(): void
     {
         $secret = 'refresh-secret';
-        $token = Auth::getToken(['sub' => 'user-1'], $secret, 3600);
-        $newToken = Auth::refreshToken($token, $secret, 7200);
+        $_ENV['SECRET'] = $secret;
+        $token = Auth::getToken(['sub' => 'user-1'], expiresIn: 3600);
+        $newToken = Auth::refreshToken($token, expiresIn: 7200);
 
         $this->assertNotNull($newToken);
         $this->assertNotSame($token, $newToken);
 
-        $payload = Auth::validToken($newToken, $secret);
+        $payload = Auth::validToken($newToken);
         $this->assertSame('user-1', $payload['sub']);
     }
 
     public function testAuthRefreshTokenInvalid(): void
     {
-        $this->assertNull(Auth::refreshToken('invalid', 'secret'));
+        $_ENV['SECRET'] = 'some-secret';
+        $this->assertNull(Auth::refreshToken('invalid'));
     }
 
     public function testAuthAuthenticateRequest(): void
     {
         $secret = 'auth-secret';
-        $token = Auth::getToken(['role' => 'admin'], $secret);
+        $_ENV['SECRET'] = $secret;
+        $token = Auth::getToken(['role' => 'admin']);
 
         $payload = Auth::authenticateRequest(
-            ['Authorization' => "Bearer {$token}"],
-            $secret
+            ['Authorization' => "Bearer {$token}"]
         );
 
         $this->assertNotNull($payload);
@@ -1357,7 +1363,8 @@ class SmokeTest extends TestCase
 
     public function testAuthAuthenticateRequestNoBearer(): void
     {
-        $this->assertNull(Auth::authenticateRequest([], 'secret'));
+        $_ENV['SECRET'] = 'some-secret';
+        $this->assertNull(Auth::authenticateRequest([]));
     }
 
     public function testAuthValidateApiKey(): void
@@ -1370,10 +1377,11 @@ class SmokeTest extends TestCase
     public function testAuthMiddleware(): void
     {
         $secret = 'mw-secret';
-        $mw = Auth::middleware($secret);
+        $_ENV['SECRET'] = $secret;
+        $mw = Auth::middleware();
         $this->assertIsCallable($mw);
 
-        $token = Auth::getToken(['sub' => 'test'], $secret);
+        $token = Auth::getToken(['sub' => 'test']);
         $req = Request::create(
             method: 'GET',
             path: '/api',
@@ -1387,7 +1395,8 @@ class SmokeTest extends TestCase
 
     public function testAuthMiddlewareNoToken(): void
     {
-        $mw = Auth::middleware('secret');
+        $_ENV['SECRET'] = 'some-secret';
+        $mw = Auth::middleware();
         $req = Request::create(method: 'GET', path: '/api');
         $this->assertNull($mw($req));
     }
@@ -1401,16 +1410,17 @@ class SmokeTest extends TestCase
         $queuePath = sys_get_temp_dir() . '/tina4_smoke_queue_' . bin2hex(random_bytes(4));
         mkdir($queuePath, 0755, true);
 
-        $q = new Queue('file', ['path' => $queuePath]);
+        $qa = new Queue('file', ['path' => $queuePath], topic: 'channel_a');
+        $qb = new Queue('file', ['path' => $queuePath], topic: 'channel_b');
 
-        $q->push('channel_a', ['msg' => 'a1']);
-        $q->push('channel_b', ['msg' => 'b1']);
-        $q->push('channel_a', ['msg' => 'a2']);
+        $qa->push(['msg' => 'a1']);
+        $qb->push(['msg' => 'b1']);
+        $qa->push(['msg' => 'a2']);
 
-        $this->assertSame(2, $q->size('channel_a'));
-        $this->assertSame(1, $q->size('channel_b'));
+        $this->assertSame(2, $qa->size());
+        $this->assertSame(1, $qb->size());
 
-        $job = $q->pop('channel_b');
+        $job = $qb->pop();
         $this->assertSame('b1', $job['payload']['msg']);
 
         $this->removeDirRecursive($queuePath);

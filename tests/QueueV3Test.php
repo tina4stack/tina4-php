@@ -37,47 +37,47 @@ class QueueV3Test extends TestCase
         rmdir($dir);
     }
 
-    private function makeQueue(): Queue
+    private function makeQueue(string $topic = 'default'): Queue
     {
-        return new Queue('file', ['path' => $this->testPath]);
+        return new Queue('file', ['path' => $this->testPath], topic: $topic);
     }
 
     // ── Push tests ──────────────────────────────────────────────
 
     public function testPushReturnsJobId(): void
     {
-        $q = $this->makeQueue();
-        $id = $q->push('emails', ['to' => 'alice@test.com']);
+        $q = $this->makeQueue('emails');
+        $id = $q->push(['to' => 'alice@test.com']);
         $this->assertIsString($id);
         $this->assertNotEmpty($id);
     }
 
     public function testPushCreatesFile(): void
     {
-        $q = $this->makeQueue();
-        $q->push('emails', ['to' => 'bob@test.com']);
+        $q = $this->makeQueue('emails');
+        $q->push(['to' => 'bob@test.com']);
         $files = glob($this->testPath . '/emails/*.queue-data');
         $this->assertCount(1, $files);
     }
 
     public function testPushMultipleJobs(): void
     {
-        $q = $this->makeQueue();
-        $id1 = $q->push('tasks', ['action' => 'a']);
-        $id2 = $q->push('tasks', ['action' => 'b']);
-        $id3 = $q->push('tasks', ['action' => 'c']);
+        $q = $this->makeQueue('tasks');
+        $id1 = $q->push(['action' => 'a']);
+        $id2 = $q->push(['action' => 'b']);
+        $id3 = $q->push(['action' => 'c']);
 
         $this->assertNotEquals($id1, $id2);
         $this->assertNotEquals($id2, $id3);
-        $this->assertEquals(3, $q->size('tasks'));
+        $this->assertEquals(3, $q->size());
     }
 
     public function testPushWithScalarPayload(): void
     {
-        $q = $this->makeQueue();
-        $id = $q->push('simple', 'hello world');
+        $q = $this->makeQueue('simple');
+        $id = $q->push('hello world');
         $this->assertNotEmpty($id);
-        $job = $q->pop('simple');
+        $job = $q->pop();
         $this->assertEquals('hello world', $job['payload']);
     }
 
@@ -85,9 +85,9 @@ class QueueV3Test extends TestCase
 
     public function testPopReturnsJob(): void
     {
-        $q = $this->makeQueue();
-        $q->push('work', ['task' => 'process']);
-        $job = $q->pop('work');
+        $q = $this->makeQueue('work');
+        $q->push(['task' => 'process']);
+        $job = $q->pop();
 
         $this->assertIsArray($job);
         $this->assertEquals(['task' => 'process'], $job['payload']);
@@ -96,30 +96,30 @@ class QueueV3Test extends TestCase
 
     public function testPopReturnsNullOnEmpty(): void
     {
-        $q = $this->makeQueue();
-        $this->assertNull($q->pop('nonexistent'));
+        $q = $this->makeQueue('nonexistent');
+        $this->assertNull($q->pop());
     }
 
     public function testPopRemovesJob(): void
     {
-        $q = $this->makeQueue();
-        $q->push('work', ['x' => 1]);
-        $q->pop('work');
-        $this->assertEquals(0, $q->size('work'));
+        $q = $this->makeQueue('work');
+        $q->push(['x' => 1]);
+        $q->pop();
+        $this->assertEquals(0, $q->size());
     }
 
     public function testPopOrderFIFO(): void
     {
-        $q = $this->makeQueue();
-        $q->push('ordered', ['seq' => 1]);
+        $q = $this->makeQueue('ordered');
+        $q->push(['seq' => 1]);
         usleep(10000); // small gap for timestamp ordering
-        $q->push('ordered', ['seq' => 2]);
+        $q->push(['seq' => 2]);
         usleep(10000);
-        $q->push('ordered', ['seq' => 3]);
+        $q->push(['seq' => 3]);
 
-        $first = $q->pop('ordered');
-        $second = $q->pop('ordered');
-        $third = $q->pop('ordered');
+        $first = $q->pop();
+        $second = $q->pop();
+        $third = $q->pop();
 
         $this->assertEquals(1, $first['payload']['seq']);
         $this->assertEquals(2, $second['payload']['seq']);
@@ -130,63 +130,63 @@ class QueueV3Test extends TestCase
 
     public function testSizeEmpty(): void
     {
-        $q = $this->makeQueue();
-        $this->assertEquals(0, $q->size('empty'));
+        $q = $this->makeQueue('empty');
+        $this->assertEquals(0, $q->size());
     }
 
     public function testSizeAfterPush(): void
     {
-        $q = $this->makeQueue();
-        $q->push('count', ['a' => 1]);
-        $q->push('count', ['b' => 2]);
-        $this->assertEquals(2, $q->size('count'));
+        $q = $this->makeQueue('count');
+        $q->push(['a' => 1]);
+        $q->push(['b' => 2]);
+        $this->assertEquals(2, $q->size());
     }
 
     public function testSizeAfterPop(): void
     {
-        $q = $this->makeQueue();
-        $q->push('count', ['a' => 1]);
-        $q->push('count', ['b' => 2]);
-        $q->pop('count');
-        $this->assertEquals(1, $q->size('count'));
+        $q = $this->makeQueue('count');
+        $q->push(['a' => 1]);
+        $q->push(['b' => 2]);
+        $q->pop();
+        $this->assertEquals(1, $q->size());
     }
 
     // ── Clear tests ─────────────────────────────────────────────
 
     public function testClear(): void
     {
-        $q = $this->makeQueue();
-        $q->push('cleanup', ['x' => 1]);
-        $q->push('cleanup', ['x' => 2]);
-        $q->clear('cleanup');
-        $this->assertEquals(0, $q->size('cleanup'));
+        $q = $this->makeQueue('cleanup');
+        $q->push(['x' => 1]);
+        $q->push(['x' => 2]);
+        $q->clear();
+        $this->assertEquals(0, $q->size());
     }
 
     public function testClearNonexistent(): void
     {
-        $q = $this->makeQueue();
-        $q->clear('doesnotexist'); // should not throw
-        $this->assertEquals(0, $q->size('doesnotexist'));
+        $q = $this->makeQueue('doesnotexist');
+        $q->clear(); // should not throw
+        $this->assertEquals(0, $q->size());
     }
 
     // ── Failed jobs tests ───────────────────────────────────────
 
     public function testFailedJobsEmpty(): void
     {
-        $q = $this->makeQueue();
-        $this->assertEmpty($q->failed('nofails'));
+        $q = $this->makeQueue('nofails');
+        $this->assertEmpty($q->failed());
     }
 
     public function testProcessFailedJobGoesToFailed(): void
     {
-        $q = $this->makeQueue();
-        $q->push('failtest', ['action' => 'boom']);
+        $q = $this->makeQueue('failtest');
+        $q->push(['action' => 'boom']);
 
-        $q->process('failtest', function ($job) {
+        $q->process(function ($job) {
             throw new \RuntimeException('Something went wrong');
         });
 
-        $failed = $q->failed('failtest');
+        $failed = $q->failed();
         $this->assertCount(1, $failed);
         $this->assertEquals('failed', $failed[0]['status']);
         $this->assertEquals('Something went wrong', $failed[0]['error']);
@@ -196,22 +196,22 @@ class QueueV3Test extends TestCase
 
     public function testRetryMovesJobBackToPending(): void
     {
-        $q = $this->makeQueue();
-        $q->push('retryq', ['action' => 'retry_me']);
+        $q = $this->makeQueue('retryq');
+        $q->push(['action' => 'retry_me']);
 
-        $q->process('retryq', function ($job) {
+        $q->process(function ($job) {
             throw new \RuntimeException('fail once');
         });
 
-        $this->assertEquals(0, $q->size('retryq'));
-        $failed = $q->failed('retryq');
+        $this->assertEquals(0, $q->size());
+        $failed = $q->failed();
         $this->assertCount(1, $failed);
 
         $result = $q->retry($failed[0]['id']);
         $this->assertTrue($result);
 
-        $this->assertEquals(1, $q->size('retryq'));
-        $this->assertEmpty($q->failed('retryq'));
+        $this->assertEquals(1, $q->size());
+        $this->assertEmpty($q->failed());
     }
 
     public function testRetryNonexistentJob(): void
@@ -222,15 +222,15 @@ class QueueV3Test extends TestCase
 
     public function testRetryExceedsMaxRetries(): void
     {
-        $q = new Queue('file', ['path' => $this->testPath, 'maxRetries' => 1]);
-        $q->push('maxretry', ['x' => 1]);
+        $q = new Queue('file', ['path' => $this->testPath, 'maxRetries' => 1], topic: 'maxretry');
+        $q->push(['x' => 1]);
 
         // Fail it once (attempts becomes 1)
-        $q->process('maxretry', function ($job) {
+        $q->process(function ($job) {
             throw new \RuntimeException('fail');
         });
 
-        $failed = $q->failed('maxretry');
+        $failed = $q->failed();
         $this->assertCount(1, $failed);
 
         // Should not retry because attempts >= maxRetries
@@ -242,62 +242,64 @@ class QueueV3Test extends TestCase
 
     public function testDelayedJobNotImmediatelyAvailable(): void
     {
-        $q = $this->makeQueue();
-        $q->push('delayed', ['x' => 1], 60); // 60 second delay
-        $job = $q->pop('delayed');
+        $q = $this->makeQueue('delayed');
+        $q->push(['x' => 1], 60); // 60 second delay
+        $job = $q->pop();
         $this->assertNull($job); // not yet available
-        $this->assertEquals(1, $q->size('delayed')); // still counts as pending
+        $this->assertEquals(1, $q->size()); // still counts as pending
     }
 
     // ── Process tests ───────────────────────────────────────────
 
     public function testProcessHandlesAllJobs(): void
     {
-        $q = $this->makeQueue();
-        $q->push('batch', ['n' => 1]);
-        $q->push('batch', ['n' => 2]);
-        $q->push('batch', ['n' => 3]);
+        $q = $this->makeQueue('batch');
+        $q->push(['n' => 1]);
+        $q->push(['n' => 2]);
+        $q->push(['n' => 3]);
 
         $processed = [];
-        $q->process('batch', function ($job) use (&$processed) {
+        $q->process(function ($job) use (&$processed) {
             $processed[] = $job['payload']['n'];
         });
 
         $this->assertEquals([1, 2, 3], $processed);
-        $this->assertEquals(0, $q->size('batch'));
+        $this->assertEquals(0, $q->size());
     }
 
     public function testProcessMaxJobs(): void
     {
-        $q = $this->makeQueue();
-        $q->push('limited', ['n' => 1]);
-        $q->push('limited', ['n' => 2]);
-        $q->push('limited', ['n' => 3]);
+        $q = $this->makeQueue('limited');
+        $q->push(['n' => 1]);
+        $q->push(['n' => 2]);
+        $q->push(['n' => 3]);
 
         $processed = [];
-        $q->process('limited', function ($job) use (&$processed) {
+        $q->process(function ($job) use (&$processed) {
             $processed[] = $job['payload']['n'];
         }, ['maxJobs' => 2]);
 
         $this->assertCount(2, $processed);
-        $this->assertEquals(1, $q->size('limited'));
+        $this->assertEquals(1, $q->size());
     }
 
     // ── Multiple queues ─────────────────────────────────────────
 
     public function testMultipleQueuesIsolated(): void
     {
-        $q = $this->makeQueue();
-        $q->push('queue_a', ['from' => 'a']);
-        $q->push('queue_b', ['from' => 'b']);
+        $qa = $this->makeQueue('queue_a');
+        $qb = $this->makeQueue('queue_b');
+        $qa->push(['from' => 'a']);
+        $qb->push(['from' => 'b']);
+        $qa->push(['from' => 'a2']);
 
-        $this->assertEquals(1, $q->size('queue_a'));
-        $this->assertEquals(1, $q->size('queue_b'));
+        $this->assertEquals(2, $qa->size());
+        $this->assertEquals(1, $qb->size());
 
-        $jobA = $q->pop('queue_a');
+        $jobA = $qa->pop();
         $this->assertEquals('a', $jobA['payload']['from']);
 
-        $jobB = $q->pop('queue_b');
+        $jobB = $qb->pop();
         $this->assertEquals('b', $jobB['payload']['from']);
     }
 
@@ -392,10 +394,13 @@ class QueueV3Test extends TestCase
 
     public function testTopicOverrideInMethods(): void
     {
-        // You can still pass explicit queue names to methods (legacy compat)
-        $q = new Queue('file', ['path' => $this->testPath], topic: 'default_topic');
-        $q->push(['x' => 1], 'other_topic');
-        $this->assertEquals(0, $q->size()); // default_topic is empty
-        $this->assertEquals(1, $q->size('other_topic')); // other_topic has the job
+        // With the topic-based API, each queue instance is bound to its constructor topic.
+        // Use separate queue instances to push to different topics.
+        $qDefault = new Queue('file', ['path' => $this->testPath], topic: 'default_topic');
+        $qOther = new Queue('file', ['path' => $this->testPath], topic: 'other_topic');
+
+        $qOther->push(['x' => 1]);
+        $this->assertEquals(0, $qDefault->size()); // default_topic is empty
+        $this->assertEquals(1, $qOther->size());   // other_topic has the job
     }
 }

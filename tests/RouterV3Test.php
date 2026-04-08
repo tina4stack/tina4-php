@@ -284,7 +284,7 @@ class RouterV3Test extends TestCase
         putenv("SECRET={$secret}");
         Router::get('/secure', fn($req, $res) => $res->json(['ok' => true]))->secure();
 
-        $token = Auth::getToken(['sub' => 'tester'], $secret);
+        $token = Auth::getToken(['sub' => 'tester']);
         $request = Request::create(
             method: 'GET',
             path: '/secure',

@@ -2368,10 +2368,12 @@ class Frond
                 $payload['session_id'] = $sessionId;
             }
 
-            $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
+            if (!isset($_ENV['SECRET']) && !getenv('SECRET')) {
+                $_ENV['SECRET'] = DotEnv::getEnv('SECRET') ?? 'tina4-default-secret';
+            }
             $ttlMinutes = (int)(DotEnv::getEnv('TINA4_TOKEN_LIMIT', '60') ?? '60');
             $expiresIn = $ttlMinutes * 60;
-            return Auth::getToken($payload, $secret, $expiresIn);
+            return Auth::getToken($payload, $expiresIn);
         };
 
         // formToken / form_token — returns full <input> element
