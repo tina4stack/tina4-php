@@ -459,6 +459,73 @@ class QueueBackendTest extends TestCase
         new MongoBackend();
     }
 
+    // -- Batch dequeue (popBatch) -------------------------------------------
+
+    public function testPopBatchReturnsArray(): void
+    {
+        $queue = new \Tina4\Queue('file', [], 'batch_test');
+        $queue->clear();
+        $queue->push(['n' => 1]);
+        $queue->push(['n' => 2]);
+        $queue->push(['n' => 3]);
+        $jobs = $queue->popBatch(2);
+        $this->assertIsArray($jobs);
+        $this->assertCount(2, $jobs);
+        $queue->clear();
+    }
+
+    public function testPopBatchPartialWhenFewerAvailable(): void
+    {
+        $queue = new \Tina4\Queue('file', [], 'batch_partial');
+        $queue->clear();
+        $queue->push(['n' => 1]);
+        $jobs = $queue->popBatch(10);
+        $this->assertCount(1, $jobs);
+        $queue->clear();
+    }
+
+    public function testPopBatchEmptyQueue(): void
+    {
+        $queue = new \Tina4\Queue('file', [], 'batch_empty');
+        $queue->clear();
+        $jobs = $queue->popBatch(5);
+        $this->assertSame([], $jobs);
+    }
+
+    public function testConsumeWithBatchSize(): void
+    {
+        $queue = new \Tina4\Queue('file', [], 'batch_consume');
+        $queue->clear();
+        for ($i = 0; $i < 5; $i++) {
+            $queue->push(['n' => $i]);
+        }
+        $batches = [];
+        foreach ($queue->consume('batch_consume', null, 0, 2) as $jobs) {
+            $batches[] = $jobs;
+        }
+        $total = array_sum(array_map('count', $batches));
+        $this->assertSame(5, $total);
+        $this->assertTrue(is_array($batches[0]));
+        $queue->clear();
+    }
+
+    public function testProcessWithBatchSize(): void
+    {
+        $queue = new \Tina4\Queue('file', [], 'batch_process');
+        $queue->clear();
+        for ($i = 0; $i < 6; $i++) {
+            $queue->push(['n' => $i]);
+        }
+        $received = [];
+        $queue->process(function($jobs) use (&$received) {
+            foreach ($jobs as $job) {
+                $received[] = $job['payload']['n'] ?? $job['n'] ?? null;
+            }
+        }, '', ['batchSize' => 3]);
+        $this->assertCount(6, $received);
+        $queue->clear();
+    }
+
     // -- Config override priority -------------------------------------------
 
     public function testKafkaConfigOverridesEnvVars(): void

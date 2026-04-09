@@ -117,6 +117,60 @@ class LiteBackend implements QueueBackend
     }
 
     /**
+     * Pop up to $count pending jobs at once. Returns a partial batch if fewer available.
+     *
+     * @param string $topic Queue/topic name
+     * @param int    $count Maximum number of jobs to return
+     * @return array<int, array> Array of job arrays (may be shorter than $count)
+     */
+    public function dequeueBatch(string $topic, int $count): array
+    {
+        $queuePath = $this->queuePath($topic);
+        if (!is_dir($queuePath)) {
+            return [];
+        }
+
+        $files = glob($queuePath . '/*.queue-data');
+        if (empty($files)) {
+            return [];
+        }
+
+        $candidates = [];
+        $nowMicro = microtime(true);
+
+        foreach ($files as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data === null || $data['status'] !== 'pending') {
+                continue;
+            }
+            if (!empty($data['delay_until']) && (float)$data['delay_until'] > $nowMicro) {
+                continue;
+            }
+            $candidates[] = ['file' => $file, 'data' => $data];
+        }
+
+        if (empty($candidates)) {
+            return [];
+        }
+
+        usort($candidates, fn($a, $b) => strcmp($a['data']['created_at'], $b['data']['created_at']));
+
+        $jobs = [];
+        foreach ($candidates as $candidate) {
+            if (count($jobs) >= $count) {
+                break;
+            }
+            if (@unlink($candidate['file'])) {
+                $job = $candidate['data'];
+                $job['topic'] = $topic;
+                $jobs[] = $job;
+            }
+        }
+
+        return $jobs;
+    }
+
+    /**
      * Acknowledge a message — no-op for file backend (message is removed on dequeue).
      *
      * @param string $topic     The queue/topic name

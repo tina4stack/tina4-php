@@ -136,6 +136,28 @@ class Queue
     }
 
     /**
+     * Pop up to $count jobs at once. Returns a partial batch if fewer available.
+     *
+     * @param int $count Maximum number of jobs to return.
+     * @return array<int, array> Array of job arrays (may be shorter than $count).
+     */
+    public function popBatch(int $count): array
+    {
+        $backend = $this->externalBackend ?? $this->liteBackend;
+        if (method_exists($backend, 'dequeueBatch')) {
+            return $backend->dequeueBatch($this->topic, $count);
+        }
+        // Fallback for external backends
+        $jobs = [];
+        for ($i = 0; $i < $count; $i++) {
+            $job = $backend->dequeue($this->topic);
+            if ($job === null) break;
+            $jobs[] = $job;
+        }
+        return $jobs;
+    }
+
+    /**
      * Process jobs from a queue using a handler callback.
      *
      * Accepts two calling styles:
@@ -174,28 +196,50 @@ class Queue
         }
         $queue = $queue ?: $this->topic;
         $maxJobs = $options['maxJobs'] ?? null;
+        $batchSize = (int)($options['batchSize'] ?? 1);
         $processed = 0;
 
-        while ($maxJobs === null || $processed < $maxJobs) {
-            $job = $this->externalBackend !== null
-                ? $this->externalBackend->dequeue($queue)
-                : $this->liteBackend->dequeue($queue);
-            if ($job === null) {
-                break;
+        if ($batchSize > 1) {
+            while ($maxJobs === null || $processed < $maxJobs) {
+                $remaining = $maxJobs !== null ? min($batchSize, $maxJobs - $processed) : $batchSize;
+                $jobs = $this->popBatch($remaining);
+                if (empty($jobs)) {
+                    break;
+                }
+                try {
+                    $handler($jobs);
+                } catch (\Throwable $e) {
+                    foreach ($jobs as $job) {
+                        $job['status'] = 'failed';
+                        $job['error'] = $e->getMessage();
+                        $job['attempts'] = ($job['attempts'] ?? 0) + 1;
+                        $this->liteBackend->writeFailed($queue, $job);
+                    }
+                }
+                $processed += count($jobs);
             }
+        } else {
+            while ($maxJobs === null || $processed < $maxJobs) {
+                $job = $this->externalBackend !== null
+                    ? $this->externalBackend->dequeue($queue)
+                    : $this->liteBackend->dequeue($queue);
+                if ($job === null) {
+                    break;
+                }
 
-            try {
-                $handler($job);
-            } catch (\Throwable $e) {
-                // Mark as failed
-                $job['status'] = 'failed';
-                $job['error'] = $e->getMessage();
-                $job['attempts'] = ($job['attempts'] ?? 0) + 1;
+                try {
+                    $handler($job);
+                } catch (\Throwable $e) {
+                    // Mark as failed
+                    $job['status'] = 'failed';
+                    $job['error'] = $e->getMessage();
+                    $job['attempts'] = ($job['attempts'] ?? 0) + 1;
 
-                $this->liteBackend->writeFailed($queue, $job);
+                    $this->liteBackend->writeFailed($queue, $job);
+                }
+
+                $processed++;
             }
-
-            $processed++;
         }
     }
 
@@ -346,8 +390,9 @@ class Queue
      * @param string $topic        Queue topic (defaults to constructor topic)
      * @param ?string $id          Optional job ID — single yield, no polling
      * @param float $pollInterval  Seconds to sleep when queue is empty (default 1.0)
+     * @param int $batchSize       When > 1, yield arrays of jobs instead of single Job objects
      */
-    public function consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0): \Generator
+    public function consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0, int $batchSize = 1): \Generator
     {
         $topic = $topic ?: $this->topic;
 
@@ -362,18 +407,32 @@ class Queue
 
         // pollInterval=0 → single-pass drain (returns when empty)
         // pollInterval>0 → long-running poll (sleeps when empty, never returns)
-        while (true) {
-            $data = $this->externalBackend !== null
-                ? $this->externalBackend->dequeue($topic)
-                : $this->liteBackend->dequeue($topic);
-            if ($data === null) {
-                if ($pollInterval <= 0) {
-                    break;
+        if ($batchSize > 1) {
+            while (true) {
+                $jobs = $this->popBatch($batchSize);
+                if (empty($jobs)) {
+                    if ($pollInterval <= 0) {
+                        break;
+                    }
+                    usleep((int)($pollInterval * 1_000_000));
+                    continue;
                 }
-                usleep((int)($pollInterval * 1_000_000));
-                continue;
+                yield $jobs;
             }
-            yield new Job($data, $this, $topic);
+        } else {
+            while (true) {
+                $data = $this->externalBackend !== null
+                    ? $this->externalBackend->dequeue($topic)
+                    : $this->liteBackend->dequeue($topic);
+                if ($data === null) {
+                    if ($pollInterval <= 0) {
+                        break;
+                    }
+                    usleep((int)($pollInterval * 1_000_000));
+                    continue;
+                }
+                yield new Job($data, $this, $topic);
+            }
         }
     }
 
