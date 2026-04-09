@@ -2312,11 +2312,10 @@ class Frond
 
         // Utility
         $this->filters['default'] = fn($v, $fallback = '') => ($v === null || $v === '' || $v === false) ? $fallback : $v;
-        $this->filters['dump'] = function($v) {
-            ob_start();
-            var_dump($v);
-            return self::RAW_MARKER . '<pre>' . htmlspecialchars(ob_get_clean(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
-        };
+        // dump filter — gated on TINA4_DEBUG=true. Delegates to the shared
+        // renderDump() helper so the |dump filter and the dump() global
+        // function produce identical output and obey the same gating.
+        $this->filters['dump'] = fn($v) => self::renderDump($v);
         $this->filters['string'] = fn($v) => (string)$v;
         $this->filters['truncate'] = function($v, $length = 255) {
             $s = (string)$v;
@@ -2343,6 +2342,33 @@ class Frond
     }
 
     /* ───────────────────── built-in globals ───────────────────── */
+
+    /**
+     * Render a value as a pre-formatted var_dump wrapped in <pre> tags.
+     *
+     * Gated on TINA4_DEBUG=true. In production (TINA4_DEBUG unset or false)
+     * dump output is suppressed entirely to avoid leaking internal state,
+     * object shapes, or sensitive values into rendered HTML.
+     *
+     * Shared by the {{ value|dump }} filter and the {{ dump(value) }} global
+     * function so both produce identical output and obey the same gating.
+     *
+     * Returned string is prefixed with self::RAW_MARKER so the template
+     * engine's auto-escape pass skips the HTML entities we produce.
+     *
+     * @param mixed $v Value to dump
+     * @return string  <pre>...</pre> in debug mode, empty string in production
+     */
+    public static function renderDump(mixed $v): string
+    {
+        $debugMode = strtolower(getenv('TINA4_DEBUG') ?: '') === 'true';
+        if (!$debugMode) {
+            return '';
+        }
+        ob_start();
+        var_dump($v);
+        return self::RAW_MARKER . '<pre>' . htmlspecialchars((string)ob_get_clean(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
+    }
 
     private function registerBuiltinGlobals(): void
     {
@@ -2391,6 +2417,11 @@ class Frond
         $this->globals['form_token'] = $formTokenFn;
         $this->globals['formTokenValue'] = $formTokenValueFn;
         $this->globals['form_token_value'] = $formTokenValueFn;
+
+        // Debug helper: {{ dump(x) }} — gated on TINA4_DEBUG=true.
+        // Both this global and the |dump filter call self::renderDump()
+        // which returns an empty string in production.
+        $this->globals['dump'] = static fn($v = null) => self::renderDump($v);
 
         // Also register as filters so {{ "" | formToken }} and {{ "" | form_token }} work
         $this->filters['formToken'] = fn($v) => $formTokenFn((string)($v ?: ''));

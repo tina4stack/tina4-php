@@ -1816,4 +1816,62 @@ TPL;
         $this->assertStringContainsString('1', $result);
         $this->assertStringContainsString('2', $result);
     }
+
+    /* ═══════════ dump filter + dump() function ═══════════ */
+
+    public function testDumpFilterDebugMode(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=true');
+        try {
+            $engine = new \Tina4\Frond(sys_get_temp_dir());
+            $result = $engine->renderString('{{ val | dump | raw }}', ['val' => ['a' => 1]]);
+            $this->assertStringContainsString('<pre>', $result);
+            $this->assertStringContainsString('array(1)', $result);
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
+
+    public function testDumpFilterProductionMode(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=false');
+        try {
+            $engine = new \Tina4\Frond(sys_get_temp_dir());
+            $result = $engine->renderString('{{ val | dump | raw }}', ['val' => ['secret' => 'hunter2']]);
+            $this->assertSame('', $result);
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
+
+    public function testDumpFunctionFormMatchesFilter(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=true');
+        try {
+            $engine = new \Tina4\Frond(sys_get_temp_dir());
+            $data = ['val' => ['a' => 1, 'b' => 'hi']];
+            $filterOut = $engine->renderString('{{ val | dump | raw }}', $data);
+            $fnOut = $engine->renderString('{{ dump(val) | raw }}', $data);
+            $this->assertSame($filterOut, $fnOut);
+            $this->assertStringContainsString('<pre>', $fnOut);
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
+
+    public function testDumpFunctionSilentInProduction(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=false');
+        try {
+            $engine = new \Tina4\Frond(sys_get_temp_dir());
+            $result = $engine->renderString('{{ dump(val) | raw }}', ['val' => ['secret' => 'x']]);
+            $this->assertSame('', $result);
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
 }
