@@ -213,9 +213,17 @@ class User extends \Tina4\ORM {
     public $fieldMapping = [];     // ["db_column" => "phpProperty"]
     public $hasOne = [];           // Related single records
     public $hasMany = [];          // Related collections
+    public $belongsTo = [];        // Parent records
+    public $foreignKeys = [];      // FK auto-wire: ['user_id' => 'User'] → $post->user + $user->posts
     public $softDelete = false;
     public $tableFilter = "";      // Default WHERE clause
 }
+
+// $foreignKeys auto-wires both sides of the relationship:
+//   Simple form:  ['user_id' => 'User']
+//   Extended:     ['user_id' => ['model' => 'User', 'related_name' => 'blog_posts']]
+// → declaring model gets belongsTo entry (column name minus _id)
+// → referenced model gets hasMany entry (declaring class lowercased + 's', or related_name)
 
 // Instance methods
 $user = new User($request);
