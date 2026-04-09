@@ -131,14 +131,14 @@ class SmokeTest extends TestCase
         $item->name = 'Widget';
         $item->category = 'Tools';
         $this->assertNotFalse($item->save());
-        $this->assertTrue($item->exists());
         $id = $item->getPrimaryKeyValue();
+        $this->assertTrue($item->exists($id));
         $this->assertNotNull($id);
 
         // Load
         $loaded = new SmokeItem($db);
         $loaded->load("id = ?", [$id]);
-        $this->assertTrue($loaded->exists());
+        $this->assertTrue($loaded->exists($id));
         $this->assertSame('Widget', $loaded->name);
 
         // toDict (associative array)
@@ -151,7 +151,7 @@ class SmokeTest extends TestCase
 
         $check = new SmokeItem($db);
         $check->load("id = ?", [$id]);
-        $this->assertFalse($check->exists());
+        $this->assertFalse($check->exists($id));
 
         $db->close();
     }
@@ -505,11 +505,11 @@ class SmokeTest extends TestCase
     public function testFakeDataSeededDeterministic(): void
     {
         $fake1 = new FakeData(42);
-        $name1 = $fake1->fullName();
+        $name1 = $fake1->name();
         $email1 = $fake1->email();
 
         $fake2 = new FakeData(42);
-        $name2 = $fake2->fullName();
+        $name2 = $fake2->name();
         $email2 = $fake2->email();
 
         $this->assertSame($name1, $name2);

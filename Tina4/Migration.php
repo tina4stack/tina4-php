@@ -432,6 +432,20 @@ class Migration
     }
 
     /**
+     * Create a new migration file — static helper for parity with Python/Ruby/Node.
+     *
+     * @param string $description    Human-readable migration name
+     * @param string $migrationsDir  Directory for migration files (default: 'migrations')
+     * @param string $kind           File kind: 'sql' or 'php' (default: 'sql')
+     * @return string Path to the created file
+     */
+    public static function createMigration(string $description, string $migrationsDir = 'migrations', string $kind = 'sql'): string
+    {
+        $m = new static($migrationsDir);
+        return $m->create($description, $kind);
+    }
+
+    /**
      * Execute a .php migration file by requiring it and calling up() or down().
      *
      * @param string $filepath  Full path to the .php migration file.
@@ -520,8 +534,12 @@ class Migration
 
     /**
      * Record a migration as applied.
+     *
+     * @param string $fileName Migration filename (e.g. "20240101000000_create_users.sql").
+     * @param int    $batch    Batch number this migration belongs to.
+     * @param int    $passed   1 if the migration succeeded (default), 0 if it failed.
      */
-    private function recordMigration(string $fileName, int $batch): void
+    public function recordMigration(string $name, int $batch, int $passed = 1): void
     {
         if ($this->isFirebird()) {
             // Firebird: generate ID from sequence
@@ -531,14 +549,27 @@ class Migration
             $nextId = (int)($rows[0]['NEXT_ID'] ?? 1);
             $this->db->exec(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
-                [':id' => $nextId, ':name' => $fileName, ':batch' => $batch]
+                [':id' => $nextId, ':name' => $name, ':batch' => $batch]
             );
         } else {
             $this->db->exec(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (migration, batch) VALUES (:name, :batch)",
-                [':name' => $fileName, ':batch' => $batch]
+                [':name' => $name, ':batch' => $batch]
             );
         }
+    }
+
+    /**
+     * Remove a migration record from the tracking table by name.
+     *
+     * @param string $name Migration name to remove.
+     */
+    public function removeMigrationRecord(string $name): void
+    {
+        $this->db->exec(
+            "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration = :name",
+            [':name' => $name]
+        );
     }
 
     /**

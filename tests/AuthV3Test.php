@@ -589,4 +589,31 @@ class AuthV3Test extends TestCase
             }
         };
     }
+
+    // ── authenticateRequest secret + algorithm params ─────────────
+
+    public function testAuthenticateRequestAcceptsSecretParam(): void
+    {
+        $token = Auth::getToken(['sub' => 'user-secret-test']);
+        $result = Auth::authenticateRequest(['Authorization' => "Bearer $token"], null);
+        $this->assertNotNull($result);
+        $this->assertEquals('user-secret-test', $result['sub']);
+    }
+
+    public function testAuthenticateRequestAcceptsAlgorithmParam(): void
+    {
+        $token = Auth::getToken(['sub' => 'algo-test']);
+        $result = Auth::authenticateRequest(['Authorization' => "Bearer $token"], null, 'HS256');
+        $this->assertNotNull($result);
+        $this->assertEquals('algo-test', $result['sub']);
+    }
+
+    // ── getToken secret param ────────────────────────────────────
+
+    public function testGetTokenWithExplicitSecret(): void
+    {
+        $token = Auth::getToken(['sub' => 'custom'], 'custom-secret', 3600);
+        $this->assertIsString($token);
+        $this->assertStringContainsString('.', $token);
+    }
 }

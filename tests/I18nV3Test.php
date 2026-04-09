@@ -130,7 +130,7 @@ class I18nV3Test extends TestCase
         $this->writeLocale('fr', ['a' => 'c']);
         $this->writeLocale('de', ['a' => 'd']);
         $i18n = new I18n($this->tempDir, 'en');
-        $locales = $i18n->getAvailableLocales();
+        $locales = $i18n->availableLocales();
         $this->assertSame(['de', 'en', 'fr'], $locales);
     }
 
@@ -174,7 +174,7 @@ class I18nV3Test extends TestCase
     {
         $i18n = new I18n('/nonexistent/path', 'en');
         $this->assertSame('greeting', $i18n->t('greeting'));
-        $locales = $i18n->getAvailableLocales();
+        $locales = $i18n->availableLocales();
         $this->assertSame(['en'], $locales);
     }
 
@@ -269,7 +269,7 @@ class I18nV3Test extends TestCase
         $this->writeLocale('fr', ['a' => 'c']);
         $this->writeLocale('de', ['a' => 'd']);
         $i18n = new I18n($this->tempDir, 'en');
-        $locales = $i18n->getAvailableLocales();
+        $locales = $i18n->availableLocales();
         $sorted = $locales;
         sort($sorted);
         $this->assertSame($sorted, $locales);

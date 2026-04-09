@@ -201,7 +201,7 @@ class AutoCrud
             $model = new $modelClass($db);
             $model->load($request->params['id']);
 
-            if (!$model->exists()) {
+            if (!$model->exists($request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -239,7 +239,7 @@ class AutoCrud
             $model = new $modelClass($db);
             $model->load($request->params['id']);
 
-            if (!$model->exists()) {
+            if (!$model->exists($request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -265,7 +265,7 @@ class AutoCrud
             $model = new $modelClass($db);
             $model->load($request->params['id']);
 
-            if (!$model->exists()) {
+            if (!$model->exists($request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 

@@ -137,7 +137,7 @@ class I18n
      *
      * @return string[]
      */
-    public function getAvailableLocales(): array
+    public function availableLocales(): array
     {
         if (!is_dir($this->localeDir)) {
             return [$this->defaultLocale];

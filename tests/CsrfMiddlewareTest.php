@@ -187,9 +187,10 @@ class CsrfMiddlewareTest extends TestCase
 
         [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
 
-        // Response::error() returns an array with a 'message' key
-        $this->assertIsArray($resOut);
-        $this->assertStringContainsStringIgnoringCase('query string', $resOut['message']);
+        // $response->error() returns a Response instance; check body via getBody()
+        $this->assertInstanceOf(\Tina4\Response::class, $resOut);
+        $body = json_decode($resOut->getBody(), true);
+        $this->assertStringContainsStringIgnoringCase('query string', $body['message']);
     }
 
     // ── Invalid / expired / wrong-secret token is rejected ───────
@@ -399,11 +400,12 @@ class CsrfMiddlewareTest extends TestCase
 
         [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
 
-        // Response::error() returns an array
-        $this->assertIsArray($resOut);
-        $this->assertTrue($resOut['error']);
-        $this->assertEquals('CSRF_INVALID', $resOut['code']);
-        $this->assertArrayHasKey('message', $resOut);
+        // $response->error() returns a Response instance
+        $this->assertInstanceOf(\Tina4\Response::class, $resOut);
+        $body = json_decode($resOut->getBody(), true);
+        $this->assertTrue($body['error']);
+        $this->assertEquals('CSRF_INVALID', $body['code']);
+        $this->assertArrayHasKey('message', $body);
     }
 
     public function testCsrf403ResponseHasStatusField(): void
@@ -413,8 +415,8 @@ class CsrfMiddlewareTest extends TestCase
 
         [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
 
-        $this->assertIsArray($resOut);
-        $this->assertEquals(403, $resOut['status']);
+        $this->assertInstanceOf(\Tina4\Response::class, $resOut);
+        $this->assertEquals(403, $resOut->getStatusCode());
     }
 
     // ── Helpers ──────────────────────────────────────────────────

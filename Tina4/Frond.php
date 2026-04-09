@@ -31,6 +31,17 @@ class Frond
      */
     public static string $formTokenSessionId = '';
 
+    /**
+     * Set the session ID used for CSRF form token binding.
+     * Parity with Python/Ruby/Node: Frond::setFormTokenSessionId($id)
+     *
+     * @param string $sessionId The session ID to bind form tokens to
+     */
+    public static function setFormTokenSessionId(string $sessionId): void
+    {
+        self::$formTokenSessionId = $sessionId;
+    }
+
     // Sentinel for "raw" (no auto-escape)
     private const RAW_MARKER = "\x00FROND_RAW\x00";
 

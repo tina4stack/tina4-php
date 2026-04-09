@@ -34,7 +34,7 @@ class SeederV3Test extends TestCase
 
     public function testFullName(): void
     {
-        $name = $this->fake->fullName();
+        $name = $this->fake->name();
         $this->assertIsString($name);
         $this->assertStringContainsString(' ', $name);
     }
@@ -123,7 +123,7 @@ class SeederV3Test extends TestCase
 
     public function testFloat(): void
     {
-        $val = $this->fake->float(1.0, 5.0, 2);
+        $val = $this->fake->numeric(1.0, 5.0, 2);
         $this->assertGreaterThanOrEqual(1.0, $val);
         $this->assertLessThanOrEqual(5.0, $val);
     }
@@ -164,15 +164,9 @@ class SeederV3Test extends TestCase
         $this->assertMatchesRegularExpression('#^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$#', $ip);
     }
 
-    public function testColor(): void
-    {
-        $this->assertIsString($this->fake->color());
-        $this->assertNotEmpty($this->fake->color());
-    }
-
     public function testHexColor(): void
     {
-        $hex = $this->fake->hexColor();
+        $hex = $this->fake->colorHex();
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex);
     }
 
@@ -194,7 +188,7 @@ class SeederV3Test extends TestCase
         $fake = $this->fake;
         $rows = $fake->run(function () use ($fake) {
             return [
-                'name' => $fake->fullName(),
+                'name' => $fake->name(),
                 'email' => $fake->email(),
             ];
         }, 5);
@@ -215,11 +209,11 @@ class SeederV3Test extends TestCase
     public function testSeededDeterministic(): void
     {
         $fake1 = new FakeData(42);
-        $name1 = $fake1->fullName();
+        $name1 = $fake1->name();
         $email1 = $fake1->email();
 
         $fake2 = new FakeData(42);
-        $name2 = $fake2->fullName();
+        $name2 = $fake2->name();
         $email2 = $fake2->email();
 
         $this->assertSame($name1, $name2);
@@ -246,7 +240,7 @@ class SeederV3Test extends TestCase
     {
         $fake = FakeData::seed(42);
         $this->assertInstanceOf(FakeData::class, $fake);
-        $name = $fake->fullName();
+        $name = $fake->name();
         $this->assertIsString($name);
         $this->assertStringContainsString(' ', $name);
     }
@@ -283,7 +277,7 @@ class SeederV3Test extends TestCase
 
     public function testFloatPrecision(): void
     {
-        $val = $this->fake->float(0, 100, 3);
+        $val = $this->fake->numeric(0, 100, 3);
         $str = (string)$val;
         if (strpos($str, '.') !== false) {
             $this->assertLessThanOrEqual(3, strlen(explode('.', $str)[1]));
@@ -377,7 +371,7 @@ class SeederV3Test extends TestCase
     {
         $fake = $this->fake;
         $rows = $fake->run(function () use ($fake) {
-            return ['name' => $fake->fullName()];
+            return ['name' => $fake->name()];
         }, 15);
         $this->assertCount(15, $rows);
     }
@@ -413,7 +407,7 @@ class SeederV3Test extends TestCase
 
     public function testHexColorFormat(): void
     {
-        $hex = $this->fake->hexColor();
+        $hex = $this->fake->colorHex();
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex);
     }
 

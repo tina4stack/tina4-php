@@ -121,7 +121,7 @@ class Database implements DatabaseAdapter
      * @param bool|null $autoCommit Override auto-commit setting
      * @return self|null Null if the env var is not set
      */
-    public static function fromEnv(string $envKey = 'DATABASE_URL', ?bool $autoCommit = null): ?self
+    public static function fromEnv(string $envKey = 'DATABASE_URL', ?bool $autoCommit = null, int $pool = 0): ?self
     {
         $url = \Tina4\DotEnv::getEnv($envKey);
 
@@ -132,7 +132,7 @@ class Database implements DatabaseAdapter
         $username = \Tina4\DotEnv::getEnv('DATABASE_USERNAME') ?? '';
         $password = \Tina4\DotEnv::getEnv('DATABASE_PASSWORD') ?? '';
 
-        return new self($url, $autoCommit, $username, $password);
+        return new self($url, $autoCommit, $username, $password, $pool);
     }
 
     /**
@@ -174,7 +174,15 @@ class Database implements DatabaseAdapter
     /**
      * Get pool size (0 = single connection mode).
      */
-    public function getPoolSize(): int
+    public function poolSize(): int
+    {
+        return $this->poolSize;
+    }
+
+    /**
+     * Alias for poolSize() — returns total pool size (0 = single connection mode).
+     */
+    public function size(): int
     {
         return $this->poolSize;
     }
@@ -182,12 +190,52 @@ class Database implements DatabaseAdapter
     /**
      * Get the number of active (created) connections in the pool.
      */
-    public function getActivePoolCount(): int
+    public function activeCount(): int
     {
         if ($this->poolSize === 0) {
             return $this->adapter !== null ? 1 : 0;
         }
         return count(array_filter($this->pool, fn($a) => $a !== null));
+    }
+
+    /**
+     * Borrow the next adapter from the pool (round-robin).
+     *
+     * In PHP, connections are persistent objects in the pool array.
+     * checkout() returns the next available adapter, lazily creating it if needed.
+     * Call checkin() when done to signal the connection is available again.
+     *
+     * @return DatabaseAdapter
+     */
+    public function checkout(): DatabaseAdapter
+    {
+        return $this->getNextAdapter();
+    }
+
+    /**
+     * Return a borrowed adapter to the pool.
+     *
+     * In PHP, pool connections are persistent and remain in the pool array,
+     * so this is a no-op. It exists to satisfy the cross-framework interface
+     * and document the borrow/return pattern.
+     *
+     * @param DatabaseAdapter $adapter The adapter previously returned by checkout()
+     */
+    public function checkin(DatabaseAdapter $adapter): void
+    {
+        // No-op — PHP pool connections are persistent references in the pool array.
+        // The adapter is already held by $this->pool and will be reused automatically.
+    }
+
+    /**
+     * Close all pooled (or single) connections and release resources.
+     *
+     * After calling closeAll() the instance should not be used further
+     * unless connections are re-established.
+     */
+    public function closeAll(): void
+    {
+        $this->close();
     }
 
     // -------------------------------------------------------------------------

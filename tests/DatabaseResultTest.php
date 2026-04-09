@@ -22,7 +22,7 @@ class DatabaseResultTest extends TestCase
         $this->assertSame([], $result->records);
         $this->assertSame([], $result->columns);
         $this->assertSame(0, $result->count);
-        $this->assertSame(10, $result->limit);
+        $this->assertSame(100, $result->limit);
         $this->assertSame(0, $result->offset);
     }
 

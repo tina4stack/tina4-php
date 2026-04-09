@@ -109,7 +109,7 @@ class ORMV3Test extends TestCase
 
         $this->assertNotFalse($result);
         $this->assertNotNull($user->getPrimaryKeyValue());
-        $this->assertTrue($user->exists());
+        $this->assertTrue($user->exists($user->getPrimaryKeyValue()));
     }
 
     public function testLoad(): void
@@ -119,7 +119,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db);
         $user->load("id = ?", [1]);
 
-        $this->assertTrue($user->exists());
+        $this->assertTrue($user->exists(1));
         $this->assertSame('Alice', $user->name);
         $this->assertSame('alice@test.com', $user->email);
     }
@@ -129,7 +129,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db);
         $user->load("id = ?", [999]);
 
-        $this->assertFalse($user->exists());
+        $this->assertFalse($user->exists(999));
     }
 
     public function testUpdate(): void
@@ -163,7 +163,7 @@ class ORMV3Test extends TestCase
 
         $user2 = new TestUser($this->db);
         $user2->load("id = ?", [$id]);
-        $this->assertFalse($user2->exists());
+        $this->assertFalse($user2->exists($id));
     }
 
     // --- Soft Delete ---
@@ -186,7 +186,7 @@ class ORMV3Test extends TestCase
         // But load doesn't find it
         $post2 = new TestPost($this->db);
         $post2->load("id = ?", [$id]);
-        $this->assertFalse($post2->exists());
+        $this->assertFalse($post2->exists($id));
     }
 
     // --- Find ---
@@ -297,7 +297,7 @@ class ORMV3Test extends TestCase
         $product->load("id = ?", [1]);
 
         // Reverse mapping: DB columns map back to PHP properties
-        $this->assertTrue($product->exists());
+        $this->assertTrue($product->exists(1));
     }
 
     // --- Serialization ---
@@ -576,7 +576,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db);
         $user->load("id = ?", [1]);
 
-        $this->assertTrue($user->exists());
+        $this->assertTrue($user->exists(1));
         $this->assertSame('Alice', $user->name);
     }
 
@@ -584,7 +584,7 @@ class ORMV3Test extends TestCase
     {
         $user = new TestUser($this->db);
         $user->load("id = ?", [9999]);
-        $this->assertFalse($user->exists());
+        $this->assertFalse($user->exists(9999));
     }
 
     // --- Find with multiple conditions ---
@@ -637,7 +637,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db, ['name' => 'QuickCreate', 'email' => 'qc@test.com']);
         $user->save();
 
-        $this->assertTrue($user->exists());
+        $this->assertTrue($user->exists($user->getPrimaryKeyValue()));
         $this->assertNotNull($user->getPrimaryKeyValue());
 
         $loaded = new TestUser($this->db);
@@ -674,7 +674,7 @@ class ORMV3Test extends TestCase
 
         $post2 = new TestPost($this->db);
         $post2->load("id = ?", [$id]);
-        $this->assertFalse($post2->exists());
+        $this->assertFalse($post2->exists($id));
     }
 
     // --- Per-model database ---
@@ -688,7 +688,7 @@ class ORMV3Test extends TestCase
         $user->name = 'SeparateDb';
         $user->save();
 
-        $this->assertTrue($user->exists());
+        $this->assertTrue($user->exists($user->getPrimaryKeyValue()));
 
         // Verify it's in db2 not this->db
         $rows = $db2->query("SELECT * FROM users WHERE name = 'SeparateDb'");
@@ -1061,7 +1061,7 @@ class ORMV3Test extends TestCase
 
         $loaded = new TestUser($this->db);
         $loaded->load("id = ?", [$id]);
-        $this->assertTrue($loaded->exists());
+        $this->assertTrue($loaded->exists($id));
         $this->assertSame('Immediate', $loaded->name);
     }
 
@@ -1127,7 +1127,7 @@ class ORMV3Test extends TestCase
 
         $loaded = new TestUser($this->db);
         $loaded->load("id = ?", [$id]);
-        $this->assertFalse($loaded->exists());
+        $this->assertFalse($loaded->exists($id));
     }
 
     // --- Fill and save preserves all fields --------------------------------
@@ -1197,7 +1197,7 @@ class ORMV3Test extends TestCase
 
         $loaded = new TestProduct($this->db);
         $loaded->load("id = ?", [$id]);
-        $this->assertTrue($loaded->exists());
+        $this->assertTrue($loaded->exists($id));
         // Verify the mapping works in both directions
         $rows = $this->db->query("SELECT product_name, unit_price FROM products WHERE id = :id", [':id' => $id]);
         $this->assertSame('RoundTrip', $rows[0]['product_name']);
@@ -1289,5 +1289,23 @@ class ORMV3Test extends TestCase
         $dict = $user->toDict();
 
         $this->assertIsArray($dict, 'toDict() on an empty model must return an array');
+    }
+
+    // ── Utility: snakeToCamel / camelToSnake ────────────────────
+
+    public function testSnakeToCamel(): void
+    {
+        $this->assertSame('firstName', \Tina4\ORM::snakeToCamel('first_name'));
+        $this->assertSame('userId', \Tina4\ORM::snakeToCamel('user_id'));
+        $this->assertSame('id', \Tina4\ORM::snakeToCamel('id'));
+        $this->assertSame('myFieldName', \Tina4\ORM::snakeToCamel('my_field_name'));
+    }
+
+    public function testCamelToSnake(): void
+    {
+        $this->assertSame('first_name', \Tina4\ORM::camelToSnake('firstName'));
+        $this->assertSame('user_id', \Tina4\ORM::camelToSnake('userId'));
+        $this->assertSame('id', \Tina4\ORM::camelToSnake('id'));
+        $this->assertSame('my_field_name', \Tina4\ORM::camelToSnake('myFieldName'));
     }
 }

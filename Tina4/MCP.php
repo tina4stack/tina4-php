@@ -248,6 +248,20 @@ class McpServer
     /** @var McpServer[] Class-level registry of all MCP server instances */
     private static array $instances = [];
 
+    /** @var McpServer|null Default server for decorator helpers */
+    private static ?McpServer $defaultServer = null;
+
+    /**
+     * Get (or create) the default server used by mcp_tool() / mcp_resource() helpers.
+     */
+    public static function getDefaultServer(): McpServer
+    {
+        if (self::$defaultServer === null) {
+            self::$defaultServer = new McpServer('/__dev/mcp', 'Tina4 Dev Tools');
+        }
+        return self::$defaultServer;
+    }
+
     private string $path;
     private string $name;
     private string $version;
@@ -994,4 +1008,52 @@ class McpDevTools
             ];
         }, 'Framework version, PHP version, project info');
     }
+}
+
+// ── Functional decorator helpers (parity with Python/Ruby/Node) ──
+
+/**
+ * Register a callable as an MCP tool on a server (or the default server).
+ *
+ * Usage:
+ *     mcp_tool("lookup_invoice", "Find invoice by number")(function(string $invoiceNo): array {
+ *         return $db->fetchOne("SELECT * FROM invoices WHERE invoice_no = ?", [$invoiceNo]);
+ *     });
+ *
+ * @param string          $name        Tool name
+ * @param string          $description Human-readable description
+ * @param McpServer|null  $server      Target server (null = default)
+ * @return callable Decorator that accepts the handler callable
+ */
+function mcp_tool(string $name = '', string $description = '', ?McpServer $server = null): callable
+{
+    return function (callable $handler) use ($name, $description, $server): callable {
+        $toolName = $name ?: (is_array($handler) ? $handler[1] : 'tool');
+        $target = $server ?? McpServer::getDefaultServer();
+        $target->registerTool($toolName, $handler, $description);
+        return $handler;
+    };
+}
+
+/**
+ * Register a callable as an MCP resource on a server (or the default server).
+ *
+ * Usage:
+ *     mcp_resource("app://schema", "Database schema")(function() use ($db) {
+ *         return $db->getDatabase();
+ *     });
+ *
+ * @param string          $uri         Resource URI
+ * @param string          $description Human-readable description
+ * @param string          $mimeType    MIME type (default application/json)
+ * @param McpServer|null  $server      Target server (null = default)
+ * @return callable Decorator that accepts the handler callable
+ */
+function mcp_resource(string $uri, string $description = '', string $mimeType = 'application/json', ?McpServer $server = null): callable
+{
+    return function (callable $handler) use ($uri, $description, $mimeType, $server): callable {
+        $target = $server ?? McpServer::getDefaultServer();
+        $target->registerResource($uri, $handler, $description, $mimeType);
+        return $handler;
+    };
 }

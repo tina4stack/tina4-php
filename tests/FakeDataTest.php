@@ -37,13 +37,13 @@ class FakeDataTest extends TestCase
     {
         // Collect values from first seeded instance
         $fake1 = new FakeData(123);
-        $name1 = $fake1->fullName();
+        $name1 = $fake1->name();
         $email1 = $fake1->email();
         $phone1 = $fake1->phone();
 
         // Create a fresh instance with the same seed and collect again
         $fake2 = new FakeData(123);
-        $name2 = $fake2->fullName();
+        $name2 = $fake2->name();
         $email2 = $fake2->email();
         $phone2 = $fake2->phone();
 
@@ -61,8 +61,8 @@ class FakeDataTest extends TestCase
         $names1 = [];
         $names2 = [];
         for ($i = 0; $i < 5; $i++) {
-            $names1[] = $fake1->fullName();
-            $names2[] = $fake2->fullName();
+            $names1[] = $fake1->name();
+            $names2[] = $fake2->name();
         }
         $this->assertNotEquals($names1, $names2);
     }
@@ -88,14 +88,14 @@ class FakeDataTest extends TestCase
     public function testFullNameContainsSpace(): void
     {
         $fake = new FakeData();
-        $name = $fake->fullName();
+        $name = $fake->name();
         $this->assertStringContainsString(' ', $name);
     }
 
     public function testFullNameHasTwoParts(): void
     {
         $fake = new FakeData();
-        $parts = explode(' ', $fake->fullName());
+        $parts = explode(' ', $fake->name());
         $this->assertCount(2, $parts);
     }
 
@@ -275,7 +275,7 @@ class FakeDataTest extends TestCase
     public function testFloatInDefaultRange(): void
     {
         $fake = new FakeData();
-        $value = $fake->float();
+        $value = $fake->numeric();
         $this->assertIsFloat($value);
         $this->assertGreaterThanOrEqual(0, $value);
         $this->assertLessThanOrEqual(1000, $value);
@@ -284,7 +284,7 @@ class FakeDataTest extends TestCase
     public function testFloatInCustomRange(): void
     {
         $fake = new FakeData();
-        $value = $fake->float(1.0, 2.0, 4);
+        $value = $fake->numeric(1.0, 2.0, 4);
         $this->assertGreaterThanOrEqual(1.0, $value);
         $this->assertLessThanOrEqual(2.0, $value);
     }
@@ -292,7 +292,7 @@ class FakeDataTest extends TestCase
     public function testFloatDecimalPrecision(): void
     {
         $fake = new FakeData();
-        $value = $fake->float(0, 100, 3);
+        $value = $fake->numeric(0, 100, 3);
         $parts = explode('.', (string)$value);
         if (isset($parts[1])) {
             $this->assertLessThanOrEqual(3, strlen($parts[1]));
@@ -401,18 +401,10 @@ class FakeDataTest extends TestCase
 
     // ── Color Generation ───────────────────────────────────────────
 
-    public function testColorReturnsNonEmpty(): void
-    {
-        $fake = new FakeData();
-        $color = $fake->color();
-        $this->assertIsString($color);
-        $this->assertNotEmpty($color);
-    }
-
     public function testHexColorFormat(): void
     {
         $fake = new FakeData();
-        $hex = $fake->hexColor();
+        $hex = $fake->colorHex();
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex);
     }
 
@@ -455,14 +447,14 @@ class FakeDataTest extends TestCase
     public function testRunGeneratesCorrectCount(): void
     {
         $fake = new FakeData();
-        $rows = $fake->run(fn() => ['name' => $fake->fullName()], 5);
+        $rows = $fake->run(fn() => ['name' => $fake->name()], 5);
         $this->assertCount(5, $rows);
     }
 
     public function testRunReturnsAssociativeArrays(): void
     {
         $fake = new FakeData();
-        $rows = $fake->run(fn() => ['id' => $fake->integer(), 'name' => $fake->fullName()], 3);
+        $rows = $fake->run(fn() => ['id' => $fake->integer(), 'name' => $fake->name()], 3);
         foreach ($rows as $row) {
             $this->assertArrayHasKey('id', $row);
             $this->assertArrayHasKey('name', $row);
@@ -492,7 +484,7 @@ class FakeDataTest extends TestCase
 
         $this->assertIsString($fake->firstName());
         $this->assertIsString($fake->lastName());
-        $this->assertIsString($fake->fullName());
+        $this->assertIsString($fake->name());
         $this->assertIsString($fake->email());
         $this->assertIsString($fake->phone());
         $this->assertIsString($fake->address());
@@ -505,14 +497,13 @@ class FakeDataTest extends TestCase
         $this->assertIsString($fake->sentence());
         $this->assertIsString($fake->paragraph());
         $this->assertIsInt($fake->integer());
-        $this->assertIsFloat($fake->float());
+        $this->assertIsFloat($fake->numeric());
         $this->assertIsBool($fake->boolean());
         $this->assertIsString($fake->date());
         $this->assertIsString($fake->uuid());
         $this->assertIsString($fake->url());
         $this->assertIsString($fake->ipAddress());
-        $this->assertIsString($fake->color());
-        $this->assertIsString($fake->hexColor());
+        $this->assertIsString($fake->colorHex());
         $this->assertIsString($fake->creditCard());
         $this->assertIsString($fake->currency());
     }

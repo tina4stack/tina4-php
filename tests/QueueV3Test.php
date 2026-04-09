@@ -243,7 +243,7 @@ class QueueV3Test extends TestCase
     public function testDelayedJobNotImmediatelyAvailable(): void
     {
         $q = $this->makeQueue('delayed');
-        $q->push(['x' => 1], 60); // 60 second delay
+        $q->push(['x' => 1], 0, 60); // 60 second delay (priority=0, delay=60)
         $job = $q->pop();
         $this->assertNull($job); // not yet available
         $this->assertEquals(1, $q->size()); // still counts as pending

@@ -74,52 +74,69 @@ class Router
     }
 
     /**
+     * Register a route for a specific HTTP method.
+     * Core registration method — all convenience methods delegate here.
+     *
+     * @param string   $method   HTTP method (GET, POST, PUT, PATCH, DELETE, ANY)
+     * @param string   $path     URL pattern
+     * @param callable $handler  Route handler callable
+     */
+    public static function add(string $method, string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
+    {
+        $method = strtoupper($method);
+        if ($method === 'ANY') {
+            return self::any($path, $handler, $middleware, $swaggerMeta, $template);
+        }
+        return self::addRoute($method, $path, $handler, $swaggerMeta, $middleware, $template);
+    }
+
+    /**
      * Register a GET route.
      */
-    public static function get(string $path, callable $callback): self
+    public static function get(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
-        return self::addRoute('GET', $path, $callback);
+        return self::addRoute('GET', $path, $handler, $swaggerMeta, $middleware, $template);
     }
 
     /**
      * Register a POST route.
      */
-    public static function post(string $path, callable $callback): self
+    public static function post(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
-        return self::addRoute('POST', $path, $callback);
+        return self::addRoute('POST', $path, $handler, $swaggerMeta, $middleware, $template);
     }
 
     /**
      * Register a PUT route.
      */
-    public static function put(string $path, callable $callback): self
+    public static function put(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
-        return self::addRoute('PUT', $path, $callback);
+        return self::addRoute('PUT', $path, $handler, $swaggerMeta, $middleware, $template);
     }
 
     /**
      * Register a PATCH route.
      */
-    public static function patch(string $path, callable $callback): self
+    public static function patch(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
-        return self::addRoute('PATCH', $path, $callback);
+        return self::addRoute('PATCH', $path, $handler, $swaggerMeta, $middleware, $template);
     }
 
     /**
      * Register a DELETE route.
      */
-    public static function delete(string $path, callable $callback): self
+    public static function delete(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
-        return self::addRoute('DELETE', $path, $callback);
+        return self::addRoute('DELETE', $path, $handler, $swaggerMeta, $middleware, $template);
     }
 
     /**
      * Register a route for any HTTP method.
      */
-    public static function any(string $path, callable $callback): self
+    public static function any(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
         foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
-            self::addRoute($method, $path, $callback);
+            self::addRoute($method, $path, $handler, $swaggerMeta, $middleware, $template);
         }
         // Point lastRoute to the GET one for chaining
         self::$lastRouteMethod = 'GET';
@@ -720,7 +737,7 @@ class Router
     /**
      * Register a route.
      */
-    private static function addRoute(string $method, string $path, callable $callback, array $swagger = []): self
+    private static function addRoute(string $method, string $path, callable $handler, array $swagger = [], array $middleware = [], ?string $template = null): self
     {
         $fullPath = self::$groupPrefix . '/' . ltrim($path, '/');
         $fullPath = '/' . trim($fullPath, '/');
@@ -739,7 +756,7 @@ class Router
         $noAuth = false;
         $secure = false;
         try {
-            $ref = new \ReflectionFunction($callback);
+            $ref = new \ReflectionFunction($handler);
             $doc = $ref->getDocComment();
             if ($doc !== false) {
                 if (preg_match('/@noauth\b/i', $doc)) {
@@ -757,14 +774,15 @@ class Router
             'pattern' => $fullPath,
             'regex' => $parsed['regex'],
             'paramNames' => $parsed['paramNames'],
-            'callback' => $callback,
-            'middleware' => self::$groupMiddleware,
+            'callback' => $handler,
+            'middleware' => array_merge(self::$groupMiddleware, $middleware),
             'cache' => false,
             'secure' => $secure,
             'noAuth' => $noAuth,
             'catchAll' => $parsed['catchAll'],
             'catchAllName' => $parsed['catchAllName'],
             'swagger' => $swagger,
+            'template' => $template,
         ];
 
         self::$lastRouteMethod = $method;

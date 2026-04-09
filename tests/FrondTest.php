@@ -1874,4 +1874,45 @@ TPL;
             putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
         }
     }
+
+    /* ═══════════ setFormTokenSessionId ═══════════ */
+
+    public function testSetFormTokenSessionId(): void
+    {
+        \Tina4\Frond::setFormTokenSessionId('sess_abc');
+        $this->assertSame('sess_abc', \Tina4\Frond::$formTokenSessionId);
+    }
+
+    public function testSetFormTokenSessionIdEmpty(): void
+    {
+        \Tina4\Frond::setFormTokenSessionId('to-be-cleared');
+        \Tina4\Frond::setFormTokenSessionId('');
+        $this->assertSame('', \Tina4\Frond::$formTokenSessionId);
+    }
+
+    /* ═══════════ renderDump ═══════════ */
+
+    public function testRenderDumpSilentInProduction(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=false');
+        try {
+            $result = \Tina4\Frond::renderDump(['key' => 'value']);
+            $this->assertSame('', $result);
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
+
+    public function testRenderDumpInDebugMode(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=true');
+        try {
+            $result = \Tina4\Frond::renderDump(['key' => 'value']);
+            $this->assertStringContainsString('<pre>', $result);
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
 }

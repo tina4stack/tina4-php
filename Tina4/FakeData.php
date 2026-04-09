@@ -14,12 +14,12 @@ namespace Tina4;
  * Generate realistic fake data for testing and development.
  *
  *     $fake  = new FakeData();
- *     $name  = $fake->fullName();   // "Alice Johnson"
+ *     $name  = $fake->name();   // "Alice Johnson"
  *     $email = $fake->email();      // "alice.johnson@example.com"
  *
  *     // Deterministic output with a seed:
  *     $fake  = new FakeData(42);
- *     $name  = $fake->fullName();   // same every time
+ *     $name  = $fake->name();   // same every time
  */
 class FakeData
 {
@@ -95,12 +95,6 @@ class FakeData
         'SEK', 'NZD', 'ZAR', 'BRL', 'INR', 'KRW', 'MXN',
     ];
 
-    private const COLORS = [
-        'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink',
-        'cyan', 'magenta', 'brown', 'black', 'white', 'gray', 'teal',
-        'navy', 'coral', 'salmon', 'indigo', 'violet', 'lime',
-    ];
-
     // ── Instance state ────────────────────────────────────────────
 
     private ?int $seed;
@@ -119,7 +113,7 @@ class FakeData
      * Static factory — create a seeded FakeData instance.
      *
      *     $fake = FakeData::seed(42);
-     *     $fake->fullName(); // deterministic
+     *     $fake->name(); // deterministic
      */
     public static function seed(int $seed): self
     {
@@ -154,11 +148,6 @@ class FakeData
     public function lastName(): string
     {
         return $this->pick(self::LAST_NAMES);
-    }
-
-    public function fullName(): string
-    {
-        return $this->firstName() . ' ' . $this->lastName();
     }
 
     public function email(): string
@@ -240,12 +229,6 @@ class FakeData
         return $this->rand($min, $max);
     }
 
-    public function float(float $min = 0, float $max = 1000, int $decimals = 2): float
-    {
-        $rand = $min + mt_rand() / mt_getrandmax() * ($max - $min);
-        return round($rand, $decimals);
-    }
-
     public function boolean(): bool
     {
         return (bool)$this->rand(0, 1);
@@ -297,12 +280,7 @@ class FakeData
                $this->rand(0, 255) . '.' . $this->rand(1, 254);
     }
 
-    public function color(): string
-    {
-        return $this->pick(self::COLORS);
-    }
-
-    public function hexColor(): string
+    public function colorHex(): string
     {
         return sprintf('#%06x', $this->rand(0, 0xFFFFFF));
     }
@@ -324,6 +302,105 @@ class FakeData
     public function currency(): string
     {
         return $this->pick(self::CURRENCIES);
+    }
+
+    /**
+     * Returns a full name — matches Python's name() method.
+     */
+    public function name(): string
+    {
+        return $this->firstName() . ' ' . $this->lastName();
+    }
+
+    /**
+     * Returns multi-paragraph text.
+     *
+     * @param int $paragraphs Number of paragraphs to generate
+     */
+    public function text(int $paragraphs = 3): string
+    {
+        $parts = [];
+        for ($i = 0; $i < $paragraphs; $i++) {
+            $parts[] = $this->paragraph();
+        }
+        return implode("\n\n", $parts);
+    }
+
+    /**
+     * Returns a random element from the given array.
+     * Matches Python's choice() method.
+     *
+     * @param array $items
+     */
+    public function choice(array $items): mixed
+    {
+        return $items[$this->rand(0, count($items) - 1)];
+    }
+
+    /**
+     * Random float in range with specified decimals. Matches Python's numeric().
+     *
+     * @param float $min
+     * @param float $max
+     * @param int   $decimals
+     */
+    public function numeric(float $min = 0.0, float $max = 1000.0, int $decimals = 2): float
+    {
+        $rand = $min + mt_rand() / mt_getrandmax() * ($max - $min);
+        return round($rand, $decimals);
+    }
+
+    /**
+     * Seed a database table with fake data using raw SQL inserts.
+     *
+     * @param mixed  $db        Database instance with execute() and commit() methods
+     * @param string $tableName Name of the table to seed
+     * @param int    $count     Number of rows to insert
+     * @param array  $fieldMap  Associative array of column_name => callable|value
+     * @param array  $overrides Static values applied to every row (override fieldMap)
+     *
+     * @return int Number of rows inserted
+     */
+    public static function seedTable(
+        mixed $db,
+        string $tableName,
+        int $count = 10,
+        array $fieldMap = [],
+        array $overrides = []
+    ): int {
+        if (empty($fieldMap)) {
+            return 0;
+        }
+
+        $inserted = 0;
+        for ($i = 0; $i < $count; $i++) {
+            $row = [];
+            foreach ($fieldMap as $col => $generator) {
+                $row[$col] = is_callable($generator) ? $generator() : $generator;
+            }
+            foreach ($overrides as $col => $value) {
+                $row[$col] = $value;
+            }
+
+            $cols = implode(', ', array_map(fn($c) => "`$c`", array_keys($row)));
+            $placeholders = implode(', ', array_fill(0, count($row), '?'));
+            $values = array_values($row);
+
+            try {
+                $db->execute("INSERT INTO `$tableName` ($cols) VALUES ($placeholders)", $values);
+                $inserted++;
+            } catch (\Throwable $e) {
+                // skip failed rows
+            }
+        }
+
+        try {
+            $db->commit();
+        } catch (\Throwable $e) {
+            // ignore commit errors (may not be needed for all adapters)
+        }
+
+        return $inserted;
     }
 
     // ── Seeder runner ───────────────────────────────────────────
@@ -359,6 +436,162 @@ class FakeData
         }
 
         return $results;
+    }
+
+    /**
+     * Generate a datetime string like "2023-04-15 14:32:07".
+     *
+     * @param int $startYear Start year (default 2020)
+     * @param int $endYear   End year (default 2025)
+     */
+    public function datetime(int $startYear = 2020, int $endYear = 2025): string
+    {
+        $startTs = mktime(0, 0, 0, 1, 1, $startYear);
+        $endTs   = mktime(23, 59, 59, 12, 31, $endYear);
+        $ts      = $this->rand($startTs, $endTs);
+        return date('Y-m-d H:i:s', $ts);
+    }
+
+    /**
+     * Generate a fake value from a field definition array and optional column name.
+     *
+     * Mirrors Python's FakeData.for_field().
+     *
+     * @param array  $fieldDef   Field definition with keys: type, primary_key, auto_increment, max_length, min, max
+     * @param string $columnName Optional column name for heuristic matching
+     *
+     * @return mixed Generated value, or null if the field is an auto-increment primary key
+     */
+    public function forField(array $fieldDef, string $columnName = ''): mixed
+    {
+        if (!empty($fieldDef['primary_key']) && !empty($fieldDef['auto_increment'])) {
+            return null;
+        }
+
+        $col   = strtolower($columnName);
+        $ftype = strtolower($fieldDef['type'] ?? 'string');
+
+        // Column name heuristics
+        if ($col !== '') {
+            if (str_contains($col, 'email')) {
+                return $this->email();
+            }
+            if (str_contains($col, 'phone') || str_contains($col, 'tel') || str_contains($col, 'mobile')) {
+                return $this->phone();
+            }
+            if (in_array($col, ['full_name', 'fullname', 'name'], true)) {
+                return $this->name();
+            }
+            if (str_contains($col, 'first_name') || (str_contains($col, 'first') && str_contains($col, 'name'))) {
+                return $this->firstName();
+            }
+            if (str_contains($col, 'last_name') || (str_contains($col, 'last') && str_contains($col, 'name'))) {
+                return $this->lastName();
+            }
+            if (str_contains($col, 'address') || str_contains($col, 'street')) {
+                return $this->address();
+            }
+            if (str_contains($col, 'city') || str_contains($col, 'town')) {
+                return $this->city();
+            }
+            if (str_contains($col, 'country')) {
+                return $this->country();
+            }
+            if (str_contains($col, 'zip') || str_contains($col, 'postal')) {
+                return $this->zipCode();
+            }
+            if (str_contains($col, 'company') || str_contains($col, 'org')) {
+                return $this->company();
+            }
+            if (str_contains($col, 'url') || str_contains($col, 'website') || str_contains($col, 'link')) {
+                return $this->url();
+            }
+            if (str_contains($col, 'uuid') || str_contains($col, 'guid')) {
+                return $this->uuid();
+            }
+        }
+
+        // Field type fallback
+        return match (true) {
+            in_array($ftype, ['string', 'text'], true) => $this->sentence(),
+            $ftype === 'integer'                        => $this->integer(
+                (int) ($fieldDef['min'] ?? 0),
+                (int) ($fieldDef['max'] ?? 1000)
+            ),
+            in_array($ftype, ['numeric', 'float', 'decimal'], true) => $this->numeric(
+                (float) ($fieldDef['min'] ?? 0.0),
+                (float) ($fieldDef['max'] ?? 1000.0)
+            ),
+            $ftype === 'boolean'  => $this->boolean(),
+            $ftype === 'datetime' => $this->datetime(),
+            $ftype === 'date'     => $this->date(),
+            default               => $this->word(),
+        };
+    }
+
+    /**
+     * Seed an ORM model class with auto-generated fake data.
+     *
+     * Mirrors Python's seed_orm().
+     *
+     * @param string   $ormClass  Fully-qualified ORM class name (e.g. User::class)
+     * @param int      $count     Number of records to insert
+     * @param array    $overrides Field overrides — static values or callables receiving a FakeData instance
+     * @param bool     $clear     If true, delete all existing records before seeding
+     * @param int|null $seed      Optional PRNG seed for reproducible output
+     *
+     * @return int Number of records inserted
+     */
+    public static function seedOrm(
+        string $ormClass,
+        int $count = 10,
+        array $overrides = [],
+        bool $clear = false,
+        ?int $seed = null
+    ): int {
+        $fake   = new self($seed);
+        $orm    = new $ormClass();
+
+        // Attempt to retrieve field definitions from the ORM instance
+        $fieldDefs = method_exists($orm, 'getFieldDefinitions')
+            ? $orm->getFieldDefinitions()
+            : (property_exists($orm, 'fieldDefinitions') ? $orm->fieldDefinitions : []);
+
+        if ($clear && method_exists($orm, 'deleteAll')) {
+            try {
+                $orm->deleteAll();
+            } catch (\Throwable $e) {
+                // Ignore clear errors
+            }
+        }
+
+        $inserted = 0;
+        for ($i = 0; $i < $count; $i++) {
+            $attrs = [];
+
+            foreach ($fieldDefs as $name => $fieldDef) {
+                if (!empty($fieldDef['primary_key']) && !empty($fieldDef['auto_increment'])) {
+                    continue;
+                }
+                if (array_key_exists($name, $overrides)) {
+                    $val = $overrides[$name];
+                    $attrs[$name] = is_callable($val) ? $val($fake) : $val;
+                } else {
+                    $attrs[$name] = $fake->forField($fieldDef, $name);
+                }
+            }
+
+            try {
+                $instance = new $ormClass($attrs);
+                if ($instance->save()) {
+                    $inserted++;
+                }
+            } catch (\Throwable $e) {
+                // Skip failed rows
+            }
+        }
+
+        return $inserted;
     }
 
     /**

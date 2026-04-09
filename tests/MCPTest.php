@@ -660,4 +660,53 @@ class MCPTest extends TestCase
             @rmdir($tmpDir);
         }
     }
+
+    // ── mcp_tool() / mcp_resource() module-level helpers ──────────
+
+    public function testMcpToolRegistersOnServer(): void
+    {
+        $server = new McpServer('/test', 'Test');
+        $decorator = \Tina4\mcp_tool('greet', 'Say hello', $server);
+        $decorator(function (string $name): string {
+            return "Hello $name";
+        });
+
+        $resp = json_decode($server->handleMessage([
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'tools/list',
+            'params' => [],
+        ]), true);
+
+        $names = array_column($resp['result']['tools'], 'name');
+        $this->assertContains('greet', $names);
+    }
+
+    public function testMcpToolReturnsOriginalHandler(): void
+    {
+        $server = new McpServer('/test2', 'Test2');
+        $handler = fn(string $x): string => strtoupper($x);
+        $decorator = \Tina4\mcp_tool('up', '', $server);
+        $returned = $decorator($handler);
+        $this->assertSame($handler, $returned);
+    }
+
+    public function testMcpResourceRegistersOnServer(): void
+    {
+        $server = new McpServer('/test3', 'Test3');
+        $decorator = \Tina4\mcp_resource('test://data', 'Test data', 'application/json', $server);
+        $decorator(function (): array {
+            return ['items' => []];
+        });
+
+        $resp = json_decode($server->handleMessage([
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'resources/list',
+            'params' => [],
+        ]), true);
+
+        $uris = array_column($resp['result']['resources'], 'uri');
+        $this->assertContains('test://data', $uris);
+    }
 }

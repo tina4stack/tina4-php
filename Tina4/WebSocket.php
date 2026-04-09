@@ -296,6 +296,24 @@ class WebSocket
     // ── WebSocket handshake ─────────────────────────────────────
 
     /**
+     * Close a specific client connection with an optional code and reason.
+     *
+     * @param string $clientId Client ID to close
+     * @param int    $code     WebSocket close code (default 1000)
+     * @param string $reason   Human-readable close reason
+     */
+    public function close(string $clientId, int $code = 1000, string $reason = ''): void
+    {
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+        $payload = pack('n', $code) . $reason;
+        $frame = self::encodeFrame($payload, self::OP_CLOSE);
+        $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
+        $this->disconnectClient($clientId);
+    }
+
+    /**
      * Compute the Sec-WebSocket-Accept value per RFC 6455.
      *
      * @param string $key The Sec-WebSocket-Key header value

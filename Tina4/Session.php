@@ -253,6 +253,66 @@ class Session
         return $this->started;
     }
 
+    /**
+     * Read raw session data for a given session ID from the backend storage.
+     *
+     * @param string $sessionId The session ID to read
+     * @return array|null The session data array, or null if not found / expired
+     */
+    public function read(string $sessionId): ?array
+    {
+        $previousId = $this->sessionId;
+        $previousData = $this->data;
+
+        $this->sessionId = $sessionId;
+        $this->load();
+        $result = $this->data;
+
+        $this->sessionId = $previousId;
+        $this->data = $previousData;
+
+        // Return null if only empty or default meta (session not found)
+        if (empty($result) || $result === ['_meta' => $result['_meta'] ?? []]) {
+            $keys = array_keys($result);
+            $nonMeta = array_filter($keys, fn($k) => $k !== '_meta');
+            if (empty($nonMeta)) {
+                // Check if the meta looks freshly initialised (created_at == last_accessed ~now)
+                $meta = $result['_meta'] ?? [];
+                if (isset($meta['created_at']) && abs($meta['created_at'] - $meta['last_accessed']) < 2) {
+                    return null;
+                }
+            }
+        }
+
+        return $result ?: null;
+    }
+
+    /**
+     * Write raw session data for a given session ID to the backend storage.
+     *
+     * @param string $sessionId The session ID to write
+     * @param array  $data      The session data to store
+     * @param int    $ttl       Optional TTL override in seconds (0 = use instance TTL)
+     */
+    public function write(string $sessionId, array $data, int $ttl = 0): void
+    {
+        $previousId = $this->sessionId;
+        $previousData = $this->data;
+        $previousTtl = $this->ttl;
+
+        $this->sessionId = $sessionId;
+        $this->data = $data;
+        if ($ttl > 0) {
+            $this->ttl = $ttl;
+        }
+
+        $this->save();
+
+        $this->sessionId = $previousId;
+        $this->data = $previousData;
+        $this->ttl = $previousTtl;
+    }
+
     // ── Storage Operations ────────────────────────────────────────
 
     /**
@@ -305,8 +365,11 @@ class Session
      * Only file and database backends support GC — Redis/Valkey/Mongo
      * handle TTL-based expiry natively.
      */
-    public function gc(): void
+    public function gc(int $maxLifetime = 0): void
     {
+        if ($maxLifetime > 0) {
+            $this->ttl = $maxLifetime;
+        }
         match ($this->backend) {
             'database', 'db' => $this->gcDatabase(),
             'file' => $this->gcFiles(),

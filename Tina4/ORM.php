@@ -150,7 +150,7 @@ abstract class ORM
     /**
      * Convert a snake_case name to camelCase.
      */
-    private static function snakeToCamel(string $name): string
+    public static function snakeToCamel(string $name): string
     {
         $name = strtolower($name); // normalise uppercase column names (Firebird/Oracle)
         return lcfirst(str_replace('_', '', ucwords($name, '_')));
@@ -159,7 +159,7 @@ abstract class ORM
     /**
      * Convert a camelCase name to snake_case.
      */
-    private static function camelToSnake(string $name): string
+    public static function camelToSnake(string $name): string
     {
         return strtolower(preg_replace('/[A-Z]/', '_$0', lcfirst($name)));
     }
@@ -537,7 +537,7 @@ abstract class ORM
      *
      * @return array<int, static>
      */
-    public function all(int $limit = 100, int $offset = 0, ?array $include = null): array
+    public function all(int $limit = 100, int $offset = 0, ?array $include = null, ?string $orderBy = null): array
     {
         $this->ensureDb();
 
@@ -545,6 +545,10 @@ abstract class ORM
 
         if ($this->softDelete) {
             $sql .= " WHERE is_deleted = 0";
+        }
+
+        if ($orderBy !== null) {
+            $sql .= " ORDER BY {$orderBy}";
         }
 
         $result = $this->_db->fetch($sql, [], $limit, $offset);
@@ -705,11 +709,17 @@ abstract class ORM
     }
 
     /**
-     * Check if this model instance exists in the database.
+     * Check whether a record with the given primary key value exists in the database.
      */
-    public function exists(): bool
+    public function exists(int|string $pkValue): bool
     {
-        return $this->_exists;
+        $db = $this->_db ?? static::resolveDb();
+        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $sql = "SELECT 1 FROM {$this->tableName} WHERE {$pkColumn} = ?";
+        if ($this->softDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        return $db->fetchOne($sql, [$pkValue]) !== null;
     }
 
     /**
@@ -1348,10 +1358,14 @@ abstract class ORM
      * @param array<string> $include Relationship names (supports dot notation for nesting)
      * @param DatabaseAdapter $db Database adapter
      */
-    public static function eagerLoad(array &$instances, array $include, DatabaseAdapter $db): void
+    public static function eagerLoad(array &$instances, array $include, ?DatabaseAdapter $db = null): void
     {
         if (empty($instances)) {
             return;
+        }
+
+        if ($db === null) {
+            $db = static::getDb();
         }
 
         $sample = $instances[0];

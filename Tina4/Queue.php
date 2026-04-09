@@ -99,7 +99,7 @@ class Queue
      * @param int   $priority      Job priority (higher = processed first)
      * @return string Job ID
      */
-    public function push(mixed $payload, int $delay = 0, int $priority = 0): string
+    public function push(mixed $payload, int $priority = 0, int $delay = 0): string
     {
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
@@ -297,8 +297,20 @@ class Queue
      * @param int    $delaySeconds Delay in seconds before the retried job becomes available
      * @return bool True if job was found and re-queued
      */
-    public function retry(string $jobId, int $delaySeconds = 0): bool
+    public function retry(?string $jobId = null, int $delaySeconds = 0): bool
     {
+        if ($jobId === null) {
+            // Retry all dead-letter jobs
+            $dead = $this->deadLetters();
+            if (empty($dead)) return false;
+            $retried = false;
+            foreach ($dead as $job) {
+                if ($this->liteBackend->retry($job['id'], null, $delaySeconds)) {
+                    $retried = true;
+                }
+            }
+            return $retried;
+        }
         // Pass null so LiteBackend searches all topic subdirectories — the caller
         // doesn't know which topic the job lives in, only the ID.
         return $this->liteBackend->retry($jobId, null, $delaySeconds);
@@ -307,11 +319,12 @@ class Queue
     /**
      * Get dead letter jobs — failed jobs that exceeded max retries.
      *
+     * @param int|null $maxRetries Override the queue's default max retries threshold
      * @return array<int, array> List of dead letter job arrays
      */
-    public function deadLetters(): array
+    public function deadLetters(?int $maxRetries = null): array
     {
-        return $this->liteBackend->deadLetters($this->topic);
+        return $this->liteBackend->deadLetters($this->topic, $maxRetries ?? $this->maxRetries);
     }
 
     /**
@@ -320,31 +333,33 @@ class Queue
      * @param string $status Status to purge: 'completed', 'failed', 'dead', 'pending'
      * @return int Number of jobs purged
      */
-    public function purge(string $status): int
+    public function purge(string $status, ?int $maxRetries = null): int
     {
-        return $this->liteBackend->purge($status, $this->topic);
+        return $this->liteBackend->purge($status, $this->topic, $maxRetries ?? $this->maxRetries);
     }
 
     /**
      * Re-queue failed jobs that haven't exceeded max retries back to pending.
      *
+     * @param int|null $maxRetries Override the queue's default max retries threshold
      * @return int Number of jobs re-queued
      */
-    public function retryFailed(): int
+    public function retryFailed(?int $maxRetries = null): int
     {
-        return $this->liteBackend->retryFailed($this->topic);
+        return $this->liteBackend->retryFailed($this->topic, $maxRetries ?? $this->maxRetries);
     }
 
     /**
      * Produce a message onto a named topic. Use when you need to push to a
      * topic other than the one set in the constructor.
      *
-     * @param string $topic   Topic/queue name
-     * @param mixed  $payload Job data
-     * @param int    $delay   Delay in seconds before job becomes available
+     * @param string $topic        Topic/queue name
+     * @param mixed  $payload      Job data
+     * @param int    $priority     Priority (higher = dequeued first, default 0)
+     * @param int    $delaySeconds Delay in seconds before job becomes available
      * @return string Job ID
      */
-    public function produce(string $topic, mixed $payload, int $delay = 0): string
+    public function produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0): string
     {
         if ($this->externalBackend !== null) {
             $message = [
@@ -358,8 +373,8 @@ class Queue
         $message = [
             'id'            => $this->generateId(),
             'payload'       => $payload,
-            'priority'      => 0,
-            'delay_seconds' => $delay,
+            'priority'      => $priority,
+            'delay_seconds' => $delaySeconds,
         ];
         return $this->liteBackend->enqueue($topic, $message);
     }

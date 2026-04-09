@@ -36,7 +36,7 @@ class Api
      *
      * @param array $headers Associative array of header name => value
      */
-    public function addCustomHeaders(array $headers): void
+    public function addHeaders(array $headers): void
     {
         $this->headers = array_merge($this->headers, $headers);
     }
@@ -70,66 +70,70 @@ class Api
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
         }
-        return $this->sendRequest($url, 'GET');
+        return $this->sendRequest('GET', $url);
     }
 
     /**
      * HTTP POST request.
      *
-     * @param string $path URL path
-     * @param mixed  $body Request body (array/object auto-serialized to JSON)
+     * @param string $path        URL path
+     * @param mixed  $body        Request body (array/object auto-serialized to JSON)
+     * @param string $contentType Content-Type header
      * @return array
      */
-    public function post(string $path = '', mixed $body = null): array
+    public function post(string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
-        return $this->sendRequest($this->buildUrl($path), 'POST', $body);
+        return $this->sendRequest('POST', $this->buildUrl($path), $body, $contentType);
     }
 
     /**
      * HTTP PUT request.
      *
-     * @param string $path URL path
-     * @param mixed  $body Request body
+     * @param string $path        URL path
+     * @param mixed  $body        Request body
+     * @param string $contentType Content-Type header
      * @return array
      */
-    public function put(string $path = '', mixed $body = null): array
+    public function put(string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
-        return $this->sendRequest($this->buildUrl($path), 'PUT', $body);
+        return $this->sendRequest('PUT', $this->buildUrl($path), $body, $contentType);
     }
 
     /**
      * HTTP PATCH request.
      *
-     * @param string $path URL path
-     * @param mixed  $body Request body
+     * @param string $path        URL path
+     * @param mixed  $body        Request body
+     * @param string $contentType Content-Type header
      * @return array
      */
-    public function patch(string $path = '', mixed $body = null): array
+    public function patch(string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
-        return $this->sendRequest($this->buildUrl($path), 'PATCH', $body);
+        return $this->sendRequest('PATCH', $this->buildUrl($path), $body, $contentType);
     }
 
     /**
      * HTTP DELETE request.
      *
      * @param string $path URL path
+     * @param mixed  $body Request body
      * @return array
      */
-    public function delete(string $path = ''): array
+    public function delete(string $path = '', mixed $body = null): array
     {
-        return $this->sendRequest($this->buildUrl($path), 'DELETE');
+        return $this->sendRequest('DELETE', $this->buildUrl($path), $body);
     }
 
     /**
      * Execute an HTTP request. Returns a standardized result array.
      *
-     * @param string $path        Full URL or path (appended to baseUrl if not absolute)
      * @param string $method      HTTP method (GET, POST, PUT, PATCH, DELETE)
+     * @param string $path        Full URL or path (appended to baseUrl if not absolute)
      * @param mixed  $body        Request body
      * @param string $contentType Content-Type header for the request body
      * @return array{http_code: ?int, body: mixed, headers: array, error: ?string}
      */
-    public function sendRequest(string $path = '', string $method = 'GET', mixed $body = null, string $contentType = 'application/json'): array
+    public function sendRequest(string $method = 'GET', string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
 

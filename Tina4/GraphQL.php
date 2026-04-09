@@ -220,7 +220,7 @@ class GraphQL
      * @param string $source
      * @return array List of [type, value, pos]
      */
-    private function tokenize(string $source): array
+    public function tokenize(string $source): array
     {
         $patterns = [
             'SPREAD'   => '\.\.\.',
@@ -616,17 +616,17 @@ class GraphQLParser
         return $doc;
     }
 
-    private function peek(): ?array
+    public function peek(int $offset = 0): ?array
     {
-        return $this->tokens[$this->pos] ?? null;
+        return $this->tokens[$this->pos + $offset] ?? null;
     }
 
-    private function advance(): array
+    public function advance(): array
     {
         return $this->tokens[$this->pos++];
     }
 
-    private function expect(string $type, ?string $value = null): array
+    public function expect(string $type, ?string $value = null): array
     {
         $t = $this->peek();
         if (!$t || $t['type'] !== $type || ($value !== null && $t['value'] !== $value)) {
@@ -637,7 +637,7 @@ class GraphQLParser
         return $this->advance();
     }
 
-    private function match(string $type, ?string $value = null): ?array
+    public function match(string $type, ?string $value = null): ?array
     {
         $t = $this->peek();
         if ($t && $t['type'] === $type && ($value === null || $t['value'] === $value)) {
