@@ -53,6 +53,12 @@ class Request
     /** @var Session|null Lazy-loaded session instance */
     public ?Session $session = null;
 
+    /** @var mixed|null Authenticated user payload — set by auth middleware after token validation */
+    public mixed $user = null;
+
+    /** @var mixed|null Route handler reference — set by the router during dispatch */
+    public mixed $handler = null;
+
     /**
      * Create a Request from PHP superglobals (convenience factory).
      */

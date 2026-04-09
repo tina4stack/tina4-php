@@ -78,23 +78,18 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $dbProp = $ref->getProperty('database');
-        $dbProp->setAccessible(true);
         $this->assertEquals('mydb', $dbProp->getValue($handler));
 
         $collProp = $ref->getProperty('collection');
-        $collProp->setAccessible(true);
         $this->assertEquals('mysessions', $collProp->getValue($handler));
 
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(7200, $ttlProp->getValue($handler));
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('myhost', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(28017, $portProp->getValue($handler));
     }
 
@@ -174,27 +169,21 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('valkey.local', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(6380, $portProp->getValue($handler));
 
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('mypass', $passProp->getValue($handler));
 
         $dbProp = $ref->getProperty('db');
-        $dbProp->setAccessible(true);
         $this->assertEquals(3, $dbProp->getValue($handler));
 
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(7200, $ttlProp->getValue($handler));
 
         $prefixProp = $ref->getProperty('keyPrefix');
-        $prefixProp->setAccessible(true);
         $this->assertEquals('app:sess:', $prefixProp->getValue($handler));
     }
 
@@ -208,11 +197,9 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('envhost', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(6381, $portProp->getValue($handler));
 
         putenv('TINA4_SESSION_VALKEY_HOST');
@@ -227,7 +214,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('envpassword', $passProp->getValue($handler));
 
         putenv('TINA4_SESSION_VALKEY_PASSWORD');
@@ -241,7 +227,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $dbProp = $ref->getProperty('db');
-        $dbProp->setAccessible(true);
         $this->assertEquals(5, $dbProp->getValue($handler));
 
         putenv('TINA4_SESSION_VALKEY_DB');
@@ -253,7 +238,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $prefixProp = $ref->getProperty('keyPrefix');
-        $prefixProp->setAccessible(true);
         $this->assertEquals('tina4:session:', $prefixProp->getValue($handler));
     }
 
@@ -263,7 +247,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertNull($passProp->getValue($handler));
     }
 
@@ -298,7 +281,6 @@ class SessionHandlerTest extends TestCase
         $handler = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 7200]);
 
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(7200, $ttlProp->getValue($handler));
 
         putenv('TINA4_SESSION_TTL');
@@ -348,7 +330,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(3600, $ttlProp->getValue($handler));
     }
 
@@ -359,7 +340,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(900, $ttlProp->getValue($handler));
     }
 
@@ -390,23 +370,18 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('localhost', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(6379, $portProp->getValue($handler));
 
         $dbProp = $ref->getProperty('db');
-        $dbProp->setAccessible(true);
         $this->assertEquals(0, $dbProp->getValue($handler));
 
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(3600, $ttlProp->getValue($handler));
 
         $prefixProp = $ref->getProperty('keyPrefix');
-        $prefixProp->setAccessible(true);
         $this->assertEquals('tina4:session:', $prefixProp->getValue($handler));
     }
 
@@ -424,27 +399,21 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('redis.example.com', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(6380, $portProp->getValue($handler));
 
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('pass123', $passProp->getValue($handler));
 
         $dbProp = $ref->getProperty('db');
-        $dbProp->setAccessible(true);
         $this->assertEquals(2, $dbProp->getValue($handler));
 
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(7200, $ttlProp->getValue($handler));
 
         $prefixProp = $ref->getProperty('keyPrefix');
-        $prefixProp->setAccessible(true);
         $this->assertEquals('myapp:sess:', $prefixProp->getValue($handler));
     }
 
@@ -488,11 +457,9 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('envhost', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(6381, $portProp->getValue($handler));
 
         putenv('TINA4_SESSION_REDIS_HOST');
@@ -507,7 +474,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('envpassword', $passProp->getValue($handler));
 
         putenv('TINA4_SESSION_REDIS_PASSWORD');
@@ -521,7 +487,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $dbProp = $ref->getProperty('db');
-        $dbProp->setAccessible(true);
         $this->assertEquals(5, $dbProp->getValue($handler));
 
         putenv('TINA4_SESSION_REDIS_DB');
@@ -533,7 +498,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertNull($passProp->getValue($handler));
     }
 
@@ -545,7 +509,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('confighost', $hostProp->getValue($handler));
 
         putenv('TINA4_SESSION_REDIS_HOST');
@@ -559,7 +522,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(900, $ttlProp->getValue($handler));
 
         putenv('TINA4_SESSION_TTL');
@@ -579,11 +541,9 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('mongo-env', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(27018, $portProp->getValue($handler));
 
         putenv('TINA4_SESSION_MONGO_HOST');
@@ -599,11 +559,9 @@ class SessionHandlerTest extends TestCase
         $ref = new \ReflectionClass($handler);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('db.host.com', $hostProp->getValue($handler));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(27020, $portProp->getValue($handler));
     }
 
@@ -629,7 +587,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('confighost', $hostProp->getValue($handler));
 
         putenv('TINA4_SESSION_VALKEY_HOST');
@@ -643,7 +600,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(900, $ttlProp->getValue($handler));
 
         putenv('TINA4_SESSION_TTL');
@@ -655,7 +611,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertIsInt($ttlProp->getValue($handler));
         $this->assertGreaterThan(0, $ttlProp->getValue($handler));
     }
@@ -666,7 +621,6 @@ class SessionHandlerTest extends TestCase
 
         $ref = new \ReflectionClass($handler);
         $ttlProp = $ref->getProperty('ttl');
-        $ttlProp->setAccessible(true);
         $this->assertEquals(3600, $ttlProp->getValue($handler));
     }
 }

@@ -72,7 +72,6 @@ class LiveReloadTest extends TestCase
     private function invokeDetectFileChanges(Server $server): bool
     {
         $ref = new ReflectionMethod(Server::class, 'detectFileChanges');
-        $ref->setAccessible(true);
         return $ref->invoke($server);
     }
 
@@ -82,7 +81,6 @@ class LiveReloadTest extends TestCase
     private function getFileMtimes(Server $server): array
     {
         $ref = new ReflectionProperty(Server::class, 'fileMtimes');
-        $ref->setAccessible(true);
         return $ref->getValue($server);
     }
 
@@ -534,7 +532,6 @@ class LiveReloadTest extends TestCase
     {
         $server = new Server();
         $ref = new ReflectionProperty(Server::class, 'fileCheckInterval');
-        $ref->setAccessible(true);
         $interval = $ref->getValue($server);
         $this->assertGreaterThan(0, $interval);
     }

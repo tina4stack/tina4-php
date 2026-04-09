@@ -131,11 +131,9 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('envhost', $hostProp->getValue($backend));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(15672, $portProp->getValue($backend));
 
         // Clean up env vars
@@ -156,11 +154,9 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $brokersProp = $ref->getProperty('brokers');
-        $brokersProp->setAccessible(true);
         $this->assertEquals('kafka1:9092,kafka2:9092', $brokersProp->getValue($backend));
 
         $groupProp = $ref->getProperty('groupId');
-        $groupProp->setAccessible(true);
         $this->assertEquals('test_group', $groupProp->getValue($backend));
 
         // Clean up
@@ -176,7 +172,6 @@ class QueueBackendTest extends TestCase
 
         $ref = new \ReflectionClass($backend);
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('confighost', $hostProp->getValue($backend));
 
         putenv('TINA4_RABBITMQ_HOST');
@@ -210,23 +205,18 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('localhost', $hostProp->getValue($backend));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(5672, $portProp->getValue($backend));
 
         $userProp = $ref->getProperty('username');
-        $userProp->setAccessible(true);
         $this->assertEquals('guest', $userProp->getValue($backend));
 
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('guest', $passProp->getValue($backend));
 
         $vhostProp = $ref->getProperty('vhost');
-        $vhostProp->setAccessible(true);
         $this->assertEquals('/', $vhostProp->getValue($backend));
     }
 
@@ -243,23 +233,18 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('rabbitmq.example.com', $hostProp->getValue($backend));
 
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(5673, $portProp->getValue($backend));
 
         $userProp = $ref->getProperty('username');
-        $userProp->setAccessible(true);
         $this->assertEquals('admin', $userProp->getValue($backend));
 
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('secret', $passProp->getValue($backend));
 
         $vhostProp = $ref->getProperty('vhost');
-        $vhostProp->setAccessible(true);
         $this->assertEquals('/test', $vhostProp->getValue($backend));
     }
 
@@ -284,11 +269,9 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $brokersProp = $ref->getProperty('brokers');
-        $brokersProp->setAccessible(true);
         $this->assertEquals('localhost:9092', $brokersProp->getValue($backend));
 
         $groupProp = $ref->getProperty('groupId');
-        $groupProp->setAccessible(true);
         $this->assertEquals('tina4_consumer_group', $groupProp->getValue($backend));
     }
 
@@ -302,11 +285,9 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $brokersProp = $ref->getProperty('brokers');
-        $brokersProp->setAccessible(true);
         $this->assertEquals('kafka1:9092,kafka2:9092', $brokersProp->getValue($backend));
 
         $groupProp = $ref->getProperty('groupId');
-        $groupProp->setAccessible(true);
         $this->assertEquals('my-app', $groupProp->getValue($backend));
     }
 
@@ -332,7 +313,6 @@ class QueueBackendTest extends TestCase
 
         $ref = new \ReflectionClass($backend);
         $vhostProp = $ref->getProperty('vhost');
-        $vhostProp->setAccessible(true);
         $this->assertEquals('/envvhost', $vhostProp->getValue($backend));
 
         putenv('TINA4_RABBITMQ_VHOST');
@@ -348,11 +328,9 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $userProp = $ref->getProperty('username');
-        $userProp->setAccessible(true);
         $this->assertEquals('envuser', $userProp->getValue($backend));
 
         $passProp = $ref->getProperty('password');
-        $passProp->setAccessible(true);
         $this->assertEquals('envpass', $passProp->getValue($backend));
 
         putenv('TINA4_RABBITMQ_USERNAME');
@@ -365,7 +343,6 @@ class QueueBackendTest extends TestCase
 
         $ref = new \ReflectionClass($backend);
         $clientProp = $ref->getProperty('clientId');
-        $clientProp->setAccessible(true);
         $this->assertEquals('tina4-php', $clientProp->getValue($backend));
     }
 
@@ -492,7 +469,6 @@ class QueueBackendTest extends TestCase
 
         $ref = new \ReflectionClass($backend);
         $brokersProp = $ref->getProperty('brokers');
-        $brokersProp->setAccessible(true);
         $this->assertEquals('config-broker:9092', $brokersProp->getValue($backend));
 
         putenv('TINA4_KAFKA_BROKERS');
@@ -508,12 +484,10 @@ class QueueBackendTest extends TestCase
         $ref = new \ReflectionClass($backend);
 
         $hostProp = $ref->getProperty('host');
-        $hostProp->setAccessible(true);
         $this->assertEquals('confighost', $hostProp->getValue($backend));
 
         // Port should still come from env since not specified in config
         $portProp = $ref->getProperty('port');
-        $portProp->setAccessible(true);
         $this->assertEquals(15672, $portProp->getValue($backend));
 
         putenv('TINA4_RABBITMQ_HOST');
