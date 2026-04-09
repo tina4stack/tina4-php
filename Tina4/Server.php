@@ -65,6 +65,9 @@ class Server
     /** @var array<string, int> Tracked file modification times */
     private array $fileMtimes = [];
 
+    /** @var bool True if the most recent file-change scan saw a .php file change */
+    private bool $phpChangeDetected = false;
+
     /** @var float Last time we scanned files for changes */
     private float $lastFileCheck = 0;
 
@@ -869,13 +872,16 @@ class Server
 
     /**
      * Scan watched directories for file changes.
-     * Compares filemtime() against stored map. Returns true if anything changed.
+     * Compares filemtime() against stored map. Returns true if anything changed
+     * and sets $this->phpChangeDetected to true if any .php file was among the
+     * changes (used by onFilesChanged() to decide whether a full restart is needed).
      */
     private function detectFileChanges(): bool
     {
         $dirs = ['src', 'migrations'];
         $extensions = ['php', 'twig', 'html', 'scss', 'css', 'js', 'json'];
         $changed = false;
+        $this->phpChangeDetected = false;
 
         // Also watch .env
         $envFile = '.env';
@@ -909,6 +915,9 @@ class Server
                 $mtime = $file->getMTime();
                 if (isset($this->fileMtimes[$path]) && $this->fileMtimes[$path] !== $mtime) {
                     $changed = true;
+                    if ($ext === 'php') {
+                        $this->phpChangeDetected = true;
+                    }
                     Log::info("Hot reload: {$path} changed");
                 }
                 $this->fileMtimes[$path] = $mtime;
@@ -920,26 +929,24 @@ class Server
 
     /**
      * Called when file changes are detected.
-     * Re-discovers routes and notifies browser clients to reload.
+     *
+     * For template/CSS/JS/HTML edits: just broadcast a reload signal to the
+     * browser. Frond re-reads templates in dev mode and static files are
+     * served from disk each request, so nothing else is needed — and touching
+     * the router would blow away the dev toolbar injection path.
+     *
+     * For .php file edits: log a warning. PHP cannot safely re-evaluate a
+     * previously-included file (classes cannot be redeclared), and
+     * include_once on an already-included file is a no-op, so the only
+     * correct way to pick up PHP changes is a full process restart.
      */
     private function onFilesChanged(): void
     {
-        // Re-discover routes from src/routes/
-        Router::clear();
-        $routeDir = 'src/routes';
-        if (is_dir($routeDir)) {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($routeDir, \FilesystemIterator::SKIP_DOTS)
+        if ($this->phpChangeDetected) {
+            Log::warning(
+                "Hot reload: .php file changed — PHP code changes require a full server restart. " .
+                "Template/CSS/JS edits hot-reload automatically."
             );
-            foreach ($iterator as $file) {
-                if ($file->isFile() && $file->getExtension() === 'php') {
-                    try {
-                        include_once $file->getPathname();
-                    } catch (\Throwable $e) {
-                        Log::error("Hot reload error: " . $e->getMessage());
-                    }
-                }
-            }
         }
 
         // Notify all reload subscribers via WebSocket
