@@ -407,7 +407,7 @@ class Queue
      * @param float $pollInterval  Seconds to sleep when queue is empty (default 1.0)
      * @param int $batchSize       When > 1, yield arrays of jobs instead of single Job objects
      */
-    public function consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0, int $batchSize = 1): \Generator
+    public function consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0, int $iterations = 0, int $batchSize = 1): \Generator
     {
         $topic = $topic ?: $this->topic;
 
@@ -420,8 +420,10 @@ class Queue
             return;
         }
 
+        // iterations = max jobs consumed (0 = unlimited). Matches Python semantics.
         // pollInterval=0 → single-pass drain (returns when empty)
-        // pollInterval>0 → long-running poll (sleeps when empty, never returns)
+        // pollInterval>0 → long-running poll (sleeps when empty)
+        $consumed = 0;
         if ($batchSize > 1) {
             while (true) {
                 $jobs = $this->popBatch($batchSize);
@@ -433,6 +435,10 @@ class Queue
                     continue;
                 }
                 yield $jobs;
+                $consumed += count($jobs);
+                if ($iterations > 0 && $consumed >= $iterations) {
+                    break;
+                }
             }
         } else {
             while (true) {
@@ -447,6 +453,10 @@ class Queue
                     continue;
                 }
                 yield new Job($data, $this, $topic);
+                $consumed++;
+                if ($iterations > 0 && $consumed >= $iterations) {
+                    break;
+                }
             }
         }
     }

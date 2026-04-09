@@ -161,20 +161,23 @@ class Events
      *
      * @param string $event Event name
      * @param mixed ...$args Arguments passed to each listener
+     * @return array Listener return values (failed listeners return null)
      */
-    public static function emitAsync(string $event, mixed ...$args): void
+    public static function emitAsync(string $event, mixed ...$args): array
     {
         if (!isset(self::$listeners[$event])) {
-            return;
+            return [];
         }
 
         $toRemove = [];
+        $results = [];
 
         foreach (self::$listeners[$event] as $index => $entry) {
             try {
-                call_user_func_array($entry['callback'], $args);
+                $results[] = call_user_func_array($entry['callback'], $args);
             } catch (\Exception $e) {
                 // Async emit silently catches errors
+                $results[] = null;
             }
 
             if ($entry['once']) {
@@ -190,6 +193,8 @@ class Events
         if (empty(self::$listeners[$event])) {
             unset(self::$listeners[$event]);
         }
+
+        return $results;
     }
 
     /**

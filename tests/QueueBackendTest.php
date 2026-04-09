@@ -500,7 +500,7 @@ class QueueBackendTest extends TestCase
             $queue->push(['n' => $i]);
         }
         $batches = [];
-        foreach ($queue->consume('batch_consume', null, 0, 2) as $jobs) {
+        foreach ($queue->consume('batch_consume', null, 0, 0, 2) as $jobs) {
             $batches[] = $jobs;
         }
         $total = array_sum(array_map('count', $batches));
