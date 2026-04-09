@@ -60,6 +60,25 @@ class Migration
 
         foreach ($pending as $migration) {
             $fileName = basename($migration);
+
+            // PHP class-based migration
+            if (str_ends_with($fileName, '.php')) {
+                $this->db->startTransaction();
+                try {
+                    $this->executePHPMigration($migration, 'up');
+                    $this->recordMigration($fileName, $batch);
+                    $this->db->commit();
+                    $applied[] = $fileName;
+                    Log::info("Migration applied: {$fileName}");
+                } catch (\Throwable $e) {
+                    $this->db->rollback();
+                    $errors[$fileName] = $e->getMessage();
+                    Log::error("Migration failed: {$fileName} — {$e->getMessage()}");
+                    break;
+                }
+                continue;
+            }
+
             $sql = file_get_contents($migration);
 
             if ($sql === false || trim($sql) === '') {
@@ -168,32 +187,43 @@ class Migration
             $this->db->startTransaction();
 
             try {
-                // Look for a .down.sql file
-                $downFile = $this->getDownFilePath($fileName);
-
-                if ($downFile !== null && file_exists($downFile)) {
-                    $downSql = file_get_contents($downFile);
-
-                    if ($downSql !== false && trim($downSql) !== '') {
-                        $statements = $this->splitStatements($downSql);
-
-                        foreach ($statements as $statement) {
-                            $statement = trim($statement);
-                            if ($statement === '') {
-                                continue;
-                            }
-
-                            $result = $this->db->exec($statement);
-                            if (!$result) {
-                                $error = $this->db->error() ?? 'Unknown error';
-                                throw new \RuntimeException("Rollback SQL failed: {$error}");
-                            }
-                        }
-
-                        Log::info("Executed down migration: " . basename($downFile));
+                // PHP class-based migration: call down()
+                if (str_ends_with($fileName, '.php')) {
+                    $phpFile = $this->migrationsDir . '/' . $fileName;
+                    if (file_exists($phpFile)) {
+                        $this->executePHPMigration($phpFile, 'down');
+                        Log::info("Executed down migration: {$fileName}");
+                    } else {
+                        Log::warning("No .php file found for {$fileName}, removing tracking record only");
                     }
                 } else {
-                    Log::warning("No .down.sql file found for {$fileName}, removing tracking record only");
+                    // Look for a .down.sql file
+                    $downFile = $this->getDownFilePath($fileName);
+
+                    if ($downFile !== null && file_exists($downFile)) {
+                        $downSql = file_get_contents($downFile);
+
+                        if ($downSql !== false && trim($downSql) !== '') {
+                            $statements = $this->splitStatements($downSql);
+
+                            foreach ($statements as $statement) {
+                                $statement = trim($statement);
+                                if ($statement === '') {
+                                    continue;
+                                }
+
+                                $result = $this->db->exec($statement);
+                                if (!$result) {
+                                    $error = $this->db->error() ?? 'Unknown error';
+                                    throw new \RuntimeException("Rollback SQL failed: {$error}");
+                                }
+                            }
+
+                            Log::info("Executed down migration: " . basename($downFile));
+                        }
+                    } else {
+                        Log::warning("No .down.sql file found for {$fileName}, removing tracking record only");
+                    }
                 }
 
                 // Remove the migration record
@@ -282,18 +312,31 @@ class Migration
             return [];
         }
 
-        $files = glob($this->migrationsDir . '/*.sql');
-        if ($files === false) {
-            return [];
+        $sqlFiles = glob($this->migrationsDir . '/*.sql');
+        if ($sqlFiles === false) {
+            $sqlFiles = [];
         }
 
         // Exclude .down.sql files — those are rollback scripts, not up migrations
-        $files = array_filter($files, function (string $file): bool {
+        $sqlFiles = array_filter($sqlFiles, function (string $file): bool {
             return !str_ends_with($file, '.down.sql');
         });
 
-        $files = array_values($files);
-        sort($files);
+        // Include .php migration files matching the digit-prefix naming pattern
+        $phpFiles = glob($this->migrationsDir . '/*.php');
+        if ($phpFiles === false) {
+            $phpFiles = [];
+        }
+
+        $phpFiles = array_filter($phpFiles, function (string $file): bool {
+            return (bool) preg_match('/^\d+_/', basename($file));
+        });
+
+        $files = array_values(array_merge(array_values($sqlFiles), array_values($phpFiles)));
+        usort($files, function (string $a, string $b): int {
+            return strcmp(basename($a), basename($b));
+        });
+
         return $files;
     }
 
@@ -330,12 +373,14 @@ class Migration
     /**
      * Create a new migration file with a YYYYMMDDHHMMSS timestamp prefix.
      *
-     * Creates both the up migration (.sql) and the down migration (.down.sql).
+     * When $kind is 'sql' (default): creates both .sql and .down.sql files.
+     * When $kind is 'php': creates a single .php file with up()/down() methods.
      *
      * @param string $description Human-readable description (used in filename)
-     * @return string Path to the created up migration file
+     * @param string $kind        'sql' (default) or 'php'
+     * @return string Path to the created migration file
      */
-    public function create(string $description): string
+    public function create(string $description, string $kind = 'sql'): string
     {
         if (!is_dir($this->migrationsDir)) {
             mkdir($this->migrationsDir, 0755, true);
@@ -344,19 +389,98 @@ class Migration
         $timestamp = date('YmdHis');
         $safeName  = preg_replace('/[^a-z0-9]+/', '_', strtolower($description));
         $safeName  = trim($safeName, '_');
+        $createdAt = date('Y-m-d H:i:s') . ' UTC';
+
+        if ($kind === 'php') {
+            $fileName  = "{$timestamp}_{$safeName}.php";
+            $filePath  = $this->migrationsDir . DIRECTORY_SEPARATOR . $fileName;
+
+            // Derive a CamelCase class name
+            $className = implode('', array_map('ucfirst', preg_split('/[^a-z0-9]+/', strtolower($description))));
+
+            $content = "<?php\n\n"
+                . "use Tina4\\MigrationBase;\n\n"
+                . "// Migration: {$description}\n"
+                . "// Created: {$createdAt}\n\n"
+                . "class {$className} extends MigrationBase\n"
+                . "{\n"
+                . "    public function up(\$db): void\n"
+                . "    {\n"
+                . "        // \$db->exec(\"CREATE TABLE ...\");\n"
+                . "    }\n\n"
+                . "    public function down(\$db): void\n"
+                . "    {\n"
+                . "        // \$db->exec(\"DROP TABLE IF EXISTS ...\");\n"
+                . "    }\n"
+                . "}\n";
+
+            file_put_contents($filePath, $content);
+            Log::info("Created migration: {$fileName}");
+            return $filePath;
+        }
 
         $upFileName   = "{$timestamp}_{$safeName}.sql";
         $downFileName = "{$timestamp}_{$safeName}.down.sql";
         $upPath       = $this->migrationsDir . DIRECTORY_SEPARATOR . $upFileName;
         $downPath     = $this->migrationsDir . DIRECTORY_SEPARATOR . $downFileName;
-        $createdAt    = date('Y-m-d H:i:s') . ' UTC';
 
         file_put_contents($upPath, "-- Migration: {$description}\n-- Created: {$createdAt}\n\n");
         file_put_contents($downPath, "-- Rollback: {$description}\n-- Created: {$createdAt}\n\n");
 
         Log::info("Created migration: {$upFileName}");
-
         return $upPath;
+    }
+
+    /**
+     * Execute a .php migration file by requiring it and calling up() or down().
+     *
+     * @param string $filepath  Full path to the .php migration file.
+     * @param string $direction Either 'up' or 'down'.
+     */
+    private function executePHPMigration(string $filepath, string $direction): void
+    {
+        // Snapshot classes before loading so we can detect newly defined ones
+        $before = get_declared_classes();
+
+        require_once $filepath;
+
+        // Find a MigrationBase subclass that was newly defined by this file
+        $after = get_declared_classes();
+        $newClasses = array_diff($after, $before);
+
+        $klass = null;
+        foreach ($newClasses as $class) {
+            if (is_subclass_of($class, MigrationBase::class)) {
+                $klass = $class;
+                break;
+            }
+        }
+
+        // If no new class was defined (e.g. require_once skipped a re-include),
+        // fall back to the most recently declared subclass
+        if ($klass === null) {
+            foreach (array_reverse($after) as $class) {
+                if (is_subclass_of($class, MigrationBase::class)) {
+                    // Verify this class is actually defined in the expected file
+                    try {
+                        $ref = new \ReflectionClass($class);
+                        if (realpath($ref->getFileName()) === realpath($filepath)) {
+                            $klass = $class;
+                            break;
+                        }
+                    } catch (\ReflectionException) {
+                        // ignore
+                    }
+                }
+            }
+        }
+
+        if ($klass === null) {
+            throw new \RuntimeException("No MigrationBase subclass found in {$filepath}");
+        }
+
+        $instance = new $klass();
+        $instance->{$direction}($this->db);
     }
 
     /**

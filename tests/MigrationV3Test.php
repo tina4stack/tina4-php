@@ -461,4 +461,147 @@ class MigrationV3Test extends TestCase
         $this->assertArrayHasKey('migration', $applied[0]);
         $this->assertArrayHasKey('batch', $applied[0]);
     }
+
+    // --- PHP class-based migrations ---
+
+    public function testMigratePHPFile(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_php_table.php',
+            <<<'PHP'
+            <?php
+            use Tina4\MigrationBase;
+            class CreatePhpTable extends MigrationBase
+            {
+                public function up($db): void
+                {
+                    $db->exec("CREATE TABLE php_table (id INTEGER PRIMARY KEY, label TEXT)");
+                }
+                public function down($db): void
+                {
+                    $db->exec("DROP TABLE IF EXISTS php_table");
+                }
+            }
+            PHP
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+
+        $this->assertCount(1, $result['applied']);
+        $this->assertSame('20240101000000_create_php_table.php', $result['applied'][0]);
+        $this->assertTrue($this->db->tableExists('php_table'));
+    }
+
+    public function testRollbackPHPFile(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_rb_php.php',
+            <<<'PHP'
+            <?php
+            use Tina4\MigrationBase;
+            class CreateRbPhp extends MigrationBase
+            {
+                public function up($db): void
+                {
+                    $db->exec("CREATE TABLE rb_php (id INTEGER PRIMARY KEY)");
+                }
+                public function down($db): void
+                {
+                    $db->exec("DROP TABLE IF EXISTS rb_php");
+                }
+            }
+            PHP
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->migrate();
+        $this->assertTrue($this->db->tableExists('rb_php'));
+
+        $result = $migration->rollback();
+        $this->assertCount(1, $result['rolledBack']);
+        $this->assertEmpty($result['errors']);
+        $this->assertCount(0, $migration->getAppliedMigrations());
+    }
+
+    public function testMixedSqlAndPHPMigrationsRunInOrder(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_sql_first.sql',
+            'CREATE TABLE sql_first (id INTEGER PRIMARY KEY)'
+        );
+        file_put_contents(
+            $this->migrationsDir . '/20240102000000_php_second.php',
+            <<<'PHP'
+            <?php
+            use Tina4\MigrationBase;
+            class PhpSecond extends MigrationBase
+            {
+                public function up($db): void
+                {
+                    $db->exec("CREATE TABLE php_second (id INTEGER PRIMARY KEY)");
+                }
+                public function down($db): void
+                {
+                    $db->exec("DROP TABLE IF EXISTS php_second");
+                }
+            }
+            PHP
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+
+        $this->assertCount(2, $result['applied']);
+        $this->assertSame('20240101000000_sql_first.sql', $result['applied'][0]);
+        $this->assertSame('20240102000000_php_second.php', $result['applied'][1]);
+        $this->assertTrue($this->db->tableExists('sql_first'));
+        $this->assertTrue($this->db->tableExists('php_second'));
+    }
+
+    public function testCreatePhpMigration(): void
+    {
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $path = $migration->create('add feature table', 'php');
+
+        $this->assertStringEndsWith('.php', $path);
+        $this->assertFileExists($path);
+        $content = file_get_contents($path);
+        $this->assertStringContainsString('MigrationBase', $content);
+        $this->assertStringContainsString('public function up($db): void', $content);
+        $this->assertStringContainsString('public function down($db): void', $content);
+    }
+
+    public function testPHPMigrationWithNoSubclassThrows(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_no_class.php',
+            '<?php // no MigrationBase subclass here'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+
+        $this->assertCount(0, $result['applied']);
+        $this->assertNotEmpty($result['errors']);
+    }
+
+    public function testGetMigrationFilesIncludesPHPFiles(): void
+    {
+        file_put_contents($this->migrationsDir . '/20240101000000_a.sql', 'SELECT 1');
+        file_put_contents(
+            $this->migrationsDir . '/20240102000000_b.php',
+            '<?php use Tina4\MigrationBase; class MigB extends MigrationBase { public function up($db): void {} public function down($db): void {} }'
+        );
+        // Non-migration PHP file (no digit prefix) — should be excluded
+        file_put_contents($this->migrationsDir . '/Helper.php', '<?php // helper');
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $files = array_map('basename', $migration->getMigrationFiles());
+
+        $this->assertContains('20240101000000_a.sql', $files);
+        $this->assertContains('20240102000000_b.php', $files);
+        $this->assertNotContains('Helper.php', $files);
+        $this->assertCount(2, $files);
+    }
 }
