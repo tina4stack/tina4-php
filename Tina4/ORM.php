@@ -54,11 +54,30 @@ abstract class ORM
     /** @var array<string, string> Belongs-to relationships: ['propertyName' => 'ForeignModel.foreign_key'] */
     public array $belongsTo = [];
 
+    /**
+     * Foreign key field declarations — auto-wires belongsTo on this model and hasMany on the referenced model.
+     *
+     * Format:
+     *   'user_id' => 'User'                                          // simple: model name
+     *   'user_id' => ['model' => 'User', 'related_name' => 'posts']  // extended: with custom has-many key
+     *
+     * @var array<string, string|array>
+     */
+    public array $foreignKeys = [];
+
     /** @var DatabaseAdapter|null Instance database connection */
     protected ?DatabaseAdapter $_db = null;
 
     /** @var DatabaseAdapter|null Global database for static methods (set via ORM::setGlobalDb or App::setDatabase) */
     private static ?DatabaseAdapter $_globalDb = null;
+
+    /**
+     * Cross-model registry: maps target model class name → list of has-many relationship specs.
+     * Populated by _processForeignKeys() when a model declares $foreignKeys.
+     *
+     * @var array<string, array<int, array{key: string, spec: string}>>
+     */
+    private static array $_fkRegistry = [];
 
     /**
      * Set the global database for all ORM models.
@@ -159,6 +178,9 @@ abstract class ORM
             $this->fill($data);
         }
 
+        // Auto-wire relationships from $foreignKeys declarations
+        $this->_processForeignKeys();
+
         // Auto-register for CRUD if flagged
         if ($this->autoCrud && $this->tableName !== '') {
             static $autoCrudRegistered = [];
@@ -204,6 +226,14 @@ abstract class ORM
         if (isset($this->hasOne[$name])) {
             $this->_relCache[$name] = $this->_loadRelationship($name, $this->hasOne[$name], 'hasOne');
             return $this->_relCache[$name];
+        }
+
+        // Merge any FK-registry-registered has-many entries for this class
+        $registryEntries = self::$_fkRegistry[static::class] ?? [];
+        foreach ($registryEntries as $entry) {
+            if (!isset($this->hasMany[$entry['key']])) {
+                $this->hasMany[$entry['key']] = $entry['spec'];
+            }
         }
 
         // Lazy load has-many relationships
@@ -1210,6 +1240,67 @@ abstract class ORM
         $sql = "SELECT COUNT(*) as cnt FROM {$this->tableName} WHERE {$pkColumn} = :id";
         $rows = $this->_db->query($sql, [':id' => $id]);
         return !empty($rows) && (int)$rows[0]['cnt'] > 0;
+    }
+
+    /**
+     * Auto-wire belongsTo on this model and register hasMany on the referenced model
+     * based on the $foreignKeys declarations.
+     *
+     * Called from constructor. Idempotent — skips entries already present.
+     */
+    private function _processForeignKeys(): void
+    {
+        if (empty($this->foreignKeys)) {
+            return;
+        }
+
+        $declaringClass = static::class;
+
+        foreach ($this->foreignKeys as $fkColumn => $config) {
+            // Normalise config
+            if (is_string($config)) {
+                $referencedModel = $config;
+                $relatedName = null;
+            } else {
+                $referencedModel = $config['model'] ?? '';
+                $relatedName = $config['related_name'] ?? null;
+            }
+
+            if ($referencedModel === '') {
+                continue;
+            }
+
+            // Derive belongsTo key: strip trailing _id
+            $belongsKey = preg_replace('/_id$/', '', $fkColumn);
+
+            // Add to $this->belongsTo if not already declared
+            if (!isset($this->belongsTo[$belongsKey])) {
+                $this->belongsTo[$belongsKey] = "{$referencedModel}.{$fkColumn}";
+            }
+
+            // Determine has-many key on the referenced model
+            if ($relatedName !== null) {
+                $hasManyKey = $relatedName;
+            } else {
+                // Default: declaring class name lowercased + 's'
+                $shortName = basename(str_replace('\\', '/', $declaringClass));
+                $hasManyKey = strtolower($shortName) . 's';
+            }
+
+            // Register in the cross-model FK registry so the referenced model
+            // gets the has-many entry injected lazily via __get()
+            $entry = ['key' => $hasManyKey, 'spec' => "{$declaringClass}.{$fkColumn}"];
+            $existing = self::$_fkRegistry[$referencedModel] ?? [];
+            foreach ($existing as $e) {
+                if ($e['key'] === $hasManyKey && $e['spec'] === $entry['spec']) {
+                    $entry = null;
+                    break;
+                }
+            }
+            if ($entry !== null) {
+                self::$_fkRegistry[$referencedModel][] = $entry;
+            }
+        }
     }
 
     /**
