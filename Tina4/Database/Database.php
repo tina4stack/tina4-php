@@ -844,7 +844,14 @@ class Database implements DatabaseAdapter
         }
 
         if (str_starts_with($url, 'sqlite:///')) {
-            $path = substr($url, 10);
+            // Strip the scheme: sqlite:/// = 9 chars
+            //   Linux:   sqlite:///var/data/app.db   → /var/data/app.db
+            //   Windows: sqlite:///C:/Users/app.db   → /C:/Users/app.db
+            // On Windows the leading / before the drive letter must be removed.
+            $path = substr($url, 9);
+            if (preg_match('/^\/[A-Za-z]:/', $path)) {
+                $path = substr($path, 1);
+            }
             return new SQLite3Adapter($path, $autoCommit);
         }
 
