@@ -95,7 +95,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodeShortFrame(): void
     {
         $msg = 'Hello';
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
 
         $this->assertEquals(0x81, ord($frame[0])); // FIN + TEXT
         $this->assertEquals(5, ord($frame[1]));     // length
@@ -105,7 +105,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodeMediumFrame(): void
     {
         $msg = str_repeat('A', 200);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
 
         $this->assertEquals(0x81, ord($frame[0]));
         $this->assertEquals(126, ord($frame[1])); // Extended 16-bit length
@@ -117,7 +117,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodeLargeFrame(): void
     {
         $msg = str_repeat('B', 70000);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
 
         $this->assertEquals(0x81, ord($frame[0]));
         $this->assertEquals(127, ord($frame[1])); // Extended 64-bit length
@@ -127,7 +127,7 @@ class WebSocketV3Test extends TestCase
 
     public function testEncodeEmptyFrame(): void
     {
-        $frame = WebSocket::encodeFrame('');
+        $frame = WebSocket::buildFrame('');
         $this->assertEquals(0x81, ord($frame[0]));
         $this->assertEquals(0, ord($frame[1]));
         $this->assertEquals(2, strlen($frame));
@@ -135,13 +135,13 @@ class WebSocketV3Test extends TestCase
 
     public function testEncodeBinaryOpcode(): void
     {
-        $frame = WebSocket::encodeFrame('data', WebSocket::OP_BINARY);
+        $frame = WebSocket::buildFrame('data', WebSocket::OP_BINARY);
         $this->assertEquals(0x80 | WebSocket::OP_BINARY, ord($frame[0]));
     }
 
     public function testEncodePingFrame(): void
     {
-        $frame = WebSocket::encodeFrame('', WebSocket::OP_PING);
+        $frame = WebSocket::buildFrame('', WebSocket::OP_PING);
         $this->assertEquals(0x80 | WebSocket::OP_PING, ord($frame[0]));
     }
 
@@ -149,7 +149,7 @@ class WebSocketV3Test extends TestCase
 
     public function testDecodeUnmaskedFrame(): void
     {
-        $frame = WebSocket::encodeFrame('Hello');
+        $frame = WebSocket::buildFrame('Hello');
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -187,7 +187,7 @@ class WebSocketV3Test extends TestCase
         $messages = ['short', str_repeat('x', 200), str_repeat('y', 70000)];
 
         foreach ($messages as $msg) {
-            $frame = WebSocket::encodeFrame($msg);
+            $frame = WebSocket::buildFrame($msg);
             $decoded = WebSocket::decodeFrame($frame);
             $this->assertNotNull($decoded);
             $this->assertEquals($msg, $decoded['payload']);
@@ -263,7 +263,7 @@ class WebSocketV3Test extends TestCase
 
     public function testEncodeCloseFrame(): void
     {
-        $frame = WebSocket::encodeFrame('', WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame('', WebSocket::OP_CLOSE);
         $this->assertEquals(0x80 | WebSocket::OP_CLOSE, ord($frame[0]));
         $this->assertEquals(0, ord($frame[1]));
     }
@@ -271,7 +271,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodePongFrame(): void
     {
         $payload = 'pong-data';
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_PONG);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_PONG);
         $this->assertEquals(0x80 | WebSocket::OP_PONG, ord($frame[0]));
         $this->assertEquals(strlen($payload), ord($frame[1]));
         $this->assertEquals($payload, substr($frame, 2));
@@ -279,7 +279,7 @@ class WebSocketV3Test extends TestCase
 
     public function testEncodeContinuationFrame(): void
     {
-        $frame = WebSocket::encodeFrame('continued', WebSocket::OP_CONTINUATION);
+        $frame = WebSocket::buildFrame('continued', WebSocket::OP_CONTINUATION);
         $this->assertEquals(0x80 | WebSocket::OP_CONTINUATION, ord($frame[0]));
     }
 
@@ -288,7 +288,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodePayloadExactly125Bytes(): void
     {
         $msg = str_repeat('X', 125);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $this->assertEquals(125, ord($frame[1]));
         $this->assertEquals(127, strlen($frame)); // 2 header + 125 payload
         $this->assertEquals($msg, substr($frame, 2));
@@ -297,7 +297,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodePayloadExactly126Bytes(): void
     {
         $msg = str_repeat('Y', 126);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $this->assertEquals(126, ord($frame[1])); // triggers 16-bit extended
         $len = unpack('n', substr($frame, 2, 2))[1];
         $this->assertEquals(126, $len);
@@ -306,7 +306,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodePayloadExactly65535Bytes(): void
     {
         $msg = str_repeat('Z', 65535);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $this->assertEquals(126, ord($frame[1])); // still 16-bit
         $len = unpack('n', substr($frame, 2, 2))[1];
         $this->assertEquals(65535, $len);
@@ -315,7 +315,7 @@ class WebSocketV3Test extends TestCase
     public function testEncodePayloadExactly65536Bytes(): void
     {
         $msg = str_repeat('W', 65536);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $this->assertEquals(127, ord($frame[1])); // triggers 64-bit
         $len = unpack('J', substr($frame, 2, 8))[1];
         $this->assertEquals(65536, $len);
@@ -335,7 +335,7 @@ class WebSocketV3Test extends TestCase
         ];
 
         foreach ($opcodes as $opcode) {
-            $frame = WebSocket::encodeFrame('test', $opcode);
+            $frame = WebSocket::buildFrame('test', $opcode);
             $finBit = (ord($frame[0]) >> 7) & 1;
             $this->assertEquals(1, $finBit, "FIN bit should be set for opcode {$opcode}");
         }
@@ -345,7 +345,7 @@ class WebSocketV3Test extends TestCase
 
     public function testDecodeCloseFrame(): void
     {
-        $frame = WebSocket::encodeFrame('', WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame('', WebSocket::OP_CLOSE);
         $decoded = WebSocket::decodeFrame($frame);
         $this->assertNotNull($decoded);
         $this->assertEquals(WebSocket::OP_CLOSE, $decoded['opcode']);
@@ -355,7 +355,7 @@ class WebSocketV3Test extends TestCase
     public function testDecodePingFrame(): void
     {
         $payload = 'ping-payload';
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_PING);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_PING);
         $decoded = WebSocket::decodeFrame($frame);
         $this->assertNotNull($decoded);
         $this->assertEquals(WebSocket::OP_PING, $decoded['opcode']);
@@ -365,7 +365,7 @@ class WebSocketV3Test extends TestCase
     public function testDecodePongFrame(): void
     {
         $payload = 'pong-payload';
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_PONG);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_PONG);
         $decoded = WebSocket::decodeFrame($frame);
         $this->assertNotNull($decoded);
         $this->assertEquals(WebSocket::OP_PONG, $decoded['opcode']);
@@ -375,7 +375,7 @@ class WebSocketV3Test extends TestCase
     public function testDecodeBinaryFrame(): void
     {
         $payload = "\x00\x01\x02\xFF\xFE";
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_BINARY);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_BINARY);
         $decoded = WebSocket::decodeFrame($frame);
         $this->assertNotNull($decoded);
         $this->assertEquals(WebSocket::OP_BINARY, $decoded['opcode']);
@@ -467,7 +467,7 @@ class WebSocketV3Test extends TestCase
     public function testDecodedFrameIncludesLength(): void
     {
         $msg = 'Hello';
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $decoded = WebSocket::decodeFrame($frame);
         $this->assertNotNull($decoded);
         $this->assertArrayHasKey('length', $decoded);
@@ -477,7 +477,7 @@ class WebSocketV3Test extends TestCase
     public function testDecodedFrameLengthMedium(): void
     {
         $msg = str_repeat('B', 200);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $decoded = WebSocket::decodeFrame($frame);
         $this->assertNotNull($decoded);
         $this->assertEquals(strlen($frame), $decoded['length']);
@@ -489,7 +489,7 @@ class WebSocketV3Test extends TestCase
     {
         // Build a close frame containing a 2-byte status code
         $closePayload = pack('n', WebSocket::CLOSE_NORMAL) . 'goodbye';
-        $frame = WebSocket::encodeFrame($closePayload, WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame($closePayload, WebSocket::OP_CLOSE);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -502,7 +502,7 @@ class WebSocketV3Test extends TestCase
     public function testCloseGoingAwayCode(): void
     {
         $closePayload = pack('n', WebSocket::CLOSE_GOING_AWAY);
-        $frame = WebSocket::encodeFrame($closePayload, WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame($closePayload, WebSocket::OP_CLOSE);
         $decoded = WebSocket::decodeFrame($frame);
         $code = unpack('n', substr($decoded['payload'], 0, 2))[1];
         $this->assertEquals(1001, $code);
@@ -511,7 +511,7 @@ class WebSocketV3Test extends TestCase
     public function testCloseProtocolErrorCode(): void
     {
         $closePayload = pack('n', WebSocket::CLOSE_PROTOCOL_ERROR);
-        $frame = WebSocket::encodeFrame($closePayload, WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame($closePayload, WebSocket::OP_CLOSE);
         $decoded = WebSocket::decodeFrame($frame);
         $code = unpack('n', substr($decoded['payload'], 0, 2))[1];
         $this->assertEquals(1002, $code);
@@ -522,7 +522,7 @@ class WebSocketV3Test extends TestCase
     public function testPingPongRoundTrip(): void
     {
         $pingData = 'keepalive-123';
-        $pingFrame = WebSocket::encodeFrame($pingData, WebSocket::OP_PING);
+        $pingFrame = WebSocket::buildFrame($pingData, WebSocket::OP_PING);
         $decodedPing = WebSocket::decodeFrame($pingFrame);
 
         $this->assertNotNull($decodedPing);
@@ -530,7 +530,7 @@ class WebSocketV3Test extends TestCase
         $this->assertEquals($pingData, $decodedPing['payload']);
 
         // Server would respond with a pong containing the same payload
-        $pongFrame = WebSocket::encodeFrame($decodedPing['payload'], WebSocket::OP_PONG);
+        $pongFrame = WebSocket::buildFrame($decodedPing['payload'], WebSocket::OP_PONG);
         $decodedPong = WebSocket::decodeFrame($pongFrame);
 
         $this->assertNotNull($decodedPong);

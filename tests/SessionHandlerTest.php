@@ -54,10 +54,10 @@ class SessionHandlerTest extends TestCase
         $this->assertEquals(2, $method->getNumberOfParameters());
     }
 
-    public function testMongoSessionHandlerHasDeleteMethod(): void
+    public function testMongoSessionHandlerHasDestroyMethod(): void
     {
         $ref = new \ReflectionClass(MongoSessionHandler::class);
-        $this->assertTrue($ref->hasMethod('delete'));
+        $this->assertTrue($ref->hasMethod('destroy'));
     }
 
     public function testMongoSessionHandlerHasCloseMethod(): void
@@ -131,10 +131,10 @@ class SessionHandlerTest extends TestCase
         $this->assertTrue($ref->hasMethod('write'));
     }
 
-    public function testValkeySessionHandlerHasDeleteMethod(): void
+    public function testValkeySessionHandlerHasDestroyMethod(): void
     {
         $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('delete'));
+        $this->assertTrue($ref->hasMethod('destroy'));
     }
 
     public function testValkeySessionHandlerHasCloseMethod(): void
@@ -261,7 +261,7 @@ class SessionHandlerTest extends TestCase
     {
         $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'read'));
         $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'write'));
-        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'delete'));
+        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'destroy'));
         $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'close'));
     }
 
@@ -427,9 +427,9 @@ class SessionHandlerTest extends TestCase
         $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'write'));
     }
 
-    public function testRedisSessionHandlerHasDeleteMethod(): void
+    public function testRedisSessionHandlerHasDestroyMethod(): void
     {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'delete'));
+        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'destroy'));
     }
 
     public function testRedisSessionHandlerHasCloseMethod(): void

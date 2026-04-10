@@ -74,7 +74,7 @@ class DatabaseSessionHandler
 
         if ($expiresAt < microtime(true)) {
             // Session expired — clean it up
-            $this->delete($sessionId);
+            $this->destroy($sessionId);
             return null;
         }
 
@@ -127,6 +127,16 @@ class DatabaseSessionHandler
      * @param string $sessionId The session ID
      */
     public function delete(string $sessionId): void
+    {
+        $this->destroy($sessionId);
+    }
+
+    /**
+     * Destroy a session (alias used internally).
+     *
+     * @param string $sessionId The session ID
+     */
+    public function destroy(string $sessionId): void
     {
         $this->ensureTable();
 

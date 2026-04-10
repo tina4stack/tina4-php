@@ -92,6 +92,71 @@ class ScssCompiler
         $this->presetVariables[$name] = $value;
     }
 
+    /**
+     * Compile all .scss files in a directory into a single CSS output file.
+     *
+     * Non-partial files (not starting with _) are compiled in alphabetical order.
+     * Returns the compiled CSS string.
+     */
+    public function compileScss(string $scssDir = 'src/scss', string $output = 'public/css/default.css', bool $minify = false): string
+    {
+        if (!is_dir($scssDir)) {
+            return '';
+        }
+
+        $files = glob($scssDir . '/*.scss');
+        if ($files === false || empty($files)) {
+            return '';
+        }
+
+        // Filter out partials and sort
+        $files = array_filter($files, function ($f) {
+            return !str_starts_with(basename($f), '_');
+        });
+        sort($files);
+
+        if (empty($files)) {
+            return '';
+        }
+
+        // Add the scss dir as an import path
+        if (!in_array($scssDir, $this->importPaths, true)) {
+            array_unshift($this->importPaths, $scssDir);
+        }
+
+        // Merge all files, resolving imports
+        $merged = '';
+        $imported = [];
+        foreach ($files as $file) {
+            $real = realpath($file);
+            if ($real === false) {
+                continue;
+            }
+            $imported[] = $real;
+            $content = file_get_contents($file);
+            if ($content === false) {
+                continue;
+            }
+            $content = $this->resolveImports($content, dirname($real), $imported);
+            $merged .= $content . "\n";
+        }
+
+        $css = $this->doCompile($merged);
+
+        if ($minify) {
+            $css = $this->minify($css);
+        }
+
+        // Write output
+        $outDir = dirname($output);
+        if (!is_dir($outDir)) {
+            mkdir($outDir, 0777, true);
+        }
+        file_put_contents($output, $css);
+
+        return $css;
+    }
+
     // ── Main compilation pipeline ───────────────────────────────
 
     private function doCompile(string $scss): string
@@ -464,6 +529,18 @@ class ScssCompiler
             return substr($content, $start, $pos - $start);
         }
         return null;
+    }
+
+    /**
+     * Minify CSS output.
+     */
+    private function minify(string $css): string
+    {
+        $css = preg_replace('#/\*.*?\*/#s', '', $css);  // Remove comments
+        $css = preg_replace('#\s+#', ' ', $css);         // Collapse whitespace
+        $css = preg_replace('#\s*([{}:;,])\s*#', '$1', $css);  // Remove space around punctuation
+        $css = str_replace(';}', '}', $css);             // Remove last semicolon before }
+        return trim($css);
     }
 
     /**

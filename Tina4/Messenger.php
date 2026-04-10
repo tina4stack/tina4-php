@@ -556,6 +556,56 @@ class Messenger
         }
     }
 
+    /**
+     * Mark a message as read (set \Seen flag).
+     *
+     * @param int    $uid    Message UID
+     * @param string $folder IMAP folder name
+     */
+    public function markRead(int $uid, string $folder = 'INBOX'): void
+    {
+        $imap = $this->imapConnect($folder);
+        if ($imap === null) {
+            return;
+        }
+
+        try {
+            imap_setflag_full($imap, (string)$uid, '\\Seen', ST_UID);
+            imap_close($imap);
+        } catch (\Throwable $e) {
+            @imap_close($imap);
+        }
+    }
+
+    /**
+     * Test IMAP connectivity without reading messages.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public function testImapConnection(): array
+    {
+        try {
+            $imap = $this->imapConnect('INBOX');
+            if ($imap === null) {
+                return ['success' => false, 'message' => 'IMAP connection failed'];
+            }
+            imap_close($imap);
+            return ['success' => true, 'message' => "Connected to {$this->imapHost}:{$this->imapPort}"];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => 'IMAP connection failed: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Factory that creates a Messenger from the current environment.
+     *
+     * @return static
+     */
+    public static function createMessenger(): static
+    {
+        return new static();
+    }
+
     // ── SMTP Internals ───────────────────────────────────────────
 
     /**

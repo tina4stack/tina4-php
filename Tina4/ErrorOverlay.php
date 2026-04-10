@@ -18,11 +18,11 @@ namespace Tina4;
  *   try {
  *       $handler($request, $response);
  *   } catch (\Throwable $e) {
- *       echo ErrorOverlay::render($e, $_SERVER);
+ *       echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);
  *   }
  *
  * Only activate when TINA4_DEBUG is true.
- * In production, call ErrorOverlay::renderProduction() instead.
+ * In production, call ErrorOverlay::renderProductionError() instead.
  */
 class ErrorOverlay
 {
@@ -49,7 +49,7 @@ class ErrorOverlay
      * @param array|null $request Optional request details ($_SERVER or custom array).
      * @return string Complete HTML page.
      */
-    public static function render(\Throwable $e, ?array $request = null): string
+    public static function renderErrorOverlay(\Throwable $e, ?array $request = null): string
     {
         $excType = get_class($e);
         $excMsg = $e->getMessage();
@@ -158,7 +158,7 @@ HTML;
     /**
      * Render a safe, generic error page for production.
      */
-    public static function renderProduction(int $statusCode = 500, string $message = 'Internal Server Error', string $path = ''): string
+    public static function renderProductionError(int $statusCode = 500, string $message = 'Internal Server Error', string $path = ''): string
     {
         $e_msg = self::esc($message);
         $e_path = self::esc($path);

@@ -268,6 +268,14 @@ class Request
     }
 
     /**
+     * Get a parameter by key from merged params (query + body + route params).
+     */
+    public function param(string $key, mixed $default = null): mixed
+    {
+        return $this->params[$key] ?? $this->query[$key] ?? $default;
+    }
+
+    /**
      * Get the bearer token from the Authorization header.
      */
     public function bearerToken(): ?string
@@ -317,7 +325,7 @@ class Request
     /**
      * Parse the request body based on content type.
      */
-    private function parseBody(): mixed
+    public function parseBody(): mixed
     {
         if ($this->rawBody === '') {
             // Fall back to $_POST for form submissions

@@ -25,14 +25,13 @@ class Swagger
     /**
      * Generate an OpenAPI 3.0.3 spec from registered routes.
      *
-     * @param string $title   API title
-     * @param string $version API version string
+     * @param array  $routes  Optional route definitions (reads from Router if empty)
      * @return array<string, mixed> OpenAPI spec as a nested associative array
      */
-    public static function generateSpec(string $title = 'Tina4 API', string $version = '1.0.0'): array
+    public static function generate(array $routes = []): array
     {
-        $title = DotEnv::getEnv('SWAGGER_TITLE', $title) ?? $title;
-        $version = DotEnv::getEnv('SWAGGER_VERSION', $version) ?? $version;
+        $title = DotEnv::getEnv('SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
+        $version = DotEnv::getEnv('SWAGGER_VERSION', '1.0.0') ?? '1.0.0';
         $description = DotEnv::getEnv('SWAGGER_DESCRIPTION', 'Auto-generated from Tina4 routes') ?? 'Auto-generated from Tina4 routes';
 
         $spec = [
@@ -276,7 +275,7 @@ class Swagger
     public static function register(): void
     {
         Router::get('/swagger/openapi.json', function (Request $request, Response $response) {
-            $spec = self::generateSpec();
+            $spec = self::generate();
             return $response->json($spec);
         });
 

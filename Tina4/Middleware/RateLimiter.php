@@ -143,6 +143,35 @@ class RateLimiter
         }
     }
 
+    /**
+     * Apply rate limiting to a request/response pair.
+     *
+     * Checks the IP, sets headers, returns 429 if over limit.
+     *
+     * @param Request $request
+     * @param Response $response
+     * @return array{0: Request, 1: Response}
+     */
+    public function apply(Request $request, Response $response): array
+    {
+        $ip = $request->ip ?? 'unknown';
+        $result = $this->check($ip);
+        $allowed = $result['allowed'];
+        $info = $result;
+
+        $response->header('X-RateLimit-Limit', (string)$info['limit']);
+        $response->header('X-RateLimit-Remaining', (string)$info['remaining']);
+        $response->header('X-RateLimit-Reset', (string)$info['reset']);
+
+        if (!$allowed) {
+            $retryAfter = max(1, (int)$info['reset']);
+            $response->header('Retry-After', (string)$retryAfter);
+            $response->setStatusCode(429);
+        }
+
+        return [$request, $response];
+    }
+
     /** @var array<string, array<float>> Static request tracking for the middleware hook */
     private static array $staticRequests = [];
 

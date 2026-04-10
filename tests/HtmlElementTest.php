@@ -251,4 +251,32 @@ class HtmlElementTest extends TestCase
         // In PHP, __toString is the only string conversion
         $this->assertSame((string) $el, (string) $el);
     }
+
+    // -- addHtmlHelpers --------------------------------------------------------
+
+    public function testAddHtmlHelpersInjectsIntoArray(): void
+    {
+        $h = [];
+        HtmlElement::addHtmlHelpers($h);
+        $this->assertArrayHasKey('_div', $h);
+        $this->assertArrayHasKey('_p', $h);
+        $this->assertArrayHasKey('_span', $h);
+    }
+
+    public function testAddHtmlHelpersClosuresWork(): void
+    {
+        $h = [];
+        HtmlElement::addHtmlHelpers($h);
+        $el = $h['_div'](['class' => 'card'], $h['_p']('Hello'));
+        $this->assertSame('<div class="card"><p>Hello</p></div>', (string) $el);
+    }
+
+    public function testAddHtmlHelpersInjectsIntoObject(): void
+    {
+        $obj = new \stdClass();
+        HtmlElement::addHtmlHelpers($obj);
+        $this->assertTrue(property_exists($obj, '_div'));
+        $el = ($obj->_div)(['class' => 'test'], 'Hi');
+        $this->assertSame('<div class="test">Hi</div>', (string) $el);
+    }
 }

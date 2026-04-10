@@ -521,7 +521,7 @@ class Session
      */
     private function removeFromRedis(): void
     {
-        $this->getRedisHandler()->delete($this->sessionId);
+        $this->getRedisHandler()->destroy($this->sessionId);
     }
 
     // ── Valkey Backend (delegates to ValkeySessionHandler) ────────
@@ -550,7 +550,7 @@ class Session
 
     private function removeFromValkey(): void
     {
-        $this->getValkeyHandler()->delete($this->sessionId);
+        $this->getValkeyHandler()->destroy($this->sessionId);
     }
 
     // ── MongoDB Backend (delegates to MongoSessionHandler) ────────
@@ -579,7 +579,7 @@ class Session
 
     private function removeFromMongo(): void
     {
-        $this->getMongoHandler()->delete($this->sessionId);
+        $this->getMongoHandler()->destroy($this->sessionId);
     }
 
     // ── Database Backend (delegates to DatabaseSessionHandler) ────
@@ -608,6 +608,6 @@ class Session
 
     private function removeFromDatabase(): void
     {
-        $this->getDbHandler()->delete($this->sessionId);
+        $this->getDbHandler()->destroy($this->sessionId);
     }
 }

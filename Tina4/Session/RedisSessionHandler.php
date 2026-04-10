@@ -101,7 +101,7 @@ class RedisSessionHandler
      *
      * @param string $sessionId The session ID
      */
-    public function delete(string $sessionId): void
+    public function destroy(string $sessionId): void
     {
         $this->ensureConnected();
 

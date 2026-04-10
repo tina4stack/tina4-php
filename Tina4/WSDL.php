@@ -51,6 +51,16 @@ abstract class WSDL
     private const NS_XSD = 'http://www.w3.org/2001/XMLSchema';
     private const NS_SOAP_ENV = 'http://schemas.xmlsoap.org/soap/envelope/';
 
+    /**
+     * Create a WSDLOperation attribute instance (programmatic alternative to #[WSDLOperation]).
+     *
+     * @param array<string, string> $returnTypes Map of return element names to XSD type names
+     */
+    public static function wsdlOperation(array $returnTypes = []): WSDLOperation
+    {
+        return new WSDLOperation($returnTypes);
+    }
+
     /** PHP type name to XSD type mapping */
     private const TYPE_MAP = [
         'int' => 'xsd:int',
@@ -111,7 +121,7 @@ abstract class WSDL
     /**
      * Generate WSDL 1.1 XML definition.
      */
-    protected function generateWSDL(string $endpointUrl): string
+    public function generateWSDL(string $endpointUrl = ''): string
     {
         $tns = "urn:{$this->serviceName}";
         $parts = [];
@@ -315,14 +325,14 @@ abstract class WSDL
     /**
      * Lifecycle hook: called before operation invocation. Override to validate/log.
      */
-    protected function onRequest(Request $request): void
+    public function onRequest(Request $request): void
     {
     }
 
     /**
      * Lifecycle hook: called after operation returns. Override to transform/audit.
      */
-    protected function onResult(mixed $result): mixed
+    public function onResult(mixed $result): mixed
     {
         return $result;
     }

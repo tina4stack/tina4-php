@@ -86,7 +86,7 @@ class WebSocket
      */
     public function broadcast(string $message, ?array $excludeIds = null, ?string $path = null): void
     {
-        $frame = self::encodeFrame($message);
+        $frame = self::buildFrame($message);
         foreach ($this->clients as $id => $client) {
             if ($excludeIds && in_array($id, $excludeIds)) {
                 continue;
@@ -104,12 +104,12 @@ class WebSocket
      * @param string $clientId Client ID
      * @param string $message  Message to send
      */
-    public function send(string $clientId, string $message): void
+    public function sendTo(string $clientId, string $message): void
     {
         if (!isset($this->clients[$clientId])) {
             return;
         }
-        $frame = self::encodeFrame($message);
+        $frame = self::buildFrame($message);
         $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
     }
 
@@ -193,7 +193,7 @@ class WebSocket
         if (empty($members)) {
             return;
         }
-        $frame = self::encodeFrame($message);
+        $frame = self::buildFrame($message);
         foreach ($members as $clientId) {
             if ($excludeIds && in_array($clientId, $excludeIds, true)) {
                 continue;
@@ -308,7 +308,7 @@ class WebSocket
             return;
         }
         $payload = pack('n', $code) . $reason;
-        $frame = self::encodeFrame($payload, self::OP_CLOSE);
+        $frame = self::buildFrame($payload, self::OP_CLOSE);
         $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
         $this->disconnectClient($clientId);
     }
@@ -380,7 +380,7 @@ class WebSocket
      * @param int    $opcode  Opcode (default: OP_TEXT)
      * @return string Binary frame
      */
-    public static function encodeFrame(string $message, int $opcode = self::OP_TEXT): string
+    public static function buildFrame(string $message, int $opcode = self::OP_TEXT): string
     {
         $frame = '';
         $length = strlen($message);
@@ -562,7 +562,7 @@ class WebSocket
                     break;
 
                 case self::OP_PING:
-                    $pong = self::encodeFrame($frame['payload'], self::OP_PONG);
+                    $pong = self::buildFrame($frame['payload'], self::OP_PONG);
                     $this->writeToSocket($client['socket'], $pong);
                     break;
 

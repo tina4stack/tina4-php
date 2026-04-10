@@ -510,7 +510,7 @@ class Router
         } catch (\Throwable $e) {
             if (ErrorOverlay::isDebugMode()) {
                 // Rich error overlay with stack trace, source context, and line numbers
-                $overlayHtml = ErrorOverlay::render($e, [
+                $overlayHtml = ErrorOverlay::renderErrorOverlay($e, [
                     'REQUEST_METHOD' => $request->method,
                     'REQUEST_URI' => $request->path,
                     'CONTENT_TYPE' => $request->contentType ?? '',

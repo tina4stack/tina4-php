@@ -135,9 +135,17 @@ class AutoCrud
      *
      * @return array<string, class-string<ORM>>
      */
-    public function getModels(): array
+    public function models(): array
     {
         return $this->models;
+    }
+
+    /**
+     * Clear all registered models (useful for testing).
+     */
+    public function clear(): void
+    {
+        $this->models = [];
     }
 
     /**

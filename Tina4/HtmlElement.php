@@ -172,4 +172,29 @@ class HtmlElement
 
         return $helpers;
     }
+
+    /**
+     * Inject _div(), _p(), _a(), _span(), etc. helper closures into the given namespace (array or object).
+     *
+     * Usage:
+     *   $h = [];
+     *   HtmlElement::addHtmlHelpers($h);
+     *   echo $h['_div'](["class" => "card"], $h['_p']("Hello"));
+     *
+     * @param array|object $namespace  Target to inject helpers into (array by reference or object)
+     */
+    public static function addHtmlHelpers(array|object &$namespace): void
+    {
+        $helpers = self::helpers();
+
+        if (is_array($namespace)) {
+            foreach ($helpers as $name => $fn) {
+                $namespace[$name] = $fn;
+            }
+        } else {
+            foreach ($helpers as $name => $fn) {
+                $namespace->$name = $fn;
+            }
+        }
+    }
 }

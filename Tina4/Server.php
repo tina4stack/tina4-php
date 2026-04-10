@@ -317,6 +317,20 @@ class Server
     }
 
     /**
+     * Dispatch a Request through the Tina4 Router and return a Response.
+     *
+     * Useful for testing and embedding — does not require an active socket
+     * connection. Cross-framework parity with Python and Node.js.
+     *
+     * @param Request $request The request to handle
+     * @return Response The response from the router
+     */
+    public function handle(Request $request): Response
+    {
+        return Router::dispatch($request, new Response());
+    }
+
+    /**
      * Check if a socket connected via the AI port.
      */
     private function isAiPortConnection($socket): bool
@@ -634,7 +648,7 @@ class Server
                     break;
 
                 case WebSocket::OP_PING:
-                    $pong = WebSocket::encodeFrame($frame['payload'], WebSocket::OP_PONG);
+                    $pong = WebSocket::buildFrame($frame['payload'], WebSocket::OP_PONG);
                     @fwrite($socket, $pong);
                     break;
 
@@ -644,7 +658,7 @@ class Server
 
                 case WebSocket::OP_CLOSE:
                     // Echo close frame back
-                    $closeFrame = WebSocket::encodeFrame(
+                    $closeFrame = WebSocket::buildFrame(
                         $frame['payload'],
                         WebSocket::OP_CLOSE
                     );
@@ -664,7 +678,7 @@ class Server
      */
     public function broadcastWebSocket(string $message, ?string $path = null, ?string $excludeId = null): void
     {
-        $frame = WebSocket::encodeFrame($message);
+        $frame = WebSocket::buildFrame($message);
         foreach ($this->wsClients as $id => $client) {
             if ($excludeId !== null && $id === $excludeId) {
                 continue;

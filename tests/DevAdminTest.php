@@ -755,6 +755,42 @@ class DevAdminTest extends TestCase
         $this->assertStringContainsString('line 42', $found[0]['traceback']);
     }
 
+    public function testErrorTrackerHealth(): void
+    {
+        ErrorTracker::capture('Error', 'one', '', 'a.php', 1);
+        ErrorTracker::capture('Error', 'two', '', 'b.php', 2);
+        $entries = ErrorTracker::get();
+        $twoId = null;
+        foreach ($entries as $e) {
+            if ($e['message'] === 'two') {
+                $twoId = $e['id'];
+                break;
+            }
+        }
+        ErrorTracker::resolve($twoId);
+
+        $health = ErrorTracker::health();
+        $this->assertSame(2, $health['total']);
+        $this->assertSame(1, $health['unresolved']);
+        $this->assertSame(1, $health['resolved']);
+        $this->assertFalse($health['healthy']);
+    }
+
+    public function testErrorTrackerHealthEmpty(): void
+    {
+        $health = ErrorTracker::health();
+        $this->assertTrue($health['healthy']);
+        $this->assertSame(0, $health['total']);
+    }
+
+    public function testErrorTrackerClearAll(): void
+    {
+        ErrorTracker::capture('Error', 'one', '', 'a.php', 1);
+        ErrorTracker::capture('Error', 'two', '', 'b.php', 2);
+        ErrorTracker::clearAll();
+        $this->assertCount(0, ErrorTracker::get());
+    }
+
     // ── Helper ─────────────────────────────────────────────────────
 
     private function findRouteCallback(string $method, string $pattern): ?callable

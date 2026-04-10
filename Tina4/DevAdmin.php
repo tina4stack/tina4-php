@@ -2209,6 +2209,25 @@ class ErrorTracker
     }
 
     /**
+     * Health summary — are there unresolved errors?
+     *
+     * @return array{healthy: bool, total: int, unresolved: int, resolved: int}
+     */
+    public static function health(): array
+    {
+        self::load();
+        $total = count(self::$errors);
+        $resolved = count(array_filter(self::$errors, fn($e) => $e['resolved']));
+        $unresolved = $total - $resolved;
+        return [
+            'healthy' => $unresolved === 0,
+            'total' => $total,
+            'unresolved' => $unresolved,
+            'resolved' => $resolved,
+        ];
+    }
+
+    /**
      * Register PHP error and exception handlers to feed the tracker.
      *
      * Safe to call multiple times — only registers once per process.

@@ -453,7 +453,11 @@ class SmokeTest extends TestCase
         Router::post('/api/widgets', fn() => null);
         Router::get('/api/widgets/{id}', fn() => null)->secure();
 
-        $spec = Swagger::generateSpec('Smoke API', '0.1.0');
+        putenv('SWAGGER_TITLE=Smoke API');
+        putenv('SWAGGER_VERSION=0.1.0');
+        $spec = Swagger::generate();
+        putenv('SWAGGER_TITLE');
+        putenv('SWAGGER_VERSION');
 
         $this->assertSame('3.0.3', $spec['openapi']);
         $this->assertSame('Smoke API', $spec['info']['title']);
@@ -776,7 +780,7 @@ class SmokeTest extends TestCase
         $this->assertSame($expected, WebSocket::computeAcceptKey($key));
 
         // Frame encoding
-        $frame = WebSocket::encodeFrame('Hello');
+        $frame = WebSocket::buildFrame('Hello');
         $this->assertSame(0x81, ord($frame[0])); // FIN + TEXT
         $this->assertSame(5, ord($frame[1]));     // length
         $this->assertSame('Hello', substr($frame, 2));
@@ -950,7 +954,7 @@ class SmokeTest extends TestCase
             $res->json(['secret' => 'data'])
         )->secure();
 
-        $token = Auth::getToken(['sub' => 'tester']);
+        $token = Auth::getToken(['sub' => 'tester'], $secret);
         $request = Request::create(
             method: 'GET',
             path: '/smoke/secret',

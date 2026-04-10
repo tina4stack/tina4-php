@@ -336,6 +336,14 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
         return $this->count;
     }
 
+    /**
+     * Returns the total count — alias for count() for cross-framework parity.
+     */
+    public function size(): int
+    {
+        return $this->count;
+    }
+
     // ── ArrayAccess ─────────────────────────────────────────────────
 
     public function offsetExists(mixed $offset): bool

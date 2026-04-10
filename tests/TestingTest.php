@@ -105,4 +105,22 @@ class TestingTest extends TestCase
 
         $this->assertSame(1, $results['errors'], "expected 1 error for will_crash");
     }
+
+    public function testDocblockDiscover(): void
+    {
+        Testing::reset();
+
+        $discovered = Testing::discover(__DIR__ . '/fixtures');
+        $this->assertSame(3, $discovered, "expected 3 functions discovered from docblocks");
+
+        $results = Testing::runAll(quiet: true);
+
+        // docblock_add: 3 assertEqual → 3 passed
+        // docblock_add_safe: 1 assertRaises + 1 assertEqual → 2 passed
+        // docblock_truthy: 1 assertTrue + 1 assertFalse → 2 passed
+        // Total: 7 passed
+        $this->assertSame(7, $results['passed'], "expected 7 passed from docblock tests");
+        $this->assertSame(0, $results['failed'], "expected 0 failed");
+        $this->assertSame(0, $results['errors'], "expected 0 errors");
+    }
 }

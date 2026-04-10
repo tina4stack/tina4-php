@@ -18,38 +18,38 @@ class ErrorOverlayTest extends TestCase
 
     public function testRenderReturnsHtmlString(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertIsString($html);
         $this->assertStringStartsWith('<!DOCTYPE html>', $html);
     }
 
     public function testRenderContainsExceptionType(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('RuntimeException', $html);
     }
 
     public function testRenderContainsExceptionMessage(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('something broke', $html);
     }
 
     public function testRenderContainsFilePath(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('ErrorOverlayTest.php', $html);
     }
 
     public function testRenderContainsSourceCode(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('RuntimeException', $html);
     }
 
     public function testRenderContainsErrorLineMarker(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('&#x25b6;', $html);
     }
 
@@ -60,7 +60,7 @@ class ErrorOverlayTest extends TestCase
             'REQUEST_URI' => '/api/users',
             'HTTP_HOST' => 'localhost',
         ];
-        $html = ErrorOverlay::render($this->makeException(), $request);
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException(), $request);
         $this->assertStringContainsString('GET', $html);
         $this->assertStringContainsString('/api/users', $html);
         $this->assertStringContainsString('localhost', $html);
@@ -69,14 +69,14 @@ class ErrorOverlayTest extends TestCase
 
     public function testRenderWithoutRequest(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         // The collapsible Request Details section should not be rendered
         $this->assertStringNotContainsString('user-select:none;">Request Details</summary>', $html);
     }
 
     public function testRenderContainsEnvironmentSection(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('Environment', $html);
         $this->assertStringContainsString('Tina4 PHP', $html);
         $this->assertStringContainsString('PHP', $html);
@@ -84,48 +84,48 @@ class ErrorOverlayTest extends TestCase
 
     public function testRenderContainsDebugModeFooter(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('TINA4_DEBUG', $html);
     }
 
     public function testRenderEscapesHtmlInMessage(): void
     {
         $e = new \RuntimeException('<script>alert("xss")</script>');
-        $html = ErrorOverlay::render($e);
+        $html = ErrorOverlay::renderErrorOverlay($e);
         $this->assertStringNotContainsString('<script>', $html);
         $this->assertStringContainsString('&lt;script&gt;', $html);
     }
 
     public function testRenderStackTraceOpen(): void
     {
-        $html = ErrorOverlay::render($this->makeException());
+        $html = ErrorOverlay::renderErrorOverlay($this->makeException());
         $this->assertStringContainsString('Stack Trace', $html);
         $this->assertStringContainsString('<details', $html);
     }
 
     public function testRenderProductionReturnsHtml(): void
     {
-        $html = ErrorOverlay::renderProduction();
+        $html = ErrorOverlay::renderProductionError();
         $this->assertIsString($html);
         $this->assertStringStartsWith('<!DOCTYPE html>', $html);
     }
 
     public function testRenderProductionContainsStatusCode(): void
     {
-        $html = ErrorOverlay::renderProduction(404, 'Not Found');
+        $html = ErrorOverlay::renderProductionError(404, 'Not Found');
         $this->assertStringContainsString('404', $html);
         $this->assertStringContainsString('Not Found', $html);
     }
 
     public function testRenderProductionNoStackTrace(): void
     {
-        $html = ErrorOverlay::renderProduction();
+        $html = ErrorOverlay::renderProductionError();
         $this->assertStringNotContainsString('Stack Trace', $html);
     }
 
     public function testRenderProductionDefault500(): void
     {
-        $html = ErrorOverlay::renderProduction();
+        $html = ErrorOverlay::renderProductionError();
         $this->assertStringContainsString('500', $html);
         $this->assertStringContainsString('Internal Server Error', $html);
     }

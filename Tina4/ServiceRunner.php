@@ -213,6 +213,16 @@ class ServiceRunner
     }
 
     /**
+     * Stop all services and remove all registrations.
+     */
+    public static function clear(): void
+    {
+        self::stop();
+        self::$services = [];
+        self::$status = [];
+    }
+
+    /**
      * Check if a service is currently running.
      *
      * @param string $name Service name

@@ -34,6 +34,9 @@ class WebSocketConnection
     /** @var Server|null Reference to the server for broadcasting */
     private ?Server $server;
 
+    /** @var WebSocket|null Reference to the WebSocket manager for rooms */
+    private ?WebSocket $ws;
+
     /**
      * @param string      $id      Unique connection ID
      * @param string      $path    WebSocket route path
@@ -42,6 +45,7 @@ class WebSocketConnection
      * @param string      $ip      Client IP address
      * @param array       $headers HTTP headers from upgrade request
      * @param array       $params  Route params from path pattern
+     * @param WebSocket|null $ws   WebSocket manager for room operations
      */
     public function __construct(
         string $id,
@@ -51,6 +55,7 @@ class WebSocketConnection
         string $ip = '',
         array $headers = [],
         array $params = [],
+        ?WebSocket $ws = null,
     ) {
         $this->id = $id;
         $this->path = $path;
@@ -59,6 +64,7 @@ class WebSocketConnection
         $this->ip = $ip;
         $this->headers = $headers;
         $this->params = $params;
+        $this->ws = $ws;
     }
 
     /**
@@ -66,7 +72,7 @@ class WebSocketConnection
      */
     public function send(string $message): void
     {
-        $frame = WebSocket::encodeFrame($message);
+        $frame = WebSocket::buildFrame($message);
         @fwrite($this->socket, $frame);
     }
 
@@ -86,6 +92,26 @@ class WebSocketConnection
     }
 
     /**
+     * Join a room.
+     */
+    public function joinRoom(string $roomName): void
+    {
+        if ($this->ws !== null) {
+            $this->ws->joinRoom($this->id, $roomName);
+        }
+    }
+
+    /**
+     * Leave a room.
+     */
+    public function leaveRoom(string $roomName): void
+    {
+        if ($this->ws !== null) {
+            $this->ws->leaveRoom($this->id, $roomName);
+        }
+    }
+
+    /**
      * Close this WebSocket connection.
      *
      * @param int    $code   Close status code (default: 1000 Normal)
@@ -94,7 +120,7 @@ class WebSocketConnection
     public function close(int $code = WebSocket::CLOSE_NORMAL, string $reason = ''): void
     {
         $payload = pack('n', $code) . $reason;
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_CLOSE);
         @fwrite($this->socket, $frame);
 
         if ($this->server !== null) {

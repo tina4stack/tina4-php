@@ -12,6 +12,8 @@ namespace Tina4;
  * Inline testing framework — attach test assertions to functions/methods
  * and run them all at once.
  *
+ * Option 1: Explicit registration
+ *
  *     Testing::tests(
  *         [Testing::assertEqual([5, 3], 8), Testing::assertRaises('InvalidArgumentException', [null])],
  *         function ($a, $b = null) {
@@ -21,6 +23,16 @@ namespace Tina4;
  *         'add'
  *     );
  *
+ * Option 2: Docblock annotations (auto-discovered)
+ *
+ *     /**
+ *      * @tests assertEqual([5, 3], 8)
+ *      * @tests assertEqual([0, 0], 0)
+ *      * @tests assertRaises(InvalidArgumentException::class, [null])
+ *      *\/
+ *     function add(int $a, ?int $b = null): int { ... }
+ *
+ *     Testing::discover('src/');   // scans for @tests docblocks
  *     Testing::runAll();
  */
 class Testing
@@ -146,6 +158,241 @@ class Testing
     public static function reset(): void
     {
         self::$registry = [];
+    }
+
+    // ── Docblock discovery ────────────────────────────────────────
+
+    /**
+     * Scan PHP files for functions/methods with @tests docblock annotations
+     * and auto-register them.
+     *
+     * Supports standalone functions and static class methods.
+     *
+     *     /** @tests assertEqual([5, 3], 8) *\/
+     *     function add(int $a, int $b): int { return $a + $b; }
+     *
+     * @param string $path  Directory to scan recursively
+     * @return int Number of functions discovered
+     */
+    public static function discover(string $path): int
+    {
+        $count = 0;
+        $files = self::globRecursive($path, '*.php');
+
+        foreach ($files as $file) {
+            $source = file_get_contents($file);
+            if ($source === false || strpos($source, '@tests') === false) {
+                continue;
+            }
+
+            // Include the file so functions/classes are available via reflection
+            require_once $file;
+
+            // Find all docblocks containing @tests followed by a function declaration
+            $count += self::discoverFunctions($source, $file);
+            $count += self::discoverMethods($source, $file);
+        }
+
+        return $count;
+    }
+
+    /**
+     * Discover standalone functions with @tests docblocks.
+     */
+    private static function discoverFunctions(string $source, string $file): int
+    {
+        $count = 0;
+        // Match: docblock → function name(
+        $pattern = '/\/\*\*(.*?)\*\/\s*function\s+(\w+)\s*\(/s';
+
+        if (!preg_match_all($pattern, $source, $matches, PREG_SET_ORDER)) {
+            return 0;
+        }
+
+        // Detect namespace
+        $namespace = '';
+        if (preg_match('/namespace\s+([\w\\\\]+)\s*;/', $source, $nsMatch)) {
+            $namespace = $nsMatch[1] . '\\';
+        }
+
+        foreach ($matches as $match) {
+            $docblock = $match[1];
+            $funcName = $match[2];
+
+            if (strpos($docblock, '@tests') === false) {
+                continue;
+            }
+
+            $fqn = $namespace . $funcName;
+
+            $assertions = self::parseDocblockAssertions($docblock);
+            if (empty($assertions)) {
+                continue;
+            }
+
+            if (!function_exists($fqn)) {
+                continue;
+            }
+
+            self::tests($assertions, $fqn, $funcName);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Discover static class methods with @tests docblocks.
+     */
+    private static function discoverMethods(string $source, string $file): int
+    {
+        $count = 0;
+        // Match: docblock → public static function name(
+        $pattern = '/\/\*\*(.*?)\*\/\s*public\s+static\s+function\s+(\w+)\s*\(/s';
+
+        if (!preg_match_all($pattern, $source, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+            return 0;
+        }
+
+        // Detect namespace
+        $namespace = '';
+        if (preg_match('/namespace\s+([\w\\\\]+)\s*;/', $source, $nsMatch)) {
+            $namespace = $nsMatch[1] . '\\';
+        }
+
+        // Find all class declarations and their positions
+        preg_match_all('/class\s+(\w+)/', $source, $classMatches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
+        foreach ($matches as $match) {
+            $docblock = $match[1][0];
+            $methodName = $match[2][0];
+            $position = $match[0][1];
+
+            if (strpos($docblock, '@tests') === false) {
+                continue;
+            }
+
+            $assertions = self::parseDocblockAssertions($docblock);
+            if (empty($assertions)) {
+                continue;
+            }
+
+            // Find the class this method belongs to (nearest class declaration before it)
+            $className = null;
+            foreach ($classMatches as $cm) {
+                if ($cm[0][1] < $position) {
+                    $className = $cm[1][0];
+                }
+            }
+
+            if ($className === null) {
+                continue;
+            }
+
+            $fqn = $namespace . $className;
+            if (!class_exists($fqn) || !method_exists($fqn, $methodName)) {
+                continue;
+            }
+
+            self::tests($assertions, [$fqn, $methodName], "{$className}::{$methodName}");
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Parse @tests lines from a docblock into assertion arrays.
+     *
+     * Each @tests line should contain an assertion call, e.g.:
+     *   @tests assertEqual([5, 3], 8)
+     *   @tests assertRaises(InvalidArgumentException::class, [null])
+     *   @tests assertTrue([1, 1])
+     *   @tests assertFalse([0, 0])
+     */
+    private static function parseDocblockAssertions(string $docblock): array
+    {
+        $assertions = [];
+
+        // Extract @tests lines
+        if (!preg_match_all('/@tests\s+(.+)/', $docblock, $lines)) {
+            return [];
+        }
+
+        foreach ($lines[1] as $line) {
+            $line = trim($line);
+            // Remove trailing */ or * if present
+            $line = rtrim($line, ' */');
+
+            $assertion = self::parseAssertionLine($line);
+            if ($assertion !== null) {
+                $assertions[] = $assertion;
+            }
+        }
+
+        return $assertions;
+    }
+
+    /**
+     * Parse a single assertion expression like "assertEqual([5, 3], 8)".
+     */
+    private static function parseAssertionLine(string $line): ?array
+    {
+        // Match: methodName(...)
+        if (!preg_match('/^(assertEqual|assertRaises|assertTrue|assertFalse)\s*\((.+)\)$/s', $line, $m)) {
+            return null;
+        }
+
+        $method = $m[1];
+        $argsStr = trim($m[2]);
+
+        // Evaluate the arguments safely using PHP's eval
+        // We wrap in an array context so the expression becomes valid PHP
+        try {
+            $evaluated = eval("return [{$argsStr}];");
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!is_array($evaluated)) {
+            return null;
+        }
+
+        return match ($method) {
+            'assertEqual' => count($evaluated) >= 2
+                ? self::assertEqual((array)$evaluated[0], $evaluated[1])
+                : null,
+            'assertRaises' => count($evaluated) >= 2
+                ? self::assertRaises((string)$evaluated[0], (array)$evaluated[1])
+                : null,
+            'assertTrue' => count($evaluated) >= 1
+                ? self::assertTrue((array)$evaluated[0])
+                : null,
+            'assertFalse' => count($evaluated) >= 1
+                ? self::assertFalse((array)$evaluated[0])
+                : null,
+            default => null,
+        };
+    }
+
+    /**
+     * Recursively glob for files matching a pattern.
+     */
+    private static function globRecursive(string $dir, string $pattern): array
+    {
+        $dir = rtrim($dir, '/');
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $files = glob("{$dir}/{$pattern}") ?: [];
+        $subdirs = glob("{$dir}/*", GLOB_ONLYDIR) ?: [];
+
+        foreach ($subdirs as $subdir) {
+            $files = array_merge($files, self::globRecursive($subdir, $pattern));
+        }
+
+        return $files;
     }
 
     // ── Internals ──────────────────────────────────────────────────

@@ -76,7 +76,7 @@ class MongoSessionHandler
         // Check TTL expiry
         $lastAccessed = $result['last_accessed'] ?? 0;
         if (time() - $lastAccessed > $this->ttl) {
-            $this->delete($sessionId);
+            $this->destroy($sessionId);
             return [];
         }
 
@@ -112,7 +112,7 @@ class MongoSessionHandler
      *
      * @param string $sessionId The session ID
      */
-    public function delete(string $sessionId): void
+    public function destroy(string $sessionId): void
     {
         $this->ensureConnected();
 

@@ -54,7 +54,7 @@ class AutoCrudV3Test extends TestCase
         $crud = new AutoCrud($this->db);
         $crud->register(CrudItem::class);
 
-        $models = $crud->getModels();
+        $models = $crud->models();
         $this->assertArrayHasKey('items', $models);
         $this->assertSame(CrudItem::class, $models['items']);
     }

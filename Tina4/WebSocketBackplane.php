@@ -14,7 +14,7 @@ namespace Tina4;
  *   TINA4_WS_BACKPLANE_URL — Connection string (default: tcp://127.0.0.1:6379)
  *
  * Usage:
- *   $backplane = WebSocketBackplaneFactory::create();
+ *   $backplane = WebSocketBackplaneFactory::create_backplane();
  *   if ($backplane) {
  *       $backplane->subscribe("chat", function ($msg) { relayToLocal($msg); });
  *       $backplane->publish("chat", '{"user":"A","text":"hello"}');
@@ -214,7 +214,7 @@ class NATSBackplane implements WebSocketBackplaneInterface
  */
 class WebSocketBackplaneFactory
 {
-    public static function create(?string $url = null): ?WebSocketBackplaneInterface
+    public static function create_backplane(?string $url = null): ?WebSocketBackplaneInterface
     {
         $backend = strtolower(trim(
             $_ENV['TINA4_WS_BACKPLANE']

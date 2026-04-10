@@ -253,4 +253,35 @@ class ScssV3Test extends TestCase
         $css = $this->compiler->compile($scss);
         $this->assertStringNotContainsString('Just a comment', $css);
     }
+
+    public function testCompileScssDirectory(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/tina4_scss_dir_' . uniqid();
+        mkdir($tempDir, 0777, true);
+
+        file_put_contents($tempDir . '/main.scss', '.main { color: green; }');
+        file_put_contents($tempDir . '/_partial.scss', '$x: red;');
+
+        $output = sys_get_temp_dir() . '/tina4_scss_out_' . uniqid() . '/default.css';
+
+        $compiler = new ScssCompiler();
+        $css = $compiler->compileScss($tempDir, $output);
+        $this->assertStringContainsString('.main', $css);
+        $this->assertStringContainsString('color: green', $css);
+        $this->assertFileExists($output);
+
+        // Cleanup
+        unlink($tempDir . '/main.scss');
+        unlink($tempDir . '/_partial.scss');
+        rmdir($tempDir);
+        unlink($output);
+        rmdir(dirname($output));
+    }
+
+    public function testCompileScssDirectoryNonexistent(): void
+    {
+        $compiler = new ScssCompiler();
+        $css = $compiler->compileScss('/nonexistent/path');
+        $this->assertSame('', $css);
+    }
 }

@@ -69,7 +69,7 @@ class WebSocketTest extends TestCase
     public function testEncodeDecodeTextFrame(): void
     {
         $msg = 'Hello WebSocket!';
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -80,7 +80,7 @@ class WebSocketTest extends TestCase
 
     public function testEncodeDecodeEmptyFrame(): void
     {
-        $frame = WebSocket::encodeFrame('');
+        $frame = WebSocket::buildFrame('');
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -91,7 +91,7 @@ class WebSocketTest extends TestCase
     public function testEncodeDecodeMediumFrame(): void
     {
         $msg = str_repeat('M', 200);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -102,7 +102,7 @@ class WebSocketTest extends TestCase
     public function testEncodeDecodeLargeFrame(): void
     {
         $msg = str_repeat('L', 70000);
-        $frame = WebSocket::encodeFrame($msg);
+        $frame = WebSocket::buildFrame($msg);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -113,7 +113,7 @@ class WebSocketTest extends TestCase
     public function testEncodePingFrame(): void
     {
         $payload = 'keepalive';
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_PING);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_PING);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -124,7 +124,7 @@ class WebSocketTest extends TestCase
     public function testEncodePongFrame(): void
     {
         $payload = 'keepalive';
-        $frame = WebSocket::encodeFrame($payload, WebSocket::OP_PONG);
+        $frame = WebSocket::buildFrame($payload, WebSocket::OP_PONG);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -135,7 +135,7 @@ class WebSocketTest extends TestCase
     public function testEncodeCloseFrame(): void
     {
         $closePayload = pack('n', WebSocket::CLOSE_NORMAL) . 'bye';
-        $frame = WebSocket::encodeFrame($closePayload, WebSocket::OP_CLOSE);
+        $frame = WebSocket::buildFrame($closePayload, WebSocket::OP_CLOSE);
         $decoded = WebSocket::decodeFrame($frame);
 
         $this->assertNotNull($decoded);
@@ -174,14 +174,14 @@ class WebSocketTest extends TestCase
     public function testPingPongRoundTrip(): void
     {
         $pingData = 'ping-123';
-        $pingFrame = WebSocket::encodeFrame($pingData, WebSocket::OP_PING);
+        $pingFrame = WebSocket::buildFrame($pingData, WebSocket::OP_PING);
         $decodedPing = WebSocket::decodeFrame($pingFrame);
 
         $this->assertNotNull($decodedPing);
         $this->assertEquals(WebSocket::OP_PING, $decodedPing['opcode']);
 
         // Server responds with pong containing same payload
-        $pongFrame = WebSocket::encodeFrame($decodedPing['payload'], WebSocket::OP_PONG);
+        $pongFrame = WebSocket::buildFrame($decodedPing['payload'], WebSocket::OP_PONG);
         $decodedPong = WebSocket::decodeFrame($pongFrame);
 
         $this->assertNotNull($decodedPong);
@@ -194,7 +194,7 @@ class WebSocketTest extends TestCase
         $sizes = [0, 1, 125, 126, 127, 200, 65535, 65536];
         foreach ($sizes as $size) {
             $msg = str_repeat('x', $size);
-            $frame = WebSocket::encodeFrame($msg);
+            $frame = WebSocket::buildFrame($msg);
             $decoded = WebSocket::decodeFrame($frame);
             $this->assertNotNull($decoded, "Round-trip failed for size {$size}");
             $this->assertEquals($msg, $decoded['payload'], "Payload mismatch for size {$size}");
