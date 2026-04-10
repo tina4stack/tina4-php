@@ -535,10 +535,10 @@ Renders syntax-highlighted stack traces with source context, request details, an
 
 ```php
 // Render a full HTML error overlay (dev mode)
-ErrorOverlay::render(\Throwable $e, ?array $request = null): string
+ErrorOverlay::renderErrorOverlay(\Throwable $e, ?array $request = null): string
 
 // Render a safe, generic error page (production)
-ErrorOverlay::renderProduction(int $statusCode = 500, string $message = 'Internal Server Error'): string
+ErrorOverlay::renderProductionError(int $statusCode = 500, string $message = 'Internal Server Error'): string
 
 // Check if TINA4_DEBUG is enabled
 ErrorOverlay::isDebugMode(): bool
@@ -550,9 +550,9 @@ try {
     $handler($request, $response);
 } catch (\Throwable $e) {
     if (ErrorOverlay::isDebugMode()) {
-        echo ErrorOverlay::render($e, $_SERVER);
+        echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);
     } else {
-        echo ErrorOverlay::renderProduction(500);
+        echo ErrorOverlay::renderProductionError(500);
     }
 }
 ```
