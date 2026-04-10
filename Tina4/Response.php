@@ -295,16 +295,32 @@ class Response
     /**
      * Flush the response to the client.
      */
-    public function send(): void
+    public function send(mixed $data = null, ?int $statusCode = null, ?string $contentType = null): self
     {
+        // If data is provided, set it on the response and return (fluent API)
+        if ($data !== null) {
+            if (is_array($data) || is_object($data)) {
+                return $this->json($data, $statusCode ?? 200);
+            }
+            if ($contentType !== null) {
+                $this->headers['content-type'] = $contentType;
+            }
+            $this->body = (string) $data;
+            if ($statusCode !== null) {
+                $this->statusCode = $statusCode;
+            }
+            return $this;
+        }
+
+        // No data — flush the response to the client
         if ($this->sent) {
-            return;
+            return $this;
         }
 
         $this->sent = true;
 
         if ($this->testing) {
-            return;
+            return $this;
         }
 
         // Set status code
@@ -329,6 +345,7 @@ class Response
 
         // Output body
         echo $this->body;
+        return $this;
     }
 
     /**

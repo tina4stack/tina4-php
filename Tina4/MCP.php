@@ -540,7 +540,7 @@ class McpServer
      *     POST {path}/message - JSON-RPC message endpoint
      *     GET  {path}/sse     - SSE endpoint for streaming
      */
-    public function registerRoutes(): void
+    public function registerRoutes($router = null): void
     {
         $server = $this;
         $msgPath = $this->path . '/message';

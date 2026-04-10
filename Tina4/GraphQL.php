@@ -905,3 +905,42 @@ class GraphQLParser
         return $t;
     }
 }
+
+/**
+ * Lightweight GraphQL type wrapper matching Ruby's GraphQLType.
+ */
+class GraphQLType
+{
+    public const SCALARS = ['String', 'Int', 'Float', 'Boolean', 'ID'];
+
+    public string $name;
+    public string $kind;
+    public ?GraphQLType $ofType;
+
+    public function __construct(string $name, string $kind = 'object', ?GraphQLType $ofType = null)
+    {
+        $this->name = $name;
+        $this->kind = $kind;
+        $this->ofType = $ofType;
+    }
+
+    /**
+     * Parse a GraphQL type string like "String", "String!", "[Int!]!".
+     */
+    public static function parse(string $typeStr): self
+    {
+        $s = trim($typeStr);
+        if (str_ends_with($s, '!')) {
+            $inner = self::parse(substr($s, 0, -1));
+            return new self($s, 'non_null', $inner);
+        }
+        if (str_starts_with($s, '[') && str_ends_with($s, ']')) {
+            $inner = self::parse(substr($s, 1, -1));
+            return new self($s, 'list', $inner);
+        }
+        if (in_array($s, self::SCALARS, true)) {
+            return new self($s, 'scalar');
+        }
+        return new self($s, 'object');
+    }
+}
