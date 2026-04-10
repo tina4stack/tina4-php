@@ -128,7 +128,7 @@ abstract class ORM
     public static function query(): QueryBuilder
     {
         $instance = new static();
-        return QueryBuilder::from($instance->tableName, $instance->_db);
+        return QueryBuilder::fromTable($instance->tableName, $instance->_db);
     }
 
     /**

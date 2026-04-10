@@ -579,7 +579,7 @@ class Response
      * Render a Twig template via the Frond engine and return as HTML response.
      *
      * Usage:
-     *   return $res->template("dashboard.twig", ["title" => "Dashboard"]);
+     *   return $res->render("dashboard.twig", ["title" => "Dashboard"]);
      *
      * @param string $templateName Template file relative to the template directory
      * @param array  $data         Variables to pass into the template
@@ -587,7 +587,7 @@ class Response
      * @param string $templateDir  Template directory (default 'src/templates')
      * @return $this
      */
-    public function template(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
+    public function render(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
     {
         $frond = ($templateDir !== 'src/templates') ? new Frond($templateDir) : self::getFrond();
         $html = $frond->render($templateName, $data);
@@ -597,19 +597,5 @@ class Response
         $this->body = $html;
 
         return $this;
-    }
-
-    /**
-     * Render a template. Alias for template() — provides cross-framework parity.
-     *
-     * @param string $templateName Template file name (e.g. 'dashboard.twig')
-     * @param array  $data         Variables to pass to the template
-     * @param int    $status       HTTP status code (default 200)
-     * @param string $templateDir  Template directory (default 'src/templates')
-     * @return $this
-     */
-    public function render(string $templateName, array $data = [], int $status = 200, string $templateDir = 'src/templates'): self
-    {
-        return $this->template($templateName, $data, $status, $templateDir);
     }
 }

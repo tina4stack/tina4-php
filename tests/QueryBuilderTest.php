@@ -66,13 +66,13 @@ class QueryBuilderTest extends TestCase
 
     public function testFromReturnsQueryBuilder(): void
     {
-        $qb = QueryBuilder::from('users');
+        $qb = QueryBuilder::fromTable('users');
         $this->assertInstanceOf(QueryBuilder::class, $qb);
     }
 
     public function testFromWithDatabase(): void
     {
-        $qb = QueryBuilder::from('users', $this->db);
+        $qb = QueryBuilder::fromTable('users', $this->db);
         $this->assertInstanceOf(QueryBuilder::class, $qb);
     }
 
@@ -82,7 +82,7 @@ class QueryBuilderTest extends TestCase
 
     public function testSelectSetsColumns(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('id', 'name')
             ->toSql();
 
@@ -91,25 +91,25 @@ class QueryBuilderTest extends TestCase
 
     public function testSelectDefaultStar(): void
     {
-        $sql = QueryBuilder::from('users')->toSql();
+        $sql = QueryBuilder::fromTable('users')->toSql();
         $this->assertSame('SELECT * FROM users', $sql);
     }
 
     public function testSelectEmptyKeepsStar(): void
     {
-        $sql = QueryBuilder::from('users')->select()->toSql();
+        $sql = QueryBuilder::fromTable('users')->select()->toSql();
         $this->assertSame('SELECT * FROM users', $sql);
     }
 
     public function testSelectSingleColumn(): void
     {
-        $sql = QueryBuilder::from('users')->select('name')->toSql();
+        $sql = QueryBuilder::fromTable('users')->select('name')->toSql();
         $this->assertSame('SELECT name FROM users', $sql);
     }
 
     public function testSelectMultipleColumns(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('id', 'name', 'email', 'age')
             ->toSql();
 
@@ -122,7 +122,7 @@ class QueryBuilderTest extends TestCase
 
     public function testWhereSingleCondition(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->where('active = ?', [1])
             ->toSql();
 
@@ -131,7 +131,7 @@ class QueryBuilderTest extends TestCase
 
     public function testWhereMultipleConditionsAnd(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->where('active = ?', [1])
             ->where('age > ?', [18])
             ->toSql();
@@ -141,7 +141,7 @@ class QueryBuilderTest extends TestCase
 
     public function testWhereNoParams(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->where('active = 1')
             ->toSql();
 
@@ -154,7 +154,7 @@ class QueryBuilderTest extends TestCase
 
     public function testOrWhere(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->where('active = ?', [1])
             ->orWhere('age > ?', [30])
             ->toSql();
@@ -165,7 +165,7 @@ class QueryBuilderTest extends TestCase
     public function testOrWhereAsFirst(): void
     {
         // When orWhere is the first condition, the OR connector is omitted (index 0)
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->orWhere('active = ?', [1])
             ->toSql();
 
@@ -174,7 +174,7 @@ class QueryBuilderTest extends TestCase
 
     public function testMixedWhereAndOrWhere(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->where('active = ?', [1])
             ->where('age > ?', [18])
             ->orWhere('name = ?', ['Admin'])
@@ -192,7 +192,7 @@ class QueryBuilderTest extends TestCase
 
     public function testJoinInner(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->join('orders', 'orders.user_id = users.id')
             ->toSql();
 
@@ -204,7 +204,7 @@ class QueryBuilderTest extends TestCase
 
     public function testMultipleJoins(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->join('orders', 'orders.user_id = users.id')
             ->join('products', 'products.id = orders.product_id')
             ->toSql();
@@ -219,7 +219,7 @@ class QueryBuilderTest extends TestCase
 
     public function testLeftJoin(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->leftJoin('orders', 'orders.user_id = users.id')
             ->toSql();
 
@@ -231,7 +231,7 @@ class QueryBuilderTest extends TestCase
 
     public function testMixedJoinTypes(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->join('orders', 'orders.user_id = users.id')
             ->leftJoin('profiles', 'profiles.user_id = users.id')
             ->toSql();
@@ -246,7 +246,7 @@ class QueryBuilderTest extends TestCase
 
     public function testGroupBy(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('active', 'COUNT(*) as cnt')
             ->groupBy('active')
             ->toSql();
@@ -256,7 +256,7 @@ class QueryBuilderTest extends TestCase
 
     public function testGroupByMultiple(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->groupBy('active')
             ->groupBy('age')
             ->toSql();
@@ -270,7 +270,7 @@ class QueryBuilderTest extends TestCase
 
     public function testHaving(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('active', 'COUNT(*) as cnt')
             ->groupBy('active')
             ->having('COUNT(*) > ?', [1])
@@ -284,7 +284,7 @@ class QueryBuilderTest extends TestCase
 
     public function testHavingMultiple(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('active', 'COUNT(*) as cnt', 'AVG(age) as avg_age')
             ->groupBy('active')
             ->having('COUNT(*) > ?', [1])
@@ -300,7 +300,7 @@ class QueryBuilderTest extends TestCase
 
     public function testOrderBy(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->orderBy('name ASC')
             ->toSql();
 
@@ -309,7 +309,7 @@ class QueryBuilderTest extends TestCase
 
     public function testOrderByMultiple(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->orderBy('active DESC')
             ->orderBy('name ASC')
             ->toSql();
@@ -325,7 +325,7 @@ class QueryBuilderTest extends TestCase
     {
         // limit does not appear in toSql() — it is passed to fetch()
         // We verify the SQL is valid and limit works via get()
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->orderBy('id ASC')
             ->limit(2)
             ->get();
@@ -336,7 +336,7 @@ class QueryBuilderTest extends TestCase
 
     public function testLimitWithOffset(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->orderBy('id ASC')
             ->limit(2, 2)
             ->get();
@@ -353,13 +353,13 @@ class QueryBuilderTest extends TestCase
 
     public function testToSqlMinimal(): void
     {
-        $sql = QueryBuilder::from('users')->toSql();
+        $sql = QueryBuilder::fromTable('users')->toSql();
         $this->assertSame('SELECT * FROM users', $sql);
     }
 
     public function testToSqlFullQuery(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('name', 'age')
             ->join('orders', 'orders.user_id = users.id')
             ->where('active = ?', [1])
@@ -395,7 +395,7 @@ class QueryBuilderTest extends TestCase
 
     public function testMethodChainingReturnsSelf(): void
     {
-        $qb = QueryBuilder::from('users', $this->db);
+        $qb = QueryBuilder::fromTable('users', $this->db);
 
         $this->assertSame($qb, $qb->select('id', 'name'));
         $this->assertSame($qb, $qb->where('id > ?', [0]));
@@ -410,7 +410,7 @@ class QueryBuilderTest extends TestCase
 
     public function testFluentChainProducesCorrectSql(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('id', 'name')
             ->where('active = ?', [1])
             ->orderBy('name ASC')
@@ -428,7 +428,7 @@ class QueryBuilderTest extends TestCase
 
     public function testGetReturnsResults(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->select('id', 'name')
             ->orderBy('id ASC')
             ->get();
@@ -440,7 +440,7 @@ class QueryBuilderTest extends TestCase
 
     public function testGetWithWhereCondition(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->where('active = ?', [1])
             ->orderBy('name ASC')
             ->get();
@@ -455,7 +455,7 @@ class QueryBuilderTest extends TestCase
 
     public function testGetWithJoin(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->select('users.name', 'orders.amount')
             ->join('orders', 'orders.user_id = users.id')
             ->orderBy('orders.amount DESC')
@@ -471,7 +471,7 @@ class QueryBuilderTest extends TestCase
 
     public function testFirstReturnsSingleRow(): void
     {
-        $row = QueryBuilder::from('users', $this->db)
+        $row = QueryBuilder::fromTable('users', $this->db)
             ->where('name = ?', ['Alice'])
             ->first();
 
@@ -482,7 +482,7 @@ class QueryBuilderTest extends TestCase
 
     public function testFirstReturnsNullWhenNoMatch(): void
     {
-        $row = QueryBuilder::from('users', $this->db)
+        $row = QueryBuilder::fromTable('users', $this->db)
             ->where('name = ?', ['Nonexistent'])
             ->first();
 
@@ -491,7 +491,7 @@ class QueryBuilderTest extends TestCase
 
     public function testFirstWithOrderByReturnsCorrectRow(): void
     {
-        $row = QueryBuilder::from('users', $this->db)
+        $row = QueryBuilder::fromTable('users', $this->db)
             ->where('active = ?', [1])
             ->orderBy('age ASC')
             ->first();
@@ -507,13 +507,13 @@ class QueryBuilderTest extends TestCase
 
     public function testCountAll(): void
     {
-        $count = QueryBuilder::from('users', $this->db)->count();
+        $count = QueryBuilder::fromTable('users', $this->db)->count();
         $this->assertSame(5, $count);
     }
 
     public function testCountWithWhere(): void
     {
-        $count = QueryBuilder::from('users', $this->db)
+        $count = QueryBuilder::fromTable('users', $this->db)
             ->where('active = ?', [1])
             ->count();
 
@@ -522,7 +522,7 @@ class QueryBuilderTest extends TestCase
 
     public function testCountWithNoResults(): void
     {
-        $count = QueryBuilder::from('users', $this->db)
+        $count = QueryBuilder::fromTable('users', $this->db)
             ->where('name = ?', ['Nonexistent'])
             ->count();
 
@@ -531,7 +531,7 @@ class QueryBuilderTest extends TestCase
 
     public function testCountDoesNotAlterColumns(): void
     {
-        $qb = QueryBuilder::from('users', $this->db)
+        $qb = QueryBuilder::fromTable('users', $this->db)
             ->select('id', 'name');
 
         // count() temporarily replaces columns with COUNT(*), then restores
@@ -549,7 +549,7 @@ class QueryBuilderTest extends TestCase
 
     public function testExistsReturnsTrue(): void
     {
-        $exists = QueryBuilder::from('users', $this->db)
+        $exists = QueryBuilder::fromTable('users', $this->db)
             ->where('name = ?', ['Alice'])
             ->exists();
 
@@ -558,7 +558,7 @@ class QueryBuilderTest extends TestCase
 
     public function testExistsReturnsFalse(): void
     {
-        $exists = QueryBuilder::from('users', $this->db)
+        $exists = QueryBuilder::fromTable('users', $this->db)
             ->where('name = ?', ['Nonexistent'])
             ->exists();
 
@@ -567,7 +567,7 @@ class QueryBuilderTest extends TestCase
 
     public function testExistsWithMultipleConditions(): void
     {
-        $exists = QueryBuilder::from('users', $this->db)
+        $exists = QueryBuilder::fromTable('users', $this->db)
             ->where('active = ?', [1])
             ->where('age > ?', [29])
             ->exists();
@@ -585,25 +585,25 @@ class QueryBuilderTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('No database adapter provided');
 
-        QueryBuilder::from('users')->get();
+        QueryBuilder::fromTable('users')->get();
     }
 
     public function testFirstWithoutDbThrowsException(): void
     {
         $this->expectException(\RuntimeException::class);
-        QueryBuilder::from('users')->first();
+        QueryBuilder::fromTable('users')->first();
     }
 
     public function testCountWithoutDbThrowsException(): void
     {
         $this->expectException(\RuntimeException::class);
-        QueryBuilder::from('users')->count();
+        QueryBuilder::fromTable('users')->count();
     }
 
     public function testExistsWithoutDbThrowsException(): void
     {
         $this->expectException(\RuntimeException::class);
-        QueryBuilder::from('users')->exists();
+        QueryBuilder::fromTable('users')->exists();
     }
 
     // -------------------------------------------------------------------------
@@ -612,7 +612,7 @@ class QueryBuilderTest extends TestCase
 
     public function testComplexQuerySql(): void
     {
-        $sql = QueryBuilder::from('users')
+        $sql = QueryBuilder::fromTable('users')
             ->select('users.name', 'COUNT(orders.id) as order_count', 'SUM(orders.amount) as total')
             ->join('orders', 'orders.user_id = users.id')
             ->where('users.active = ?', [1])
@@ -635,7 +635,7 @@ class QueryBuilderTest extends TestCase
 
     public function testComplexQueryExecution(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->select('users.name', 'SUM(orders.amount) as total')
             ->join('orders', 'orders.user_id = users.id')
             ->where('orders.status = ?', ['completed'])
@@ -649,7 +649,7 @@ class QueryBuilderTest extends TestCase
 
     public function testComplexQueryWithOrWhere(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->where('age > ?', [30])
             ->orWhere('active = ?', [0])
             ->orderBy('name ASC')
@@ -665,7 +665,7 @@ class QueryBuilderTest extends TestCase
     public function testComplexQueryWithLeftJoin(): void
     {
         // Left join should include users without orders
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->select('users.name', 'orders.amount')
             ->leftJoin('orders', 'orders.user_id = users.id')
             ->orderBy('users.name ASC')
@@ -686,7 +686,7 @@ class QueryBuilderTest extends TestCase
 
     public function testGetReturnsEmptyData(): void
     {
-        $result = QueryBuilder::from('users', $this->db)
+        $result = QueryBuilder::fromTable('users', $this->db)
             ->where('name = ?', ['Nonexistent'])
             ->get();
 
@@ -698,7 +698,7 @@ class QueryBuilderTest extends TestCase
     {
         $this->db->exec("CREATE TABLE empty_table (id INTEGER PRIMARY KEY, value TEXT)");
 
-        $count = QueryBuilder::from('empty_table', $this->db)->count();
+        $count = QueryBuilder::fromTable('empty_table', $this->db)->count();
         $this->assertSame(0, $count);
     }
 
@@ -706,7 +706,7 @@ class QueryBuilderTest extends TestCase
     {
         $this->db->exec("CREATE TABLE empty_table (id INTEGER PRIMARY KEY, value TEXT)");
 
-        $exists = QueryBuilder::from('empty_table', $this->db)->exists();
+        $exists = QueryBuilder::fromTable('empty_table', $this->db)->exists();
         $this->assertFalse($exists);
     }
 
@@ -714,7 +714,7 @@ class QueryBuilderTest extends TestCase
     {
         $this->db->exec("CREATE TABLE empty_table (id INTEGER PRIMARY KEY, value TEXT)");
 
-        $row = QueryBuilder::from('empty_table', $this->db)->first();
+        $row = QueryBuilder::fromTable('empty_table', $this->db)->first();
         $this->assertNull($row);
     }
 }

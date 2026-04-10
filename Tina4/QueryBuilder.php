@@ -15,7 +15,7 @@ use Tina4\Database\DatabaseAdapter;
  *
  * Usage:
  *   // Standalone
- *   $result = QueryBuilder::from('users', $db)
+ *   $result = QueryBuilder::fromTable('users', $db)
  *       ->select('id', 'name')
  *       ->where('active = ?', [1])
  *       ->orderBy('name ASC')
@@ -59,7 +59,7 @@ class QueryBuilder
      * @param DatabaseAdapter|null $db Database adapter (optional).
      * @return self
      */
-    public static function from(string $table, ?DatabaseAdapter $db = null): self
+    public static function fromTable(string $table, ?DatabaseAdapter $db = null): self
     {
         return new self($table, $db);
     }
