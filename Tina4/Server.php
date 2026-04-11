@@ -146,7 +146,8 @@ class Server
     public function start(): void
     {
         // Require tina4 CLI (or TINA4_OVERRIDE_CLIENT=true in .env)
-        if (getenv('TINA4_CLI') !== 'true' && getenv('TINA4_OVERRIDE_CLIENT') !== 'true') {
+        $isManaged = in_array('--managed', $_SERVER['argv'] ?? [], true);
+        if (!$isManaged && getenv('TINA4_OVERRIDE_CLIENT') !== 'true') {
             echo PHP_EOL;
             echo str_repeat('=', 60) . PHP_EOL;
             echo PHP_EOL;
