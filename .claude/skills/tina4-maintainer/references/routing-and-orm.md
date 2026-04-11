@@ -132,6 +132,10 @@ class Article(ORM):
     # Article().with_trashed().fetch() includes deleted
 ```
 
+### QueryBuilder — `from()` renamed (v3.10.91)
+
+The `from()` method has been renamed to `from_table()` (Python/Ruby) and `fromTable()` (PHP/Node.js). The old `from()` method is fully removed with no backward-compatibility alias.
+
 ### PHP
 ```php
 class User extends \Tina4\ORM {

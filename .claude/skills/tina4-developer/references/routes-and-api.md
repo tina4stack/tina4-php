@@ -186,3 +186,11 @@ Built-in. Configure in `.env` or it defaults to allowing all origins in developm
 ## Rate Limiting
 
 Built-in. No configuration needed for sensible defaults. Override in `.env` if needed.
+
+### RateLimiterMiddleware (v3.10.92)
+
+A dedicated `RateLimiterMiddleware` class is available for route-level rate limiting. In Python, the `RateLimiter` class lives in `core/rate_limiter.py`.
+
+**Methods:**
+- `before_rate_limit(request, response)` / `beforeRateLimit(request, response)` — called before the rate limit check; return modified request/response
+- `check(request, response)` — performs the rate limit check and returns a 429 if exceeded

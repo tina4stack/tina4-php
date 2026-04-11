@@ -97,6 +97,9 @@ async def chat(connection):
 Tracks all connections by ID and path. Handles upgrade handshake, frame protocol
 (FIN, opcodes, masking/unmasking, payload encoding), and auto ping/pong.
 
+### WebSocketBackplane rename (v3.10.92 — breaking)
+`create()` renamed to `create_backplane()` (Python/Ruby) / `createBackplane()` (PHP/Node) across all frameworks.
+
 ### Integration with Frond Live Blocks
 `{% live "name" ws "/ws/path" %}` auto-registers WebSocket endpoint, watches for data
 changes via event system, re-renders Frond blocks server-side, pushes HTML fragments to client.
@@ -194,6 +197,12 @@ class Calculator(WSDL):
 
 Built-in, zero-dependency. Compiles `.scss` files to CSS.
 
+### ScssCompiler parity (v3.10.92)
+- Python: `ScssCompiler` class with `compile()`, `compile_file()`, `add_import_path()`, `set_variable()`
+- PHP: Added `compileScss()`
+- Ruby: Added `compile`, `add_import_path`, `set_variable`
+- Node: Added `compileScss()`
+
 ---
 
 ## i18n / Localization
@@ -287,6 +296,63 @@ from tina4 import Api
 api = Api("https://api.example.com", auth_header="Bearer xyz")
 result = api.send_request("/users", method="GET")
 ```
+
+---
+
+## RateLimiterMiddleware (v3.10.91+)
+
+Wrapper class around `RateLimiter` for use as route middleware. All 4 frameworks have both `RateLimiter` and `RateLimiterMiddleware`.
+
+- Python: `from tina4_python.core.rate_limiter import RateLimiter` (extracted to own file). `RateLimiterMiddleware` wraps it.
+- PHP: `RateLimiterMiddleware` class with `beforeRateLimit()`, `check()`, `reset()`.
+- Ruby/Node: Same dual-class pattern.
+
+---
+
+## ErrorOverlay renames (v3.10.92 — breaking)
+
+Old names removed across all frameworks: `render()`, `renderProduction()`, `render_production()`, `debug_mode?`.
+
+| Method | Python | PHP | Ruby | Node |
+|--------|--------|-----|------|------|
+| Render overlay | `render_error_overlay()` | `renderErrorOverlay()` | `render_error_overlay` | `renderErrorOverlay()` |
+| Production error | `render_production_error()` | `renderProductionError()` | `render_production_error` | `renderProductionError()` |
+| Check debug | `is_debug_mode()` | `isDebugMode()` | `is_debug_mode` | `isDebugMode()` |
+
+---
+
+## Server parity (v3.10.92)
+
+- Python/Node: Added `start()` and `stop()` methods.
+- PHP/Ruby: Added `handle()` method.
+
+---
+
+## DatabaseResult parity (v3.10.92)
+
+- Python: Added `size()`, `to_array()`, `to_json()`, `to_csv()`.
+- PHP/Node: Added `size()`.
+
+---
+
+## QueryBuilder rename (v3.10.91 — breaking)
+
+`from()` renamed to `from_table()` (Python/Ruby) / `fromTable()` (PHP/Node) across all frameworks.
+
+---
+
+## DevReload parity (v3.10.92)
+
+- Node: Added `start()` and `stop()` methods.
+
+---
+
+## DevAdmin parity (v3.10.92)
+
+- Python: Added `unresolved_count()`, `clear_all()`, `reset()`, `capture()` (5-param), `register()`.
+- PHP: Added `health()`.
+- Ruby: Added `register`.
+- Node: Added `capture()`, `clearAll()`, `health()`, `unresolvedCount()`, `reset()`, `register()`.
 
 ---
 

@@ -63,6 +63,12 @@ export class User extends BaseModel {
 > **v3 API** — `find_by_id(id)` for ID lookup, `find(filter)` for filtered lists.
 > Do NOT use the v2 query builder chain (`select("*").fetch()`) — it no longer exists.
 
+> **v3.10.91** — QueryBuilder's `from()` method has been renamed to avoid language keyword conflicts:
+> - Python / Ruby: `from_table()`
+> - PHP / Node.js: `fromTable()`
+>
+> The old `from()` method is removed.
+
 ### Create
 
 ```python
@@ -235,6 +241,26 @@ For paginated JSON responses the result includes metadata:
     "per_page": 20,
     "total_pages": 5
 }
+```
+
+## DatabaseResult Methods
+
+> **v3.10.92** — `DatabaseResult` gained convenience methods (Python now matches the other frameworks):
+
+| Method | Description | Frameworks |
+|--------|-------------|------------|
+| `size()` | Returns record count | All |
+| `to_array()` | Convert to list/array | All (Python added in v3.10.92) |
+| `to_json()` | Convert to JSON string | All (Python added in v3.10.92) |
+| `to_csv()` | Convert to CSV string | All (Python added in v3.10.92) |
+
+```python
+# Python
+results = db.fetch("SELECT * FROM users")
+results.size()       # 42
+results.to_array()   # [{"id": 1, "name": "Alice"}, ...]
+results.to_json()    # '[{"id": 1, "name": "Alice"}, ...]'
+results.to_csv()     # 'id,name\n1,Alice\n...'
 ```
 
 ## Raw SQL
