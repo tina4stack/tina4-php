@@ -293,6 +293,9 @@ class App
             RouteDiscovery::scan($routesDir);
         }
 
+        // Auto-wire i18n → template global t() if locale files exist
+        $this->autoWireI18n();
+
         // Register Swagger/OpenAPI routes
         Swagger::register();
 
@@ -324,6 +327,58 @@ class App
 
         Router::get('/health', $handler);
         $this->routes['GET']['/health'] = fn() => $this->getHealthData();
+    }
+
+    /**
+     * Auto-wire i18n into the template engine.
+     *
+     * If src/locales/ contains .json locale files and the user hasn't already
+     * registered a 't' global on the Frond engine, create an I18n instance
+     * (respecting TINA4_LOCALE and TINA4_LOCALE_DIR env vars) and register
+     * t() as a template global so templates can use {{ t("key") }}.
+     */
+    private function autoWireI18n(): void
+    {
+        $localeDir = $this->basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'locales';
+
+        // Check env override for locale directory
+        $envDir = getenv('TINA4_LOCALE_DIR');
+        if ($envDir !== false && $envDir !== '') {
+            $localeDir = $envDir;
+        }
+
+        // Only proceed if locale directory exists and contains .json files
+        if (!is_dir($localeDir)) {
+            return;
+        }
+
+        $hasJsonFiles = false;
+        $files = scandir($localeDir);
+        foreach ($files as $file) {
+            if (str_ends_with($file, '.json')) {
+                $hasJsonFiles = true;
+                break;
+            }
+        }
+
+        if (!$hasJsonFiles) {
+            return;
+        }
+
+        // Don't overwrite a user-registered t() global
+        $frond = Response::getFrond();
+        $globals = $frond->getGlobals();
+        if (isset($globals['t'])) {
+            return;
+        }
+
+        // Create the I18n instance (it reads TINA4_LOCALE and TINA4_LOCALE_DIR internally)
+        $i18n = new I18n($localeDir);
+
+        // Register t() as a callable template global
+        $frond->addGlobal('t', function (string $key, array $params = [], ?string $locale = null) use ($i18n): string {
+            return $i18n->translate($key, $params, $locale);
+        });
     }
 
     /**

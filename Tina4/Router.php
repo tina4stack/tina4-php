@@ -397,9 +397,10 @@ class Router
                 [$request, $response] = Middleware::runBefore(array_values($otherMiddleware), $request, $response);
             }
 
-            // Short-circuit if a global middleware set an error status.
-            // CORS headers are already set above, so the browser can read this response.
-            if ($response->getStatusCode() >= 400) {
+            // Short-circuit if a global middleware set a non-default status.
+            // Covers both error responses (4xx/5xx) and CORS preflight (204).
+            $statusCode = $response->getStatusCode();
+            if ($statusCode >= 400 || $statusCode === 204) {
                 return $response;
             }
         }
@@ -452,8 +453,28 @@ class Router
         }
 
         if ($requiresAuth) {
-            $token = $request->bearerToken();
             $secret = getenv('SECRET') ?: '';
+            $token = null;
+            $tokenSource = null;
+
+            // Priority 1: Authorization Bearer header
+            $bearerToken = $request->bearerToken();
+            if ($bearerToken !== null) {
+                $token = $bearerToken;
+                $tokenSource = 'header';
+            }
+
+            // Priority 2: formToken in request body
+            if ($token === null && is_array($request->body) && !empty($request->body['formToken'])) {
+                $token = $request->body['formToken'];
+                $tokenSource = 'body';
+            }
+
+            // Priority 3: Session token
+            if ($token === null && $request->session !== null && $request->session->has('token')) {
+                $token = $request->session->get('token');
+                $tokenSource = 'session';
+            }
 
             if ($token === null) {
                 return $response->json(['error' => 'Unauthorized'], 401);
@@ -465,6 +486,15 @@ class Router
 
             // Attach decoded JWT payload to the request for downstream use
             $request->user = Auth::getPayload($token);
+
+            // When body formToken validates, return a FreshToken header so
+            // frond.js can use the Authorization header on subsequent requests
+            if ($tokenSource === 'body') {
+                $freshToken = Auth::refreshToken($token);
+                if ($freshToken !== null) {
+                    $response->header('FreshToken', $freshToken);
+                }
+            }
         }
 
         // Run middleware chain

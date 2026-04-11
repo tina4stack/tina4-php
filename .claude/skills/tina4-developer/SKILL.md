@@ -208,6 +208,33 @@ When helping a developer build with Tina4, always follow these:
 5. **Show, don't tell** — When a developer asks how to do something, give them working code
    they can drop into their project. Brief explanation, then the code.
 
+
+### @noauth Is a Last Resort — Not a Default
+
+`@noauth()` makes a write route (POST/PUT/PATCH/DELETE) publicly accessible with NO authentication.
+AI assistants and developers reach for it too quickly because it's the fastest way to "make it work."
+This is dangerous and lazy.
+
+**The rules:**
+
+1. **GET routes are already public** — You NEVER need `@noauth()` on a GET route. GET is public by default.
+2. **POST/PUT/PATCH/DELETE require auth by default** — This is intentional. Auth protects your data.
+3. **`@noauth()` is ONLY acceptable for:**
+   - Public login/register endpoints (users can't be authenticated yet)
+   - Public webhook receivers (validated by signature, not token)
+   - Public API endpoints explicitly designed for anonymous access (e.g. product search)
+4. **Admin routes MUST NEVER use `@noauth()`** — Use `@middleware(AdminAuth)` instead
+5. **Cart and checkout routes need auth** — Anonymous cart uses sessions, but checkout requires login
+6. **File upload routes MUST be authenticated** — Never allow anonymous uploads
+
+**Before adding `@noauth()`, ask yourself:**
+- Can this action modify data? → It needs auth
+- Can this action cost money? → It needs auth
+- Can this action be abused by bots? → It needs auth or rate limiting
+- Is there ANY reason a logged-in user shouldn't be the one doing this? → If no, don't use `@noauth()`
+
+If you find yourself putting `@noauth()` on more than 2-3 POST routes in an entire application,
+something is wrong with your auth flow.
 ## Language Versions
 
 Always target the latest supported versions:
@@ -423,6 +450,53 @@ Code → Tests pass → Commit → Push → Carbonah check → Deploy
 ```
 
 No shortcuts. No "we'll check it later." The check happens before the deploy, every time.
+
+### Monitor the Metrics Dashboard
+
+The Tina4 Dev Admin panel (`/__dev/` → Metrics tab) provides a **live code health visualization** that
+every developer must use. It shows a bubble chart where:
+
+- **Bubble size** = lines of code (LOC) — bigger = more code
+- **Color** = complexity — **green** is healthy, **yellow** is moderate, **orange** needs attention, **red** is too complex
+- **D badge** = has documentation
+- **T badge** = has tests
+
+**The rules:**
+
+1. **No red bubbles** — Any red file must be refactored immediately. Extract functions, split into
+   smaller files, move logic to service classes in `src/app/`. A red file is a bug waiting to happen.
+2. **Orange is a warning** — It's not urgent, but it should be on your list. If it's growing, fix it now.
+3. **Every file needs both D and T badges** — Documentation (docstrings/comments) AND test coverage.
+   A file missing either badge is incomplete work.
+4. **Watch for disproportionate bubbles** — If one file is much larger than its neighbours, it's
+   doing too much. Split it. One responsibility per file.
+
+**When to check:**
+- After adding a new feature or file
+- Before every commit
+- During code review
+
+**How to fix complexity:**
+- **Extract service classes** — Move business logic from routes to `src/app/services/`
+- **Split large files** — If a route file handles 5+ endpoints, split by resource
+- **Use built-in features** — Raw SQL, manual auth, hand-rolled queues all add unnecessary complexity.
+  Use the framework's ORM, Auth, Queue, etc.
+- **Simplify conditionals** — Deep nesting means the logic needs restructuring
+
+The metrics view is not decoration — it's a development tool. Use it the same way you use tests:
+habitually, before shipping.
+
+### Frond Template Parity
+
+Frond templates must work identically across all 4 Tina4 frameworks (Python, PHP, Ruby, Node.js).
+If a template is written in one language, it must render the same output when copied to any other.
+
+**What this means for developers:**
+- Only use Frond/Twig features documented in the framework — no language-specific extensions
+- Test templates against the Frond engine, not assumptions about Twig/Jinja2 compatibility
+- Array literals (`{% set items = ["a", "b"] %}`), dict literals (`{% set obj = {"k": "v"} %}`),
+  subscript access (`{{ items[loop.index0 % 3] }}`), and all filters must behave identically
+- If a template feature works in Python but not PHP/Ruby/Node.js, it's a **framework bug** — report it
 
 ## Communication Style
 

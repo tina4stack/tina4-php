@@ -163,6 +163,16 @@ class Response
     }
 
     /**
+     * Set a response header (snake_case alias for parity with Python).
+     *
+     * @return $this
+     */
+    public function add_header(string $name, string $value): self
+    {
+        return $this->header($name, $value);
+    }
+
+    /**
      * Set multiple headers at once.
      *
      * @param array<string, string> $headers

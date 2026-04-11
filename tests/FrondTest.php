@@ -1915,4 +1915,80 @@ TPL;
             putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
         }
     }
+
+    /* ═══════════ Multi-level template inheritance ═══════════ */
+
+    public function testThreeLevelExtends(): void
+    {
+        $this->writeTemplate('ml_base.html', '<html>{% block title %}Default{% endblock %}|{% block content %}Base{% endblock %}</html>');
+        $this->writeTemplate('ml_mid.html', '{% extends "ml_base.html" %}{% block content %}Mid Content{% endblock %}');
+        $this->writeTemplate('ml_child.html', '{% extends "ml_mid.html" %}{% block title %}Child Title{% endblock %}{% block content %}Child Content{% endblock %}');
+        $this->assertSame('<html>Child Title|Child Content</html>', $this->engine->render('ml_child.html'));
+    }
+
+    public function testThreeLevelExtendsBlockFromMiddlePreserved(): void
+    {
+        $this->writeTemplate('ml2_base.html', '{% block a %}A{% endblock %}|{% block b %}B{% endblock %}');
+        $this->writeTemplate('ml2_mid.html', '{% extends "ml2_base.html" %}{% block a %}MA{% endblock %}');
+        $this->writeTemplate('ml2_child.html', '{% extends "ml2_mid.html" %}{% block b %}CB{% endblock %}');
+        $this->assertSame('MA|CB', $this->engine->render('ml2_child.html'));
+    }
+
+    public function testFourLevelExtends(): void
+    {
+        $this->writeTemplate('ml4_base.html', '{% block title %}T{% endblock %}|{% block nav %}N{% endblock %}|{% block content %}C{% endblock %}|{% block footer %}F{% endblock %}');
+        $this->writeTemplate('ml4_layout.html', '{% extends "ml4_base.html" %}{% block nav %}Layout Nav{% endblock %}');
+        $this->writeTemplate('ml4_page.html', '{% extends "ml4_layout.html" %}{% block content %}Page Content{% endblock %}');
+        $this->writeTemplate('ml4_special.html', '{% extends "ml4_page.html" %}{% block title %}Special{% endblock %}{% block footer %}Special Footer{% endblock %}');
+        $this->assertSame('Special|Layout Nav|Page Content|Special Footer', $this->engine->render('ml4_special.html'));
+    }
+
+    public function testThreeLevelParentCall(): void
+    {
+        $this->writeTemplate('mlp_base.html', '{% block content %}BASE{% endblock %}');
+        $this->writeTemplate('mlp_mid.html', '{% extends "mlp_base.html" %}{% block content %}MID+{{ parent() }}{% endblock %}');
+        $this->writeTemplate('mlp_child.html', '{% extends "mlp_mid.html" %}{% block content %}CHILD+{{ parent() }}{% endblock %}');
+        $this->assertSame('CHILD+MID+BASE', $this->engine->render('mlp_child.html'));
+    }
+
+    public function testFourLevelParentChain(): void
+    {
+        $this->writeTemplate('mlp4_base.html', '{% block x %}A{% endblock %}');
+        $this->writeTemplate('mlp4_l2.html', '{% extends "mlp4_base.html" %}{% block x %}B+{{ parent() }}{% endblock %}');
+        $this->writeTemplate('mlp4_l3.html', '{% extends "mlp4_l2.html" %}{% block x %}C+{{ parent() }}{% endblock %}');
+        $this->writeTemplate('mlp4_l4.html', '{% extends "mlp4_l3.html" %}{% block x %}D+{{ parent() }}{% endblock %}');
+        $this->assertSame('D+C+B+A', $this->engine->render('mlp4_l4.html'));
+    }
+
+    public function testThreeLevelSuperCall(): void
+    {
+        $this->writeTemplate('mls_base.html', '{% block content %}BASE{% endblock %}');
+        $this->writeTemplate('mls_mid.html', '{% extends "mls_base.html" %}{% block content %}MID+{{ super() }}{% endblock %}');
+        $this->writeTemplate('mls_child.html', '{% extends "mls_mid.html" %}{% block content %}CHILD+{{ super() }}{% endblock %}');
+        $this->assertSame('CHILD+MID+BASE', $this->engine->render('mls_child.html'));
+    }
+
+    public function testThreeLevelNestedBlocks(): void
+    {
+        $this->writeTemplate('mln_base.html', '{% block wrapper %}W{% block slot %}DEFAULT{% endblock %}W{% endblock %}');
+        $this->writeTemplate('mln_mid.html', '{% extends "mln_base.html" %}{% block wrapper %}M{% block slot %}MID{% endblock %}M{% endblock %}');
+        $this->writeTemplate('mln_child.html', '{% extends "mln_mid.html" %}{% block slot %}CHILD{% endblock %}');
+        $this->assertSame('MCHILDM', $this->engine->render('mln_child.html'));
+    }
+
+    public function testThreeLevelChildOnlyOverridesGrandparentBlock(): void
+    {
+        $this->writeTemplate('mlg_base.html', '{% block header %}H{% endblock %}|{% block body %}BODY{% endblock %}');
+        $this->writeTemplate('mlg_mid.html', '{% extends "mlg_base.html" %}{% block body %}MID BODY{% endblock %}');
+        $this->writeTemplate('mlg_child.html', '{% extends "mlg_mid.html" %}{% block header %}CHILD H{% endblock %}');
+        $this->assertSame('CHILD H|MID BODY', $this->engine->render('mlg_child.html'));
+    }
+
+    public function testThreeLevelWithVariables(): void
+    {
+        $this->writeTemplate('mlv_base.html', '<h1>{% block title %}Default{% endblock %}</h1>{% block content %}{% endblock %}');
+        $this->writeTemplate('mlv_layout.html', '{% extends "mlv_base.html" %}{% block content %}<main>{% block main %}{% endblock %}</main>{% endblock %}');
+        $this->writeTemplate('mlv_page.html', '{% extends "mlv_layout.html" %}{% block title %}{{ page_title }}{% endblock %}{% block main %}Hello {{ name }}{% endblock %}');
+        $this->assertSame('<h1>Dashboard</h1><main>Hello Alice</main>', $this->engine->render('mlv_page.html', ['page_title' => 'Dashboard', 'name' => 'Alice']));
+    }
 }

@@ -240,16 +240,33 @@ class I18n
      * Flatten a nested associative array using dot notation.
      *
      * {"a": {"b": "c"}} becomes {"a.b": "c"}
+     *
+     * Also stores the leaf key as an alias so both "a.b" and "b" resolve.
+     * First-wins on conflict: if two branches define the same leaf key,
+     * the first one encountered keeps the alias.
      */
-    private function flatten(array $data, string $prefix = ''): array
+    private function flatten(array $data, string $prefix = '', array &$leafAliases = []): array
     {
         $result = [];
         foreach ($data as $key => $value) {
-            $fullKey = $prefix !== '' ? $prefix . '.' . $key : $key;
+            $fullKey = $prefix !== '' ? $prefix . '.' . $key : (string)$key;
             if (is_array($value)) {
-                $result = array_merge($result, $this->flatten($value, $fullKey));
+                $result = array_merge($result, $this->flatten($value, $fullKey, $leafAliases));
             } else {
                 $result[$fullKey] = (string)$value;
+                // Store leaf key alias (first-wins)
+                $leafKey = (string)$key;
+                if ($leafKey !== $fullKey && !isset($leafAliases[$leafKey])) {
+                    $leafAliases[$leafKey] = (string)$value;
+                }
+            }
+        }
+        // At the top level, merge leaf aliases into result (first-wins: don't overwrite existing keys)
+        if ($prefix === '') {
+            foreach ($leafAliases as $alias => $aliasValue) {
+                if (!isset($result[$alias])) {
+                    $result[$alias] = $aliasValue;
+                }
             }
         }
         return $result;

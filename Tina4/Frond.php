@@ -670,8 +670,18 @@ class Frond
         foreach ($ast as $node) {
             if ($node['type'] === 'block') {
                 if (isset($childBlocks[$node['name']])) {
-                    // Store original parent body for parent()/super() support
-                    $node['parentBody'] = $node['body'];
+                    // Wrap the current body as a block node that preserves the
+                    // parentBody chain so parent()/super() resolves at every
+                    // level in multi-level inheritance (A extends B extends C).
+                    $parentBlock = [
+                        'type' => 'block',
+                        'name' => $node['name'],
+                        'body' => $node['body'],
+                    ];
+                    if (!empty($node['parentBody'])) {
+                        $parentBlock['parentBody'] = $node['parentBody'];
+                    }
+                    $node['parentBody'] = [$parentBlock];
                     $node['body'] = $this->replaceBlocks($childBlocks[$node['name']], $childBlocks);
                 } else {
                     $node['body'] = $this->replaceBlocks($node['body'], $childBlocks);
@@ -1445,6 +1455,19 @@ class Frond
 
         $current = $data;
         foreach ($segments as $seg) {
+            // Slice marker from parseVarPath: ['__slice__', start, end]
+            if (is_array($seg) && ($seg[0] ?? null) === '__slice__') {
+                if (is_array($current)) {
+                    $current = array_slice($current, $seg[1] ?? 0, $seg[2] !== null ? ($seg[2] - ($seg[1] ?? 0)) : null);
+                } elseif (is_string($current)) {
+                    $current = $seg[2] !== null
+                        ? substr($current, $seg[1] ?? 0, $seg[2] - ($seg[1] ?? 0))
+                        : substr($current, $seg[1] ?? 0);
+                } else {
+                    return '';
+                }
+                continue;
+            }
             // Check if segment is a method call like name(args)
             if (is_string($seg) && preg_match(self::RE_METHOD_CALL, $seg, $mc)) {
                 $methodName = $mc[1];
@@ -1542,18 +1565,31 @@ class Frond
                 $end = strpos($expr, ']', $pos + 1);
                 if ($end === false) break;
                 $idx = trim(substr($expr, $pos + 1, $end - $pos - 1));
-                if ((str_starts_with($idx, '"') && str_ends_with($idx, '"')) ||
-                    (str_starts_with($idx, "'") && str_ends_with($idx, "'"))) {
+                // Slice syntax: value[1:5], value[:10], value[start:end]
+                $isQuoted = (str_starts_with($idx, '"') && str_ends_with($idx, '"')) ||
+                            (str_starts_with($idx, "'") && str_ends_with($idx, "'"));
+                if (str_contains($idx, ':') && !$isQuoted) {
+                    $sliceParts = explode(':', $idx, 2);
+                    $sStart = trim($sliceParts[0]) !== '' ? (int)$this->evaluateExpression(trim($sliceParts[0]), $data) : null;
+                    $sEnd = trim($sliceParts[1]) !== '' ? (int)$this->evaluateExpression(trim($sliceParts[1]), $data) : null;
+                    // Use a special marker so resolveVariable can apply slicing
+                    $segments[] = ['__slice__', $sStart, $sEnd];
+                    $pos = $end + 1;
+                } elseif ($isQuoted) {
                     // Quoted string literal — strip quotes
                     $idx = substr($idx, 1, -1);
+                    $segments[] = $idx;
+                    $pos = $end + 1;
                 } elseif (is_numeric($idx)) {
                     $idx = (int)$idx;
+                    $segments[] = $idx;
+                    $pos = $end + 1;
                 } else {
-                    // Resolve as a variable from context
-                    $idx = $this->resolveVariable($idx, $data);
+                    // Evaluate as an expression (supports e.g. arr[i % 2])
+                    $idx = $this->evaluateExpression($idx, $data);
+                    $segments[] = $idx;
+                    $pos = $end + 1;
                 }
-                $segments[] = $idx;
-                $pos = $end + 1;
             } else {
                 $current .= $ch;
                 $pos++;
@@ -1621,11 +1657,12 @@ class Frond
     {
         $inQ = null;
         $depth = 0;
+        $bracketDepth = 0;
         $len = strlen($expr);
         $nLen = strlen($needle);
         for ($i = 0; $i <= $len - $nLen; $i++) {
             $ch = $expr[$i];
-            if (($ch === '"' || $ch === "'") && $depth === 0) {
+            if (($ch === '"' || $ch === "'") && $depth === 0 && $bracketDepth === 0) {
                 if ($inQ === null) {
                     $inQ = $ch;
                 } elseif ($ch === $inQ) {
@@ -1636,7 +1673,9 @@ class Frond
             if ($inQ !== null) continue;
             if ($ch === '(') { $depth++; }
             elseif ($ch === ')') { $depth--; }
-            if ($depth === 0 && substr($expr, $i, $nLen) === $needle) return $i;
+            if ($ch === '[') { $bracketDepth++; }
+            elseif ($ch === ']') { $bracketDepth--; }
+            if ($depth === 0 && $bracketDepth === 0 && substr($expr, $i, $nLen) === $needle) return $i;
         }
         return false;
     }
@@ -1650,11 +1689,12 @@ class Frond
         $currentStart = 0;
         $inQ = null;
         $depth = 0;
+        $bracketDepth = 0;
         $len = strlen($expr);
         $sepLen = strlen($sep);
         for ($i = 0; $i <= $len - $sepLen; $i++) {
             $ch = $expr[$i];
-            if (($ch === '"' || $ch === "'") && $depth === 0) {
+            if (($ch === '"' || $ch === "'") && $depth === 0 && $bracketDepth === 0) {
                 if ($inQ === null) {
                     $inQ = $ch;
                 } elseif ($ch === $inQ) {
@@ -1665,7 +1705,9 @@ class Frond
             if ($inQ !== null) continue;
             if ($ch === '(') { $depth++; }
             elseif ($ch === ')') { $depth--; }
-            if ($depth === 0 && substr($expr, $i, $sepLen) === $sep) {
+            if ($ch === '[') { $bracketDepth++; }
+            elseif ($ch === ']') { $bracketDepth--; }
+            if ($depth === 0 && $bracketDepth === 0 && substr($expr, $i, $sepLen) === $sep) {
                 $parts[] = substr($expr, $currentStart, $i - $currentStart);
                 $i += $sepLen;
                 $currentStart = $i;
