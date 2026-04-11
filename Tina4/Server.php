@@ -145,6 +145,27 @@ class Server
      */
     public function start(): void
     {
+        // Require tina4 CLI (or TINA4_OVERRIDE_CLIENT=true in .env)
+        if (getenv('TINA4_CLI') !== 'true' && getenv('TINA4_OVERRIDE_CLIENT') !== 'true') {
+            echo PHP_EOL;
+            echo str_repeat('=', 60) . PHP_EOL;
+            echo PHP_EOL;
+            echo "  Tina4 must be started with the tina4 CLI:" . PHP_EOL;
+            echo PHP_EOL;
+            echo "    tina4 serve              (development)" . PHP_EOL;
+            echo "    tina4 serve --production (production)" . PHP_EOL;
+            echo PHP_EOL;
+            echo "  Install: cargo install tina4" . PHP_EOL;
+            echo "  Docs:    https://tina4.com" . PHP_EOL;
+            echo PHP_EOL;
+            echo "  To run directly, add to .env:" . PHP_EOL;
+            echo "    TINA4_OVERRIDE_CLIENT=true" . PHP_EOL;
+            echo PHP_EOL;
+            echo str_repeat('=', 60) . PHP_EOL;
+            echo PHP_EOL;
+            exit(1);
+        }
+
         $context = stream_context_create([
             'socket' => [
                 'backlog' => 1024,
@@ -587,8 +608,9 @@ class Server
         ];
         $this->wsSocketMap[$resourceId] = $connectionId;
 
-        // Create WebSocketConnection object
+        // Create WebSocketConnection object and persist it for callback reuse
         $connection = new WebSocketConnection($connectionId, $path, $client, $this);
+        $this->wsClients[$connectionId]['connection'] = $connection;
 
         // Fire the handler with 'open' message
         try {
@@ -634,12 +656,9 @@ class Server
             switch ($frame['opcode']) {
                 case WebSocket::OP_TEXT:
                 case WebSocket::OP_BINARY:
-                    $connection = new WebSocketConnection(
-                        $connectionId,
-                        $wsClient['path'],
-                        $socket,
-                        $this
-                    );
+                    // Reuse the persisted connection so route-style callbacks survive
+                    $connection = $wsClient['connection']
+                        ?? new WebSocketConnection($connectionId, $wsClient['path'], $socket, $this);
                     try {
                         ($wsClient['handler'])($connection, $frame['payload'], 'message');
                     } catch (\Throwable $e) {
@@ -704,13 +723,9 @@ class Server
         $socket = $wsClient['socket'];
         $resourceId = (int)$socket;
 
-        // Fire close event
-        $connection = new WebSocketConnection(
-            $connectionId,
-            $wsClient['path'],
-            $socket,
-            $this
-        );
+        // Fire close event — reuse persisted connection so route-style callbacks survive
+        $connection = $wsClient['connection']
+            ?? new WebSocketConnection($connectionId, $wsClient['path'], $socket, $this);
         try {
             ($wsClient['handler'])($connection, null, 'close');
         } catch (\Throwable $e) {

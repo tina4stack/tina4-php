@@ -37,6 +37,15 @@ class WebSocketConnection
     /** @var WebSocket|null Reference to the WebSocket manager for rooms */
     private ?WebSocket $ws;
 
+    /** @var callable|null Callback for incoming messages (set by route-style handlers) */
+    public $onMessage = null;
+
+    /** @var callable|null Callback for connection close (set by route-style handlers) */
+    public $onClose = null;
+
+    /** @var callable|null Callback for errors (set by route-style handlers) */
+    public $onError = null;
+
     /**
      * @param string      $id      Unique connection ID
      * @param string      $path    WebSocket route path
@@ -126,6 +135,22 @@ class WebSocketConnection
         if ($this->server !== null) {
             $this->server->removeWebSocketClient($this->id);
         }
+    }
+
+    /**
+     * Set the message callback (decorator style, matches Python's on_message).
+     */
+    public function setOnMessage(callable $handler): void
+    {
+        $this->onMessage = $handler;
+    }
+
+    /**
+     * Set the close callback (decorator style, matches Python's on_close).
+     */
+    public function setOnClose(callable $handler): void
+    {
+        $this->onClose = $handler;
     }
 
     /**

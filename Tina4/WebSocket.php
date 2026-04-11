@@ -37,6 +37,9 @@ class WebSocket
     /** @var array<string, callable> Event handlers: open, message, close, error */
     private array $handlers = [];
 
+    /** @var array<string, array> Route-style handlers keyed by path */
+    private array $_handlers = [];
+
     /** @var array<string, array> Connected clients: clientId => [socket, ip, connected_at, buffer, path, rooms] */
     private array $clients = [];
 
@@ -71,6 +74,43 @@ class WebSocket
     {
         $this->handlers[$event] = $handler;
         return $this;
+    }
+
+    /**
+     * Register a route-style WebSocket handler for a path.
+     *
+     * Returns a callable that accepts the user's handler function.
+     * The handler is called with ($conn) on open; it should set
+     * $conn->onMessage and $conn->onClose callbacks internally.
+     *
+     * Matches Python's WebSocketServer.route(path) decorator pattern.
+     *
+     * @param string $path WebSocket path to handle
+     * @return callable Accepts a callable handler and registers it
+     */
+    public function route(string $path): callable
+    {
+        return function (callable $handler) use ($path) {
+            $this->_handlers[$path] = ['handler' => $handler];
+
+            // Adapter: converts decorator-style to Router's (conn, data, event) style
+            $adapter = function ($conn, $data, $event) use ($handler) {
+                if ($event === 'open') {
+                    $handler($conn);
+                } elseif ($event === 'message') {
+                    if ($conn->onMessage !== null) {
+                        ($conn->onMessage)($data);
+                    }
+                } elseif ($event === 'close') {
+                    if ($conn->onClose !== null) {
+                        ($conn->onClose)();
+                    }
+                }
+            };
+
+            Router::websocket($path, $adapter);
+            return $handler;
+        };
     }
 
     /**
