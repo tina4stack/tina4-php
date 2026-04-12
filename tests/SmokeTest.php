@@ -453,6 +453,8 @@ class SmokeTest extends TestCase
         Router::post('/api/widgets', fn() => null);
         Router::get('/api/widgets/{id}', fn() => null)->secure();
 
+        \Tina4\DotEnv::resetEnv();
+        unset($_ENV['SWAGGER_TITLE'], $_ENV['SWAGGER_VERSION'], $_ENV['SWAGGER_DESCRIPTION']);
         putenv('SWAGGER_TITLE=Smoke API');
         putenv('SWAGGER_VERSION=0.1.0');
         $spec = Swagger::generate();

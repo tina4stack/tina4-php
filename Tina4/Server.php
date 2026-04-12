@@ -77,6 +77,12 @@ class Server
     /** @var string[] WebSocket connection IDs subscribed to reload events */
     private array $reloadSubscribers = [];
 
+    /** @var array<string, array<string>> Rooms: roomName => [clientId, ...] */
+    private array $wsRooms = [];
+
+    /** @var array<array{callback: callable, interval: float, lastRun: float}> Registered tick callbacks */
+    private array $tickCallbacks = [];
+
     /**
      * @param string $host Host to bind to
      * @param int    $port Port to listen on
@@ -277,6 +283,9 @@ class Server
                 break;
             }
             if ($changed === 0) {
+                // Run registered tick callbacks (background tasks)
+                $this->runTickCallbacks();
+
                 // Hot reload: check for file changes on idle ticks (skipped when TINA4_NO_RELOAD=true)
                 if ($this->isDebug && !$this->noReload) {
                     $now = microtime(true);
@@ -711,6 +720,66 @@ class Server
     }
 
     /**
+     * Join a WebSocket room.
+     */
+    public function joinRoom(string $clientId, string $roomName): void
+    {
+        if (!isset($this->wsRooms[$roomName])) {
+            $this->wsRooms[$roomName] = [];
+        }
+        if (!in_array($clientId, $this->wsRooms[$roomName], true)) {
+            $this->wsRooms[$roomName][] = $clientId;
+        }
+    }
+
+    /**
+     * Leave a WebSocket room.
+     */
+    public function leaveRoom(string $clientId, string $roomName): void
+    {
+        if (isset($this->wsRooms[$roomName])) {
+            $this->wsRooms[$roomName] = array_values(array_filter(
+                $this->wsRooms[$roomName],
+                fn($id) => $id !== $clientId
+            ));
+            if (empty($this->wsRooms[$roomName])) {
+                unset($this->wsRooms[$roomName]);
+            }
+        }
+    }
+
+    /**
+     * Broadcast a message to all members of a room.
+     */
+    public function broadcastToRoom(string $roomName, string $message, ?array $excludeIds = null): void
+    {
+        $members = $this->wsRooms[$roomName] ?? [];
+        $frame = WebSocket::buildFrame($message);
+        foreach ($members as $clientId) {
+            if ($excludeIds !== null && in_array($clientId, $excludeIds, true)) {
+                continue;
+            }
+            if (isset($this->wsClients[$clientId])) {
+                @fwrite($this->wsClients[$clientId]['socket'], $frame);
+            }
+        }
+    }
+
+    /**
+     * Get rooms a client belongs to.
+     */
+    public function getClientRooms(string $clientId): array
+    {
+        $result = [];
+        foreach ($this->wsRooms as $roomName => $members) {
+            if (in_array($clientId, $members, true)) {
+                $result[] = $roomName;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Remove a WebSocket client by connection ID.
      * Called by WebSocketConnection::close() and internally.
      */
@@ -731,6 +800,17 @@ class Server
             ($wsClient['handler'])($connection, null, 'close');
         } catch (\Throwable $e) {
             // Ignore errors in close handler
+        }
+
+        // Remove from all rooms
+        foreach ($this->wsRooms as $roomName => $members) {
+            $this->wsRooms[$roomName] = array_values(array_filter(
+                $members,
+                fn($id) => $id !== $connectionId
+            ));
+            if (empty($this->wsRooms[$roomName])) {
+                unset($this->wsRooms[$roomName]);
+            }
         }
 
         // Clean up
@@ -896,6 +976,55 @@ class Server
     public function isRunning(): bool
     {
         return $this->running;
+    }
+
+    // ── Tick Callbacks (background tasks) ────────────────────────
+
+    /**
+     * Register a callback to run periodically on idle server ticks.
+     * Matches Python's threading.Thread(target=fn, daemon=True) pattern
+     * but runs cooperatively in the event loop.
+     *
+     * @param callable $callback  Function to call (no arguments)
+     * @param float    $interval  Minimum seconds between invocations (default: 1.0)
+     */
+    public function onTick(callable $callback, float $interval = 1.0): void
+    {
+        $this->tickCallbacks[] = [
+            'callback' => $callback,
+            'interval' => $interval,
+            'lastRun' => 0.0,
+        ];
+    }
+
+    /**
+     * Run any due tick callbacks. Called from the idle branch of the event loop.
+     * Includes a safety timeout — if a callback takes longer than its interval,
+     * a warning is logged to help developers identify blocking code.
+     */
+    private function runTickCallbacks(): void
+    {
+        $now = microtime(true);
+        foreach ($this->tickCallbacks as &$tick) {
+            if ($now - $tick['lastRun'] >= $tick['interval']) {
+                $tick['lastRun'] = $now;
+                $start = microtime(true);
+                try {
+                    ($tick['callback'])();
+                } catch (\Throwable $e) {
+                    Log::error('Background task error: ' . $e->getMessage());
+                }
+                $elapsed = microtime(true) - $start;
+                if ($elapsed > $tick['interval']) {
+                    Log::warning(sprintf(
+                        'Background task took %.2fs (interval: %.2fs) — this blocks the server. '
+                        . 'Use non-blocking calls (e.g. $queue->pop() instead of $queue->consume()).',
+                        $elapsed, $tick['interval']
+                    ));
+                }
+            }
+        }
+        unset($tick);
     }
 
     // ── Hot Reload ─────────────────────────────────────────────────

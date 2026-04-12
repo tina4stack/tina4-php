@@ -221,6 +221,24 @@ class WebSocket
     }
 
     /**
+     * Return all room names a specific client belongs to.
+     * Matches Python's conn.rooms property.
+     *
+     * @param string $clientId Client connection ID
+     * @return string[]
+     */
+    public function getClientRooms(string $clientId): array
+    {
+        $result = [];
+        foreach ($this->rooms as $roomName => $members) {
+            if (in_array($clientId, $members, true)) {
+                $result[] = $roomName;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Broadcast a message to all clients in a room.
      *
      * @param string     $roomName   Room name

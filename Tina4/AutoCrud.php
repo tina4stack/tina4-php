@@ -186,14 +186,15 @@ class AutoCrud
                 ]);
             }
 
-            $result = $model->all($limit, $offset);
-            $data = array_map(fn(ORM $m) => $m->toDict(), $result['data']);
+            $models = $model->all($limit, $offset);
+            $data = array_map(fn(ORM $m) => $m->toDict(), $models);
+            $total = $model->count();
 
             return $response->json([
                 'data' => $data,
-                'total' => $result['total'],
-                'limit' => $result['limit'],
-                'offset' => $result['offset'],
+                'total' => $total,
+                'limit' => $limit,
+                'offset' => $offset,
             ]);
         };
     }

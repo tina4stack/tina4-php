@@ -14,14 +14,26 @@ use Tina4\Response;
 
 class RouterV3Test extends TestCase
 {
+    private string|false $savedDebug;
+
     protected function setUp(): void
     {
         Router::clear();
+        // Prevent dev toolbar injection from polluting response assertions
+        $this->savedDebug = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=false');
+        unset($_ENV['TINA4_DEBUG']);
+        \Tina4\DotEnv::resetEnv();
     }
 
     protected function tearDown(): void
     {
         Router::clear();
+        if ($this->savedDebug !== false) {
+            putenv("TINA4_DEBUG={$this->savedDebug}");
+        } else {
+            putenv('TINA4_DEBUG');
+        }
     }
 
     // --- Route Registration ---

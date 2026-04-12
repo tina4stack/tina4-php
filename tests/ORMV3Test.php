@@ -254,10 +254,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db);
         $result = $user->all(10, 0);
 
-        $this->assertCount(10, $result['data']);
-        $this->assertSame(15, $result['total']);
-        $this->assertSame(10, $result['limit']);
-        $this->assertSame(0, $result['offset']);
+        $this->assertCount(10, $result);
     }
 
     public function testAllSecondPage(): void
@@ -269,7 +266,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db);
         $result = $user->all(10, 10);
 
-        $this->assertCount(5, $result['data']);
+        $this->assertCount(5, $result);
     }
 
     // --- Field Mapping ---
@@ -818,8 +815,7 @@ class ORMV3Test extends TestCase
         $user = new TestUser($this->db);
         $result = $user->all(10, 0);
 
-        $this->assertCount(0, $result['data']);
-        $this->assertSame(0, $result['total']);
+        $this->assertCount(0, $result);
     }
 
     // --- Fill does not set unknown keys as properties ---
@@ -880,7 +876,7 @@ class ORMV3Test extends TestCase
 
         $user = new TestUser($this->db);
         $result = $user->all(20, 0);
-        $this->assertSame(10, $result['total']);
+        $this->assertCount(10, $result);
     }
 
     // --- Update only changes specified fields --------------------------------
@@ -947,14 +943,13 @@ class ORMV3Test extends TestCase
 
         $user = new TestUser($this->db);
         $page1 = $user->all(10, 0);
-        $this->assertCount(10, $page1['data']);
-        $this->assertSame(25, $page1['total']);
+        $this->assertCount(10, $page1);
 
         $page2 = $user->all(10, 10);
-        $this->assertCount(10, $page2['data']);
+        $this->assertCount(10, $page2);
 
         $page3 = $user->all(10, 20);
-        $this->assertCount(5, $page3['data']);
+        $this->assertCount(5, $page3);
     }
 
     // --- Relationship: nested depth 3 (user -> post -> comment) -----------
@@ -1247,7 +1242,7 @@ class ORMV3Test extends TestCase
     // --- ORM find()/all() normalisation (issue #108) ----------------------
 
     /**
-     * all() returns a paginated structure; the 'data' key must contain model instances.
+     * all() returns a flat array of model instances.
      * This covers the DatabaseResult normalisation path inside the ORM fetch layer.
      */
     public function testAllReturnsModelInstances(): void
@@ -1258,11 +1253,10 @@ class ORMV3Test extends TestCase
         $page = (new TestUser($this->db))->all();
 
         $this->assertIsArray($page, 'all() must return an array');
-        $this->assertArrayHasKey('data', $page, 'all() result must have a "data" key');
-        $this->assertGreaterThanOrEqual(2, count($page['data']), 'data should contain at least the 2 inserted rows');
+        $this->assertGreaterThanOrEqual(2, count($page), 'should contain at least the 2 inserted rows');
 
-        foreach ($page['data'] as $u) {
-            $this->assertInstanceOf(TestUser::class, $u, 'Each item in data must be a TestUser instance');
+        foreach ($page as $u) {
+            $this->assertInstanceOf(TestUser::class, $u, 'Each item must be a TestUser instance');
             $this->assertIsString($u->name, 'name must be a string');
         }
     }

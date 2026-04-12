@@ -75,6 +75,9 @@ class App
 
     private string $basePath;
 
+    /** @var array<array{callback: callable, interval: float}> Pending tick callbacks to register on server start */
+    private array $tickCallbacks = [];
+
     public function __construct(
         string $basePath = '',
         private readonly bool $development = false,
@@ -695,6 +698,20 @@ HTML;
     }
 
     /**
+     * Register a background task that runs periodically in the server event loop.
+     * Matches Python's App.background(fn, interval) pattern.
+     *
+     * @param callable $callback  Function to call (no arguments)
+     * @param float    $interval  Seconds between invocations (default: 1.0)
+     * @return self Fluent
+     */
+    public function background(callable $callback, float $interval = 1.0): self
+    {
+        $this->tickCallbacks[] = ['callback' => $callback, 'interval' => $interval];
+        return $this;
+    }
+
+    /**
      * Run the application using the custom Tina4 Server.
      * Calls start() to register routes, then launches the non-blocking HTTP/WebSocket server.
      * Falls back to `php -S` if stream_socket_server fails.
@@ -719,6 +736,12 @@ HTML;
 
         try {
             $server = new Server($host, $port);
+
+            // Register background tasks on the server's event loop
+            foreach ($this->tickCallbacks as $tick) {
+                $server->onTick($tick['callback'], $tick['interval']);
+            }
+
             self::openBrowser("http://localhost:{$port}");
             $server->start();
         } catch (\RuntimeException $e) {

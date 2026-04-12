@@ -65,7 +65,7 @@ class Frond
     private const RE_FILTER_WITH_ARGS = '/^(\w+)\s*\((.+)\)$/s';
     private const RE_FILTER_COMPARISON = '/^(\w+)\s*(!=|==|>=|<=|>|<)\s*(.+)$/';
     private const RE_DIVISIBLE_BY = '/^divisible\s*by\s*\(?\s*(.+?)\s*\)?$/';
-    private const RE_DICT_PAIR = '/^(["\']?)(\w+)\1\s*:\s*(.+)$/s';
+    private const RE_DICT_PAIR = '/^(?:(["\'])(.+?)\1|(\w+))\s*:\s*(.+)$/s';
     private const RE_SLUG_STRIP = '/[^a-z0-9]+/';
 
     /** @var array<string, array> Cache for parsed filter chains keyed by expression string */
@@ -2194,8 +2194,8 @@ class Frond
         foreach ($pairs as $pair) {
             $pair = trim($pair);
             if (preg_match(self::RE_DICT_PAIR, $pair, $m)) {
-                $key = $m[2];
-                $val = $this->evaluateExpression(trim($m[3]), $data);
+                $key = ($m[1] !== '') ? $m[2] : $m[3];
+                $val = $this->evaluateExpression(trim($m[4]), $data);
                 $result[$key] = $val;
             }
         }
@@ -2260,7 +2260,14 @@ class Frond
         $this->filters['trim'] = fn($v) => trim((string)$v);
         $this->filters['ltrim'] = fn($v) => ltrim((string)$v);
         $this->filters['rtrim'] = fn($v) => rtrim((string)$v);
-        $this->filters['replace'] = fn($v, $from, $to) => str_replace($from, $to, (string)$v);
+        $this->filters['replace'] = function($v, $from, $to = null) {
+            // Twig-style: replace({"old": "new"}) — dict as first arg
+            if (is_array($from)) {
+                return str_replace(array_keys($from), array_values($from), (string)$v);
+            }
+            // Positional: replace("old", "new")
+            return str_replace($from, $to ?? '', (string)$v);
+        };
         $this->filters['striptags'] = fn($v) => strip_tags((string)$v);
 
         // Encoding

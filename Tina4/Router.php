@@ -499,7 +499,51 @@ class Router
 
         // Run middleware chain
         foreach ($route['middleware'] as $mw) {
-            $mwResult = $mw($request, $response);
+            // Resolve middleware: string class name → call before() methods (Python parity)
+            if (is_string($mw)) {
+                // Try as class name (exact, PascalCase, or ucfirst)
+                $className = null;
+                foreach ([$mw, ucfirst($mw)] as $candidate) {
+                    if (class_exists($candidate)) {
+                        $className = $candidate;
+                        break;
+                    }
+                }
+
+                if ($className !== null) {
+                    // Call all before_* / before static methods (matches Python's middleware pattern)
+                    $methods = get_class_methods($className);
+                    foreach ($methods as $method) {
+                        if (str_starts_with($method, 'before')) {
+                            $mwResult = $className::$method($request, $response);
+                            if ($mwResult instanceof Response) {
+                                return $mwResult;
+                            }
+                            if ($mwResult === false) {
+                                return self::renderError($response, 403, 'Forbidden', $request->path);
+                            }
+                            // If middleware returns [request, response], update them
+                            if (is_array($mwResult) && count($mwResult) === 2) {
+                                [$request, $response] = $mwResult;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                // Fallback: try as callable function name
+                if (is_callable($mw)) {
+                    $mwResult = $mw($request, $response);
+                } else {
+                    Log::warning("Middleware not found: {$mw}");
+                    continue;
+                }
+            } elseif (is_callable($mw)) {
+                $mwResult = $mw($request, $response);
+            } else {
+                continue;
+            }
+
             // If middleware returns a Response, short-circuit
             if ($mwResult instanceof Response) {
                 return $mwResult;

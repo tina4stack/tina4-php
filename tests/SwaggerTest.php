@@ -6,14 +6,32 @@ use Tina4\Router;
 
 class SwaggerTest extends TestCase
 {
+    private array $savedEnvKeys = ['SWAGGER_TITLE', 'SWAGGER_VERSION', 'SWAGGER_DESCRIPTION'];
+    private array $savedEnvValues = [];
+
     protected function setUp(): void
     {
         Router::clear();
+        // Clear DotEnv internal store and $_ENV to avoid pollution from earlier tests
+        \Tina4\DotEnv::resetEnv();
+        foreach ($this->savedEnvKeys as $key) {
+            $this->savedEnvValues[$key] = getenv($key);
+            putenv($key);
+            unset($_ENV[$key]);
+        }
     }
 
     protected function tearDown(): void
     {
         Router::clear();
+        // Restore previous env state
+        foreach ($this->savedEnvKeys as $key) {
+            if ($this->savedEnvValues[$key] !== false) {
+                putenv("{$key}={$this->savedEnvValues[$key]}");
+            } else {
+                putenv($key);
+            }
+        }
     }
 
     // ── Spec Structure ──────────────────────────────────────────

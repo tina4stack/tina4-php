@@ -37,7 +37,7 @@ abstract class ORM
     public array $fieldMapping = [];
 
     /** @var bool When true, auto-generates fieldMapping from camelCase properties to snake_case DB columns */
-    public bool $autoMap = false;
+    public bool $autoMap = true;
 
     /** @var bool Whether soft delete is enabled */
     public bool $softDelete = false;
@@ -316,6 +316,12 @@ abstract class ORM
             // Map DB column to PHP property if mapping exists
             $propName = $reverseMapping[$key] ?? $key;
             $this->_data[$propName] = $value;
+
+            // Also set declared properties so $model->prop works without __get
+            // (PHP skips __get for declared properties, even untyped ones)
+            if (property_exists($this, $propName)) {
+                $this->$propName = $value;
+            }
         }
 
         return $this;
@@ -565,12 +571,7 @@ abstract class ORM
             static::eagerLoad($models, $include, $this->_db);
         }
 
-        return [
-            'data' => $models,
-            'total' => $result['total'],
-            'limit' => $result['limit'],
-            'offset' => $result['offset'],
-        ];
+        return $models;
     }
 
     /**
@@ -615,9 +616,24 @@ abstract class ORM
      * @return array<string, mixed>
      */
     /** @return array<string, mixed> */
-    public function toDict(?array $include = null): array
+    /**
+     * Convert to associative array.
+     *
+     * @param array|null $include  Relationships to eager-load
+     * @param string     $case     Key casing: 'camel' (default for PHP), 'snake' (matches Python/DB)
+     * @return array<string, mixed>
+     */
+    public function toDict(?array $include = null, string $case = 'camel'): array
     {
-        $result = $this->_data;
+        if ($case === 'snake') {
+            // Map camelCase keys back to snake_case DB column names
+            $result = [];
+            foreach ($this->_data as $key => $value) {
+                $result[$this->fieldMapping[$key] ?? $key] = $value;
+            }
+        } else {
+            $result = $this->_data;
+        }
 
         if ($include !== null) {
             // Group includes: top-level and nested
@@ -640,11 +656,11 @@ abstract class ORM
                     $result[$relName] = null;
                 } elseif (is_array($related)) {
                     $result[$relName] = array_map(
-                        fn(ORM $r) => $r->toDict(!empty($nested) ? $nested : null),
+                        fn(ORM $r) => $r->toDict(!empty($nested) ? $nested : null, $case),
                         $related
                     );
                 } elseif ($related instanceof ORM) {
-                    $result[$relName] = $related->toDict(!empty($nested) ? $nested : null);
+                    $result[$relName] = $related->toDict(!empty($nested) ? $nested : null, $case);
                 }
             }
         }

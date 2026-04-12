@@ -34,9 +34,6 @@ class WebSocketConnection
     /** @var Server|null Reference to the server for broadcasting */
     private ?Server $server;
 
-    /** @var WebSocket|null Reference to the WebSocket manager for rooms */
-    private ?WebSocket $ws;
-
     /** @var callable|null Callback for incoming messages (set by route-style handlers) */
     public $onMessage = null;
 
@@ -50,11 +47,10 @@ class WebSocketConnection
      * @param string      $id      Unique connection ID
      * @param string      $path    WebSocket route path
      * @param resource    $socket  Raw socket resource
-     * @param Server|null $server  Server reference for broadcast
+     * @param Server|null $server  Server reference for broadcast and rooms
      * @param string      $ip      Client IP address
      * @param array       $headers HTTP headers from upgrade request
      * @param array       $params  Route params from path pattern
-     * @param WebSocket|null $ws   WebSocket manager for room operations
      */
     public function __construct(
         string $id,
@@ -64,7 +60,6 @@ class WebSocketConnection
         string $ip = '',
         array $headers = [],
         array $params = [],
-        ?WebSocket $ws = null,
     ) {
         $this->id = $id;
         $this->path = $path;
@@ -73,7 +68,6 @@ class WebSocketConnection
         $this->ip = $ip;
         $this->headers = $headers;
         $this->params = $params;
-        $this->ws = $ws;
     }
 
     /**
@@ -105,8 +99,8 @@ class WebSocketConnection
      */
     public function joinRoom(string $roomName): void
     {
-        if ($this->ws !== null) {
-            $this->ws->joinRoom($this->id, $roomName);
+        if ($this->server !== null) {
+            $this->server->joinRoom($this->id, $roomName);
         }
     }
 
@@ -115,9 +109,43 @@ class WebSocketConnection
      */
     public function leaveRoom(string $roomName): void
     {
-        if ($this->ws !== null) {
-            $this->ws->leaveRoom($this->id, $roomName);
+        if ($this->server !== null) {
+            $this->server->leaveRoom($this->id, $roomName);
         }
+    }
+
+    /**
+     * Broadcast a message to all members of a room.
+     * Matches Python's conn.broadcast_to_room(room, message, exclude_self=True).
+     */
+    public function broadcastToRoom(string $roomName, string $message, bool $excludeSelf = true): void
+    {
+        if ($this->server !== null) {
+            $exclude = $excludeSelf ? [$this->id] : null;
+            $this->server->broadcastToRoom($roomName, $message, $exclude);
+        }
+    }
+
+    /**
+     * Get rooms this connection belongs to.
+     * Matches Python's conn.rooms property.
+     *
+     * @return string[]
+     */
+    public function getRooms(): array
+    {
+        if ($this->server !== null) {
+            return $this->server->getClientRooms($this->id);
+        }
+        return [];
+    }
+
+    /**
+     * Send a JSON-encoded message. Matches Python's conn.send_json().
+     */
+    public function sendJson(array $data): void
+    {
+        $this->send(json_encode($data));
     }
 
     /**

@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.10.97 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.10.99 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -18,6 +18,7 @@ Version 3.10.97 — Full Tina4 PHP framework and application scaffold. See https
 - **No hardcoded hex colors** — always use CSS variables (`var(--text)`, `var(--border)`, `var(--primary)`, etc.) or SCSS variables
 - **Shared CSS only** — Never define UI patterns in local `<style>` blocks. All shared styles go in a project SCSS file
 - **Use built-in features** — Never reinvent what the framework provides (Auth, ORM, Messenger, etc.)
+- **Background work** — Use `$app->background(fn, interval)` for periodic tasks (queue consumers, health checks, simulators). Never use raw threads or separate worker processes
 - **Template inheritance** — Every page extends a base Twig template, reusable UI in partials
 - **Migrations for all schema changes** — Never execute DDL outside migration files
 - **Constants** — No magic strings or numbers in routes. Use class constants or a dedicated constants file
@@ -426,6 +427,41 @@ Events::once('app.boot', fn() => warmCaches());
 $results = Events::emit('user.created', $userData);
 ```
 
+### Background Tasks — Periodic background work in the server event loop
+
+Register callbacks that run periodically in the server's `stream_select` event loop. No threads, no separate processes — tasks run cooperatively between HTTP requests.
+
+```php
+$app = new \Tina4\App();
+
+// Process queue jobs every 2 seconds
+$app->background(function () use ($queue) {
+    processOrders($queue);
+}, 2.0);
+
+// Health check every 30 seconds
+$app->background(function () {
+    $api = new \Tina4\Api("https://api.example.com");
+    $result = $api->sendRequest("/health");
+    if ($result['http_code'] !== 200) {
+        \Tina4\Debug::message("Health check failed", TINA4_LOG_WARNING);
+    }
+}, 30.0);
+
+$app->run();
+```
+
+**Never use raw threads or separate processes for periodic work.** Use `$app->background()` instead — it integrates with the server lifecycle, handles errors gracefully, and shuts down cleanly.
+
+| Method | Description |
+|--------|-------------|
+| `$app->background(callable $callback, float $interval = 1.0): self` | Register a periodic task. Callback takes no arguments. Interval is in seconds. Returns `$app` for chaining. |
+
+Server-level access (advanced):
+```php
+$server->onTick(callable $callback, float $interval = 1.0): void
+```
+
 ### AI — Detect AI coding assistants and scaffold context files
 
 Supports: Claude Code, Cursor, GitHub Copilot, Windsurf, Aider, Cline, OpenAI Codex.
@@ -710,6 +746,7 @@ $result = SqlTranslation::remember(
 - Programmatic HTML builder (`HtmlElement`) with tag helpers
 - Inline testing (`Testing`) with assertion builders and test runner
 - SQL dialect translation (`SqlTranslation`) for cross-database portability
+- Background tasks via `$app->background()` — cooperative periodic callbacks in the event loop (no threads)
 - AI assistant detection (`AI`) with context file scaffolding for 7 tools
 - Queue system with Kafka, RabbitMQ, and MongoDB backends
 - Session handlers for MongoDB and Valkey/Redis. `TINA4_SESSION_SAMESITE` env var (default: Lax)
