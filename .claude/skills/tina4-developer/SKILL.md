@@ -261,6 +261,10 @@ Read these when you need detailed patterns for a specific area:
 - **`references/auth-and-services.md`** — JWT authentication, sessions, queue system, email,
   GraphQL, WSDL, events, caching, i18n. Read this for auth or background services.
 
+- **`references/deployment.md`** — Docker base images, Dockerfile recipes for every database
+  driver, Docker Compose, environment variables, production checklist. Read this for ANY
+  deployment or Docker work. **Never guess at Docker configuration — use these exact recipes.**
+
 ## Environment Configuration
 
 All Tina4 apps use a `.env` file. The keys are identical across all four languages:
@@ -300,12 +304,51 @@ Encourage developers to write tests for their routes, models, and business logic
 
 ## Deployment
 
-Tina4 apps deploy easily via Docker. Images are small (40-80MB):
+Tina4 apps deploy via Docker using official base images from Docker Hub.
+
+**Read `references/deployment.md` for exact Dockerfile recipes** — never guess at Docker
+configuration. The reference contains copy-paste Dockerfiles for every database driver.
+
+### Base Images (Docker Hub)
+
+| Framework | Base Image | Port | Size |
+|-----------|-----------|------|------|
+| Python | `tina4stack/tina4-python:v3` | 7146 | ~56MB |
+| PHP | `tina4stack/tina4-php:v3` | 7145 | ~154MB |
+
+### Quick Deploy (PHP)
+
+```dockerfile
+FROM tina4stack/tina4-php:v3
+WORKDIR /app
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --optimize-autoloader --no-scripts && rm /usr/bin/composer
+COPY index.php .
+COPY .env .
+COPY migrations/ migrations/
+COPY src/ src/
+RUN mkdir -p data data/sessions data/queue data/mailbox
+EXPOSE 7145
+CMD ["php", "index.php", "0.0.0.0:7145"]
+```
 
 ```bash
-tina4py build                           # Build Docker image
-tina4py stage                           # Build + push + deploy (~30s)
-tina4py deploy promote staging production  # Promote to production
+docker build -t my-app .
+docker run -d -p 7145:7145 -v $(pwd)/data:/app/data my-app
+```
+
+### Database Drivers
+
+Base images ship with **SQLite only**. To add PostgreSQL, MySQL, MSSQL, or Firebird,
+see `references/deployment.md` for exact Dockerfile recipes per driver per framework.
+
+### CLI Deploy
+
+```bash
+tina4php build                          # Build Docker image
+tina4php stage                          # Build + push + deploy (~30s)
+tina4php deploy promote staging production  # Promote to production
 ```
 
 The app includes a health check at `/health` that Kubernetes probes can use.

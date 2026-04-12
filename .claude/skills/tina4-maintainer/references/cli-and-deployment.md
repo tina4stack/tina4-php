@@ -101,13 +101,22 @@ Supports environment-specific overrides: `.env.development`, `.env.production`, 
 
 ## Docker
 
-### Image Sizes (targets)
-- Python: ~80MB (slim base)
-- PHP: ~50MB (Alpine)
-- Ruby: ~60MB (Alpine)
-- Node.js: ~40MB (distroless)
+### Official Base Images (Docker Hub)
 
-Multi-stage builds. 3-10x smaller than typical framework images.
+| Framework | Image | Port | Size | Base |
+|-----------|-------|------|------|------|
+| Python | `tina4stack/tina4-python:v3` | 7146 | ~56MB | Alpine 3.23, Python 3.13 |
+| PHP | `tina4stack/tina4-php:v3` | 7145 | ~154MB | Alpine 3.23, PHP 8.4 |
+
+Base images ship with **SQLite only** and include:
+- Python: libffi, sqlite-libs, PYTHONUNBUFFERED=1, TINA4_OVERRIDE_CLIENT=true, TINA4_NO_BROWSER=true
+- PHP: sqlite3, pdo_sqlite, OPcache (production settings), TINA4_OVERRIDE_CLIENT=true
+
+Both use multi-stage builds. App Dockerfiles extend these with `FROM tina4stack/tina4-python:v3`
+or `FROM tina4stack/tina4-php:v3` and only add app code + any extra database drivers.
+
+Database driver installation recipes are in the tina4-developer skill at
+`references/deployment.md` — covers PostgreSQL, MySQL, MSSQL, and Firebird for both Python and PHP.
 
 ### Docker Compose
 Provided for integration testing with real databases (PostgreSQL, MySQL, MSSQL, etc.).
