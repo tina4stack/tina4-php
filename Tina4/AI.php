@@ -147,7 +147,7 @@ class AI
         $action = file_exists($contextPath) ? "Updated" : "Installed";
         $relative = ltrim(str_replace($root, '', $contextPath), '/');
         $created[] = $relative;
-        echo "  \e[32m✓\e[0m {$action} {$relative}\n";
+        echo "  \e[32m[OK]\e[0m {$action} {$relative}\n";
 
         // Claude-specific extras
         if ($tool['name'] === 'claude-code') {
@@ -172,7 +172,7 @@ class AI
             $returnCode = 0;
             exec("{$cmd} install --upgrade tina4-ai 2>&1", $output, $returnCode);
             if ($returnCode === 0) {
-                echo "  \e[32m✓\e[0m Installed tina4-ai (mdview)\n";
+                echo "  \e[32m[OK]\e[0m Installed tina4-ai (mdview)\n";
                 return;
             } else {
                 $error = implode(' ', array_slice($output, 0, 3));
@@ -211,7 +211,7 @@ class AI
                 self::copyDirectory($skillDir, $targetDir);
                 $relative = ltrim(str_replace($root, '', $targetDir), '/');
                 $created[] = $relative;
-                echo "  \e[32m✓\e[0m Updated {$relative}\n";
+                echo "  \e[32m[OK]\e[0m Updated {$relative}\n";
             }
         }
 
