@@ -473,6 +473,28 @@ Tina4 PHP is built from the ground up with no third-party runtime dependencies i
 
 ---
 
+## Demo Store
+
+A complete e-commerce app lives in `example/`. It demonstrates every framework feature through a real-world use case.
+
+```bash
+cd example
+bash setup.sh          # macOS/Linux
+# or: setup.bat        # Windows
+php index.php
+```
+
+Open http://localhost:7145
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@tina4store.com | admin123 |
+| Customer | alice@example.com | customer123 |
+
+See [`example/README.md`](example/README.md) for full details.
+
+---
+
 ## Documentation
 
 Full guides, API reference, and examples at **[tina4.com](https://tina4.com)**.
