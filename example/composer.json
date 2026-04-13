@@ -2,8 +2,15 @@
     "name": "tina4stack/tina4-store-demo",
     "description": "Tina4 PHP Store Demo — complete framework showcase",
     "type": "project",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../",
+            "options": { "symlink": true }
+        }
+    ],
     "require": {
-        "tina4stack/tina4php": "^3.10"
+        "tina4stack/tina4php": "@dev"
     },
     "autoload": {
         "psr-4": {
