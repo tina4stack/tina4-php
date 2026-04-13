@@ -447,7 +447,13 @@ class GraphQL
     {
         $db = $ormInstance->getDb();
         if ($db === null) {
-            throw new \RuntimeException('GraphQL::fromOrm() requires an ORM instance with a database adapter set.');
+            // Try to resolve the database the same way ORM::ensureDb() does
+            $db = ORM::getGlobalDb() ?? App::getDatabase() ?? Database\Database::fromEnv();
+            if ($db !== null) {
+                $ormInstance->setDb($db);
+            } else {
+                throw new \RuntimeException('GraphQL::fromOrm() requires an ORM instance with a database adapter set.');
+            }
         }
 
         $className = (new \ReflectionClass($ormInstance))->getShortName();
@@ -502,9 +508,9 @@ class GraphQL
         $this->addQuery($plural, ['limit' => 'Int', 'offset' => 'Int'], "[{$className}]", function ($root, $args, $context) use ($ormInstance) {
             $limit = $args['limit'] ?? 10;
             $offset = $args['offset'] ?? 0;
-            $result = $ormInstance->all($limit, $offset);
+            $models = $ormInstance->all($limit, $offset);
             $records = [];
-            foreach ($result['data'] as $model) {
+            foreach ($models as $model) {
                 $records[] = $model->toDict();
             }
             return $records;

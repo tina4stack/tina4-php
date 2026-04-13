@@ -89,6 +89,14 @@ abstract class ORM
     }
 
     /**
+     * Get the global database if one is set.
+     */
+    public static function getGlobalDb(): ?DatabaseAdapter
+    {
+        return self::$_globalDb;
+    }
+
+    /**
      * Resolve the database for static methods.
      * Checks: instance $_db → global $_globalDb → App::getDatabase() → Database::fromEnv()
      */

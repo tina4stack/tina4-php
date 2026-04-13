@@ -1,13 +1,20 @@
 <?php
 
 \Tina4\Router::get("/checkout", function ($request, $response) {
+    // Redirect to login if not authenticated (session-based, matches Python)
+    $customerId = $request->session->get("customer_id");
+    if (!$customerId) {
+        $request->session->flash("error", "Please login to checkout");
+        return $response->redirect("/login");
+    }
+
     $items = getCartItems($request->session);
     $total = getCartTotal($request->session);
     return $response(storeRender("storefront/checkout.twig", [
         "cart_items" => $items,
         "cart_total" => $total,
     ], $request));
-})->secure();
+})->noAuth();
 
 \Tina4\Router::post("/checkout", function ($request, $response) {
     $cart = $request->session->get("cart") ?? [];

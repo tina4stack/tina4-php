@@ -147,12 +147,15 @@ class ScssCompiler
             $css = $this->minify($css);
         }
 
-        // Write output
+        // Write output only if content changed (avoids triggering DevReload loops)
         $outDir = dirname($output);
         if (!is_dir($outDir)) {
             mkdir($outDir, 0777, true);
         }
-        file_put_contents($output, $css);
+        $existing = file_exists($output) ? file_get_contents($output) : null;
+        if ($existing !== $css) {
+            file_put_contents($output, $css);
+        }
 
         return $css;
     }
