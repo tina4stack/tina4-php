@@ -742,6 +742,20 @@ HTML;
                 $server->onTick($tick['callback'], $tick['interval']);
             }
 
+            // Banner — so the user knows the server started
+            $routeCount = Router::count();
+            $wsCount = count(Router::getWebSocketRoutes());
+            $wsInfo = $wsCount > 0 ? " (WebSocket: {$wsCount} routes)" : '';
+            echo "\n";
+            echo "  Tina4 PHP v" . self::$VERSION . "\n\n";
+            echo "  Server:    http://localhost:{$port}{$wsInfo}\n";
+            echo "  Swagger:   http://localhost:{$port}/swagger\n";
+            if ($this->isDevelopment()) {
+                echo "  Dashboard: http://localhost:{$port}/__dev\n";
+            }
+            echo "  Routes:    {$routeCount}\n";
+            echo "\n  Press Ctrl+C to stop.\n\n";
+
             self::openBrowser("http://localhost:{$port}");
             $server->start();
         } catch (\RuntimeException $e) {
