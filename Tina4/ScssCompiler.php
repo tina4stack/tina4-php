@@ -98,7 +98,7 @@ class ScssCompiler
      * Non-partial files (not starting with _) are compiled in alphabetical order.
      * Returns the compiled CSS string.
      */
-    public function compileScss(string $scssDir = 'src/scss', string $output = 'public/css/default.css', bool $minify = false): string
+    public function compileScss(string $scssDir = 'src/scss', string $output = 'src/public/css/default.css', bool $minify = false): string
     {
         if (!is_dir($scssDir)) {
             return '';
