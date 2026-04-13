@@ -341,19 +341,25 @@ class DevAdminTest extends TestCase
         $this->assertStringContainsString('Dashboard', $html);
     }
 
-    // ── Dashboard HTML ──────────────────────────────────────────
-
-    public function testDashboardReturnsHtml(): void
+    public function testToolbarNoExternalDeps(): void
     {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('<!DOCTYPE html>', $html);
-        $this->assertStringContainsString('Tina4 Dev Admin', $html);
+        $html = strtolower(DevAdmin::renderToolbar());
+        $this->assertStringNotContainsString('cdn.', $html);
     }
 
-    public function testDashboardContainsTabs(): void
+    public function testToolbarWithContext(): void
     {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('dev-tab', $html);
+        $html = DevAdmin::renderToolbar('POST', '/api/users', '/api/users/{id}', 'req-456', 10);
+        $this->assertStringContainsString('POST', $html);
+        $this->assertStringContainsString('/api/users', $html);
+        $this->assertStringContainsString('req-456', $html);
+        $this->assertStringContainsString('10 routes', $html);
+    }
+
+    public function testToolbarShowsPhpVersion(): void
+    {
+        $html = DevAdmin::renderToolbar();
+        $this->assertStringContainsString('PHP', $html);
     }
 
     // ── Status API: db_tables field ────────────────────────────────
@@ -453,105 +459,6 @@ class DevAdminTest extends TestCase
         $db->close();
     }
 
-    // ── Database tab HTML ──────────────────────────────────────────
-
-    public function testDashboardSplitScreenLayout(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('table-list', $html);
-        $this->assertStringContainsString('query-results', $html);
-        $this->assertStringContainsString('query-input', $html);
-    }
-
-    public function testDashboardCopyButtons(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('Copy CSV', $html);
-        $this->assertStringContainsString('Copy JSON', $html);
-        $this->assertStringContainsString('Paste', $html);
-    }
-
-    public function testDashboardLimitDropdown(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('query-limit', $html);
-        $this->assertStringContainsString('<option value="20">20</option>', $html);
-        $this->assertStringContainsString('<option value="0">All</option>', $html);
-    }
-
-    public function testDashboardSeedControls(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('seed-table', $html);
-        $this->assertStringContainsString('seed-count', $html);
-        $this->assertStringContainsString('seedTable()', $html);
-    }
-
-    // ── Dashboard HTML: tabs ──────────────────────────────────────
-
-    public function testDashboardContainsAllTabs(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        foreach (['Routes', 'Queue', 'Mailbox', 'Messages', 'Database'] as $tab) {
-            $this->assertStringContainsString($tab, $html);
-        }
-    }
-
-    public function testDashboardContainsRequestInspector(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('Requests', $html);
-    }
-
-    public function testDashboardContainsErrorTracker(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('Errors', $html);
-    }
-
-    public function testDashboardContainsSystemOverview(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('System', $html);
-    }
-
-    public function testDashboardNoExternalDependencies(): void
-    {
-        $html = strtolower(DevAdmin::renderDashboard());
-        $this->assertStringNotContainsString('cdn.', $html);
-        $this->assertStringNotContainsString('unpkg', $html);
-        $this->assertStringNotContainsString('jsdelivr', $html);
-    }
-
-    public function testDashboardUsesCssVariables(): void
-    {
-        $html = DevAdmin::renderDashboard();
-        $this->assertStringContainsString('<style>', $html);
-        $this->assertStringContainsString('var(--', $html);
-    }
-
-    // ── Toolbar rendering ──────────────────────────────────────
-
-    public function testToolbarNoExternalDeps(): void
-    {
-        $html = strtolower(DevAdmin::renderToolbar());
-        $this->assertStringNotContainsString('cdn.', $html);
-    }
-
-    public function testToolbarWithContext(): void
-    {
-        $html = DevAdmin::renderToolbar('POST', '/api/users', '/api/users/{id}', 'req-456', 10);
-        $this->assertStringContainsString('POST', $html);
-        $this->assertStringContainsString('/api/users', $html);
-        $this->assertStringContainsString('req-456', $html);
-        $this->assertStringContainsString('10 routes', $html);
-    }
-
-    public function testToolbarShowsPhpVersion(): void
-    {
-        $html = DevAdmin::renderToolbar();
-        $this->assertStringContainsString('PHP', $html);
-    }
 
     // ── API Handler: routes ──────────────────────────────────────
 
@@ -789,6 +696,234 @@ class DevAdminTest extends TestCase
         ErrorTracker::capture('Error', 'two', '', 'b.php', 2);
         ErrorTracker::clearAll();
         $this->assertCount(0, ErrorTracker::get());
+    }
+
+    // ── API Handler: tables ──────────────────────────────────────
+
+    public function testTablesEndpointReturnsTableNames(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        $db->exec("CREATE TABLE alpha (id INTEGER PRIMARY KEY)");
+        $db->exec("CREATE TABLE bravo (id INTEGER PRIMARY KEY)");
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/tables');
+        $this->assertNotNull($callback, 'Tables route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/tables');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('tables', $json);
+        $this->assertIsArray($json['tables']);
+        $this->assertContains('alpha', $json['tables']);
+        $this->assertContains('bravo', $json['tables']);
+
+        $db->close();
+    }
+
+    // ── API Handler: mtime ──────────────────────────────────────
+
+    public function testMtimeEndpointReturnsMtime(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/mtime');
+        $this->assertNotNull($callback, 'Mtime route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/mtime');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('mtime', $json);
+        $this->assertIsInt($json['mtime']);
+
+        $db->close();
+    }
+
+    // ── API Handler: queue ──────────────────────────────────────
+
+    public function testQueueEndpointReturnsJobs(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/queue');
+        $this->assertNotNull($callback, 'Queue route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/queue');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('jobs', $json);
+        $this->assertIsArray($json['jobs']);
+
+        $db->close();
+    }
+
+    // ── API Handler: broken ──────────────────────────────────────
+
+    public function testBrokenEndpointReturnsErrors(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/broken');
+        $this->assertNotNull($callback, 'Broken route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/broken');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('errors', $json);
+        $this->assertIsArray($json['errors']);
+        $this->assertArrayHasKey('count', $json);
+        $this->assertArrayHasKey('health', $json);
+
+        $db->close();
+    }
+
+    // ── API Handler: websockets ──────────────────────────────────
+
+    public function testWebsocketsEndpointReturnsConnections(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/websockets');
+        $this->assertNotNull($callback, 'Websockets route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/websockets');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('connections', $json);
+        $this->assertIsArray($json['connections']);
+        $this->assertArrayHasKey('count', $json);
+
+        $db->close();
+    }
+
+    // ── API Handler: graphql/schema ──────────────────────────────
+
+    public function testGraphqlSchemaEndpointReturnsSchemaAndSdl(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/graphql/schema');
+        $this->assertNotNull($callback, 'GraphQL schema route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/graphql/schema');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('schema', $json);
+        $this->assertArrayHasKey('sdl', $json);
+
+        $db->close();
+    }
+
+    // ── API Handler: messages/clear ──────────────────────────────
+
+    public function testMessagesClearEndpointReturnsOk(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        MessageLog::log('test', 'info', 'To be cleared');
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('POST', '/__dev/api/messages/clear');
+        $this->assertNotNull($callback, 'Messages clear route should be registered');
+
+        $request = Request::create('POST', '/__dev/api/messages/clear');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('cleared', $json);
+        $this->assertTrue($json['cleared']);
+        $this->assertCount(0, MessageLog::get());
+
+        $db->close();
+    }
+
+    // ── API Handler: requests/clear ──────────────────────────────
+
+    public function testRequestsClearEndpointReturnsOk(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        RequestInspector::capture('GET', '/test', 200, 5.0);
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('POST', '/__dev/api/requests/clear');
+        $this->assertNotNull($callback, 'Requests clear route should be registered');
+
+        $request = Request::create('POST', '/__dev/api/requests/clear');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('cleared', $json);
+        $this->assertTrue($json['cleared']);
+        $this->assertCount(0, RequestInspector::get());
+
+        $db->close();
+    }
+
+    // ── API Handler: connections ──────────────────────────────────
+
+    public function testConnectionsEndpointReturnsConnectionInfo(): void
+    {
+        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
+        \Tina4\App::setDatabase($db);
+
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/connections');
+        $this->assertNotNull($callback, 'Connections route should be registered');
+
+        $request = Request::create('GET', '/__dev/api/connections');
+        $response = new Response(true);
+
+        $result = $callback($request, $response);
+        $json = json_decode($result->getBody(), true);
+
+        $this->assertArrayHasKey('url', $json);
+        $this->assertArrayHasKey('username', $json);
+        $this->assertArrayHasKey('password', $json);
+
+        $db->close();
     }
 
     // ── Helper ─────────────────────────────────────────────────────

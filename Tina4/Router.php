@@ -652,27 +652,30 @@ class Router
 
         foreach (self::$routes as $method => $routes) {
             foreach ($routes as $route) {
-                // Derive handler name from the callback
+                // Derive handler name and module from the callback
                 $handler = '';
-                if (isset($route['handler'])) {
-                    $cb = $route['handler'];
-                    if ($cb instanceof \Closure) {
-                        $ref = new \ReflectionFunction($cb);
-                        $file = $ref->getFileName();
-                        $handler = $file ? basename($file) . ':' . $ref->getStartLine() : 'Closure';
-                    } elseif (is_string($cb)) {
-                        $handler = $cb;
-                    } elseif (is_array($cb) && count($cb) === 2) {
-                        $handler = (is_object($cb[0]) ? get_class($cb[0]) : $cb[0]) . '::' . $cb[1];
-                    }
+                $module = '';
+                $cb = $route['callback'];
+                if ($cb instanceof \Closure) {
+                    $ref = new \ReflectionFunction($cb);
+                    $file = $ref->getFileName();
+                    $handler = $file ? basename($file) . ':' . $ref->getStartLine() : 'Closure';
+                    $module = $file ? dirname($file) : '';
+                } elseif (is_string($cb)) {
+                    $handler = $cb;
+                } elseif (is_array($cb) && count($cb) === 2) {
+                    $handler = (is_object($cb[0]) ? get_class($cb[0]) : $cb[0]) . '::' . $cb[1];
                 }
                 $list[] = [
                     'method' => $method,
                     'pattern' => $route['pattern'],
+                    'path' => $route['pattern'],
                     'middleware' => count($route['middleware']),
                     'cache' => $route['cache'],
                     'secure' => $route['secure'],
+                    'auth_required' => $route['secure'] && !($route['noAuth'] ?? false),
                     'handler' => $handler,
+                    'module' => $module,
                     'callback' => $route['callback'],
                     'swagger' => $route['swagger'] ?? [],
                 ];
@@ -684,10 +687,13 @@ class Router
             $list[] = [
                 'method' => 'WS',
                 'pattern' => $wsRoute['path'],
+                'path' => $wsRoute['path'],
                 'middleware' => 0,
                 'cache' => false,
                 'secure' => false,
+                'auth_required' => false,
                 'handler' => '',
+                'module' => '',
             ];
         }
 
