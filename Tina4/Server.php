@@ -209,7 +209,11 @@ class Server
         stream_set_blocking($this->socket, false);
         $this->running = true;
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        $this->noReload = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_RELOAD', 'false'));
+        // Disable the internal file watcher when launched by the Rust CLI (--managed).
+        // The Rust CLI owns file watching, SCSS compilation, and browser reload.
+        // Running both causes double-reloads and SCSS recompile loops.
+        $isManaged = in_array('--managed', $_SERVER['argv'] ?? [], true);
+        $this->noReload = $isManaged || DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_RELOAD', 'false'));
 
         // AI dual-port: open port+1 when TINA4_DEBUG=true and TINA4_NO_AI_PORT is not set
         $noAiPort = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_AI_PORT', 'false'));
