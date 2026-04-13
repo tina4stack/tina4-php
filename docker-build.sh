@@ -2,7 +2,7 @@
 # Build and push tina4stack/tina4-php Docker images after a release.
 #
 # Usage:
-#   ./docker-build.sh          # builds :v3 and :v3.10.97 (reads version from composer.json)
+#   ./docker-build.sh          # builds :v3 and :3.10.99 (reads version from composer.json)
 #   ./docker-build.sh 3.10.99  # override version tag
 #
 # Prerequisites:
@@ -26,23 +26,23 @@ if [ -z "$VERSION" ]; then
 fi
 
 echo "Building $REPO"
-echo "  Tags: v3, v$VERSION"
+echo "  Tags: v3, $VERSION"
 echo ""
 
-# Build with both tags
+# Build with both tags (PHP uses unversioned v3 + bare version number)
 docker build \
     -t "$REPO:v3" \
-    -t "$REPO:v$VERSION" \
+    -t "$REPO:$VERSION" \
     "$SCRIPT_DIR"
 
 echo ""
 echo "Pushing $REPO:v3 ..."
 docker push "$REPO:v3"
 
-echo "Pushing $REPO:v$VERSION ..."
-docker push "$REPO:v$VERSION"
+echo "Pushing $REPO:$VERSION ..."
+docker push "$REPO:$VERSION"
 
 echo ""
 echo "Done. Images pushed:"
 echo "  $REPO:v3"
-echo "  $REPO:v$VERSION"
+echo "  $REPO:$VERSION"

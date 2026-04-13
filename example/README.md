@@ -2,12 +2,30 @@
 
 A fully functional e-commerce app demonstrating every Tina4 feature.
 
-## Quick Start (3 commands)
+## Quick Start
+
+### macOS / Linux
 
 ```bash
 cd example
-composer install
+bash setup.sh
 php index.php
+```
+
+### Windows
+
+```cmd
+cd example
+setup.bat
+php index.php
+```
+
+### Docker (zero setup)
+
+```bash
+cd example
+docker build -t tina4-store-php .
+docker run -p 7145:7145 tina4-store-php
 ```
 
 Open http://localhost:7145
@@ -32,15 +50,7 @@ Open http://localhost:7145
 
 - PHP 8.2+
 - ext-sqlite3 (usually included)
-- Composer
-
-## Docker (zero setup)
-
-```bash
-cd example
-docker build -t tina4-store-php .
-docker run -p 7145:7145 tina4-store-php
-```
+- Composer (setup.sh installs it for you if missing)
 
 ## Environment
 

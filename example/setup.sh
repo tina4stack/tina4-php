@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Tina4 Store Demo — One-command setup
+# Tina4 Store Demo — One-command setup (macOS / Linux)
 # Usage: bash setup.sh
+#
+# Windows users: see setup.bat
 set -euo pipefail
 
 echo "=== Tina4 Store (PHP) Setup ==="
@@ -11,7 +13,6 @@ if ! command -v php &>/dev/null; then
     echo "ERROR: PHP not found. Install PHP 8.2+ first."
     echo "  macOS:   brew install php"
     echo "  Ubuntu:  sudo apt install php php-sqlite3"
-    echo "  Windows: https://windows.php.net/download/"
     exit 1
 fi
 
@@ -29,13 +30,13 @@ if ! command -v composer &>/dev/null; then
     echo "[OK] Composer installed locally"
 else
     COMPOSER="composer"
-    echo "[OK] Composer $(composer --version 2>/dev/null | head -1)"
+    echo "[OK] Composer found"
 fi
 
-# Install dependencies
-echo ""
+# Install dependencies (uses local framework via path repo)
 echo "Installing dependencies..."
 $COMPOSER install --no-dev --optimize-autoloader 2>&1 | tail -3
+echo "[OK] Dependencies installed"
 
 # Create .env if missing
 if [ ! -f .env ]; then
