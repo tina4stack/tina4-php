@@ -438,6 +438,9 @@ abstract class ORM
         if ($result === null) {
             return false;
         }
+        // Clear stale data before filling — prevents double-fill corruption
+        // where properties from a previous load() persist after a new one.
+        $this->_data = [];
         $this->fill($result->getData());
         $this->_exists = true;
         return true;
@@ -751,7 +754,13 @@ abstract class ORM
      */
     public function getPrimaryKeyValue(): int|string|null
     {
-        return $this->_data[$this->primaryKey] ?? null;
+        // Check _data first (set via __set / fill), then fall back to
+        // declared public properties (set directly: $model->id = 1).
+        $value = $this->_data[$this->primaryKey] ?? null;
+        if ($value === null && property_exists($this, $this->primaryKey)) {
+            $value = $this->{$this->primaryKey} ?? null;
+        }
+        return $value;
     }
 
     /**
@@ -1197,7 +1206,12 @@ abstract class ORM
             // Set the auto-generated ID if not already set
             $pkValue = $this->getPrimaryKeyValue();
             if ($pkValue === null || $pkValue === 0) {
-                $this->_data[$this->primaryKey] = $this->_db->lastInsertId();
+                $newId = $this->_db->lastInsertId();
+                $this->_data[$this->primaryKey] = $newId;
+                // Sync to declared public property so $model->id works
+                if (property_exists($this, $this->primaryKey)) {
+                    $this->{$this->primaryKey} = $newId;
+                }
             }
         }
 
