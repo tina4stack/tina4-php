@@ -1,0 +1,38 @@
+{% extends "admin/base_admin.twig" %}
+
+{% block title %}Categories — Admin{% endblock %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">{{ t("categories") }}</h1>
+    <a href="/admin/categories/new" class="btn btn-primary">{{ t("add_category") }}</a>
+</div>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th style="text-align:right;">ID</th>
+            <th style="text-align:left;">{{ t("name") }}</th>
+            <th style="text-align:left;">Slug</th>
+            <th style="text-align:left;">{{ t("description") }}</th>
+            <th colspan="2" style="text-align:center;">{{ t("options") }}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for cat in categories %}
+        <tr>
+            <td style="text-align:right;">{{ cat.id }}</td>
+            <td style="text-align:left;">{{ cat.name }}</td>
+            <td style="text-align:left;">{{ cat.slug }}</td>
+            <td style="text-align:left;">{{ cat.description }}</td>
+            <td><a href="/admin/categories/{{ cat.id }}/edit" class="text-decoration-underline">{{ t("edit") }}</a></td>
+            <td>
+                <form method="POST" action="/admin/categories/{{ cat.id }}/delete" class="d-inline">
+                    <button type="submit" class="btn-icon text-danger" onclick="return confirm('{{ t('confirm_delete') }}')" title="{{ t('delete') }}">&times;</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

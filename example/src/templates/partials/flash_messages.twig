@@ -1,0 +1,10 @@
+{% if flash_success %}
+    <div class="container mt-3">
+        <div class="alert alert-success">{{ flash_success }}</div>
+    </div>
+{% endif %}
+{% if flash_error %}
+    <div class="container mt-3">
+        <div class="alert alert-danger">{{ flash_error }}</div>
+    </div>
+{% endif %}

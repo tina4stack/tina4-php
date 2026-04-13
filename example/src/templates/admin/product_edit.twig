@@ -1,0 +1,85 @@
+{% extends "admin/base_admin.twig" %}
+
+{% block title %}{{ t("admin") }} - {{ t("edit") }} {{ product.name }}{% endblock %}
+
+{% block admin_content %}
+    <h1>{{ t("edit") }}: {{ product.name }}</h1>
+
+    <form id="product-edit-form" method="POST" action="/admin/products/{{ product.id }}/edit">
+        {{ form_token() }}
+
+        <div class="mb-3">
+            <label for="name">{{ t("name") }}</label>
+            <input type="text" id="name" name="name" class="form-control" value="{{ product.name }}" placeholder="Product name" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="description">{{ t("description") }}</label>
+            <textarea id="description" name="description" class="form-control" rows="3" placeholder="Product description">{{ product.description }}</textarea>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col">
+                <label for="price">{{ t("price") }}</label>
+                <input type="number" id="price" name="price" class="form-control" value="{{ product.price }}" step="0.01" min="0" placeholder="0.00" required>
+            </div>
+            <div class="col">
+                <label for="stock">{{ t("stock") }}</label>
+                <input type="number" id="stock" name="stock" class="form-control" value="{{ product.stock }}" min="0" placeholder="0" required>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="category_id">{{ t("category") }}</label>
+            <select id="category_id" name="category_id" class="form-control">
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if cat.id == product.categoryId %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label>{{ t("product_image") }}</label>
+            <div class="row">
+                <div class="col" style="max-width:160px;">
+                    <img id="image-preview" src="{{ product.imageUrl }}" alt="Preview" class="product-detail-image mb-2">
+                </div>
+                <div class="col">
+                    <input type="file" id="image-file" accept="image/*" class="form-control mb-2">
+                    <div id="upload-status" class="text-muted"></div>
+                    <input type="hidden" id="image_url" name="image_url" value="{{ product.imageUrl }}">
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" onclick="frond.form.submit('product-edit-form', '/admin/products/{{ product.id }}/edit', null, function(){ window.location='/admin/products'; })">{{ t("save") }}</button>
+        <a href="/admin/products" class="btn">{{ t("cancel") }}</a>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('image-file').addEventListener('change', function() {
+        var file = this.files[0];
+        if (!file) return;
+
+        document.getElementById('upload-status').textContent = 'Uploading...';
+
+        var formData = new FormData();
+        formData.append('image', file);
+
+        frond.request('/api/upload/product-image', {
+            method: 'POST',
+            body: formData,
+            onSuccess: function(result) {
+                document.getElementById('image_url').value = result.url;
+                document.getElementById('image-preview').src = result.url;
+                document.getElementById('upload-status').textContent = 'Uploaded: ' + result.filename;
+            },
+            onError: function(status) {
+                document.getElementById('upload-status').textContent = 'Upload failed (' + status + ')';
+            }
+        });
+    });
+</script>
+{% endblock %}

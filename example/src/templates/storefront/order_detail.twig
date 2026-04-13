@@ -1,0 +1,39 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("order") }} #{{ order.id }}{% endblock %}
+
+{% block content %}
+    <h1>{{ t("order") }} #{{ order.id }}</h1>
+    <p class="text-muted">{{ order.createdAt }}</p>
+
+    <order-tracker order-id="{{ order.id }}"></order-tracker>
+
+    <table class="table mt-3">
+        <thead>
+            <tr>
+                <th>{{ t("product") }}</th>
+                <th>{{ t("quantity") }}</th>
+                <th class="text-end">{{ t("price") }}</th>
+                <th class="text-end">{{ t("subtotal") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td class="text-end">{{ t("currency") }}{{ item.unitPrice|number_format(2) }}</td>
+                    <td class="text-end">{{ t("currency") }}{{ (item.unitPrice * item.quantity)|number_format(2) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="text-end"><strong>{{ t("total") }}</strong></td>
+                <td class="text-end"><strong>{{ t("currency") }}{{ order.total|number_format(2) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <a href="/account" class="btn">{{ t("back_to_account") }}</a>
+{% endblock %}

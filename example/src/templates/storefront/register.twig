@@ -1,0 +1,37 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("register") }}{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col"></div>
+        <div class="col">
+            <div class="card">
+                <div class="card-body">
+                    <h2>{{ t("register") }}</h2>
+                    {% if error %}
+                        <div class="alert alert-danger mb-3">{{ error }}</div>
+                    {% endif %}
+                    <form id="register-form" method="POST" action="/register">
+                        {{ form_token() }}
+                        <div class="mb-3">
+                            <label for="reg-name">{{ t("name") }}</label>
+                            <input type="text" id="reg-name" name="name" class="form-control" placeholder="Your full name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reg-email">{{ t("email") }}</label>
+                            <input type="email" id="reg-email" name="email" class="form-control" placeholder="you@example.com" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reg-password">{{ t("password") }}</label>
+                            <input type="password" id="reg-password" name="password" class="form-control" placeholder="Choose a password" required>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="frond.form.submit('register-form', '/register', null, function(){ window.location='/account'; })">{{ t("register") }}</button>
+                    </form>
+                    <p class="mt-3 text-muted">{{ t("have_account") }} <a href="/login">{{ t("login") }}</a></p>
+                </div>
+            </div>
+        </div>
+        <div class="col"></div>
+    </div>
+{% endblock %}

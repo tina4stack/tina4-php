@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 4px;">
+        <h1 style="color: #333333; margin-top: 0;">{{ t("order_shipped") }}</h1>
+        <p style="color: #555555;">{{ t("hello") }} {{ customer_name }},</p>
+        <p style="color: #555555;">{{ t("order_shipped_message") }}</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #eeeeee; color: #777777;">{{ t("order_number") }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eeeeee; font-weight: bold;">#{{ order.id }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #eeeeee; color: #777777;">{{ t("tracking") }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eeeeee; font-weight: bold;">{{ tracking_number|default("N/A") }}</td>
+            </tr>
+        </table>
+        <p style="color: #555555;">{{ t("thank_you") }}</p>
+        <hr style="border: none; border-top: 1px solid #eeeeee; margin: 20px 0;">
+        <p style="color: #999999; font-size: 12px;">{{ t("powered_by") }} Tina4</p>
+    </div>
+</body>
+</html>

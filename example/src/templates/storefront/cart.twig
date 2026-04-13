@@ -1,0 +1,166 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("cart") }}{% endblock %}
+
+{% block content %}
+    <div class="cart-header">
+        <h1>{{ t("cart") }}</h1>
+        {% if cart_items %}
+            <a href="/checkout" class="btn btn-primary">{{ t("checkout") }}</a>
+        {% endif %}
+    </div>
+
+    {% if cart_items %}
+        <table class="table">
+            <caption class="text-start">{{ t("cart") }} — {{ cart_items|length }} {{ cart_items|length == 1 ? 'item' : 'items' }}</caption>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th class="text-start">{{ t("product") }}</th>
+                    <th class="text-end">{{ t("quantity") }}</th>
+                    <th class="text-end">{{ t("price") }}</th>
+                    <th class="text-end">{{ t("subtotal") }}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cart_items %}
+                    <tr id="cart-row-{{ item.productId }}">
+                        <td><img src="{{ item.imageUrl }}" alt="{{ item.name }}" width="60"></td>
+                        <td>{{ item.name }}</td>
+                        <td class="text-end">
+                            <div class="qty-spinner">
+                                <button type="button" class="qty-btn qty-minus" data-product-id="{{ item.productId }}">-</button>
+                                <span class="qty-value" id="qty-{{ item.productId }}">{{ item.quantity }}</span>
+                                <button type="button" class="qty-btn qty-plus" data-product-id="{{ item.productId }}">+</button>
+                            </div>
+                        </td>
+                        <td class="text-end price" data-price-usd="{{ item.price }}">${{ item.price|number_format(2) }}</td>
+                        <td class="text-end subtotal" id="subtotal-{{ item.productId }}">{{ t("currency") }}{{ item.subtotal|number_format(2) }}</td>
+                        <td>
+                            <button type="button" class="btn btn-danger btn-sm cart-remove-btn" data-product-id="{{ item.productId }}">{{ t("remove") }}</button>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-end"><strong>{{ t("total") }}</strong></td>
+                    <td class="text-end"><strong id="cart-total">{{ t("currency") }}{{ cart_total|number_format(2) }}</strong></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        <div class="mt-3">
+            <a href="/products" class="btn">{{ t("continue_shopping") }}</a>
+        </div>
+    {% else %}
+        <p class="text-muted">{{ t("cart_empty") }}</p>
+        <a href="/products" class="btn btn-primary">{{ t("continue_shopping") }}</a>
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+/**
+ * Cart page — tina4-js signals for reactive qty/subtotal/total updates.
+ * Demonstrates: signal(), computed(), effect()
+ */
+(function() {
+    var { signal, computed, effect } = Tina4;
+
+    // Build reactive state per cart item from the DOM
+    var rows = document.querySelectorAll("[id^='cart-row-']");
+    var items = {};
+
+    rows.forEach(function(row) {
+        var pid = row.id.replace("cart-row-", "");
+        var qtyEl = document.getElementById("qty-" + pid);
+        var priceEl = row.querySelector(".price");
+        var subtotalEl = document.getElementById("subtotal-" + pid);
+        var price = parseFloat(priceEl.dataset.priceUsd || 0);
+
+        var qty = signal(parseInt(qtyEl.textContent, 10));
+        var subtotal = computed(function() { return qty.value * price; });
+
+        // Effect: update DOM when qty/subtotal change
+        effect(function() {
+            qtyEl.textContent = qty.value;
+            subtotalEl.textContent = "$" + subtotal.value.toFixed(2);
+        });
+
+        items[pid] = { qty: qty, subtotal: subtotal, price: price, row: row };
+    });
+
+    // Computed total across all items
+    var cartTotal = computed(function() {
+        var total = 0;
+        for (var pid in items) {
+            total += items[pid].subtotal.value;
+        }
+        return total;
+    });
+
+    var totalEl = document.getElementById("cart-total");
+    var badge = document.getElementById("cart-badge");
+    var navTotal = document.getElementById("cart-total-display");
+    var currency = navTotal ? (navTotal.dataset.currency || "$") : "$";
+
+    // Update nav badge and total display from current signals
+    function updateNav() {
+        var totalQty = 0;
+        for (var p in items) { totalQty += items[p].qty.value; }
+        var totalVal = cartTotal.value;
+        if (badge) {
+            badge.textContent = totalQty;
+            badge.style.display = totalQty > 0 ? "flex" : "none";
+        }
+        if (navTotal) {
+            navTotal.textContent = currency + totalVal.toFixed(2);
+            navTotal.style.display = totalQty > 0 ? "" : "none";
+        }
+    }
+
+    // Effect: update table total and nav whenever cart changes
+    effect(function() {
+        if (totalEl) totalEl.textContent = "$" + cartTotal.value.toFixed(2);
+        updateNav();
+    });
+
+    // Qty spinner: + and - buttons
+    document.addEventListener("click", function(e) {
+        var btn = e.target.closest(".qty-plus, .qty-minus");
+        if (!btn) return;
+        var pid = btn.dataset.productId;
+        var item = items[pid];
+        if (!item) return;
+
+        var delta = btn.classList.contains("qty-plus") ? 1 : -1;
+        var newQty = Math.max(1, item.qty.value + delta);
+        item.qty.value = newQty;
+
+        // Sync to server
+        Tina4.api.post("/cart/update", { product_id: parseInt(pid, 10), quantity: newQty });
+    });
+
+    // Remove button
+    document.addEventListener("click", function(e) {
+        var btn = e.target.closest(".cart-remove-btn");
+        if (!btn) return;
+        var pid = btn.dataset.productId;
+
+        Tina4.api.post("/cart/remove", { product_id: parseInt(pid, 10) }).then(function() {
+            var row = document.getElementById("cart-row-" + pid);
+            if (row) row.remove();
+            // Set qty to 0 first so cartTotal recomputes (items is not reactive)
+            if (items[pid]) items[pid].qty.value = 0;
+            delete items[pid];
+            // Reload if cart empty
+            var remaining = 0;
+            for (var p in items) { remaining++; }
+            if (remaining === 0) location.reload();
+        });
+    });
+})();
+</script>
+{% endblock %}

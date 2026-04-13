@@ -1,0 +1,32 @@
+{% extends "admin/base_admin.twig" %}
+
+{% block title %}{{ t("admin") }} - {{ t("help_desk") }}{% endblock %}
+
+{% block admin_content %}
+    <h1>{{ t("help_desk") }}</h1>
+
+    <div class="helpdesk-layout">
+        <div class="helpdesk-sessions">
+            <h4 class="helpdesk-sessions-title">{{ t("active_chats") }}</h4>
+            <ul id="chat-session-list" class="helpdesk-session-list">
+                <li class="helpdesk-empty" id="no-chats-msg">{{ t("waiting_for_customers") }}</li>
+            </ul>
+        </div>
+
+        <div class="helpdesk-chat" id="helpdesk-chat">
+            <div class="helpdesk-chat-header" id="helpdesk-chat-header">
+                <span id="helpdesk-chat-title">{{ t("no_active_chats") }}</span>
+                <span id="helpdesk-chat-status" class="chat-status"></span>
+            </div>
+            <div class="helpdesk-messages" id="helpdesk-messages"></div>
+            <div class="helpdesk-input-row">
+                <input type="text" id="helpdesk-input" class="chat-input" placeholder="{{ t('type_reply') }}" autocomplete="off" disabled>
+                <button id="helpdesk-send" class="chat-send-btn" disabled>&#10148;</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="/js/helpdesk.js"></script>
+{% endblock %}

@@ -1,0 +1,52 @@
+{
+    "name": "tina4stack/tina4-store-demo",
+    "description": "Tina4 PHP Store Demo — complete framework showcase",
+    "type": "project",
+    "require": {
+        "tina4stack/tina4php": "^3.10"
+    },
+    "autoload": {
+        "psr-4": {
+            "": "src/"
+        },
+        "files": [
+            "src/orm/Category.php",
+            "src/orm/Product.php",
+            "src/orm/Customer.php",
+            "src/orm/Order.php",
+            "src/orm/OrderItem.php",
+            "src/orm/CartItem.php",
+            "src/middleware/AdminAuth.php",
+            "src/middleware/RequestLogger.php",
+            "src/app/constants.php",
+            "src/app/template.php",
+            "src/app/services/cart_service.php",
+            "src/app/services/forex_service.php",
+            "src/app/services/order_service.php",
+            "src/routes/api/sse.php",
+            "src/app/services/notification_service.php",
+            "src/routes/index.php",
+            "src/routes/products.php",
+            "src/routes/cart.php",
+            "src/routes/checkout.php",
+            "src/routes/auth.php",
+            "src/routes/account.php",
+            "src/routes/contact.php",
+            "src/routes/admin/dashboard.php",
+            "src/routes/admin/products.php",
+            "src/routes/admin/categories.php",
+            "src/routes/admin/orders.php",
+            "src/routes/admin/helpdesk.php",
+            "src/routes/api/products.php",
+            "src/routes/api/categories.php",
+            "src/routes/api/cart.php",
+            "src/routes/api/orders.php",
+            "src/routes/api/chat.php",
+            "src/routes/api/graphql.php",
+            "src/routes/api/i18n.php",
+            "src/routes/api/upload.php",
+            "src/routes/api/forex.php",
+            "src/routes/api/wsdl.php"
+        ]
+    }
+}

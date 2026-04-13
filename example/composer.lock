@@ -1,0 +1,76 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "ddcca5beb811c1f7c9554cfd0a8b77fd",
+    "packages": [
+        {
+            "name": "tina4stack/tina4php",
+            "version": "v3.10.95",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tina4stack/tina4-php.git",
+                "reference": "daa43eb014320ed26bede32813f05d25fe4519ad"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tina4stack/tina4-php/zipball/daa43eb014320ed26bede32813f05d25fe4519ad",
+                "reference": "daa43eb014320ed26bede32813f05d25fe4519ad",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-openssl": "*",
+                "php": ">=8.2"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10 || ^11"
+            },
+            "suggest": {
+                "ext-curl": "Required for external API calls",
+                "ext-fileinfo": "Required for file type detection",
+                "ext-pdo": "Required for MySQL/PostgreSQL/MSSQL database support",
+                "ext-sqlite3": "Required for SQLite3 database support",
+                "ext-zip": "Required for ZIP file handling"
+            },
+            "bin": [
+                "bin/tina4php"
+            ],
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "Tina4/Constants.php",
+                    "Tina4/MCP.php"
+                ],
+                "psr-4": {
+                    "Tina4\\": "Tina4/",
+                    "Tina4\\Queue\\": "Tina4/Queue/",
+                    "Tina4\\Session\\": "Tina4/Session/",
+                    "Tina4\\Database\\": "Tina4/Database/",
+                    "Tina4\\Middleware\\": "Tina4/Middleware/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Tina4 for PHP — 54 built-in features, zero dependencies",
+            "support": {
+                "issues": "https://github.com/tina4stack/tina4-php/issues",
+                "source": "https://github.com/tina4stack/tina4-php/tree/v3.10.95"
+            },
+            "time": "2026-04-11T19:42:54+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {},
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {},
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
+}

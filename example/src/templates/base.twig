@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="{{ lang|default('en') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ t("store_name") }}{% endblock %}</title>
+    <link rel="stylesheet" href="/css/tina4.min.css">
+    <link rel="stylesheet" href="/css/store.css">
+</head>
+<body data-role="{{ role|default('') }}" data-customer-name="{{ customer_name|default('Guest') }}">
+    {% include "partials/nav.twig" %}
+
+    {% include "partials/flash_messages.twig" %}
+
+    <main class="{% block main_class %}container mt-4 mb-4{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="container text-center text-muted mt-4 mb-3">
+        <hr>
+        <p>{{ t("powered_by") }} <a href="https://tina4.com">Tina4</a></p>
+        <div>
+            <a href="/api/locale/en">EN</a> |
+            <a href="/api/locale/fr">FR</a>
+        </div>
+    </footer>
+
+    {% if role != "admin" %}
+    <!-- Live Chat Widget (customer only) -->
+    <div id="chat-widget" class="chat-widget">
+        <button id="chat-toggle" class="chat-toggle" title="Live Chat">&#128172;</button>
+        <div id="chat-panel" class="chat-panel">
+            <div class="chat-header">
+                <span>Live Chat</span>
+                <span id="chat-status" class="chat-status"></span>
+                <button class="chat-close" onclick="document.getElementById('chat-panel').classList.remove('open')">&times;</button>
+            </div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." autocomplete="off">
+                <button id="chat-send" class="chat-send-btn">&#10148;</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="/js/frond.min.js"></script>
+    <script src="/js/tina4js.min.js"></script>
+    <script src="/js/store.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

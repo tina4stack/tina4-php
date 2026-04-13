@@ -1,0 +1,31 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ product.name }}{% endblock %}
+
+{% block content %}
+    <div class="row g-4">
+        <div class="col-md-6">
+            <img src="{{ product.imageUrl }}" alt="{{ product.name }}" class="product-detail-image">
+        </div>
+        <div class="col-md-6 p-4">
+            <h1>{{ product.name }}</h1>
+            <p class="text-muted">{{ product.category_name }}</p>
+            <p>{{ product.description }}</p>
+            <h2>${{ product.price|number_format(2) }}</h2>
+            <p class="text-muted price-conversions">{{ product.price|currency }}</p>
+            {% if product.stock > 0 %}
+                <span class="stock-pill in-stock mb-3">&#10003; {{ t("in_stock") }} ({{ product.stock }})</span>
+                <div class="mb-3">
+                    <label for="quantity">{{ t("quantity") }}</label>
+                    <input type="number" id="detail-qty" value="1" min="1" max="{{ product.stock }}" class="form-control" style="max-width:100px;">
+                </div>
+                <button type="button" class="btn btn-primary add-to-cart-btn"
+                        data-product-id="{{ product.id }}"
+                        data-qty-input="detail-qty"
+                        data-label="{{ t('add_to_cart') }}">{{ t("add_to_cart") }}</button>
+            {% else %}
+                <span class="stock-pill out-of-stock">&#10007; {{ t("out_of_stock") }}</span>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

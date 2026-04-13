@@ -1,0 +1,6 @@
+vendor/
+data/
+.env
+*.log
+.git
+.idea

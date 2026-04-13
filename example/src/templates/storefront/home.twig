@@ -1,0 +1,33 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("store_name") }} - {{ t("home") }}{% endblock %}
+
+{% block content %}
+    {% if categories %}
+        <section class="mb-4">
+            <h2>{{ t("categories") }}</h2>
+            <div class="category-grid">
+                {% for category in categories %}
+                    <a href="/products?category={{ category.slug }}" class="category-card" style="background: {{ category.gradient }};">
+                        <span class="category-icon">{{ category.icon }}</span>
+                        <span class="category-name">{{ category.name }}</span>
+                        {% if category.description %}
+                            <span class="category-desc">{{ category.description }}</span>
+                        {% endif %}
+                    </a>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+
+    <section>
+        <h2>{{ t("featured_products") }}</h2>
+        <div class="product-grid">
+            {% for product in featured_products %}
+                <div class="product-card">
+                    {% include "partials/product_card.twig" with {"product": product} %}
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+{% endblock %}

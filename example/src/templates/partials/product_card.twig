@@ -1,0 +1,22 @@
+<div class="card">
+    <a href="/products/{{ product.slug }}">
+        <img src="{{ product.imageUrl }}" alt="{{ product.name }}" class="card-img-top">
+    </a>
+    <div class="card-body">
+        <h3><a href="/products/{{ product.slug }}">{{ product.name }}</a></h3>
+        <div class="product-price-row">
+            <span class="product-price">${{ product.price|number_format(2) }}</span>
+            <small class="text-muted price-conversions">{{ product.price|currency }}</small>
+            {% if product.stock > 0 %}
+                <span class="stock-pill in-stock">&#10003; {{ t("in_stock") }}</span>
+            {% else %}
+                <span class="stock-pill out-of-stock">&#10007; {{ t("out_of_stock") }}</span>
+            {% endif %}
+        </div>
+        {% if product.stock > 0 %}
+            <button type="button" class="btn btn-primary mt-2 btn-full add-to-cart-btn"
+                    data-product-id="{{ product.id }}"
+                    data-label="{{ t('add_to_cart') }}">{{ t("add_to_cart") }}</button>
+        {% endif %}
+    </div>
+</div>

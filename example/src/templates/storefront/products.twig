@@ -1,0 +1,39 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("products") }}{% endblock %}
+
+{% block content %}
+    <h1>{{ t("products") }}</h1>
+
+    <div class="mb-3">
+        <label for="category-filter">{{ t("filter_by_category") }}</label>
+        <select id="category-filter" class="form-control" onchange="window.location='/products?category='+this.value">
+            <option value="">{{ t("all_categories") }}</option>
+            {% for category in categories %}
+                <option value="{{ category.slug }}" {% if current_category == category.slug %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="product-grid">
+        {% for product in products %}
+            <div class="product-card">
+                {% include "partials/product_card.twig" with {"product": product} %}
+            </div>
+        {% else %}
+            <p class="text-muted">{{ t("no_products_found") }}</p>
+        {% endfor %}
+    </div>
+
+    {% if pagination %}
+        <nav class="text-center mt-4">
+            {% if pagination.prev %}
+                <a href="?page={{ pagination.prev }}" class="btn">{{ t("previous") }}</a>
+            {% endif %}
+            <span class="text-muted">{{ t("page") }} {{ pagination.current }} / {{ pagination.total }}</span>
+            {% if pagination.next %}
+                <a href="?page={{ pagination.next }}" class="btn">{{ t("next") }}</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("checkout") }}{% endblock %}
+
+{% block content %}
+    <div class="cart-header">
+        <h1>{{ t("checkout") }}</h1>
+        {% if customer_name and cart_items %}
+            <form method="POST" action="/checkout">
+                {{ form_token() }}
+                <button type="submit" class="btn btn-primary">{{ t("place_order") }}</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if not customer_name %}
+        <div class="alert alert-danger mb-3">
+            {{ t("login_to_checkout") }} <a href="/login">{{ t("login") }}</a>
+        </div>
+    {% endif %}
+
+    {% if cart_items %}
+        <table class="table mb-3">
+            <thead>
+                <tr>
+                    <th>{{ t("product") }}</th>
+                    <th>{{ t("quantity") }}</th>
+                    <th class="text-end">{{ t("subtotal") }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cart_items %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td class="text-end">{{ t("currency") }}{{ item.subtotal|number_format(2) }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" class="text-end"><strong>{{ t("total") }}</strong></td>
+                    <td class="text-end"><strong>{{ t("currency") }}{{ cart_total|number_format(2) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+
+    {% else %}
+        <p class="text-muted">{{ t("cart_empty") }}</p>
+    {% endif %}
+{% endblock %}

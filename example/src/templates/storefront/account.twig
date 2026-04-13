@@ -1,0 +1,35 @@
+{% extends "base.twig" %}
+
+{% block title %}{{ t("account") }}{% endblock %}
+
+{% block content %}
+    <h1>{{ t("welcome") }}, {{ customer_name }}</h1>
+
+    <h2 class="mt-4">{{ t("order_history") }}</h2>
+    {% if orders %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{{ t("order_number") }}</th>
+                    <th>{{ t("date") }}</th>
+                    <th>{{ t("status") }}</th>
+                    <th class="text-end">{{ t("total") }}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                    <tr>
+                        <td>#{{ order.id }}</td>
+                        <td>{{ order.createdAt }}</td>
+                        <td>{{ order.status }}</td>
+                        <td class="text-end">{{ t("currency") }}{{ order.total|number_format(2) }}</td>
+                        <td><a href="/account/orders/{{ order.id }}" class="btn btn-sm">{{ t("view") }}</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-muted">{{ t("no_orders") }}</p>
+    {% endif %}
+{% endblock %}

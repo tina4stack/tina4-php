@@ -1,0 +1,152 @@
+{% extends "admin/base_admin.twig" %}
+
+{% block title %}{{ t("admin") }} - {{ t("dashboard") }}{% endblock %}
+
+{% block admin_content %}
+    <h1>{{ t("dashboard") }}</h1>
+
+    <div class="row g-3 mb-4">
+        <div class="col">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3>{{ stats.total_orders }}</h3>
+                    <p class="text-muted">{{ t("total_orders") }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3>{{ t("currency") }}{{ stats.total_sales|number_format(2) }}</h3>
+                    <p class="text-muted">{{ t("total_sales") }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3>{{ stats.low_stock_count }}</h3>
+                    <p class="text-muted">{{ t("low_stock") }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2>{{ t("live_sales") }}</h2>
+            <div id="sales-ticker" class="text-muted">{{ t("waiting_for_sales") }}</div>
+        </div>
+    </div>
+
+    <h2>{{ t("recent_orders") }}</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>{{ t("order_number") }}</th>
+                <th>{{ t("customer") }}</th>
+                <th>{{ t("status") }}</th>
+                <th class="text-end">{{ t("total") }}</th>
+                <th>{{ t("date") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in recent_orders %}
+                <tr>
+                    <td><a href="/admin/orders/{{ order.id }}">#{{ order.id }}</a></td>
+                    <td>{{ order.customerName }}</td>
+                    <td>
+                        {% if order.status == "pending" %}
+                            <span class="badge" style="background:#f0ad4e;color:#fff;">{{ t(order.status) }}</span>
+                        {% elif order.status == "processing" %}
+                            <span class="badge" style="background:#5bc0de;color:#fff;">{{ t(order.status) }}</span>
+                        {% elif order.status == "shipped" %}
+                            <span class="badge" style="background:#337ab7;color:#fff;">{{ t(order.status) }}</span>
+                        {% elif order.status == "delivered" %}
+                            <span class="badge" style="background:#5cb85c;color:#fff;">{{ t(order.status) }}</span>
+                        {% elif order.status == "cancelled" %}
+                            <span class="badge" style="background:#d9534f;color:#fff;">{{ t(order.status) }}</span>
+                        {% else %}
+                            <span class="badge">{{ order.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ t("currency") }}{{ order.total|number_format(2) }}</td>
+                    <td>{{ order.createdAt[:16]|replace({"T": " "}) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
+
+{% block admin_scripts %}
+    <script>
+        (function() {
+            var ticker = document.getElementById("sales-ticker");
+
+            // ── Connect to SSE using frond.sse ─────────────────────
+            var stream = frond.sse("/api/events/sales", {
+                reconnect: true,
+                json: true,
+                onOpen: function() {
+                    ticker.textContent = "{{ t('waiting_for_sales') }}";
+                },
+                onClose: function() {
+                    ticker.textContent = "SSE disconnected...";
+                }
+            });
+
+            // ── Toast notification container ───────────────────────
+            var toastBox = document.createElement("div");
+            toastBox.className = "sse-toast-container";
+            document.body.appendChild(toastBox);
+
+            function showToast(msg, type) {
+                var toast = document.createElement("div");
+                toast.className = "sse-toast sse-toast-" + (type || "info");
+                toast.textContent = msg;
+                toastBox.appendChild(toast);
+                setTimeout(function() { toast.classList.add("show"); }, 10);
+                setTimeout(function() {
+                    toast.classList.remove("show");
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 5000);
+            }
+
+            // ── Format event into human-readable message ───────────
+            function formatEvent(data) {
+                if (data.type === "order_placed") {
+                    return { msg: "New order #" + data.order_id + " — " + parseFloat(data.total).toFixed(2), type: "success" };
+                } else if (data.type === "order_processing") {
+                    return { msg: "Order #" + data.order_id + " is now processing", type: "info" };
+                } else if (data.type === "status_changed") {
+                    return { msg: "Order #" + data.order_id + " → " + data.status, type: "info" };
+                } else if (data.type === "cart_add") {
+                    return { msg: data.customer + " added " + data.product + " to cart", type: "info" };
+                } else if (data.type === "stock_low") {
+                    return { msg: "Low stock — product #" + data.product_id + " (" + data.remaining + " left)", type: "warning" };
+                }
+                return { msg: JSON.stringify(data), type: "info" };
+            }
+
+            // ── React to SSE messages ──────────────────────────────
+            stream.on("message", function(data) {
+                var evt = formatEvent(data);
+
+                // Toast popup
+                showToast(evt.msg, evt.type);
+
+                // Ticker log
+                var item = document.createElement("div");
+                item.className = "sse-ticker-item";
+                item.innerHTML = "<span class='sse-time'>" + new Date().toLocaleTimeString() + "</span> " + evt.msg;
+                ticker.prepend(item);
+                setTimeout(function() { item.classList.add("show"); }, 10);
+
+                // Keep only last 20
+                while (ticker.children.length > 20) {
+                    ticker.removeChild(ticker.lastChild);
+                }
+            });
+        })();
+    </script>
+{% endblock %}

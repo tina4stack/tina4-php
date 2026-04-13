@@ -1,0 +1,62 @@
+{% extends "base.twig" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <div class="admin-sidebar-col">
+        {% include "admin/sidebar.twig" %}
+    </div>
+    <div class="admin-main">
+        {% block admin_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% block admin_scripts %}{% endblock %}
+<script>
+/**
+ * Helpdesk notification badge — runs on ALL admin pages.
+ * Connects to /ws/chat as admin, increments the sidebar badge
+ * when a customer message arrives while the admin is NOT on the
+ * helpdesk page. The helpdesk page itself clears the badge.
+ */
+(function() {
+    var badge = document.getElementById("helpdesk-badge");
+    if (!badge) return;
+
+    // Don't run the notifier if we're already on the helpdesk page
+    // (helpdesk.js handles its own WebSocket connection there)
+    if (window.location.pathname.indexOf("/admin/helpdesk") === 0) return;
+
+    var unread = 0;
+    var wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    var wsUrl = wsProtocol + "//" + location.host + "/ws/chat";
+    var ws;
+
+    function connect() {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = function() {
+            ws.send(JSON.stringify({ type: "join_admin" }));
+        };
+        ws.onmessage = function(e) {
+            try {
+                var data = JSON.parse(e.data);
+                if (data.type === "message" && !data.is_admin) {
+                    unread++;
+                    badge.textContent = unread;
+                    badge.classList.add("active");
+                }
+            } catch(err) {}
+        };
+        ws.onclose = function() {
+            ws = null;
+            setTimeout(connect, 5000);
+        };
+    }
+
+    connect();
+})();
+</script>
+{% endblock %}

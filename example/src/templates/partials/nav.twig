@@ -1,0 +1,57 @@
+<nav class="navbar navbar-dark">
+    <div class="container">
+        <div class="navbar-top-row">
+            <a href="/" class="navbar-brand">{{ t("store_name") }}</a>
+            <div class="navbar-search navbar-search-desktop">
+                <div class="search-wrapper">
+                    <input type="text" id="product-search-desktop" class="search-input" placeholder="{{ t('search_placeholder') }}" autocomplete="off">
+                    <div id="search-results-desktop" class="search-dropdown"></div>
+                </div>
+            </div>
+            <select id="currency-select" class="nav-currency-select" title="Currency">
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+                <option value="GBP">£ GBP</option>
+                <option value="ZAR">R ZAR</option>
+                <option value="JPY">¥ JPY</option>
+            </select>
+            <a href="/api/locale/{{ locale == 'fr' ? 'en' : 'fr' }}" class="nav-lang-toggle" title="{{ locale == 'fr' ? 'English' : 'Français' }}">
+                {% if locale == 'fr' %}
+                    <img src="https://flagcdn.com/w20/gb.png" width="20" height="15" alt="EN" style="vertical-align:middle;">
+                {% else %}
+                    <img src="https://flagcdn.com/w20/fr.png" width="20" height="15" alt="FR" style="vertical-align:middle;">
+                {% endif %}
+            </a>
+            <a href="/cart" class="nav-cart-icon" title="{{ t('cart') }}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;color:inherit;">
+                &#128722;
+                <span id="cart-badge" class="badge-cart" style="background:#e67e22;color:#fff;border-radius:50%;padding:2px 7px;font-size:11px;font-weight:bold;{% if cart_count == 0 %}display:none;{% endif %}">{{ cart_count }}</span>
+                <span id="cart-total-display" data-currency="{{ t('currency') }}" style="font-size:12px;color:#ccc;{% if cart_count == 0 %}display:none;{% endif %}">{{ t("currency") }}{{ cart_total|number_format(2) }}</span>
+            </a>
+            <button class="navbar-toggler" type="button" onclick="this.closest('.container').querySelector('.navbar-collapse').classList.toggle('show')">
+                &#9776;
+            </button>
+        </div>
+        <div class="navbar-search navbar-search-mobile">
+            <div class="search-wrapper">
+                <input type="text" id="product-search-mobile" class="search-input" placeholder="{{ t('search_placeholder') }}" autocomplete="off">
+                <div id="search-results-mobile" class="search-dropdown"></div>
+            </div>
+        </div>
+        <div class="navbar-collapse">
+            <div class="navbar-nav">
+                <a href="/" class="nav-link">{{ t("home") }}</a>
+                <a href="/products" class="nav-link">{{ t("products") }}</a>
+                <a href="/contact" class="nav-link">Contact</a>
+                {% if customer_name %}
+                    <a href="/account" class="nav-link">{{ t("account") }}</a>
+                    {% if role == "admin" %}
+                        <a href="/admin" class="nav-link">{{ t("admin") }}</a>
+                    {% endif %}
+                    <a href="/logout" class="nav-link">{{ t("logout") }}</a>
+                {% else %}
+                    <a href="/login" class="nav-link">{{ t("login") }}</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>

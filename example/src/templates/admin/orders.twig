@@ -1,0 +1,68 @@
+{% extends "admin/base_admin.twig" %}
+
+{% block title %}{{ t("admin") }} - {{ t("orders") }}{% endblock %}
+
+{% block admin_content %}
+    <h1>{{ t("orders") }}</h1>
+
+    <div class="mb-3">
+        <label for="status-filter">{{ t("filter_by_status") }}</label>
+        <select id="status-filter" class="form-control" onchange="window.location='/admin/orders?status='+this.value">
+            <option value="">{{ t("all") }}</option>
+            <option value="pending" {% if selected_status == "pending" %}selected{% endif %}>{{ t("pending") }}</option>
+            <option value="shipped" {% if selected_status == "shipped" %}selected{% endif %}>{{ t("shipped") }}</option>
+            <option value="delivered" {% if selected_status == "delivered" %}selected{% endif %}>{{ t("delivered") }}</option>
+            <option value="cancelled" {% if selected_status == "cancelled" %}selected{% endif %}>{{ t("cancelled") }}</option>
+        </select>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="text-align:right;">{{ t("order_number") }}</th>
+                <th style="text-align:left;">{{ t("date") }}</th>
+                <th style="text-align:left;">{{ t("customer") }}</th>
+                <th style="text-align:center;">{{ t("status") }}</th>
+                <th style="text-align:right;">{{ t("total") }}</th>
+                <th style="text-align:center;">{{ t("options") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+                <tr>
+                    <td style="text-align:right;"><a href="/admin/orders/{{ order.id }}">#{{ order.id }}</a></td>
+                    <td style="text-align:left;">{{ order.createdAt|date("%Y-%m-%d %H:%M") }}</td>
+                    <td style="text-align:left;">{{ order.customerName }}</td>
+                    <td style="text-align:center;">
+                        {% if order.status == "pending" %}
+                            <span class="badge" style="background:#f0ad4e;color:#fff;">{{ t("pending") }}</span>
+                        {% elif order.status == "processing" %}
+                            <span class="badge" style="background:#5bc0de;color:#fff;">{{ t("processing") }}</span>
+                        {% elif order.status == "shipped" %}
+                            <span class="badge" style="background:#337ab7;color:#fff;">{{ t("shipped") }}</span>
+                        {% elif order.status == "delivered" %}
+                            <span class="badge" style="background:#5cb85c;color:#fff;">{{ t("delivered") }}</span>
+                        {% elif order.status == "cancelled" %}
+                            <span class="badge" style="background:#d9534f;color:#fff;">{{ t("cancelled") }}</span>
+                        {% else %}
+                            <span class="badge">{{ order.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align:right;">{{ t("currency") }}{{ order.total|number_format(2) }}</td>
+                    <td style="text-align:center;">
+                        <form method="POST" action="/admin/orders/{{ order.id }}/status" class="d-inline">
+                            {{ form_token() }}
+                            <select name="status" class="form-control form-control-sm" onchange="this.form.submit()" style="width:auto;display:inline-block;">
+                                <option value="pending" {% if order.status == "pending" %}selected{% endif %}>{{ t("pending") }}</option>
+                                <option value="processing" {% if order.status == "processing" %}selected{% endif %}>{{ t("processing") }}</option>
+                                <option value="shipped" {% if order.status == "shipped" %}selected{% endif %}>{{ t("shipped") }}</option>
+                                <option value="delivered" {% if order.status == "delivered" %}selected{% endif %}>{{ t("delivered") }}</option>
+                                <option value="cancelled" {% if order.status == "cancelled" %}selected{% endif %}>{{ t("cancelled") }}</option>
+                            </select>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

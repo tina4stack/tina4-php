@@ -100,9 +100,13 @@ test.db
 *.db-shm
 *.db-wal
 example/.env
+example/vendor/
+example/data/*.db
+example/data/*.db-*
+example/data/sessions/
+example/logs/
 tests/logs/*.log
 .claude/settings.local.json
 .claude/worktrees/
 /data/sessions/
 /data/
-/example/

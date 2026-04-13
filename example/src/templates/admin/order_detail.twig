@@ -1,0 +1,68 @@
+{% extends "admin/base_admin.twig" %}
+
+{% block title %}{{ t("admin") }} - {{ t("order") }} #{{ order.id }}{% endblock %}
+
+{% block admin_content %}
+    <h1>{{ t("order") }} #{{ order.id }}</h1>
+
+    <div class="row mb-4">
+        <div class="col">
+            <div class="card">
+                <div class="card-body">
+                    <h3>{{ t("order_info") }}</h3>
+                    <p><strong>{{ t("status") }}:</strong> {{ order.status }}</p>
+                    <p><strong>{{ t("date") }}:</strong> {{ order.createdAt }}</p>
+                    <p><strong>{{ t("total") }}:</strong> {{ t("currency") }}{{ order.total|number_format(2) }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card">
+                <div class="card-body">
+                    <h3>{{ t("customer_info") }}</h3>
+                    <p><strong>{{ t("name") }}:</strong> {{ order.customerName }}</p>
+                    <p><strong>{{ t("email") }}:</strong> {{ order.customer_email }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>{{ t("items") }}</h2>
+    <table class="table mb-4">
+        <thead>
+            <tr>
+                <th>{{ t("product") }}</th>
+                <th>{{ t("quantity") }}</th>
+                <th>{{ t("price") }}</th>
+                <th>{{ t("subtotal") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>${{ item.unitPrice|number_format(2) }}</td>
+                    <td>${{ (item.quantity * item.unitPrice)|number_format(2) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>{{ t("update_status") }}</h2>
+    <form method="POST" action="/admin/orders/{{ order.id }}/status">
+        <div class="row">
+            <div class="col">
+                <select name="status" class="form-control">
+                    <option value="pending" {% if order.status == "pending" %}selected{% endif %}>{{ t("pending") }}</option>
+                    <option value="shipped" {% if order.status == "shipped" %}selected{% endif %}>{{ t("shipped") }}</option>
+                    <option value="delivered" {% if order.status == "delivered" %}selected{% endif %}>{{ t("delivered") }}</option>
+                    <option value="cancelled" {% if order.status == "cancelled" %}selected{% endif %}>{{ t("cancelled") }}</option>
+                </select>
+            </div>
+            <div class="col">
+                <button type="submit" class="btn btn-primary">{{ t("update") }}</button>
+            </div>
+        </div>
+    </form>
+{% endblock %}
