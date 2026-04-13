@@ -25,7 +25,7 @@
             $html
         );
     } catch (\Throwable $e) {
-        \Tina4\Debug::message("Email skipped (no SMTP configured): " . $e->getMessage());
+        \Tina4\Log::info("Email skipped (no SMTP configured): " . $e->getMessage());
     }
 });
 
@@ -55,7 +55,7 @@
                 $html
             );
         } catch (\Throwable $e) {
-            \Tina4\Debug::message("Email skipped (no SMTP configured): " . $e->getMessage());
+            \Tina4\Log::info("Email skipped (no SMTP configured): " . $e->getMessage());
         }
     }
 });
@@ -87,6 +87,6 @@
             "Hi {$data['name']}, welcome to our store!"
         );
     } catch (\Throwable $e) {
-        \Tina4\Debug::message("Welcome email skipped (no SMTP configured): " . $e->getMessage());
+        \Tina4\Log::info("Welcome email skipped (no SMTP configured): " . $e->getMessage());
     }
 });
