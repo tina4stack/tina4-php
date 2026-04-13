@@ -290,15 +290,10 @@ class Server
                 // Run registered tick callbacks (background tasks)
                 $this->runTickCallbacks();
 
-                // Hot reload: check for file changes on idle ticks (skipped when TINA4_NO_RELOAD=true)
-                if ($this->isDebug && !$this->noReload) {
-                    $now = microtime(true);
-                    if ($now - $this->lastFileCheck >= $this->fileCheckInterval) {
-                        $this->lastFileCheck = $now;
-                        if ($this->detectFileChanges()) {
-                            $this->onFilesChanged();
-                        }
-                    }
+                // Check for pending reload from Rust CLI (POST /__dev/api/reload)
+                if (DevAdmin::$pendingReload) {
+                    DevAdmin::$pendingReload = false;
+                    $this->broadcastReload();
                 }
                 continue;
             }

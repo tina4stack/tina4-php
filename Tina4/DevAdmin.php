@@ -24,6 +24,12 @@ class DevAdmin
     public static bool $suppressReload = false;
 
     /**
+     * When true, Server broadcasts a reload signal on the next tick.
+     * Set by POST /__dev/api/reload (called by the Rust CLI on file changes).
+     */
+    public static bool $pendingReload = false;
+
+    /**
      * Register all /__dev routes. Call from App::start() when in development mode.
      */
     public static function register(): void
@@ -69,6 +75,24 @@ class DevAdmin
                 }
             }
             return $response->json(['mtime' => $latest, 'file' => $latestFile]);
+        });
+
+        // API: Trigger browser reload — called by the Rust CLI when it detects file changes.
+        // Sets a flag that Server reads on its next tick to broadcast via WebSocket,
+        // and touches a sentinel file so the polling fallback also picks it up.
+        Router::post('/__dev/api/reload', function (Request $request, Response $response) {
+            // Touch a sentinel so the mtime polling fallback detects the change
+            $sentinel = getcwd() . '/src/.reload_sentinel';
+            @touch($sentinel);
+
+            // Set a static flag for Server to pick up on the next tick
+            self::$pendingReload = true;
+
+            $file = $request->body['file'] ?? '';
+            $type = $request->body['type'] ?? 'reload';
+            Log::info("External reload trigger: {$type}" . ($file ? " ({$file})" : ''));
+
+            return $response->json(['ok' => true, 'type' => $type]);
         });
 
         // API: Version check — proxy to avoid CORS issues with registry APIs
