@@ -83,9 +83,10 @@ class GraphQL
      *
      * @param string     $query     GraphQL query/mutation string
      * @param array|null $variables Variable values
+     * @param array      $context   Execution context (auth, request, etc.)
      * @return array {data: mixed, errors?: array}
      */
-    public function execute(string $query, ?array $variables = null): array
+    public function execute(string $query, ?array $variables = null, array $context = []): array
     {
         $variables = $variables ?? [];
         $errors = [];
@@ -124,7 +125,7 @@ class GraphQL
         }
 
         $data = [];
-        $errs = $this->resolveSelectionsInto($op['selections'], $resolvers, null, $variables, $fragments, $data);
+        $errs = $this->resolveSelectionsInto($op['selections'], $resolvers, null, $variables, $fragments, $data, $context);
         $errors = array_merge($errors, $errs);
 
         $response = ['data' => $data];
@@ -279,12 +280,13 @@ class GraphQL
      * Resolve selections and merge results into target.
      */
     private function resolveSelectionsInto(array $selections, array $resolvers, mixed $parent,
-                                           array $variables, array $fragments, array &$target): array
+                                           array $variables, array $fragments, array &$target,
+                                           array $context = []): array
     {
         $errors = [];
 
         foreach ($selections as $sel) {
-            if (!$this->checkDirectives($sel['directives'] ?? [], $variables)) {
+            if (!$this->checkDirectives($sel['directives'] ?? [], $variables, $context)) {
                 continue;
             }
 
@@ -295,7 +297,7 @@ class GraphQL
                     continue;
                 }
                 $errs = $this->resolveSelectionsInto(
-                    $frag['selections'], $resolvers, $parent, $variables, $fragments, $target
+                    $frag['selections'], $resolvers, $parent, $variables, $fragments, $target, $context
                 );
                 $errors = array_merge($errors, $errs);
                 continue;
@@ -303,14 +305,14 @@ class GraphQL
 
             if ($sel['kind'] === 'inline_fragment') {
                 $errs = $this->resolveSelectionsInto(
-                    $sel['selections'], $resolvers, $parent, $variables, $fragments, $target
+                    $sel['selections'], $resolvers, $parent, $variables, $fragments, $target, $context
                 );
                 $errors = array_merge($errors, $errs);
                 continue;
             }
 
             // Field resolution
-            [$val, $errs] = $this->resolveField($sel, $resolvers, $parent, $variables, $fragments);
+            [$val, $errs] = $this->resolveField($sel, $resolvers, $parent, $variables, $fragments, $context);
             $errors = array_merge($errors, $errs);
             $key = $sel['alias'] ?? $sel['name'];
             $target[$key] = $val;
@@ -323,7 +325,7 @@ class GraphQL
      * Resolve a single field.
      */
     private function resolveField(array $sel, array $resolvers, mixed $parent,
-                                  array $variables, array $fragments): array
+                                  array $variables, array $fragments, array $context = []): array
     {
         $errors = [];
         $name = $sel['name'];
@@ -338,10 +340,20 @@ class GraphQL
             }
         } elseif (isset($resolvers[$name])) {
             $config = $resolvers[$name];
+
+            // Input validation — check args against declared types
+            $validationErrors = $this->validateArgs($args, $config['args'] ?? [], $name);
+            if (!empty($validationErrors)) {
+                return [null, $validationErrors];
+            }
+
             $resolver = $config['resolve'] ?? null;
             if ($resolver) {
+                // Inject sub-selections into context for DataLoader/eager-loading
+                $ctx = $context;
+                $ctx['__selections'] = $sel['selections'] ?? [];
                 try {
-                    $value = $resolver(null, $args, []);
+                    $value = $resolver(null, $args, $ctx);
                 } catch (\Throwable $e) {
                     $errors[] = ['message' => $e->getMessage(), 'path' => [$name]];
                     return [null, $errors];
@@ -358,7 +370,7 @@ class GraphQL
             foreach ($value as $item) {
                 $obj = [];
                 $errs = $this->resolveSelectionsInto(
-                    $sel['selections'], [], $item, $variables, $fragments, $obj
+                    $sel['selections'], [], $item, $variables, $fragments, $obj, $context
                 );
                 $errors = array_merge($errors, $errs);
                 $result[] = $obj;
@@ -369,7 +381,7 @@ class GraphQL
         if ($value !== null) {
             $obj = [];
             $errs = $this->resolveSelectionsInto(
-                $sel['selections'], [], $value, $variables, $fragments, $obj
+                $sel['selections'], [], $value, $variables, $fragments, $obj, $context
             );
             $errors = array_merge($errors, $errs);
             return [$obj, $errors];
@@ -402,23 +414,132 @@ class GraphQL
     }
 
     /**
-     * Check @skip and @include directives.
+     * Check directives: @skip, @include, @auth, @role, @guest.
+     *
+     * Returns true if the field should be included, false to skip.
      */
-    private function checkDirectives(array $directives, array $variables): bool
+    private function checkDirectives(array $directives, array $variables, array $context = []): bool
     {
         foreach ($directives as $d) {
             $val = $d['args']['if'] ?? false;
             if (is_array($val) && isset($val['$var'])) {
                 $val = $variables[$val['$var']] ?? false;
             }
+
+            // Built-in: @skip and @include
             if ($d['name'] === 'skip' && $val) {
                 return false;
             }
             if ($d['name'] === 'include' && !$val) {
                 return false;
             }
+
+            // Auth: @auth — requires any authenticated user
+            if ($d['name'] === 'auth') {
+                if (empty($context['user'])) {
+                    return false;
+                }
+            }
+
+            // Auth: @role(role: "admin") — requires specific role
+            if ($d['name'] === 'role') {
+                $requiredRole = $d['args']['role'] ?? null;
+                $userRole = $context['user']['role'] ?? ($context['role'] ?? null);
+                if ($requiredRole === null || $userRole !== $requiredRole) {
+                    return false;
+                }
+            }
+
+            // Auth: @guest — only accessible to unauthenticated users
+            if ($d['name'] === 'guest') {
+                if (!empty($context['user'])) {
+                    return false;
+                }
+            }
         }
         return true;
+    }
+
+    /**
+     * Validate resolved arguments against their declared types.
+     *
+     * Returns an array of error objects. Empty array = valid.
+     */
+    private function validateArgs(array $args, array $argConfigs, string $fieldName): array
+    {
+        $errors = [];
+
+        foreach ($argConfigs as $argName => $declaredType) {
+            $parsed = GraphQLType::parse($declaredType);
+            $value = $args[$argName] ?? null;
+            $isNonNull = $parsed->kind === 'non_null';
+
+            // Unwrap non_null to get the inner type
+            $innerType = $isNonNull ? $parsed->ofType : $parsed;
+            $baseName = $innerType->kind === 'list' ? 'list' : $innerType->name;
+
+            // Non-null check
+            if ($isNonNull && ($value === null || $value === '')) {
+                $errors[] = [
+                    'message' => "Argument '{$argName}' on field '{$fieldName}' is required (type: {$declaredType})",
+                    'path' => [$fieldName],
+                ];
+                continue;
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            // List validation
+            if ($baseName === 'list' && is_array($value)) {
+                $itemType = $innerType->ofType;
+                if ($itemType) {
+                    $itemName = $itemType->kind === 'non_null' ? ($itemType->ofType->name ?? 'String') : $itemType->name;
+                    foreach ($value as $i => $item) {
+                        $coerced = $this->coerceValue($item, $itemName);
+                        if ($coerced === false && $item !== false) {
+                            $errors[] = [
+                                'message' => "Argument '{$argName}[{$i}]' on field '{$fieldName}' expected {$itemName}, got " . gettype($item),
+                                'path' => [$fieldName],
+                            ];
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // Scalar type coercion + validation
+            if (in_array($baseName, GraphQLType::SCALARS, true)) {
+                $coerced = $this->coerceValue($value, $baseName);
+                if ($coerced === false && $value !== false) {
+                    $errors[] = [
+                        'message' => "Argument '{$argName}' on field '{$fieldName}' expected type {$baseName}, got " . gettype($value),
+                        'path' => [$fieldName],
+                    ];
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Attempt to coerce a value to the declared GraphQL scalar type.
+     *
+     * Returns the coerced value, or false if coercion is impossible.
+     */
+    private function coerceValue(mixed $value, string $type): mixed
+    {
+        return match ($type) {
+            'Int' => is_numeric($value) ? (int)$value : false,
+            'Float' => is_numeric($value) ? (float)$value : false,
+            'Boolean' => is_bool($value) || in_array($value, [0, 1, '0', '1', 'true', 'false'], true)
+                ? filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false
+                : false,
+            'String', 'ID' => is_scalar($value) ? (string)$value : false,
+            default => $value, // Custom types — pass through
+        };
     }
 
     /**
