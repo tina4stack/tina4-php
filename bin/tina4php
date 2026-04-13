@@ -132,6 +132,9 @@ function parseFields(string $fieldsStr): array
  */
 function parseFlags(array $args): array
 {
+    // Boolean-only flags that never take a value argument
+    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear'];
+
     $flags = [];
     $positional = [];
     $i = 0;
@@ -142,6 +145,9 @@ function parseFlags(array $args): array
             if (str_contains($key, '=')) {
                 [$key, $val] = explode('=', $key, 2);
                 $flags[$key] = $val;
+                $i++;
+            } elseif (in_array($key, $booleanFlags, true)) {
+                $flags[$key] = true;
                 $i++;
             } elseif ($i + 1 < count($args) && !str_starts_with($args[$i + 1], '--')) {
                 $flags[$key] = $args[$i + 1];
