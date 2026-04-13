@@ -95,14 +95,18 @@ class RouteDiscovery
 
         // 2. Inline route files (any other .php file that registers routes directly)
         foreach ($inlineFiles as $file) {
-            $result = require_once $file;
-            // Only count files that return a callable as route files
-            if (is_callable($result)) {
-                $discovered[] = [
-                    'method' => 'INLINE',
-                    'path' => '*',
-                    'file' => $file,
-                ];
+            try {
+                $result = require_once $file;
+                // Only count files that return a callable as route files
+                if (is_callable($result)) {
+                    $discovered[] = [
+                        'method' => 'INLINE',
+                        'path' => '*',
+                        'file' => $file,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                Log::error("Failed to load route file {$file}: " . $e->getMessage());
             }
         }
 
@@ -196,13 +200,18 @@ class RouteDiscovery
      */
     private static function loadRouteFile(string $file): ?callable
     {
-        $result = require $file;
+        try {
+            $result = require $file;
 
-        if (is_callable($result)) {
-            return $result;
+            if (is_callable($result)) {
+                return $result;
+            }
+
+            Log::warning("Route file does not return a callable: {$file}");
+            return null;
+        } catch (\Throwable $e) {
+            Log::error("Failed to load route file {$file}: " . $e->getMessage());
+            return null;
         }
-
-        Log::warning("Route file does not return a callable: {$file}");
-        return null;
     }
 }
