@@ -36,9 +36,13 @@ class App
             }
         }
         // Try composer installed.json (Packagist installs)
-        $installed = __DIR__ . '/../vendor/composer/installed.json';
+        // __DIR__ is Tina4/ inside vendor/tina4stack/tina4php/Tina4/
+        $installed = __DIR__ . '/../../../composer/installed.json';
         if (!file_exists($installed)) {
             $installed = __DIR__ . '/../../vendor/composer/installed.json';
+        }
+        if (!file_exists($installed)) {
+            $installed = __DIR__ . '/../vendor/composer/installed.json';
         }
         if (file_exists($installed)) {
             $data = json_decode(file_get_contents($installed), true);
