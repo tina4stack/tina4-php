@@ -100,13 +100,22 @@ class App
         }
         $this->errorHandlerSet = true;
 
-        // Strict mode: convert all PHP warnings/notices to exceptions
-        // so errors like "Undefined array key" are caught immediately
+        // Error handler: convert warnings and user errors to exceptions so they
+        // are caught by try/catch blocks. Notices and deprecations are logged
+        // but don't crash the application — this prevents autoloaded files with
+        // minor issues from killing the entire server on startup.
         set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
             if (!(error_reporting() & $severity)) {
                 return false; // Respect @ suppression operator
             }
-            throw new \ErrorException($message, 0, $severity, $file, $line);
+            // Throw for errors and warnings — these indicate real problems
+            $throwable = E_ERROR | E_WARNING | E_USER_ERROR | E_USER_WARNING | E_RECOVERABLE_ERROR;
+            if ($severity & $throwable) {
+                throw new \ErrorException($message, 0, $severity, $file, $line);
+            }
+            // Log notices and deprecations without crashing
+            Log::warning("[PHP] {$message} in {$file}:{$line}");
+            return true;
         });
 
         // Set base path for static file serving
@@ -297,7 +306,11 @@ class App
         // Auto-discover routes from src/routes/
         $routesDir = $this->basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'routes';
         if (is_dir($routesDir)) {
-            RouteDiscovery::scan($routesDir);
+            try {
+                RouteDiscovery::scan($routesDir);
+            } catch (\Throwable $e) {
+                Log::error("Route discovery failed: {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}");
+            }
         }
 
         // Auto-wire i18n → template global t() if locale files exist
