@@ -750,6 +750,113 @@ class DevAdminTest extends TestCase
         $db->close();
     }
 
+    // ── Hot-reload parity tests ────────────────────────────────────
+    //
+    // GET /__dev/api/mtime must return an in-memory counter. It only
+    // advances when POST /__dev/api/reload is called. There must be no
+    // filesystem scan and no sentinel file under src/. These tests
+    // mirror equivalent suites in tina4-python, tina4-ruby, tina4-nodejs.
+
+    private function resetReloadState(): void
+    {
+        $ref = new \ReflectionClass(DevAdmin::class);
+        foreach (['reloadMtime' => 0, 'reloadFile' => '', 'pendingReload' => false] as $name => $value) {
+            $prop = $ref->getProperty($name);
+            $prop->setAccessible(true);
+            $prop->setValue(null, $value);
+        }
+    }
+
+    private function callReloadPost(array $body = []): array
+    {
+        $callback = $this->findRouteCallback('POST', '/__dev/api/reload');
+        $this->assertNotNull($callback, 'Reload route should be registered');
+        $request = Request::create('POST', '/__dev/api/reload', null, $body);
+        $response = new Response(true);
+        $result = $callback($request, $response);
+        return json_decode($result->getBody(), true);
+    }
+
+    private function callMtimeGet(): array
+    {
+        $callback = $this->findRouteCallback('GET', '/__dev/api/mtime');
+        $request = Request::create('GET', '/__dev/api/mtime');
+        $response = new Response(true);
+        $result = $callback($request, $response);
+        return json_decode($result->getBody(), true);
+    }
+
+    public function testHotReloadMtimeStartsAtZero(): void
+    {
+        DevAdmin::register();
+        $this->resetReloadState();
+
+        $json = $this->callMtimeGet();
+        $this->assertSame(0, $json['mtime']);
+        $this->assertSame('', $json['file']);
+    }
+
+    public function testHotReloadPostBumpsMtime(): void
+    {
+        DevAdmin::register();
+        $this->resetReloadState();
+
+        $this->assertSame(0, $this->callMtimeGet()['mtime']);
+
+        $before = time();
+        $this->callReloadPost(['file' => 'src/routes/home.php', 'type' => 'reload']);
+        $after = time();
+
+        $json = $this->callMtimeGet();
+        $this->assertGreaterThanOrEqual($before, $json['mtime']);
+        $this->assertLessThanOrEqual($after, $json['mtime']);
+        $this->assertSame('src/routes/home.php', $json['file']);
+    }
+
+    public function testHotReloadSetsPendingReloadFlag(): void
+    {
+        DevAdmin::register();
+        $this->resetReloadState();
+
+        $this->assertFalse(DevAdmin::$pendingReload);
+        $this->callReloadPost([]);
+        $this->assertTrue(DevAdmin::$pendingReload);
+    }
+
+    public function testHotReloadDoesNotWriteSentinelUnderSrc(): void
+    {
+        // Regression: earlier PHP code touched src/.reload_sentinel,
+        // which fed back into the Rust CLI's src/ watcher and caused
+        // an endless reload loop. Parity design must not touch the FS.
+        DevAdmin::register();
+        $this->resetReloadState();
+
+        $sentinel = getcwd() . '/src/.reload_sentinel';
+        $sentinelTina = getcwd() . '/.tina4/.reload_sentinel';
+        @unlink($sentinel);
+        @unlink($sentinelTina);
+
+        $this->callReloadPost(['file' => 'whatever.php']);
+
+        $this->assertFileDoesNotExist($sentinel, 'Reload must not create src/.reload_sentinel');
+        $this->assertFileDoesNotExist($sentinelTina, 'Reload must not create .tina4/.reload_sentinel');
+    }
+
+    public function testHotReloadMtimeIsMonotonic(): void
+    {
+        DevAdmin::register();
+        $this->resetReloadState();
+
+        $this->callReloadPost(['file' => 'a.php']);
+        $m1 = $this->callMtimeGet()['mtime'];
+        sleep(1);
+        $this->callReloadPost(['file' => 'b.php']);
+        $m2 = $this->callMtimeGet()['mtime'];
+
+        $this->assertGreaterThan($m1, $m2, 'Second reload must advance the counter');
+        $this->assertSame('b.php', $this->callMtimeGet()['file']);
+    }
+
     // ── API Handler: queue ──────────────────────────────────────
 
     public function testQueueEndpointReturnsJobs(): void
