@@ -30,6 +30,16 @@ class DevAdmin
     public static bool $pendingReload = false;
 
     /**
+     * In-memory reload counter — returned by GET /__dev/api/mtime and
+     * bumped by POST /__dev/api/reload. Matches the Python/Ruby/Node
+     * design: no filesystem scan, no sentinel file, no feedback loop.
+     */
+    private static int $reloadMtime = 0;
+
+    /** Last file path reported to POST /__dev/api/reload (for logging/UI). */
+    private static string $reloadFile = '';
+
+    /**
      * Register all /__dev routes. Call from App::start() when in development mode.
      */
     public static function register(): void
@@ -55,72 +65,24 @@ class DevAdmin
             return $response->html($spa);
         });
 
-        // API: Live-reload — returns latest mtime of src/ for browser polling.
-        // Excludes transient artefacts (logs, db journals, caches, vcs) so the
-        // poll doesn't self-trigger on server-side writes.
+        // API: Live-reload — returns an in-memory counter that is bumped only
+        // by POST /__dev/api/reload. No filesystem scan and no sentinel file,
+        // so server-side writes can't self-trigger a reload. Matches the
+        // Python/Ruby/Node design.
         Router::get('/__dev/api/mtime', function (Request $request, Response $response) {
-            $srcDir = getcwd() . '/src';
-            $latest = 0;
-            $latestFile = '';
-            $ignoreSubstr = ['__pycache__', '/.git/', '/node_modules/', '/logs/'];
-            $ignoreExt = ['log', 'db', 'db-wal', 'db-shm', 'sqlite', 'sqlite-journal', 'tmp', 'swp'];
-            if (is_dir($srcDir)) {
-                $iterator = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
-                );
-                foreach ($iterator as $file) {
-                    if (!$file->isFile()) {
-                        continue;
-                    }
-                    $path = $file->getPathname();
-                    foreach ($ignoreSubstr as $skip) {
-                        if (str_contains($path, $skip)) {
-                            continue 2;
-                        }
-                    }
-                    $ext = strtolower($file->getExtension());
-                    if (in_array($ext, $ignoreExt, true)) {
-                        continue;
-                    }
-                    $mtime = $file->getMTime();
-                    if ($mtime > $latest) {
-                        $latest = $mtime;
-                        $latestFile = $path;
-                    }
-                }
-            }
-            // Include sentinel mtime so external reload triggers bump the value
-            $sentinel = getcwd() . '/.tina4/.reload_sentinel';
-            if (is_file($sentinel)) {
-                $m = @filemtime($sentinel);
-                if ($m && $m > $latest) {
-                    $latest = $m;
-                    $latestFile = $sentinel;
-                }
-            }
-            return $response->json(['mtime' => $latest, 'file' => $latestFile]);
+            return $response->json(['mtime' => self::$reloadMtime, 'file' => self::$reloadFile]);
         });
 
         // API: Trigger browser reload — called by the Rust CLI when it detects file changes.
         // Sets a flag that Server reads on its next tick to broadcast via WebSocket,
-        // and touches a sentinel file so the polling fallback also picks it up.
+        // and bumps the in-memory counter so the polling fallback detects the change.
         Router::post('/__dev/api/reload', function (Request $request, Response $response) {
-            // Touch a sentinel so the mtime polling fallback detects the change.
-            // Kept outside src/ so the Rust CLI watcher (which watches src/)
-            // doesn't re-trigger a reload loop.
-            $tinaDir = getcwd() . '/.tina4';
-            if (!is_dir($tinaDir)) {
-                @mkdir($tinaDir, 0755, true);
-            }
-            $sentinel = $tinaDir . '/.reload_sentinel';
-            @touch($sentinel);
-
-            // Set a static flag for Server to pick up on the next tick
             self::$pendingReload = true;
+            self::$reloadMtime = time();
+            self::$reloadFile = (string) ($request->body['file'] ?? '');
 
-            $file = $request->body['file'] ?? '';
             $type = $request->body['type'] ?? 'reload';
-            Log::info("External reload trigger: {$type}" . ($file ? " ({$file})" : ''));
+            Log::info("External reload trigger: {$type}" . (self::$reloadFile ? ' (' . self::$reloadFile . ')' : ''));
 
             return $response->json(['ok' => true, 'type' => $type]);
         });
@@ -985,7 +947,7 @@ HTML;
         if (!self::$suppressReload) {
             $toolbar .= <<<'RELOADSCRIPT'
 <script>
-(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0,pollStarted=false;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){if(pollStarted)return;pollStarted=true;var iv=parseInt('3000')||3000;var dbt=null;var cssExts=['.css','.scss'];function apply(d){var f=d.file||'';var isCss=cssExts.some(function(e){return f.endsWith(e)});if(isCss){document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+d.mtime;});}else{location.reload();}}setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(!d||!d.mtime)return;if(mt===0){mt=d.mtime;return;}if(d.mtime>mt){mt=d.mtime;if(dbt)clearTimeout(dbt);dbt=setTimeout(function(){apply(d);},500);}}).catch(function(){});},iv);}tryWs();})();
+(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0,pollStarted=false;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){if(pollStarted)return;pollStarted=true;setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(!d||!d.mtime)return;if(mt===0){mt=d.mtime;return;}if(d.mtime>mt){mt=d.mtime;location.reload();}}).catch(function(){});},3000);}tryWs();})();
 </script>
 RELOADSCRIPT;
         }
