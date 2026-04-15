@@ -10,7 +10,7 @@ $ws = new \Tina4\WebSocket();
 $ws->route("/ws/orders")(function ($conn) {
     $conn->sendJson(["type" => "connected", "message" => "Order tracking ready"]);
 
-    $conn->setOnMessage(function ($message) use ($conn) {
+    $conn->onMessage(function ($message) use ($conn) {
         try {
             $data = json_decode($message, true);
             if (($data["action"] ?? "") === "track") {
@@ -28,7 +28,7 @@ $ws->route("/ws/orders")(function ($conn) {
         }
     });
 
-    $conn->setOnClose(function () {
+    $conn->onClose(function () {
         // cleanup if needed
     });
 });
@@ -44,7 +44,7 @@ $ws->route("/ws/chat")(function ($conn) {
         "client_id" => $conn->id,
     ]), true);
 
-    $conn->setOnMessage(function ($message) use ($conn) {
+    $conn->onMessage(function ($message) use ($conn) {
         try {
             $data = json_decode($message, true);
             $msgType = $data["type"] ?? "message";
@@ -90,7 +90,7 @@ $ws->route("/ws/chat")(function ($conn) {
         }
     });
 
-    $conn->setOnClose(function () use ($conn) {
+    $conn->onClose(function () use ($conn) {
         $conn->broadcastToRoom("chat_admin", json_encode([
             "type" => "system",
             "message" => "Customer {$conn->id} left chat",

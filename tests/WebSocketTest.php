@@ -496,4 +496,55 @@ class WebSocketTest extends TestCase
         $routes = Router::getWebSocketRoutes();
         $this->assertEquals('/', $routes[0]['path']);
     }
+
+    // ── Parity: onMessage/onClose renamed from setOnMessage/setOnClose ──
+
+    public function testConnectionOnMessageMethodSetsCallback(): void
+    {
+        $conn = new WebSocketConnection('id1', '/ws', null, null);
+        $called = false;
+        $conn->onMessage(function ($msg) use (&$called) { $called = $msg; });
+        $this->assertIsCallable($conn->onMessage);
+        ($conn->onMessage)('hello');
+        $this->assertEquals('hello', $called);
+    }
+
+    public function testConnectionOnCloseMethodSetsCallback(): void
+    {
+        $conn = new WebSocketConnection('id2', '/ws', null, null);
+        $flag = false;
+        $conn->onClose(function () use (&$flag) { $flag = true; });
+        $this->assertIsCallable($conn->onClose);
+        ($conn->onClose)();
+        $this->assertTrue($flag);
+    }
+
+    public function testOldSetOnMessageMethodRemoved(): void
+    {
+        $this->assertFalse(method_exists(WebSocketConnection::class, 'setOnMessage'));
+        $this->assertFalse(method_exists(WebSocketConnection::class, 'setOnClose'));
+    }
+
+    // ── Parity: WebSocket::route accepts optional handler ──
+
+    public function testRouteReturnsClosureWhenHandlerOmitted(): void
+    {
+        $ws = new WebSocket();
+        $decorator = $ws->route('/ws/a');
+        $this->assertIsCallable($decorator);
+        $decorator(function ($conn) {});
+        $routes = Router::getWebSocketRoutes();
+        $this->assertNotEmpty($routes);
+        $this->assertEquals('/ws/a', $routes[0]['path']);
+    }
+
+    public function testRouteRegistersDirectlyWhenHandlerProvided(): void
+    {
+        $ws = new WebSocket();
+        $result = $ws->route('/ws/b', function ($conn) {});
+        $this->assertSame($ws, $result);
+        $routes = Router::getWebSocketRoutes();
+        $this->assertNotEmpty($routes);
+        $this->assertEquals('/ws/b', $routes[0]['path']);
+    }
 }

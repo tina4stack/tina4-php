@@ -85,12 +85,14 @@ class WebSocket
      *
      * Matches Python's WebSocketServer.route(path) decorator pattern.
      *
-     * @param string $path WebSocket path to handle
-     * @return callable Accepts a callable handler and registers it
+     * @param string        $path    WebSocket path to handle
+     * @param callable|null $handler Optional handler; when provided, registered directly.
+     *                               When null, returns a closure accepting the handler (decorator style).
+     * @return callable|self Returns $this when handler is provided, else the decorator closure.
      */
-    public function route(string $path): callable
+    public function route(string $path, ?callable $handler = null): callable|self
     {
-        return function (callable $handler) use ($path) {
+        $register = function (callable $handler) use ($path) {
             $this->_handlers[$path] = ['handler' => $handler];
 
             // Adapter: converts decorator-style to Router's (conn, data, event) style
@@ -111,6 +113,13 @@ class WebSocket
             Router::websocket($path, $adapter);
             return $handler;
         };
+
+        if ($handler !== null) {
+            $register($handler);
+            return $this;
+        }
+
+        return $register;
     }
 
     /**

@@ -168,7 +168,7 @@ class WebSocketConnection
     /**
      * Set the message callback (decorator style, matches Python's on_message).
      */
-    public function setOnMessage(callable $handler): void
+    public function onMessage(callable $handler): void
     {
         $this->onMessage = $handler;
     }
@@ -176,7 +176,7 @@ class WebSocketConnection
     /**
      * Set the close callback (decorator style, matches Python's on_close).
      */
-    public function setOnClose(callable $handler): void
+    public function onClose(callable $handler): void
     {
         $this->onClose = $handler;
     }
