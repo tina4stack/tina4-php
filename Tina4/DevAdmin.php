@@ -55,23 +55,47 @@ class DevAdmin
             return $response->html($spa);
         });
 
-        // API: Live-reload — returns latest mtime of src/ for browser polling
+        // API: Live-reload — returns latest mtime of src/ for browser polling.
+        // Excludes transient artefacts (logs, db journals, caches, vcs) so the
+        // poll doesn't self-trigger on server-side writes.
         Router::get('/__dev/api/mtime', function (Request $request, Response $response) {
             $srcDir = getcwd() . '/src';
             $latest = 0;
             $latestFile = '';
+            $ignoreSubstr = ['__pycache__', '/.git/', '/node_modules/', '/logs/'];
+            $ignoreExt = ['log', 'db', 'db-wal', 'db-shm', 'sqlite', 'sqlite-journal', 'tmp', 'swp'];
             if (is_dir($srcDir)) {
                 $iterator = new \RecursiveIteratorIterator(
                     new \RecursiveDirectoryIterator($srcDir, \RecursiveDirectoryIterator::SKIP_DOTS)
                 );
                 foreach ($iterator as $file) {
-                    if ($file->isFile() && !str_contains($file->getPathname(), '__pycache__')) {
-                        $mtime = $file->getMTime();
-                        if ($mtime > $latest) {
-                            $latest = $mtime;
-                            $latestFile = $file->getPathname();
+                    if (!$file->isFile()) {
+                        continue;
+                    }
+                    $path = $file->getPathname();
+                    foreach ($ignoreSubstr as $skip) {
+                        if (str_contains($path, $skip)) {
+                            continue 2;
                         }
                     }
+                    $ext = strtolower($file->getExtension());
+                    if (in_array($ext, $ignoreExt, true)) {
+                        continue;
+                    }
+                    $mtime = $file->getMTime();
+                    if ($mtime > $latest) {
+                        $latest = $mtime;
+                        $latestFile = $path;
+                    }
+                }
+            }
+            // Include sentinel mtime so external reload triggers bump the value
+            $sentinel = getcwd() . '/.tina4/.reload_sentinel';
+            if (is_file($sentinel)) {
+                $m = @filemtime($sentinel);
+                if ($m && $m > $latest) {
+                    $latest = $m;
+                    $latestFile = $sentinel;
                 }
             }
             return $response->json(['mtime' => $latest, 'file' => $latestFile]);
@@ -81,8 +105,14 @@ class DevAdmin
         // Sets a flag that Server reads on its next tick to broadcast via WebSocket,
         // and touches a sentinel file so the polling fallback also picks it up.
         Router::post('/__dev/api/reload', function (Request $request, Response $response) {
-            // Touch a sentinel so the mtime polling fallback detects the change
-            $sentinel = getcwd() . '/src/.reload_sentinel';
+            // Touch a sentinel so the mtime polling fallback detects the change.
+            // Kept outside src/ so the Rust CLI watcher (which watches src/)
+            // doesn't re-trigger a reload loop.
+            $tinaDir = getcwd() . '/.tina4';
+            if (!is_dir($tinaDir)) {
+                @mkdir($tinaDir, 0755, true);
+            }
+            $sentinel = $tinaDir . '/.reload_sentinel';
             @touch($sentinel);
 
             // Set a static flag for Server to pick up on the next tick
@@ -362,35 +392,133 @@ class DevAdmin
             }
         });
 
-        // API: Get queue status
+        // API: List available queue topics by scanning the queue data directory.
+        Router::get('/__dev/api/queue/topics', function (Request $request, Response $response) {
+            try {
+                $queueDir = getcwd() . '/data/queue';
+                if (is_dir($queueDir)) {
+                    $topics = [];
+                    foreach (scandir($queueDir) ?: [] as $entry) {
+                        if ($entry === '.' || $entry === '..') continue;
+                        if (is_dir($queueDir . '/' . $entry)) $topics[] = $entry;
+                    }
+                    sort($topics);
+                    if (empty($topics)) $topics = ['default'];
+                } else {
+                    $topics = ['default'];
+                }
+                return $response->json(['topics' => $topics]);
+            } catch (\Throwable $e) {
+                return $response->json(['topics' => ['default'], 'error' => $e->getMessage()]);
+            }
+        });
+
+        // API: Queue status and jobs — backed by the real Queue class.
         Router::get('/__dev/api/queue', function (Request $request, Response $response) {
-            return $response->json([
-                'jobs' => [],
-                'stats' => [
-                    'pending' => 0,
-                    'completed' => 0,
-                    'failed' => 0,
-                    'reserved' => 0,
-                ],
-            ]);
+            try {
+                $topic = $request->queryParam('topic') ?? 'default';
+                $statusFilter = $request->queryParam('status');
+                $queue = new \Tina4\Queue('file', [], $topic);
+
+                $stats = [
+                    'pending' => $queue->size('pending'),
+                    'completed' => $queue->size('completed'),
+                    'failed' => $queue->size('failed'),
+                    'reserved' => $queue->size('reserved'),
+                ];
+
+                $jobs = [];
+                if ($statusFilter === 'pending' || $statusFilter === null) {
+                    $queueDir = getcwd() . '/data/queue/' . $topic;
+                    if (is_dir($queueDir)) {
+                        $files = glob($queueDir . '/*.queue-data') ?: [];
+                        sort($files);
+                        foreach ($files as $filepath) {
+                            $raw = @file_get_contents($filepath);
+                            if ($raw === false) continue;
+                            $job = json_decode($raw, true);
+                            if (is_array($job)) {
+                                $job['status'] = 'pending';
+                                $jobs[] = $job;
+                            }
+                        }
+                    }
+                }
+                if ($statusFilter === 'failed' || $statusFilter === null) {
+                    foreach ($queue->failed() as $j) {
+                        $j['status'] = 'failed';
+                        $jobs[] = $j;
+                    }
+                }
+                if ($statusFilter === 'dead' || $statusFilter === null) {
+                    foreach ($queue->deadLetters() as $j) {
+                        $j['status'] = 'dead_letter';
+                        $jobs[] = $j;
+                    }
+                }
+
+                return $response->json(['jobs' => $jobs, 'stats' => $stats]);
+            } catch (\Throwable $e) {
+                return $response->json([
+                    'jobs' => [],
+                    'stats' => ['pending' => 0, 'completed' => 0, 'failed' => 0, 'reserved' => 0],
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+
+        // API: Dead-letter jobs for a topic.
+        Router::get('/__dev/api/queue/dead-letters', function (Request $request, Response $response) {
+            try {
+                $topic = $request->queryParam('topic') ?? 'default';
+                $queue = new \Tina4\Queue('file', [], $topic);
+                $jobs = [];
+                foreach ($queue->deadLetters() as $j) {
+                    $j['status'] = 'dead_letter';
+                    $jobs[] = $j;
+                }
+                return $response->json(['jobs' => $jobs, 'count' => count($jobs), 'topic' => $topic]);
+            } catch (\Throwable $e) {
+                return $response->json(['jobs' => [], 'count' => 0, 'error' => $e->getMessage()]);
+            }
         });
 
         // API: Retry failed queue jobs
         Router::post('/__dev/api/queue/retry', function (Request $request, Response $response) {
-            $topic = $request->input('topic') ?? 'default';
-            return $response->json(['retried' => 0, 'topic' => $topic]);
+            try {
+                $topic = $request->input('topic') ?? 'default';
+                $queue = new \Tina4\Queue('file', [], $topic);
+                $retried = $queue->retryFailed();
+                return $response->json(['retried' => $retried, 'topic' => $topic]);
+            } catch (\Throwable $e) {
+                return $response->json(['retried' => 0, 'error' => $e->getMessage()]);
+            }
         });
 
         // API: Purge completed queue jobs
         Router::post('/__dev/api/queue/purge', function (Request $request, Response $response) {
-            $topic = $request->input('topic') ?? 'default';
-            return $response->json(['purged' => true, 'topic' => $topic]);
+            try {
+                $topic = $request->input('topic') ?? 'default';
+                $status = $request->input('status') ?? 'completed';
+                $queue = new \Tina4\Queue('file', [], $topic);
+                $purged = $queue->purge($status);
+                return $response->json(['purged' => $purged, 'topic' => $topic, 'status' => $status]);
+            } catch (\Throwable $e) {
+                return $response->json(['purged' => 0, 'error' => $e->getMessage()]);
+            }
         });
 
         // API: Replay a specific queue job
         Router::post('/__dev/api/queue/replay', function (Request $request, Response $response) {
-            $jobId = $request->input('job_id') ?? '';
-            return $response->json(['replayed' => true, 'job_id' => $jobId]);
+            try {
+                $topic = $request->input('topic') ?? 'default';
+                $jobId = $request->input('job_id') ?? '';
+                $queue = new \Tina4\Queue('file', [], $topic);
+                $ok = $queue->retry($jobId);
+                return $response->json(['replayed' => $ok, 'job_id' => $jobId, 'topic' => $topic]);
+            } catch (\Throwable $e) {
+                return $response->json(['replayed' => false, 'error' => $e->getMessage()]);
+            }
         });
 
         // API: Get dev mailbox
@@ -857,7 +985,7 @@ HTML;
         if (!self::$suppressReload) {
             $toolbar .= <<<'RELOADSCRIPT'
 <script>
-(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){var iv=parseInt('3000')||3000;var dbt=null;var cssExts=['.css','.scss'];function apply(d){var f=d.file||'';var isCss=cssExts.some(function(e){return f.endsWith(e)});if(isCss){document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+d.mtime;});}else{location.reload();}}setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(d.mtime&&d.mtime>mt){mt=d.mtime;if(dbt)clearTimeout(dbt);dbt=setTimeout(function(){apply(d);},500);}}).catch(function(){});},iv);}tryWs();})();
+(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0,pollStarted=false;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){if(pollStarted)return;pollStarted=true;var iv=parseInt('3000')||3000;var dbt=null;var cssExts=['.css','.scss'];function apply(d){var f=d.file||'';var isCss=cssExts.some(function(e){return f.endsWith(e)});if(isCss){document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+d.mtime;});}else{location.reload();}}setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(!d||!d.mtime)return;if(mt===0){mt=d.mtime;return;}if(d.mtime>mt){mt=d.mtime;if(dbt)clearTimeout(dbt);dbt=setTimeout(function(){apply(d);},500);}}).catch(function(){});},iv);}tryWs();})();
 </script>
 RELOADSCRIPT;
         }
