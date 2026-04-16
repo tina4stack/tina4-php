@@ -28,15 +28,42 @@ class DatabaseUrlTest extends TestCase
 
     public function testParseSqlitePath(): void
     {
+        // sqlite:///X is RELATIVE to cwd (matches tina4-python, tina4-nodejs).
+        // Use sqlite:////X for absolute paths.
         $db = new DatabaseUrl('sqlite:///path/to/database.db');
 
         $this->assertEquals('sqlite', $db->scheme);
         $this->assertEquals('DataSQLite3', $db->driver);
-        $this->assertEquals('/path/to/database.db', $db->database);
+        $this->assertEquals('path/to/database.db', $db->database, 'three slashes = relative');
         $this->assertEquals('', $db->host);
         $this->assertEquals(0, $db->port);
         $this->assertEquals('', $db->username);
         $this->assertEquals('', $db->password);
+    }
+
+    public function testParseSqliteAbsolutePath(): void
+    {
+        // Four slashes = Unix absolute path.
+        $db = new DatabaseUrl('sqlite:////var/data/app.db');
+        $this->assertEquals('sqlite', $db->scheme);
+        $this->assertEquals('/var/data/app.db', $db->database);
+    }
+
+    public function testParseSqliteWindowsDriveLetter(): void
+    {
+        // Windows drive letter = absolute.
+        $db = new DatabaseUrl('sqlite:///C:/Users/app.db');
+        $this->assertEquals('sqlite', $db->scheme);
+        $this->assertEquals('C:/Users/app.db', $db->database);
+    }
+
+    public function testParseSqliteBruceCase(): void
+    {
+        // Regression for the bruceproject crash: sqlite:///data/app.db
+        // used to be parsed as absolute "/data/app.db" and tried to
+        // mkdir("/data") on macOS read-only root. Now relative.
+        $db = new DatabaseUrl('sqlite:///data/app.db');
+        $this->assertEquals('data/app.db', $db->database);
     }
 
     public function testParseSqliteMemory(): void
@@ -140,7 +167,8 @@ class DatabaseUrlTest extends TestCase
 
     public function testGetDsnForSqlite(): void
     {
-        $db = new DatabaseUrl('sqlite:///tmp/test.db');
+        // sqlite:///X is relative; use sqlite:////X for absolute.
+        $db = new DatabaseUrl('sqlite:////tmp/test.db');
 
         $this->assertEquals('/tmp/test.db', $db->getDsn());
     }
@@ -165,7 +193,7 @@ class DatabaseUrlTest extends TestCase
 
     public function testToSafeStringForSqlite(): void
     {
-        $db = new DatabaseUrl('sqlite:///tmp/test.db');
+        $db = new DatabaseUrl('sqlite:////tmp/test.db');
 
         $this->assertEquals('sqlite:////tmp/test.db', $db->toSafeString());
     }
@@ -373,8 +401,9 @@ class DatabaseUrlTest extends TestCase
 
     public function testGetDsnWithoutPort(): void
     {
-        // SQLite has port 0, so getDsn should just return the database
-        $db = new DatabaseUrl('sqlite:///tmp/test.db');
+        // SQLite has port 0, so getDsn should just return the database.
+        // Use sqlite:////X for absolute paths (sqlite:///X is now relative).
+        $db = new DatabaseUrl('sqlite:////tmp/test.db');
         $this->assertEquals('/tmp/test.db', $db->getDsn());
     }
 

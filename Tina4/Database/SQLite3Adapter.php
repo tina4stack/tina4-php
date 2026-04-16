@@ -23,12 +23,56 @@ class SQLite3Adapter implements DatabaseAdapter
      * @param bool $autoCommit Whether to auto-commit (default based on env TINA4_AUTOCOMMIT)
      */
     public function __construct(
-        private readonly string $database = ':memory:',
+        string $database = ':memory:',
         ?bool $autoCommit = null,
     ) {
         $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');
         $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
+        $this->database = self::resolveDatabasePath($database);
         $this->open();
+    }
+
+    /** Resolved database path (after cwd-relative resolution). */
+    private string $database;
+
+    /**
+     * Resolve a SQLite path argument against the project root (cwd).
+     *
+     * Matches the tina4-python and tina4-nodejs convention:
+     *   ":memory:"         → passthrough
+     *   "data/app.db"      → {cwd}/data/app.db  (auto-mkdir under cwd)
+     *   "/abs/app.db"      → /abs/app.db        (NO auto-mkdir)
+     *   "C:/Users/app.db"  → C:/Users/app.db    (NO auto-mkdir)
+     *
+     * Never mkdir outside cwd — that was the root cause of the
+     * `Read-only file system: '/data'` crash reported on macOS.
+     */
+    private static function resolveDatabasePath(string $dbPath): string
+    {
+        if ($dbPath === ':memory:') {
+            return $dbPath;
+        }
+
+        $isUnixAbs = str_starts_with($dbPath, '/');
+        $isWindowsAbs = (
+            strlen($dbPath) >= 3
+            && ctype_alpha($dbPath[0])
+            && $dbPath[1] === ':'
+            && ($dbPath[2] === '/' || $dbPath[2] === '\\')
+        );
+
+        if ($isUnixAbs || $isWindowsAbs) {
+            // Absolute — trust the user. Do NOT auto-mkdir outside cwd.
+            return $dbPath;
+        }
+
+        // Relative — resolve under cwd and ensure parent exists.
+        $resolved = getcwd() . DIRECTORY_SEPARATOR . $dbPath;
+        $parent = dirname($resolved);
+        if (!is_dir($parent)) {
+            @mkdir($parent, 0775, true);
+        }
+        return $resolved;
     }
 
     public function open(): void

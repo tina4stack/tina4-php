@@ -61,11 +61,33 @@ class DatabaseUrl
         }
 
         if (str_starts_with($url, 'sqlite:///')) {
+            // Convention (matches tina4-python and tina4-nodejs):
+            //   sqlite:///app.db              → relative: "app.db"
+            //   sqlite:///data/app.db         → relative: "data/app.db"
+            //   sqlite:////var/data/app.db    → absolute: "/var/data/app.db"
+            //   sqlite:///C:/Users/app.db     → Windows absolute: "C:/Users/app.db"
+            //
+            // Three slashes = relative to project root (cwd).
+            // Four slashes = Unix absolute. Drive letter = Windows absolute.
+            $rest = substr($url, 10); // skip "sqlite:///"
+
+            // Detect absolute forms. Four-slash Unix means $rest already starts
+            // with "/". Windows drive letter means $rest starts with e.g. "C:/".
+            $isUnixAbs = str_starts_with($rest, '/');
+            $isWindowsAbs = (
+                strlen($rest) >= 3
+                && ctype_alpha($rest[0])
+                && $rest[1] === ':'
+                && ($rest[2] === '/' || $rest[2] === '\\')
+            );
+
             $this->scheme = 'sqlite';
             $this->driver = self::DRIVER_MAP['sqlite'];
             $this->host = '';
             $this->port = 0;
-            $this->database = substr($url, 9); // Everything after sqlite://
+            $this->database = $isUnixAbs || $isWindowsAbs ? $rest : $rest;
+            // Whether the path is absolute or relative is decided at connect
+            // time by the adapter — here we just preserve the raw form.
             $this->username = '';
             $this->password = '';
             return;
