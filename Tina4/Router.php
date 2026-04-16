@@ -945,6 +945,31 @@ class Router
         }
     }
 
+    /**
+     * Supported typed-parameter constraints. Keys are the type name written
+     * in the route pattern (e.g. ``{id:int}``); values are the regex fragment
+     * that the param must match. Mirrored verbatim in tina4-python /
+     * tina4-ruby / tina4-nodejs for cross-framework parity.
+     *
+     * Any type name not in this table raises ``InvalidArgumentException`` at
+     * route registration — we never silently fall through to the default
+     * matcher, because a typo like ``{id:inetger}`` would otherwise match
+     * anything and create a security footgun (see tina4-book#125).
+     */
+    private const PARAM_TYPE_PATTERNS = [
+        'string'  => '[^/]+',                                            // default, any non-slash segment
+        'int'     => '\d+',
+        'integer' => '\d+',
+        'float'   => '[\d.]+',
+        'number'  => '[\d.]+',
+        'alpha'   => '[A-Za-z]+',                                        // letters only
+        'alnum'   => '[A-Za-z0-9]+',                                     // letters + digits
+        'slug'    => '[a-z0-9-]+',                                       // URL slug
+        'uuid'    => '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+        'path'    => '.+',                                               // greedy — matches remaining path
+        '.*'      => '.+',
+    ];
+
     private static function compilePath(string $path): array
     {
         $paramNames = [];
@@ -961,27 +986,27 @@ class Router
 
         // Replace typed and untyped params: {name}, {name:int}, {name:float}, {name:path}, {name:.*}
         $paramTypes = [];
-        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}#', function ($m) use (&$paramNames, &$paramTypes, &$catchAll, &$catchAllName) {
+        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}#', function ($m) use (&$paramNames, &$paramTypes, &$catchAll, &$catchAllName, $path) {
             $name = $m[1];
             $type = $m[2] ?? 'string';
             $paramNames[] = $name;
             $paramTypes[$name] = $type;
 
-            switch ($type) {
-                case 'int':
-                case 'integer':
-                    return '(?P<' . $name . '>\d+)';
-                case 'float':
-                case 'number':
-                    return '(?P<' . $name . '>[\d.]+)';
-                case 'path':
-                case '.*':
-                    $catchAll = true;
-                    $catchAllName = $name;
-                    return '(?P<' . $name . '>.+)';
-                default:
-                    return '(?P<' . $name . '>[^/]+)';
+            if (!array_key_exists($type, self::PARAM_TYPE_PATTERNS)) {
+                $valid = array_filter(array_keys(self::PARAM_TYPE_PATTERNS), fn($k) => $k !== '.*');
+                sort($valid);
+                throw new \InvalidArgumentException(
+                    "Unknown param type '{$type}' in route '{$path}'. " .
+                    "Valid types: " . implode(', ', $valid) . "."
+                );
             }
+
+            if ($type === 'path' || $type === '.*') {
+                $catchAll = true;
+                $catchAllName = $name;
+            }
+
+            return '(?P<' . $name . '>' . self::PARAM_TYPE_PATTERNS[$type] . ')';
         }, $path);
 
         // Escape forward slashes and anchor

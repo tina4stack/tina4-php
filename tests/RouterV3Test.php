@@ -380,4 +380,79 @@ class RouterV3Test extends TestCase
         Router::clear();
         $this->assertSame(0, Router::count());
     }
+
+    // ── Typed-parameter constraints (parity with tina4-python) ───────
+    // Fixes tina4-book#125. All 4 frameworks share the same type set:
+    //   string (default), int/integer, float/number, alpha, alnum, slug,
+    //   uuid, path (greedy). Unknown types throw at registration.
+
+    public function testIntParamRejectsNonNumeric(): void
+    {
+        Router::get('/users/{id:int}', fn($req, $res) => $res->json(['id' => $req->params['id']]));
+        $result = Router::match('GET', '/users/abc');
+        $this->assertNull($result, 'Non-numeric id should not match {id:int}');
+    }
+
+    public function testAlphaParamMatchesLettersOnly(): void
+    {
+        Router::get('/users/{name:alpha}', fn($req, $res) => $res->json(['ok' => true]));
+        $this->assertNotNull(Router::match('GET', '/users/Alice'));
+        $this->assertNull(Router::match('GET', '/users/alice123'), 'digits rejected');
+        $this->assertNull(Router::match('GET', '/users/alice-bob'), 'hyphen rejected');
+    }
+
+    public function testAlnumParamMatchesLettersAndDigits(): void
+    {
+        Router::get('/api/{code:alnum}', fn($req, $res) => $res->json(['ok' => true]));
+        $this->assertNotNull(Router::match('GET', '/api/abc123'));
+        $this->assertNotNull(Router::match('GET', '/api/ABC'));
+        $this->assertNull(Router::match('GET', '/api/abc-123'), 'hyphen rejected');
+        $this->assertNull(Router::match('GET', '/api/abc.123'), 'dot rejected');
+    }
+
+    public function testSlugParamMatchesUrlSlug(): void
+    {
+        Router::get('/posts/{slug:slug}', fn($req, $res) => $res->json(['ok' => true]));
+        $this->assertNotNull(Router::match('GET', '/posts/hello-world'));
+        $this->assertNotNull(Router::match('GET', '/posts/post-123'));
+        $this->assertNull(Router::match('GET', '/posts/Hello-World'), 'uppercase rejected');
+        $this->assertNull(Router::match('GET', '/posts/hello_world'), 'underscore rejected');
+    }
+
+    public function testUuidParamMatchesValidUuid(): void
+    {
+        Router::get('/api/{id:uuid}', fn($req, $res) => $res->json(['ok' => true]));
+        $this->assertNotNull(Router::match('GET', '/api/550e8400-e29b-41d4-a716-446655440000'));
+        $this->assertNull(Router::match('GET', '/api/not-a-uuid'));
+        $this->assertNull(Router::match('GET', '/api/123'));
+    }
+
+    public function testExplicitStringTypeMatchesDefault(): void
+    {
+        Router::get('/a/{name:string}', fn($req, $res) => $res->json(['via' => 'string']));
+        Router::get('/b/{name}', fn($req, $res) => $res->json(['via' => 'implicit']));
+        $this->assertNotNull(Router::match('GET', '/a/alice'));
+        $this->assertNotNull(Router::match('GET', '/b/alice'));
+    }
+
+    public function testUnknownTypeThrowsAtRegistration(): void
+    {
+        // fixes tina4-book#125 — typos and unsupported types must be loud
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown param type');
+        Router::get('/api/{name:str}', fn() => null);
+    }
+
+    public function testUnknownTypeMessageListsValidTypes(): void
+    {
+        try {
+            Router::get('/api/{name:inetger}', fn() => null);
+            $this->fail('Expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('int', $e->getMessage());
+            $this->assertStringContainsString('alpha', $e->getMessage());
+            $this->assertStringContainsString('slug', $e->getMessage());
+            $this->assertStringContainsString('uuid', $e->getMessage());
+        }
+    }
 }
