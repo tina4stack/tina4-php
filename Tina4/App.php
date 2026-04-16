@@ -476,7 +476,7 @@ class App
     private static function galleryBtn(string $name, string $tryUrl): string
     {
         if (self::isGalleryDeployed($name)) {
-            return '<button class="try-btn" style="background:#22c55e;" onclick="window.location.href=\'' . $tryUrl . '\'" data-deployed="1">View &#8599;</button>';
+            return '<button class="try-btn" style="background:#22c55e;" onclick="window.open(\'' . $tryUrl . '\',\'_blank\')" data-deployed="1">View &#8599;</button>';
         }
         return '<button class="try-btn" onclick="deployGallery(\'' . $name . '\',\'' . $tryUrl . '\')">Try It</button>';
     }
@@ -663,18 +663,19 @@ function deployGallery(name, tryUrl) {
             btn.style.background = '#22c55e';
             btn.dataset.deployed = '1';
             btn.disabled = false;
-            // Wait for the newly deployed route to become reachable before navigating
+            // Wait for the newly deployed route to become reachable, then
+            // open in a new tab so the gallery home stays open (tina4-book#115).
             var attempts = 0;
             var maxAttempts = 5;
             function pollRoute() {
                 fetch(tryUrl, {method: 'HEAD'}).then(function() {
-                    window.location.href = tryUrl;
+                    window.open(tryUrl, '_blank');
                 }).catch(function() {
                     attempts++;
                     if (attempts < maxAttempts) {
                         setTimeout(pollRoute, 500);
                     } else {
-                        window.location.href = tryUrl;
+                        window.open(tryUrl, '_blank');
                     }
                 });
             }
