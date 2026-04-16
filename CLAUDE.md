@@ -7,7 +7,7 @@ Version 3.11.0 — Full Tina4 PHP framework and application scaffold. See https:
 - PHP: >=8.2
 - Install: `composer install`
 - Run tests: `composer test` or `./vendor/bin/phpunit tests --verbose --color`
-- Start server: `composer start` or `composer serve` (default host `0.0.0.0`, default port `7146`)
+- Start server: `composer start` or `composer serve` (default host `0.0.0.0`, default port `7145`)
 - CLI: `bin/tina4php`
 
 ## Code Principles
@@ -742,7 +742,7 @@ $result = SqlTranslation::remember(
 
 - **Zero external dependencies** — v3 has no Composer runtime dependencies (only `ext-openssl` and `ext-json`). Database extensions are optional and suggested
 - **Unified framework** — Everything lives in the `tina4stack/tina4php` package. No separate `tina4php-core`, `tina4php-database`, `tina4php-orm` packages
-- **Default server** — Binds to `0.0.0.0:7146` by default
+- **Default server** — Binds to `0.0.0.0:7145` by default
 - Routes auto-discovered from `src/routes/`
 - ORM with migration support built in
 - Twig-compatible templating via built-in `Frond` engine (zero deps)

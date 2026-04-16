@@ -6,13 +6,13 @@
 <h3 align="center">The Intelligent Native Application 4ramework</h3>
 
 <p align="center">
-  54 built-in features. Zero dependencies. One require, everything works.
+  55 built-in features. Zero dependencies. One require, everything works.
 </p>
 
 <p align="center">
   <a href="https://packagist.org/packages/tina4stack/tina4php"><img src="https://img.shields.io/packagist/v/tina4stack/tina4php?color=7b1fa2&label=Packagist" alt="Packagist"></a>
-  <img src="https://img.shields.io/badge/tests-1%2C427%20passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/features-54-blue" alt="Features">
+  <img src="https://img.shields.io/badge/tests-2%2C073%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/features-55-blue" alt="Features">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero Deps">
   <a href="https://tina4.com"><img src="https://img.shields.io/badge/docs-tina4.com-7b1fa2" alt="Docs"></a>
 </p>
@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://tina4.com">Documentation</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#whats-built-in-54-features">Features</a> &bull;
+  <a href="#whats-built-in-55-features">Features</a> &bull;
   <a href="#cli-reference">CLI Reference</a> &bull;
   <a href="https://tina4.com">tina4.com</a>
 </p>
@@ -30,24 +30,42 @@
 ## Quick Start
 
 ```bash
-# Install
-composer require tina4stack/tina4php
+# Install the Tina4 CLI (one-time, cross-language)
+cargo install tina4    # or download a binary from https://github.com/tina4stack/tina4/releases
 
-# Create entry point
-echo '<?php require "vendor/autoload.php"; (new Tina4\App())->start();' > index.php
+# Create a project
+tina4 init php ./my-app
 
-# Create .env
-echo 'TINA4_DEBUG=true' > .env
-
-# Run
-php -S localhost:7146 index.php
+# Run it
+cd my-app && tina4 serve
 ```
 
-Open http://localhost:7146 -- your app is running.
+Open http://localhost:7145 -- your app is running.
+
+<details>
+<summary><strong>Without the Tina4 CLI</strong></summary>
+
+```bash
+# 1. Install
+composer require tina4stack/tina4php
+
+# 2. Entry point
+echo '<?php require "vendor/autoload.php"; (new Tina4\App())->run();' > index.php
+
+# 3. .env
+echo 'TINA4_DEBUG=true' > .env
+
+# 4. Run (no file watching in this mode)
+composer start
+```
+
+Open http://localhost:7145
+
+</details>
 
 ---
 
-## What's Built In (54 Features)
+## What's Built In (55 Features)
 
 Every feature is built from scratch -- no bloated vendor trees, no third-party runtime dependencies in core.
 
@@ -64,7 +82,7 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 | **Developer Tools** (7) | Dev dashboard (11 tabs), dev toolbar, error overlay (Catppuccin Mocha), dev mailbox, hot reload + CSS hot-reload, code metrics (complexity, coupling, maintainability), AI context installer (7 tools) |
 | **Utilities** (7) | DI container (transient + singleton), HtmlElement builder, inline testing (`@tests` decorator), i18n (6 languages), Swagger/OpenAPI auto-generation, CLI scaffolding (`generate model/route/migration/middleware`), structured logging |
 
-**1,427 tests. Zero dependencies. Full parity across Python, PHP, Ruby, and Node.js.**
+**2,073 tests. Zero dependencies. Full parity across Python, PHP, Ruby, and Node.js.**
 
 For full documentation visit **[tina4.com](https://tina4.com)**.
 
@@ -354,10 +372,10 @@ echo $_div(["class" => "card"],
 
 Set `TINA4_DEBUG=true` in `.env` to enable:
 
-- **Dev dashboard** (`/__dev/`) -- 11-tab admin UI with route inspection, query runner, queue management, WebSocket monitor, dev mailbox, and more
+- **Dev dashboard** (`/__dev/`) -- admin UI with route inspection, query runner, queue management, WebSocket monitor, dev mailbox, and more
 - **Dev toolbar** -- fixed bar showing HTTP method, matched route, request ID, and PHP version
 - **Error overlay** -- syntax-highlighted stack traces with Catppuccin Mocha theme
-- **Hot reload** -- auto-reload on file changes + CSS hot-reload
+- **Hot reload** -- the `tina4` Rust CLI watches `src/`, `migrations/`, `.env` and POSTs `/__dev/api/reload`; PHP broadcasts to the browser via WebSocket (`/__dev_reload`) with a polling fallback on `GET /__dev/api/mtime`. SCSS changes swap the stylesheet without a full reload
 - **Template debug** -- `{{ dump(variable) }}` available, no caching
 
 ---
@@ -365,7 +383,7 @@ Set `TINA4_DEBUG=true` in `.env` to enable:
 ## CLI Reference
 
 ```bash
-bin/tina4php serve [port]                    # Start dev server (default: 7146)
+bin/tina4php serve [--port P] [--host H]     # Start dev server (default: 0.0.0.0:7145)
 bin/tina4php migrate                         # Run pending migrations
 bin/tina4php migrate:create "description"    # Create a migration file
 bin/tina4php generate model <name>           # Generate ORM model scaffold
@@ -394,11 +412,11 @@ Benchmarked with `wrk` — 5,000 requests, 50 concurrent, median of 3 runs:
 
 | Framework | JSON req/s | Deps | Features |
 |-----------|-----------|------|----------|
-| **Tina4 PHP** | **29,293** | 0 | 54 |
+| **Tina4 PHP** | **29,293** | 0 | 55 |
 | Slim | 5,714 | 10+ | ~6 |
 | Laravel | 445 | 50+ | ~25 |
 
-Tina4 PHP is **5× faster than Slim and 65× faster than Laravel** — with zero dependencies and 54 features built in.
+Tina4 PHP is **5× faster than Slim and 65× faster than Laravel** — with zero dependencies and 55 features built in.
 
 **Across all 4 Tina4 implementations:**
 
@@ -406,20 +424,20 @@ Tina4 PHP is **5× faster than Slim and 65× faster than Laravel** — with zero
 |---|--------|-----|------|---------|
 | **JSON req/s** | 6,508 | 29,293 | 10,243 | 84,771 |
 | **Dependencies** | 0 | 0 | 0 | 0 |
-| **Features** | 54 | 54 | 54 | 54 |
+| **Features** | 55 | 55 | 55 | 55 |
 
 ---
 
 ## Cross-Framework Parity
 
-Tina4 ships the same 54 features across four languages with full test parity:
+Tina4 ships the same 55 features across four languages with full test parity:
 
-| Language | Package | Tests |
-|----------|---------|-------|
-| **Python** | `pip install tina4` | 1,427 |
-| **PHP** | `composer require tina4stack/tina4php` | 1,427 |
-| **Ruby** | `gem install tina4` | 1,427 |
-| **Node.js** | `npm install tina4` | 1,427 |
+| Language | Package | Tests (v3.11.12) |
+|----------|---------|------------------|
+| **Python** | `pip install tina4-python` | 2,281 |
+| **PHP** | `composer require tina4stack/tina4php` | 2,073 |
+| **Ruby** | `gem install tina4` | 2,508 |
+| **Node.js** | `npm install @tina4/core` | 2,897 |
 
 Same routing, same ORM, same templates, same CLI, same dev tools. Learn one, deploy in any.
 
