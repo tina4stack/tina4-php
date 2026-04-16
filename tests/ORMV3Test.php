@@ -1302,4 +1302,25 @@ class ORMV3Test extends TestCase
         $this->assertSame('id', \Tina4\ORM::camelToSnake('id'));
         $this->assertSame('my_field_name', \Tina4\ORM::camelToSnake('myFieldName'));
     }
+
+    // ── Parity contract: driver-native types on read path ──────────
+    //
+    // Mirrors tina4-python's TestFieldsNativeTypes. Guards against any
+    // future ORM read-path change that would accidentally re-coerce a
+    // value that's already the correct type (e.g. a native DateTime
+    // instance returned by psycopg2-equivalent on PostgreSQL).
+    //
+    // See tina4-python/plan/orm-field-validate-native-types.md.
+
+    public function testOrmRoundTripsDateTimeStringWithoutCrashing(): void
+    {
+        $this->db->exec("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, created_at TEXT)");
+        $this->db->exec("INSERT INTO events (title, created_at) VALUES ('launch', '2026-04-16 22:30:00')");
+
+        $page = $this->db->fetch("SELECT * FROM events WHERE id = 1");
+        $this->assertIsArray($page, 'fetch() must return a paginated array and not crash on a datetime column');
+        $this->assertArrayHasKey('data', $page);
+        $this->assertNotEmpty($page['data'], 'fetch() must return the inserted row');
+        $this->assertSame('2026-04-16 22:30:00', $page['data'][0]['created_at']);
+    }
 }
