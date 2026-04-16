@@ -58,6 +58,17 @@ Set `TINA4_DEBUG=true` in `.env` to enable:
 
 Debug levels controlled by `TINA4_LOG_*` constants passed to `Debug::message()`.
 
+### DevReload — how hot reload works
+
+The `tina4` Rust CLI is the sole file watcher for the Tina4 stack — PHP has no internal watcher. The flow is:
+
+1. `tina4 serve` watches `src/`, `migrations/`, `.env`. Noise is filtered (Access/Metadata events, `__pycache__`, `.git`, `node_modules`, `vendor`, `logs`, `.log`/`.db*`/`.swp` files) and a real mtime check defeats overlayfs spurious events.
+2. On a real change, the CLI POSTs `/__dev/api/reload` to the running PHP server.
+3. `DevAdmin` bumps its in-memory `$reloadMtime` counter and sets `$pendingReload = true`. `GET /__dev/api/mtime` returns the counter for the polling fallback.
+4. The PHP server's inline reload script (injected by the dev toolbar) listens on WebSocket `/__dev_reload` (primary) and polls `/__dev/api/mtime` every 3s (fallback). On a change it reloads the page, or swaps the stylesheet if the change was CSS.
+
+No file-based sentinel is used — everything is in-memory. This matches the Python/Ruby/Node implementations.
+
 ## Project Structure
 
 ```
