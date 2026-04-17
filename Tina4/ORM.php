@@ -133,10 +133,17 @@ abstract class ORM
      *
      * @return QueryBuilder
      */
+    /**
+     * Create a fluent QueryBuilder for this model's table.
+     *
+     * Works as both static and instance method:
+     *   User::query()->where('active = ?', [1])->get();
+     *   $user->query()->where('name LIKE ?', ['%alice%'])->get();
+     */
     public static function query(): QueryBuilder
     {
         $instance = new static();
-        return QueryBuilder::fromTable($instance->tableName, $instance->_db);
+        return QueryBuilder::fromTable($instance->tableName, $instance->_db ?? static::resolveDb());
     }
 
     /**

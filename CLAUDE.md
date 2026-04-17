@@ -40,7 +40,7 @@ When using Firebird as the database engine:
 - **No triggers, no foreign keys** in migrations — use generators for auto-increment IDs
 - **ID generation** — Use generators: `GEN_ID(GEN_FOO_ID, 1)` or `NEXT VALUE FOR GEN_FOO_ID`
 - **Pagination** — Use `ROWS {skip+1} TO {skip+per_page}` syntax (not LIMIT/OFFSET)
-- **BLOB handling** — `fetch()` auto-base64-encodes BLOB fields
+- **BLOB handling** — `fetch()` auto-reads BLOB resource handles into byte strings (Firebird) and unescapes bytea hex encoding (PostgreSQL). Values are raw bytes, not base64
 - **No `TEXT` type** — Use `VARCHAR(n)` or `BLOB SUB_TYPE TEXT`
 - **No `REAL`/`FLOAT`** — Use `DOUBLE PRECISION`
 - **No `IF NOT EXISTS`** for `ALTER TABLE ADD` — framework checks `RDB$RELATION_FIELDS` automatically
