@@ -116,8 +116,8 @@ abstract class ORM
         throw new \RuntimeException('No database configured. Call ORM::setGlobalDb(), App::setDatabase(), or set DATABASE_URL in .env');
     }
 
-    /** @var array<string, mixed> Model data storage */
-    private array $_data = [];
+    /** @var array<string, mixed> Storage for undeclared/dynamic properties only (from joins, extras) */
+    private array $_dynamicProps = [];
 
     /** @var bool Whether this record exists in the database */
     private bool $_exists = false;
@@ -207,22 +207,23 @@ abstract class ORM
     }
 
     /**
-     * Set a property value via magic setter.
+     * Magic setter — stores undeclared properties in _dynamicProps.
+     * Declared public properties are set directly by PHP (this never fires for them).
      */
     public function __set(string $name, mixed $value): void
     {
-        $this->_data[$name] = $value;
+        $this->_dynamicProps[$name] = $value;
     }
 
     /**
-     * Get a property value via magic getter.
-     * Supports lazy loading for relationships defined in $hasOne, $hasMany, and $belongsTo.
+     * Magic getter — checks dynamic props, then lazy-loads relationships.
+     * Declared public properties are read directly by PHP (this never fires for them).
      */
     public function __get(string $name): mixed
     {
-        // Check regular data first
-        if (array_key_exists($name, $this->_data)) {
-            return $this->_data[$name];
+        // Check dynamic properties (from joins, extras)
+        if (array_key_exists($name, $this->_dynamicProps)) {
+            return $this->_dynamicProps[$name];
         }
 
         // Check relationship cache
@@ -264,7 +265,7 @@ abstract class ORM
      */
     public function __isset(string $name): bool
     {
-        return isset($this->_data[$name]);
+        return isset($this->_dynamicProps[$name]);
     }
 
     /**
@@ -272,7 +273,7 @@ abstract class ORM
      */
     public function __unset(string $name): void
     {
-        unset($this->_data[$name]);
+        unset($this->_dynamicProps[$name]);
     }
 
     /**
@@ -311,6 +312,13 @@ abstract class ORM
                 if (in_array($col, $existingMappedColumns, true)) {
                     continue;
                 }
+                // Skip keys that are already camelCase (no underscores, not
+                // all-uppercase) — they came from getData() or user code,
+                // not from the database. Running snakeToCamel on them would
+                // lowercase the first char and corrupt the key.
+                if (!str_contains($col, '_') && !ctype_upper($col)) {
+                    continue;
+                }
                 $camel = self::snakeToCamel($col);
                 if ($camel !== $col && !isset($this->fieldMapping[$camel])) {
                     $this->fieldMapping[$camel] = $col;
@@ -323,13 +331,10 @@ abstract class ORM
         foreach ($data as $key => $value) {
             // Map DB column to PHP property if mapping exists
             $propName = $reverseMapping[$key] ?? $key;
-            $this->_data[$propName] = $value;
 
-            // Also set declared properties so $model->prop works without __get
-            // (PHP skips __get for declared properties, even untyped ones)
-            if (property_exists($this, $propName)) {
-                $this->$propName = $value;
-            }
+            // Set directly on the object — declared properties get set natively,
+            // undeclared ones go through __set → _dynamicProps
+            $this->$propName = $value;
         }
 
         return $this;
@@ -438,10 +443,19 @@ abstract class ORM
         if ($result === null) {
             return false;
         }
-        // Clear stale data before filling — prevents double-fill corruption
-        // where properties from a previous load() persist after a new one.
-        $this->_data = [];
-        $this->fill($result->getData());
+
+        // Copy the result's state directly — no double-fill.
+        // selectOne() already ran fill() on $result with the raw DB data,
+        // which built the correct fieldMapping. We inherit that mapping
+        // and copy all properties.
+        $this->fieldMapping = array_merge($this->fieldMapping, $result->fieldMapping);
+        $this->_dynamicProps = $result->_dynamicProps;
+
+        // Copy declared properties from result
+        foreach ($result->getModelProperties() as $prop => $value) {
+            $this->$prop = $value;
+        }
+
         $this->_exists = true;
         return true;
     }
@@ -636,14 +650,15 @@ abstract class ORM
      */
     public function toDict(?array $include = null, string $case = 'camel'): array
     {
+        $modelProps = $this->getModelProperties();
         if ($case === 'snake') {
             // Map camelCase keys back to snake_case DB column names
             $result = [];
-            foreach ($this->_data as $key => $value) {
+            foreach ($modelProps as $key => $value) {
                 $result[$this->fieldMapping[$key] ?? $key] = $value;
             }
         } else {
-            $result = $this->_data;
+            $result = $modelProps;
         }
 
         if ($include !== null) {
@@ -710,7 +725,7 @@ abstract class ORM
     /** @return array<int, mixed> */
     public function toArray(): array
     {
-        return array_values($this->_data);
+        return array_values($this->getModelProperties());
     }
 
     /**
@@ -754,13 +769,8 @@ abstract class ORM
      */
     public function getPrimaryKeyValue(): int|string|null
     {
-        // Check _data first (set via __set / fill), then fall back to
-        // declared public properties (set directly: $model->id = 1).
-        $value = $this->_data[$this->primaryKey] ?? null;
-        if ($value === null && property_exists($this, $this->primaryKey)) {
-            $value = $this->{$this->primaryKey} ?? null;
-        }
-        return $value;
+        // Read directly from the property (declared or dynamic)
+        return $this->{$this->primaryKey} ?? null;
     }
 
     /**
@@ -929,7 +939,7 @@ abstract class ORM
 
         if ($result) {
             $this->_exists = true;
-            $this->_data['is_deleted'] = 0;
+            $this->is_deleted = 0;
         }
 
         $this->_db->commit();
@@ -1091,7 +1101,7 @@ abstract class ORM
             $foreignKey = rtrim($related->tableName, 's') . '_id';
         }
 
-        $fkValue = $this->_data[$foreignKey] ?? null;
+        $fkValue = $this->$foreignKey ?? null;
         if ($fkValue === null) {
             return null;
         }
@@ -1168,7 +1178,7 @@ abstract class ORM
      */
     public function getData(): array
     {
-        return $this->_data;
+        return $this->getModelProperties();
     }
 
     /**
@@ -1207,11 +1217,7 @@ abstract class ORM
             $pkValue = $this->getPrimaryKeyValue();
             if ($pkValue === null || $pkValue === 0) {
                 $newId = $this->_db->lastInsertId();
-                $this->_data[$this->primaryKey] = $newId;
-                // Sync to declared public property so $model->id works
-                if (property_exists($this, $this->primaryKey)) {
-                    $this->{$this->primaryKey} = $newId;
-                }
+                $this->{$this->primaryKey} = $newId;
             }
         }
 
@@ -1254,29 +1260,68 @@ abstract class ORM
      *
      * @return array<string, mixed>
      */
+    /**
+     * Get all model data as DB column → value pairs for insert/update.
+     *
+     * Reads directly from public properties (declared on the subclass)
+     * and _dynamicProps (undeclared extras). Uses fieldMapping to convert
+     * PHP property names to DB column names.
+     */
     private function getDbData(): array
     {
-        // When autoMap is enabled, ensure camelCase properties have
-        // snake_case mappings before converting to DB column names.
-        if ($this->autoMap) {
-            foreach (array_keys($this->_data) as $prop) {
-                if (!isset($this->fieldMapping[$prop])) {
-                    $snaked = self::camelToSnake($prop);
-                    if ($snaked !== $prop) {
-                        $this->fieldMapping[$prop] = $snaked;
-                    }
+        $data = [];
+        $props = $this->getModelProperties();
+
+        foreach ($props as $name => $value) {
+            // Auto-generate fieldMapping for camelCase → snake_case
+            if ($this->autoMap && !isset($this->fieldMapping[$name])) {
+                $snaked = self::camelToSnake($name);
+                if ($snaked !== $name) {
+                    $this->fieldMapping[$name] = $snaked;
                 }
             }
-        }
-
-        $data = [];
-
-        foreach ($this->_data as $prop => $value) {
-            $column = $this->getDbColumn($prop);
+            $column = $this->getDbColumn($name);
             $data[$column] = $value;
         }
 
         return $data;
+    }
+
+    /**
+     * Get all user-defined model properties as name → value.
+     *
+     * Collects declared public properties from the subclass (not the ORM
+     * base class framework props) plus any dynamic properties set via __set.
+     */
+    private function getModelProperties(): array
+    {
+        static $frameworkProps = [
+            'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
+            'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
+            'foreignKeys', 'tableFilter',
+        ];
+
+        $props = [];
+
+        // Declared public properties on the subclass
+        $ref = new \ReflectionObject($this);
+        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+            if ($prop->isStatic()) continue;
+            $name = $prop->getName();
+            if (in_array($name, $frameworkProps, true)) continue;
+            if ($prop->getDeclaringClass()->getName() === self::class) continue;
+            if (!$prop->isInitialized($this)) continue;
+            $props[$name] = $this->$name;
+        }
+
+        // Dynamic properties (from joins, undeclared fields)
+        foreach ($this->_dynamicProps as $name => $value) {
+            if (!isset($props[$name])) {
+                $props[$name] = $value;
+            }
+        }
+
+        return $props;
     }
 
     /**
@@ -1579,7 +1624,7 @@ abstract class ORM
      */
     private function belongsToMethod(string $relatedClass, string $foreignKey): ?ORM
     {
-        $fkValue = $this->_data[$foreignKey] ?? null;
+        $fkValue = $this->$foreignKey ?? null;
         if ($fkValue === null) {
             return null;
         }
