@@ -121,11 +121,25 @@ class FirebirdAdapter implements DatabaseAdapter
 
             $rows = [];
             $fetchFn = $this->fn . 'fetch_assoc';
-            while ($row = @$fetchFn($result)) {
+            $blobInfoFn = $this->fn . 'blob_info';
+            while ($row = @$fetchFn($result, IBASE_TEXT)) {
                 // Trim string values (Firebird pads CHAR fields)
+                // and auto-decode BLOB columns
                 $cleaned = [];
                 foreach ($row as $key => $value) {
-                    $cleaned[$key] = is_string($value) ? rtrim($value) : $value;
+                    if (is_resource($value)) {
+                        // BLOB resource handle — read into bytes
+                        $blobData = '';
+                        while ($chunk = fread($value, 8192)) {
+                            $blobData .= $chunk;
+                        }
+                        fclose($value);
+                        $cleaned[$key] = $blobData;
+                    } elseif (is_string($value)) {
+                        $cleaned[$key] = rtrim($value);
+                    } else {
+                        $cleaned[$key] = $value;
+                    }
                 }
                 $rows[] = $cleaned;
             }

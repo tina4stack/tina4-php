@@ -89,8 +89,24 @@ class PostgresAdapter implements DatabaseAdapter
                 return [];
             }
 
+            // Detect binary (bytea) columns for auto-encoding
+            $binaryColumns = [];
+            $numFields = pg_num_fields($result);
+            for ($i = 0; $i < $numFields; $i++) {
+                if (pg_field_type($result, $i) === 'bytea') {
+                    $binaryColumns[] = pg_field_name($result, $i);
+                }
+            }
+
             $rows = [];
             while ($row = pg_fetch_assoc($result)) {
+                // Auto-decode bytea columns: PostgreSQL returns hex-escaped
+                // strings (\x...) via pg_fetch_assoc. Unescape to raw bytes.
+                foreach ($binaryColumns as $col) {
+                    if (isset($row[$col]) && $row[$col] !== null) {
+                        $row[$col] = pg_unescape_bytea($row[$col]);
+                    }
+                }
                 $rows[] = $row;
             }
 
