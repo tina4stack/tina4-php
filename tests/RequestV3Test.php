@@ -168,4 +168,111 @@ class RequestV3Test extends TestCase
         $request = Request::create(body: 'raw text body');
         $this->assertSame('raw text body', $request->rawBody);
     }
+
+    // ── Multipart form data tests ──
+
+    private function buildMultipart(array $fields, array $files = [], string $boundary = 'TestBoundary123'): array
+    {
+        $body = '';
+        foreach ($fields as $name => $value) {
+            $body .= "--{$boundary}\r\n";
+            $body .= "Content-Disposition: form-data; name=\"{$name}\"\r\n\r\n";
+            $body .= "{$value}\r\n";
+        }
+        foreach ($files as $name => $file) {
+            $body .= "--{$boundary}\r\n";
+            $body .= "Content-Disposition: form-data; name=\"{$name}\"; filename=\"{$file['filename']}\"\r\n";
+            $body .= "Content-Type: {$file['type']}\r\n\r\n";
+            $body .= "{$file['content']}\r\n";
+        }
+        $body .= "--{$boundary}--\r\n";
+        return [
+            'body' => $body,
+            'content_type' => "multipart/form-data; boundary={$boundary}",
+        ];
+    }
+
+    public function testMultipartFormFields(): void
+    {
+        $multi = $this->buildMultipart(['name' => 'Alice', 'email' => 'alice@test.com']);
+        $parsed = \Tina4\Server::parseMultipartBody($multi['body'], $multi['content_type']);
+
+        $this->assertSame('Alice', $parsed['fields']['name']);
+        $this->assertSame('alice@test.com', $parsed['fields']['email']);
+        $this->assertEmpty($parsed['files']);
+    }
+
+    public function testMultipartFileUpload(): void
+    {
+        $multi = $this->buildMultipart(
+            ['title' => 'My Photo'],
+            ['avatar' => ['filename' => 'photo.png', 'type' => 'image/png', 'content' => 'FAKEPNGDATA']]
+        );
+        $parsed = \Tina4\Server::parseMultipartBody($multi['body'], $multi['content_type']);
+
+        $this->assertSame('My Photo', $parsed['fields']['title']);
+        $this->assertArrayHasKey('avatar', $parsed['files']);
+        $this->assertSame('photo.png', $parsed['files']['avatar']['filename']);
+        $this->assertSame('image/png', $parsed['files']['avatar']['type']);
+        $this->assertSame('FAKEPNGDATA', $parsed['files']['avatar']['content']);
+        $this->assertSame(11, $parsed['files']['avatar']['size']);
+    }
+
+    public function testMultipartMultipleFiles(): void
+    {
+        $multi = $this->buildMultipart(
+            ['description' => 'Uploads'],
+            [
+                'photo' => ['filename' => 'a.jpg', 'type' => 'image/jpeg', 'content' => 'JPG1'],
+                'doc' => ['filename' => 'b.pdf', 'type' => 'application/pdf', 'content' => 'PDF2'],
+            ]
+        );
+        $parsed = \Tina4\Server::parseMultipartBody($multi['body'], $multi['content_type']);
+
+        $this->assertCount(2, $parsed['files']);
+        $this->assertSame('a.jpg', $parsed['files']['photo']['filename']);
+        $this->assertSame('b.pdf', $parsed['files']['doc']['filename']);
+    }
+
+    public function testMultipartNoBoundary(): void
+    {
+        $parsed = \Tina4\Server::parseMultipartBody('no data', 'multipart/form-data');
+        $this->assertEmpty($parsed['fields']);
+        $this->assertEmpty($parsed['files']);
+    }
+
+    public function testMultipartEmptyFilename(): void
+    {
+        // Browser sends empty filename when no file is selected
+        $boundary = 'Bound123';
+        $body = "--{$boundary}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"\"\r\nContent-Type: application/octet-stream\r\n\r\n\r\n--{$boundary}--\r\n";
+        $parsed = \Tina4\Server::parseMultipartBody($body, "multipart/form-data; boundary={$boundary}");
+
+        // Empty filename should still produce a file entry (with empty name)
+        $this->assertArrayHasKey('upload', $parsed['files']);
+        $this->assertSame('', $parsed['files']['upload']['filename']);
+    }
+
+    public function testMultipartBinaryContent(): void
+    {
+        // File content containing boundary-like strings shouldn't break parsing
+        $boundary = 'SimpleBound';
+        $binaryContent = "line1\r\nline2\r\n--NotTheBoundary\r\nline3";
+        $body = "--{$boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"data.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n{$binaryContent}\r\n--{$boundary}--\r\n";
+        $parsed = \Tina4\Server::parseMultipartBody($body, "multipart/form-data; boundary={$boundary}");
+
+        $this->assertSame($binaryContent, $parsed['files']['file']['content']);
+    }
+
+    public function testMultipartQuotedBoundary(): void
+    {
+        // Some clients quote the boundary value
+        $multi = $this->buildMultipart(['key' => 'value'], [], 'QuotedBound');
+        $parsed = \Tina4\Server::parseMultipartBody(
+            $multi['body'],
+            'multipart/form-data; boundary="QuotedBound"'
+        );
+
+        $this->assertSame('value', $parsed['fields']['key']);
+    }
 }

@@ -876,7 +876,7 @@ class Server
      *
      * @return array{fields: array, files: array}
      */
-    private static function parseMultipartBody(string $body, string $contentType): array
+    public static function parseMultipartBody(string $body, string $contentType): array
     {
         $fields = [];
         $files = [];
