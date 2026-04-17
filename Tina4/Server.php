@@ -464,15 +464,23 @@ class Server
             $formData = [];
             parse_str($body, $formData);
             $parsedBody = $formData;
+        } elseif (str_contains($contentType, 'multipart/form-data') && $body !== '') {
+            // PHP's SAPI layer doesn't run under stream_socket_server,
+            // so $_FILES is always empty. Parse multipart manually.
+            $parsed = self::parseMultipartBody($body, $contentType);
+            $parsedBody = $parsed['fields'];
+            $parsedFiles = $parsed['files'];
         }
 
         // Build Request object
+        $files = $parsedFiles ?? [];
         $request = new Request(
             method: strtoupper($method),
             path: $path,
             query: $queryParams,
             body: $parsedBody,
             headers: $this->buildHeaderArray($headers),
+            files: !empty($files) ? $files : null,
         );
 
         // Populate PHP superglobals so user code that reads $_COOKIE, $_GET,
@@ -860,6 +868,100 @@ class Server
     /**
      * Build a clean header array from parsed headers (exclude internal keys).
      */
+    /**
+     * Parse multipart/form-data body into fields and files.
+     *
+     * The stream_socket_server bypasses PHP's SAPI layer so $_FILES is
+     * always empty. This parses the raw body using boundary scanning.
+     *
+     * @return array{fields: array, files: array}
+     */
+    private static function parseMultipartBody(string $body, string $contentType): array
+    {
+        $fields = [];
+        $files = [];
+
+        // Extract boundary from Content-Type header
+        $boundary = null;
+        foreach (explode(';', $contentType) as $part) {
+            $part = trim($part);
+            if (str_starts_with($part, 'boundary=')) {
+                $boundary = trim(substr($part, 9), '"');
+                break;
+            }
+        }
+
+        if ($boundary === null) {
+            return ['fields' => $fields, 'files' => $files];
+        }
+
+        $delimiter = "--{$boundary}";
+        $closeDelimiter = "--{$boundary}--";
+
+        // Split body on boundary
+        $parts = explode($delimiter, $body);
+
+        foreach ($parts as $part) {
+            // Skip preamble and closing boundary
+            $part = ltrim($part, "\r\n");
+            if ($part === '' || $part === '--' || str_starts_with($part, '--')) {
+                continue;
+            }
+
+            // Separate headers from content (double CRLF)
+            $headerEnd = strpos($part, "\r\n\r\n");
+            if ($headerEnd === false) {
+                continue;
+            }
+
+            $headerSection = substr($part, 0, $headerEnd);
+            $content = substr($part, $headerEnd + 4);
+
+            // Remove trailing CRLF from content
+            if (str_ends_with($content, "\r\n")) {
+                $content = substr($content, 0, -2);
+            }
+
+            // Parse headers
+            $name = null;
+            $filename = null;
+            $fileType = 'application/octet-stream';
+
+            foreach (explode("\r\n", $headerSection) as $line) {
+                if (stripos($line, 'Content-Disposition') !== false) {
+                    if (preg_match('/name="([^"]+)"/', $line, $m)) {
+                        $name = $m[1];
+                    }
+                    if (preg_match('/filename="([^"]*)"/', $line, $m)) {
+                        $filename = $m[1];
+                    }
+                } elseif (stripos($line, 'Content-Type') !== false) {
+                    $fileType = trim(explode(':', $line, 2)[1] ?? $fileType);
+                }
+            }
+
+            if ($name === null) {
+                continue;
+            }
+
+            if ($filename !== null) {
+                // File upload — matches normaliseFiles() format in Request.php
+                $files[$name] = [
+                    'fieldName' => $name,
+                    'filename' => $filename,
+                    'type' => $fileType,
+                    'content' => $content,  // raw binary
+                    'size' => strlen($content),
+                ];
+            } else {
+                // Regular form field
+                $fields[$name] = $content;
+            }
+        }
+
+        return ['fields' => $fields, 'files' => $files];
+    }
+
     private function buildHeaderArray(array $headers): array
     {
         $clean = [];
