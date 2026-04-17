@@ -349,6 +349,16 @@ class Request
             return $parsed;
         }
 
+        // Multipart form data (XHR FormData or standard form POST)
+        if (str_contains($this->contentType, 'multipart/form-data')) {
+            $parsed = Server::parseMultipartBody($this->rawBody, $this->contentType);
+            // Merge files into $this->files
+            if (!empty($parsed['files'])) {
+                $this->files = array_merge($this->files, $parsed['files']);
+            }
+            return $parsed['fields'];
+        }
+
         // Return raw body for other content types
         return $this->rawBody;
     }
