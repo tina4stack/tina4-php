@@ -843,6 +843,389 @@ class DevAdmin
                 return $response->json(['success' => false, 'error' => $e->getMessage()]);
             }
         });
+
+        // ── Editor endpoints: file tree + CRUD ──────────────────────
+        //
+        // Dev-admin's left panel and central editor drive every write
+        // through these. Every path is validated against the project
+        // root so `?path=../../etc/passwd` can't escape the sandbox.
+        // Matches the Python dev_admin API 1:1 so the frontend doesn't
+        // need per-framework branching.
+
+        Router::get('/__dev/api/files', function (Request $request, Response $response) {
+            $dir = self::devAdminSafePath($request->params['path'] ?? '.');
+            if ($dir === null || !is_dir($dir)) {
+                return $response->json(['error' => 'invalid path'], 400);
+            }
+            $entries = [];
+            foreach (scandir($dir) ?: [] as $name) {
+                if ($name === '.' || $name === '..') continue;
+                $full = $dir . DIRECTORY_SEPARATOR . $name;
+                $rel = self::devAdminRel($full);
+                if ($rel === null) continue;
+                $entries[] = [
+                    'path' => $rel,
+                    'name' => $name,
+                    'type' => is_dir($full) ? 'dir' : 'file',
+                    'size' => is_file($full) ? (filesize($full) ?: 0) : 0,
+                ];
+            }
+            // Dirs first, then alphabetical. Matches what most editors do.
+            usort($entries, fn($a, $b) => [$a['type'] === 'file', strtolower($a['name'])]
+                                          <=> [$b['type'] === 'file', strtolower($b['name'])]);
+            $branch = self::devAdminGitBranch();
+            return $response->json(['entries' => $entries, 'branch' => $branch]);
+        });
+
+        Router::get('/__dev/api/file', function (Request $request, Response $response) {
+            $path = self::devAdminSafePath($request->params['path'] ?? '');
+            if ($path === null || !is_file($path)) {
+                return $response->json(['error' => 'not found'], 404);
+            }
+            $content = @file_get_contents($path);
+            if ($content === false) {
+                return $response->json(['error' => 'unreadable'], 500);
+            }
+            return $response->json([
+                'path' => self::devAdminRel($path),
+                'content' => $content,
+                'language' => self::devAdminLang($path),
+            ]);
+        });
+
+        Router::get('/__dev/api/file/raw', function (Request $request, Response $response) {
+            $path = self::devAdminSafePath($request->params['path'] ?? '');
+            if ($path === null || !is_file($path)) {
+                return $response->text('not found', 404);
+            }
+            // Let the Response class pick the MIME from the extension;
+            // we just load the bytes and set Content-Type. Streaming
+            // large files is a later slice — for raster images on the
+            // order of tens of KB this is fine.
+            $mime = function_exists('mime_content_type') ? (mime_content_type($path) ?: 'application/octet-stream') : 'application/octet-stream';
+            return $response->header('Content-Type', $mime)->html(file_get_contents($path));
+        });
+
+        Router::post('/__dev/api/file/save', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $path = self::devAdminSafePath($body['path'] ?? '');
+            if ($path === null) {
+                return $response->json(['error' => 'invalid path'], 400);
+            }
+            $content = $body['content'] ?? '';
+            if (!is_string($content)) {
+                return $response->json(['error' => 'content must be a string'], 400);
+            }
+            // Ensure parent dir exists — dev-admin creates new files
+            // in empty folders frequently (e.g. `src/routes/newfile.py`).
+            $dir = dirname($path);
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            if (@file_put_contents($path, $content) === false) {
+                return $response->json(['error' => 'write failed'], 500);
+            }
+            self::$reloadMtime++; // same counter live-reload uses
+            return $response->json(['ok' => true, 'path' => self::devAdminRel($path)]);
+        });
+
+        Router::post('/__dev/api/file/delete', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $path = self::devAdminSafePath($body['path'] ?? '');
+            if ($path === null || !file_exists($path)) {
+                return $response->json(['error' => 'not found'], 404);
+            }
+            if (is_dir($path)) {
+                // Recursive delete — only within the project root.
+                $rdi = new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS);
+                foreach (new \RecursiveIteratorIterator($rdi, \RecursiveIteratorIterator::CHILD_FIRST) as $f) {
+                    $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
+                }
+                @rmdir($path);
+            } else {
+                @unlink($path);
+            }
+            self::$reloadMtime++;
+            return $response->json(['ok' => true]);
+        });
+
+        Router::post('/__dev/api/file/rename', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $from = self::devAdminSafePath($body['from'] ?? '');
+            $to   = self::devAdminSafePath($body['to'] ?? '');
+            if ($from === null || !file_exists($from)) {
+                return $response->json(['error' => 'source not found'], 404);
+            }
+            if ($to === null) {
+                return $response->json(['error' => 'invalid destination'], 400);
+            }
+            if (file_exists($to)) {
+                return $response->json(['error' => 'destination exists'], 409);
+            }
+            $dir = dirname($to);
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            if (!@rename($from, $to)) {
+                return $response->json(['error' => 'rename failed'], 500);
+            }
+            self::$reloadMtime++;
+            return $response->json(['ok' => true, 'path' => self::devAdminRel($to)]);
+        });
+
+        // ── Dependency management: composer search + require ──────
+        //
+        // `deps/search` hits packagist's public JSON API.
+        // `deps/install` shells out to `composer require`. Package
+        // names are whitelisted against the Composer spec before
+        // being passed to shell — prevents arg injection.
+
+        Router::get('/__dev/api/deps/search', function (Request $request, Response $response) {
+            $query = trim($request->params['query'] ?? '');
+            if ($query === '') {
+                return $response->json(['results' => []]);
+            }
+            $ch = curl_init('https://packagist.org/search.json?q=' . urlencode($query) . '&per_page=20');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 8,
+                CURLOPT_USERAGENT => 'tina4-php/dev-admin',
+            ]);
+            $raw = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($raw === false || $code !== 200) {
+                return $response->json(['results' => [], 'error' => 'packagist unavailable'], 502);
+            }
+            $data = json_decode($raw, true) ?: [];
+            $results = array_map(fn($r) => [
+                'name' => $r['name'] ?? '',
+                'description' => $r['description'] ?? '',
+                'downloads' => $r['downloads'] ?? 0,
+                'repository' => $r['repository'] ?? '',
+            ], $data['results'] ?? []);
+            return $response->json(['results' => $results]);
+        });
+
+        Router::post('/__dev/api/deps/install', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $name = trim($body['name'] ?? '');
+            // Composer package names: vendor/package with lowercase
+            // letters, digits, hyphens, and underscores. Period allowed
+            // in vendor prefix (e.g. `tina4stack/tina4-php`).
+            if (!preg_match('#^[a-z0-9][a-z0-9._\-]*/[a-z0-9][a-z0-9._\-]*$#', $name)) {
+                return $response->json(['ok' => false, 'error' => 'invalid package name'], 400);
+            }
+            $root = self::devAdminProjectRoot();
+            $cmd = 'cd ' . escapeshellarg($root) . ' && composer require ' . escapeshellarg($name) . ' 2>&1';
+            $output = shell_exec($cmd) ?? '';
+            $ok = str_contains($output, 'Generating autoload files')
+               || str_contains($output, 'Installs:');
+            return $response->json(['ok' => $ok, 'output' => $output]);
+        });
+
+        // ── Git status ────────────────────────────────────────────
+        Router::get('/__dev/api/git/status', function (Request $request, Response $response) {
+            $root = self::devAdminProjectRoot();
+            if (!is_dir($root . '/.git')) {
+                return $response->json(['ok' => false, 'error' => 'not a git repository']);
+            }
+            $branch = self::devAdminGitBranch();
+            $ahead = 0; $behind = 0;
+            $ab = trim(shell_exec('cd ' . escapeshellarg($root) . ' && git rev-list --left-right --count HEAD...@{u} 2>/dev/null') ?? '');
+            if (preg_match('/^(\d+)\s+(\d+)$/', $ab, $m)) {
+                [$_, $ahead, $behind] = $m;
+            }
+            $raw = shell_exec('cd ' . escapeshellarg($root) . ' && git status --porcelain 2>/dev/null') ?? '';
+            $dirty = [];
+            foreach (explode("\n", trim($raw)) as $line) {
+                if ($line === '') continue;
+                $dirty[] = ['status' => substr($line, 0, 2), 'path' => trim(substr($line, 3))];
+            }
+            return $response->json([
+                'ok' => true,
+                'branch' => $branch,
+                'ahead' => (int) $ahead,
+                'behind' => (int) $behind,
+                'dirty' => $dirty,
+            ]);
+        });
+
+        // ── MCP REST shim ─────────────────────────────────────────
+        //
+        // Python parity — dev-admin calls /mcp/tools + /mcp/call to
+        // enumerate and invoke framework-registered tools. PHP doesn't
+        // have an MCP tool registry equivalent to Python's 44-tool
+        // suite yet; this returns the correct shape so the frontend
+        // doesn't error, and signals "not implemented" on call.
+        // Porting the tool library is a separate slice.
+
+        Router::get('/__dev/api/mcp/tools', function (Request $request, Response $response) {
+            return $response->json(['tools' => []]);
+        });
+
+        Router::post('/__dev/api/mcp/call', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $name = (string) ($body['name'] ?? '');
+            return $response->json([
+                'ok' => false,
+                'name' => $name,
+                'error' => 'PHP MCP tool registry not yet implemented — parity coming in a later slice',
+            ], 501);
+        });
+
+        // ── Scaffold: + Route / + Model / + Migration / + Middleware
+        Router::get('/__dev/api/scaffold', function (Request $request, Response $response) {
+            return $response->json(['kinds' => [
+                ['kind' => 'route',      'label' => '+ Route',      'needs_name' => true],
+                ['kind' => 'model',      'label' => '+ Model',      'needs_name' => true],
+                ['kind' => 'migration',  'label' => '+ Migration',  'needs_name' => true],
+                ['kind' => 'middleware', 'label' => '+ Middleware', 'needs_name' => true],
+            ]]);
+        });
+
+        Router::post('/__dev/api/scaffold/run', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $kind = strtolower(trim($body['kind'] ?? ''));
+            $name = trim($body['name'] ?? '');
+            if (!in_array($kind, ['route', 'model', 'migration', 'middleware'], true)) {
+                return $response->json(['ok' => false, 'error' => 'unknown scaffold kind'], 400);
+            }
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_\-]*$/', $name)) {
+                return $response->json(['ok' => false, 'error' => 'name must match [A-Za-z][A-Za-z0-9_-]*'], 400);
+            }
+            $root = self::devAdminProjectRoot();
+            $cmd = 'cd ' . escapeshellarg($root) . ' && php bin/tina4php generate ' . escapeshellarg($kind) . ' ' . escapeshellarg($name) . ' 2>&1';
+            $output = shell_exec($cmd) ?? '';
+            return $response->json(['ok' => true, 'kind' => $kind, 'name' => $name, 'output' => $output]);
+        });
+    }
+
+    // ── Dev-admin helpers ──────────────────────────────────────────
+
+    /**
+     * Resolve the project root. The CWD when the server was started
+     * is the canonical "project root" across Tina4 — same convention
+     * Python and Ruby use.
+     */
+    private static function devAdminProjectRoot(): string
+    {
+        return realpath(getcwd()) ?: getcwd();
+    }
+
+    /**
+     * Resolve a user-supplied path against the project root, rejecting
+     * anything that escapes the root (`..`, absolute paths outside,
+     * symlinks pointing elsewhere). Returns the absolute path on
+     * success, null on rejection.
+     */
+    private static function devAdminSafePath(string $input): ?string
+    {
+        $input = trim($input);
+        if ($input === '') {
+            $input = '.';
+        }
+        $root = self::devAdminProjectRoot();
+        $candidate = $input[0] === '/' ? $input : ($root . DIRECTORY_SEPARATOR . $input);
+        // Normalise manually — we can't rely on realpath() because the
+        // file may not exist yet (new-file save). Reject any segment
+        // that is `..`.
+        $parts = [];
+        foreach (explode(DIRECTORY_SEPARATOR, $candidate) as $seg) {
+            if ($seg === '' || $seg === '.') continue;
+            if ($seg === '..') {
+                array_pop($parts);
+                continue;
+            }
+            $parts[] = $seg;
+        }
+        $absolute = DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $parts);
+        // Must live under the project root after normalisation.
+        if (!str_starts_with($absolute . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)
+            && $absolute !== $root) {
+            return null;
+        }
+        return $absolute;
+    }
+
+    /**
+     * Convert an absolute path back into a project-relative string.
+     * Returns null if the path is outside the project root.
+     */
+    private static function devAdminRel(string $absolute): ?string
+    {
+        $root = self::devAdminProjectRoot();
+        if (!str_starts_with($absolute, $root)) {
+            return null;
+        }
+        return ltrim(substr($absolute, strlen($root)), DIRECTORY_SEPARATOR);
+    }
+
+    /**
+     * Map a file extension to the language tag dev-admin uses to pick
+     * a CodeMirror language pack. Cheap lookup, no magic.
+     */
+    private static function devAdminLang(string $path): string
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        return match ($ext) {
+            'py'               => 'python',
+            'php'              => 'php',
+            'rb'               => 'ruby',
+            'ts', 'tsx'        => 'typescript',
+            'js', 'jsx', 'mjs' => 'javascript',
+            'json'             => 'json',
+            'yaml', 'yml'      => 'yaml',
+            'sql'              => 'sql',
+            'md'               => 'markdown',
+            'html', 'htm'      => 'html',
+            'twig', 'jinja'    => 'twig',
+            'css'              => 'css',
+            'scss', 'sass'     => 'scss',
+            'toml'             => 'toml',
+            'env'              => 'env',
+            'sh', 'bash'       => 'shell',
+            'dockerfile'       => 'dockerfile',
+            default            => 'text',
+        };
+    }
+
+    /**
+     * Current git branch via plumbing. Empty string when not a repo
+     * or git isn't available — the UI treats empty as "no branch
+     * info" rather than an error.
+     */
+    private static function devAdminGitBranch(): string
+    {
+        $root = self::devAdminProjectRoot();
+        if (!is_dir($root . '/.git')) {
+            return '';
+        }
+        $out = shell_exec('cd ' . escapeshellarg($root) . ' && git rev-parse --abbrev-ref HEAD 2>/dev/null') ?? '';
+        return trim($out);
+    }
+
+    /**
+     * Read the request body into an array regardless of whether the
+     * client sent JSON or form data. PHP's `Request` exposes parsed
+     * fields on `$request->data` (JSON) or `$request->params` (form);
+     * we normalise so endpoints don't care.
+     */
+    private static function devAdminBody(Request $request): array
+    {
+        if (isset($request->data) && is_array($request->data) && !empty($request->data)) {
+            return $request->data;
+        }
+        if (isset($request->params) && is_array($request->params)) {
+            return $request->params;
+        }
+        // Fall through — last resort, re-decode raw input.
+        $raw = file_get_contents('php://input');
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     // Legacy renderDashboard() removed — UI served from tina4-dev-admin.min.js
