@@ -853,32 +853,117 @@ class DevAdmin
         // need per-framework branching.
 
         Router::get('/__dev/api/files', function (Request $request, Response $response) {
-            $dir = self::devAdminSafePath($request->params['path'] ?? '.');
-            if ($dir === null || !is_dir($dir)) {
-                return $response->json(['error' => 'invalid path'], 400);
+            // Response shape matches tina4-python's /files 1:1 so the
+            // dev-admin frontend works against both with no branching.
+            // Each entry carries `is_dir` (boolean), `has_children`,
+            // `git_status`, and `size`. Noise directories (.git,
+            // node_modules, vendor, etc.) are filtered out.
+            $rel = trim((string) ($request->query['path'] ?? ''), '/');
+            $target = self::devAdminSafePath($rel === '' ? '.' : $rel);
+            if ($target === null || !is_dir($target)) {
+                return $response->json(['error' => 'not a directory'], 404);
             }
+
+            $root = self::devAdminProjectRoot();
+            $branch = self::devAdminGitBranch();
+            $gitStatus = self::devAdminGitStatusMap();
+
+            // Paths git reports are relative to the git repo root.
+            // If the project root *is* the git root, entry paths map
+            // straight to git paths; otherwise prefix with the delta.
+            $cwdInGit = '';
+            $gitRoot = self::devAdminGitRoot();
+            if ($gitRoot !== null && $gitRoot !== $root) {
+                $cwdInGit = ltrim(substr($root, strlen($gitRoot)), DIRECTORY_SEPARATOR);
+                if ($cwdInGit !== '') {
+                    $cwdInGit .= '/';
+                }
+            }
+
             $entries = [];
-            foreach (scandir($dir) ?: [] as $name) {
+            $names = scandir($target) ?: [];
+            sort($names); // alphabetical; we don't re-sort by type
+
+            // Noise filter — matches Python's list verbatim so both
+            // frameworks hide the same dirs. Hidden dot-files are
+            // filtered too except .env and .env.example.
+            static $ignoredDirs = [
+                '__pycache__', 'node_modules', 'vendor', '.git',
+                'venv', '.venv', 'dist', 'target', '.tina4',
+            ];
+
+            foreach ($names as $name) {
                 if ($name === '.' || $name === '..') continue;
-                $full = $dir . DIRECTORY_SEPARATOR . $name;
-                $rel = self::devAdminRel($full);
-                if ($rel === null) continue;
+                if ($name !== '.env' && $name !== '.env.example' && str_starts_with($name, '.')) {
+                    continue;
+                }
+                if (in_array($name, $ignoredDirs, true)) {
+                    continue;
+                }
+
+                $full = $target . DIRECTORY_SEPARATOR . $name;
+                $entryRel = ltrim(substr($full, strlen($root)), DIRECTORY_SEPARATOR);
+                $entryRel = str_replace(DIRECTORY_SEPARATOR, '/', $entryRel);
+                $isDir = is_dir($full);
+
+                // Git status for this entry — same 4-char mapping Python uses.
+                $gitPath = $cwdInGit . $entryRel;
+                $status = 'clean';
+                if (isset($gitStatus[$gitPath])) {
+                    $code = $gitStatus[$gitPath];
+                    if ($code === '??') {
+                        $status = 'untracked';
+                    } elseif (str_contains($code, 'M')) {
+                        $status = 'modified';
+                    } elseif (str_contains($code, 'A')) {
+                        $status = 'added';
+                    } elseif (str_contains($code, 'D')) {
+                        $status = 'deleted';
+                    }
+                } elseif ($isDir) {
+                    // Propagate dirty status from any child file.
+                    $prefix = $gitPath . '/';
+                    foreach ($gitStatus as $gf => $gc) {
+                        if (str_starts_with($gf, $prefix)) {
+                            $status = $gc === '??' ? 'untracked' : 'modified';
+                            break;
+                        }
+                    }
+                }
+
+                // has_children: does the dir contain anything visible?
+                $hasChildren = null;
+                if ($isDir) {
+                    $hasChildren = false;
+                    $children = @scandir($full) ?: [];
+                    foreach ($children as $c) {
+                        if ($c === '.' || $c === '..') continue;
+                        if (in_array($c, $ignoredDirs, true)) continue;
+                        if ($c !== '.env' && $c !== '.env.example' && str_starts_with($c, '.')) continue;
+                        $hasChildren = true;
+                        break;
+                    }
+                }
+
                 $entries[] = [
-                    'path' => $rel,
-                    'name' => $name,
-                    'type' => is_dir($full) ? 'dir' : 'file',
-                    'size' => is_file($full) ? (filesize($full) ?: 0) : 0,
+                    'name'         => $name,
+                    'path'         => $entryRel,
+                    'is_dir'       => $isDir,
+                    'has_children' => $hasChildren,
+                    'git_status'   => $status,
+                    'size'         => $isDir ? null : (int) @filesize($full),
                 ];
             }
-            // Dirs first, then alphabetical. Matches what most editors do.
-            usort($entries, fn($a, $b) => [$a['type'] === 'file', strtolower($a['name'])]
-                                          <=> [$b['type'] === 'file', strtolower($b['name'])]);
-            $branch = self::devAdminGitBranch();
-            return $response->json(['entries' => $entries, 'branch' => $branch]);
+
+            return $response->json([
+                'path'    => $rel !== '' ? $rel : '.',
+                'branch'  => $branch,
+                'entries' => $entries,
+            ]);
         });
 
         Router::get('/__dev/api/file', function (Request $request, Response $response) {
-            $path = self::devAdminSafePath($request->params['path'] ?? '');
+            $path = self::devAdminSafePath($request->query['path'] ?? '');
             if ($path === null || !is_file($path)) {
                 return $response->json(['error' => 'not found'], 404);
             }
@@ -894,7 +979,7 @@ class DevAdmin
         });
 
         Router::get('/__dev/api/file/raw', function (Request $request, Response $response) {
-            $path = self::devAdminSafePath($request->params['path'] ?? '');
+            $path = self::devAdminSafePath($request->query['path'] ?? '');
             if ($path === null || !is_file($path)) {
                 return $response->text('not found', 404);
             }
@@ -981,7 +1066,7 @@ class DevAdmin
         // being passed to shell — prevents arg injection.
 
         Router::get('/__dev/api/deps/search', function (Request $request, Response $response) {
-            $query = trim($request->params['query'] ?? '');
+            $query = trim($request->query['query'] ?? '');
             if ($query === '') {
                 return $response->json(['results' => []]);
             }
@@ -1198,11 +1283,86 @@ class DevAdmin
     private static function devAdminGitBranch(): string
     {
         $root = self::devAdminProjectRoot();
-        if (!is_dir($root . '/.git')) {
+        if (!self::devAdminIsInGitRepo($root)) {
             return '';
         }
         $out = shell_exec('cd ' . escapeshellarg($root) . ' && git rev-parse --abbrev-ref HEAD 2>/dev/null') ?? '';
         return trim($out);
+    }
+
+    /**
+     * Absolute path to the git toplevel containing the project, or
+     * null if not a git repo. Project root may be *inside* a larger
+     * repo (e.g. a monorepo's src/my-app), so we can't assume the
+     * project root itself is the git root.
+     */
+    private static function devAdminGitRoot(): ?string
+    {
+        static $cache = null;
+        if ($cache !== null) {
+            return $cache ?: null; // false-ish cached "no git" stays sticky
+        }
+        $root = self::devAdminProjectRoot();
+        $out = @shell_exec('cd ' . escapeshellarg($root) . ' && git rev-parse --show-toplevel 2>/dev/null');
+        if (!is_string($out) || trim($out) === '') {
+            $cache = '';
+            return null;
+        }
+        $cache = rtrim(trim($out), DIRECTORY_SEPARATOR);
+        return $cache;
+    }
+
+    /**
+     * Cheap check used before shelling out for git data. Walks up
+     * looking for a .git — cheaper than running `git rev-parse`.
+     */
+    private static function devAdminIsInGitRepo(string $root): bool
+    {
+        $path = $root;
+        // Cap at a reasonable depth so a runaway symlink can't loop.
+        for ($i = 0; $i < 12 && $path !== '' && $path !== '/'; $i++) {
+            if (is_dir($path . DIRECTORY_SEPARATOR . '.git')) {
+                return true;
+            }
+            $parent = dirname($path);
+            if ($parent === $path) break;
+            $path = $parent;
+        }
+        return false;
+    }
+
+    /**
+     * Parse `git status --porcelain -uall` into a map of
+     *   "relative/path/from/repo/root" => two-char status code.
+     *
+     * The key shape matches what `git` emits (always forward-slash,
+     * always relative to the repo root). Empty map on any error —
+     * callers degrade to "clean" for every entry.
+     */
+    private static function devAdminGitStatusMap(): array
+    {
+        $root = self::devAdminProjectRoot();
+        if (!self::devAdminIsInGitRepo($root)) {
+            return [];
+        }
+        $raw = @shell_exec('cd ' . escapeshellarg($root) . ' && git status --porcelain -uall 2>/dev/null');
+        if (!is_string($raw)) {
+            return [];
+        }
+        $map = [];
+        foreach (explode("\n", $raw) as $line) {
+            if (strlen($line) < 4) continue;
+            $code = trim(substr($line, 0, 2));
+            // Rename / copy lines contain " -> "; keep the destination
+            // path so moves show up against the new location.
+            $path = trim(substr($line, 3));
+            if (($arrow = strpos($path, ' -> ')) !== false) {
+                $path = substr($path, $arrow + 4);
+            }
+            if ($path === '') continue;
+            $map[$path] = $code;
+        }
+        return $map;
     }
 
     /**
