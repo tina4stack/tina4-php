@@ -113,6 +113,72 @@ class FrondTest extends TestCase
         $this->assertSame('HELLO', $this->engine->renderString('{{ name | upper }}', ['name' => 'hello']));
     }
 
+    /**
+     * Regression: a filter segment followed by dotted property access —
+     * e.g. `{{ details|first.groupSummary }}` — was being handed to
+     * applyFilter() as the single filter name "first.groupSummary",
+     * which matches no registered filter. The chain silently returned
+     * the input value unchanged; property access was lost.
+     *
+     * After the fix, evaluateFilterPipe splits on the first `.` that
+     * sits outside parens + quotes, applies the filter, then traverses
+     * the remaining path on the filter result.
+     */
+    public function testFilterFollowedByPropertyAccess(): void
+    {
+        $data = [
+            'details' => [
+                ['groupSummary' => 'Alpha', 'amount' => 100],
+                ['groupSummary' => 'Beta',  'amount' => 200],
+            ],
+        ];
+        // first.groupSummary → take first element, read .groupSummary
+        $this->assertSame('Alpha', $this->engine->renderString(
+            '{{ details | first.groupSummary }}',
+            $data,
+        ));
+    }
+
+    public function testFilterFollowedByChainedPropertyAccess(): void
+    {
+        $data = [
+            'invoices' => [
+                [
+                    'customer' => [
+                        'name' => 'Acme Corp',
+                        'address' => ['city' => 'Johannesburg'],
+                    ],
+                ],
+            ],
+        ];
+        // first.customer.address.city — multi-level chain on filter result
+        $this->assertSame('Johannesburg', $this->engine->renderString(
+            '{{ invoices | first.customer.address.city }}',
+            $data,
+        ));
+    }
+
+    public function testFilterDotsInArgumentsNotSplit(): void
+    {
+        // Regression guard: the `.` split must be outside parens. A dot
+        // inside a filter argument (numeric literal, format string, etc.)
+        // shouldn't be treated as a property-access separator.
+        $this->assertSame('1.50', $this->engine->renderString(
+            '{{ price | number_format(2) }}',
+            ['price' => 1.5],
+        ));
+    }
+
+    public function testLastFilterWithPropertyAccess(): void
+    {
+        // Parity — works for `last` and other aggregating filters too.
+        $data = ['rows' => [['sku' => 'A1'], ['sku' => 'B2'], ['sku' => 'C3']]];
+        $this->assertSame('C3', $this->engine->renderString(
+            '{{ rows | last.sku }}',
+            $data,
+        ));
+    }
+
     public function testFilterLower(): void
     {
         $this->assertSame('hello', $this->engine->renderString('{{ name | lower }}', ['name' => 'HELLO']));

@@ -1270,9 +1270,83 @@ class Frond
 
         $value = $this->evaluateExpression($filterSplit[0], $data);
         for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
-            $value = $this->applyFilter(trim($filterSplit[$i]), $value, $data);
+            $part = trim($filterSplit[$i]);
+
+            // A filter segment can carry a property-access suffix:
+            //   details|first.groupSummary   → apply `first`, then `.groupSummary`
+            //   invoice|format(2).toUpperCase → apply `format(2)`, then `.toUpperCase`
+            //
+            // We split at the first `.` that sits outside quotes + parens
+            // so `date("Y.m.d")` and `number_format(1.5)` don't match.
+            // Without this split, applyFilter() was being handed
+            // "first.groupSummary" as the whole filter name, finding no
+            // match, and silently returning the input unchanged — that's
+            // the Frond bug the user hit.
+            $dotPos = $this->findDotOutsideParens($part);
+            if ($dotPos !== false) {
+                $filterCall = trim(substr($part, 0, $dotPos));
+                $propPath   = substr($part, $dotPos + 1);
+                $value = $this->applyFilter($filterCall, $value, $data);
+
+                // Traverse the property path via resolveVariable by
+                // staging the filter result under a synthetic key. Reuses
+                // existing dotted + bracketed path resolution rather than
+                // writing a second traversal loop we'd have to keep in
+                // sync with resolveVariable's bugfixes.
+                $tmpKey  = '__frond_filter_chain_result';
+                $tmpData = [$tmpKey => $value];
+                $value   = $this->resolveVariable($tmpKey . '.' . $propPath, $tmpData);
+            } else {
+                $value = $this->applyFilter($part, $value, $data);
+            }
         }
         return $value;
+    }
+
+    /**
+     * Find the first `.` position that sits outside any quote / paren /
+     * bracket / brace. Used to cleanly split a filter segment like
+     * `first.groupSummary` into the filter call and the property path.
+     *
+     * Quote handling mirrors splitFilters — backslash-escaped same-quote
+     * doesn't close the string. Depth tracking covers (), [], {} so
+     * `format(1.5)`, `slice(0, 1.2)`, and `date("Y.m.d")` don't trip.
+     *
+     * Returns false when there's no structural `.` — caller should treat
+     * the whole segment as a plain filter.
+     */
+    private function findDotOutsideParens(string $expr): int|false
+    {
+        $depth = 0;
+        $inStr = false;
+        $strCh = '';
+        $len   = strlen($expr);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $expr[$i];
+            if ($inStr) {
+                if ($ch === $strCh && ($i === 0 || $expr[$i - 1] !== '\\')) {
+                    $inStr = false;
+                }
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") {
+                $inStr = true;
+                $strCh = $ch;
+                continue;
+            }
+            if ($ch === '(' || $ch === '[' || $ch === '{') {
+                $depth++;
+                continue;
+            }
+            if ($ch === ')' || $ch === ']' || $ch === '}') {
+                $depth--;
+                continue;
+            }
+            if ($ch === '.' && $depth === 0) {
+                return $i;
+            }
+        }
+        return false;
     }
 
     /* ── helper: string concatenation (~) ── */
