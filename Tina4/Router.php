@@ -324,7 +324,53 @@ class Router
      */
     public static function dispatch(Request $request, Response $response): Response
     {
-        // Auto-start session — read session ID from cookie, lazy-create on first use
+        // Start PHP's native session so $_SESSION writes persist across
+        // requests on every SAPI — Apache + PHP-FPM, FastCGI, CGI,
+        // command-line — not just on the built-in dev server.
+        //
+        // Why this matters: PHP's default `session.auto_start = Off`
+        // means $_SESSION is a transient empty array unless something
+        // calls `session_start()`. The `php -S` built-in server
+        // behaves as if auto_start were On for convenience, which
+        // masks the bug in local development — code that reads or
+        // writes $_SESSION works fine locally, then silently loses
+        // every value when deployed to shared hosting.
+        //
+        // Tina4's own $request->session API (backed by the
+        // tina4_session cookie + data/sessions/*.json files) is
+        // untouched by this call; both coexist. We just make sure
+        // native sessions are wired so existing app code that uses
+        // $_SESSION directly — login flows, booking flows,
+        // third-party integrations — keeps working.
+        //
+        // Storage: configurable via TINA4_PHP_SESSION_PATH (default:
+        // data/sessions-php/ under the project root so shared-hosting
+        // /tmp quotas don't surprise us). Cookie name via
+        // TINA4_PHP_SESSION_NAME (default: PHPSESSID, PHP's default).
+        //
+        // Fixes tina4stack/tina4-php#112.
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+            // Router::$basePath is set by App::__construct, so falling
+            // back to getcwd() is defensive for code paths that use
+            // Router::dispatch() directly in tests without booting an
+            // App instance first.
+            $basePath = self::$basePath !== '.' ? self::$basePath : getcwd();
+            $sessionPath = getenv('TINA4_PHP_SESSION_PATH')
+                ?: ($basePath . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'sessions-php');
+            if (!is_dir($sessionPath)) {
+                @mkdir($sessionPath, 0755, true);
+            }
+            if (is_writable($sessionPath)) {
+                session_save_path($sessionPath);
+            }
+            $sessionName = getenv('TINA4_PHP_SESSION_NAME') ?: 'PHPSESSID';
+            session_name($sessionName);
+            @session_start();
+        }
+
+        // Auto-start Tina4's own session — read session ID from cookie,
+        // lazy-create on first use. This is independent of $_SESSION
+        // above; both share nothing but coexist without conflict.
         $sessionCookie = $_COOKIE['tina4_session'] ?? null;
         $session = new Session();
         $session->start($sessionCookie);
