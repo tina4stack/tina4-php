@@ -31,8 +31,17 @@ class Log
     /** @var string Log directory path */
     private static string $logDir = 'logs';
 
-    /** @var string Log file name */
+    /** @var string Log file name (all levels land here) */
     private static string $logFile = 'tina4.log';
+
+    /**
+     * @var string Error-only log file name.
+     *
+     * Any entry at WARNING or above is mirrored into this file so
+     * developers can `tail -f logs/error.log` without wading through
+     * INFO/DEBUG noise. The main `tina4.log` still carries everything.
+     */
+    private static string $errorFile = 'error.log';
 
     /** @var bool Whether to output to stdout */
     private static bool $stdout = false;
@@ -151,8 +160,15 @@ class Log
             self::writeStdout($level, $line);
         }
 
-        // Always write ALL levels to file (raw log, no filtering), strip ANSI codes
-        self::writeToFile(self::stripAnsi($line));
+        // Always write ALL levels to the main file (raw log, no filtering), strip ANSI codes
+        self::writeToFile(self::$logFile, self::stripAnsi($line));
+
+        // Mirror WARNING and ERROR into the dedicated error log so
+        // developers can tail errors without the INFO/DEBUG noise.
+        // Parity with tina4-python's debug/_error_writer.
+        if ((self::LEVEL_PRIORITY[$level] ?? 0) >= self::LEVEL_PRIORITY[self::LEVEL_WARNING]) {
+            self::writeToFile(self::$errorFile, self::stripAnsi($line));
+        }
     }
 
     /**
@@ -232,11 +248,14 @@ class Log
     }
 
     /**
-     * Write a log line to the log file, with numbered rotation.
+     * Write a log line to the named file under the log directory,
+     * with numbered rotation.
      *
-     * Rotation scheme: tina4.log → tina4.log.1 → tina4.log.2 → ... → tina4.log.{keep}
+     * Rotation scheme: <file> → <file>.1 → <file>.2 → ... → <file>.{keep}
+     * Called separately for the main log (tina4.log) and the error
+     * mirror (error.log) so each rotates independently.
      */
-    private static function writeToFile(string $line): void
+    private static function writeToFile(string $fileName, string $line): void
     {
         $dir = self::$logDir;
 
@@ -244,7 +263,7 @@ class Log
             mkdir($dir, 0755, true);
         }
 
-        $filePath = $dir . DIRECTORY_SEPARATOR . self::$logFile;
+        $filePath = $dir . DIRECTORY_SEPARATOR . $fileName;
 
         // Rotate if file exceeds max size
         if (is_file($filePath) && filesize($filePath) >= self::$maxFileSize) {
@@ -288,6 +307,7 @@ class Log
         self::$requestId = null;
         self::$logDir = 'logs';
         self::$logFile = 'tina4.log';
+        self::$errorFile = 'error.log';
         self::$stdout = false;
         self::$humanReadable = false;
         self::$minLevel = self::LEVEL_DEBUG;

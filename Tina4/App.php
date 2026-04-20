@@ -77,6 +77,18 @@ class App
     /** @var bool Whether this instance set an error handler */
     private bool $errorHandlerSet = false;
 
+    /** @var bool Whether this instance set an exception handler */
+    private bool $exceptionHandlerSet = false;
+
+    /**
+     * Whether a shutdown handler has been registered at the
+     * class (static) level. PHP offers no way to unregister a
+     * shutdown function, so we install exactly one per process —
+     * repeated App constructions in the same process (e.g. during
+     * test runs) must not stack handlers.
+     */
+    private static bool $shutdownHandlerRegistered = false;
+
     private string $basePath;
 
     /** @var array<array{callback: callable, interval: float}> Pending tick callbacks to register on server start */
@@ -118,6 +130,15 @@ class App
             return true;
         });
 
+        // Note: set_exception_handler() and register_shutdown_function()
+        // are NOT installed here — they live in start() instead.
+        // Rationale: tests construct App heavily but only a few call
+        // start(). Installing the exception handler in __construct
+        // leaks it past test teardown (PHPUnit flags each test risky)
+        // because __destruct doesn't run reliably mid-test. Moving
+        // the install into start() keeps the production behaviour
+        // identical and stops tests from needing per-test cleanup.
+
         // Set base path for static file serving
         Router::$basePath = $this->basePath;
 
@@ -149,6 +170,10 @@ class App
         if ($this->errorHandlerSet) {
             restore_error_handler();
             $this->errorHandlerSet = false;
+        }
+        if ($this->exceptionHandlerSet) {
+            restore_exception_handler();
+            $this->exceptionHandlerSet = false;
         }
     }
 
@@ -285,6 +310,16 @@ class App
             }
         }
 
+        // Restore the exception handler installed by start() so the
+        // caller's handler stack is left clean. We don't try to un-
+        // register the fatal-error shutdown function (PHP doesn't
+        // support it); that one is guarded by self::$shutdownHandlerRegistered
+        // and its body is a no-op when error_get_last() is null.
+        if ($this->exceptionHandlerSet) {
+            restore_exception_handler();
+            $this->exceptionHandlerSet = false;
+        }
+
         $this->running = false;
         Log::info('Tina4 application stopped');
     }
@@ -297,6 +332,75 @@ class App
     public function start(): void
     {
         $this->running = true;
+
+        // Install global exception + fatal-error capture. Done here
+        // rather than in __construct so tests that don't call start()
+        // don't leak handlers across the suite. The matching restore
+        // happens in stop() / __destruct.
+        //
+        // Exception handler: any uncaught Throwable from a route,
+        // middleware, or bootstrap path gets logged with a full trace
+        // and recorded in the dev-toolbar's ErrorTracker. Without
+        // this, an uncaught exception bypasses Tina4\Log entirely
+        // and surfaces only via PHP's default error output.
+        if (!$this->exceptionHandlerSet) {
+            set_exception_handler(static function (\Throwable $e): void {
+                $msg = sprintf(
+                    'Uncaught %s: %s in %s:%d',
+                    get_class($e),
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine()
+                );
+                Log::error($msg, ['trace' => $e->getTraceAsString()]);
+                if (class_exists(ErrorTracker::class)) {
+                    ErrorTracker::capture(
+                        get_class($e),
+                        $e->getMessage(),
+                        $e->getTraceAsString(),
+                        $e->getFile(),
+                        $e->getLine()
+                    );
+                }
+            });
+            $this->exceptionHandlerSet = true;
+        }
+
+        // Shutdown handler: fatal errors (E_ERROR, E_PARSE,
+        // E_COMPILE_ERROR, E_CORE_ERROR, E_USER_ERROR) kill the
+        // process before any set_error_handler runs, so they'd be
+        // invisible without this. PHP has no API to remove a
+        // shutdown function, so we guard with a class-level flag —
+        // repeated App::start() calls in the same process (test
+        // runs, long-running workers with restarts) don't stack.
+        if (!self::$shutdownHandlerRegistered) {
+            register_shutdown_function(static function (): void {
+                $err = error_get_last();
+                if ($err === null) {
+                    return;
+                }
+                $fatal = E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR | E_USER_ERROR;
+                if (!($err['type'] & $fatal)) {
+                    return;
+                }
+                Log::error(sprintf(
+                    '[FATAL] %s in %s:%d',
+                    $err['message'],
+                    $err['file'],
+                    $err['line']
+                ));
+                if (class_exists(ErrorTracker::class)) {
+                    ErrorTracker::capture(
+                        'FatalError',
+                        $err['message'],
+                        '',
+                        $err['file'],
+                        $err['line']
+                    );
+                }
+            });
+            self::$shutdownHandlerRegistered = true;
+        }
 
         // Register dev admin dashboard (only in development mode)
         if ($this->isDevelopment()) {

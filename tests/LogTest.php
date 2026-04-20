@@ -128,6 +128,52 @@ class LogTest extends TestCase
         $this->assertArrayNotHasKey('request_id', $decoded);
     }
 
+    public function testErrorLogCapturesErrorsOnly(): void
+    {
+        // error.log must receive WARNING + ERROR, not DEBUG + INFO.
+        // Same rotation config as tina4.log, separate file.
+        Log::debug('Debug message');
+        Log::info('Info message');
+        Log::warning('Warning message');
+        Log::error('Error message');
+
+        $errorLog = $this->tempDir . '/error.log';
+        $this->assertFileExists($errorLog);
+
+        $content = file_get_contents($errorLog);
+        $this->assertStringNotContainsString('Debug message', $content);
+        $this->assertStringNotContainsString('Info message', $content);
+        $this->assertStringContainsString('Warning message', $content);
+        $this->assertStringContainsString('Error message', $content);
+    }
+
+    public function testErrorLogFormatMatchesMainLog(): void
+    {
+        // An error written via Log::error should appear with the
+        // same JSON shape in both tina4.log and error.log so a
+        // consumer tailing either file sees identical frames.
+        Log::error('Parity check', ['code' => 500]);
+
+        $mainContent = file_get_contents($this->tempDir . '/tina4.log');
+        $errContent  = file_get_contents($this->tempDir . '/error.log');
+
+        $mainLine = trim(explode("\n", $mainContent)[0]);
+        $errLine  = trim(explode("\n", $errContent)[0]);
+
+        $this->assertJsonStringEqualsJsonString($mainLine, $errLine);
+    }
+
+    public function testErrorLogNotCreatedWithoutErrors(): void
+    {
+        // If the project only ever logs INFO/DEBUG, error.log stays
+        // absent — saves dashboards from showing a phantom empty file.
+        Log::info('Hello');
+        Log::debug('World');
+
+        $errorLog = $this->tempDir . '/error.log';
+        $this->assertFileDoesNotExist($errorLog);
+    }
+
     public function testFileAlwaysCapturesAllLevels(): void
     {
         Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_WARNING);

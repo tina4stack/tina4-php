@@ -212,6 +212,7 @@ class I18nLeafAliasTest extends TestCase
             $this->assertSame('Hello', ($globals['t'])('greeting'));
         } finally {
             restore_error_handler();
+            restore_exception_handler();
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
@@ -236,6 +237,7 @@ class I18nLeafAliasTest extends TestCase
             $this->assertArrayNotHasKey('t', $globals, 'No locale files means no t() global');
         } finally {
             restore_error_handler();
+            restore_exception_handler();
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
@@ -261,6 +263,7 @@ class I18nLeafAliasTest extends TestCase
             $this->assertArrayNotHasKey('t', $globals, 'Empty locales dir means no t() global');
         } finally {
             restore_error_handler();
+            restore_exception_handler();
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
@@ -291,6 +294,7 @@ class I18nLeafAliasTest extends TestCase
             $this->assertSame('USER:greeting', ($globals['t'])('greeting'));
         } finally {
             restore_error_handler();
+            restore_exception_handler();
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();

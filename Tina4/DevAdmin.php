@@ -1635,8 +1635,9 @@ class ErrorTracker
 
         $fingerprint = md5($errorType . '|' . $message . '|' . $file . '|' . $line);
         $now = gmdate('Y-m-d\TH:i:s\Z');
+        $isNew = !isset(self::$errors[$fingerprint]);
 
-        if (isset(self::$errors[$fingerprint])) {
+        if (!$isNew) {
             self::$errors[$fingerprint]['count']++;
             self::$errors[$fingerprint]['last_seen'] = $now;
             self::$errors[$fingerprint]['resolved'] = false; // Re-open resolved duplicates
@@ -1656,6 +1657,20 @@ class ErrorTracker
         }
 
         self::save();
+
+        // Mirror into the structured log so errors land in
+        // logs/error.log alongside anything coming through
+        // Log::error() directly. We log only on FIRST capture of a
+        // given fingerprint — duplicate floods would otherwise spam
+        // the log. `count` on the tracker entry still records how
+        // often the same error has happened.
+        if ($isNew && class_exists(Log::class)) {
+            $ctx = [];
+            if ($file !== '') $ctx['file'] = $file;
+            if ($line !== 0)  $ctx['line'] = $line;
+            if ($traceback !== '') $ctx['trace'] = $traceback;
+            Log::error(sprintf('[%s] %s', $errorType, $message), $ctx);
+        }
     }
 
     /**
