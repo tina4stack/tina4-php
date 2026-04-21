@@ -871,10 +871,12 @@ class DevAdmin
             // Paths git reports are relative to the git repo root.
             // If the project root *is* the git root, entry paths map
             // straight to git paths; otherwise prefix with the delta.
+            // Everything here runs in forward-slash form so the code
+            // doesn't have to branch on Windows vs Unix.
             $cwdInGit = '';
             $gitRoot = self::devAdminGitRoot();
             if ($gitRoot !== null && $gitRoot !== $root) {
-                $cwdInGit = ltrim(substr($root, strlen($gitRoot)), DIRECTORY_SEPARATOR);
+                $cwdInGit = ltrim(substr($root, strlen($gitRoot)), '/');
                 if ($cwdInGit !== '') {
                     $cwdInGit .= '/';
                 }
@@ -901,9 +903,11 @@ class DevAdmin
                     continue;
                 }
 
-                $full = $target . DIRECTORY_SEPARATOR . $name;
-                $entryRel = ltrim(substr($full, strlen($root)), DIRECTORY_SEPARATOR);
-                $entryRel = str_replace(DIRECTORY_SEPARATOR, '/', $entryRel);
+                // $target is already forward-slash (via devAdminSafePath),
+                // so concat with `/` keeps the form consistent on every
+                // platform. PHP's filesystem APIs accept `/` on Windows.
+                $full = $target . '/' . $name;
+                $entryRel = ltrim(substr($full, strlen($root)), '/');
                 $isDir = is_dir($full);
 
                 // Git status for this entry — same 4-char mapping Python uses.
@@ -1195,7 +1199,12 @@ class DevAdmin
      */
     private static function devAdminProjectRoot(): string
     {
-        return realpath(getcwd()) ?: getcwd();
+        $cwd = getcwd();
+        $resolved = is_string($cwd) ? realpath($cwd) : false;
+        // Normalise to forward slashes so downstream string ops don't
+        // have to branch on platform. Windows APIs accept forward
+        // slashes interchangeably; on Unix nothing changes.
+        return str_replace('\\', '/', $resolved !== false ? $resolved : ($cwd ?: '.'));
     }
 
     /**
@@ -1203,6 +1212,14 @@ class DevAdmin
      * anything that escapes the root (`..`, absolute paths outside,
      * symlinks pointing elsewhere). Returns the absolute path on
      * success, null on rejection.
+     *
+     * Windows note: the dev-admin frontend always sends forward-slash
+     * web paths. Earlier versions of this method split on
+     * `DIRECTORY_SEPARATOR` (which is `\` on Windows), so `src/routes`
+     * stayed as a single segment, and the always-leading-`/` rebuild
+     * produced invalid paths like `\C:\project\src/routes`. The
+     * rewrite normalises every input + root to forward slashes,
+     * splits on `/` only, and never prepends a bogus separator.
      */
     private static function devAdminSafePath(string $input): ?string
     {
@@ -1210,13 +1227,34 @@ class DevAdmin
         if ($input === '') {
             $input = '.';
         }
-        $root = self::devAdminProjectRoot();
-        $candidate = $input[0] === '/' ? $input : ($root . DIRECTORY_SEPARATOR . $input);
-        // Normalise manually — we can't rely on realpath() because the
-        // file may not exist yet (new-file save). Reject any segment
-        // that is `..`.
+        // Normalise every separator to `/` up front so the rest of
+        // this function never has to think about platform.
+        $input = str_replace('\\', '/', $input);
+        $root  = self::devAdminProjectRoot(); // already forward-slash
+
+        // Detect absolute paths. Unix form: leading `/`. Windows form:
+        // drive letter (`C:`) optionally followed by `/`. Anything
+        // else is relative to the project root.
+        if ($input !== '' && ($input[0] === '/' || preg_match('#^[A-Za-z]:#', $input))) {
+            $candidate = $input;
+        } else {
+            $candidate = $root . '/' . $input;
+        }
+
+        // Split, drop `.` / empty, collapse `..`. Manual instead of
+        // realpath() because the file may not exist yet (new-file
+        // save on the editor's Save As path).
         $parts = [];
-        foreach (explode(DIRECTORY_SEPARATOR, $candidate) as $seg) {
+        $segments = explode('/', $candidate);
+        // Preserve the drive letter or root marker as the first
+        // non-empty segment. On Unix the first segment is empty (path
+        // starts with `/`); on Windows it's `C:` or similar.
+        $driveOrLead = '';
+        foreach ($segments as $i => $seg) {
+            if ($i === 0 && preg_match('#^[A-Za-z]:$#', $seg)) {
+                $driveOrLead = $seg;
+                continue;
+            }
             if ($seg === '' || $seg === '.') continue;
             if ($seg === '..') {
                 array_pop($parts);
@@ -1224,26 +1262,37 @@ class DevAdmin
             }
             $parts[] = $seg;
         }
-        $absolute = DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $parts);
-        // Must live under the project root after normalisation.
-        if (!str_starts_with($absolute . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)
-            && $absolute !== $root) {
+
+        // Re-assemble. Unix absolute gets a leading `/`, Windows
+        // absolute gets the drive letter + `/`, nothing else.
+        if ($driveOrLead !== '') {
+            $absolute = $driveOrLead . '/' . implode('/', $parts);
+        } else {
+            $absolute = '/' . implode('/', $parts);
+        }
+
+        // Must live under the project root — string-prefix check,
+        // both sides already in `/` form.
+        if ($absolute !== $root
+            && !str_starts_with($absolute . '/', $root . '/')) {
             return null;
         }
         return $absolute;
     }
 
     /**
-     * Convert an absolute path back into a project-relative string.
-     * Returns null if the path is outside the project root.
+     * Convert an absolute path back into a project-relative forward-
+     * slash string. Returns null if the path is outside the project
+     * root.
      */
     private static function devAdminRel(string $absolute): ?string
     {
+        $absolute = str_replace('\\', '/', $absolute);
         $root = self::devAdminProjectRoot();
         if (!str_starts_with($absolute, $root)) {
             return null;
         }
-        return ltrim(substr($absolute, strlen($root)), DIRECTORY_SEPARATOR);
+        return ltrim(substr($absolute, strlen($root)), '/');
     }
 
     /**
@@ -1308,7 +1357,10 @@ class DevAdmin
             $cache = '';
             return null;
         }
-        $cache = rtrim(trim($out), DIRECTORY_SEPARATOR);
+        // Normalise separators so the prefix-match against project
+        // root works on Windows (git reports forward slashes anyway,
+        // but cache-then-compare needs consistent form either way).
+        $cache = rtrim(str_replace('\\', '/', trim($out)), '/');
         return $cache;
     }
 
@@ -1318,10 +1370,17 @@ class DevAdmin
      */
     private static function devAdminIsInGitRepo(string $root): bool
     {
-        $path = $root;
+        // Normalise to forward slashes so dirname() and the string
+        // comparisons below behave identically on Windows and Unix.
+        $path = str_replace('\\', '/', $root);
         // Cap at a reasonable depth so a runaway symlink can't loop.
-        for ($i = 0; $i < 12 && $path !== '' && $path !== '/'; $i++) {
-            if (is_dir($path . DIRECTORY_SEPARATOR . '.git')) {
+        // Terminate on `/` (Unix root) or a drive-letter-only path
+        // like `C:` / `C:/` (Windows root).
+        for ($i = 0; $i < 12 && $path !== ''; $i++) {
+            if ($path === '/' || preg_match('#^[A-Za-z]:/?$#', $path)) {
+                break;
+            }
+            if (is_dir($path . '/.git')) {
                 return true;
             }
             $parent = dirname($path);
