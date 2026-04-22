@@ -899,10 +899,13 @@ class DevAdminTest extends TestCase
         $result = $callback($request, $response);
         $json = json_decode($result->getBody(), true);
 
+        // Python-parity shape: {errors, health} — no `count` (caller derives
+        // from `len(errors)`). See /Users/andrevanzuydam/IdeaProjects/tina4-python
+        // `_api_broken` for canonical shape.
         $this->assertArrayHasKey('errors', $json);
         $this->assertIsArray($json['errors']);
-        $this->assertArrayHasKey('count', $json);
         $this->assertArrayHasKey('health', $json);
+        $this->assertArrayNotHasKey('count', $json);
 
         $db->close();
     }

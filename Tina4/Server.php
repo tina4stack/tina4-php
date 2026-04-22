@@ -570,7 +570,33 @@ class Server
         $httpResponse .= "\r\n";
         $httpResponse .= $responseBody;
 
-        @fwrite($client, $httpResponse);
+        // IMPORTANT: fwrite() on a non-blocking stream socket may return
+        // a short write count when the OS send buffer fills (~300-400KB
+        // on macOS). A single fwrite() silently truncates any response
+        // larger than the buffer — the dev-admin JS bundle (~954KB)
+        // hits this exact failure mode, causing Chrome to hang at
+        // "bundle pending" because Content-Length doesn't match the
+        // bytes actually delivered. Loop until the full payload is
+        // written, yielding between attempts so other clients don't
+        // starve if the buffer is full.
+        $total = strlen($httpResponse);
+        $written = 0;
+        while ($written < $total) {
+            $n = @fwrite($client, substr($httpResponse, $written));
+            if ($n === false || $n === 0) {
+                // Socket closed / errored — give up to avoid a tight loop.
+                break;
+            }
+            $written += $n;
+            if ($written < $total) {
+                // Yield briefly so the kernel drains the send buffer.
+                // stream_select requires variables passed by reference.
+                $sr = [];
+                $sw = [$client];
+                $se = [];
+                @stream_select($sr, $sw, $se, 0, 10000);
+            }
+        }
 
         if (!$keepAlive) {
             $this->removeClient($client);

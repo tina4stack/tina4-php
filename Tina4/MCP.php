@@ -253,13 +253,82 @@ class McpServer
 
     /**
      * Get (or create) the default server used by mcp_tool() / mcp_resource() helpers.
+     *
+     * First-call side effect: the 24-tool built-in dev toolkit
+     * (McpDevTools) is registered on the server so the REST shim and
+     * JSON-RPC endpoint both see a populated registry. Without this,
+     * /__dev/api/mcp/tools would return an empty list. Registration is
+     * idempotent — tool names are hash keys, so re-registering is a no-op.
+     * Matches Python's `_get_default_server()`.
      */
     public static function getDefaultServer(): McpServer
     {
         if (self::$defaultServer === null) {
             self::$defaultServer = new McpServer('/__dev/mcp', 'Tina4 Dev Tools');
+            try {
+                McpDevTools::register(self::$defaultServer);
+            } catch (\Throwable $exc) {
+                // Don't let a bad tool module prevent the server from existing —
+                // the REST shim should still return an empty list rather than
+                // crashing the request.
+                error_log('[mcp] dev tool registration failed: ' . $exc->getMessage());
+            }
         }
         return self::$defaultServer;
+    }
+
+    /**
+     * Reset the default server (test helper — forces re-registration on next call).
+     */
+    public static function resetDefaultServer(): void
+    {
+        self::$defaultServer = null;
+    }
+
+    /**
+     * Return the list of registered tools on this server (name + description + schema).
+     * Used by the /__dev/api/mcp/tools REST shim.
+     */
+    public function getToolList(): array
+    {
+        $tools = [];
+        foreach ($this->tools as $t) {
+            $tools[] = [
+                'name' => $t['name'],
+                'description' => $t['description'],
+                'schema' => $t['inputSchema'],
+            ];
+        }
+        return $tools;
+    }
+
+    /**
+     * Invoke a registered tool by name with positional arguments drawn
+     * from the `$arguments` associative array (Python-parity). Returns
+     * the raw handler result (not wrapped in MCP content).
+     *
+     * @throws \RuntimeException if the tool is unknown
+     */
+    public function callTool(string $name, array $arguments = []): mixed
+    {
+        $tool = $this->tools[$name] ?? null;
+        if ($tool === null) {
+            throw new \RuntimeException("Unknown tool: {$name}");
+        }
+        $handler = $tool['handler'];
+        $schema = $tool['inputSchema'] ?? ['properties' => []];
+        $props = $schema['properties'] ?? [];
+        $positional = [];
+        foreach ($props as $argName => $_) {
+            if (array_key_exists($argName, $arguments)) {
+                $positional[] = $arguments[$argName];
+            } else {
+                // Parameter missing — let the callable's own defaults
+                // handle it; stop collecting positionals at the first gap.
+                break;
+            }
+        }
+        return $handler(...$positional);
     }
 
     private string $path;
@@ -1000,13 +1069,281 @@ class McpDevTools
         $server->registerTool('system_info', function () use ($projectRoot) {
             return [
                 'framework' => 'tina4-php',
-                'version' => '3.10.85',
+                'version' => App::$VERSION,
                 'php' => PHP_VERSION,
                 'platform' => PHP_OS,
                 'cwd' => $projectRoot,
                 'debug' => getenv('TINA4_DEBUG') ?: 'false',
             ];
         }, 'Framework version, PHP version, project info');
+
+        // ── Plan management ──────────────────────────────────────
+        //
+        // 9 tools — Python-parity, shared storage format with
+        // tina4_python.dev_admin.plan. The dev-admin UI "Plans" panel
+        // calls these via MCP; without them the whole feature is dead.
+
+        $server->registerTool('plan_current', function () {
+            return Plan::current();
+        }, 'Active plan: title, steps (done/not), next step, progress');
+
+        $server->registerTool('plan_list', function () {
+            return Plan::listPlans();
+        }, 'All plans in plan/ with progress and which one is active');
+
+        $server->registerTool('plan_create', function (string $title, string $goal = '', array $steps = [], bool $make_current = true) {
+            return Plan::create($title, $goal, $steps, $make_current);
+        }, 'Create a new markdown plan in plan/ and make it active');
+
+        $server->registerTool('plan_switch_to', function (string $name) {
+            return Plan::setCurrent($name);
+        }, 'Make a different plan the active one');
+
+        $server->registerTool('plan_complete_step', function (int $index) {
+            return Plan::completeStep($index);
+        }, 'Tick a step as done (call the moment the step finishes)');
+
+        $server->registerTool('plan_add_step', function (string $text) {
+            return Plan::addStep($text);
+        }, 'Append a new unchecked step to the current plan');
+
+        $server->registerTool('plan_note', function (string $text) {
+            return Plan::appendNote($text);
+        }, 'Append a timestamped note/breadcrumb to the current plan');
+
+        $server->registerTool('plan_archive', function (string $name = '') {
+            return Plan::archive($name);
+        }, 'Move a finished plan to plan/done/ and clear the current pointer');
+
+        $server->registerTool('plan_read', function (string $name) {
+            return Plan::read($name);
+        }, 'Full structured view of any plan by filename');
+
+        $server->registerTool('plan_flesh', function (string $name = '', string $prompt = '') {
+            return Plan::flesh($name, $prompt);
+        }, 'Auto-generate concrete build steps via qwen and append them to an existing plan — use when a plan has a title/goal but no steps yet');
+
+        // ── Framework docs (Tina4 knowledge base) ────────────────
+        //
+        // Let the AI look up first-party framework documentation on
+        // demand instead of guessing from training data. Reads the
+        // markdown bundled with the tina4-php repo — answers match the
+        // exact framework version the project is using.
+
+        $frameworkDocs = function (): array {
+            // Framework docs live at the package root (composer vendor
+            // dir or repo root when developing locally).
+            $candidates = [];
+            try {
+                $ref = new \ReflectionClass(App::class);
+                $pkgRoot = dirname((string) $ref->getFileName(), 2); // Tina4/App.php → repo root
+                $candidates = [
+                    $pkgRoot . '/CLAUDE.md',
+                    $pkgRoot . '/AGENTS.md',
+                    $pkgRoot . '/CONVENTIONS.md',
+                    $pkgRoot . '/README.md',
+                ];
+            } catch (\Throwable) {
+            }
+            $out = [];
+            foreach ($candidates as $c) {
+                if (is_file($c)) {
+                    $out[] = $c;
+                }
+            }
+            return $out;
+        };
+
+        $server->registerTool('docs_list', function () use ($frameworkDocs) {
+            $out = [];
+            foreach ($frameworkDocs() as $p) {
+                $out[] = ['name' => basename($p), 'bytes' => filesize($p) ?: 0];
+            }
+            return $out;
+        }, 'List framework documentation files');
+
+        $server->registerTool('docs_search', function (string $query, int $limit = 5, int $context_lines = 4) use ($frameworkDocs) {
+            if (strlen($query) < 2) {
+                return ['error' => 'query must be at least 2 characters'];
+            }
+            $needle = strtolower($query);
+            $hits = [];
+            foreach ($frameworkDocs() as $p) {
+                $text = (string) @file_get_contents($p);
+                $lines = preg_split("/\r\n|\n|\r/", $text) ?: [];
+                foreach ($lines as $i => $line) {
+                    if (str_contains(strtolower($line), $needle)) {
+                        $start = max(0, $i - $context_lines);
+                        $end = min(count($lines), $i + $context_lines + 1);
+                        $snippet = implode("\n", array_slice($lines, $start, $end - $start));
+                        $score = 1;
+                        if (str_contains($line, $query)) $score++;
+                        if (str_starts_with(ltrim($line), '#')) $score += 2;
+                        $hits[] = [
+                            'file' => basename($p),
+                            'line' => $i + 1,
+                            'score' => $score,
+                            'snippet' => $snippet,
+                        ];
+                    }
+                }
+            }
+            usort($hits, fn($a, $b) => $b['score'] - $a['score']);
+            return array_slice($hits, 0, max(1, $limit));
+        }, 'Search Tina4 framework docs for a query string (use before guessing)');
+
+        $server->registerTool('docs_section', function (string $file, string $heading) use ($frameworkDocs) {
+            $match = null;
+            foreach ($frameworkDocs() as $p) {
+                if (basename($p) === $file) {
+                    $match = $p;
+                    break;
+                }
+            }
+            if ($match === null) {
+                return ['error' => "Unknown doc file: {$file}. Try docs_list() first."];
+            }
+            $text = (string) file_get_contents($match);
+            $lines = preg_split("/\r\n|\n|\r/", $text) ?: [];
+            $headingLc = strtolower(trim($heading));
+            $start = -1;
+            $startLevel = 0;
+            foreach ($lines as $i => $line) {
+                $stripped = ltrim($line);
+                if (str_starts_with($stripped, '#')) {
+                    $level = strlen($stripped) - strlen(ltrim($stripped, '#'));
+                    $title = strtolower(trim(substr($stripped, $level)));
+                    if (str_contains($title, $headingLc)) {
+                        $start = $i;
+                        $startLevel = $level;
+                        break;
+                    }
+                }
+            }
+            if ($start < 0) {
+                return ['error' => "Heading '{$heading}' not found in {$file}"];
+            }
+            $end = count($lines);
+            for ($j = $start + 1; $j < count($lines); $j++) {
+                $stripped = ltrim($lines[$j]);
+                if (str_starts_with($stripped, '#')) {
+                    $level = strlen($stripped) - strlen(ltrim($stripped, '#'));
+                    if ($level <= $startLevel) {
+                        $end = $j;
+                        break;
+                    }
+                }
+            }
+            return [
+                'file' => $file,
+                'heading' => trim($lines[$start]),
+                'body' => implode("\n", array_slice($lines, $start, $end - $start)),
+            ];
+        }, 'Return a full markdown section from a framework doc file');
+
+        // ── Project introspection ────────────────────────────────
+
+        $server->registerTool('git_status', function () use ($projectRoot) {
+            $cmd = function (array $args) use ($projectRoot): string {
+                $full = 'cd ' . escapeshellarg($projectRoot) . ' && git ' . implode(' ', array_map('escapeshellarg', $args)) . ' 2>&1';
+                $out = shell_exec($full);
+                return trim($out ?? '');
+            };
+            $inside = shell_exec('cd ' . escapeshellarg($projectRoot) . ' && git rev-parse --is-inside-work-tree 2>/dev/null');
+            if (!$inside || trim($inside) !== 'true') {
+                return ['error' => 'Not a git repository'];
+            }
+            $status = $cmd(['status', '--porcelain']);
+            $lines = $status === '' ? [] : preg_split("/\r?\n/", $status);
+            $commits = $cmd(['log', '--oneline', '-5']);
+            return [
+                'branch' => $cmd(['branch', '--show-current']),
+                'status' => $lines,
+                'recent_commits' => $commits === '' ? [] : preg_split("/\r?\n/", $commits),
+            ];
+        }, 'Show git branch, modified/untracked files, recent commits');
+
+        $server->registerTool('deps_list', function () use ($projectRoot) {
+            $composer = $projectRoot . '/composer.json';
+            if (!is_file($composer)) {
+                return ['error' => 'No composer.json at project root'];
+            }
+            $data = json_decode((string) file_get_contents($composer), true);
+            if (!is_array($data)) {
+                return ['error' => 'Failed to parse composer.json'];
+            }
+            return [
+                'name' => $data['name'] ?? '',
+                'version' => $data['version'] ?? '',
+                'require' => $data['require'] ?? [],
+                'require_dev' => $data['require-dev'] ?? [],
+                'php' => $data['require']['php'] ?? '',
+            ];
+        }, "List this project's declared PHP dependencies");
+
+        $server->registerTool('project_overview', function () use ($server) {
+            // One-shot snapshot: system + deps + routes + models + tables +
+            // errors + git. Calls other registered tools internally so
+            // drift between /overview and individual tools is impossible.
+            $out = [];
+            $safe = function (string $tool) use ($server, &$out) {
+                try {
+                    $out[] = [$tool, $server->callTool($tool, [])];
+                } catch (\Throwable $e) {
+                    $out[] = [$tool, ['error' => $e->getMessage()]];
+                }
+            };
+            $safe('system_info');
+            $safe('deps_list');
+            $safe('route_list');
+            $safe('orm_describe');
+            $safe('database_tables');
+            $safe('git_status');
+            $overview = [];
+            foreach ($out as [$k, $v]) {
+                $overview[$k] = $v;
+            }
+            return $overview;
+        }, 'One-shot snapshot: system, deps, routes, models, tables, git');
+
+        // ── Project index — "where is what" map ──────────────────
+        //
+        // 4 tools backed by ProjectIndex (.tina4/project_index.json).
+        // Zero deps: PHP symbol extraction via token_get_all(), all other
+        // languages via regex.
+
+        $server->registerTool('index_rebuild', function () {
+            return ProjectIndex::refresh();
+        }, 'Refresh the persistent project index (lazy, mtime-based)');
+
+        $server->registerTool('index_search', function (string $query, int $limit = 20) {
+            return ProjectIndex::search($query, $limit);
+        }, "Find files by path, symbol, route, or summary — use FIRST for 'where is X'");
+
+        $server->registerTool('index_file', function (string $path) {
+            return ProjectIndex::fileEntry($path);
+        }, 'Full index entry for one file: symbols, routes, imports');
+
+        $server->registerTool('index_overview', function () {
+            return ProjectIndex::overview();
+        }, 'Project shape: files by language, routes, models, recent edits');
+
+        // ── Migration status (was stubbed) ───────────────────────
+        // Replace the earlier `migration_status` stub with a real check.
+        $server->registerTool('migration_status', function () use ($projectRoot) {
+            $dir = $projectRoot . '/migrations';
+            if (!is_dir($dir)) {
+                return ['pending' => [], 'completed' => [], 'note' => 'no migrations/ dir'];
+            }
+            $files = glob($dir . '/*.sql') ?: [];
+            sort($files);
+            $names = array_map('basename', $files);
+            return [
+                'count' => count($names),
+                'files' => $names,
+                'note' => 'Run `php bin/tina4php migrate` to apply pending migrations.',
+            ];
+        }, 'List pending and completed migrations');
     }
 }
 

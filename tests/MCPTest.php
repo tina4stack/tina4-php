@@ -617,7 +617,7 @@ class MCPTest extends TestCase
 
     // ── Dev Tools Registration Count ─────────────────────────────
 
-    public function testDevToolsRegisters24Tools(): void
+    public function testDevToolsRegistersExpectedToolkit(): void
     {
         $server = new McpServer('/test-dev', 'Dev Test');
         $tmpDir = sys_get_temp_dir() . '/mcp_dev_test_' . uniqid();
@@ -635,7 +635,10 @@ class MCPTest extends TestCase
                 'params' => [],
             ]), true);
 
-            $this->assertCount(24, $resp['result']['tools']);
+            // Exact parity with Python (tina4_python/mcp/tools.py):
+            // 24 base tools + 9 plan_* + 3 docs_* + git_status + deps_list
+            // + project_overview = 39. Assert it doesn't regress below.
+            $this->assertGreaterThanOrEqual(39, count($resp['result']['tools']));
 
             // Verify all expected tool names are present
             $names = array_column($resp['result']['tools'], 'name');
@@ -708,5 +711,60 @@ class MCPTest extends TestCase
 
         $uris = array_column($resp['result']['resources'], 'uri');
         $this->assertContains('test://data', $uris);
+    }
+
+    // ── Default-server bootstrap + REST shim parity with Python ─────
+
+    public function testDefaultServerAutoRegistersDevTools(): void
+    {
+        McpServer::resetDefaultServer();
+        $server = McpServer::getDefaultServer();
+        $tools = $server->getToolList();
+        $this->assertGreaterThan(0, count($tools), 'default server should register the built-in dev toolkit');
+        $names = array_column($tools, 'name');
+        foreach (['database_tables', 'route_list', 'file_read', 'file_list', 'system_info'] as $expected) {
+            $this->assertContains($expected, $names, "default server missing tool: {$expected}");
+        }
+    }
+
+    public function testGetToolListShapeMatchesPython(): void
+    {
+        $server = new McpServer('/rest-shape', 'Test');
+        $server->registerTool('echo', function (string $text): string {
+            return $text;
+        }, 'Echo a string');
+
+        $list = $server->getToolList();
+        $this->assertCount(1, $list);
+        $this->assertSame('echo', $list[0]['name']);
+        $this->assertSame('Echo a string', $list[0]['description']);
+        $this->assertArrayHasKey('schema', $list[0]);
+        $this->assertSame('object', $list[0]['schema']['type']);
+        $this->assertArrayHasKey('text', $list[0]['schema']['properties']);
+    }
+
+    public function testCallToolInvokesByName(): void
+    {
+        $server = new McpServer('/rest-call', 'Test');
+        $server->registerTool('square', fn(int $n): int => $n * $n, 'Square a number');
+        $this->assertSame(49, $server->callTool('square', ['n' => 7]));
+    }
+
+    public function testCallToolUnknownThrows(): void
+    {
+        $server = new McpServer('/rest-call-unknown', 'Test');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unknown tool: nope');
+        $server->callTool('nope', []);
+    }
+
+    public function testCallToolHonoursDefaultParameters(): void
+    {
+        $server = new McpServer('/rest-call-defaults', 'Test');
+        $server->registerTool('greet', function (string $name = 'world'): string {
+            return "hi {$name}";
+        });
+        $this->assertSame('hi world', $server->callTool('greet', []));
+        $this->assertSame('hi alice', $server->callTool('greet', ['name' => 'alice']));
     }
 }

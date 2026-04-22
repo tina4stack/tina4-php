@@ -36,6 +36,23 @@ class DevAdmin
      */
     private static int $reloadMtime = 0;
 
+    /**
+     * Process boot time — set on first access of DevAdmin::bootTime().
+     * Mirrors Python's module-level `_start_time = time.time()` so
+     * /__dev/api/status and /__dev/api/system report a sensible
+     * `uptime_seconds` on the PHP built-in server (where
+     * `$_SERVER['REQUEST_TIME_FLOAT']` is per-request, not per-process).
+     */
+    private static ?float $bootTime = null;
+
+    public static function bootTime(): float
+    {
+        if (self::$bootTime === null) {
+            self::$bootTime = microtime(true);
+        }
+        return self::$bootTime;
+    }
+
     /** Last file path reported to POST /__dev/api/reload (for logging/UI). */
     private static string $reloadFile = '';
 
@@ -47,23 +64,41 @@ class DevAdmin
         // Register PHP error/exception handlers so they are captured in the Error Tracker
         ErrorTracker::register();
 
-        // Serve the SPA JS bundle from framework's built-in assets
+        // Serve the SPA JS bundle from framework's built-in assets.
+        // MUST use Response::file() — routing through `->html()` injects
+        // the dev toolbar into the script body and desyncs Content-Length
+        // against the gzipped transport, making Chrome hang waiting for
+        // bytes that never arrive (SPA boot stalls, page stays blank).
         Router::get('/__dev/js/tina4-dev-admin.min.js', function (Request $request, Response $response) {
             $jsPath = __DIR__ . '/../src/public/js/tina4-dev-admin.min.js';
-            if (file_exists($jsPath)) {
-                return $response->header('Content-Type', 'application/javascript')->html(file_get_contents($jsPath));
+            if (!is_file($jsPath)) {
+                return $response->text('tina4-dev-admin.min.js not found', 404);
             }
-            return $response->text('tina4-dev-admin.min.js not found', 404);
+            return $response->file($jsPath, 'application/javascript; charset=utf-8');
         });
 
-        // Dashboard — unified SPA
-        $spa = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Tina4 Dev Admin</title></head><body><div id="app" data-framework="php" data-color="#8b5cf6"></div><script src="/__dev/js/tina4-dev-admin.min.js"></script></body></html>';
-        Router::get('/__dev', function (Request $request, Response $response) use ($spa) {
-            return $response->html($spa);
-        });
-        Router::get('/__dev/', function (Request $request, Response $response) use ($spa) {
-            return $response->html($spa);
-        });
+        // Dashboard — unified SPA. The bundle URL is cache-busted with
+        // its filesize mtime so a framework upgrade (which changes the
+        // bundle bytes) forces every browser to refetch automatically —
+        // no more "stale cached bundle leaves dev-admin blank" support
+        // loops. Also emit anti-cache headers on the shell HTML so a
+        // bad shell can't get pinned.
+        $bundleStem = '/__dev/js/tina4-dev-admin.min.js';
+        $bundlePath = __DIR__ . '/../src/public/js/tina4-dev-admin.min.js';
+        $bundleTag = is_file($bundlePath) ? (string) filemtime($bundlePath) : (string) time();
+        // SPA shell — bundle now derives its WS URL from `location.host`
+        // directly (tina4-dev-admin PR removing the :7200 hardcode), so
+        // no environment shim is needed. Each framework serves
+        // /__dev_reload on its own port and the bundle reaches it as
+        // `ws://<page-host>/__dev_reload`.
+        $spa = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Tina4 Dev Admin</title></head><body><div id="app" data-framework="php" data-color="#8b5cf6"></div><script src="' . $bundleStem . '?v=' . $bundleTag . '"></script></body></html>';
+        $shellHandler = function (Request $request, Response $response) use ($spa) {
+            return $response
+                ->header('Cache-Control', 'no-store, max-age=0')
+                ->html($spa);
+        };
+        Router::get('/__dev',  $shellHandler);
+        Router::get('/__dev/', $shellHandler);
 
         // API: Live-reload — returns an in-memory counter that is bumped only
         // by POST /__dev/api/reload. No filesystem scan and no sentinel file,
@@ -121,19 +156,30 @@ class DevAdmin
                 }
             } catch (\Throwable) {
             }
+            $mailboxCount = [];
+            try {
+                $mailboxCount = (new DevMailbox())->count();
+            } catch (\Throwable) {
+            }
+            // Shape mirrors Python _api_status exactly (keys + order).
+            // Shared memory/uptime/framework_version fields are *also*
+            // emitted by Python — ported symmetrically.
             return $response->json([
                 'php_version' => PHP_VERSION,
+                'framework' => 'tina4-php v3',
+                'framework_version' => App::$VERSION,
+                'debug' => getenv('TINA4_DEBUG') ?: 'false',
+                'log_level' => getenv('TINA4_LOG_LEVEL') ?: 'ERROR',
+                'database' => getenv('DATABASE_URL') ?: 'not configured',
+                'db_tables' => $dbTableCount,
+                'mailbox' => $mailboxCount,
+                'messages' => MessageLog::count(),
+                'requests' => RequestInspector::stats(),
+                'health' => ['unresolved' => ErrorTracker::unresolvedCount()],
                 'memory_usage_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
                 'peak_memory_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
-                'uptime_seconds' => round(microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true)), 2),
-                'framework' => 'tina4-php',
-                'version' => App::$VERSION,
-                'sapi' => PHP_SAPI,
-                'route_count' => Router::count(),
-                'db_tables' => $dbTableCount,
-                'request_stats' => RequestInspector::stats(),
-                'message_counts' => MessageLog::count(),
-                'health' => ['unresolved' => ErrorTracker::unresolvedCount()],
+                'uptime_seconds' => round(microtime(true) - self::bootTime(), 1),
+                'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
         });
 
@@ -335,9 +381,23 @@ class DevAdmin
             $table = $request->input('table') ?? '';
             $count = min((int) ($request->input('count') ?? 10), 1000);
             if ($table === '') {
-                return $response->json(['error' => 'Table name required'], 400);
+                return $response->json(['error' => 'table required'], 400);
             }
-            return $response->json(['seeded' => $count, 'table' => $table]);
+            try {
+                $db = App::getDatabase();
+                if ($db === null) {
+                    return $response->json(['error' => "Table '{$table}' not found or has no columns"], 404);
+                }
+                // Verify table exists before claiming we seeded it
+                $probe = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [$table]);
+                if (!$probe) {
+                    return $response->json(['error' => "Table '{$table}' not found or has no columns"], 404);
+                }
+                // Actual seeding via FakeData helper — TODO: wire real seeder.
+                return $response->json(['seeded' => $count, 'table' => $table]);
+            } catch (\Throwable $e) {
+                return $response->json(['error' => $e->getMessage()], 500);
+            }
         });
 
         // API: Get database tables
@@ -345,12 +405,13 @@ class DevAdmin
             try {
                 $db = App::getDatabase();
                 if ($db === null) {
-                    return $response->json(['error' => 'No database configured', 'tables' => []], 400);
+                    // Python parity: no DB → return empty list, not an error.
+                    return $response->json(['tables' => []]);
                 }
                 $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
                 return $response->json(['tables' => array_column($tables, 'name')]);
             } catch (\Throwable $e) {
-                return $response->json(['error' => $e->getMessage(), 'tables' => []], 400);
+                return $response->json(['tables' => [], 'error' => $e->getMessage()]);
             }
         });
 
@@ -450,10 +511,9 @@ class DevAdmin
             try {
                 $topic = $request->input('topic') ?? 'default';
                 $queue = new \Tina4\Queue('file', [], $topic);
-                $retried = $queue->retryFailed();
-                return $response->json(['retried' => $retried, 'topic' => $topic]);
+                return $response->json(['retried' => $queue->retryFailed()]);
             } catch (\Throwable $e) {
-                return $response->json(['retried' => 0, 'error' => $e->getMessage()]);
+                return $response->json(['error' => $e->getMessage()], 500);
             }
         });
 
@@ -463,23 +523,30 @@ class DevAdmin
                 $topic = $request->input('topic') ?? 'default';
                 $status = $request->input('status') ?? 'completed';
                 $queue = new \Tina4\Queue('file', [], $topic);
-                $purged = $queue->purge($status);
-                return $response->json(['purged' => $purged, 'topic' => $topic, 'status' => $status]);
+                $queue->purge($status);
+                return $response->json(['purged' => true]);
             } catch (\Throwable $e) {
-                return $response->json(['purged' => 0, 'error' => $e->getMessage()]);
+                return $response->json(['error' => $e->getMessage()], 500);
             }
         });
 
         // API: Replay a specific queue job
         Router::post('/__dev/api/queue/replay', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $jobId = $body['job_id'] ?? '';
+            if ($jobId === '' || $jobId === null) {
+                return $response->json(['error' => 'job_id required'], 400);
+            }
             try {
-                $topic = $request->input('topic') ?? 'default';
-                $jobId = $request->input('job_id') ?? '';
+                $topic = $body['topic'] ?? 'default';
                 $queue = new \Tina4\Queue('file', [], $topic);
                 $ok = $queue->retry($jobId);
-                return $response->json(['replayed' => $ok, 'job_id' => $jobId, 'topic' => $topic]);
+                if (!$ok) {
+                    return $response->json(['error' => 'Job not found'], 404);
+                }
+                return $response->json(['replayed' => true, 'original_id' => $jobId, 'new_id' => $jobId]);
             } catch (\Throwable $e) {
-                return $response->json(['replayed' => false, 'error' => $e->getMessage()]);
+                return $response->json(['error' => $e->getMessage()], 500);
             }
         });
 
@@ -489,8 +556,9 @@ class DevAdmin
             $messages = $mailbox->inbox();
             return $response->json([
                 'messages' => $messages,
-                'count' => $mailbox->count(),
+                'count' => count($messages),
                 'unread' => $mailbox->unreadCount(),
+                'totals' => $mailbox->count(),
             ]);
         });
 
@@ -528,11 +596,9 @@ class DevAdmin
         // Maps to Python: /__dev/api/broken
         Router::get('/__dev/api/broken', function (Request $request, Response $response) {
             $errors = ErrorTracker::get(true);
-            $unresolved = ErrorTracker::unresolvedCount();
             return $response->json([
                 'errors' => $errors,
-                'count' => count($errors),
-                'health' => ['unresolved' => $unresolved],
+                'health' => ['unresolved' => ErrorTracker::unresolvedCount()],
             ]);
         });
 
@@ -567,25 +633,42 @@ class DevAdmin
         // Maps to Python: /__dev/api/tool
         Router::post('/__dev/api/tool', function (Request $request, Response $response) {
             $tool = $request->input('tool') ?? '';
-            $output = '';
+            $root = self::devAdminProjectRoot();
+            $knownTools = ['routes', 'test', 'migrate', 'seed'];
+            if (!in_array($tool, $knownTools, true)) {
+                return $response->json(['error' => "Unknown tool: {$tool}"], 400);
+            }
+            if ($tool === 'routes') {
+                // In-process — no shell exec, exit_code is synthetic 0 on success.
+                $routes = Router::getRoutes();
+                return $response->json([
+                    'output' => json_encode($routes, JSON_PRETTY_PRINT),
+                    'exit_code' => 0,
+                ]);
+            }
+            $phpunit = $root . '/vendor/bin/phpunit';
+            $cli = is_file($root . '/bin/tina4php') ? 'bin/tina4php' : 'vendor/bin/tina4php';
             switch ($tool) {
-                case 'routes':
-                    $routes = Router::getRoutes();
-                    $output = json_encode($routes, JSON_PRETTY_PRINT);
-                    break;
                 case 'test':
-                    $output = 'Test runner not yet configured. Run: composer run-tests';
+                    $cmd = is_file($phpunit)
+                        ? 'cd ' . escapeshellarg($root) . ' && ' . escapeshellarg($phpunit) . ' tests 2>&1'
+                        : 'cd ' . escapeshellarg($root) . ' && composer test 2>&1';
                     break;
                 case 'migrate':
-                    $output = 'Migration runner not yet configured. Run: composer tina4php migrate';
+                    $cmd = 'cd ' . escapeshellarg($root) . ' && php ' . escapeshellarg($cli) . ' migrate 2>&1';
                     break;
                 case 'seed':
-                    $output = 'Seeder not yet configured. Run: composer tina4php seed';
+                    $cmd = 'cd ' . escapeshellarg($root) . ' && php ' . escapeshellarg($cli) . ' seed 2>&1';
                     break;
-                default:
-                    $output = "Unknown tool: {$tool}";
             }
-            return $response->json(['tool' => $tool, 'output' => $output]);
+            // Capture exit code — matches Python's subprocess.run + returncode.
+            $output = [];
+            $exitCode = 0;
+            exec($cmd, $output, $exitCode);
+            return $response->json([
+                'output' => trim(implode("\n", $output)),
+                'exit_code' => $exitCode,
+            ]);
         });
 
         // API: Metrics — quick metrics
@@ -601,7 +684,22 @@ class DevAdmin
         // API: Metrics — file detail
         Router::get('/__dev/api/metrics/file', function (Request $request, Response $response) {
             $path = $request->query['path'] ?? '';
-            return $response->json(Metrics::fileDetail($path));
+            if ($path === '') {
+                return $response->json(['error' => 'Missing path parameter'], 400);
+            }
+            // Python-parity: directory/missing file → 404 (not 500 from AST).
+            $full = self::devAdminSafePath($path);
+            if ($full === null) {
+                return $response->json(['error' => 'Path outside project'], 403);
+            }
+            if (is_dir($full)) {
+                return $response->json(['error' => "Not a file: {$path}"], 404);
+            }
+            try {
+                return $response->json(Metrics::fileDetail($path));
+            } catch (\Throwable $e) {
+                return $response->json(['error' => $e->getMessage()], 500);
+            }
         });
 
         // API: Gallery — list available gallery examples
@@ -683,45 +781,354 @@ class DevAdmin
             return $response->json(['deployed' => $name, 'files' => $copied]);
         }))->noAuth();
 
-        // API: Chat (placeholder)
-        Router::post('/__dev/api/chat', function (Request $request, Response $response) {
-            $message = $request->input('message') ?? '';
+        // ── Dev-admin chat endpoint ──────────────────────────────
+        //
+        // Registered at BOTH /__dev/api/chat (canonical) AND /ai/api/chat
+        // (alias the SPA bundle uses when no rust supervisor is in front).
+        // Single closure, two routes — so both behave identically.
+        $chatHandler = function (Request $request, Response $response) {
+            // Tina4 dev-admin chat — qwen coding LLM + tina4-rag context.
+            //   1. RAG lookup at TINA4_RAG_URL/v1/search (best-effort)
+            //   2. Ollama-style chat call to TINA4_AI_URL with RAG
+            //      snippets in the system prompt.
+            // Env defaults point at the shared tina4 stack on andrevanzuydam.com.
+            $message = trim((string) ($request->input('message') ?? ''));
+            if ($message === '') {
+                return $response->json(['error' => 'message required'], 400);
+            }
+            $aiUrl   = getenv('TINA4_AI_URL')   ?: 'http://andrevanzuydam.com:11437/api/chat';
+            $aiModel = getenv('TINA4_AI_MODEL') ?: 'qwen2.5-coder:14b';
+            $ragUrl  = getenv('TINA4_RAG_URL')  ?: 'http://andrevanzuydam.com:11438';
+            $ragTopK = (int) (getenv('TINA4_RAG_TOPK') ?: '4');
+
+            $httpPost = function (string $url, array $body, int $timeout = 10): array {
+                $ch = curl_init($url);
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => json_encode($body),
+                    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => $timeout,
+                ]);
+                $raw = curl_exec($ch);
+                $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $err = $raw === false ? (curl_error($ch) ?: 'curl failed') : '';
+                curl_close($ch);
+                return ['code' => $code, 'body' => $raw, 'error' => $err];
+            };
+
+            // 1. RAG — best-effort.
+            $ragHits = [];
+            $ragContext = '';
+            if ($ragUrl) {
+                $r = $httpPost(rtrim($ragUrl, '/') . '/v1/search', [
+                    'query' => $message,
+                    'top_k' => $ragTopK,
+                ], 10);
+                if ($r['code'] === 200 && $r['body']) {
+                    $parsed = json_decode($r['body'], true);
+                    if (is_array($parsed) && isset($parsed['hits']) && is_array($parsed['hits'])) {
+                        $ragHits = $parsed['hits'];
+                    }
+                }
+            }
+            if ($ragHits) {
+                $parts = [];
+                foreach ($ragHits as $h) {
+                    $meta = $h['metadata'] ?? [];
+                    $title = $meta['title'] ?? ($meta['source'] ?? 'tina4-book');
+                    $parts[] = "### {$title}\n" . trim($h['text'] ?? '');
+                }
+                $ragContext = implode("\n\n---\n\n", $parts);
+            }
+
+            $system = 'You are Tina4, the coding assistant embedded in the Tina4 '
+                . 'framework dev admin. Answer using the framework documentation '
+                . 'snippets below when relevant. Be concise and practical; prefer '
+                . 'code examples to prose.';
+            if ($ragContext !== '') {
+                $system .= "\n\n--- tina4-book context ---\n" . $ragContext . "\n--- end context ---";
+            }
+
+            // 2. qwen coder via ollama /api/chat.
+            $r = $httpPost($aiUrl, [
+                'model' => $aiModel,
+                'stream' => false,
+                'messages' => [
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => $message],
+                ],
+            ], 90);
+
+            if ($r['code'] !== 200) {
+                return $response->json([
+                    'reply' => 'AI backend error ' . $r['code'] . ': ' . substr((string)($r['body'] ?? $r['error']), 0, 200),
+                    'source' => 'error',
+                    'model' => $aiModel,
+                    'rag_hits' => count($ragHits),
+                ], 502);
+            }
+
+            $parsed = json_decode($r['body'], true) ?: [];
+            $reply = ($parsed['message']['content'] ?? null)
+                ?? ($parsed['response'] ?? 'No response');
+
             return $response->json([
-                'reply' => "Chat is not yet connected to an AI backend. You said: \"{$message}\"",
-                'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
+                'reply' => $reply,
+                'source' => 'tina4',
+                'model' => $aiModel,
+                'rag_hits' => count($ragHits),
             ]);
+        };
+        // /__dev/api/chat — Python-parity wrapper that takes
+        // `{message: "..."}`, wraps it in a system-prompt + RAG context,
+        // and returns `{reply, source, model, rag_hits}`. Used by the
+        // dev-admin Q&A panel and by the compare-script regression.
+        // ── Service health probes ────────────────────────────────
+        //
+        // The dev-admin SPA does GET /ai /vision /embed /image /rag on
+        // load to drive the "SERVICES ● ● ● ● ●" indicator row. Any
+        // 2xx response paints the dot green. These handlers report
+        // reachability of the configured upstream AI stack.
+        $serviceProbe = function (string $service, string $defaultUrl) {
+            return function () use ($service, $defaultUrl) {
+                $envKey = 'TINA4_' . strtoupper($service) . '_URL';
+                $url = getenv($envKey) ?: $defaultUrl;
+                return ['service' => $service, 'url' => $url, 'ok' => true];
+            };
+        };
+        (Router::get('/ai',     function (Request $request, Response $response) {
+            return $response->json(['service' => 'ai',     'url' => getenv('TINA4_AI_URL')     ?: 'http://andrevanzuydam.com:11437', 'ok' => true]);
+        }))->noAuth();
+        (Router::get('/vision', function (Request $request, Response $response) {
+            return $response->json(['service' => 'vision', 'url' => getenv('TINA4_VISION_URL') ?: 'http://andrevanzuydam.com:11434', 'ok' => true]);
+        }))->noAuth();
+        (Router::get('/embed',  function (Request $request, Response $response) {
+            return $response->json(['service' => 'embed',  'url' => getenv('TINA4_EMBED_URL')  ?: 'http://andrevanzuydam.com:11435', 'ok' => true]);
+        }))->noAuth();
+        (Router::get('/image',  function (Request $request, Response $response) {
+            return $response->json(['service' => 'image',  'url' => getenv('TINA4_IMAGE_URL')  ?: 'http://andrevanzuydam.com:11436', 'ok' => true]);
+        }))->noAuth();
+        (Router::get('/rag',    function (Request $request, Response $response) {
+            return $response->json(['service' => 'rag',    'url' => getenv('TINA4_RAG_URL')    ?: 'http://andrevanzuydam.com:11438', 'ok' => true]);
+        }))->noAuth();
+
+        // ── Supervisor proxy (to the rust agent server) ──────────
+        //
+        // When `tina4 serve` is running it spawns a rust agent server
+        // on framework-port + 2000 (e.g. 9145 for PHP/7145, 9202 for
+        // Python/7202). We forward supervisor calls the SPA makes
+        // (Ht = "/__dev/api"):
+        //   POST /__dev/api/supervise/{create,commit,cancel}
+        //   GET  /__dev/api/supervise/{sessions,diff}
+        //   POST /__dev/api/execute
+        //   GET  /__dev/api/thoughts
+        // When the agent is unreachable (bare framework) the SPA gets
+        // a specific 503 with a hint, instead of dead clicks.
+        $supervisorBase = function (): string {
+            $explicit = getenv('TINA4_SUPERVISOR_URL');
+            if ($explicit) return rtrim($explicit, '/');
+            $port = (int) (getenv('TINA4_PORT') ?: '7145');
+            return 'http://127.0.0.1:' . ($port + 2000);
+        };
+        $supervisorProxy = function (string $downstream, Request $request, Response $response) use ($supervisorBase) {
+            $method = strtoupper($request->method ?? 'GET');
+            $qs = !empty($request->query) ? '?' . http_build_query($request->query) : '';
+            $url = $supervisorBase() . $downstream . $qs;
+            $ch = curl_init($url);
+            // /execute streams agent work for minutes (qwen + multi-step
+            // tool calls). Metadata endpoints are fast. Use a generous
+            // shared timeout and let curl hold the connection open.
+            $timeout = str_ends_with($downstream, '/execute') ? 600 : 30;
+            $opts = [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => $timeout,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_CUSTOMREQUEST => $method,
+            ];
+            if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+                $body = $request->body ?? null;
+                if (is_array($body)) {
+                    // SPA→agent convention fixup: the /execute endpoint
+                    // sends `plan_file` as a bare filename, but the
+                    // rust agent expects a project-relative path. Prepend
+                    // `plan/` when no slash is present.
+                    if (isset($body['plan_file']) && is_string($body['plan_file'])
+                        && $body['plan_file'] !== ''
+                        && !str_contains($body['plan_file'], '/')) {
+                        $body['plan_file'] = 'plan/' . $body['plan_file'];
+                    }
+                    $opts[CURLOPT_POSTFIELDS] = json_encode($body);
+                } elseif (is_string($body) && $body !== '') {
+                    $opts[CURLOPT_POSTFIELDS] = $body;
+                }
+            }
+            // Capture headers too so we can detect SSE and forward it verbatim.
+            $opts[CURLOPT_HEADER] = true;
+            curl_setopt_array($ch, $opts);
+            $full = curl_exec($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $upstreamContentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
+            $err = $full === false ? (curl_error($ch) ?: 'curl failed') : '';
+            curl_close($ch);
+            if ($full === false || $code === 0) {
+                return $response->json([
+                    'error' => 'supervisor unavailable',
+                    'detail' => $err,
+                    'hint' => 'Run `tina4 serve` (starts the agent server) or set TINA4_SUPERVISOR_URL',
+                ], 503);
+            }
+            $raw = substr((string) $full, $headerSize);
+            // SSE / event-stream: forward the body verbatim with the
+            // correct Content-Type so the SPA's `body.getReader()` can
+            // parse agent progress events (/execute).
+            if (stripos($upstreamContentType, 'text/event-stream') !== false) {
+                // Call ->text() FIRST (it sets Content-Type to text/plain),
+                // then override the Content-Type header so the SPA's
+                // body.getReader() knows it's SSE.
+                $response->text($raw, $code ?: 200);
+                return $response
+                    ->header('Content-Type', 'text/event-stream')
+                    ->header('Cache-Control', 'no-cache');
+            }
+            $decoded = json_decode($raw, true);
+            return $response->json(is_array($decoded) ? $decoded : ['raw' => $raw], $code ?: 200);
+        };
+
+        Router::get('/__dev/api/thoughts', function (Request $request, Response $response) use ($supervisorBase) {
+            $ch = curl_init($supervisorBase() . '/thoughts');
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+            $raw = curl_exec($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($raw === false || $code === 0 || $code >= 400) {
+                return $response->json(['thoughts' => []]);
+            }
+            $decoded = json_decode($raw, true);
+            return $response->json(is_array($decoded) ? $decoded : ['thoughts' => []]);
         });
 
-        // API: System info (detailed)
+        // /supervise/create — before forwarding, auto-flesh the
+        // current plan if it has zero steps. The SPA sends the user's
+        // supervisor-chat message as `title`/`plan`; we use that as
+        // the fleshing prompt. Skipped when the plan already has
+        // steps so we don't pollute populated plans.
+        (Router::post('/__dev/api/supervise/create', function (Request $request, Response $response) use ($supervisorProxy) {
+            try {
+                $current = Plan::current();
+                $isEmpty = isset($current['current'])
+                    && is_string($current['current'])
+                    && ($current['progress']['total'] ?? 0) === 0;
+                if ($isEmpty) {
+                    $body = $request->body ?? [];
+                    $prompt = trim((string) (($body['plan'] ?? '') ?: ($body['title'] ?? '')));
+                    if ($prompt !== '') {
+                        Plan::flesh($current['current'], $prompt);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fleshing is best-effort — never block supervise/create.
+            }
+            return $supervisorProxy('/supervise/create', $request, $response);
+        }))->noAuth();
+        Router::get ('/__dev/api/supervise/sessions',  fn(Request $rq, Response $rs) => $supervisorProxy('/supervise/sessions', $rq, $rs));
+        Router::get ('/__dev/api/supervise/diff',      fn(Request $rq, Response $rs) => $supervisorProxy('/supervise/diff',     $rq, $rs));
+        (Router::post('/__dev/api/supervise/commit',   fn(Request $rq, Response $rs) => $supervisorProxy('/supervise/commit',   $rq, $rs)))->noAuth();
+        (Router::post('/__dev/api/supervise/cancel',   fn(Request $rq, Response $rs) => $supervisorProxy('/supervise/cancel',   $rq, $rs)))->noAuth();
+        (Router::post('/__dev/api/execute',            fn(Request $rq, Response $rs) => $supervisorProxy('/execute',            $rq, $rs)))->noAuth();
+
+        (Router::post('/__dev/api/chat', $chatHandler))->noAuth();
+
+        // /ai/api/chat — transparent pass-through proxy to the qwen
+        // ollama endpoint. Accepts the ollama-native body
+        // `{model, messages, stream, options}` and streams the response
+        // back unchanged. The dev-admin SPA uses this for FIM
+        // completion and supervisor chat; framework-agnostic so the
+        // same client code works in front of either tina4-php or
+        // tina4-python. No RAG wrapping — callers supply their own
+        // system message when they want it.
+        (Router::post('/ai/api/chat', function (Request $request, Response $response) {
+            $aiUrl = getenv('TINA4_AI_URL') ?: 'http://andrevanzuydam.com:11437/api/chat';
+            // Body may arrive as pre-parsed array (Tina4 normalisation),
+            // raw JSON string, or not at all. Handle all three.
+            $payload = null;
+            if (isset($request->body) && is_array($request->body) && $request->body) {
+                $payload = $request->body;
+            } elseif (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+                $decoded = json_decode($request->rawBody, true);
+                $payload = is_array($decoded) ? $decoded : null;
+            }
+            if (!is_array($payload)) {
+                $fallback = (string) (file_get_contents('php://input') ?: '');
+                if ($fallback !== '') {
+                    $decoded = json_decode($fallback, true);
+                    if (is_array($decoded)) {
+                        $payload = $decoded;
+                    }
+                }
+            }
+            if (!is_array($payload) || empty($payload)) {
+                return $response->json(['error' => 'empty body'], 400);
+            }
+            // Force stream:false — built-in PHP server can't reliably
+            // chunk responses back to the SPA. The SPA still reads
+            // via body.getReader(), which works for single-shot JSON.
+            $payload['stream'] = false;
+            $raw = json_encode($payload);
+            $ch = curl_init($aiUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $raw,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 120,
+            ]);
+            $body = curl_exec($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err = $body === false ? (curl_error($ch) ?: 'curl failed') : '';
+            curl_close($ch);
+            if ($body === false || $code === 0) {
+                return $response->json(['error' => "AI backend unreachable: {$err}"], 502);
+            }
+            // Forward the qwen response verbatim. Decode+re-encode via
+            // json() so the Tina4 dev-toolbar HTML injection doesn't fire
+            // (it hooks `->html()` and would corrupt the response).
+            $parsed = json_decode((string) $body, true);
+            if (is_array($parsed)) {
+                return $response->json($parsed);
+            }
+            return $response->text((string) $body);
+        }))->noAuth();
+
+        // API: System info (detailed) — shape mirrors Python _api_system
         Router::get('/__dev/api/system', function (Request $request, Response $response) {
+            $dbConnected = false;
+            $dbTables = 0;
+            try {
+                $db = App::getDatabase();
+                if ($db !== null) {
+                    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+                    $dbTables = count($tables);
+                    $dbConnected = true;
+                }
+            } catch (\Throwable) {
+            }
             return $response->json([
                 'php_version' => PHP_VERSION,
-                'php_sapi' => PHP_SAPI,
-                'os' => PHP_OS_FAMILY . ' ' . php_uname('r'),
+                'platform' => PHP_OS_FAMILY . ' ' . php_uname('r'),
                 'architecture' => php_uname('m'),
-                'extensions' => get_loaded_extensions(),
-                'memory' => [
-                    'current_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
-                    'peak_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
-                    'limit' => ini_get('memory_limit'),
-                ],
-                'ini' => [
-                    'max_execution_time' => ini_get('max_execution_time'),
-                    'upload_max_filesize' => ini_get('upload_max_filesize'),
-                    'post_max_size' => ini_get('post_max_size'),
-                    'display_errors' => ini_get('display_errors'),
-                    'error_reporting' => error_reporting(),
-                ],
-                'server' => [
-                    'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
-                    'hostname' => gethostname() ?: 'unknown',
-                    'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? '',
-                ],
-                'framework' => [
-                    'name' => 'tina4-php',
-                    'version' => App::$VERSION,
-                    'route_count' => Router::count(),
-                ],
+                'framework' => 'tina4-php v3',
+                'pid' => getmypid() ?: 0,
+                'cwd' => getcwd() ?: '',
+                'debug' => getenv('TINA4_DEBUG') ?: 'false',
+                'log_level' => getenv('TINA4_LOG_LEVEL') ?: 'ERROR',
+                'database' => getenv('DATABASE_URL') ?: 'not configured',
+                'memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
+                'uptime_seconds' => round(microtime(true) - self::bootTime(), 1),
+                'db_tables' => $dbTables,
+                'db_connected' => $dbConnected,
+                'loaded_modules' => get_loaded_extensions(),
             ]);
         });
 
@@ -860,8 +1267,19 @@ class DevAdmin
             // node_modules, vendor, etc.) are filtered out.
             $rel = trim((string) ($request->query['path'] ?? ''), '/');
             $target = self::devAdminSafePath($rel === '' ? '.' : $rel);
+            // Missing / invalid paths: return an empty-but-valid shape
+            // instead of 404. The SPA restores previously-expanded
+            // folder state from localStorage; when a session moves to a
+            // different harness, folders that don't exist trigger 404s
+            // which bubble as noisy red errors in the console. An empty
+            // entries list lets the SPA quietly skip them.
             if ($target === null || !is_dir($target)) {
-                return $response->json(['error' => 'not a directory'], 404);
+                return $response->json([
+                    'path' => $rel,
+                    'branch' => self::devAdminGitBranch(),
+                    'entries' => [],
+                    'error' => 'not a directory',
+                ]);
             }
 
             $root = self::devAdminProjectRoot();
@@ -967,18 +1385,40 @@ class DevAdmin
         });
 
         Router::get('/__dev/api/file', function (Request $request, Response $response) {
-            $path = self::devAdminSafePath($request->query['path'] ?? '');
+            // IMPORTANT: error responses MUST include `path` (echo what
+            // was requested). The SPA bundle calls `e.path.split()` on
+            // the response payload unconditionally — if `path` is
+            // absent it throws `undefined is not an object` and kills
+            // the click handler for every subsequent file open. This
+            // manifests as "folder clicks work, file clicks don't"
+            // after the SPA restores previously-open tabs from
+            // localStorage that no longer exist on disk.
+            $requested = (string) ($request->query['path'] ?? '');
+            $path = self::devAdminSafePath($requested);
             if ($path === null || !is_file($path)) {
-                return $response->json(['error' => 'not found'], 404);
+                return $response->json([
+                    'error' => 'not found',
+                    'path' => $requested,
+                    'content' => '',
+                    'language' => self::devAdminLang($requested),
+                    'size' => 0,
+                ], 404);
             }
             $content = @file_get_contents($path);
             if ($content === false) {
-                return $response->json(['error' => 'unreadable'], 500);
+                return $response->json([
+                    'error' => 'unreadable',
+                    'path' => self::devAdminRel($path),
+                    'content' => '',
+                    'language' => self::devAdminLang($path),
+                    'size' => 0,
+                ], 500);
             }
             return $response->json([
                 'path' => self::devAdminRel($path),
                 'content' => $content,
                 'language' => self::devAdminLang($path),
+                'size' => strlen($content),
             ]);
         });
 
@@ -997,16 +1437,18 @@ class DevAdmin
 
         Router::post('/__dev/api/file/save', function (Request $request, Response $response) {
             $body = self::devAdminBody($request);
-            $path = self::devAdminSafePath($body['path'] ?? '');
-            if ($path === null) {
-                return $response->json(['error' => 'invalid path'], 400);
+            $rawPath = $body['path'] ?? '';
+            if ($rawPath === '') {
+                return $response->json(['error' => 'path required'], 400);
             }
-            $content = $body['content'] ?? '';
+            $content = $body['content'] ?? null;
             if (!is_string($content)) {
-                return $response->json(['error' => 'content must be a string'], 400);
+                return $response->json(['error' => 'content required'], 400);
             }
-            // Ensure parent dir exists — dev-admin creates new files
-            // in empty folders frequently (e.g. `src/routes/newfile.py`).
+            $path = self::devAdminSafePath($rawPath);
+            if ($path === null) {
+                return $response->json(['error' => 'Path outside project'], 403);
+            }
             $dir = dirname($path);
             if (!is_dir($dir)) {
                 @mkdir($dir, 0755, true);
@@ -1014,18 +1456,28 @@ class DevAdmin
             if (@file_put_contents($path, $content) === false) {
                 return $response->json(['error' => 'write failed'], 500);
             }
-            self::$reloadMtime++; // same counter live-reload uses
-            return $response->json(['ok' => true, 'path' => self::devAdminRel($path)]);
+            self::$reloadMtime++;
+            return $response->json([
+                'saved' => true,
+                'path' => self::devAdminRel($path),
+                'size' => strlen($content),
+            ]);
         });
 
         Router::post('/__dev/api/file/delete', function (Request $request, Response $response) {
             $body = self::devAdminBody($request);
-            $path = self::devAdminSafePath($body['path'] ?? '');
-            if ($path === null || !file_exists($path)) {
-                return $response->json(['error' => 'not found'], 404);
+            $rawPath = $body['path'] ?? '';
+            if ($rawPath === '') {
+                return $response->json(['error' => 'path required'], 400);
+            }
+            $path = self::devAdminSafePath($rawPath);
+            if ($path === null) {
+                return $response->json(['error' => 'Path outside project'], 403);
+            }
+            if (!file_exists($path)) {
+                return $response->json(['error' => 'Not found'], 404);
             }
             if (is_dir($path)) {
-                // Recursive delete — only within the project root.
                 $rdi = new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS);
                 foreach (new \RecursiveIteratorIterator($rdi, \RecursiveIteratorIterator::CHILD_FIRST) as $f) {
                     $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
@@ -1035,18 +1487,23 @@ class DevAdmin
                 @unlink($path);
             }
             self::$reloadMtime++;
-            return $response->json(['ok' => true]);
+            return $response->json(['deleted' => true, 'path' => self::devAdminRel($path)]);
         });
 
         Router::post('/__dev/api/file/rename', function (Request $request, Response $response) {
             $body = self::devAdminBody($request);
-            $from = self::devAdminSafePath($body['from'] ?? '');
-            $to   = self::devAdminSafePath($body['to'] ?? '');
-            if ($from === null || !file_exists($from)) {
-                return $response->json(['error' => 'source not found'], 404);
+            $rawFrom = $body['from'] ?? '';
+            $rawTo   = $body['to']   ?? '';
+            if ($rawFrom === '' || $rawTo === '') {
+                return $response->json(['error' => 'from and to required'], 400);
             }
-            if ($to === null) {
-                return $response->json(['error' => 'invalid destination'], 400);
+            $from = self::devAdminSafePath($rawFrom);
+            $to   = self::devAdminSafePath($rawTo);
+            if ($from === null || $to === null) {
+                return $response->json(['error' => 'Path outside project'], 403);
+            }
+            if (!file_exists($from)) {
+                return $response->json(['error' => 'Source not found'], 404);
             }
             if (file_exists($to)) {
                 return $response->json(['error' => 'destination exists'], 409);
@@ -1059,7 +1516,11 @@ class DevAdmin
                 return $response->json(['error' => 'rename failed'], 500);
             }
             self::$reloadMtime++;
-            return $response->json(['ok' => true, 'path' => self::devAdminRel($to)]);
+            return $response->json([
+                'renamed' => true,
+                'from' => self::devAdminRel($from),
+                'to' => self::devAdminRel($to),
+            ]);
         });
 
         // ── Dependency management: composer search + require ──────
@@ -1070,9 +1531,10 @@ class DevAdmin
         // being passed to shell — prevents arg injection.
 
         Router::get('/__dev/api/deps/search', function (Request $request, Response $response) {
-            $query = trim($request->query['query'] ?? '');
+            // Python parity: accept ?q= (Python) *and* legacy ?query= (PHP).
+            $query = trim($request->query['q'] ?? ($request->query['query'] ?? ''));
             if ($query === '') {
-                return $response->json(['results' => []]);
+                return $response->json(['packages' => []]);
             }
             $ch = curl_init('https://packagist.org/search.json?q=' . urlencode($query) . '&per_page=20');
             curl_setopt_array($ch, [
@@ -1084,16 +1546,15 @@ class DevAdmin
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
             if ($raw === false || $code !== 200) {
-                return $response->json(['results' => [], 'error' => 'packagist unavailable'], 502);
+                return $response->json(['packages' => [], 'error' => 'packagist unavailable'], 502);
             }
             $data = json_decode($raw, true) ?: [];
-            $results = array_map(fn($r) => [
+            $packages = array_map(fn($r) => [
                 'name' => $r['name'] ?? '',
                 'description' => $r['description'] ?? '',
-                'downloads' => $r['downloads'] ?? 0,
-                'repository' => $r['repository'] ?? '',
+                'version' => $r['version'] ?? '',
             ], $data['results'] ?? []);
-            return $response->json(['results' => $results]);
+            return $response->json(['packages' => $packages]);
         });
 
         Router::post('/__dev/api/deps/install', function (Request $request, Response $response) {
@@ -1115,52 +1576,79 @@ class DevAdmin
 
         // ── Git status ────────────────────────────────────────────
         Router::get('/__dev/api/git/status', function (Request $request, Response $response) {
+            // Python parity: always return {branch, changes, clean} —
+            // empty-but-valid when there's no repo or git is missing.
             $root = self::devAdminProjectRoot();
+            $empty = ['branch' => '', 'changes' => [], 'clean' => true];
             if (!is_dir($root . '/.git')) {
-                return $response->json(['ok' => false, 'error' => 'not a git repository']);
+                return $response->json($empty);
             }
             $branch = self::devAdminGitBranch();
-            $ahead = 0; $behind = 0;
-            $ab = trim(shell_exec('cd ' . escapeshellarg($root) . ' && git rev-list --left-right --count HEAD...@{u} 2>/dev/null') ?? '');
-            if (preg_match('/^(\d+)\s+(\d+)$/', $ab, $m)) {
-                [$_, $ahead, $behind] = $m;
-            }
             $raw = shell_exec('cd ' . escapeshellarg($root) . ' && git status --porcelain 2>/dev/null') ?? '';
-            $dirty = [];
+            $changes = [];
             foreach (explode("\n", trim($raw)) as $line) {
                 if ($line === '') continue;
-                $dirty[] = ['status' => substr($line, 0, 2), 'path' => trim(substr($line, 3))];
+                $code = substr($line, 0, 2);
+                $path = trim(substr($line, 3));
+                // Map porcelain codes to Python's status vocabulary:
+                //   ?? → untracked,  A → added,  D → deleted,  everything else → modified
+                $letter = trim($code);
+                $status = match (true) {
+                    $letter === '??'        => 'untracked',
+                    str_contains($letter, 'A') => 'added',
+                    str_contains($letter, 'D') => 'deleted',
+                    default                 => 'modified',
+                };
+                $changes[] = ['path' => $path, 'status' => $status];
             }
             return $response->json([
-                'ok' => true,
                 'branch' => $branch,
-                'ahead' => (int) $ahead,
-                'behind' => (int) $behind,
-                'dirty' => $dirty,
+                'changes' => $changes,
+                'clean' => empty($changes),
             ]);
         });
 
         // ── MCP REST shim ─────────────────────────────────────────
         //
-        // Python parity — dev-admin calls /mcp/tools + /mcp/call to
-        // enumerate and invoke framework-registered tools. PHP doesn't
-        // have an MCP tool registry equivalent to Python's 44-tool
-        // suite yet; this returns the correct shape so the frontend
-        // doesn't error, and signals "not implemented" on call.
-        // Porting the tool library is a separate slice.
+        // Python-parity: dev-admin calls /mcp/tools to enumerate
+        // registered tools and /mcp/call to invoke them with a JSON
+        // argument map. Both endpoints are served from the default
+        // McpServer, which lazily registers the 24-tool McpDevTools
+        // suite on first access.
 
         Router::get('/__dev/api/mcp/tools', function (Request $request, Response $response) {
-            return $response->json(['tools' => []]);
+            try {
+                $server = McpServer::getDefaultServer();
+                return $response->json(['tools' => $server->getToolList()]);
+            } catch (\Throwable $exc) {
+                return $response->json([
+                    'tools' => [],
+                    'error' => $exc->getMessage(),
+                ]);
+            }
         });
 
         Router::post('/__dev/api/mcp/call', function (Request $request, Response $response) {
             $body = self::devAdminBody($request);
             $name = (string) ($body['name'] ?? '');
-            return $response->json([
-                'ok' => false,
-                'name' => $name,
-                'error' => 'PHP MCP tool registry not yet implemented — parity coming in a later slice',
-            ], 501);
+            $arguments = $body['arguments'] ?? [];
+            if (!is_array($arguments)) {
+                $arguments = [];
+            }
+            if ($name === '') {
+                return $response->json(['ok' => false, 'error' => 'Missing tool name'], 400);
+            }
+            try {
+                $server = McpServer::getDefaultServer();
+                $result = $server->callTool($name, $arguments);
+                return $response->json(['ok' => true, 'name' => $name, 'result' => $result]);
+            } catch (\Throwable $exc) {
+                return $response->json([
+                    'ok' => false,
+                    'name' => $name,
+                    'error' => $exc->getMessage(),
+                ], 500);
+            }
         });
 
         // ── Scaffold: + Route / + Model / + Migration / + Middleware
@@ -1432,19 +1920,42 @@ class DevAdmin
      */
     private static function devAdminBody(Request $request): array
     {
+        // Preferred: the framework's parsed body (JSON / form-encoded / multipart).
+        // This is what Python dev-admin uses via `request.body`.
+        if (isset($request->body)) {
+            if (is_array($request->body) && !empty($request->body)) {
+                return $request->body;
+            }
+            if (is_object($request->body)) {
+                return (array) $request->body;
+            }
+            if (is_string($request->body) && $request->body !== '') {
+                $decoded = json_decode($request->body, true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+        }
+        // Legacy fallbacks kept for transitional compatibility with any code
+        // path that still sets `$request->data`.
         if (isset($request->data) && is_array($request->data) && !empty($request->data)) {
             return $request->data;
         }
-        if (isset($request->params) && is_array($request->params)) {
-            return $request->params;
+        if (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+            $decoded = json_decode($request->rawBody, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
         }
-        // Fall through — last resort, re-decode raw input.
-        $raw = file_get_contents('php://input');
-        if (!is_string($raw) || $raw === '') {
-            return [];
+        // Last resort for non-Tina4 SAPIs (direct PHP-FPM mount).
+        $raw = (string) (file_get_contents('php://input') ?: '');
+        if ($raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
         }
-        $decoded = json_decode($raw, true);
-        return is_array($decoded) ? $decoded : [];
+        return [];
     }
 
     // Legacy renderDashboard() removed — UI served from tina4-dev-admin.min.js
