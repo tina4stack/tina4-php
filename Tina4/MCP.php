@@ -730,21 +730,35 @@ class McpDevTools
 
         // ── Helpers ───────────────────────────────────────────
 
+        // Normalise a relative path safely without requiring intermediate
+        // directories to exist. Old impl used realpath() of the parent
+        // dir, which returns false when both the file AND its parent
+        // are new (e.g. `tests/foo.php` when `tests/` doesn't exist
+        // yet). The agent then sees "Path escapes project directory"
+        // for a perfectly innocent path. Walk the segments manually,
+        // resolve `..` against the segment stack, and reject only if
+        // the path actually tries to climb above the project root.
         $safePath = function (string $relPath) use ($projectRoot): string {
-            $resolved = realpath($projectRoot . DIRECTORY_SEPARATOR . $relPath);
-            // realpath returns false if file doesn't exist yet - try parent dir
-            if ($resolved === false) {
-                $parent = realpath(dirname($projectRoot . DIRECTORY_SEPARATOR . $relPath));
-                $basename = basename($relPath);
-                if ($parent === false || strpos($parent, $projectRoot) !== 0) {
-                    throw new \RuntimeException("Path escapes project directory: $relPath");
+            // Strip leading slashes so absolute-looking paths can't
+            // escape; the LLM occasionally emits "/src/foo.php" by
+            // habit and we want to treat it as project-relative.
+            $clean = ltrim($relPath, "/\\");
+            $parts = preg_split('#[/\\\\]+#', $clean) ?: [];
+            $stack = [];
+            foreach ($parts as $part) {
+                if ($part === '' || $part === '.') {
+                    continue;
                 }
-                return $parent . DIRECTORY_SEPARATOR . $basename;
+                if ($part === '..') {
+                    if (empty($stack)) {
+                        throw new \RuntimeException("Path escapes project directory: $relPath");
+                    }
+                    array_pop($stack);
+                    continue;
+                }
+                $stack[] = $part;
             }
-            if (strpos($resolved, $projectRoot) !== 0) {
-                throw new \RuntimeException("Path escapes project directory: $relPath");
-            }
-            return $resolved;
+            return $projectRoot . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $stack);
         };
 
         $redactEnv = function (string $key, string $value): string {
