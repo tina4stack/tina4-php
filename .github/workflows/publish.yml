@@ -10,15 +10,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for git log on the tagged commit
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
 
+      - name: Extract release notes from commit body
+        run: |
+          # Pull the tagged commit body (sans Co-Authored-By trailers and
+          # trailing blank lines). The body is the narrative the maintainer
+          # already writes for each release — piping it straight into the
+          # GitHub release beats a bare "Full Changelog" link.
+          git log -1 "${GITHUB_REF_NAME}" --pretty=%B \
+            | awk '/^Co-Authored-By:/ { skip=1 } !skip { print }' \
+            | sed -e :a -e '/^[[:space:]]*$/{$d;N;ba' -e '}' \
+            > /tmp/release-notes.md
+          echo "── /tmp/release-notes.md ──"
+          cat /tmp/release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          generate_release_notes: true
+          body_path: /tmp/release-notes.md
 
       - name: Notify Packagist
         env:
