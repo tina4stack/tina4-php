@@ -1106,6 +1106,56 @@ class DevAdmin
                 ->header('Content-Type', 'application/json');
         }))->noAuth();
 
+        // /image/v1/images/generations — transparent passthrough to
+        // SDXL Turbo (TINA4_IMAGE_URL, default andrevanzuydam.com:11436).
+        // The SPA's image-generation flow (aiGenerateImage in src/ai.ts)
+        // hits this endpoint with the OpenAI Images API body shape.
+        // Without this route the framework returns 404 and the user
+        // sees "No image returned: 404 <!DOCTYPE html>…" in chat.
+        // Mirrors the /ai/api/chat proxy pattern: read body, forward
+        // verbatim, return compact JSON.
+        (Router::post('/image/v1/images/generations', function (Request $request, Response $response) {
+            $imageUrl = getenv('TINA4_IMAGE_URL') ?: 'http://andrevanzuydam.com:11436';
+            $endpoint = rtrim($imageUrl, '/') . '/v1/images/generations';
+            $payload = null;
+            if (isset($request->body) && is_array($request->body) && $request->body) {
+                $payload = $request->body;
+            } elseif (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+                $decoded = json_decode($request->rawBody, true);
+                $payload = is_array($decoded) ? $decoded : null;
+            }
+            if (!is_array($payload)) {
+                $fallback = (string) (file_get_contents('php://input') ?: '');
+                if ($fallback !== '') {
+                    $decoded = json_decode($fallback, true);
+                    if (is_array($decoded)) {
+                        $payload = $decoded;
+                    }
+                }
+            }
+            if (!is_array($payload)) {
+                return $response->json(['error' => 'empty body'], 400);
+            }
+            $raw = json_encode($payload);
+            $ch = curl_init($endpoint);
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $raw,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_RETURNTRANSFER => true,
+                // SDXL is slow; allow up to 3 minutes per image.
+                CURLOPT_TIMEOUT => 180,
+            ]);
+            $body = curl_exec($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err = $body === false ? (curl_error($ch) ?: 'curl failed') : '';
+            if ($body === false || $code === 0) {
+                return $response->json(['error' => "Image backend unreachable: {$err}"], 502);
+            }
+            return $response->text((string) $body, $code)
+                ->header('Content-Type', 'application/json');
+        }))->noAuth();
+
         // API: System info (detailed) — shape mirrors Python _api_system
         Router::get('/__dev/api/system', function (Request $request, Response $response) {
             $dbConnected = false;
