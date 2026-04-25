@@ -64,6 +64,14 @@ class DevAdmin
         // Register PHP error/exception handlers so they are captured in the Error Tracker
         ErrorTracker::register();
 
+        // Auto-discovery: drop `.tina4/mcp.json` so MCP-aware AI tools
+        // (Claude Code, Cursor, etc.) discover the local Live Docs +
+        // MCP server without the user having to author config. See
+        // plan/v3/22-LIVE-API-RAG.md §"Auto-discovery file".
+        // Idempotent — re-running is a no-op when the file already
+        // points at the right URL. .tina4/ also gets gitignored.
+        self::writeMcpDiscoveryFile();
+
         // Serve the SPA JS bundle from framework's built-in assets.
         // MUST use Response::file() — routing through `->html()` injects
         // the dev toolbar into the script body and desyncs Content-Length
@@ -118,6 +126,21 @@ class DevAdmin
 
             $type = $request->body['type'] ?? 'reload';
             Log::info("External reload trigger: {$type}" . (self::$reloadFile ? ' (' . self::$reloadFile . ')' : ''));
+
+            // Invalidate the touched .php file in opcache so the next
+            // request re-reads it from disk. Without this, PHP keeps
+            // running cached opcodes from before the edit — the
+            // "Call to undefined method ::template()" symptom even
+            // after the source has been patched to ::render(). We do
+            // it here (per file) rather than a blanket opcache_reset()
+            // because reset() invalidates the entire framework + vendor
+            // tree on every save, which slows mid-session iteration.
+            if (self::$reloadFile !== '' && function_exists('opcache_invalidate')) {
+                $abs = realpath(self::$reloadFile) ?: self::$reloadFile;
+                if (str_ends_with($abs, '.php')) {
+                    @opcache_invalidate($abs, true);
+                }
+            }
 
             return $response->json(['ok' => true, 'type' => $type]);
         });
@@ -1730,6 +1753,88 @@ class DevAdmin
             $output = shell_exec($cmd) ?? '';
             return $response->json(['ok' => true, 'kind' => $kind, 'name' => $name, 'output' => $output]);
         });
+
+        // ── Live Docs (per plan/v3/22-LIVE-API-RAG.md) ─────────────
+        // Thin HTTP wrappers around \Tina4\Docs. Both framework public
+        // API and the user's own src/ surface are returned, tagged with
+        // `source = framework | user`. AI tools (Claude Code, Cursor,
+        // dev-admin chat) hit these for ground-truth introspection
+        // instead of guessing from training-data fragments.
+
+        // Shared instance per request — Docs caches its own framework
+        // index across calls within a process.
+        $docsInstance = function () {
+            static $cached = null;
+            if ($cached === null) {
+                $cached = new Docs(self::devAdminProjectRoot());
+            }
+            return $cached;
+        };
+
+        Router::get('/__dev/api/docs/search', function (Request $request, Response $response) use ($docsInstance) {
+            $q              = (string) ($request->query['q'] ?? '');
+            $k              = (int)    ($request->query['k'] ?? 5);
+            $source         = (string) ($request->query['source'] ?? 'all');
+            $includePrivate = (bool)   filter_var($request->query['include_private'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($q === '') {
+                return $response->json(['ok' => false, 'error' => "missing required 'q' param"], 400);
+            }
+            $start = microtime(true);
+            $hits = $docsInstance()->search($q, $k, $source, $includePrivate);
+            $tookMs = (int) ((microtime(true) - $start) * 1000);
+            return $response->json(['ok' => true, 'query' => $q, 'results' => $hits, 'took_ms' => $tookMs]);
+        });
+
+        Router::get('/__dev/api/docs/class', function (Request $request, Response $response) use ($docsInstance) {
+            $name = (string) ($request->query['name'] ?? '');
+            if ($name === '') {
+                return $response->json(['ok' => false, 'error' => "missing required 'name' param"], 400);
+            }
+            $spec = $docsInstance()->classSpec($name);
+            if ($spec === null) {
+                return $response->json(['ok' => false, 'error' => "class not found: {$name}"], 404);
+            }
+            return $response->json(['ok' => true, 'class' => $spec]);
+        });
+
+        Router::get('/__dev/api/docs/method', function (Request $request, Response $response) use ($docsInstance) {
+            $class  = (string) ($request->query['class'] ?? '');
+            $method = (string) ($request->query['name']  ?? '');
+            if ($class === '' || $method === '') {
+                return $response->json(['ok' => false, 'error' => "both 'class' and 'name' params are required"], 400);
+            }
+            $spec = $docsInstance()->methodSpec($class, $method);
+            if ($spec === null) {
+                return $response->json(['ok' => false, 'error' => "method not found: {$class}::{$method}"], 404);
+            }
+            return $response->json(['ok' => true, 'method' => $spec]);
+        });
+
+        Router::get('/__dev/api/docs/index', function (Request $request, Response $response) use ($docsInstance) {
+            $source = (string) ($request->query['source'] ?? 'all');
+            $entities = $docsInstance()->index();
+            if ($source !== 'all') {
+                $entities = array_values(array_filter($entities, fn($e) => ($e['source'] ?? '') === $source));
+            }
+            return $response->json(['ok' => true, 'count' => count($entities), 'entities' => $entities]);
+        });
+
+        // Public well-known doc — describes what the docs surface offers
+        // so non-MCP AI tools know what endpoints to call. Static.
+        Router::get('/__dev/api/docs/.well-known.json', function (Request $request, Response $response) {
+            return $response->json([
+                'ok' => true,
+                'service' => 'tina4-live-docs',
+                'version' => '1',
+                'endpoints' => [
+                    'search' => '/__dev/api/docs/search?q={query}&k={int}&source={framework|user|all}',
+                    'class'  => '/__dev/api/docs/class?name={fqn}',
+                    'method' => '/__dev/api/docs/method?class={fqn}&name={method}',
+                    'index'  => '/__dev/api/docs/index?source={framework|user|all}',
+                ],
+                'description' => 'Live API reflection for this Tina4 project — framework + user code combined.',
+            ]);
+        });
     }
 
     // ── Dev-admin helpers ──────────────────────────────────────────
@@ -1747,6 +1852,102 @@ class DevAdmin
         // have to branch on platform. Windows APIs accept forward
         // slashes interchangeably; on Unix nothing changes.
         return str_replace('\\', '/', $resolved !== false ? $resolved : ($cwd ?: '.'));
+    }
+
+    /**
+     * Drop `.tina4/mcp.json` so MCP-aware AI tools (Claude Code,
+     * Cursor, etc.) auto-discover the local Live Docs server. Also
+     * appends `.tina4/` to `.gitignore` if not already there. Both
+     * are idempotent — running twice is a no-op when the state is
+     * already correct.
+     *
+     * Skipped silently in non-debug mode (we don't write artefacts
+     * into a production checkout) and on filesystem errors (read-only
+     * project dir, etc.) — discovery is a convenience, not a
+     * requirement.
+     */
+    private static function writeMcpDiscoveryFile(): void
+    {
+        $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+        if (!$isDev) {
+            return;
+        }
+        $root = self::devAdminProjectRoot();
+        $tina4Dir = $root . '/.tina4';
+        $mcpFile  = $tina4Dir . '/mcp.json';
+        // Use Elvis (?:) not null-coalesce (??) — getenv() returns
+        // `false` when unset, which `??` does NOT fall through (it
+        // only short-circuits on null). The earlier impl produced
+        // `http://localhost:/__dev/api/mcp` because the chain
+        // returned `false` and stringified to empty.
+        $port = ($_SERVER['SERVER_PORT'] ?? '')
+            ?: (getenv('TINA4_PORT')
+            ?: (getenv('PORT')
+            ?: '7145'));
+        $url = "http://localhost:{$port}/__dev/api/mcp";
+        $expected = [
+            'mcpServers' => [
+                'tina4-live-docs' => [
+                    'url' => $url,
+                    'description' => 'Live API docs for this Tina4 project (framework + user code)',
+                ],
+            ],
+        ];
+        $expectedJson = json_encode($expected, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($expectedJson === false) {
+            return;
+        }
+
+        // Idempotency check: if the file already matches what we'd write,
+        // nothing to do.
+        if (is_file($mcpFile)) {
+            $existing = @file_get_contents($mcpFile);
+            if ($existing !== false && trim($existing) === trim($expectedJson)) {
+                self::ensureGitIgnore($root);
+                return;
+            }
+        }
+
+        // Make sure the dir exists before writing.
+        if (!is_dir($tina4Dir)) {
+            if (!@mkdir($tina4Dir, 0755, true) && !is_dir($tina4Dir)) {
+                return; // can't create — silent skip
+            }
+        }
+        @file_put_contents($mcpFile, $expectedJson . "\n");
+        self::ensureGitIgnore($root);
+    }
+
+    /**
+     * Append `.tina4/` to `.gitignore` if it isn't already excluded.
+     * The check tolerates leading slashes, trailing slashes, and
+     * comment-line variations so we don't add a duplicate when the
+     * user has already added it themselves.
+     */
+    private static function ensureGitIgnore(string $root): void
+    {
+        $gitignore = $root . '/.gitignore';
+        // Only touch projects that are already a git repo. No point
+        // creating a .gitignore in a non-git directory.
+        if (!is_dir($root . '/.git')) {
+            return;
+        }
+        $existing = is_file($gitignore) ? (string) @file_get_contents($gitignore) : '';
+        // Match `.tina4`, `.tina4/`, `/.tina4`, `/.tina4/` on any
+        // non-comment line.
+        foreach (preg_split("/\r\n|\n|\r/", $existing) ?: [] as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || $trimmed[0] === '#') {
+                continue;
+            }
+            $normal = trim(trim($trimmed, '/'));
+            if ($normal === '.tina4') {
+                return; // already excluded
+            }
+        }
+        $append = (str_ends_with($existing, "\n") || $existing === '' ? '' : "\n")
+                . ".tina4/\n";
+        @file_put_contents($gitignore, $append, FILE_APPEND);
     }
 
     /**
@@ -2056,7 +2257,7 @@ class DevAdmin
     <span style="color:#ffeb3b;">req:{$safeRequestId}</span>
     <span style="color:#90caf9;">{$routeCount} routes</span>
     <span style="color:#888;">PHP {$phpVersion}</span>
-    <a href="#" onclick="(function(e){e.preventDefault();var p=document.getElementById('tina4-dev-panel');if(p){p.style.display=p.style.display==='none'?'block':'none';return;}var c=document.createElement('div');c.id='tina4-dev-panel';c.style.cssText='position:fixed;top:3rem;left:0;right:0;bottom:2rem;z-index:99998;transition:all 0.2s';var f=document.createElement('iframe');f.src='/__dev';f.style.cssText='width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';c.appendChild(f);document.body.appendChild(c);})(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
+    <a href="#" onclick="window.__tina4ToggleOverlay(event)" style="color:#ef9a9a;margin-left:auto;text-decoration:none;cursor:pointer;">Dashboard &#8599;</a>
     <span onclick="this.parentElement.style.display='none'" style="cursor:pointer;color:#888;margin-left:8px;">&#10005;</span>
 </div>
 <script>
@@ -2110,6 +2311,63 @@ function tina4VersionModal(){
 }
 </script>
 HTML;
+
+        // Overlay open/toggle helper + auto-restore. The dev-admin
+        // iframe overlay vanishes whenever the parent page reloads
+        // (the toolbar's own WS reload is exactly that). Persist the
+        // overlay's open/closed state in localStorage so the user
+        // doesn't lose their dev-admin chat / plan / file tree
+        // every time they save a file. The overlay rebuilds in the
+        // same shape on the very next paint after reload.
+        $toolbar .= <<<'OVERLAYSCRIPT'
+<script>
+(function(){
+    var STATE_KEY = 'tina4_dev_overlay_open';
+    function buildOverlay() {
+        var c = document.createElement('div');
+        c.id = 'tina4-dev-panel';
+        c.style.cssText = 'position:fixed;top:3rem;left:0;right:0;bottom:2rem;z-index:99998;transition:all 0.2s';
+        var f = document.createElement('iframe');
+        f.src = '/__dev';
+        f.style.cssText = 'width:100%;height:100%;border:1px solid #7b1fa2;border-radius:0.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#0f172a';
+        c.appendChild(f);
+        document.body.appendChild(c);
+        return c;
+    }
+    window.__tina4ToggleOverlay = function(e) {
+        if (e) e.preventDefault();
+        var p = document.getElementById('tina4-dev-panel');
+        if (p) {
+            // Toggle visibility; sync state.
+            var hide = p.style.display !== 'none';
+            p.style.display = hide ? 'none' : 'block';
+            try { localStorage.setItem(STATE_KEY, hide ? '0' : '1'); } catch (_) {}
+            return;
+        }
+        buildOverlay();
+        try { localStorage.setItem(STATE_KEY, '1'); } catch (_) {}
+    };
+    // Auto-restore on page load — if the overlay was open before a
+    // reload (file watcher, manual refresh, app navigation), bring it
+    // straight back. Skip when we're INSIDE the overlay's iframe (the
+    // dev-admin SPA itself is on /__dev — opening another overlay
+    // there would be infinite-recursive).
+    function restoreIfOpen() {
+        try {
+            if (location.pathname.indexOf('/__dev') === 0) return;
+            if (localStorage.getItem(STATE_KEY) === '1' && !document.getElementById('tina4-dev-panel')) {
+                buildOverlay();
+            }
+        } catch (_) {}
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', restoreIfOpen);
+    } else {
+        restoreIfOpen();
+    }
+})();
+</script>
+OVERLAYSCRIPT;
 
         if (!self::$suppressReload) {
             $toolbar .= <<<'RELOADSCRIPT'

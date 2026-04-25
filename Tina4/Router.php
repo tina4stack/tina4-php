@@ -468,7 +468,8 @@ class Router
                 }
             }
 
-            return self::renderError($response, 404, 'Not Found', $request->path);
+            $errorResp = self::renderError($response, 404, 'Not Found', $request->path);
+            return self::injectDevToolbar($request, $errorResp, 'error');
         }
 
         $route = $result['route'];
@@ -566,7 +567,8 @@ class Router
                                 return $mwResult;
                             }
                             if ($mwResult === false) {
-                                return self::renderError($response, 403, 'Forbidden', $request->path);
+                                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
+                                return self::injectDevToolbar($request, $errorResp, 'error');
                             }
                             // If middleware returns [request, response], update them
                             if (is_array($mwResult) && count($mwResult) === 2) {
@@ -596,7 +598,8 @@ class Router
             }
             // If middleware returns false, stop processing
             if ($mwResult === false) {
-                return self::renderError($response, 403, 'Forbidden', $request->path);
+                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
+                return self::injectDevToolbar($request, $errorResp, 'error');
             }
         }
 
@@ -643,10 +646,11 @@ class Router
                 return $response->html($overlayHtml, 500);
             }
             $errorMessage = $e->getMessage() . "\n" . $e->getTraceAsString();
-            return self::renderError($response, 500, 'Server Error', $request->path, [
+            $errorResp = self::renderError($response, 500, 'Server Error', $request->path, [
                 'error_message' => $errorMessage,
                 'request_id' => substr(md5(uniqid('', true)), 0, 12),
             ]);
+            return self::injectDevToolbar($request, $errorResp, 'error');
         }
 
         if ($handlerResult instanceof Response) {
@@ -664,26 +668,46 @@ class Router
             [$request, $finalResponse] = Middleware::runAfter($globalMiddleware, $request, $finalResponse);
         }
 
-        // Dev toolbar injection: inject a fixed bottom toolbar into HTML responses
-        $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        if ($isDev && !str_starts_with($request->path, '/__dev') && str_contains($finalResponse->getContentType() ?? '', 'text/html')) {
-            $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
-            $requestId = Log::getRequestId() ?? '';
-            $toolbar = DevAdmin::renderToolbar(
-                method: $request->method,
-                path: $request->path,
-                matchedPattern: $matchedPattern,
-                requestId: $requestId,
-                routeCount: self::count(),
-            );
-            $body = $finalResponse->getBody();
-            if (str_contains($body, '</body>')) {
-                $finalResponse->setBody(str_replace('</body>', $toolbar . "\n</body>", $body));
-            } else {
-                $finalResponse->setBody($body . $toolbar);
-            }
-        }
+        // Dev toolbar injection — also covers 404 / 403 / 500 paths via
+        // injectDevToolbar() helper called from those return sites above.
+        $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
+        return self::injectDevToolbar($request, $finalResponse, $matchedPattern);
+    }
 
+    /**
+     * Inject the dev toolbar into an HTML response when TINA4_DEBUG is on
+     * and the path isn't itself a /__dev internal. Pulled out so 404 / 403
+     * / 500 error pages still get the toolbar (was missing before — users
+     * hitting an unknown route saw a bare error page and assumed the dev
+     * admin had broken).
+     */
+    private static function injectDevToolbar(Request $request, Response $finalResponse, string $matchedPattern = 'none'): Response
+    {
+        $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+        if (!$isDev) {
+            return $finalResponse;
+        }
+        if (str_starts_with($request->path, '/__dev')) {
+            return $finalResponse;
+        }
+        $contentType = $finalResponse->getContentType() ?? '';
+        if (!str_contains($contentType, 'text/html')) {
+            return $finalResponse;
+        }
+        $requestId = Log::getRequestId() ?? '';
+        $toolbar = DevAdmin::renderToolbar(
+            method: $request->method,
+            path: $request->path,
+            matchedPattern: $matchedPattern,
+            requestId: $requestId,
+            routeCount: self::count(),
+        );
+        $body = $finalResponse->getBody();
+        if (str_contains($body, '</body>')) {
+            $finalResponse->setBody(str_replace('</body>', $toolbar . "\n</body>", $body));
+        } else {
+            $finalResponse->setBody($body . $toolbar);
+        }
         return $finalResponse;
     }
 

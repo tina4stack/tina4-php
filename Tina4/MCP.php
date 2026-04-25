@@ -1297,6 +1297,29 @@ class McpDevTools
             ];
         }, 'Return a full markdown section from a framework doc file');
 
+        // ── Live API RAG (per plan/v3/22-LIVE-API-RAG.md) ──
+        // Distinct from docs_* (which searches prose markdown).
+        // api_* tools query the live framework reflection — actual
+        // class/method signatures, file/line locations, source
+        // tagging (framework vs user). Use api_* for "what's the
+        // signature of X?" and docs_* for "explain queues conceptually".
+        $server->registerTool('api_search', function (string $query, int $k = 5, string $source = 'all', bool $include_private = false) use ($projectRoot) {
+            $docs = new Docs($projectRoot);
+            return $docs->search($query, $k, $source, $include_private);
+        }, 'Live API search — finds framework + user classes/methods by name/summary. Use BEFORE guessing a method exists.');
+
+        $server->registerTool('api_class', function (string $name) use ($projectRoot) {
+            $docs = new Docs($projectRoot);
+            $spec = $docs->classSpec($name);
+            return $spec ?? ['error' => "class not found: {$name}"];
+        }, 'Live class reflection — returns full method list + signatures for an FQN.');
+
+        $server->registerTool('api_method', function (string $class, string $name) use ($projectRoot) {
+            $docs = new Docs($projectRoot);
+            $spec = $docs->methodSpec($class, $name);
+            return $spec ?? ['error' => "method not found: {$class}::{$name}"];
+        }, 'Live method reflection — returns signature, params, return type, file, line.');
+
         // ── Project introspection ────────────────────────────────
 
         $server->registerTool('git_status', function () use ($projectRoot) {

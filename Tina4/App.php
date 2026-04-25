@@ -333,6 +333,20 @@ class App
     {
         $this->running = true;
 
+        // In debug mode, wipe opcache on server boot so stale bytecode
+        // from a previous session doesn't shadow file edits made
+        // between runs. The user-visible symptom we hit before this
+        // was: AI patches `$response->template()` to `$response->render()`,
+        // file on disk is correct, but the runtime keeps reporting
+        // "Call to undefined method Tina4\Response::template()" because
+        // PHP is executing cached opcodes from before the patch. Each
+        // /__dev/api/reload POST also invalidates the touched path
+        // (see DevAdmin route handler) so no restart is needed for
+        // mid-session edits.
+        if ($this->isDevelopment() && function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
+
         // Install global exception + fatal-error capture. Done here
         // rather than in __construct so tests that don't call start()
         // don't leak handlers across the suite. The matching restore

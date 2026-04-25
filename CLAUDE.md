@@ -25,7 +25,7 @@ Version 3.11.22 — Full Tina4 PHP framework and application scaffold. See https
 - **Service layer pattern** — For complex business logic, create service classes in `src/services/`. Routes should be thin wrappers
 - **Parity across all frameworks** — Every new feature, fix, or optimization must be implemented with equivalent logic AND tests in all 4 Tina4 frameworks (Python, PHP, Ruby, Node.js). Never ship to one without shipping to all.
 - **Routes use `$response()`** — Return via the response callable, this is the Tina4 convention
-- **Error handling in routes** — Wrap route logic in `try/catch`, log with `Debug::message()`, return response with appropriate status
+- **Error handling in routes** — Wrap route logic in `try/catch`, log with `Log::error()` / `Log::warning()` / `Log::info()` / `Log::debug()` (or alias `Debug` if you have a backwards-compat shim), return response with appropriate status
 - **All links and references** should point to https://tina4.com
 - **Push to staging only** — Never push to production without explicit approval
 - PSR-4 autoloading — core classes live in `Tina4/` (not `src/Tina4/`)
@@ -52,11 +52,11 @@ Set `TINA4_DEBUG=true` in `.env` to enable:
 - **Dev toolbar** — A fixed toolbar at the bottom of HTML pages showing framework version, HTTP method, matched route pattern, request ID, route count, and PHP version. Includes a "Dashboard" link that opens `/__dev` in an inline panel
 - **Dev dashboard** (`/__dev`) — Single-page admin UI with route inspection, message log viewer, request capture, database query runner (SQL and GraphQL), table browser, queue management, dev mailbox, broken-route detector, WebSocket monitor, AI chat tool, and connection manager
 - **Twig debug extension** — `{{ dump(variable) }}` available in templates
-- **Verbose logging** — Full debug output via `Debug::message()`
+- **Verbose logging** — Full debug output via `Log::debug()` / `info()` / `warning()` / `error()`
 - **No template caching** — Templates recompile on every request
 - **Error detail** — Full stack traces shown in browser (via `ErrorOverlay`)
 
-Debug levels controlled by `TINA4_LOG_*` constants passed to `Debug::message()`.
+Log level configured via `TINA4_LOG_LEVEL` env var (DEBUG / INFO / WARNING / ERROR). Each `Log::*` static method routes through the same backend with the corresponding level.
 
 ### DevReload — how hot reload works
 
@@ -388,22 +388,25 @@ Auth::getPayload(string $token): ?array
 ```php
 $api = new \Tina4\Api(?string $baseURL = "", string $authHeader = "")
 $api->sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "application/json"): array
-$api->addCustomHeaders($headers): void
-$api->setUsernamePassword($username, $password): void
+$api->addHeaders(array $headers): void
+$api->setBasicAuth(string $username, string $password): void
 ```
 
 ### Migration — Database migrations
 
 ```php
 $migration = new \Tina4\Migration(string $migrationPath = "./migrations", string $delim = ";")
-$migration->doMigration(): string
+$migration->migrate(): array
 ```
 
-### Debug — Logging
+### Log — Logging
 
 ```php
-\Tina4\Debug::message(string $message, string $logLevel = TINA4_LOG_DEBUG)
-// Log levels: TINA4_LOG_DEBUG, TINA4_LOG_INFO, TINA4_LOG_WARNING, TINA4_LOG_ERROR, TINA4_LOG_CRITICAL
+\Tina4\Log::debug(string $message, array $context = []): void
+\Tina4\Log::info(string $message, array $context = []): void
+\Tina4\Log::warning(string $message, array $context = []): void
+\Tina4\Log::error(string $message, array $context = []): void
+// Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR)
 ```
 
 ### Events — Decoupled pub/sub event system
@@ -455,7 +458,7 @@ $app->background(function () {
     $api = new \Tina4\Api("https://api.example.com");
     $result = $api->sendRequest("/health");
     if ($result['http_code'] !== 200) {
-        \Tina4\Debug::message("Health check failed", TINA4_LOG_WARNING);
+        \Tina4\Log::warning("Health check failed");
     }
 }, 30.0);
 
@@ -478,33 +481,36 @@ $server->onTick(callable $callback, float $interval = 1.0): void
 Supports: Claude Code, Cursor, GitHub Copilot, Windsurf, Aider, Cline, OpenAI Codex.
 
 ```php
-// Detect which AI tools are present in a project
-AI::detectAi(string $root = "."): array
-// Returns: [['name' => 'claude-code', 'description' => '...', 'installed' => true], ...]
+// Check if a specific tool's context file already exists in $root.
+// $tool is one entry from AI::$AI_TOOLS (has 'name', 'context_file', 'config_dir').
+AI::isInstalled(string $root, array $tool): bool
 
-// Return just the names of detected tools
-AI::detectAiNames(string $root = "."): string[]
+// Print the numbered tool menu (with [installed] markers) and read a
+// comma-separated selection (or "all") from STDIN. Returns the raw line.
+AI::showMenu(string $root = "."): string
 
-// Install Tina4 context files for detected (or specified) tools
-AI::installContext(string $root = ".", ?array $tools = null, bool $force = false): string[]
+// Install context files for the tools listed in $selection ("1,3,5" or "all").
+// Returns relative paths of created/updated files.
+AI::installSelected(string $root, string $selection): array
 
-// Install context files for ALL known AI tools
-AI::installAll(string $root = ".", bool $force = false): string[]
+// Install context files for ALL known AI tools (non-interactive).
+AI::installAll(string $root = "."): array
 
-// Print a human-readable status report
-AI::statusReport(string $root = "."): string
+// Generate the tool-specific Tina4 context body (used by installSelected).
+AI::generateContext(string $toolName = 'claude-code'): string
 ```
 
 Example:
 ```php
-// Auto-detect and install context files
-$created = AI::installContext('.', null, force: true);
+// Interactive: show menu, read selection, install
+$selection = AI::showMenu('.');
+$created = AI::installSelected('.', $selection);
 
-// Install for all supported tools
-$created = AI::installAll('.', force: true);
+// Non-interactive: install everything
+$created = AI::installAll('.');
 
-// Check status
-echo AI::statusReport('.');
+// Check status — re-rendering the menu shows [installed] markers per tool
+AI::showMenu('.');
 ```
 
 ### Response Cache — In-memory GET response caching middleware

@@ -56,6 +56,11 @@ class ErrorOverlay
         $file = $e->getFile();
         $line = $e->getLine();
         $trace = $e->getTrace();
+        // Inline dev toolbar — error page is debug-mode-only, so the
+        // toolbar always belongs. One click → /__dev (chat, plan,
+        // Live Docs, file tree) so the user can fix the failure
+        // without leaving the page.
+        $devToolbar = self::renderInlineToolbar($request);
 
         // ── Main error location ──
         $framesHtml = self::formatFrame($file, $line, '{main}');
@@ -150,9 +155,41 @@ body{background:{$bg};color:{$text};font-family:-apple-system,BlinkMacSystemFont
     Tina4 Debug Overlay &mdash; This page is only shown in debug mode. Set TINA4_DEBUG=false in production.
   </div>
 </div>
+{$devToolbar}
 </body>
 </html>
 HTML;
+    }
+
+    /**
+     * Render the dev toolbar HTML for an error page. The error overlay
+     * is, by definition, debug-mode-only — so the toolbar always belongs
+     * here. Gives the user a one-click jump to /__dev (chat / plan /
+     * file tree / Live Docs) so the error page isn't a dead-end. Falls
+     * back to empty string if DevAdmin isn't loaded for any reason.
+     */
+    private static function renderInlineToolbar(?array $request): string
+    {
+        if (!class_exists('\\Tina4\\DevAdmin')) {
+            return '';
+        }
+        $method = $request['REQUEST_METHOD'] ?? 'GET';
+        $path   = $request['REQUEST_URI']   ?? '/';
+        $rid    = (class_exists('\\Tina4\\Log') && method_exists('\\Tina4\\Log', 'getRequestId'))
+            ? (\Tina4\Log::getRequestId() ?? '')
+            : '';
+        $count  = class_exists('\\Tina4\\Router') ? \Tina4\Router::count() : 0;
+        try {
+            return \Tina4\DevAdmin::renderToolbar(
+                method:         $method,
+                path:           $path,
+                matchedPattern: 'error',
+                requestId:      $rid,
+                routeCount:     $count,
+            );
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**
