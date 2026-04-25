@@ -297,7 +297,13 @@ class WebSocket
 
             $changed = @stream_select($read, $write, $except, 0, 200000);
             if ($changed === false) {
-                break;
+                // EINTR from signal handler — retry rather than tear down
+                // the WS server. Same pattern as Server.php; killing the
+                // loop on signal interrupt drops every connected client.
+                if (\function_exists('pcntl_signal_dispatch')) {
+                    \pcntl_signal_dispatch();
+                }
+                continue;
             }
             if ($changed === 0) {
                 continue;

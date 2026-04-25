@@ -284,7 +284,16 @@ class Server
             // 1ms timeout when idle — low latency without CPU spin
             $changed = @stream_select($read, $write, $except, 0, 1000);
             if ($changed === false) {
-                break;
+                // false here is almost always EINTR — a signal (SIGCHLD,
+                // SIGTERM, alarm, etc.) interrupted the syscall. Bailing
+                // out of the accept loop on EINTR kills the server while
+                // it's mid-request, which surfaces to the user as
+                // "spinner appears, then dies, no answer". Retry instead.
+                // pcntl_signal_dispatch() picks up any queued signals.
+                if (\function_exists('pcntl_signal_dispatch')) {
+                    \pcntl_signal_dispatch();
+                }
+                continue;
             }
             if ($changed === 0) {
                 // Run registered tick callbacks (background tasks)

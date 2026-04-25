@@ -588,7 +588,6 @@ class Plan
         $raw = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err = $raw === false ? (curl_error($ch) ?: 'curl failed') : '';
-        curl_close($ch);
         if ($raw === false || $code !== 200) {
             return ['ok' => false, 'error' => "AI backend unreachable: {$err} (HTTP {$code})"];
         }

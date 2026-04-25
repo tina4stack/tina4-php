@@ -813,7 +813,6 @@ class DevAdmin
                 $raw = curl_exec($ch);
                 $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $err = $raw === false ? (curl_error($ch) ?: 'curl failed') : '';
-                curl_close($ch);
                 return ['code' => $code, 'body' => $raw, 'error' => $err];
             };
 
@@ -971,7 +970,6 @@ class DevAdmin
             $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
             $upstreamContentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
             $err = $full === false ? (curl_error($ch) ?: 'curl failed') : '';
-            curl_close($ch);
             if ($full === false || $code === 0) {
                 return $response->json([
                     'error' => 'supervisor unavailable',
@@ -1001,7 +999,6 @@ class DevAdmin
             curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
             $raw = curl_exec($ch);
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             if ($raw === false || $code === 0 || $code >= 400) {
                 return $response->json(['thoughts' => []]);
             }
@@ -1087,7 +1084,6 @@ class DevAdmin
             $body = curl_exec($ch);
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $err = $body === false ? (curl_error($ch) ?: 'curl failed') : '';
-            curl_close($ch);
             if ($body === false || $code === 0) {
                 return $response->json(['error' => "AI backend unreachable: {$err}"], 502);
             }
@@ -1544,7 +1540,6 @@ class DevAdmin
             ]);
             $raw = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             if ($raw === false || $code !== 200) {
                 return $response->json(['packages' => [], 'error' => 'packagist unavailable'], 502);
             }
@@ -2517,6 +2512,26 @@ class ErrorTracker
         // Capture PHP errors at ERROR/WARNING level (avoid noise from notices/deprecations)
         $prevError = set_error_handler(
             function (int $errno, string $errstr, string $errfile = '', int $errline = 0) use (&$prevError): bool {
+                // Respect the `@` suppression operator. Without this, every
+                // `@stream_select()` EINTR retry, every `@curl_close()` on
+                // PHP 8.5, every benign suppressed warning floods the dev
+                // panel with UNRESOLVED entries. error_reporting() returns
+                // a reduced mask inside `@` since PHP 8.0; if our severity
+                // bit isn't set there, the caller asked for silence —
+                // honour that.
+                if (!(\error_reporting() & $errno)) {
+                    if ($prevError !== null) {
+                        return (bool) ($prevError)($errno, $errstr, $errfile, $errline);
+                    }
+                    return false;
+                }
+                // EINTR ("Interrupted system call") on stream_select isn't
+                // a bug — it's a signal landing mid-syscall. Filter it out
+                // so a single Ctrl+C / SIGCHLD doesn't mask real errors
+                // behind a wall of repeats.
+                if (\str_contains($errstr, 'Interrupted system call')) {
+                    return true;
+                }
                 $capture = $errno & (
                     E_ERROR | E_WARNING | E_USER_ERROR | E_USER_WARNING | E_RECOVERABLE_ERROR
                 );
