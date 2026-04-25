@@ -23,10 +23,14 @@ class Auth
      *
      * @param array           $payload   Claims to include in the token
      * @param string|int|null $secret    Signing secret, or expiresIn int for back-compat (null = read from SECRET env var)
-     * @param int             $expiresIn Token lifetime in seconds (0 = no expiry, default 3600)
+     * @param int             $expiresIn Token lifetime in MINUTES (0 = no expiry, default 60)
      * @return string Encoded JWT (header.payload.signature)
+     *
+     * @deprecated since 3.11.22 — $expiresIn was previously seconds; it is now MINUTES
+     *             to match Python (tina4_python.auth.get_token) and Ruby. Existing callers
+     *             passing seconds will produce tokens that live ~60x longer than intended.
      */
-    public static function getToken(array $payload, string|int|null $secret = null, int $expiresIn = 3600): string
+    public static function getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string
     {
         // Back-compat: if secret is an int it was passed as expiresIn (old 2-arg form)
         if (is_int($secret)) {
@@ -44,7 +48,8 @@ class Auth
         $now = time();
         $payload['iat'] = $now;
         if ($expiresIn > 0) {
-            $payload['exp'] = $now + $expiresIn;
+            // expiresIn is MINUTES (parity with Python/Ruby) — convert to seconds for exp claim
+            $payload['exp'] = $now + ($expiresIn * 60);
         }
 
         $segments = [];
@@ -223,10 +228,13 @@ class Auth
      * Maps to Python: refresh_token(token, expires_in)
      *
      * @param string $token     The existing JWT
-     * @param int    $expiresIn New lifetime in seconds (default 3600)
+     * @param int    $expiresIn New lifetime in MINUTES (default 60)
      * @return string|null New JWT on success, null if original token is invalid
+     *
+     * @deprecated since 3.11.22 — $expiresIn was previously seconds; it is now MINUTES
+     *             to match Python (tina4_python.auth.refresh_token) and Ruby.
      */
-    public static function refreshToken(string $token, int $expiresIn = 3600): ?string
+    public static function refreshToken(string $token, int $expiresIn = 60): ?string
     {
         if (!self::validToken($token)) {
             return null;

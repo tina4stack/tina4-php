@@ -584,6 +584,48 @@ class ORMV3Test extends TestCase
         $this->assertFalse($user->exists(9999));
     }
 
+    // --- find(scalar) — PK lookup parity with Python/Ruby/Node ---
+
+    public function testFindWithScalarDoesPkLookup(): void
+    {
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Alice', 'alice@test.com')");
+
+        // Scalar argument => PK lookup (returns single instance, parity with Python find(pk))
+        $user = TestUser::find(1);
+
+        $this->assertNotNull($user);
+        $this->assertInstanceOf(TestUser::class, $user);
+        $this->assertSame('Alice', $user->name);
+    }
+
+    public function testFindWithScalarMissingReturnsNull(): void
+    {
+        $user = TestUser::find(9999);
+        $this->assertNull($user);
+    }
+
+    public function testFindWithStringPkDoesPkLookup(): void
+    {
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Bob', 'bob@test.com')");
+
+        // String PK form (e.g. UUIDs) — also routes to PK lookup.
+        $user = TestUser::find('1');
+        $this->assertNotNull($user);
+        $this->assertSame('Bob', $user->name);
+    }
+
+    public function testFindWithArrayStillFiltersForBackCompat(): void
+    {
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Alice', 'alice@test.com')");
+        $this->db->exec("INSERT INTO users (name, email) VALUES ('Bob', 'bob@test.com')");
+
+        // Array argument => filter-based lookup (returns array, PHP back-compat preserved).
+        $results = TestUser::find(['name' => 'Alice']);
+        $this->assertIsArray($results);
+        $this->assertCount(1, $results);
+        $this->assertSame('Alice', $results[0]->name);
+    }
+
     // --- Find with multiple conditions ---
 
     public function testFindWithMultipleConditions(): void

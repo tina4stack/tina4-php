@@ -514,18 +514,33 @@ abstract class ORM
      * @return array<int, static> Array of model instances
      */
     /**
-     * Find records by filter dict. Always returns an array.
-     * Can be called statically: User::find(['name' => 'Alice'])
-     * Or on an instance: $user->find(['name' => 'Alice'])
+     * Find records.
      *
-     * @param array<string, mixed> $filter Column => value pairs (AND-ed)
-     * @param int $limit Max records
-     * @param int $offset Starting offset
-     * @param string|null $orderBy ORDER BY clause
-     * @return array<int, static>
+     * Polymorphic — behaviour depends on the first argument:
+     *   - **scalar** (int|string): primary-key lookup, returns a single instance or null.
+     *     Equivalent to {@see findById()}. This is the form used by Python/Ruby/Node.js
+     *     parity (`User::find(1)`).
+     *   - **array**: filter-based lookup (column => value pairs, AND-ed), returns an array
+     *     of matching instances. Preserves the historical PHP behaviour for back-compat
+     *     (`User::find(['name' => 'Alice'])`).
+     *
+     * Can be called statically: User::find(1)  /  User::find(['name' => 'Alice'])
+     * Or on an instance:        $user->find(1) /  $user->find(['name' => 'Alice'])
+     *
+     * @param array<string, mixed>|int|string $filter PK value (scalar) or column => value pairs (array)
+     * @param int $limit Max records (filter mode only)
+     * @param int $offset Starting offset (filter mode only)
+     * @param string|null $orderBy ORDER BY clause (filter mode only)
+     * @param array<string>|null $include Relationships to eager-load
+     * @return array<int, static>|static|null Array (filter mode), single instance or null (PK mode)
      */
-    public static function find(array $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null, ?array $include = null): array
+    public static function find(array|int|string $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null, ?array $include = null): array|static|null
     {
+        // Scalar form — primary-key lookup (parity with Python/Ruby/Node.js find()).
+        if (!is_array($filter)) {
+            return static::findById($filter, $include);
+        }
+
         $instance = new static();
         $db = $instance->_db ?? static::resolveDb();
 
@@ -652,10 +667,14 @@ abstract class ORM
      * Convert to associative array.
      *
      * @param array|null $include  Relationships to eager-load
-     * @param string     $case     Key casing: 'camel' (default for PHP), 'snake' (matches Python/DB)
+     * @param string     $case     Key casing: 'snake' (default — matches Python/Ruby/DB columns), 'camel' (PHP property names)
      * @return array<string, mixed>
+     *
+     * @deprecated since 3.11.22 — default $case changed from 'camel' to 'snake' to match
+     *             Python (tina4_python.orm.ORM.to_dict) and Ruby. Pass $case='camel' to keep
+     *             camelCase keys.
      */
-    public function toDict(?array $include = null, string $case = 'camel'): array
+    public function toDict(?array $include = null, string $case = 'snake'): array
     {
         $modelProps = $this->getModelProperties();
         if ($case === 'snake') {
@@ -1536,6 +1555,11 @@ abstract class ORM
                 $grouped = [];
                 foreach ($related as $record) {
                     $fkVal = $record->__get($foreignKey);
+                    // Skip records whose FK is null — they cannot match any parent PK
+                    // (avoids PHP 8.5 "null as array offset" deprecation)
+                    if ($fkVal === null) {
+                        continue;
+                    }
                     $grouped[$fkVal][] = $record;
                 }
 

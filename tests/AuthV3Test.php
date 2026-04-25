@@ -43,7 +43,8 @@ class AuthV3Test extends TestCase
 
     public function testGenerateTokenContainsExp(): void
     {
-        $token = Auth::getToken(['sub' => '123'], 3600); // 3600 seconds = 60 minutes
+        // expiresIn is now MINUTES (parity with Python/Ruby) — 60 minutes = 3600 seconds
+        $token = Auth::getToken(['sub' => '123'], 60);
         $payload = Auth::getPayload($token);
         $this->assertArrayHasKey('exp', $payload);
         $this->assertEqualsWithDelta($payload['iat'] + 3600, $payload['exp'], 5);
@@ -481,8 +482,9 @@ class AuthV3Test extends TestCase
 
     public function testRefreshTokenNewExpiry(): void
     {
+        // expiresIn is in MINUTES (parity with Python/Ruby) — 120 min = 7200 sec
         $original = Auth::getToken(['sub' => '1'], 60);
-        $refreshed = Auth::refreshToken($original, 7200); // 7200 seconds
+        $refreshed = Auth::refreshToken($original, 120);
 
         $this->assertTrue(Auth::validToken($refreshed));
         $payload = Auth::getPayload($refreshed);

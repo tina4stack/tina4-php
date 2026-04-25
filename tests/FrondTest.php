@@ -69,6 +69,23 @@ class FrondTest extends TestCase
         $this->assertSame('<b>bold</b>', $this->engine->renderString('{{ html | safe }}', ['html' => '<b>bold</b>']));
     }
 
+    public function testSafeStringFilterBypassesAutoEscape(): void
+    {
+        // Custom filter returns a SafeString — output must not be HTML-escaped.
+        // Parity with Python tina4_python.frond.SafeString.
+        $this->engine->addFilter('uppercase_html', fn($v) => new \Tina4\SafeString('<b>' . strtoupper((string)$v) . '</b>'));
+        $this->assertSame('<b>HELLO</b>', $this->engine->renderString('{{ name | uppercase_html }}', ['name' => 'hello']));
+    }
+
+    public function testSafeStringDirectVariable(): void
+    {
+        // A SafeString supplied directly as a variable bypasses auto-escape.
+        $this->assertSame(
+            '<b>bold</b>',
+            $this->engine->renderString('{{ html }}', ['html' => new \Tina4\SafeString('<b>bold</b>')])
+        );
+    }
+
     public function testStringConcatenation(): void
     {
         $this->assertSame('Hello World', $this->engine->renderString('{{ "Hello" ~ " " ~ "World" }}', []));

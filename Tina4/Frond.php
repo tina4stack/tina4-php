@@ -787,6 +787,11 @@ class Frond
         $value = $this->evaluateExpression($expr, $data);
         $isRaw = false;
 
+        // SafeString instances bypass auto-escape (parity with Python frond.SafeString)
+        if ($value instanceof SafeString) {
+            return (string)$value;
+        }
+
         if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
             $value = str_replace(self::RAW_MARKER, '', $value);
             $isRaw = true;

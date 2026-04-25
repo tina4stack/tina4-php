@@ -288,8 +288,8 @@ class SmokeTest extends TestCase
         $secret = 'smoke-test-secret-key';
         $_ENV['SECRET'] = $secret;
 
-        // Create token
-        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], expiresIn: 3600);
+        // Create token (expiresIn is in MINUTES — parity with Python/Ruby)
+        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], expiresIn: 60);
         $parts = explode('.', $token);
         $this->assertCount(3, $parts);
 
@@ -1337,8 +1337,9 @@ class SmokeTest extends TestCase
     {
         $secret = 'refresh-secret';
         $_ENV['SECRET'] = $secret;
-        $token = Auth::getToken(['sub' => 'user-1'], expiresIn: 3600);
-        $newToken = Auth::refreshToken($token, expiresIn: 7200);
+        // expiresIn is in MINUTES (parity with Python/Ruby)
+        $token = Auth::getToken(['sub' => 'user-1'], expiresIn: 60);
+        $newToken = Auth::refreshToken($token, expiresIn: 120);
 
         $this->assertNotNull($newToken);
         $this->assertNotSame($token, $newToken);

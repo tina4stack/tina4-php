@@ -79,17 +79,28 @@ class Parity31099Test extends TestCase
         $model->productName = 'Widget';
         $model->unitPrice = 9.99;
 
-        // Default (camel) — keys should be camelCase property names
-        $dict = $model->toDict();
+        // Explicit camel — keys should be camelCase property names
+        $dict = $model->toDict(case: 'camel');
 
         $this->assertArrayHasKey('productName', $dict);
         $this->assertArrayHasKey('unitPrice', $dict);
         $this->assertSame('Widget', $dict['productName']);
         $this->assertSame(9.99, $dict['unitPrice']);
+    }
 
-        // Explicit camel gives the same result
-        $dict2 = $model->toDict(case: 'camel');
-        $this->assertSame($dict, $dict2);
+    public function testToDictDefaultIsSnake(): void
+    {
+        // Default case is now 'snake' (parity with Python tina4_python.orm.ORM.to_dict
+        // and Ruby — was 'camel' prior to 3.11.22).
+        $model = new ParityProduct();
+        $model->productName = 'Widget';
+        $model->unitPrice = 9.99;
+
+        $dict = $model->toDict();
+
+        $this->assertArrayHasKey('product_name', $dict);
+        $this->assertArrayHasKey('unit_price', $dict);
+        $this->assertSame($dict, $model->toDict(case: 'snake'));
     }
 
     /* ═══════════ ORM::$autoMap default ═══════════ */
