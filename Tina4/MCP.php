@@ -811,7 +811,9 @@ class McpDevTools
             $routes = [];
             $reflection = new \ReflectionClass(Router::class);
             $prop = $reflection->getProperty('routes');
-            $prop->setAccessible(true);
+            // ReflectionProperty::setAccessible() is deprecated in PHP 8.5
+            // (no-op since 8.1 — getValue() handles private properties
+            // directly). Drop the call to silence the warning.
             $allRoutes = $prop->getValue();
             foreach ($allRoutes as $method => $methodRoutes) {
                 foreach ($methodRoutes as $route) {
@@ -873,6 +875,46 @@ class McpDevTools
             $relPath = str_replace($projectRoot . DIRECTORY_SEPARATOR, '', $p);
             return ['written' => $relPath, 'bytes' => strlen($content)];
         }, 'Write or update a project file');
+
+        // file_patch — targeted replace. The supervisor's system prompt
+        // mandates this as the primary edit tool ("Never reach for
+        // file_write when file_patch can do the job"), so any framework
+        // that doesn't register it makes the LLM's first edit attempt
+        // fail with "Unknown tool: file_patch". Mirrors the Python
+        // implementation byte-for-byte, including the count guard that
+        // rejects ambiguous matches before they corrupt the file.
+        $server->registerTool('file_patch', function (string $path, string $old_string, string $new_string, int $count = 1) use ($safePath, $projectRoot) {
+            $p = $safePath($path);
+            if (!file_exists($p) || !is_file($p)) {
+                return ['error' => "File not found: $path"];
+            }
+            $original = file_get_contents($p);
+            if ($original === false) {
+                return ['error' => "Could not read $path"];
+            }
+            $occurrences = substr_count($original, $old_string);
+            if ($occurrences === 0) {
+                return ['error' => "old_string not found in $path"];
+            }
+            if ($occurrences !== $count) {
+                return [
+                    'error' => "old_string appears {$occurrences} times, expected {$count}. " .
+                        'Expand old_string to make it unique, or set count explicitly.',
+                ];
+            }
+            // PHP's str_replace replaces all matches; we already verified
+            // the count matches, so a single bulk replace is correct.
+            $updated = str_replace($old_string, $new_string, $original);
+            if (file_put_contents($p, $updated) === false) {
+                return ['error' => "Could not write $path"];
+            }
+            $relPath = str_replace($projectRoot . DIRECTORY_SEPARATOR, '', $p);
+            return [
+                'patched' => $relPath,
+                'replacements' => $count,
+                'bytes' => strlen($updated),
+            ];
+        }, 'Targeted edit: replace old_string with new_string in a file');
 
         $server->registerTool('file_list', function (string $path = '.') use ($safePath) {
             $p = $safePath($path);
