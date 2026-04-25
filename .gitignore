@@ -110,3 +110,4 @@ tests/logs/*.log
 .claude/worktrees/
 /data/sessions/
 /data/
+/nonexistent_path/
