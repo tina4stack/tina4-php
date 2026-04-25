@@ -609,9 +609,13 @@ class DevAdmin
             return $response->json(['resolved' => $resolved, 'id' => $id]);
         });
 
-        // API: Clear resolved errors
+        // API: Clear all tracked errors. The SPA's "Clear All" button
+        // sends here, and a user clicking "Clear All" expects the panel
+        // to actually empty — not just hide the items they'd already
+        // marked resolved one-by-one. Use clearAll() instead of
+        // clearResolved() so the button does what it says on the tin.
         Router::post('/__dev/api/broken/clear', function (Request $request, Response $response) {
-            ErrorTracker::clearResolved();
+            ErrorTracker::clearAll();
             return $response->json(['cleared' => true]);
         });
 
@@ -1087,14 +1091,19 @@ class DevAdmin
             if ($body === false || $code === 0) {
                 return $response->json(['error' => "AI backend unreachable: {$err}"], 502);
             }
-            // Forward the qwen response verbatim. Decode+re-encode via
-            // json() so the Tina4 dev-toolbar HTML injection doesn't fire
-            // (it hooks `->html()` and would corrupt the response).
-            $parsed = json_decode((string) $body, true);
-            if (is_array($parsed)) {
-                return $response->json($parsed);
-            }
-            return $response->text((string) $body);
+            // Forward the qwen response verbatim. The SPA's chat()
+            // function reads the body via `body.getReader()` and splits
+            // on newlines, parsing each line as JSON (NDJSON shape). If
+            // we pretty-print here (Response::json() does that by
+            // default), every "line" is a fragment that fails
+            // JSON.parse, accumulated stays empty, and the chat bubble
+            // shows nothing. Python's equivalent endpoint returns
+            // compact JSON, which is why the same SPA works there.
+            // qwen emits compact JSON for stream:false — pass it
+            // through as-is with text() + a Content-Type override so
+            // Tina4's wrapper doesn't re-serialize.
+            return $response->text((string) $body, 200)
+                ->header('Content-Type', 'application/json');
         }))->noAuth();
 
         // API: System info (detailed) — shape mirrors Python _api_system
