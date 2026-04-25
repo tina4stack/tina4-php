@@ -244,14 +244,17 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
         }
 
         $output = fopen('php://temp', 'r+');
-        fputcsv($output, $headers);
+        // Pass $escape explicitly — default-value usage is deprecated in PHP 8.5,
+        // and the default itself will change in PHP 9. Keep the historic backslash
+        // escape so existing CSV consumers see no behavioural change.
+        fputcsv($output, $headers, ',', '"', '\\');
 
         foreach ($this->records as $row) {
             $line = [];
             foreach ($headers as $col) {
                 $line[] = $row[$col] ?? '';
             }
-            fputcsv($output, $line);
+            fputcsv($output, $line, ',', '"', '\\');
         }
 
         rewind($output);
