@@ -57,6 +57,24 @@ class Database implements DatabaseAdapter
     /** @var int Round-robin index for pool rotation */
     private int $poolIndex = 0;
 
+    /**
+     * @var DatabaseAdapter|null Adapter pinned to the current transaction.
+     *
+     * With pooling enabled, ordinary calls round-robin through the pool.
+     * Inside a transaction, however, all calls must land on the SAME
+     * adapter — otherwise startTransaction(), execute() and commit()
+     * each rotate to a different connection and the transaction is
+     * meaningless (executes autocommit on whatever adapter they hit;
+     * the final commit lands on yet another adapter that has nothing
+     * to commit; rollback() is silently no-op'd).
+     *
+     * PHP-FPM is one process per request, so a plain instance property
+     * works as the per-request pin — there's no thread-local needed
+     * (Python uses threading.local() for its multi-threaded model).
+     * startTransaction() sets the pin, commit()/rollback() clear it.
+     */
+    private ?DatabaseAdapter $pinnedAdapter = null;
+
     /** @var string Connection URL for lazy pool creation */
     private string $url;
 
@@ -138,10 +156,20 @@ class Database implements DatabaseAdapter
     /**
      * Get the next adapter — from pool (round-robin) or single connection.
      *
+     * If a transaction is in progress, returns the pinned adapter so that
+     * startTransaction(), every execute(), and the final commit/rollback
+     * all run on the same connection. Without this, pool>0 silently breaks
+     * atomicity (rollback no-ops, executes autocommit on rotated adapters).
+     *
      * @return DatabaseAdapter
      */
     private function getNextAdapter(): DatabaseAdapter
     {
+        // Pinned during a transaction — same adapter for every call.
+        if ($this->pinnedAdapter !== null) {
+            return $this->pinnedAdapter;
+        }
+
         if ($this->poolSize > 0) {
             $idx = $this->poolIndex;
             $this->poolIndex = ($this->poolIndex + 1) % $this->poolSize;
@@ -417,27 +445,34 @@ class Database implements DatabaseAdapter
     }
 
     /**
-     * Begin a transaction.
+     * Begin a transaction. Pins the adapter for the whole transaction so
+     * executes and the final commit/rollback all run on the same connection.
      */
     public function startTransaction(): void
     {
-        $this->getNextAdapter()->startTransaction();
+        $adapter = $this->getNextAdapter();
+        $this->pinnedAdapter = $adapter;
+        $adapter->startTransaction();
     }
 
     /**
-     * Commit the current transaction.
+     * Commit the current transaction and release the adapter pin.
      */
     public function commit(): void
     {
-        $this->getNextAdapter()->commit();
+        $adapter = $this->getNextAdapter();
+        $adapter->commit();
+        $this->pinnedAdapter = null;
     }
 
     /**
-     * Rollback the current transaction.
+     * Rollback the current transaction and release the adapter pin.
      */
     public function rollback(): void
     {
-        $this->getNextAdapter()->rollback();
+        $adapter = $this->getNextAdapter();
+        $adapter->rollback();
+        $this->pinnedAdapter = null;
     }
 
     // -------------------------------------------------------------------------
