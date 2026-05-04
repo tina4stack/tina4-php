@@ -1,7 +1,6 @@
 {
     "name": "tina4stack/tina4php",
     "description": "Tina4 for PHP — 54 built-in features, zero dependencies",
-    "version": "3.11.32",
     "license": "MIT",
     "autoload": {
         "psr-4": {
