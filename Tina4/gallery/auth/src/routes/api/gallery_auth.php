@@ -104,7 +104,7 @@ HTML;
     $username = $body['username'] ?? '';
     $password = $body['password'] ?? '';
     if ($username !== '' && $password !== '') {
-        $secret = getenv('SECRET') ?: 'tina4-gallery-secret';
+        $secret = getenv('TINA4_SECRET') ?: 'tina4-gallery-secret';
         $token = \Tina4\Auth::getToken(['username' => $username, 'role' => 'user'], $secret);
         return $response->json(['token' => $token, 'message' => "Welcome {$username}!"]);
     }
@@ -113,7 +113,7 @@ HTML;
 
 \Tina4\Router::get('/api/gallery/auth/verify', function (\Tina4\Request $request, \Tina4\Response $response) {
     $token = $request->queryParam('token', '');
-    $secret = getenv('SECRET') ?: 'tina4-gallery-secret';
+    $secret = getenv('TINA4_SECRET') ?: 'tina4-gallery-secret';
     $valid = \Tina4\Auth::validToken($token, $secret);
     return $response->json(['valid' => $valid]);
 });

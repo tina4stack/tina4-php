@@ -366,7 +366,7 @@ class MessengerTest extends TestCase
 
     public function testFactoryReturnsDevMailboxWithoutSmtpHost(): void
     {
-        putenv('SMTP_HOST');
+        putenv('TINA4_MAIL_HOST');
         putenv('TINA4_DEBUG');
         $instance = MessengerFactory::create();
         $this->assertInstanceOf(DevMailbox::class, $instance);
@@ -375,20 +375,20 @@ class MessengerTest extends TestCase
     public function testFactoryReturnsDevMailboxInDebugMode(): void
     {
         putenv('TINA4_DEBUG=true');
-        putenv('SMTP_HOST=smtp.example.com');
+        putenv('TINA4_MAIL_HOST=smtp.example.com');
         $instance = MessengerFactory::create();
         $this->assertInstanceOf(DevMailbox::class, $instance);
         putenv('TINA4_DEBUG');
-        putenv('SMTP_HOST');
+        putenv('TINA4_MAIL_HOST');
     }
 
     public function testFactoryReturnsMessengerInProduction(): void
     {
         putenv('TINA4_DEBUG=false');
-        putenv('SMTP_HOST=smtp.example.com');
+        putenv('TINA4_MAIL_HOST=smtp.example.com');
         $instance = MessengerFactory::create();
         $this->assertInstanceOf(Messenger::class, $instance);
         putenv('TINA4_DEBUG');
-        putenv('SMTP_HOST');
+        putenv('TINA4_MAIL_HOST');
     }
 }

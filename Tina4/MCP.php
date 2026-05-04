@@ -684,7 +684,7 @@ class McpServer
      */
     public static function isLocalhost(): bool
     {
-        $host = getenv('HOST_NAME') ?: 'localhost:7146';
+        $host = getenv('TINA4_HOST_NAME') ?: 'localhost:7146';
         $hostPart = explode(':', $host)[0];
         return in_array($hostPart, ['localhost', '127.0.0.1', '0.0.0.0', '::1', ''], true);
     }

@@ -122,13 +122,13 @@ class DatabaseUrl
     }
 
     /**
-     * Parse a DATABASE_URL from environment variable.
+     * Parse a TINA4_DATABASE_URL from environment variable.
      *
-     * @param string $envKey The environment variable name (default: DATABASE_URL)
+     * @param string $envKey The environment variable name (default: TINA4_DATABASE_URL)
      * @return self|null Null if the env var is not set
      * @throws \InvalidArgumentException If the URL format is invalid
      */
-    public static function fromEnv(string $envKey = 'DATABASE_URL'): ?self
+    public static function fromEnv(string $envKey = 'TINA4_DATABASE_URL'): ?self
     {
         $url = DotEnv::getEnv($envKey);
 

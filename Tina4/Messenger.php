@@ -91,33 +91,28 @@ class Messenger
         ?string $imapHost = null,
         ?int $imapPort = null,
     ) {
-        // SMTP — priority: constructor > TINA4_MAIL_* > SMTP_* > default
+        // SMTP — priority: constructor > TINA4_MAIL_* > default
         $this->host = $host
             ?? $this->env('TINA4_MAIL_HOST')
-            ?? $this->env('SMTP_HOST')
             ?? 'localhost';
 
-        $envPort = $this->env('TINA4_MAIL_PORT') ?? $this->env('SMTP_PORT');
+        $envPort = $this->env('TINA4_MAIL_PORT');
         $this->port = $port ?? ($envPort !== null ? (int)$envPort : 587);
 
         $this->username = $username
             ?? $this->env('TINA4_MAIL_USERNAME')
-            ?? $this->env('SMTP_USERNAME')
             ?? '';
 
         $this->password = $password
             ?? $this->env('TINA4_MAIL_PASSWORD')
-            ?? $this->env('SMTP_PASSWORD')
             ?? '';
 
         $resolvedFrom = $fromAddress
-            ?? $this->env('TINA4_MAIL_FROM')
-            ?? $this->env('SMTP_FROM');
+            ?? $this->env('TINA4_MAIL_FROM');
         $this->fromAddress = $resolvedFrom ?? ($this->username ?: 'noreply@localhost');
 
         $this->fromName = $fromName
-            ?? $this->env('TINA4_MAIL_FROM_NAME')
-            ?? $this->env('SMTP_FROM_NAME');
+            ?? $this->env('TINA4_MAIL_FROM_NAME');
 
         // Encryption: constructor > .env > backward-compat useTls > default "tls"
         $envEncryption = $encryption
@@ -133,10 +128,9 @@ class Messenger
 
         // IMAP
         $this->imapHost = $imapHost
-            ?? $this->env('TINA4_MAIL_IMAP_HOST')
-            ?? $this->env('IMAP_HOST');
+            ?? $this->env('TINA4_MAIL_IMAP_HOST');
 
-        $envImapPort = $this->env('TINA4_MAIL_IMAP_PORT') ?? $this->env('IMAP_PORT');
+        $envImapPort = $this->env('TINA4_MAIL_IMAP_PORT');
         $this->imapPort = $imapPort ?? ($envImapPort !== null ? (int)$envImapPort : 993);
     }
 
@@ -880,7 +874,7 @@ class Messenger
         }
 
         if ($this->imapHost === null) {
-            throw new \RuntimeException('IMAP host is required. Set IMAP_HOST env var or pass imapHost to constructor.');
+            throw new \RuntimeException('IMAP host is required. Set TINA4_MAIL_IMAP_HOST env var or pass imapHost to constructor.');
         }
 
         $mailbox = $this->imapMailbox($folder);

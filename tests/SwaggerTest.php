@@ -6,7 +6,7 @@ use Tina4\Router;
 
 class SwaggerTest extends TestCase
 {
-    private array $savedEnvKeys = ['SWAGGER_TITLE', 'SWAGGER_VERSION', 'SWAGGER_DESCRIPTION'];
+    private array $savedEnvKeys = ['TINA4_SWAGGER_TITLE', 'TINA4_SWAGGER_VERSION', 'TINA4_SWAGGER_DESCRIPTION'];
     private array $savedEnvValues = [];
 
     protected function setUp(): void
@@ -90,18 +90,18 @@ class SwaggerTest extends TestCase
 
     public function testCustomTitle(): void
     {
-        putenv('SWAGGER_TITLE=My API');
+        putenv('TINA4_SWAGGER_TITLE=My API');
         $spec = Swagger::generate();
         $this->assertSame('My API', $spec['info']['title']);
-        putenv('SWAGGER_TITLE');
+        putenv('TINA4_SWAGGER_TITLE');
     }
 
     public function testCustomVersion(): void
     {
-        putenv('SWAGGER_VERSION=2.5.0');
+        putenv('TINA4_SWAGGER_VERSION=2.5.0');
         $spec = Swagger::generate();
         $this->assertSame('2.5.0', $spec['info']['version']);
-        putenv('SWAGGER_VERSION');
+        putenv('TINA4_SWAGGER_VERSION');
     }
 
     public function testDefaultDescription(): void

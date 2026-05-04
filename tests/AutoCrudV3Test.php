@@ -32,8 +32,8 @@ class AutoCrudV3Test extends TestCase
     protected function setUp(): void
     {
         Router::clear();
-        putenv("SECRET={$this->secret}");
-        $_ENV['SECRET'] = $this->secret;
+        putenv("TINA4_SECRET={$this->secret}");
+        $_ENV['TINA4_SECRET'] = $this->secret;
         $this->db = new SQLite3Adapter(':memory:');
         $this->db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT, price REAL)");
         \Tina4\ORM::setGlobalDb($this->db);
@@ -42,8 +42,8 @@ class AutoCrudV3Test extends TestCase
     protected function tearDown(): void
     {
         Router::clear();
-        putenv('SECRET');
-        unset($_ENV['SECRET']);
+        putenv('TINA4_SECRET');
+        unset($_ENV['TINA4_SECRET']);
         $this->db->close();
     }
 

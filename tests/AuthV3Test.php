@@ -15,21 +15,21 @@ class AuthV3Test extends TestCase
 
     protected function setUp(): void
     {
-        $_ENV['SECRET'] = $this->secret;
+        $_ENV['TINA4_SECRET'] = $this->secret;
     }
 
     protected function tearDown(): void
     {
-        unset($_ENV['SECRET']);
-        unset($_ENV['JWT_ALGORITHM']);
+        unset($_ENV['TINA4_SECRET']);
+        unset($_ENV['TINA4_JWT_ALGORITHM']);
         // Clear getenv-side too so cross-test pollution can't shadow $_ENV in
         // the next test (regression guard for the CI failure fixed in 3.11.34)
-        putenv('SECRET');
-        putenv('JWT_ALGORITHM');
+        putenv('TINA4_SECRET');
+        putenv('TINA4_JWT_ALGORITHM');
     }
 
     // ── Secret resolution (regression guard for 3.11.34 CI fix) ────────
-    // Both Auth::getToken and Auth::validToken must resolve SECRET in the
+    // Both Auth::getToken and Auth::validToken must resolve TINA4_SECRET in the
     // SAME priority order — getenv() first, $_ENV second. If they differ,
     // a token signed with one source can't be verified with the other,
     // which manifests as a 401 on every secure route whenever an ambient
@@ -37,19 +37,19 @@ class AuthV3Test extends TestCase
 
     public function testGetenvOverridesStaleEnvSuperglobal(): void
     {
-        // Simulate a CI runner where $_ENV['SECRET'] was set by .env load
+        // Simulate a CI runner where $_ENV['TINA4_SECRET'] was set by .env load
         // (or a prior test) and a runtime putenv() then overrides it.
-        $_ENV['SECRET'] = 'stale-env-superglobal-value';
-        putenv('SECRET=runtime-override-value');
+        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value';
+        putenv('TINA4_SECRET=runtime-override-value');
 
         // Sign with no-arg getToken (resolves from env) and verify the same way
         $token = Auth::getToken(['sub' => 'tester']);
         $this->assertTrue(
             Auth::validToken($token),
-            'Auth must resolve SECRET consistently between getToken and validToken'
+            'Auth must resolve TINA4_SECRET consistently between getToken and validToken'
         );
 
-        putenv('SECRET'); // clear getenv side
+        putenv('TINA4_SECRET'); // clear getenv side
         // $_ENV is restored by tearDown
     }
 
@@ -58,37 +58,37 @@ class AuthV3Test extends TestCase
         // SmokeTest pattern: getToken receives an explicit secret AND
         // putenv() is set to the same value. validToken (no arg) must
         // resolve to the runtime putenv() value, not a stale $_ENV.
-        $_ENV['SECRET'] = 'stale-env-superglobal-value';
-        putenv('SECRET=explicit-runtime-secret');
+        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value';
+        putenv('TINA4_SECRET=explicit-runtime-secret');
 
         $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret');
         $this->assertTrue(Auth::validToken($token));
 
-        putenv('SECRET');
+        putenv('TINA4_SECRET');
     }
 
     public function testValidTokenPrefersGetenvOverEnvSuperglobal(): void
     {
         // Direct probe: getenv and $_ENV disagree. The token is signed with
         // the getenv value; validation must accept it.
-        $_ENV['SECRET'] = 'env-superglobal-value';
-        putenv('SECRET=getenv-value');
+        $_ENV['TINA4_SECRET'] = 'env-superglobal-value';
+        putenv('TINA4_SECRET=getenv-value');
 
         $token = Auth::getToken(['sub' => 'tester'], 'getenv-value');
 
         // No-arg validation must use getenv() — same source getToken used
         $this->assertTrue(Auth::validToken($token));
 
-        putenv('SECRET');
+        putenv('TINA4_SECRET');
     }
 
     public function testJwtAlgorithmAlsoPrefersGetenv(): void
     {
-        // Same priority rule must apply to JWT_ALGORITHM (parity with SECRET)
-        $_ENV['JWT_ALGORITHM'] = 'RS256';            // stale
-        putenv('JWT_ALGORITHM=HS256');                // runtime override
-        $_ENV['SECRET'] = 'stale';
-        putenv('SECRET=test-secret-key-for-jwt');
+        // Same priority rule must apply to TINA4_JWT_ALGORITHM (parity with TINA4_SECRET)
+        $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';            // stale
+        putenv('TINA4_JWT_ALGORITHM=HS256');                // runtime override
+        $_ENV['TINA4_SECRET'] = 'stale';
+        putenv('TINA4_SECRET=test-secret-key-for-jwt');
 
         $token = Auth::getToken(['sub' => 'tester']);
 
@@ -96,8 +96,8 @@ class AuthV3Test extends TestCase
         // would mismatch. PASS proves both resolve identically.
         $this->assertTrue(Auth::validToken($token));
 
-        putenv('SECRET');
-        putenv('JWT_ALGORITHM');
+        putenv('TINA4_SECRET');
+        putenv('TINA4_JWT_ALGORITHM');
     }
 
     // ── JWT Generation ────────────────────────────────────────────
@@ -167,9 +167,9 @@ class AuthV3Test extends TestCase
     {
         // Generate token with correct secret, then switch env to wrong secret for validation
         $token = Auth::getToken(['sub' => '123']);
-        $_ENV['SECRET'] = 'wrong-secret';
+        $_ENV['TINA4_SECRET'] = 'wrong-secret';
         $result = Auth::validToken($token);
-        $_ENV['SECRET'] = $this->secret;
+        $_ENV['TINA4_SECRET'] = $this->secret;
 
         $this->assertFalse($result);
     }
@@ -260,8 +260,8 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $_ENV['SECRET'] = $privateKey;
-        $_ENV['JWT_ALGORITHM'] = 'RS256';
+        $_ENV['TINA4_SECRET'] = $privateKey;
+        $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
 
         $token = Auth::getToken(['sub' => 'rs256-user', 'role' => 'admin'], 3600);
 
@@ -270,15 +270,15 @@ class AuthV3Test extends TestCase
         $this->assertCount(3, $parts);
 
         // Verify with public key
-        $_ENV['SECRET'] = $publicKey;
+        $_ENV['TINA4_SECRET'] = $publicKey;
         $this->assertTrue(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals('rs256-user', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
 
         // Restore
-        $_ENV['SECRET'] = $this->secret;
-        unset($_ENV['JWT_ALGORITHM']);
+        $_ENV['TINA4_SECRET'] = $this->secret;
+        unset($_ENV['TINA4_JWT_ALGORITHM']);
     }
 
     public function testRS256RejectsWrongKey(): void
@@ -293,17 +293,17 @@ class AuthV3Test extends TestCase
         $publicKeyDetails2 = openssl_pkey_get_details($keyPair2);
         $publicKey2 = $publicKeyDetails2['key'];
 
-        $_ENV['SECRET'] = $privateKey1;
-        $_ENV['JWT_ALGORITHM'] = 'RS256';
+        $_ENV['TINA4_SECRET'] = $privateKey1;
+        $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
         $token = Auth::getToken(['sub' => 'test'], 3600);
 
         // Verify with wrong public key
-        $_ENV['SECRET'] = $publicKey2;
+        $_ENV['TINA4_SECRET'] = $publicKey2;
         $result = Auth::validToken($token);
 
         // Restore
-        $_ENV['SECRET'] = $this->secret;
-        unset($_ENV['JWT_ALGORITHM']);
+        $_ENV['TINA4_SECRET'] = $this->secret;
+        unset($_ENV['TINA4_JWT_ALGORITHM']);
 
         $this->assertFalse($result);
     }
@@ -314,13 +314,13 @@ class AuthV3Test extends TestCase
         $keyPair = openssl_pkey_new($config);
         openssl_pkey_export($keyPair, $privateKey);
 
-        $_ENV['SECRET'] = $privateKey;
-        $_ENV['JWT_ALGORITHM'] = 'RS256';
+        $_ENV['TINA4_SECRET'] = $privateKey;
+        $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
         $token = Auth::getToken(['sub' => '1'], 3600);
 
         // Restore
-        $_ENV['SECRET'] = $this->secret;
-        unset($_ENV['JWT_ALGORITHM']);
+        $_ENV['TINA4_SECRET'] = $this->secret;
+        unset($_ENV['TINA4_JWT_ALGORITHM']);
 
         $parts = explode('.', $token);
 
@@ -577,17 +577,17 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $_ENV['SECRET'] = $privateKey;
-        $_ENV['JWT_ALGORITHM'] = 'RS256';
+        $_ENV['TINA4_SECRET'] = $privateKey;
+        $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
 
         $token = Auth::getToken(['sub' => 'test', 'exp' => time() - 10], 0);
 
-        $_ENV['SECRET'] = $publicKey;
+        $_ENV['TINA4_SECRET'] = $publicKey;
         $result = Auth::validToken($token); // Expired
 
         // Restore
-        $_ENV['SECRET'] = $this->secret;
-        unset($_ENV['JWT_ALGORITHM']);
+        $_ENV['TINA4_SECRET'] = $this->secret;
+        unset($_ENV['TINA4_JWT_ALGORITHM']);
 
         $this->assertFalse($result);
     }

@@ -193,7 +193,7 @@ class DevAdmin
                 'framework_version' => App::$VERSION,
                 'debug' => getenv('TINA4_DEBUG') ?: 'false',
                 'log_level' => getenv('TINA4_LOG_LEVEL') ?: 'ERROR',
-                'database' => getenv('DATABASE_URL') ?: 'not configured',
+                'database' => getenv('TINA4_DATABASE_URL') ?: 'not configured',
                 'db_tables' => $dbTableCount,
                 'mailbox' => $mailboxCount,
                 'messages' => MessageLog::count(),
@@ -1201,7 +1201,7 @@ class DevAdmin
                 'cwd' => getcwd() ?: '',
                 'debug' => getenv('TINA4_DEBUG') ?: 'false',
                 'log_level' => getenv('TINA4_LOG_LEVEL') ?: 'ERROR',
-                'database' => getenv('DATABASE_URL') ?: 'not configured',
+                'database' => getenv('TINA4_DATABASE_URL') ?: 'not configured',
                 'memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
                 'uptime_seconds' => round(microtime(true) - self::bootTime(), 1),
                 'db_tables' => $dbTables,
@@ -1226,11 +1226,11 @@ class DevAdmin
                     [$key, $val] = explode('=', $line, 2);
                     $key = trim($key);
                     $val = trim(trim($val), '"\'');
-                    if ($key === 'DATABASE_URL') {
+                    if ($key === 'TINA4_DATABASE_URL') {
                         $url = $val;
-                    } elseif ($key === 'DATABASE_USERNAME') {
+                    } elseif ($key === 'TINA4_DATABASE_USERNAME') {
                         $username = $val;
-                    } elseif ($key === 'DATABASE_PASSWORD') {
+                    } elseif ($key === 'TINA4_DATABASE_PASSWORD') {
                         $password = $val !== '' ? '***' : '';
                     }
                 }
@@ -1294,7 +1294,7 @@ class DevAdmin
             try {
                 $envPath = '.env';
                 $lines = file_exists($envPath) ? file($envPath, FILE_IGNORE_NEW_LINES) : [];
-                $keysFound = ['DATABASE_URL' => false, 'DATABASE_USERNAME' => false, 'DATABASE_PASSWORD' => false];
+                $keysFound = ['TINA4_DATABASE_URL' => false, 'TINA4_DATABASE_USERNAME' => false, 'TINA4_DATABASE_PASSWORD' => false];
                 $newLines = [];
                 foreach ($lines as $line) {
                     $trimmed = trim($line);
@@ -1303,20 +1303,20 @@ class DevAdmin
                         continue;
                     }
                     $key = trim(explode('=', $trimmed, 2)[0]);
-                    if ($key === 'DATABASE_URL') {
-                        $newLines[] = "DATABASE_URL={$url}";
-                        $keysFound['DATABASE_URL'] = true;
-                    } elseif ($key === 'DATABASE_USERNAME') {
-                        $newLines[] = "DATABASE_USERNAME={$username}";
-                        $keysFound['DATABASE_USERNAME'] = true;
-                    } elseif ($key === 'DATABASE_PASSWORD') {
-                        $newLines[] = "DATABASE_PASSWORD={$password}";
-                        $keysFound['DATABASE_PASSWORD'] = true;
+                    if ($key === 'TINA4_DATABASE_URL') {
+                        $newLines[] = "TINA4_DATABASE_URL={$url}";
+                        $keysFound['TINA4_DATABASE_URL'] = true;
+                    } elseif ($key === 'TINA4_DATABASE_USERNAME') {
+                        $newLines[] = "TINA4_DATABASE_USERNAME={$username}";
+                        $keysFound['TINA4_DATABASE_USERNAME'] = true;
+                    } elseif ($key === 'TINA4_DATABASE_PASSWORD') {
+                        $newLines[] = "TINA4_DATABASE_PASSWORD={$password}";
+                        $keysFound['TINA4_DATABASE_PASSWORD'] = true;
                     } else {
                         $newLines[] = $line;
                     }
                 }
-                $values = ['DATABASE_URL' => $url, 'DATABASE_USERNAME' => $username, 'DATABASE_PASSWORD' => $password];
+                $values = ['TINA4_DATABASE_URL' => $url, 'TINA4_DATABASE_USERNAME' => $username, 'TINA4_DATABASE_PASSWORD' => $password];
                 foreach ($keysFound as $key => $found) {
                     if (!$found) {
                         $newLines[] = "{$key}={$values[$key]}";

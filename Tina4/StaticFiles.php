@@ -71,15 +71,26 @@ class StaticFiles
             return null;
         }
 
-        // Search directories in order: app public, then framework public
-        $searchDirs = [
-            $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public',
-            $basePath . DIRECTORY_SEPARATOR . 'public',
-            dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public',
-        ];
+        // Search directories in order: TINA4_PUBLIC_DIR override, app public,
+        // then framework built-in public (tina4.min.js etc.)
+        $searchDirs = [];
+        $customPublic = getenv('TINA4_PUBLIC_DIR');
+        if ($customPublic !== false && $customPublic !== '') {
+            $searchDirs[] = rtrim($customPublic, DIRECTORY_SEPARATOR);
+        }
+        $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
+        $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'public';
+        $searchDirs[] = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
 
         // Normalise the request path to a relative file path
         $relativePath = ltrim($path, '/');
+
+        // Index resolution: '/' or '/foo/' -> append 'index.html' so a Vite/SPA
+        // build with src/public/index.html serves at the matching URL — no
+        // custom Router::get('/', ...) route needed.
+        if ($relativePath === '' || str_ends_with($relativePath, '/')) {
+            $relativePath .= 'index.html';
+        }
 
         foreach ($searchDirs as $dir) {
             // Try exact file match, then index.html for directory-style requests

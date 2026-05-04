@@ -22,8 +22,8 @@ class DatabaseUrlTest extends TestCase
     protected function tearDown(): void
     {
         DotEnv::resetEnv();
-        putenv('DATABASE_URL');
-        unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
     }
 
     public function testParseSqlitePath(): void
@@ -222,8 +222,8 @@ class DatabaseUrlTest extends TestCase
 
     public function testFromEnvParsesWhenSet(): void
     {
-        $_ENV['DATABASE_URL'] = 'sqlite:///tmp/test.db';
-        putenv('DATABASE_URL=sqlite:///tmp/test.db');
+        $_ENV['TINA4_DATABASE_URL'] = 'sqlite:///tmp/test.db';
+        putenv('TINA4_DATABASE_URL=sqlite:///tmp/test.db');
 
         // Reset DotEnv so it picks up the env var
         DotEnv::resetEnv();
@@ -339,8 +339,8 @@ class DatabaseUrlTest extends TestCase
 
     public function testFactoryFromEnvReturnsNullWhenNotSet(): void
     {
-        putenv('DATABASE_URL');
-        unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
         DotEnv::resetEnv();
 
         $result = Database::fromEnv();
@@ -349,8 +349,8 @@ class DatabaseUrlTest extends TestCase
 
     public function testFactoryFromEnvCreatesSqliteAdapter(): void
     {
-        $_ENV['DATABASE_URL'] = 'sqlite::memory:';
-        putenv('DATABASE_URL=sqlite::memory:');
+        $_ENV['TINA4_DATABASE_URL'] = 'sqlite::memory:';
+        putenv('TINA4_DATABASE_URL=sqlite::memory:');
         DotEnv::resetEnv();
 
         $result = Database::fromEnv();

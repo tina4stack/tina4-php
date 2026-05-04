@@ -27,14 +27,14 @@ class RouterAuthPayloadTest extends TestCase
     protected function setUp(): void
     {
         Router::clear();
-        putenv("SECRET={$this->secret}");
+        putenv("TINA4_SECRET={$this->secret}");
         putenv('TINA4_CSRF=true');
     }
 
     protected function tearDown(): void
     {
         Router::clear();
-        putenv('SECRET');
+        putenv('TINA4_SECRET');
         putenv('TINA4_CSRF');
     }
 

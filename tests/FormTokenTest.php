@@ -9,7 +9,7 @@ class FormTokenTest extends TestCase
 
     protected function setUp(): void
     {
-        $_ENV['SECRET'] = 'test-secret-key';
+        $_ENV['TINA4_SECRET'] = 'test-secret-key';
         $templateDir = sys_get_temp_dir() . '/tina4-frond-formtoken-test';
         if (!is_dir($templateDir)) {
             mkdir($templateDir, 0777, true);
@@ -19,7 +19,7 @@ class FormTokenTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($_ENV['SECRET']);
+        unset($_ENV['TINA4_SECRET']);
     }
 
     /**
@@ -240,9 +240,9 @@ class FormTokenTest extends TestCase
         // Should validate with the same secret
         $this->assertTrue(\Tina4\Auth::validToken($token));
         // Should NOT validate with a different secret
-        $_ENV['SECRET'] = 'wrong-secret';
+        $_ENV['TINA4_SECRET'] = 'wrong-secret';
         $wrongResult = \Tina4\Auth::validToken($token);
-        $_ENV['SECRET'] = 'test-secret-key';
+        $_ENV['TINA4_SECRET'] = 'test-secret-key';
         $this->assertFalse($wrongResult);
     }
 }

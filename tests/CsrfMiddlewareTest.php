@@ -32,14 +32,14 @@ class CsrfMiddlewareTest extends TestCase
 
     protected function setUp(): void
     {
-        $_ENV['SECRET'] = $this->secret;
+        $_ENV['TINA4_SECRET'] = $this->secret;
         // Ensure CSRF is enabled by default
         putenv('TINA4_CSRF=true');
     }
 
     protected function tearDown(): void
     {
-        unset($_ENV['SECRET']);
+        unset($_ENV['TINA4_SECRET']);
         putenv('TINA4_CSRF');
     }
 
@@ -222,9 +222,9 @@ class CsrfMiddlewareTest extends TestCase
     public function testCsrfRejectsWrongSecretToken(): void
     {
         // Generate token with a different secret than what the middleware will verify with
-        $_ENV['SECRET'] = 'wrong-secret-key';
+        $_ENV['TINA4_SECRET'] = 'wrong-secret-key';
         $wrongToken = Auth::getToken(['type' => 'form'], 3600);
-        $_ENV['SECRET'] = $this->secret;
+        $_ENV['TINA4_SECRET'] = $this->secret;
         $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $wrongToken]);
         $response = new Response(true);
 

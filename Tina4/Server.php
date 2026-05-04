@@ -1075,30 +1075,47 @@ class Server
     }
 
     /**
+     * RFC 7231 / RFC 9110 status reason phrases. We use this to write a
+     * correct HTTP status line in the dev server — previously the server
+     * wrote "HTTP/1.1 404 OK" for unknown codes which is malformed.
+     *
+     * @var array<int, string>
+     */
+    private const HTTP_REASON_PHRASES = [
+        100 => 'Continue', 101 => 'Switching Protocols',
+        200 => 'OK', 201 => 'Created', 202 => 'Accepted', 204 => 'No Content',
+        206 => 'Partial Content',
+        301 => 'Moved Permanently', 302 => 'Found', 303 => 'See Other',
+        304 => 'Not Modified', 307 => 'Temporary Redirect', 308 => 'Permanent Redirect',
+        400 => 'Bad Request', 401 => 'Unauthorized', 403 => 'Forbidden',
+        404 => 'Not Found', 405 => 'Method Not Allowed', 406 => 'Not Acceptable',
+        409 => 'Conflict', 410 => 'Gone', 413 => 'Content Too Large',
+        415 => 'Unsupported Media Type', 422 => 'Unprocessable Content',
+        429 => 'Too Many Requests',
+        500 => 'Internal Server Error', 501 => 'Not Implemented',
+        502 => 'Bad Gateway', 503 => 'Service Unavailable', 504 => 'Gateway Timeout',
+    ];
+
+    /**
+     * Return the canonical HTTP reason phrase for $status.
+     *
+     * Falls back to a sensible label when an exotic status is used. Never
+     * returns an empty string — the HTTP/1.1 status line requires a phrase.
+     */
+    public static function httpReason(int $status): string
+    {
+        if (isset(self::HTTP_REASON_PHRASES[$status])) {
+            return self::HTTP_REASON_PHRASES[$status];
+        }
+        return ($status >= 200 && $status < 300) ? 'OK' : 'Error';
+    }
+
+    /**
      * Get HTTP status text for a code.
      */
     private function getStatusText(int $code): string
     {
-        return match ($code) {
-            200 => 'OK',
-            201 => 'Created',
-            204 => 'No Content',
-            301 => 'Moved Permanently',
-            302 => 'Found',
-            304 => 'Not Modified',
-            400 => 'Bad Request',
-            401 => 'Unauthorized',
-            403 => 'Forbidden',
-            404 => 'Not Found',
-            405 => 'Method Not Allowed',
-            409 => 'Conflict',
-            422 => 'Unprocessable Entity',
-            429 => 'Too Many Requests',
-            500 => 'Internal Server Error',
-            502 => 'Bad Gateway',
-            503 => 'Service Unavailable',
-            default => 'Unknown',
-        };
+        return self::httpReason($code);
     }
 
     /**

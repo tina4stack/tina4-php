@@ -18,6 +18,104 @@ class App
     public static string $VERSION = '0.0.0';
 
     /**
+     * Legacy env var names that v3.12 retired. Each maps to its new
+     * TINA4_-prefixed canonical name. If any of these are set in the
+     * environment we refuse to boot — silently ignoring them would
+     * cause auth/db/mail to fall back to defaults with no warning.
+     *
+     * Bypass with TINA4_ALLOW_LEGACY_ENV=true in CI / migration scripts
+     * that genuinely need both names set during a transition window.
+     *
+     * @var array<string, string>
+     */
+    public const LEGACY_ENV_VARS = [
+        'DATABASE_URL'           => 'TINA4_DATABASE_URL',
+        'DATABASE_USERNAME'      => 'TINA4_DATABASE_USERNAME',
+        'DATABASE_PASSWORD'      => 'TINA4_DATABASE_PASSWORD',
+        'DB_URL'                 => 'TINA4_DATABASE_URL',
+        'SECRET'                 => 'TINA4_SECRET',
+        'API_KEY'                => 'TINA4_API_KEY',
+        'JWT_ALGORITHM'          => 'TINA4_JWT_ALGORITHM',
+        'SMTP_HOST'              => 'TINA4_MAIL_HOST',
+        'SMTP_PORT'              => 'TINA4_MAIL_PORT',
+        'SMTP_USERNAME'          => 'TINA4_MAIL_USERNAME',
+        'SMTP_PASSWORD'          => 'TINA4_MAIL_PASSWORD',
+        'SMTP_FROM'              => 'TINA4_MAIL_FROM',
+        'SMTP_FROM_NAME'         => 'TINA4_MAIL_FROM_NAME',
+        'IMAP_HOST'              => 'TINA4_MAIL_IMAP_HOST',
+        'IMAP_PORT'              => 'TINA4_MAIL_IMAP_PORT',
+        'IMAP_USER'              => 'TINA4_MAIL_IMAP_USERNAME',
+        'IMAP_PASS'              => 'TINA4_MAIL_IMAP_PASSWORD',
+        'HOST_NAME'              => 'TINA4_HOST_NAME',
+        'SWAGGER_TITLE'          => 'TINA4_SWAGGER_TITLE',
+        'SWAGGER_DESCRIPTION'    => 'TINA4_SWAGGER_DESCRIPTION',
+        'SWAGGER_VERSION'        => 'TINA4_SWAGGER_VERSION',
+        'ORM_PLURAL_TABLE_NAMES' => 'TINA4_ORM_PLURAL_TABLE_NAMES',
+    ];
+
+    /**
+     * Refuse to boot if pre-3.12 un-prefixed env vars are still set.
+     *
+     * Tina4 v3.12 hard-renamed every framework-specific env var to use
+     * the TINA4_ prefix. Booting silently with a legacy DATABASE_URL or
+     * SECRET would let auth, DB, or mail fall back to insecure defaults
+     * while the user thought their config was being read. Better to die
+     * loudly with a list of names to fix.
+     *
+     * Bypass with TINA4_ALLOW_LEGACY_ENV=true in CI / migration scripts
+     * that genuinely need both names set during a transition window.
+     *
+     * @param bool $exit If true, exit(2) on failure (default). If false, throws RuntimeException.
+     * @return void
+     * @throws \RuntimeException if $exit=false and legacy vars are set
+     */
+    public static function checkLegacyEnvVars(bool $exit = true): void
+    {
+        $bypass = strtolower((string)(getenv('TINA4_ALLOW_LEGACY_ENV') ?: ($_ENV['TINA4_ALLOW_LEGACY_ENV'] ?? '')));
+        if (in_array($bypass, ['true', '1', 'yes'], true)) {
+            return;
+        }
+
+        $found = [];
+        foreach (self::LEGACY_ENV_VARS as $old => $new) {
+            $val = getenv($old);
+            if ($val !== false || array_key_exists($old, $_ENV) || array_key_exists($old, $_SERVER)) {
+                $found[] = $old;
+            }
+        }
+        if ($found === []) {
+            return;
+        }
+        sort($found);
+
+        $sep = str_repeat('─', 72);
+        $lines = [
+            '',
+            $sep,
+            'Tina4 v3.12 requires TINA4_ prefix on all framework env vars.',
+            'Your environment still has these legacy names:',
+            '',
+        ];
+        foreach ($found as $old) {
+            $new = self::LEGACY_ENV_VARS[$old];
+            $lines[] = sprintf('    %-28s  ->  %s', $old, $new);
+        }
+        $lines[] = '';
+        $lines[] = 'Run `tina4 env-migrate` to rewrite your .env automatically,';
+        $lines[] = 'or rename manually. See https://tina4.com/release/3.12.0';
+        $lines[] = 'Set TINA4_ALLOW_LEGACY_ENV=true to bypass during migration.';
+        $lines[] = $sep;
+        $lines[] = '';
+        $msg = implode("\n", $lines);
+
+        if ($exit) {
+            fwrite(STDERR, $msg);
+            exit(2);
+        }
+        throw new \RuntimeException($msg);
+    }
+
+    /**
      * Resolve the version from the installed composer package.
      */
     private static function resolveVersion(): string
@@ -331,6 +429,10 @@ class App
      */
     public function start(): void
     {
+        // Refuse to boot with v3.11 / v2 era un-prefixed env vars set.
+        // See self::LEGACY_ENV_VARS / self::checkLegacyEnvVars().
+        self::checkLegacyEnvVars();
+
         $this->running = true;
 
         // In debug mode, wipe opcache on server boot so stale bytecode
@@ -521,7 +623,15 @@ class App
 
     /**
      * Register the default Tina4 landing page.
-     * Only shown when no user-defined "/" route exists and no src/templates/index.* template is found.
+     *
+     * The framework's branded welcome page renders at "/" ONLY when
+     * TINA4_DEBUG=true. When debug is off, the route is not registered at all,
+     * so "/" falls through to static / template resolution and finally a 404.
+     * This is symmetric with how /__dev/* gates on TINA4_DEBUG — the framework
+     * version, dev-admin link, and gallery never leak to real users.
+     *
+     * If the user has a "/" route, or a src/templates/pages/index.* template,
+     * that takes precedence over the landing page.
      */
     private function registerLandingPage(): void
     {
@@ -533,21 +643,28 @@ class App
             }
         }
 
-        // Check if user has a template for the root — register a route to serve it
-        $templateDir = $this->basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
-        foreach (['index.html', 'index.twig', 'index.php'] as $tpl) {
-            $tplPath = $templateDir . DIRECTORY_SEPARATOR . $tpl;
-            if (is_file($tplPath)) {
-                $file = $tpl;
-                Router::get('/', function (Request $request, Response $response) use ($file) {
-                    return $response->render($file, []);
-                });
+        // Check if user has a pages/index.* template — leave the auto-router
+        // to handle it. Don't register an explicit "/" route, so the Router
+        // can resolve it via the same pages/ pipeline as every other URL.
+        $pagesDir = $this->basePath
+            . DIRECTORY_SEPARATOR . 'src'
+            . DIRECTORY_SEPARATOR . 'templates'
+            . DIRECTORY_SEPARATOR . 'pages';
+        foreach (['index.twig', 'index.html'] as $tpl) {
+            if (is_file($pagesDir . DIRECTORY_SEPARATOR . $tpl)) {
                 return;
             }
         }
 
-        $isDev = $this->isDevelopment();
+        // Production hides the landing page entirely. /__dev/* already gates
+        // on TINA4_DEBUG; the landing page is the same kind of dev-only
+        // surface (framework version, gallery, deploy buttons).
+        if (!$this->isDevelopment()) {
+            return;
+        }
+
         $version = self::$VERSION;
+        $isDev = true;
 
         Router::get('/', function (Request $request, Response $response) use ($isDev, $version) {
             return $response->html(self::renderLandingPage($version, $isDev));
@@ -1063,12 +1180,12 @@ HTML;
 
     /**
      * Get the shared database instance.
-     * If none is set and DATABASE_URL is configured, auto-creates one via Database.
+     * If none is set and TINA4_DATABASE_URL is configured, auto-creates one via Database.
      */
     public static function getDatabase(): ?Database\DatabaseAdapter
     {
         if (self::$database === null) {
-            $db = Database\Database::fromEnv('DATABASE_URL');
+            $db = Database\Database::fromEnv('TINA4_DATABASE_URL');
             if ($db !== null) {
                 self::$database = $db;
             }

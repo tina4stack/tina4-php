@@ -451,25 +451,25 @@ class MCPTest extends TestCase
 
     public function testLocalhostDetection(): void
     {
-        $original = getenv('HOST_NAME');
+        $original = getenv('TINA4_HOST_NAME');
 
-        putenv('HOST_NAME=localhost:7146');
+        putenv('TINA4_HOST_NAME=localhost:7146');
         $this->assertTrue(McpServer::isLocalhost());
 
-        putenv('HOST_NAME=127.0.0.1:7146');
+        putenv('TINA4_HOST_NAME=127.0.0.1:7146');
         $this->assertTrue(McpServer::isLocalhost());
 
-        putenv('HOST_NAME=0.0.0.0:7146');
+        putenv('TINA4_HOST_NAME=0.0.0.0:7146');
         $this->assertTrue(McpServer::isLocalhost());
 
-        putenv('HOST_NAME=myserver.example.com:7146');
+        putenv('TINA4_HOST_NAME=myserver.example.com:7146');
         $this->assertFalse(McpServer::isLocalhost());
 
         // Restore
         if ($original !== false) {
-            putenv("HOST_NAME=$original");
+            putenv("TINA4_HOST_NAME=$original");
         } else {
-            putenv('HOST_NAME');
+            putenv('TINA4_HOST_NAME');
         }
     }
 

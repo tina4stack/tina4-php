@@ -16,9 +16,9 @@ namespace Tina4;
  * raw spec at /swagger/openapi.json.
  *
  * Env vars (via DotEnv):
- *   SWAGGER_TITLE       — API title (default: "Tina4 API")
- *   SWAGGER_VERSION     — API version (default: "1.0.0")
- *   SWAGGER_DESCRIPTION — API description (default: "Auto-generated from Tina4 routes")
+ *   TINA4_SWAGGER_TITLE       — API title (default: "Tina4 API")
+ *   TINA4_SWAGGER_VERSION     — API version (default: "1.0.0")
+ *   TINA4_SWAGGER_DESCRIPTION — API description (default: "Auto-generated from Tina4 routes")
  */
 class Swagger
 {
@@ -30,9 +30,9 @@ class Swagger
      */
     public static function generate(array $routes = []): array
     {
-        $title = DotEnv::getEnv('SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
-        $version = DotEnv::getEnv('SWAGGER_VERSION', '1.0.0') ?? '1.0.0';
-        $description = DotEnv::getEnv('SWAGGER_DESCRIPTION', 'Auto-generated from Tina4 routes') ?? 'Auto-generated from Tina4 routes';
+        $title = DotEnv::getEnv('TINA4_SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
+        $version = DotEnv::getEnv('TINA4_SWAGGER_VERSION', '1.0.0') ?? '1.0.0';
+        $description = DotEnv::getEnv('TINA4_SWAGGER_DESCRIPTION', 'Auto-generated from Tina4 routes') ?? 'Auto-generated from Tina4 routes';
 
         $spec = [
             'openapi' => '3.0.3',
@@ -525,7 +525,7 @@ class Swagger
      */
     private static function renderSwaggerUI(): string
     {
-        $title = DotEnv::getEnv('SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
+        $title = DotEnv::getEnv('TINA4_SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
 
         return <<<HTML
 <!DOCTYPE html>

@@ -18,7 +18,7 @@ class MessengerFactory
      *
      * Returns a DevMailbox when:
      *   - TINA4_DEBUG is set to a truthy value, OR
-     *   - SMTP_HOST is not configured
+     *   - TINA4_MAIL_HOST is not configured
      *
      * Returns a real Messenger otherwise.
      *
@@ -27,7 +27,7 @@ class MessengerFactory
     public static function create(): Messenger|DevMailbox
     {
         $debug = self::env('TINA4_DEBUG');
-        $smtpHost = self::env('TINA4_MAIL_HOST') ?? self::env('SMTP_HOST');
+        $smtpHost = self::env('TINA4_MAIL_HOST');
 
         $isDev = match (true) {
             $debug !== null && in_array(strtolower($debug), ['true', '1', 'yes', 'on'], true) => true,

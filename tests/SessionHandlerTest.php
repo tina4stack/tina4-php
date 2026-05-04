@@ -296,15 +296,15 @@ class SessionHandlerTest extends TestCase
 
     public function testDatabaseSessionHandlerThrowsWithoutDb(): void
     {
-        // Make sure DATABASE_URL is not set
-        $prev = getenv('DATABASE_URL');
-        putenv('DATABASE_URL');
+        // Make sure TINA4_DATABASE_URL is not set
+        $prev = getenv('TINA4_DATABASE_URL');
+        putenv('TINA4_DATABASE_URL');
 
         $this->expectException(\RuntimeException::class);
         new DatabaseSessionHandler();
 
         if ($prev !== false) {
-            putenv("DATABASE_URL={$prev}");
+            putenv("TINA4_DATABASE_URL={$prev}");
         }
     }
 

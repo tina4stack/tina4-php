@@ -37,12 +37,12 @@ class Auth
             $expiresIn = $secret;
             $secret = null;
         }
-        $secret = $secret ?? (getenv('SECRET') ?: ($_ENV['SECRET'] ?? '')) ?: '';
+        $secret = $secret ?? (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if ($secret === '') {
-            trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
+            trigger_error('Auth: TINA4_SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
         }
 
-        $algorithm = (getenv('JWT_ALGORITHM') ?: ($_ENV['JWT_ALGORITHM'] ?? '')) ?: 'HS256';
+        $algorithm = (getenv('TINA4_JWT_ALGORITHM') ?: ($_ENV['TINA4_JWT_ALGORITHM'] ?? '')) ?: 'HS256';
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
         $now = time();
@@ -72,11 +72,11 @@ class Auth
      */
     public static function validToken(string $token, ?string $secret = null): bool
     {
-        $secret = $secret ?? (getenv('SECRET') ?: ($_ENV['SECRET'] ?? '')) ?: '';
+        $secret = $secret ?? (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if ($secret === '') {
-            trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
+            trigger_error('Auth: TINA4_SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
         }
-        $algorithm = (getenv('JWT_ALGORITHM') ?: ($_ENV['JWT_ALGORITHM'] ?? '')) ?: 'HS256';
+        $algorithm = (getenv('TINA4_JWT_ALGORITHM') ?: ($_ENV['TINA4_JWT_ALGORITHM'] ?? '')) ?: 'HS256';
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             return false;
@@ -200,7 +200,7 @@ class Auth
      * The middleware extracts the Bearer token from the Authorization header,
      * verifies it, and attaches the decoded payload to the request attributes.
      * Returns a 401 response if the token is missing, invalid, or expired.
-     * Secret and algorithm are read from env (SECRET, JWT_ALGORITHM).
+     * Secret and algorithm are read from env (TINA4_SECRET, TINA4_JWT_ALGORITHM).
      *
      * @return callable Middleware function (Request $request) => ?array
      */
@@ -254,7 +254,7 @@ class Auth
     /**
      * Authenticate a request by extracting and validating the Bearer token.
      * Maps to Python: authenticate_request(headers)
-     * Secret and algorithm are read from env (SECRET, JWT_ALGORITHM).
+     * Secret and algorithm are read from env (TINA4_SECRET, TINA4_JWT_ALGORITHM).
      *
      * @param array<string, string> $headers Request headers (key => value)
      * @return array<string, mixed>|null Decoded payload on success, null on failure

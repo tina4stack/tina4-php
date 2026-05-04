@@ -147,9 +147,9 @@ class DatabaseSessionHandlerTest extends TestCase
 
     public function testConstructorThrowsWithoutDatabase(): void
     {
-        // Ensure no DATABASE_URL env var is set
-        putenv('DATABASE_URL');
-        unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+        // Ensure no TINA4_DATABASE_URL env var is set
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
         \Tina4\DotEnv::resetEnv();
 
         $this->expectException(\RuntimeException::class);

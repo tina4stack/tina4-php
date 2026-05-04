@@ -30,13 +30,13 @@ class RouterAuthSourcesTest extends TestCase
     protected function setUp(): void
     {
         Router::clear();
-        putenv("SECRET={$this->secret}");
+        putenv("TINA4_SECRET={$this->secret}");
     }
 
     protected function tearDown(): void
     {
         Router::clear();
-        putenv('SECRET');
+        putenv('TINA4_SECRET');
     }
 
     // ── Bearer header ────────────────────────────────────────────

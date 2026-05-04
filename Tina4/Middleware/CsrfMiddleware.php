@@ -73,7 +73,7 @@ class CsrfMiddleware
         if (str_starts_with($authHeader, 'Bearer ')) {
             $bearerToken = trim(substr($authHeader, 7));
             if ($bearerToken !== '') {
-                $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
+                $secret = DotEnv::getEnv('TINA4_SECRET') ?? $_ENV['TINA4_SECRET'] ?? 'tina4-default-secret';
                 if (Auth::validToken($bearerToken, $secret)) {
                     return [$request, $response];
                 }
@@ -115,7 +115,7 @@ class CsrfMiddleware
         }
 
         // Validate the token
-        $secret = DotEnv::getEnv('SECRET') ?? $_ENV['SECRET'] ?? 'tina4-default-secret';
+        $secret = DotEnv::getEnv('TINA4_SECRET') ?? $_ENV['TINA4_SECRET'] ?? 'tina4-default-secret';
         if (!Auth::validToken($token, $secret)) {
             return [$request, $response->error(
                 'CSRF_INVALID',

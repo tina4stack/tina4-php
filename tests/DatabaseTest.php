@@ -31,8 +31,8 @@ class DatabaseTest extends TestCase
             $this->db = null;
         }
         DotEnv::resetEnv();
-        putenv('DATABASE_URL');
-        unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
     }
 
     // -- Factory methods --------------------------------------------------------
@@ -54,8 +54,8 @@ class DatabaseTest extends TestCase
 
     public function testFromEnvReturnsNullWhenNotSet(): void
     {
-        putenv('DATABASE_URL');
-        unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
         DotEnv::resetEnv();
 
         $result = Database::fromEnv();
@@ -64,8 +64,8 @@ class DatabaseTest extends TestCase
 
     public function testFromEnvCreatesDatabase(): void
     {
-        $_ENV['DATABASE_URL'] = 'sqlite::memory:';
-        putenv('DATABASE_URL=sqlite::memory:');
+        $_ENV['TINA4_DATABASE_URL'] = 'sqlite::memory:';
+        putenv('TINA4_DATABASE_URL=sqlite::memory:');
         DotEnv::resetEnv();
 
         $result = Database::fromEnv();
@@ -75,8 +75,8 @@ class DatabaseTest extends TestCase
 
     public function testGetConnectionAlias(): void
     {
-        putenv('DATABASE_URL');
-        unset($_ENV['DATABASE_URL'], $_SERVER['DATABASE_URL']);
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
         DotEnv::resetEnv();
 
         $result = Database::getConnection();

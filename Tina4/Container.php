@@ -11,7 +11,7 @@
  * Usage:
  *   $container = new Container();
  *   $container->register('mailer', fn() => new MailService());
- *   $container->singleton('db', fn() => new Database(getenv('DB_URL')));
+ *   $container->singleton('db', fn() => new Database(getenv('TINA4_DATABASE_URL')));
  *   $mailer = $container->get('mailer');  // new instance each time
  *   $db = $container->get('db');          // same instance always
  */

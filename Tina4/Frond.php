@@ -2533,8 +2533,8 @@ class Frond
                 $payload['session_id'] = $sessionId;
             }
 
-            if (!isset($_ENV['SECRET']) && !getenv('SECRET')) {
-                $_ENV['SECRET'] = DotEnv::getEnv('SECRET') ?? 'tina4-default-secret';
+            if (!isset($_ENV['TINA4_SECRET']) && !getenv('TINA4_SECRET')) {
+                $_ENV['TINA4_SECRET'] = DotEnv::getEnv('TINA4_SECRET') ?? 'tina4-default-secret';
             }
             $ttlMinutes = (int)(DotEnv::getEnv('TINA4_TOKEN_LIMIT', '60') ?? '60');
             $expiresIn = $ttlMinutes * 60;

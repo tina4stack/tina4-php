@@ -113,7 +113,7 @@ abstract class ORM
         if ($envDb !== null) {
             return $envDb;
         }
-        throw new \RuntimeException('No database configured. Call ORM::setGlobalDb(), App::setDatabase(), or set DATABASE_URL in .env');
+        throw new \RuntimeException('No database configured. Call ORM::setGlobalDb(), App::setDatabase(), or set TINA4_DATABASE_URL in .env');
     }
 
     /** @var array<string, mixed> Storage for undeclared/dynamic properties only (from joins, extras) */
@@ -1714,13 +1714,13 @@ abstract class ORM
             return;
         }
 
-        // Try auto-discovery from DATABASE_URL
+        // Try auto-discovery from TINA4_DATABASE_URL
         $discovered = \Tina4\Database\Database::fromEnv();
         if ($discovered !== null) {
             $this->_db = $discovered;
             return;
         }
 
-        throw new \RuntimeException('ORM: No database connection. Call ORM::setGlobalDb(), App::setDatabase(), or set DATABASE_URL in .env');
+        throw new \RuntimeException('ORM: No database connection. Call ORM::setGlobalDb(), App::setDatabase(), or set TINA4_DATABASE_URL in .env');
     }
 }

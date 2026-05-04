@@ -57,6 +57,17 @@ class Router
     private static ?array $templateCache = null;
 
     /**
+     * Auto-routing scans this single subdirectory of src/templates/. Only files
+     * in src/templates/pages/ become URLs — everything else (partials, layouts,
+     * base.twig, errors, components, macros) is never URL-exposed and remains
+     * renderable only via {% include %} / {% extends %} / $response->render().
+     *
+     * Convention adapted from Next.js' pages/ directory and Nuxt's pages/ folder.
+     * Explicit, secure by default, no skip lists to maintain.
+     */
+    private const TEMPLATE_PAGES_DIR = 'pages';
+
+    /**
      * Register a global middleware class.
      *
      * Delegates to Middleware::use(). The middleware class should follow the
@@ -956,13 +967,47 @@ class Router
      * @return array{regex: string, paramNames: array<string>, catchAll: bool, catchAllName: string|null}
      */
     /**
-     * Resolve a URL path to a template file in src/templates/.
-     * In production: uses a cached lookup built once at startup.
-     * In development: checks the filesystem every time for live changes.
+     * Honour TINA4_TEMPLATE_ROUTING=off|false|0|no|disabled as an explicit
+     * kill switch.
+     *
+     * Default: enabled. Drop a file in src/templates/pages/ and it serves at
+     * the matching URL — the zero-config Tina4 convention. Operators who want
+     * explicit-only routing can set TINA4_TEMPLATE_ROUTING=off and every URL
+     * must be registered via Router::get / Router::post (or be a static file).
      */
-    private static function resolveTemplate(string $path): ?string
+    public static function isTemplateAutoRoutingEnabled(): bool
     {
-        $cleanPath = ltrim($path, '/');
+        $val = strtolower(trim((string) DotEnv::getEnv('TINA4_TEMPLATE_ROUTING', 'on')));
+        return !in_array($val, ['off', 'false', '0', 'no', 'disabled'], true);
+    }
+
+    /**
+     * Reset the template cache. Used by tests so each test sees a fresh scan.
+     */
+    public static function resetTemplateCache(): void
+    {
+        self::$templateCache = null;
+    }
+
+    /**
+     * Resolve a URL path to a template file in src/templates/pages/.
+     *
+     * Only files inside src/templates/pages/ auto-route from a URL. Anything
+     * in src/templates/ outside pages/ (partials, layouts, base.twig, errors,
+     * components) is never served standalone.
+     *
+     * Dev mode: checks filesystem every time for live changes.
+     * Production: uses a cached lookup built once at startup.
+     *
+     * The whole feature can be turned off with TINA4_TEMPLATE_ROUTING=off.
+     */
+    public static function resolveTemplate(string $path): ?string
+    {
+        if (!self::isTemplateAutoRoutingEnabled()) {
+            return null;
+        }
+
+        $cleanPath = trim($path, '/');
         if ($cleanPath === '') {
             $cleanPath = 'index';
         }
@@ -970,12 +1015,21 @@ class Router
         $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
 
         if ($isDev) {
-            // Dev mode: check filesystem directly so new files are picked up instantly
-            $templateDir = (self::$basePath ?: getcwd()) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
+            // Skip underscore-prefixed segments even within pages/ — they're
+            // private by Hugo/Jekyll convention (helpers, fragments) and
+            // shouldn't auto-serve.
+            foreach (explode('/', $cleanPath) as $segment) {
+                if (str_starts_with($segment, '_')) {
+                    return null;
+                }
+            }
+            $pagesDir = (self::$basePath ?: getcwd())
+                . DIRECTORY_SEPARATOR . 'src'
+                . DIRECTORY_SEPARATOR . 'templates'
+                . DIRECTORY_SEPARATOR . self::TEMPLATE_PAGES_DIR;
             foreach (['.twig', '.html'] as $ext) {
-                $tplFile = $cleanPath . $ext;
-                if (is_file($templateDir . DIRECTORY_SEPARATOR . $tplFile)) {
-                    return $tplFile;
+                if (is_file($pagesDir . DIRECTORY_SEPARATOR . $cleanPath . $ext)) {
+                    return self::TEMPLATE_PAGES_DIR . '/' . $cleanPath . $ext;
                 }
             }
             return null;
@@ -989,18 +1043,27 @@ class Router
     }
 
     /**
-     * Build the template cache by scanning src/templates/ once.
-     * Maps URL paths to template filenames (e.g. 'hello' => 'hello.twig').
+     * Build the template cache by scanning src/templates/pages/ once.
+     *
+     * Only files under pages/ are eligible — partials, layouts, base.twig,
+     * errors etc remain renderable via $response->render() but never
+     * auto-serve from a URL. Files starting with _ are skipped (private).
+     *
+     * Maps URL paths to template paths relative to src/templates/
+     * (e.g. 'about' => 'pages/about.twig').
      */
-    private static function buildTemplateCache(): void
+    public static function buildTemplateCache(): void
     {
         self::$templateCache = [];
-        $templateDir = (self::$basePath ?: getcwd()) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'templates';
-        if (!is_dir($templateDir)) {
+        $pagesDir = (self::$basePath ?: getcwd())
+            . DIRECTORY_SEPARATOR . 'src'
+            . DIRECTORY_SEPARATOR . 'templates'
+            . DIRECTORY_SEPARATOR . self::TEMPLATE_PAGES_DIR;
+        if (!is_dir($pagesDir)) {
             return;
         }
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($templateDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+            new \RecursiveDirectoryIterator($pagesDir, \RecursiveDirectoryIterator::SKIP_DOTS)
         );
         foreach ($iterator as $file) {
             if (!$file->isFile()) {
@@ -1010,12 +1073,25 @@ class Router
             if ($ext !== 'twig' && $ext !== 'html') {
                 continue;
             }
-            $relativePath = ltrim(str_replace($templateDir, '', $file->getPathname()), DIRECTORY_SEPARATOR);
-            $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
-            $urlPath = preg_replace('/\.(twig|html)$/', '', $relativePath);
+            $relInsidePages = ltrim(str_replace($pagesDir, '', $file->getPathname()), DIRECTORY_SEPARATOR);
+            $relInsidePages = str_replace(DIRECTORY_SEPARATOR, '/', $relInsidePages);
+
+            // Skip private files even within pages/ (e.g. pages/_helper.twig)
+            $skip = false;
+            foreach (explode('/', $relInsidePages) as $segment) {
+                if (str_starts_with($segment, '_')) {
+                    $skip = true;
+                    break;
+                }
+            }
+            if ($skip) {
+                continue;
+            }
+
+            $urlPath = preg_replace('/\.(twig|html)$/', '', $relInsidePages);
             // First match wins (.twig takes priority over .html)
             if (!isset(self::$templateCache[$urlPath])) {
-                self::$templateCache[$urlPath] = $relativePath;
+                self::$templateCache[$urlPath] = self::TEMPLATE_PAGES_DIR . '/' . $relInsidePages;
             }
         }
     }

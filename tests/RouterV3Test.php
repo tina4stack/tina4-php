@@ -313,7 +313,7 @@ class RouterV3Test extends TestCase
     public function testDispatchSecureRouteWithToken(): void
     {
         $secret = 'router-test-secret';
-        putenv("SECRET={$secret}");
+        putenv("TINA4_SECRET={$secret}");
         Router::get('/secure', fn($req, $res) => $res->json(['ok' => true]))->secure();
 
         $token = Auth::getToken(['sub' => 'tester']);
@@ -326,7 +326,7 @@ class RouterV3Test extends TestCase
         $result = Router::dispatch($request, $response);
 
         $this->assertSame(200, $result->getStatusCode());
-        putenv('SECRET');
+        putenv('TINA4_SECRET');
     }
 
     public function testDispatchArrayReturn(): void

@@ -16,7 +16,7 @@ use Tina4\DatabaseUrl;
  * Can be used as:
  *   - Database::create($url)  — static factory (returns Database instance)
  *   - new Database($url)      — constructor
- *   - Database::fromEnv()     — from DATABASE_URL env var
+ *   - Database::fromEnv()     — from TINA4_DATABASE_URL env var
  *
  * All methods delegate to the internal DatabaseAdapter.
  *
@@ -133,13 +133,13 @@ class Database implements DatabaseAdapter
     }
 
     /**
-     * Create a Database instance from the DATABASE_URL environment variable.
+     * Create a Database instance from the TINA4_DATABASE_URL environment variable.
      *
-     * @param string $envKey Environment variable name (default: DATABASE_URL)
+     * @param string $envKey Environment variable name (default: TINA4_DATABASE_URL)
      * @param bool|null $autoCommit Override auto-commit setting
      * @return self|null Null if the env var is not set
      */
-    public static function fromEnv(string $envKey = 'DATABASE_URL', ?bool $autoCommit = null, int $pool = 0): ?self
+    public static function fromEnv(string $envKey = 'TINA4_DATABASE_URL', ?bool $autoCommit = null, int $pool = 0): ?self
     {
         $url = \Tina4\DotEnv::getEnv($envKey);
 
@@ -147,8 +147,8 @@ class Database implements DatabaseAdapter
             return null;
         }
 
-        $username = \Tina4\DotEnv::getEnv('DATABASE_USERNAME') ?? '';
-        $password = \Tina4\DotEnv::getEnv('DATABASE_PASSWORD') ?? '';
+        $username = \Tina4\DotEnv::getEnv('TINA4_DATABASE_USERNAME') ?? '';
+        $password = \Tina4\DotEnv::getEnv('TINA4_DATABASE_PASSWORD') ?? '';
 
         return new self($url, $autoCommit, $username, $password, $pool);
     }
@@ -786,10 +786,10 @@ class Database implements DatabaseAdapter
     /**
      * Convenience alias for fromEnv().
      *
-     * @param string $envKey Environment variable name (default: DATABASE_URL)
+     * @param string $envKey Environment variable name (default: TINA4_DATABASE_URL)
      * @return self|null Null if the env var is not set
      */
-    public static function getConnection(string $envKey = 'DATABASE_URL'): ?self
+    public static function getConnection(string $envKey = 'TINA4_DATABASE_URL'): ?self
     {
         return self::fromEnv($envKey);
     }

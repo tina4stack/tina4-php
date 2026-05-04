@@ -29,15 +29,15 @@ class PostProtectionTest extends TestCase
     protected function setUp(): void
     {
         Router::clear();
-        putenv("SECRET={$this->secret}");
-        $_ENV['SECRET'] = $this->secret;
+        putenv("TINA4_SECRET={$this->secret}");
+        $_ENV['TINA4_SECRET'] = $this->secret;
     }
 
     protected function tearDown(): void
     {
         Router::clear();
-        putenv('SECRET');
-        unset($_ENV['SECRET']);
+        putenv('TINA4_SECRET');
+        unset($_ENV['TINA4_SECRET']);
     }
 
     // ── Secure flag registration ─────────────────────────────────

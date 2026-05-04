@@ -183,8 +183,10 @@ class PostgresAdapter implements DatabaseAdapter
                 return false;
             }
 
+            $hasReturning = $this->isInsertReturning($sql);
+
             // Capture RETURNING id if present
-            if ($this->isInsertReturning($sql)) {
+            if ($hasReturning) {
                 $row = pg_fetch_assoc($result);
                 if ($row !== false) {
                     $first = reset($row);
@@ -195,6 +197,39 @@ class PostgresAdapter implements DatabaseAdapter
             }
 
             pg_free_result($result);
+
+            // For an INSERT without RETURNING, probe lastval() so getLastId()
+            // works on auto-increment PKs.
+            //
+            // Issue #38: SELECT lastval() raises on tables with no sequence
+            // (UUID, ULID, hash PKs etc.). The exception itself isn't fatal,
+            // but PostgreSQL marks the whole transaction as aborted, so every
+            // subsequent statement on this connection fails with
+            // "current transaction is aborted" — far away from the real cause.
+            //
+            // Fix: wrap the probe in a SAVEPOINT. If lastval() raises, we
+            // ROLLBACK TO SAVEPOINT and the outer transaction stays usable;
+            // lastId just stays at its previous value. On success we RELEASE.
+            if (!$hasReturning && $this->isInsert($sql)) {
+                $sp = @pg_query($this->db, 'SAVEPOINT _t4_lastval_probe');
+                if ($sp !== false) {
+                    @pg_free_result($sp);
+                    $probe = @pg_query($this->db, 'SELECT lastval()');
+                    if ($probe === false) {
+                        $rb = @pg_query($this->db, 'ROLLBACK TO SAVEPOINT _t4_lastval_probe');
+                        if ($rb !== false) { @pg_free_result($rb); }
+                    } else {
+                        $row = pg_fetch_row($probe);
+                        if ($row !== false && isset($row[0])) {
+                            $this->lastId = $row[0];
+                        }
+                        pg_free_result($probe);
+                        $rel = @pg_query($this->db, 'RELEASE SAVEPOINT _t4_lastval_probe');
+                        if ($rel !== false) { @pg_free_result($rel); }
+                    }
+                }
+            }
+
             return true;
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
@@ -520,6 +555,14 @@ class PostgresAdapter implements DatabaseAdapter
      */
     private function isInsertReturning(string $sql): bool
     {
-        return (bool)preg_match('/^\s*INSERT\b/i', $sql) && (bool)preg_match('/\bRETURNING\b/i', $sql);
+        return $this->isInsert($sql) && (bool)preg_match('/\bRETURNING\b/i', $sql);
+    }
+
+    /**
+     * Check if a SQL statement is an INSERT.
+     */
+    private function isInsert(string $sql): bool
+    {
+        return (bool)preg_match('/^\s*INSERT\b/i', $sql);
     }
 }
