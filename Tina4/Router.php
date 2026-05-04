@@ -500,7 +500,6 @@ class Router
         }
 
         if ($requiresAuth) {
-            $secret = getenv('SECRET') ?: '';
             $token = null;
             $tokenSource = null;
 
@@ -527,7 +526,13 @@ class Router
                 return $response->json(['error' => 'Unauthorized'], 401);
             }
 
-            if (!Auth::validToken($token, $secret)) {
+            // Pass token only — Auth::validToken resolves SECRET consistently
+            // ($_ENV first, then getenv). Pre-resolving here with `getenv()` only
+            // would mismatch Auth::getToken's resolution and reject valid tokens
+            // whenever $_ENV['SECRET'] differs from getenv('SECRET') (e.g. when
+            // .env loads SECRET into $_ENV but a test or runtime override calls
+            // putenv with a different value).
+            if (!Auth::validToken($token)) {
                 return $response->json(['error' => 'Unauthorized'], 401);
             }
 

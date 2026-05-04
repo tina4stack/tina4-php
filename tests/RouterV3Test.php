@@ -15,6 +15,8 @@ use Tina4\Response;
 class RouterV3Test extends TestCase
 {
     private string|false $savedDebug;
+    private string|false $savedSecret;
+    private string|false $savedSecretEnvSuper;
 
     protected function setUp(): void
     {
@@ -23,6 +25,14 @@ class RouterV3Test extends TestCase
         $this->savedDebug = getenv('TINA4_DEBUG');
         putenv('TINA4_DEBUG=false');
         unset($_ENV['TINA4_DEBUG']);
+        // Snapshot SECRET from BOTH sources — Auth resolves $_ENV first then
+        // getenv, so a stale $_ENV['SECRET'] (from a CI runner with .env load
+        // or a previous test) would shadow any putenv() the test does.
+        // Wipe both so each test gets a clean slate; tearDown restores them.
+        $this->savedSecret = getenv('SECRET');
+        $this->savedSecretEnvSuper = $_ENV['SECRET'] ?? false;
+        putenv('SECRET');
+        unset($_ENV['SECRET']);
         \Tina4\DotEnv::resetEnv();
     }
 
@@ -33,6 +43,16 @@ class RouterV3Test extends TestCase
             putenv("TINA4_DEBUG={$this->savedDebug}");
         } else {
             putenv('TINA4_DEBUG');
+        }
+        if ($this->savedSecret !== false) {
+            putenv("SECRET={$this->savedSecret}");
+        } else {
+            putenv('SECRET');
+        }
+        if ($this->savedSecretEnvSuper !== false) {
+            $_ENV['SECRET'] = $this->savedSecretEnvSuper;
+        } else {
+            unset($_ENV['SECRET']);
         }
     }
 

@@ -37,12 +37,12 @@ class Auth
             $expiresIn = $secret;
             $secret = null;
         }
-        $secret = $secret ?? $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
+        $secret = $secret ?? (getenv('SECRET') ?: ($_ENV['SECRET'] ?? '')) ?: '';
         if ($secret === '') {
             trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
         }
 
-        $algorithm = $_ENV['JWT_ALGORITHM'] ?? getenv('JWT_ALGORITHM') ?: 'HS256';
+        $algorithm = (getenv('JWT_ALGORITHM') ?: ($_ENV['JWT_ALGORITHM'] ?? '')) ?: 'HS256';
         $header = ['alg' => $algorithm, 'typ' => 'JWT'];
 
         $now = time();
@@ -72,11 +72,11 @@ class Auth
      */
     public static function validToken(string $token, ?string $secret = null): bool
     {
-        $secret = $secret ?? $_ENV['SECRET'] ?? getenv('SECRET') ?: '';
+        $secret = $secret ?? (getenv('SECRET') ?: ($_ENV['SECRET'] ?? '')) ?: '';
         if ($secret === '') {
             trigger_error('Auth: SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
         }
-        $algorithm = $_ENV['JWT_ALGORITHM'] ?? getenv('JWT_ALGORITHM') ?: 'HS256';
+        $algorithm = (getenv('JWT_ALGORITHM') ?: ($_ENV['JWT_ALGORITHM'] ?? '')) ?: 'HS256';
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             return false;

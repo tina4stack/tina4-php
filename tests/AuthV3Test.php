@@ -22,6 +22,82 @@ class AuthV3Test extends TestCase
     {
         unset($_ENV['SECRET']);
         unset($_ENV['JWT_ALGORITHM']);
+        // Clear getenv-side too so cross-test pollution can't shadow $_ENV in
+        // the next test (regression guard for the CI failure fixed in 3.11.34)
+        putenv('SECRET');
+        putenv('JWT_ALGORITHM');
+    }
+
+    // ── Secret resolution (regression guard for 3.11.34 CI fix) ────────
+    // Both Auth::getToken and Auth::validToken must resolve SECRET in the
+    // SAME priority order — getenv() first, $_ENV second. If they differ,
+    // a token signed with one source can't be verified with the other,
+    // which manifests as a 401 on every secure route whenever an ambient
+    // env shadows a runtime putenv() override.
+
+    public function testGetenvOverridesStaleEnvSuperglobal(): void
+    {
+        // Simulate a CI runner where $_ENV['SECRET'] was set by .env load
+        // (or a prior test) and a runtime putenv() then overrides it.
+        $_ENV['SECRET'] = 'stale-env-superglobal-value';
+        putenv('SECRET=runtime-override-value');
+
+        // Sign with no-arg getToken (resolves from env) and verify the same way
+        $token = Auth::getToken(['sub' => 'tester']);
+        $this->assertTrue(
+            Auth::validToken($token),
+            'Auth must resolve SECRET consistently between getToken and validToken'
+        );
+
+        putenv('SECRET'); // clear getenv side
+        // $_ENV is restored by tearDown
+    }
+
+    public function testExplicitSecretToGetTokenStillVerifiesViaEnv(): void
+    {
+        // SmokeTest pattern: getToken receives an explicit secret AND
+        // putenv() is set to the same value. validToken (no arg) must
+        // resolve to the runtime putenv() value, not a stale $_ENV.
+        $_ENV['SECRET'] = 'stale-env-superglobal-value';
+        putenv('SECRET=explicit-runtime-secret');
+
+        $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret');
+        $this->assertTrue(Auth::validToken($token));
+
+        putenv('SECRET');
+    }
+
+    public function testValidTokenPrefersGetenvOverEnvSuperglobal(): void
+    {
+        // Direct probe: getenv and $_ENV disagree. The token is signed with
+        // the getenv value; validation must accept it.
+        $_ENV['SECRET'] = 'env-superglobal-value';
+        putenv('SECRET=getenv-value');
+
+        $token = Auth::getToken(['sub' => 'tester'], 'getenv-value');
+
+        // No-arg validation must use getenv() — same source getToken used
+        $this->assertTrue(Auth::validToken($token));
+
+        putenv('SECRET');
+    }
+
+    public function testJwtAlgorithmAlsoPrefersGetenv(): void
+    {
+        // Same priority rule must apply to JWT_ALGORITHM (parity with SECRET)
+        $_ENV['JWT_ALGORITHM'] = 'RS256';            // stale
+        putenv('JWT_ALGORITHM=HS256');                // runtime override
+        $_ENV['SECRET'] = 'stale';
+        putenv('SECRET=test-secret-key-for-jwt');
+
+        $token = Auth::getToken(['sub' => 'tester']);
+
+        // If the algorithm resolution were broken, signing or verification
+        // would mismatch. PASS proves both resolve identically.
+        $this->assertTrue(Auth::validToken($token));
+
+        putenv('SECRET');
+        putenv('JWT_ALGORITHM');
     }
 
     // ── JWT Generation ────────────────────────────────────────────
