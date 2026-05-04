@@ -480,9 +480,37 @@ class FirebirdAdapter implements DatabaseAdapter
     /**
      * Execute a SQL statement with params using ibase_prepare/ibase_execute.
      *
+     * Wraps the underlying ibase calls in a one-shot reconnect-and-retry on
+     * dead-connection errors ("Error writing data to the connection",
+     * connection shutdown, network error). Idle Firebird connections die
+     * silently behind NAT timeouts, server-side ConnectionIdleTimeout, or
+     * Docker network rotation; without this the next prepare() crashes the
+     * request. Skipped inside an explicit transaction — atomicity beats
+     * resilience there; the caller handles rollback.
+     *
      * @return resource|bool Result resource or true for non-SELECT, false on error
      */
     private function executeInternal(string $sql, array $params): mixed
+    {
+        try {
+            return $this->doExecute($sql, $params);
+        } catch (\Throwable $e) {
+            if (!self::isDeadConnection($e->getMessage()) || $this->transaction !== null) {
+                throw $e;
+            }
+            $this->reconnect();
+            return $this->doExecute($sql, $params);
+        }
+    }
+
+    /**
+     * Raw single-attempt execute. Throws on dead-connection so executeInternal
+     * can decide whether to retry; returns the result resource (or true/false)
+     * for ordinary outcomes.
+     *
+     * @return resource|bool
+     */
+    private function doExecute(string $sql, array $params): mixed
     {
         $errFn = $this->fn . 'errmsg';
         $context = $this->transaction ?? $this->db;
@@ -496,7 +524,11 @@ class FirebirdAdapter implements DatabaseAdapter
 
             $stmt = @$prepareFn($context, $sql);
             if ($stmt === false) {
-                $this->lastError = $errFn();
+                $msg = $errFn();
+                if (self::isDeadConnection($msg)) {
+                    throw new \RuntimeException($msg);
+                }
+                $this->lastError = $msg;
                 return false;
             }
 
@@ -505,11 +537,62 @@ class FirebirdAdapter implements DatabaseAdapter
         }
 
         if ($result === false) {
-            $this->lastError = $errFn();
+            $msg = $errFn();
+            if (self::isDeadConnection($msg)) {
+                throw new \RuntimeException($msg);
+            }
+            $this->lastError = $msg;
             return false;
         }
 
         return $result;
+    }
+
+    /**
+     * Detect dead-socket Firebird errors that warrant a reconnect.
+     * Substring match (case-insensitive) so we match both ibase and fbird
+     * wording, and across server-side versus driver-side error sources.
+     */
+    public static function isDeadConnection(?string $msg): bool
+    {
+        if ($msg === null || $msg === '') {
+            return false;
+        }
+        $lower = strtolower($msg);
+        $markers = [
+            'error writing data to the connection',
+            'error reading data from the connection',
+            'connection shutdown',
+            'connection lost',
+            'network error',
+            'connection is not active',
+            'broken pipe',
+        ];
+        foreach ($markers as $m) {
+            if (str_contains($lower, $m)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Force-close any stale handle and reopen using the original connection
+     * params. Idempotent — safe to call when the connection is already dead.
+     */
+    private function reconnect(): void
+    {
+        if ($this->db !== null) {
+            try {
+                $closeFn = $this->fn . 'close';
+                @$closeFn($this->db);
+            } catch (\Throwable) {
+                // ignored — connection already gone
+            }
+        }
+        $this->db = null;
+        $this->transaction = null;
+        $this->open();
     }
 
     /**
