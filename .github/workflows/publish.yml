@@ -8,6 +8,12 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # softprops/action-gh-release calls the GitHub REST API with the
+    # default GITHUB_TOKEN. That token only writes to the repository if
+    # the job declares contents:write. Make it explicit so we don't
+    # depend on the repo-level Workflow permissions setting.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,7 +37,7 @@ jobs:
           cat /tmp/release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body_path: /tmp/release-notes.md
 
