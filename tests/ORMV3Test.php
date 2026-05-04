@@ -76,6 +76,25 @@ class TestProduct extends ORM
     ];
 }
 
+/**
+ * Typed-property test model — matches the shape real users write (PHP 8+).
+ *
+ * Every domain field is declared with an explicit type AND a default value.
+ * This is the pattern that tripped issue #102: the declared `public int $id = 0`
+ * meant reflection-based getDbData() serialised the PK into every INSERT,
+ * breaking auto-increment. Tests using this fixture lock the fix in place.
+ */
+class TestTypedWidget extends ORM
+{
+    public string $tableName = 'typed_widgets';
+    public string $primaryKey = 'id';
+    public array $fieldMapping = [];
+    public int $id = 0;
+    public string $name = '';
+    public string $displayLabel = '';
+    public int $priceCents = 0;
+}
+
 class ORMV3Test extends TestCase
 {
     private SQLite3Adapter $db;
@@ -89,6 +108,7 @@ class ORMV3Test extends TestCase
         $this->db->exec("CREATE TABLE rel_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT, user_id INTEGER)");
         $this->db->exec("CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, post_id INTEGER)");
         $this->db->exec("CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, bio TEXT, user_id INTEGER)");
+        $this->db->exec("CREATE TABLE typed_widgets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, display_label TEXT, price_cents INTEGER)");
         \Tina4\ORM::setGlobalDb($this->db);
     }
 
@@ -838,6 +858,108 @@ class ORMV3Test extends TestCase
 
         $this->assertSame(1, $u1->getPrimaryKeyValue());
         $this->assertSame(2, $u2->getPrimaryKeyValue());
+
+        // Also assert via public property access — the shape users actually hit.
+        // TestUser doesn't declare $id, so this reads through __get / _dynamicProps.
+        $this->assertSame(1, $u1->id);
+        $this->assertSame(2, $u2->id);
+    }
+
+    /**
+     * Issue #102 (typed-property variant): for models that declare
+     * `public int $id = 0`, the auto-increment id must still land in the
+     * public $id property after save(). Before the insert() fix, getDbData()
+     * sent `id = 0` in the INSERT, auto-increment skipped, $id stayed 0.
+     */
+    public function testAutoIncrementIdsOnTypedModel(): void
+    {
+        $w1 = new TestTypedWidget($this->db);
+        $w1->name = 'First';
+        $w1->save();
+
+        $w2 = new TestTypedWidget($this->db);
+        $w2->name = 'Second';
+        $w2->save();
+
+        // Public property must be synced — this is the bit that broke in #102
+        $this->assertSame(1, $w1->id);
+        $this->assertSame(2, $w2->id);
+
+        // And getPrimaryKeyValue() should agree (belt-and-braces)
+        $this->assertSame(1, $w1->getPrimaryKeyValue());
+        $this->assertSame(2, $w2->getPrimaryKeyValue());
+
+        // And the rows must actually be in the DB at those IDs
+        $row1 = $this->db->fetchOne("SELECT id, name FROM typed_widgets WHERE id = ?", [1]);
+        $row2 = $this->db->fetchOne("SELECT id, name FROM typed_widgets WHERE id = ?", [2]);
+        $this->assertSame(['id' => 1, 'name' => 'First'], $row1);
+        $this->assertSame(['id' => 2, 'name' => 'Second'], $row2);
+    }
+
+    /**
+     * Edge case of the insert() PK-stripping fix: stripping only happens when
+     * the PK is "unset" (null, 0, or ''). An explicit non-zero id must still
+     * be honoured — the row goes in with that id, no auto-increment override.
+     *
+     * This matters for migrations, data imports, and sync scenarios where the
+     * caller genuinely wants to pin an id.
+     */
+    public function testExplicitPrimaryKeyIsPreservedOnInsert(): void
+    {
+        $w = new TestTypedWidget($this->db);
+        $w->id = 42;
+        $w->name = 'Pinned';
+        $w->priceCents = 100;
+        $w->save();
+
+        // The row must live at id=42, not at 1
+        $row = $this->db->fetchOne("SELECT id, name, price_cents FROM typed_widgets WHERE id = ?", [42]);
+        $this->assertSame(['id' => 42, 'name' => 'Pinned', 'price_cents' => 100], $row);
+
+        // And the model still reports id=42
+        $this->assertSame(42, $w->id);
+
+        // Next auto-increment insert picks up from 43 (SQLite MAX(id)+1 behaviour)
+        $w2 = new TestTypedWidget($this->db);
+        $w2->name = 'AfterPinned';
+        $w2->save();
+        $this->assertSame(43, $w2->id);
+    }
+
+    /**
+     * Full round-trip via typed properties: insert, update, reload.
+     *
+     * This catches regressions where public-property writes don't reach
+     * getDbData() (the `_data` synchronisation bug users reported), where
+     * auto-generated ids don't sync back, or where update() mangles the
+     * WHERE clause because $primaryKey's value is stale.
+     */
+    public function testTypedPropertyInsertUpdateRoundTrip(): void
+    {
+        $w = new TestTypedWidget($this->db);
+        $w->name = 'Sprocket';
+        $w->displayLabel = 'Super Sprocket';
+        $w->priceCents = 1995;
+        $result = $w->save();
+        $this->assertNotFalse($result, 'save() must succeed');
+
+        $insertedId = $w->id;
+        $this->assertGreaterThan(0, $insertedId, 'id must be synced back');
+
+        // Mutate via public property and save again — must UPDATE not INSERT
+        $w->priceCents = 2500;
+        $w->displayLabel = 'Sprocket Ultra';
+        $w->save();
+
+        // Still the same row — no duplicate created
+        $count = $this->db->fetchOne("SELECT COUNT(*) AS cnt FROM typed_widgets");
+        $this->assertSame(1, (int)$count['cnt'], 'update must not create a second row');
+
+        // Fields persisted
+        $row = $this->db->fetchOne("SELECT * FROM typed_widgets WHERE id = ?", [$insertedId]);
+        $this->assertSame('Sprocket', $row['name']);
+        $this->assertSame('Sprocket Ultra', $row['display_label']);
+        $this->assertSame(2500, $row['price_cents']);
     }
 
     // --- Default values ---
@@ -1364,5 +1486,53 @@ class ORMV3Test extends TestCase
         $this->assertArrayHasKey('data', $page);
         $this->assertNotEmpty($page['data'], 'fetch() must return the inserted row');
         $this->assertSame('2026-04-16 22:30:00', $page['data'][0]['created_at']);
+    }
+
+    // --- Regression: issue #102 — typed-property models ---
+
+    /**
+     * Issue #102: when a model uses PHP 8 typed public properties with default
+     * values (e.g. `public int $id = 0`), save() used to insert `id = 0`
+     * literally instead of letting the DB auto-increment assign one. The row
+     * landed in the DB but with id = 0, lastInsertId() returned 0, the public
+     * $id never synced back, and subsequent findById() calls failed.
+     *
+     * This test uses the typed-property style explicitly to lock the fix.
+     */
+    public function testTypedPropertyModelAutoIncrementsIdAndSyncsBack(): void
+    {
+        $this->db->exec("CREATE TABLE widgets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, display_label TEXT, price_cents INTEGER)");
+
+        $model = new class extends ORM {
+            public string $tableName = 'widgets';
+            public string $primaryKey = 'id';
+            public array $fieldMapping = [];
+            public int $id = 0;
+            public string $name = '';
+            public string $displayLabel = '';
+            public int $priceCents = 0;
+        };
+
+        $model->name = 'Sprocket';
+        $model->displayLabel = 'Super Sprocket';
+        $model->priceCents = 1995;
+
+        $result = $model->save();
+
+        $this->assertNotFalse($result, 'save() must succeed');
+        $this->assertSame(1, $model->id, 'auto-increment id must sync back to the public $id property');
+
+        // Read the row back via the adapter (can't use findById on anonymous class)
+        $row = $this->db->fetchOne("SELECT * FROM widgets WHERE id = ?", [1]);
+        $this->assertNotNull($row, 'row must exist at id=1');
+        $this->assertSame('Sprocket', $row['name']);
+        $this->assertSame('Super Sprocket', $row['display_label']);
+        $this->assertSame(1995, $row['price_cents']);
+
+        // Update via public property, save again, confirm the update hit
+        $model->priceCents = 2500;
+        $model->save();
+        $row2 = $this->db->fetchOne("SELECT price_cents FROM widgets WHERE id = ?", [1]);
+        $this->assertSame(2500, $row2['price_cents'], 'update via public property must persist');
     }
 }

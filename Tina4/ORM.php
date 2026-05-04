@@ -1222,6 +1222,17 @@ abstract class ORM
     {
         $data = $this->getDbData();
 
+        // Drop the primary key from the payload when it's unset (null or 0) so
+        // the database's auto-increment / sequence can assign a value. Without
+        // this, getDbData() serialises the declared `public int $id = 0` default
+        // and produces `INSERT INTO t (id, ...) VALUES (0, ...)` — SQLite stores
+        // id=0 literally, auto-increment never fires, lastInsertId() returns 0,
+        // and the property never syncs back. (See issue #102.)
+        $pkColumn = $this->getDbColumn($this->primaryKey);
+        if (array_key_exists($pkColumn, $data) && ($data[$pkColumn] === null || $data[$pkColumn] === 0 || $data[$pkColumn] === '')) {
+            unset($data[$pkColumn]);
+        }
+
         if (empty($data)) {
             return false;
         }

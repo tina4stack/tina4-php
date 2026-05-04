@@ -2,4 +2,4 @@
 require_once "./vendor/autoload.php";
 
 $app = new \Tina4\App();
-$app->handle();
+$app->run();
