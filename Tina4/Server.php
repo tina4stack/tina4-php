@@ -495,31 +495,16 @@ class Server
         // Populate PHP superglobals so user code that reads $_COOKIE, $_GET,
         // $_POST, $_SERVER, or calls header() works correctly under the built-in
         // socket server (stream_socket_server bypasses the PHP SAPI layer).
-        $_GET = $queryParams;
-        $_POST = is_array($parsedBody) && in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE']) ? $parsedBody : [];
-        $_COOKIE = [];
-        if (isset($headers['cookie'])) {
-            foreach (explode(';', $headers['cookie']) as $cookiePair) {
-                $cookiePair = trim($cookiePair);
-                if ($cookiePair === '') continue;
-                $eqPos = strpos($cookiePair, '=');
-                if ($eqPos !== false) {
-                    $_COOKIE[urldecode(substr($cookiePair, 0, $eqPos))] = urldecode(substr($cookiePair, $eqPos + 1));
-                }
-            }
-        }
-        $_SERVER['REQUEST_METHOD'] = $method;
-        $_SERVER['REQUEST_URI'] = $rawPath;
-        $_SERVER['QUERY_STRING'] = $queryString;
-        $_SERVER['SERVER_NAME'] = $this->host;
-        $_SERVER['SERVER_PORT'] = (string)$this->port;
-        $_SERVER['HTTP_HOST'] = $headers['host'] ?? "{$this->host}:{$this->port}";
-        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
-        foreach ($headers as $hk => $hv) {
-            if ($hk[0] !== '_') {
-                $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $hk))] = $hv;
-            }
-        }
+        self::populateSuperglobals(
+            $method,
+            $rawPath,
+            $queryString,
+            $queryParams,
+            $parsedBody,
+            $headers,
+            $this->host,
+            $this->port
+        );
 
         // Suppress hot-reload script for AI port connections
         if ($this->isAiPortConnection($client)) {
@@ -903,6 +888,87 @@ class Server
     /**
      * Build a clean header array from parsed headers (exclude internal keys).
      */
+    /**
+     * Populate PHP superglobals ($_GET, $_POST, $_COOKIE, $_SERVER, $_FILES)
+     * for the current request. Idempotent and safe to call repeatedly across
+     * the same persistent process — every call fully resets all keys that
+     * could leak from a prior request.
+     *
+     * SECURITY: $_SERVER is process-global under stream_socket_server. Without
+     * wiping HTTP_* keys from the previous request, headers like Authorization,
+     * Cookie, If-None-Match, X-API-Key, etc. leak across requests — an
+     * unauthenticated request following an authenticated one would observe
+     * the previous user's bearer token. Reported by 24now / 24call-agent and
+     * patched in 3.11.17 (with a backport to v2 main).
+     *
+     * Apps that read parsed headers via $request->headers were unaffected;
+     * the leak only ever surfaced for code reading $_SERVER directly.
+     *
+     * @param string                $method       HTTP method (GET, POST, ...)
+     * @param string                $rawPath      Original request URI (with query string)
+     * @param string                $queryString  Query string portion (no leading ?)
+     * @param array                 $queryParams  Parsed query parameters
+     * @param array|string|null     $parsedBody   Parsed body (array for JSON/form, string otherwise)
+     * @param array<string, string> $headers      Request headers (lowercase keys; _path/_method etc. ignored)
+     * @param string                $host         Server host
+     * @param int                   $port         Server port
+     */
+    public static function populateSuperglobals(
+        string $method,
+        string $rawPath,
+        string $queryString,
+        array $queryParams,
+        $parsedBody,
+        array $headers,
+        string $host,
+        int $port
+    ): void {
+        // SECURITY: wipe all HTTP_* keys from the previous request before we
+        // populate this one. $_SERVER survives across requests because
+        // stream_socket_server runs one PHP process for the whole socket
+        // lifetime — without this, every header sent by request N persists
+        // into request N+1 unless N+1 happens to overwrite the same key.
+        foreach (array_keys($_SERVER) as $__leakKey) {
+            if (strncmp($__leakKey, 'HTTP_', 5) === 0) {
+                unset($_SERVER[$__leakKey]);
+            }
+        }
+        // Defense-in-depth: $_FILES is not populated by the socket server
+        // (we use $request->files instead), but reset it anyway so user
+        // code that reads $_FILES cannot accidentally see stale state.
+        $_FILES = [];
+
+        $_GET = $queryParams;
+        $_POST = is_array($parsedBody) && in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)
+            ? $parsedBody
+            : [];
+        $_COOKIE = [];
+        if (isset($headers['cookie'])) {
+            foreach (explode(';', $headers['cookie']) as $cookiePair) {
+                $cookiePair = trim($cookiePair);
+                if ($cookiePair === '') continue;
+                $eqPos = strpos($cookiePair, '=');
+                if ($eqPos !== false) {
+                    $_COOKIE[urldecode(substr($cookiePair, 0, $eqPos))] = urldecode(substr($cookiePair, $eqPos + 1));
+                }
+            }
+        }
+
+        $_SERVER['REQUEST_METHOD'] = $method;
+        $_SERVER['REQUEST_URI'] = $rawPath;
+        $_SERVER['QUERY_STRING'] = $queryString;
+        $_SERVER['SERVER_NAME'] = $host;
+        $_SERVER['SERVER_PORT'] = (string)$port;
+        $_SERVER['HTTP_HOST'] = $headers['host'] ?? "{$host}:{$port}";
+        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+        foreach ($headers as $hk => $hv) {
+            if ($hk === '' || $hk[0] === '_') {
+                continue;
+            }
+            $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $hk))] = $hv;
+        }
+    }
+
     /**
      * Parse multipart/form-data body into fields and files.
      *
