@@ -101,7 +101,7 @@ class App
             $lines[] = sprintf('    %-28s  ->  %s', $old, $new);
         }
         $lines[] = '';
-        $lines[] = 'Run `tina4 env-migrate` to rewrite your .env automatically,';
+        $lines[] = 'Run `tina4 env --migrate` to rewrite your .env automatically,';
         $lines[] = 'or rename manually. See https://tina4.com/release/3.12.0';
         $lines[] = 'Set TINA4_ALLOW_LEGACY_ENV=true to bypass during migration.';
         $lines[] = $sep;
