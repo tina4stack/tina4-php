@@ -933,3 +933,32 @@ Always read and follow the instructions in .claude/skills/tina4-developer/SKILL.
 
 ## Tina4-js Frontend Skill
 Always read and follow the instructions in .claude/skills/tina4-js/SKILL.md when working with tina4-js frontend code. Read its referenced files in .claude/skills/tina4-js/references/ as needed.
+
+## First Principle: Documentation Matches Code Reality
+
+**This rule overrides everything else in this file.**
+
+Every command, env var, method, class, or feature mentioned in any
+documentation file (`*.md` in this repo, or any tina4-book chapter,
+or `tina4-documentation/docs/`) MUST exist in code. No exceptions.
+No "we'll build it later" entries. No Laravel/Rails-style commands
+that look right but don't exist. No env vars that the framework
+doesn't actually read.
+
+When you add a doc reference, add the implementation in the same PR.
+When you remove a feature, remove every doc reference in the same PR.
+When you find drift, fix it both ways: build the real thing OR delete
+the doc.
+
+The `tina4-documentation/scripts/audit-truth.py` script is the source
+of truth. It runs as a CI gate (`audit-truth.yml`) on every PR — the
+build fails on CLI drift. Run it locally before pushing if you've
+touched docs:
+
+```bash
+cd /path/to/tina4-documentation
+python3 scripts/audit-truth.py --strict
+```
+
+If you're unsure whether something exists, run `tina4 <command> --help`
+or grep the framework source. Don't guess.
