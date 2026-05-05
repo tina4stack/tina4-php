@@ -2074,4 +2074,69 @@ TPL;
         $this->writeTemplate('mlv_page.html', '{% extends "mlv_layout.html" %}{% block title %}{{ page_title }}{% endblock %}{% block main %}Hello {{ name }}{% endblock %}');
         $this->assertSame('<h1>Dashboard</h1><main>Hello Alice</main>', $this->engine->render('mlv_page.html', ['page_title' => 'Dashboard', 'name' => 'Alice']));
     }
+
+    // ── Filter + property chain (regression for tina4-php#113) ────────
+    //
+    // Property access chained after a filter must resolve as
+    // (filter).property, never as a literal `filter.property` filter
+    // name. Silent null here once cost a receipt template the entire
+    // invoice total — render shows R0.00.
+
+    public function testFilterThenSinglePropertyIssue113(): void
+    {
+        $data = ['details' => [['groupSummary' => ['totalAmount' => 190]]]];
+        $out = $this->engine->renderString(
+            '{{ details|first.groupSummary.totalAmount }}',
+            $data
+        );
+        $this->assertSame('190', $out);
+    }
+
+    public function testFilterThenPropertyInSetIssue113(): void
+    {
+        $data = ['details' => [['groupSummary' => ['totalAmount' => 190]]]];
+        $tpl = '{% set summary = details|first.groupSummary %}'
+             . '{{ summary.totalAmount }}';
+        $this->assertSame('190', $this->engine->renderString($tpl, $data));
+    }
+
+    public function testFilterThenMultiLevelChainIssue113(): void
+    {
+        $data = ['invoices' => [['customer' => ['address' => ['city' => 'Cape Town']]]]];
+        $out = $this->engine->renderString(
+            '{{ invoices|first.customer.address.city }}',
+            $data
+        );
+        $this->assertSame('Cape Town', $out);
+    }
+
+    public function testLastFilterThenPropertyIssue113(): void
+    {
+        $data = ['rows' => [['sku' => 'A1'], ['sku' => 'B2']]];
+        $out = $this->engine->renderString('{{ rows|last.sku }}', $data);
+        $this->assertSame('B2', $out);
+    }
+
+    public function testNumberFormatFilterArgsIssue113(): void
+    {
+        // number_format(2) — verifies the args path stays intact.
+        $out = $this->engine->renderString(
+            '{{ price|number_format(2) }}',
+            ['price' => 19.5]
+        );
+        $this->assertSame('19.50', $out);
+    }
+
+    public function testDotInsideQuotedFilterArgsIsNotPropertyIssue113(): void
+    {
+        // replace(".", "-") — dots inside quoted args must NOT be
+        // treated as a property-path split. If the parser split on the
+        // inner dot it would call replace as just `replace("` and miss
+        // the second arg, returning the input unchanged.
+        $out = $this->engine->renderString(
+            '{{ stamp|replace(".", "-") }}',
+            ['stamp' => '2026.05.05']
+        );
+        $this->assertSame('2026-05-05', $out);
+    }
 }
