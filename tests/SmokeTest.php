@@ -594,23 +594,23 @@ class SmokeTest extends TestCase
     public function testResponseCache(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
+        ResponseCache::clearCache();
 
-        // Store
-        $cache->store('GET', '/api/smoke', '{"ok":true}', 'application/json', 200);
+        // Store via the @internal middleware test seam
+        $cache->_internalStore('GET', '/api/smoke', '{"ok":true}', 'application/json', 200);
 
         // Lookup hit
-        $hit = $cache->lookup('GET', '/api/smoke');
+        $hit = $cache->_internalLookup('GET', '/api/smoke');
         $this->assertNotNull($hit);
         $this->assertSame('{"ok":true}', $hit['body']);
         $this->assertSame('application/json', $hit['contentType']);
         $this->assertSame(200, $hit['statusCode']);
 
         // Non-GET not cached
-        $cache->store('POST', '/api/smoke', '{}', 'application/json', 200);
-        $this->assertNull($cache->lookup('POST', '/api/smoke'));
+        $cache->_internalStore('POST', '/api/smoke', '{}', 'application/json', 200);
+        $this->assertNull($cache->_internalLookup('POST', '/api/smoke'));
 
-        $cache->clearCache();
+        ResponseCache::clearCache();
     }
 
     // ═════════════════════════════════════════════════════════════════

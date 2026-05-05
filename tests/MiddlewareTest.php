@@ -391,13 +391,13 @@ class MiddlewareTest extends TestCase
         $handlerCallCount = 0;
 
         Router::get('/api/cached', function ($req, $res) use ($cache, &$handlerCallCount) {
-            $hit = $cache->lookup('GET', '/api/cached');
+            $hit = $cache->_internalLookup('GET', '/api/cached');
             if ($hit) {
                 return $res->json(json_decode($hit['body'], true), $hit['statusCode']);
             }
             $handlerCallCount++;
             $body = json_encode(['data' => 'fresh']);
-            $cache->store('GET', '/api/cached', $body, 'application/json', 200);
+            $cache->_internalStore('GET', '/api/cached', $body, 'application/json', 200);
             return $res->json(['data' => 'fresh']);
         });
 
@@ -414,9 +414,9 @@ class MiddlewareTest extends TestCase
         $this->assertSame(200, $result2->getStatusCode());
         // Handler should still be called once because our test logic runs in handler
         // but cache lookup returns the stored body
-        $stats = $cache->cacheStats();
+        $stats = $cache->getStats();
         $this->assertSame(1, $stats['size']);
 
-        $cache->clearCache();
+        $cache->clear();
     }
 }

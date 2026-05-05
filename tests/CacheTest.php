@@ -6,8 +6,11 @@
  * License: MIT https://opensource.org/licenses/MIT
  *
  * Cache — comprehensive direct API and advanced behavior tests.
- * Complements ResponseCacheTest by focusing on the key-value cache API,
- * TTL expiry edge cases, key patterns, and max size enforcement.
+ * Complements ResponseCacheTest by focusing on the namespace-level KV cache
+ * API, TTL expiry edge cases, key patterns, and max size enforcement.
+ *
+ * Internal store/lookup is exercised via the @internal _internal* test seams
+ * exposed on the ResponseCache class.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -17,59 +20,48 @@ class CacheTest extends TestCase
 {
     protected function setUp(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
+        ResponseCache::clearCache();
+        \Tina4\Middleware\cache_clear();
     }
 
-    // ── Set / Get basics ───────────────────────────────────────────
+    // ── Set / Get basics (namespace-level KV API) ──────────────────
 
     public function testSetAndGetString(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('key1', 'hello');
-        $this->assertEquals('hello', $cache->get('key1'));
+        \Tina4\Middleware\cache_set('key1', 'hello');
+        $this->assertEquals('hello', \Tina4\Middleware\cache_get('key1'));
     }
 
     public function testSetAndGetInteger(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('num', 42);
-        $this->assertEquals(42, $cache->get('num'));
+        \Tina4\Middleware\cache_set('num', 42);
+        $this->assertEquals(42, \Tina4\Middleware\cache_get('num'));
     }
 
     public function testSetAndGetArray(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
         $data = ['a' => 1, 'b' => [2, 3]];
-        $cache->set('arr', $data);
-        $this->assertEquals($data, $cache->get('arr'));
+        \Tina4\Middleware\cache_set('arr', $data);
+        $this->assertEquals($data, \Tina4\Middleware\cache_get('arr'));
     }
 
     public function testSetAndGetBoolean(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('bool_true', true);
-        $cache->set('bool_false', false);
-        $this->assertTrue($cache->get('bool_true'));
-        $this->assertFalse($cache->get('bool_false'));
+        \Tina4\Middleware\cache_set('bool_true', true);
+        \Tina4\Middleware\cache_set('bool_false', false);
+        $this->assertTrue(\Tina4\Middleware\cache_get('bool_true'));
+        $this->assertFalse(\Tina4\Middleware\cache_get('bool_false'));
     }
 
     public function testSetAndGetNull(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('null_val', null);
-        // null value stored is retrievable (the direct API wraps in an entry with 'value' key)
-        // The get() method returns entry['value'], which is null
-        // But when value is null and entry exists, get returns the entry (implementation detail)
-        // Just verify the key exists by checking it is not the same as a missing key
-        $cache->set('known_val', 'hello');
-        $this->assertEquals('hello', $cache->get('known_val'));
+        \Tina4\Middleware\cache_set('known_val', 'hello');
+        $this->assertEquals('hello', \Tina4\Middleware\cache_get('known_val'));
     }
 
     public function testGetMissingKeyReturnsNull(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $this->assertNull($cache->get('nonexistent'));
+        $this->assertNull(\Tina4\Middleware\cache_get('nonexistent'));
     }
 
     // ── TTL expiry ─────────────────────────────────────────────────
@@ -77,119 +69,110 @@ class CacheTest extends TestCase
     public function testTtlExpiryOnDirectApi(): void
     {
         $cache = new ResponseCache(['ttl' => 1]);
-        $cache->set('expire_me', 'value', 1);
-        $this->assertEquals('value', $cache->get('expire_me'));
+        $cache->_internalSet('expire_me', 'value', 1);
+        $this->assertEquals('value', $cache->_internalGet('expire_me'));
 
         usleep(1100000); // 1.1s
 
-        $this->assertNull($cache->get('expire_me'));
+        $this->assertNull($cache->_internalGet('expire_me'));
     }
 
     public function testCustomTtlOverridesDefault(): void
     {
         // Default TTL is 60s, but set with 1s TTL
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('short_lived', 'value', 1);
+        $cache->_internalSet('short_lived', 'value', 1);
 
         usleep(1100000); // 1.1s
 
-        $this->assertNull($cache->get('short_lived'));
+        $this->assertNull($cache->_internalGet('short_lived'));
     }
 
     public function testLongTtlKeepsValue(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('long_lived', 'value', 300);
+        $cache->_internalSet('long_lived', 'value', 300);
 
         // Should still be there immediately
-        $this->assertEquals('value', $cache->get('long_lived'));
+        $this->assertEquals('value', $cache->_internalGet('long_lived'));
     }
 
     // ── Delete ─────────────────────────────────────────────────────
 
     public function testDeleteExistingKey(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('del', 'value');
-        $this->assertTrue($cache->delete('del'));
-        $this->assertNull($cache->get('del'));
+        \Tina4\Middleware\cache_set('del', 'value');
+        $this->assertTrue(\Tina4\Middleware\cache_delete('del'));
+        $this->assertNull(\Tina4\Middleware\cache_get('del'));
     }
 
     public function testDeleteNonExistentKey(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $this->assertFalse($cache->delete('nope'));
+        $this->assertFalse(\Tina4\Middleware\cache_delete('nope'));
     }
 
     public function testDeleteDoesNotAffectOtherKeys(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('keep', 'a');
-        $cache->set('remove', 'b');
-        $cache->delete('remove');
-        $this->assertEquals('a', $cache->get('keep'));
+        \Tina4\Middleware\cache_set('keep', 'a');
+        \Tina4\Middleware\cache_set('remove', 'b');
+        \Tina4\Middleware\cache_delete('remove');
+        $this->assertEquals('a', \Tina4\Middleware\cache_get('keep'));
     }
 
     // ── Key patterns ───────────────────────────────────────────────
 
     public function testKeysWithSpecialCharacters(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('key:with:colons', 'colon');
-        $cache->set('key/with/slashes', 'slash');
-        $cache->set('key.with.dots', 'dot');
-        $cache->set('key with spaces', 'space');
+        \Tina4\Middleware\cache_set('key:with:colons', 'colon');
+        \Tina4\Middleware\cache_set('key/with/slashes', 'slash');
+        \Tina4\Middleware\cache_set('key.with.dots', 'dot');
+        \Tina4\Middleware\cache_set('key with spaces', 'space');
 
-        $this->assertEquals('colon', $cache->get('key:with:colons'));
-        $this->assertEquals('slash', $cache->get('key/with/slashes'));
-        $this->assertEquals('dot', $cache->get('key.with.dots'));
-        $this->assertEquals('space', $cache->get('key with spaces'));
+        $this->assertEquals('colon', \Tina4\Middleware\cache_get('key:with:colons'));
+        $this->assertEquals('slash', \Tina4\Middleware\cache_get('key/with/slashes'));
+        $this->assertEquals('dot', \Tina4\Middleware\cache_get('key.with.dots'));
+        $this->assertEquals('space', \Tina4\Middleware\cache_get('key with spaces'));
     }
 
     public function testEmptyStringKey(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('', 'empty_key');
-        $this->assertEquals('empty_key', $cache->get(''));
+        \Tina4\Middleware\cache_set('', 'empty_key');
+        $this->assertEquals('empty_key', \Tina4\Middleware\cache_get(''));
     }
 
     public function testLongKey(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
         $longKey = str_repeat('x', 500);
-        $cache->set($longKey, 'long');
-        $this->assertEquals('long', $cache->get($longKey));
+        \Tina4\Middleware\cache_set($longKey, 'long');
+        $this->assertEquals('long', \Tina4\Middleware\cache_get($longKey));
     }
 
-    // ── Max size enforcement ───────────────────────────────────────
+    // ── Max size enforcement (response cache) ─────────────────────
 
     public function testMaxEntriesEvictionOnResponseCache(): void
     {
         $cache = new ResponseCache(['ttl' => 60, 'maxEntries' => 5]);
 
         for ($i = 0; $i < 5; $i++) {
-            $cache->store('GET', "/page/$i", "body$i", 'text/plain', 200);
+            $cache->_internalStore('GET', "/page/$i", "body$i", 'text/plain', 200);
         }
 
         // Storing one more should evict the oldest
-        $cache->store('GET', '/page/5', 'body5', 'text/plain', 200);
+        $cache->_internalStore('GET', '/page/5', 'body5', 'text/plain', 200);
 
-        $this->assertNull($cache->lookup('GET', '/page/0'));
-        $this->assertNotNull($cache->lookup('GET', '/page/5'));
+        $this->assertNull($cache->_internalLookup('GET', '/page/0'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/page/5'));
     }
 
     // ── Cache stats ────────────────────────────────────────────────
 
     public function testCacheStatsAfterOperations(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
+        \Tina4\Middleware\cache_set('s1', 'v1');
+        \Tina4\Middleware\cache_set('s2', 'v2');
+        \Tina4\Middleware\cache_set('s3', 'v3');
 
-        $cache->set('s1', 'v1');
-        $cache->set('s2', 'v2');
-        $cache->set('s3', 'v3');
-
-        $stats = $cache->cacheStats();
+        $stats = ResponseCache::cacheStats();
         $this->assertGreaterThanOrEqual(3, $stats['size']);
         $this->assertArrayHasKey('hits', $stats);
         $this->assertArrayHasKey('misses', $stats);
@@ -198,14 +181,11 @@ class CacheTest extends TestCase
 
     public function testCacheStatsHitsAndMisses(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
+        \Tina4\Middleware\cache_set('hit_key', 'value');
+        \Tina4\Middleware\cache_get('hit_key');      // hit
+        \Tina4\Middleware\cache_get('miss_key');     // miss
 
-        $cache->set('hit_key', 'value');
-        $cache->get('hit_key');      // hit
-        $cache->get('miss_key');     // miss
-
-        $stats = $cache->cacheStats();
+        $stats = ResponseCache::cacheStats();
         $this->assertGreaterThanOrEqual(1, $stats['hits']);
         $this->assertGreaterThanOrEqual(1, $stats['misses']);
     }
@@ -215,25 +195,25 @@ class CacheTest extends TestCase
     public function testClearRemovesAllEntries(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('c1', 'v1');
-        $cache->set('c2', 'v2');
-        $cache->store('GET', '/cached', 'body', 'text/plain', 200);
+        \Tina4\Middleware\cache_set('c1', 'v1');
+        \Tina4\Middleware\cache_set('c2', 'v2');
+        $cache->_internalStore('GET', '/cached', 'body', 'text/plain', 200);
 
-        $cache->clearCache();
+        ResponseCache::clearCache();
+        $cache->clear();
 
-        $this->assertNull($cache->get('c1'));
-        $this->assertNull($cache->get('c2'));
-        $this->assertNull($cache->lookup('GET', '/cached'));
+        $this->assertNull(\Tina4\Middleware\cache_get('c1'));
+        $this->assertNull(\Tina4\Middleware\cache_get('c2'));
+        $this->assertNull($cache->_internalLookup('GET', '/cached'));
     }
 
     public function testClearResetsStats(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('x', 'y');
-        $cache->get('x');
-        $cache->clearCache();
+        \Tina4\Middleware\cache_set('x', 'y');
+        \Tina4\Middleware\cache_get('x');
+        ResponseCache::clearCache();
 
-        $stats = $cache->cacheStats();
+        $stats = ResponseCache::cacheStats();
         $this->assertEquals(0, $stats['hits']);
         $this->assertEquals(0, $stats['misses']);
     }
@@ -244,39 +224,38 @@ class CacheTest extends TestCase
     {
         $cache = new ResponseCache(['ttl' => 1]);
 
-        $cache->store('GET', '/old1', 'a', 'text/plain', 200);
-        $cache->store('GET', '/old2', 'b', 'text/plain', 200);
+        $cache->_internalStore('GET', '/old1', 'a', 'text/plain', 200);
+        $cache->_internalStore('GET', '/old2', 'b', 'text/plain', 200);
 
         usleep(1100000); // 1.1s — these two are now expired
 
         // Add a fresh one
         $fresh = new ResponseCache(['ttl' => 60]);
-        $fresh->store('GET', '/new', 'c', 'text/plain', 200);
+        $fresh->_internalStore('GET', '/new', 'c', 'text/plain', 200);
 
         $removed = $fresh->sweep();
         $this->assertEquals(2, $removed);
 
         // Fresh entry survives
-        $this->assertNotNull($fresh->lookup('GET', '/new'));
+        $this->assertNotNull($fresh->_internalLookup('GET', '/new'));
     }
 
     // ── Overwrite behavior ─────────────────────────────────────────
 
     public function testSetOverwritesExistingKey(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->set('overwrite', 'first');
-        $cache->set('overwrite', 'second');
-        $this->assertEquals('second', $cache->get('overwrite'));
+        \Tina4\Middleware\cache_set('overwrite', 'first');
+        \Tina4\Middleware\cache_set('overwrite', 'second');
+        $this->assertEquals('second', \Tina4\Middleware\cache_get('overwrite'));
     }
 
     public function testStoreOverwritesExistingUrl(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('GET', '/page', 'old', 'text/plain', 200);
-        $cache->store('GET', '/page', 'new', 'text/plain', 200);
+        $cache->_internalStore('GET', '/page', 'old', 'text/plain', 200);
+        $cache->_internalStore('GET', '/page', 'new', 'text/plain', 200);
 
-        $hit = $cache->lookup('GET', '/page');
+        $hit = $cache->_internalLookup('GET', '/page');
         $this->assertEquals('new', $hit['body']);
     }
 
@@ -291,13 +270,13 @@ class CacheTest extends TestCase
             'cacheDir' => $cacheDir,
         ]);
 
-        $cache->set('fkey', ['data' => 123]);
-        $this->assertEquals(['data' => 123], $cache->get('fkey'));
+        $cache->_internalSet('fkey', ['data' => 123]);
+        $this->assertEquals(['data' => 123], $cache->_internalGet('fkey'));
 
-        $cache->delete('fkey');
-        $this->assertNull($cache->get('fkey'));
+        $cache->_internalDelete('fkey');
+        $this->assertNull($cache->_internalGet('fkey'));
 
-        $cache->clearCache();
+        $cache->clear();
         @rmdir($cacheDir);
     }
 
@@ -310,14 +289,14 @@ class CacheTest extends TestCase
             'cacheDir' => $cacheDir,
         ]);
 
-        $cache->store('GET', '/f1', 'a', 'text/plain', 200);
+        $cache->_internalStore('GET', '/f1', 'a', 'text/plain', 200);
 
         usleep(1100000);
 
         $removed = $cache->sweep();
         $this->assertGreaterThanOrEqual(1, $removed);
 
-        $cache->clearCache();
+        $cache->clear();
         @rmdir($cacheDir);
     }
 
@@ -330,12 +309,12 @@ class CacheTest extends TestCase
             'cacheDir' => $cacheDir,
         ]);
 
-        $cache->set('a', 1);
-        $cache->set('b', 2);
-        $cache->clearCache();
+        $cache->_internalSet('a', 1);
+        $cache->_internalSet('b', 2);
+        $cache->clear();
 
-        $this->assertNull($cache->get('a'));
-        $this->assertNull($cache->get('b'));
+        $this->assertNull($cache->_internalGet('a'));
+        $this->assertNull($cache->_internalGet('b'));
 
         @rmdir($cacheDir);
     }
@@ -345,8 +324,8 @@ class CacheTest extends TestCase
     public function testTtlZeroDisablesResponseCaching(): void
     {
         $cache = new ResponseCache(['ttl' => 0]);
-        $cache->store('GET', '/disabled', 'body', 'text/plain', 200);
-        $this->assertNull($cache->lookup('GET', '/disabled'));
+        $cache->_internalStore('GET', '/disabled', 'body', 'text/plain', 200);
+        $this->assertNull($cache->_internalLookup('GET', '/disabled'));
     }
 
     // ── Case insensitive method handling ───────────────────────────
@@ -354,8 +333,8 @@ class CacheTest extends TestCase
     public function testMethodCaseInsensitive(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('get', '/lower', 'body', 'text/plain', 200);
-        $hit = $cache->lookup('GET', '/lower');
+        $cache->_internalStore('get', '/lower', 'body', 'text/plain', 200);
+        $hit = $cache->_internalLookup('GET', '/lower');
         $this->assertNotNull($hit);
     }
 }

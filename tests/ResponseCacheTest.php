@@ -4,6 +4,18 @@
  * Tina4 — The Intelligent Native Application 4ramework
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Public API tests for ResponseCache parity with Python tina4_python.cache.
+ *
+ * Public surface:
+ *   - ResponseCache class — used as @middleware on a route
+ *   - ResponseCache::cacheStats() — static, module-level
+ *   - ResponseCache::clearCache() — static, module-level
+ *   - cache_stats() / cache_clear() — namespace-level convenience wrappers
+ *
+ * Internal lookup/store of GET responses is covered indirectly via middleware
+ * hooks (beforeCache / afterCache) and via _internal* test seams (marked
+ * @internal in the class).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -13,19 +25,18 @@ class ResponseCacheTest extends TestCase
 {
     protected function setUp(): void
     {
-        // Clear the static store before each test
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
+        // Reset the module-level singleton state before each test
+        ResponseCache::clearCache();
     }
 
-    // -- Store and lookup ----------------------------------------------------
+    // -- Internal store / lookup (via middleware test seams) -----------------
 
     public function testStoresGetResponse(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('GET', '/api/users', '{"users":[]}', 'application/json', 200);
+        $cache->_internalStore('GET', '/api/users', '{"users":[]}', 'application/json', 200);
 
-        $hit = $cache->lookup('GET', '/api/users');
+        $hit = $cache->_internalLookup('GET', '/api/users');
         $this->assertNotNull($hit);
         $this->assertEquals('{"users":[]}', $hit['body']);
         $this->assertEquals('application/json', $hit['contentType']);
@@ -35,10 +46,10 @@ class ResponseCacheTest extends TestCase
     public function testCacheHitOnSecondRequest(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('GET', '/page', '<html></html>', 'text/html', 200);
+        $cache->_internalStore('GET', '/page', '<html></html>', 'text/html', 200);
 
-        $first = $cache->lookup('GET', '/page');
-        $second = $cache->lookup('GET', '/page');
+        $first = $cache->_internalLookup('GET', '/page');
+        $second = $cache->_internalLookup('GET', '/page');
 
         $this->assertNotNull($first);
         $this->assertNotNull($second);
@@ -50,22 +61,22 @@ class ResponseCacheTest extends TestCase
     public function testPostNotCached(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('POST', '/api/users', '{}', 'application/json', 200);
-        $this->assertNull($cache->lookup('POST', '/api/users'));
+        $cache->_internalStore('POST', '/api/users', '{}', 'application/json', 200);
+        $this->assertNull($cache->_internalLookup('POST', '/api/users'));
     }
 
     public function testPutNotCached(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('PUT', '/api/users/1', '{}', 'application/json', 200);
-        $this->assertNull($cache->lookup('PUT', '/api/users/1'));
+        $cache->_internalStore('PUT', '/api/users/1', '{}', 'application/json', 200);
+        $this->assertNull($cache->_internalLookup('PUT', '/api/users/1'));
     }
 
     public function testDeleteNotCached(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('DELETE', '/api/users/1', '', 'text/plain', 204);
-        $this->assertNull($cache->lookup('DELETE', '/api/users/1'));
+        $cache->_internalStore('DELETE', '/api/users/1', '', 'text/plain', 204);
+        $this->assertNull($cache->_internalLookup('DELETE', '/api/users/1'));
     }
 
     // -- TTL expiry ----------------------------------------------------------
@@ -73,20 +84,20 @@ class ResponseCacheTest extends TestCase
     public function testTtlExpiry(): void
     {
         $cache = new ResponseCache(['ttl' => 1]);
-        $cache->store('GET', '/expire', 'data', 'text/plain', 200);
+        $cache->_internalStore('GET', '/expire', 'data', 'text/plain', 200);
 
-        $this->assertNotNull($cache->lookup('GET', '/expire'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/expire'));
 
         usleep(1100000); // 1.1 seconds
 
-        $this->assertNull($cache->lookup('GET', '/expire'));
+        $this->assertNull($cache->_internalLookup('GET', '/expire'));
     }
 
     public function testTtlZeroDisablesCache(): void
     {
         $cache = new ResponseCache(['ttl' => 0]);
-        $cache->store('GET', '/disabled', 'data', 'text/plain', 200);
-        $this->assertNull($cache->lookup('GET', '/disabled'));
+        $cache->_internalStore('GET', '/disabled', 'data', 'text/plain', 200);
+        $this->assertNull($cache->_internalLookup('GET', '/disabled'));
     }
 
     // -- LRU eviction --------------------------------------------------------
@@ -95,16 +106,16 @@ class ResponseCacheTest extends TestCase
     {
         $cache = new ResponseCache(['ttl' => 60, 'maxEntries' => 3]);
 
-        $cache->store('GET', '/a', 'a', 'text/plain', 200);
-        $cache->store('GET', '/b', 'b', 'text/plain', 200);
-        $cache->store('GET', '/c', 'c', 'text/plain', 200);
+        $cache->_internalStore('GET', '/a', 'a', 'text/plain', 200);
+        $cache->_internalStore('GET', '/b', 'b', 'text/plain', 200);
+        $cache->_internalStore('GET', '/c', 'c', 'text/plain', 200);
 
         // At capacity. Storing a 4th should evict the oldest (/a).
-        $cache->store('GET', '/d', 'd', 'text/plain', 200);
+        $cache->_internalStore('GET', '/d', 'd', 'text/plain', 200);
 
-        $this->assertNull($cache->lookup('GET', '/a'));
-        $this->assertNotNull($cache->lookup('GET', '/b'));
-        $this->assertNotNull($cache->lookup('GET', '/d'));
+        $this->assertNull($cache->_internalLookup('GET', '/a'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/b'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/d'));
     }
 
     // -- Status code filtering -----------------------------------------------
@@ -113,35 +124,35 @@ class ResponseCacheTest extends TestCase
     {
         $cache = new ResponseCache(['ttl' => 60, 'statusCodes' => [200]]);
 
-        $cache->store('GET', '/ok', 'ok', 'text/plain', 200);
-        $cache->store('GET', '/notfound', 'nf', 'text/plain', 404);
+        $cache->_internalStore('GET', '/ok', 'ok', 'text/plain', 200);
+        $cache->_internalStore('GET', '/notfound', 'nf', 'text/plain', 404);
 
-        $this->assertNotNull($cache->lookup('GET', '/ok'));
-        $this->assertNull($cache->lookup('GET', '/notfound'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/ok'));
+        $this->assertNull($cache->_internalLookup('GET', '/notfound'));
     }
 
     public function testMultipleStatusCodesCached(): void
     {
         $cache = new ResponseCache(['ttl' => 60, 'statusCodes' => [200, 301]]);
 
-        $cache->store('GET', '/ok', 'ok', 'text/plain', 200);
-        $cache->store('GET', '/redirect', 'redir', 'text/plain', 301);
-        $cache->store('GET', '/error', 'err', 'text/plain', 500);
+        $cache->_internalStore('GET', '/ok', 'ok', 'text/plain', 200);
+        $cache->_internalStore('GET', '/redirect', 'redir', 'text/plain', 301);
+        $cache->_internalStore('GET', '/error', 'err', 'text/plain', 500);
 
-        $this->assertNotNull($cache->lookup('GET', '/ok'));
-        $this->assertNotNull($cache->lookup('GET', '/redirect'));
-        $this->assertNull($cache->lookup('GET', '/error'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/ok'));
+        $this->assertNotNull($cache->_internalLookup('GET', '/redirect'));
+        $this->assertNull($cache->_internalLookup('GET', '/error'));
     }
 
-    // -- cacheStats ----------------------------------------------------------
+    // -- cacheStats (instance) ----------------------------------------------
 
     public function testCacheStatsReturnsCorrectCounts(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('GET', '/x', 'x', 'text/plain', 200);
-        $cache->store('GET', '/y', 'y', 'text/plain', 200);
+        $cache->_internalStore('GET', '/x', 'x', 'text/plain', 200);
+        $cache->_internalStore('GET', '/y', 'y', 'text/plain', 200);
 
-        $stats = $cache->cacheStats();
+        $stats = $cache->getStats();
         $this->assertEquals(2, $stats['size']);
         $this->assertArrayHasKey('backend', $stats);
     }
@@ -149,30 +160,52 @@ class ResponseCacheTest extends TestCase
     public function testCacheStatsEmpty(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $stats = $cache->cacheStats();
+        $stats = $cache->getStats();
         $this->assertEquals(0, $stats['size']);
     }
 
     public function testCacheStatsHasBackendField(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $stats = $cache->cacheStats();
+        $stats = $cache->getStats();
         $this->assertEquals('memory', $stats['backend']);
     }
 
-    // -- clearCache ----------------------------------------------------------
+    // -- Static module-level API (Python parity) ---------------------------
 
-    public function testClearCacheResetsEverything(): void
+    public function testStaticCacheStats(): void
+    {
+        $stats = ResponseCache::cacheStats();
+        $this->assertArrayHasKey('hits', $stats);
+        $this->assertArrayHasKey('misses', $stats);
+        $this->assertArrayHasKey('size', $stats);
+        $this->assertArrayHasKey('backend', $stats);
+    }
+
+    public function testStaticClearCache(): void
     {
         $cache = new ResponseCache(['ttl' => 60]);
-        $cache->store('GET', '/a', 'a', 'text/plain', 200);
-        $cache->store('GET', '/b', 'b', 'text/plain', 200);
+        $cache->_internalStore('GET', '/a', 'a', 'text/plain', 200);
 
-        $cache->clearCache();
+        ResponseCache::clearCache();
 
-        $this->assertNull($cache->lookup('GET', '/a'));
-        $this->assertNull($cache->lookup('GET', '/b'));
-        $stats = $cache->cacheStats();
+        $stats = ResponseCache::cacheStats();
+        $this->assertEquals(0, $stats['size']);
+    }
+
+    // -- clear (instance) ---------------------------------------------------
+
+    public function testClearResetsEverything(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $cache->_internalStore('GET', '/a', 'a', 'text/plain', 200);
+        $cache->_internalStore('GET', '/b', 'b', 'text/plain', 200);
+
+        $cache->clear();
+
+        $this->assertNull($cache->_internalLookup('GET', '/a'));
+        $this->assertNull($cache->_internalLookup('GET', '/b'));
+        $stats = $cache->getStats();
         $this->assertEquals(0, $stats['size']);
     }
 
@@ -181,14 +214,14 @@ class ResponseCacheTest extends TestCase
     public function testSweepRemovesExpiredEntries(): void
     {
         $cache = new ResponseCache(['ttl' => 1]);
-        $cache->store('GET', '/sweep1', 'a', 'text/plain', 200);
-        $cache->store('GET', '/sweep2', 'b', 'text/plain', 200);
+        $cache->_internalStore('GET', '/sweep1', 'a', 'text/plain', 200);
+        $cache->_internalStore('GET', '/sweep2', 'b', 'text/plain', 200);
 
         usleep(1100000); // 1.1 seconds
 
         // Store one more that is not expired
         $fresh = new ResponseCache(['ttl' => 60]);
-        $fresh->store('GET', '/fresh', 'c', 'text/plain', 200);
+        $fresh->_internalStore('GET', '/fresh', 'c', 'text/plain', 200);
 
         $removed = $fresh->sweep();
         $this->assertEquals(2, $removed);
@@ -212,14 +245,14 @@ class ResponseCacheTest extends TestCase
         ]);
         $this->assertEquals('file', $cache->getBackend());
 
-        // Test basic operations
-        $cache->store('GET', '/file-test', 'data', 'text/plain', 200);
-        $hit = $cache->lookup('GET', '/file-test');
+        // Test basic operations via internal seams
+        $cache->_internalStore('GET', '/file-test', 'data', 'text/plain', 200);
+        $hit = $cache->_internalLookup('GET', '/file-test');
         $this->assertNotNull($hit);
         $this->assertEquals('data', $hit['body']);
 
         // Cleanup
-        $cache->clearCache();
+        $cache->clear();
         @rmdir($cacheDir);
     }
 
@@ -255,35 +288,32 @@ class ResponseCacheTest extends TestCase
         }
     }
 
-    // -- Direct cache API ---------------------------------------------------
+    // -- Namespace-level KV API ----------------------------------------------
 
-    public function testDirectSetAndGet(): void
+    public function testNamespaceCacheSetAndGet(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
-        $cache->set('test_key', ['hello' => 'world'], 60);
-        $result = $cache->get('test_key');
+        \Tina4\Middleware\cache_clear();
+        \Tina4\Middleware\cache_set('test_key', ['hello' => 'world'], 60);
+        $result = \Tina4\Middleware\cache_get('test_key');
         $this->assertEquals(['hello' => 'world'], $result);
     }
 
-    public function testDirectGetMissing(): void
+    public function testNamespaceCacheGetMissing(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
-        $this->assertNull($cache->get('nonexistent_key_12345'));
+        \Tina4\Middleware\cache_clear();
+        $this->assertNull(\Tina4\Middleware\cache_get('nonexistent_key_12345'));
     }
 
-    public function testDirectDelete(): void
+    public function testNamespaceCacheDelete(): void
     {
-        $cache = new ResponseCache(['ttl' => 60]);
-        $cache->clearCache();
-        $cache->set('del_key', 'value', 60);
-        $this->assertTrue($cache->delete('del_key'));
-        $this->assertNull($cache->get('del_key'));
-        $this->assertFalse($cache->delete('del_key'));
+        \Tina4\Middleware\cache_clear();
+        \Tina4\Middleware\cache_set('del_key', 'value', 60);
+        $this->assertTrue(\Tina4\Middleware\cache_delete('del_key'));
+        $this->assertNull(\Tina4\Middleware\cache_get('del_key'));
+        $this->assertFalse(\Tina4\Middleware\cache_delete('del_key'));
     }
 
-    // -- File backend direct API ---------------------------------------------
+    // -- File backend KV via namespace API -----------------------------------
 
     public function testFileBackendDirectAPI(): void
     {
@@ -294,15 +324,15 @@ class ResponseCacheTest extends TestCase
             'cacheDir' => $cacheDir,
         ]);
 
-        $cache->set('file_key', ['data' => true], 60);
-        $result = $cache->get('file_key');
+        $cache->_internalSet('file_key', ['data' => true], 60);
+        $result = $cache->_internalGet('file_key');
         $this->assertEquals(['data' => true], $result);
 
-        $cache->delete('file_key');
-        $this->assertNull($cache->get('file_key'));
+        $cache->_internalDelete('file_key');
+        $this->assertNull($cache->_internalGet('file_key'));
 
         // Cleanup
-        $cache->clearCache();
+        $cache->clear();
         @rmdir($cacheDir);
     }
 }

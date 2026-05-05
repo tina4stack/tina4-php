@@ -5,7 +5,17 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Response Cache — Multi-backend GET response caching.
+ * Response Cache — Multi-backend GET response caching middleware.
+ *
+ * Public API (parity with Python tina4_python.cache):
+ *   - ResponseCache class — used as middleware on a route
+ *   - ResponseCache::cacheStats() — static, returns {hits, misses, size, backend, keys}
+ *   - ResponseCache::clearCache() — static, flushes all entries
+ *   - cache_stats() / cache_clear() — namespace-level convenience wrappers
+ *
+ * Internal lookup/store of GET responses is performed by the middleware hooks
+ * (beforeCache, afterCache) and is NOT exposed publicly. Use the middleware
+ * by attaching ResponseCache to your route, not by calling lookup/store directly.
  *
  * Backends are selected via the TINA4_CACHE_BACKEND env var:
  *   memory — in-process array cache (default, zero deps)
@@ -127,12 +137,89 @@ class ResponseCache
         }
     }
 
-    // ── Lookup / Store (Response Cache) ──────────────────────────
+    // ── Middleware hooks ─────────────────────────────────────────
 
     /**
-     * Check if a cache entry exists for the given request.
+     * Middleware hook — checks for a cached entry before the route handler runs.
+     *
+     * If a valid cached entry exists for this GET request, short-circuits
+     * by returning the cached body via the response callable. Otherwise
+     * tags the request so afterCache() can capture the response.
+     *
+     * @param object $request  Tina4 request (must expose ->method and ->url or similar)
+     * @param object $response Tina4 response object
+     * @return array{0: object, 1: object}
      */
-    public function lookup(string $method, string $url): ?array
+    public function beforeCache(object $request, object $response): array
+    {
+        if ($this->ttl <= 0) {
+            return [$request, $response];
+        }
+
+        $method = strtoupper((string)($request->method ?? 'GET'));
+        if ($method !== 'GET') {
+            return [$request, $response];
+        }
+
+        $url = (string)($request->url ?? $request->path ?? '/');
+        $hit = $this->internalLookup($method, $url);
+        if ($hit !== null) {
+            // Replay the cached response
+            if (is_callable($response)) {
+                $response = $response($hit['body'], $hit['statusCode'], $hit['contentType']);
+            }
+            return [$request, $response];
+        }
+
+        // Tag for afterCache
+        $request->_cacheKey = $this->cacheKey($method, $url);
+        return [$request, $response];
+    }
+
+    /**
+     * Middleware hook — captures the response body and stores it after the
+     * route handler runs.
+     *
+     * @param object $request
+     * @param object $response
+     * @return array{0: object, 1: object}
+     */
+    public function afterCache(object $request, object $response): array
+    {
+        if ($this->ttl <= 0) {
+            return [$request, $response];
+        }
+
+        $cacheKey = $request->_cacheKey ?? null;
+        if ($cacheKey === null) {
+            return [$request, $response];
+        }
+
+        $statusCode = (int)($response->statusCode ?? $response->httpCode ?? 200);
+        if (!in_array($statusCode, $this->statusCodes, true)) {
+            return [$request, $response];
+        }
+
+        $body = (string)($response->body ?? $response->content ?? '');
+        $contentType = (string)($response->contentType ?? 'application/json');
+
+        $entry = [
+            'body' => $body,
+            'contentType' => $contentType,
+            'statusCode' => $statusCode,
+            'expiresAt' => microtime(true) + $this->ttl,
+        ];
+        $this->backendSet($cacheKey, $entry, $this->ttl);
+
+        return [$request, $response];
+    }
+
+    // ── Internal lookup / store (response cache, NOT public) ─────
+
+    /**
+     * @internal Used by middleware hooks only.
+     */
+    private function internalLookup(string $method, string $url): ?array
     {
         if (strtoupper($method) !== 'GET') {
             return null;
@@ -165,9 +252,9 @@ class ResponseCache
     }
 
     /**
-     * Store a response in the cache.
+     * @internal Used by middleware hooks only.
      */
-    public function store(string $method, string $url, string $body, string $contentType, int $statusCode): void
+    private function internalStore(string $method, string $url, string $body, string $contentType, int $statusCode): void
     {
         if (strtoupper($method) !== 'GET') {
             return;
@@ -192,12 +279,12 @@ class ResponseCache
         $this->backendSet($key, $entry, $this->ttl);
     }
 
-    // ── Direct Cache API (same across all 4 languages) ──────────
+    // ── Internal direct KV (used by namespace-level cache_get/set/delete) ──
 
     /**
-     * Get a value from the cache by key.
+     * @internal Used by namespace-level cache_get().
      */
-    public function get(string $key): mixed
+    private function internalGet(string $key): mixed
     {
         $entry = $this->backendGet('direct:' . $key);
         if ($entry === null) {
@@ -214,9 +301,9 @@ class ResponseCache
     }
 
     /**
-     * Store a value in the cache with optional TTL.
+     * @internal Used by namespace-level cache_set().
      */
-    public function set(string $key, mixed $value, int $ttl = 0): void
+    private function internalSet(string $key, mixed $value, int $ttl = 0): void
     {
         $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
         $entry = [
@@ -227,9 +314,9 @@ class ResponseCache
     }
 
     /**
-     * Delete a key from the cache. Returns true if it existed.
+     * @internal Used by namespace-level cache_delete().
      */
-    public function delete(string $key): bool
+    private function internalDelete(string $key): bool
     {
         return $this->backendDelete('direct:' . $key);
     }
@@ -459,11 +546,11 @@ class ResponseCache
     // ── Public management methods ────────────────────────────────
 
     /**
-     * Get cache statistics.
+     * Get cache statistics for this instance.
      *
      * @return array{hits: int, misses: int, size: int, backend: string, keys: string[]}
      */
-    public function cacheStats(): array
+    public function getStats(): array
     {
         $this->sweep();
 
@@ -501,9 +588,9 @@ class ResponseCache
     }
 
     /**
-     * Clear all cached responses.
+     * Clear all cached responses for this instance and reset stats.
      */
-    public function clearCache(): void
+    public function clear(): void
     {
         self::$hits = 0;
         self::$misses = 0;
@@ -581,6 +668,72 @@ class ResponseCache
         return $this->backend;
     }
 
+    // ── Static module-level API (parity with Python) ─────────────
+
+    /**
+     * Return cache statistics from the lazy module-level singleton.
+     *
+     * Mirrors Python's tina4_python.cache.cache_stats().
+     *
+     * @return array{hits: int, misses: int, size: int, backend: string, keys: string[]}
+     */
+    public static function cacheStats(): array
+    {
+        return cache_instance()->getStats();
+    }
+
+    /**
+     * Flush all cached entries on the lazy module-level singleton.
+     *
+     * Mirrors Python's tina4_python.cache.clear_cache().
+     */
+    public static function clearCache(): void
+    {
+        cache_instance()->clear();
+    }
+
+    // ── Internal accessors used by namespace functions ───────────
+
+    /**
+     * @internal Wrapper used by namespace-level cache_get().
+     */
+    public function _internalGet(string $key): mixed
+    {
+        return $this->internalGet($key);
+    }
+
+    /**
+     * @internal Wrapper used by namespace-level cache_set().
+     */
+    public function _internalSet(string $key, mixed $value, int $ttl = 0): void
+    {
+        $this->internalSet($key, $value, $ttl);
+    }
+
+    /**
+     * @internal Wrapper used by namespace-level cache_delete().
+     */
+    public function _internalDelete(string $key): bool
+    {
+        return $this->internalDelete($key);
+    }
+
+    /**
+     * @internal Wrapper used by tests to verify middleware behaviour.
+     */
+    public function _internalLookup(string $method, string $url): ?array
+    {
+        return $this->internalLookup($method, $url);
+    }
+
+    /**
+     * @internal Wrapper used by tests to verify middleware behaviour.
+     */
+    public function _internalStore(string $method, string $url, string $body, string $contentType, int $statusCode): void
+    {
+        $this->internalStore($method, $url, $body, $contentType, $statusCode);
+    }
+
     /**
      * Build a cache key from method + URL.
      */
@@ -609,7 +762,7 @@ function cache_instance(): ResponseCache
  */
 function cache_get(string $key): mixed
 {
-    return cache_instance()->get($key);
+    return cache_instance()->_internalGet($key);
 }
 
 /**
@@ -617,7 +770,7 @@ function cache_get(string $key): mixed
  */
 function cache_set(string $key, mixed $value, int $ttl = 0): void
 {
-    cache_instance()->set($key, $value, $ttl);
+    cache_instance()->_internalSet($key, $value, $ttl);
 }
 
 /**
@@ -625,7 +778,7 @@ function cache_set(string $key, mixed $value, int $ttl = 0): void
  */
 function cache_delete(string $key): bool
 {
-    return cache_instance()->delete($key);
+    return cache_instance()->_internalDelete($key);
 }
 
 /**
@@ -633,7 +786,7 @@ function cache_delete(string $key): bool
  */
 function cache_clear(): void
 {
-    cache_instance()->clearCache();
+    cache_instance()->clear();
 }
 
 /**
@@ -641,5 +794,5 @@ function cache_clear(): void
  */
 function cache_stats(): array
 {
-    return cache_instance()->cacheStats();
+    return cache_instance()->getStats();
 }

@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.12.2 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.12.3 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -276,6 +276,44 @@ User::active($limit, $offset): array   // Example scope (after scope('active', '
 
 NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
 
+### QueryBuilder — Fluent query construction
+
+Use `QueryBuilder` for complex queries with JOINs, aggregates, GROUP BY. Always prefer over raw `$db->fetch()`.
+
+```php
+use Tina4\QueryBuilder;
+
+// JOINs
+$orders = QueryBuilder::fromTable("orders o")
+    ->select("o.*", "c.name as customer_name")
+    ->join("customers c", "o.customer_id = c.id")
+    ->where("o.status = ?", ["pending"])
+    ->orderBy("o.created_at DESC")
+    ->limit(20)
+    ->get();                       // -> array
+
+// LEFT JOIN
+$products = QueryBuilder::fromTable("products p")
+    ->select("p.*", "cat.name as category_name")
+    ->leftJoin("categories cat", "p.category_id = cat.id")
+    ->get();
+
+// Aggregates
+$total = QueryBuilder::fromTable("orders")
+    ->select("coalesce(sum(total), 0) as total")
+    ->where("status != ?", ["cancelled"])
+    ->first()["total"];            // -> single row dict
+
+// From ORM model
+$results = (new User())->query()->where("age > ?", [18])->orderBy("name")->get();
+
+// Methods: fromTable(), select(), where(), orWhere(), join(), leftJoin(),
+//          groupBy(), having(), orderBy(), limit(), get(), first(), count(),
+//          exists(), toSql(), toMongo()
+```
+
+NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.
+
 ### File Uploads
 
 Multipart file uploads are available via `$request->files` (array keyed by field name). Each file is an array:
@@ -374,6 +412,29 @@ $response->template("error.twig", ["code" => 404], 404, 'src/templates');
 
 The `template()` method uses `Frond` (built-in Twig-compatible engine, zero dependencies) and defaults to looking in `src/templates/`.
 
+### Frond — Built-in Twig-compatible template engine
+
+```php
+use Tina4\Frond;
+
+$frond = new Frond(string $templateDir = 'src/templates');
+$frond->render(string $template, array $data = []): string
+$frond->renderString(string $source, array $data = [], ?string $templateName = null): string
+$frond->addFilter(string $name, callable $fn): void
+$frond->addGlobal(string $name, mixed $value): void
+$frond->addTest(string $name, callable $fn): void
+$frond->getFilters(): array
+$frond->getGlobals(): array
+$frond->clearCache(): void
+$frond->sandbox(?array $filters = null, ?array $tags = null, ?array $vars = null): self
+$frond->unsandbox(): self
+```
+
+- **SafeString**: Custom filters can return `new SafeString($value)` to bypass auto-HTML-escaping.
+- **Fragment caching**: `{% cache "key" 300 %}...{% endcache %}` — caches rendered block content for TTL seconds.
+- **Raw blocks**: `{% raw %}...{% endraw %}` — output literal template syntax without parsing.
+- **Sandbox mode**: Restrict template capabilities via `$frond->sandbox(filters: [...], tags: [...], vars: [...])`.
+
 ### Auth — JWT authentication
 
 ```php
@@ -397,6 +458,84 @@ $api->setBasicAuth(string $username, string $password): void
 ```php
 $migration = new \Tina4\Migration(string $migrationPath = "./migrations", string $delim = ";")
 $migration->migrate(): array
+```
+
+### Queue — Job queue with pluggable backends
+
+```php
+use Tina4\Queue;
+
+$queue = new Queue(string $backend = 'file', array $config = [], string $topic = 'default');
+$queue->push(mixed $payload, int $priority = 0, int $delay = 0): string  // returns job id
+$queue->pop(): ?array
+$queue->popBatch(int $count): array
+$queue->popById(string $id): ?array
+$queue->size(string $status = 'pending'): int
+$queue->clear(): int
+$queue->failed(): array
+$queue->retry(?string $jobId = null, int $delaySeconds = 0): bool
+$queue->retryFailed(?int $maxRetries = null): int
+$queue->deadLetters(?int $maxRetries = null): array
+$queue->purge(string $status, ?int $maxRetries = null): int
+$queue->produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0): string
+$queue->consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0, int $iterations = 0, int $batchSize = 1): \Generator
+$queue->process(callable|string $handlerOrQueue, callable|string|array $queueOrHandlerOrOptions = '', array $options = []): void
+$queue->getTopic(): string
+
+// Job methods (yielded by consume() / returned by pop() as array, or wrapped via Job class)
+$job->complete(): void
+$job->fail(string $reason = ''): void
+$job->reject(string $reason = ''): void           // alias for fail()
+$job->retry(int $delaySeconds = 0): void
+$job->toArray(): array
+$job->toHash(): array
+$job->toJson(): string
+```
+
+Backends: `file` (default), `rabbitmq`, `kafka`, plus MongoDB. Override via `TINA4_QUEUE_BACKEND` env var.
+
+### Seeder — Fake data generation
+
+```php
+use Tina4\FakeData;
+
+$fake = new FakeData(?int $seed = null);
+FakeData::seed(int $seed): self                  // static seeded factory
+
+$fake->name(): string
+$fake->firstName(): string
+$fake->lastName(): string
+$fake->email(): string
+$fake->phone(): string
+$fake->address(): string
+$fake->city(): string
+$fake->country(): string
+$fake->zipCode(): string
+$fake->company(): string
+$fake->jobTitle(): string
+$fake->sentence(int $words = 8): string
+$fake->paragraph(int $sentences = 3): string
+$fake->text(int $paragraphs = 3): string
+$fake->word(): string
+$fake->integer(int $min = 0, int $max = 1000): int
+$fake->numeric(float $min = 0.0, float $max = 1000.0, int $decimals = 2): float
+$fake->boolean(): bool
+$fake->date(string $start = '2020-01-01', string $end = '2025-12-31'): string
+$fake->datetime(int $startYear = 2020, int $endYear = 2025): string
+$fake->uuid(): string
+$fake->url(): string
+$fake->ipAddress(): string
+$fake->colorHex(): string
+$fake->creditCard(): string
+$fake->currency(): string
+$fake->choice(array $items): mixed
+$fake->forField(array $fieldDef, string $columnName = ''): mixed
+
+// Bulk seeding
+FakeData::seedTable($db, string $tableName, int $count = 10, ?array $fieldMap = null, ?array $overrides = null): int
+FakeData::seedOrm(string $modelClass, int $count = 10, ?array $overrides = null): int
+$fake->seedDir(string $seedDir = 'src/seeds'): array
+$fake->run(callable $seeder, int $count = 10): array
 ```
 
 ### Log — Logging
@@ -513,9 +652,12 @@ $created = AI::installAll('.');
 AI::showMenu('.');
 ```
 
-### Response Cache — In-memory GET response caching middleware
+### Response Cache — GET response caching middleware
 
 Caches GET responses with TTL. Controlled via env vars or constructor config.
+Public surface mirrors Python's `tina4_python.cache`: middleware-only, plus
+module-level `cacheStats()` / `clearCache()`. Internal lookup/store of GET
+responses is performed by the middleware hooks and is NOT exposed publicly.
 
 | Env Variable | Default | Description |
 |---|---|---|
@@ -525,31 +667,19 @@ Caches GET responses with TTL. Controlled via env vars or constructor config.
 ```php
 use Tina4\Middleware\ResponseCache;
 
-$cache = new ResponseCache(['ttl' => 120, 'maxEntries' => 500, 'statusCodes' => [200]]);
+// Use as route middleware — cache hooks run before/after the handler
+Router::get("/api/data", $handler)->middleware([ResponseCache::class]);
 
-// Lookup a cached response (returns null on miss)
-$cache->lookup(string $method, string $url): ?array
+// Module-level stats and management (parity with Python cache_stats() / clear_cache())
+ResponseCache::cacheStats(): array     // ['hits' => int, 'misses' => int, 'size' => int, 'backend' => string, 'keys' => string[]]
+ResponseCache::clearCache(): void      // Flush all cached entries
 
-// Store a response
-$cache->store(string $method, string $url, string $body, string $contentType, int $statusCode): void
-
-// Cache stats and maintenance
-$cache->cacheStats(): array    // ['size' => int, 'keys' => string[]]
-$cache->clearCache(): void
-$cache->sweep(): int           // Remove expired entries, returns count removed
-```
-
-Example with route middleware:
-```php
-$cache = new ResponseCache(['ttl' => 300]);
-Router::get("/api/data", function($request, $response) use ($cache) {
-    $hit = $cache->lookup('GET', $request->url);
-    if ($hit) return $response($hit['body'], $hit['statusCode']);
-    $data = expensiveQuery();
-    $body = json_encode($data);
-    $cache->store('GET', $request->url, $body, 'application/json', 200);
-    return $response($data);
-});
+// Namespace-level KV cache helpers (parity with Python cache_get/cache_set/cache_delete)
+\Tina4\Middleware\cache_get(string $key): mixed
+\Tina4\Middleware\cache_set(string $key, mixed $value, int $ttl = 0): void
+\Tina4\Middleware\cache_delete(string $key): bool
+\Tina4\Middleware\cache_clear(): void
+\Tina4\Middleware\cache_stats(): array
 ```
 
 ### Container — Lightweight dependency injection container

@@ -1049,8 +1049,7 @@ class McpDevTools
 
         $server->registerTool('cache_stats', function () {
             try {
-                $cache = new \Tina4\Middleware\ResponseCache();
-                return $cache->cacheStats();
+                return \Tina4\Middleware\ResponseCache::cacheStats();
             } catch (\Throwable $e) {
                 return ['error' => $e->getMessage()];
             }
