@@ -56,9 +56,16 @@ class MySQLAdapter implements DatabaseAdapter
 
         $params = $this->parseConnection($this->connectionString);
 
+        // PHP's mysqli has a known quirk where host == "localhost" triggers
+        // Unix socket lookup and IGNORES the port argument — so connecting
+        // to mysql://...:53306 against a Docker container fails with "No
+        // such file or directory". When a non-default port is in play,
+        // rewrite to 127.0.0.1 so mysqli takes the TCP code path.
+        $host = self::rewriteHostForTcp($params['host'], $params['port']);
+
         try {
             $this->db = new \mysqli(
-                $params['host'],
+                $host,
                 $params['username'],
                 $params['password'],
                 $params['database'],
@@ -391,6 +398,28 @@ class MySQLAdapter implements DatabaseAdapter
             'password' => $this->password,
             'database' => $this->database,
         ];
+    }
+
+    /**
+     * Rewrite "localhost" to "127.0.0.1" when a port is specified.
+     *
+     * PHP's \mysqli silently swaps to a Unix socket when host is exactly
+     * "localhost" — and the port argument is ignored entirely on that
+     * code path. That breaks any TCP test setup such as
+     * ``mysql://tina4user:tina4@localhost:53306/tina4`` against a Docker
+     * container, surfacing as "No such file or directory" because mysqli
+     * is hunting for /tmp/mysql.sock.
+     *
+     * Only rewrite when a non-zero port is specified — if the user wrote
+     * ``mysql:///db`` with no port, they almost certainly want the
+     * default Unix socket path; preserve that behaviour.
+     */
+    public static function rewriteHostForTcp(string $host, ?int $port): string
+    {
+        if ($host === 'localhost' && $port !== null && $port > 0) {
+            return '127.0.0.1';
+        }
+        return $host;
     }
 
     /**

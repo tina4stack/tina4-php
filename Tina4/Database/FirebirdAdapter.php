@@ -453,28 +453,101 @@ class FirebirdAdapter implements DatabaseAdapter
 
     /**
      * Parse a connection string (URL or path) into connection params.
+     *
+     * Database identifier resolution — two layers:
+     *
+     * 1. ``TINA4_DATABASE_FIREBIRD_PATH`` env override wins if set. Useful
+     *    for Windows users with raw backslash paths (no URL encoding
+     *    required) and for ops setups that keep server URL and DB
+     *    location in separate config layers.
+     * 2. Otherwise normalise the URL path component via
+     *    {@see normalizeDbIdentifier()} — accepts every sensible variant
+     *    (single/double slash, drive letter, alias).
      */
     private function parseConnection(string $input): array
     {
+        $envOverride = \Tina4\DotEnv::getEnv('TINA4_DATABASE_FIREBIRD_PATH');
+
         if (str_contains($input, '://')) {
             $parts = parse_url($input);
+            $rawPath = $parts['path'] ?? '';
+            $database = ($envOverride !== null && $envOverride !== '')
+                ? $envOverride
+                : self::normalizeDbIdentifier($rawPath);
             return [
                 'host' => $parts['host'] ?? '',
                 'port' => $parts['port'] ?? 3050,
                 'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
                 'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
-                'database' => $parts['path'] ?? '',
+                'database' => $database,
             ];
         }
 
-        // Plain file path
+        // Plain file path — env override still wins if set.
         return [
             'host' => '',
             'port' => 3050,
             'username' => $this->username,
             'password' => $this->password,
-            'database' => $input,
+            'database' => ($envOverride !== null && $envOverride !== '') ? $envOverride : $input,
         ];
+    }
+
+    /**
+     * Turn the URL path component into a Firebird database identifier.
+     *
+     * Firebird is the awkward one — it needs either an absolute file path
+     * on the server, a Windows drive-letter path, or an alias name. The
+     * classic URI form uses a double-slash to keep the leading "/" of an
+     * absolute path through ``parse_url``::
+     *
+     *     firebird://host:port//firebird/data/app.fdb   →  /firebird/data/app.fdb
+     *
+     * But that double slash is unintuitive to anyone used to the way
+     * postgres / mysql / mssql encode the database name. We accept five
+     * equivalent forms and normalise all of them:
+     *
+     * - ``//abs/path/db.fdb``  → ``/abs/path/db.fdb``  (classic double-slash)
+     * - ``/abs/path/db.fdb``   → ``/abs/path/db.fdb``  (single-slash, what most people type)
+     * - ``/C:/Data/db.fdb``    → ``C:/Data/db.fdb``    (Windows, leading URL slash dropped)
+     * - ``/C%3A/Data/db.fdb``  → ``C:/Data/db.fdb``    (Windows with URL-encoded colon)
+     * - ``/employee``          → ``employee``          (alias — single token)
+     *
+     * Aliases are detected as the leftover case: a single token with no
+     * slashes. Anything path-like is kept as a path.
+     */
+    public static function normalizeDbIdentifier(string $rawPath): string
+    {
+        $decoded = urldecode($rawPath);
+
+        // Classic double-slash form: //abs/path → /abs/path
+        if (str_starts_with($decoded, '//')) {
+            $decoded = substr($decoded, 1);
+        }
+
+        // Windows drive-letter — drop the URL-introduced leading slash.
+        // /C:/Data/db.fdb → C:/Data/db.fdb
+        if (preg_match('#^/?[A-Za-z]:[/\\\\]#', $decoded)) {
+            if (str_starts_with($decoded, '/')) {
+                $decoded = substr($decoded, 1);
+            }
+            return $decoded;
+        }
+
+        // Look at the content after stripping the leading slash. If it's
+        // a single token with no separators, it's a Firebird alias —
+        // return WITHOUT the leading slash (the alias name itself is the
+        // identifier).
+        $body = str_starts_with($decoded, '/') ? substr($decoded, 1) : $decoded;
+        if ($body !== '' && !str_contains($body, '/') && !str_contains($body, '\\')) {
+            return $body;
+        }
+
+        // Otherwise it's a file path. If it already has a leading slash,
+        // keep it. If it's a relative-looking path (slash-separated but
+        // no leading "/") promote it to absolute — Firebird needs
+        // absolute paths and we don't know the server's CWD anyway.
+        return str_starts_with($decoded, '/') ? $decoded : '/' . $decoded;
     }
 
     /**
