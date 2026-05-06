@@ -44,6 +44,15 @@ class Request
     /** @var array<string, array> Uploaded files */
     public readonly array $files;
 
+    /**
+     * Files extracted by parseBody() during multipart parsing. Populated
+     * before $this->files is finalised so the constructor can merge them
+     * into the readonly $files property in one assignment. Internal —
+     * never read by user code.
+     * @internal
+     */
+    private array $multipartFiles = [];
+
     /** @var string Content type of the request */
     public readonly string $contentType;
 
@@ -135,14 +144,24 @@ class Request
         if ($body !== null && !is_string($body)) {
             $this->body = $body;
         } else {
+            // parseBody() may stash multipart files into
+            // $this->multipartFiles (a private mutable). Merge those
+            // into the final readonly $this->files below.
             $this->body = $this->parseBody();
         }
 
+        // Files — normalise PHP's $_FILES + the explicit $files arg + any
+        // multipart files parsed by parseBody(). Single assignment so the
+        // readonly property contract holds. Issue tina4-book#135: an
+        // earlier version mutated $this->files inside parseBody() and
+        // crashed with `Cannot modify readonly property`, which the error
+        // handler swallowed and the route received the raw multipart bytes
+        // as $request->body.
+        $explicit = $files ?? ($_FILES ?? []);
+        $this->files = self::normaliseFiles(array_merge($explicit, $this->multipartFiles));
+
         // IP address
         $this->ip = $ip ?? $this->resolveIp();
-
-        // Files — normalise PHP's $_FILES to standard format: filename, type, content, size
-        $this->files = self::normaliseFiles($files ?? ($_FILES ?? []));
     }
 
     /**
@@ -349,12 +368,16 @@ class Request
             return $parsed;
         }
 
-        // Multipart form data (XHR FormData or standard form POST)
+        // Multipart form data (XHR FormData or standard form POST).
+        // Files are stashed on the private $multipartFiles property so
+        // the constructor can fold them into the readonly $files
+        // property in a single assignment. Trying to write $this->files
+        // here used to throw `Cannot modify readonly property` and the
+        // body fell back to the raw multipart bytes (#135).
         if (str_contains($this->contentType, 'multipart/form-data')) {
             $parsed = Server::parseMultipartBody($this->rawBody, $this->contentType);
-            // Merge files into $this->files
             if (!empty($parsed['files'])) {
-                $this->files = array_merge($this->files, $parsed['files']);
+                $this->multipartFiles = $parsed['files'];
             }
             return $parsed['fields'];
         }
