@@ -103,6 +103,16 @@ class Database implements DatabaseAdapter
         $this->autoCommit = $autoCommit;
         $this->dbUsername = $username;
         $this->dbPassword = $password;
+
+        // TINA4_DB_POOL: env-level default for the connection pool size.
+        // The constructor arg wins when explicitly nonzero; otherwise the env
+        // is consulted, falling back to 0 (single connection).
+        if ($pool === 0) {
+            $envPool = \Tina4\DotEnv::getEnv('TINA4_DB_POOL');
+            if ($envPool !== null && $envPool !== '' && (int) $envPool > 0) {
+                $pool = (int) $envPool;
+            }
+        }
         $this->poolSize = $pool;
 
         if ($pool > 0) {

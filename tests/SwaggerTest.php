@@ -6,7 +6,14 @@ use Tina4\Router;
 
 class SwaggerTest extends TestCase
 {
-    private array $savedEnvKeys = ['TINA4_SWAGGER_TITLE', 'TINA4_SWAGGER_VERSION', 'TINA4_SWAGGER_DESCRIPTION'];
+    private array $savedEnvKeys = [
+        'TINA4_SWAGGER_TITLE',
+        'TINA4_SWAGGER_VERSION',
+        'TINA4_SWAGGER_DESCRIPTION',
+        'TINA4_SWAGGER_ENABLED',
+        'TINA4_SWAGGER_CONTACT_EMAIL',
+        'TINA4_SWAGGER_LICENSE',
+    ];
     private array $savedEnvValues = [];
 
     protected function setUp(): void
@@ -407,11 +414,21 @@ class SwaggerTest extends TestCase
 
     public function testRegisterAddsSwaggerRoutes(): void
     {
-        Swagger::register();
-        $routes = Router::getRoutes();
-        $patterns = array_column($routes, 'pattern');
-        $this->assertContains('/swagger', $patterns);
-        $this->assertContains('/swagger/openapi.json', $patterns);
+        // v3.12.4 — Swagger::register() honours TINA4_SWAGGER_ENABLED
+        // (default tied to TINA4_DEBUG). Force-enable for the test.
+        putenv('TINA4_SWAGGER_ENABLED=true');
+        $_ENV['TINA4_SWAGGER_ENABLED'] = 'true';
+
+        try {
+            Swagger::register();
+            $routes = Router::getRoutes();
+            $patterns = array_column($routes, 'pattern');
+            $this->assertContains('/swagger', $patterns);
+            $this->assertContains('/swagger/openapi.json', $patterns);
+        } finally {
+            putenv('TINA4_SWAGGER_ENABLED');
+            unset($_ENV['TINA4_SWAGGER_ENABLED']);
+        }
     }
 
     // ── Multiple Routes ─────────────────────────────────────────

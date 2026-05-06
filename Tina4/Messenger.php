@@ -60,6 +60,9 @@ class Messenger
     /** @var int IMAP port */
     private int $imapPort;
 
+    /** @var string IMAP encryption mode: 'tls', 'starttls', or 'none' */
+    private string $imapEncryption;
+
     /** @var int Socket timeout in seconds */
     private int $timeout = 30;
 
@@ -132,6 +135,23 @@ class Messenger
 
         $envImapPort = $this->env('TINA4_MAIL_IMAP_PORT');
         $this->imapPort = $imapPort ?? ($envImapPort !== null ? (int)$envImapPort : 993);
+
+        // IMAP encryption — TINA4_MAIL_IMAP_ENCRYPTION: 'tls' (default),
+        // 'starttls', or 'none'. Independent of SMTP encryption — Gmail-style
+        // setups use SSL/IMAPS on 993 while SMTP runs STARTTLS on 587.
+        $envImapEnc = $this->env('TINA4_MAIL_IMAP_ENCRYPTION');
+        $this->imapEncryption = strtolower($envImapEnc ?? 'tls');
+        if (!in_array($this->imapEncryption, ['tls', 'starttls', 'none'], true)) {
+            $this->imapEncryption = 'tls';
+        }
+    }
+
+    /**
+     * Resolved IMAP encryption mode after construction. Useful for tests.
+     */
+    public function getImapEncryption(): string
+    {
+        return $this->imapEncryption;
     }
 
     /**

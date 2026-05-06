@@ -93,10 +93,22 @@ class Frond
 
         $debugMode = strtolower(getenv('TINA4_DEBUG') ?: '') === 'true';
 
+        // TINA4_TEMPLATE_CACHE_TTL: 0 (default) means cache forever in
+        // production; >0 means re-read after N seconds. Lets operators tune
+        // freshness without redeploying. Ignored in debug mode (always fresh).
+        $cacheTtl = (int) (DotEnv::getEnv('TINA4_TEMPLATE_CACHE_TTL', '0') ?? '0');
+
         if (!$debugMode) {
             // Production: use permanent cache (no filesystem checks)
             $cached = $this->compiled[$template] ?? null;
-            if ($cached !== null) {
+            $stale = false;
+            if ($cached !== null && $cacheTtl > 0) {
+                $cachedAt = $cached['cachedAt'] ?? 0;
+                if ((time() - $cachedAt) >= $cacheTtl) {
+                    $stale = true;
+                }
+            }
+            if ($cached !== null && !$stale) {
                 $data = array_merge($this->globals, $data);
                 $ast = $this->resolveInheritance($cached['ast'], $data, $template);
                 return $this->execute($ast, $data);
@@ -110,7 +122,12 @@ class Frond
         $mtime = filemtime($file);
         $tokens = $this->tokenize($source);
         $ast = $this->parse($tokens);
-        $this->compiled[$template] = ['tokens' => $tokens, 'ast' => $ast, 'mtime' => $mtime];
+        $this->compiled[$template] = [
+            'tokens' => $tokens,
+            'ast' => $ast,
+            'mtime' => $mtime,
+            'cachedAt' => time(),
+        ];
 
         $data = array_merge($this->globals, $data);
         $ast = $this->resolveInheritance($ast, $data, $template);

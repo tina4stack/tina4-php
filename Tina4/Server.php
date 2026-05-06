@@ -84,11 +84,15 @@ class Server
     private array $tickCallbacks = [];
 
     /**
-     * @param string $host Host to bind to
+     * @param string|null $host Host to bind to. If null, reads TINA4_HOST (default '0.0.0.0').
      * @param int    $port Port to listen on
      */
-    public function __construct(string $host = '0.0.0.0', int $port = 7146)
+    public function __construct(?string $host = null, int $port = 7146)
     {
+        if ($host === null || $host === '') {
+            $envHost = DotEnv::getEnv('TINA4_HOST');
+            $host = ($envHost !== null && $envHost !== '') ? $envHost : '0.0.0.0';
+        }
         $this->host = $host;
         $this->port = $port;
     }

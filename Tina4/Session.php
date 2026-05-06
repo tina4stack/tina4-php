@@ -236,11 +236,42 @@ class Session
 
     /**
      * Return a Set-Cookie header value for this session.
+     *
+     * Env var overrides (only consulted when the caller passes the default
+     * cookie name "tina4_session" — explicit names from callers always win):
+     *   TINA4_SESSION_NAME      — cookie name (default: "tina4_session")
+     *   TINA4_SESSION_HTTPONLY  — emit HttpOnly attr (default: "true")
+     *   TINA4_SESSION_SECURE    — emit Secure attr (default: "false"; SameSite=None forces it on)
+     *   TINA4_SESSION_SAMESITE  — SameSite attr (default: "Lax")
      */
     public function cookieHeader(string $cookieName = 'tina4_session'): string
     {
-        $sameSite = $_ENV['TINA4_SESSION_SAMESITE'] ?? getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-        return "{$cookieName}={$this->sessionId}; Path=/; HttpOnly; SameSite={$sameSite}; Max-Age={$this->ttl}";
+        // Honor env-defined cookie name only if the caller didn't override.
+        if ($cookieName === 'tina4_session') {
+            $envName = DotEnv::getEnv('TINA4_SESSION_NAME');
+            if ($envName !== null && $envName !== '') {
+                $cookieName = $envName;
+            }
+        }
+
+        $sameSite = DotEnv::getEnv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+
+        $httpOnly = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_HTTPONLY', 'true'));
+        // SameSite=None requires Secure per RFC — silently flip Secure on.
+        $secure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
+            || strcasecmp($sameSite, 'None') === 0;
+
+        $parts = ["{$cookieName}={$this->sessionId}", "Path=/"];
+        if ($httpOnly) {
+            $parts[] = 'HttpOnly';
+        }
+        if ($secure) {
+            $parts[] = 'Secure';
+        }
+        $parts[] = "SameSite={$sameSite}";
+        $parts[] = "Max-Age={$this->ttl}";
+
+        return implode('; ', $parts);
     }
 
     /**

@@ -240,8 +240,13 @@ class App
         // Set base path for static file serving
         Router::$basePath = $this->basePath;
 
-        // Load environment
-        $envFile = $this->basePath . DIRECTORY_SEPARATOR . '.env';
+        // Load environment — TINA4_ENV_FILE may override the default '.env'
+        // location. Bootstrap order: probe the env *before* loading, so
+        // a process-level export wins; fall back to the default path.
+        $envFileName = DotEnv::getEnv('TINA4_ENV_FILE') ?? '.env';
+        $envFile = self::isAbsolutePath($envFileName)
+            ? $envFileName
+            : $this->basePath . DIRECTORY_SEPARATOR . $envFileName;
         if (is_file($envFile)) {
             DotEnv::loadEnv($envFile);
         }
@@ -558,6 +563,10 @@ class App
 
     /**
      * Register the /health endpoint.
+     *
+     * Path is configurable via TINA4_HEALTH_PATH (default '/health' for
+     * back-compat with the existing /health route used in tests; matches
+     * the v3 documented '/__health' alias when set).
      */
     private function registerHealthCheck(): void
     {
@@ -565,8 +574,28 @@ class App
             return $response->json($this->getHealthData());
         };
 
-        Router::get('/health', $handler);
-        $this->routes['GET']['/health'] = fn() => $this->getHealthData();
+        $envPath = DotEnv::getEnv('TINA4_HEALTH_PATH');
+        $path = ($envPath !== null && $envPath !== '') ? $envPath : '/health';
+        if (!str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        Router::get($path, $handler);
+        $this->routes['GET'][$path] = fn() => $this->getHealthData();
+    }
+
+    /**
+     * True when $path is absolute on the current platform.
+     */
+    private static function isAbsolutePath(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return (bool) preg_match('/^[A-Za-z]:[\\\\\/]/', $path) || str_starts_with($path, '\\\\');
+        }
+        return $path[0] === '/';
     }
 
     /**
@@ -969,10 +998,10 @@ HTML;
      * Calls start() to register routes, then launches the non-blocking HTTP/WebSocket server.
      * Falls back to `php -S` if stream_socket_server fails.
      *
-     * @param string $host Host to bind to (default: 0.0.0.0)
+     * @param string|null $host Host to bind to. If null, reads TINA4_HOST (default '0.0.0.0').
      * @param int    $port Port to listen on (default: 7145)
      */
-    public function run(string $host = '0.0.0.0', int $port = 7145): void
+    public function run(?string $host = null, int $port = 7145): void
     {
         $this->start();
 
@@ -981,11 +1010,19 @@ HTML;
             return;
         }
 
+        // Resolve host: explicit arg > TINA4_HOST > '0.0.0.0'
+        if ($host === null || $host === '') {
+            $envHost = DotEnv::getEnv('TINA4_HOST');
+            $host = ($envHost !== null && $envHost !== '') ? $envHost : '0.0.0.0';
+        }
+
         $actualPort = self::findAvailablePort($port);
         if ($actualPort !== $port) {
             echo "Port {$port} is in use, using port {$actualPort} instead.\n";
             $port = $actualPort;
         }
+
+        $suppressBanner = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SUPPRESS', 'false'));
 
         try {
             $server = new Server($host, $port);
@@ -995,21 +1032,25 @@ HTML;
                 $server->onTick($tick['callback'], $tick['interval']);
             }
 
-            // Banner — so the user knows the server started
-            $routeCount = Router::count();
-            $wsCount = count(Router::getWebSocketRoutes());
-            $wsInfo = $wsCount > 0 ? " (WebSocket: {$wsCount} routes)" : '';
-            echo "\n";
-            echo "  Tina4 PHP v" . self::$VERSION . "\n\n";
-            echo "  Server:    http://localhost:{$port}{$wsInfo}\n";
-            echo "  Swagger:   http://localhost:{$port}/swagger\n";
-            if ($this->isDevelopment()) {
-                echo "  Dashboard: http://localhost:{$port}/__dev\n";
+            if (!$suppressBanner) {
+                // Banner — so the user knows the server started
+                $routeCount = Router::count();
+                $wsCount = count(Router::getWebSocketRoutes());
+                $wsInfo = $wsCount > 0 ? " (WebSocket: {$wsCount} routes)" : '';
+                echo "\n";
+                echo "  Tina4 PHP v" . self::$VERSION . "\n\n";
+                echo "  Server:    http://localhost:{$port}{$wsInfo}\n";
+                echo "  Swagger:   http://localhost:{$port}/swagger\n";
+                if ($this->isDevelopment()) {
+                    echo "  Dashboard: http://localhost:{$port}/__dev\n";
+                }
+                echo "  Routes:    {$routeCount}\n";
+                echo "\n  Press Ctrl+C to stop.\n\n";
             }
-            echo "  Routes:    {$routeCount}\n";
-            echo "\n  Press Ctrl+C to stop.\n\n";
 
-            self::openBrowser("http://localhost:{$port}");
+            if (!$suppressBanner) {
+                self::openBrowser("http://localhost:{$port}");
+            }
             $server->start();
         } catch (\RuntimeException $e) {
             // Fallback to PHP built-in server

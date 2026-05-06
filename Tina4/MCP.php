@@ -690,6 +690,34 @@ class McpServer
     }
 
     /**
+     * Whether the MCP subsystem should activate. Reads TINA4_MCP — defaults
+     * to true when TINA4_DEBUG is on, otherwise false. Lets prod operators
+     * keep MCP off entirely without setting TINA4_DEBUG=false.
+     */
+    public static function isEnabled(): bool
+    {
+        $explicit = DotEnv::getEnv('TINA4_MCP');
+        if ($explicit !== null && $explicit !== '') {
+            return DotEnv::isTruthy($explicit);
+        }
+        return DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+    }
+
+    /**
+     * Resolve the MCP port from TINA4_MCP_PORT — defaults to base + 2000.
+     *
+     * @param int $basePort The Tina4 HTTP port (typically 7145)
+     */
+    public static function resolvePort(int $basePort = 7145): int
+    {
+        $explicit = DotEnv::getEnv('TINA4_MCP_PORT');
+        if ($explicit !== null && $explicit !== '') {
+            return (int) $explicit;
+        }
+        return $basePort + 2000;
+    }
+
+    /**
      * Get all registered MCP server instances.
      *
      * @return McpServer[]

@@ -34,13 +34,25 @@ class Swagger
         $version = DotEnv::getEnv('TINA4_SWAGGER_VERSION', '1.0.0') ?? '1.0.0';
         $description = DotEnv::getEnv('TINA4_SWAGGER_DESCRIPTION', 'Auto-generated from Tina4 routes') ?? 'Auto-generated from Tina4 routes';
 
+        $info = [
+            'title' => $title,
+            'version' => $version,
+            'description' => $description,
+        ];
+
+        // Optional contact + license blocks — only present when env is set.
+        $contactEmail = DotEnv::getEnv('TINA4_SWAGGER_CONTACT_EMAIL');
+        if ($contactEmail !== null && $contactEmail !== '') {
+            $info['contact'] = ['email' => $contactEmail];
+        }
+        $license = DotEnv::getEnv('TINA4_SWAGGER_LICENSE');
+        if ($license !== null && $license !== '') {
+            $info['license'] = ['name' => $license];
+        }
+
         $spec = [
             'openapi' => '3.0.3',
-            'info' => [
-                'title' => $title,
-                'version' => $version,
-                'description' => $description,
-            ],
+            'info' => $info,
             'paths' => [],
             'components' => [
                 'securitySchemes' => [
@@ -271,9 +283,17 @@ class Swagger
 
     /**
      * Register /swagger and /swagger/openapi.json routes.
+     *
+     * Honors TINA4_SWAGGER_ENABLED — when explicitly false, no routes are
+     * registered. When unset, defaults to TINA4_DEBUG (Swagger UI is a dev
+     * tool by convention; turn it on for prod by setting the env var).
      */
     public static function register(): void
     {
+        if (!self::isEnabled()) {
+            return;
+        }
+
         Router::get('/swagger/openapi.json', function (Request $request, Response $response) {
             $spec = self::generate();
             return $response->json($spec);
@@ -282,6 +302,20 @@ class Swagger
         Router::get('/swagger', function (Request $request, Response $response) {
             return $response->html(self::renderSwaggerUI());
         });
+    }
+
+    /**
+     * Whether the Swagger UI is enabled. Reads TINA4_SWAGGER_ENABLED first;
+     * falls back to TINA4_DEBUG. Public so callers can predicate their own
+     * docs/SDK exposure on the same flag.
+     */
+    public static function isEnabled(): bool
+    {
+        $explicit = DotEnv::getEnv('TINA4_SWAGGER_ENABLED');
+        if ($explicit !== null && $explicit !== '') {
+            return DotEnv::isTruthy($explicit);
+        }
+        return DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
     }
 
     /**

@@ -10,6 +10,7 @@
         </testsuite>
         <testsuite name="Tina4 v3 Tests">
             <file>tests/DotEnvTest.php</file>
+            <file>tests/EnvVarTest.php</file>
             <file>tests/LogTest.php</file>
             <file>tests/CorsTest.php</file>
             <file>tests/RateLimiterTest.php</file>

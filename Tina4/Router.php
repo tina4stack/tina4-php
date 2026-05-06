@@ -437,6 +437,22 @@ class Router
      */
     private static function dispatchInner(Request $request, Response $response): Response
     {
+        // TINA4_TRAILING_SLASH_REDIRECT — when truthy, any path with a trailing
+        // slash (other than the bare "/") redirects 301 to the slash-stripped
+        // form. Lets operators normalize URLs without per-route boilerplate.
+        if (
+            $request->path !== '/'
+            && str_ends_with($request->path, '/')
+            && DotEnv::isTruthy(DotEnv::getEnv('TINA4_TRAILING_SLASH_REDIRECT', 'false'))
+        ) {
+            $target = rtrim($request->path, '/');
+            // Preserve query string when present
+            if (!empty($request->query)) {
+                $target .= '?' . http_build_query($request->query);
+            }
+            return $response->redirect($target, 301);
+        }
+
         // Run global middleware "before" hooks.
         // CORS middleware runs first (separate pass) so CORS headers are always present —
         // even on short-circuited 4xx responses. This is required by the CORS spec: browsers

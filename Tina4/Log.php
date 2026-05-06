@@ -18,12 +18,19 @@ class Log
     public const LEVEL_INFO = 'INFO';
     public const LEVEL_WARNING = 'WARNING';
     public const LEVEL_ERROR = 'ERROR';
+    public const LEVEL_CRITICAL = 'CRITICAL';
 
-    /** Maximum log file size before rotation in bytes (default 10 MB, configurable via TINA4_LOG_MAX_SIZE) */
-    private static int $maxFileSize = 10 * 1024 * 1024;
+    /** Default rotation size in bytes (10 MB). Override via TINA4_LOG_ROTATE_SIZE. */
+    public const DEFAULT_ROTATE_SIZE = 10 * 1024 * 1024;
 
-    /** Number of rotated log files to keep (default 5, configurable via TINA4_LOG_KEEP) */
-    private static int $keepFiles = 5;
+    /** Default number of rotated files to keep. Override via TINA4_LOG_ROTATE_KEEP. */
+    public const DEFAULT_ROTATE_KEEP = 5;
+
+    /** Maximum log file size before rotation in bytes. 0 disables rotation. */
+    private static int $maxFileSize = self::DEFAULT_ROTATE_SIZE;
+
+    /** Number of rotated log files to keep. */
+    private static int $keepFiles = self::DEFAULT_ROTATE_KEEP;
 
     /** @var string|null Current request ID for correlation */
     private static ?string $requestId = null;
@@ -46,8 +53,14 @@ class Log
     /** @var bool Whether to output to stdout */
     private static bool $stdout = false;
 
+    /** @var bool Whether to write to file */
+    private static bool $fileOutput = true;
+
     /** @var bool Whether to format as human-readable (dev mode) */
     private static bool $humanReadable = false;
+
+    /** @var bool Whether Log::critical() actually emits (TINA4_LOG_CRITICAL) */
+    private static bool $criticalEnabled = false;
 
     /** @var string Minimum log level */
     private static string $minLevel = self::LEVEL_DEBUG;
@@ -58,13 +71,23 @@ class Log
         self::LEVEL_INFO => 1,
         self::LEVEL_WARNING => 2,
         self::LEVEL_ERROR => 3,
+        self::LEVEL_CRITICAL => 4,
     ];
 
     /**
      * Configure the logger.
      *
-     * @param string $logDir Directory for log files
-     * @param bool $development If true, enables human-readable format and stdout
+     * Reads (in addition to the explicit args):
+     *   TINA4_LOG_DIR        — log directory (overrides $logDir)
+     *   TINA4_LOG_FILE       — primary log file path; if absolute, sets dir + filename
+     *   TINA4_LOG_FORMAT     — 'text' (human-readable) or 'json'
+     *   TINA4_LOG_OUTPUT     — 'stdout', 'file', or 'both'
+     *   TINA4_LOG_CRITICAL   — enable Log::critical()
+     *   TINA4_LOG_ROTATE_SIZE — rotate threshold in bytes (0 disables rotation)
+     *   TINA4_LOG_ROTATE_KEEP — number of rotated files to retain
+     *
+     * @param string $logDir Directory for log files (overridden by TINA4_LOG_DIR)
+     * @param bool $development If true, enables human-readable format and stdout (overridden by TINA4_LOG_FORMAT/OUTPUT)
      * @param string $minLevel Minimum log level to record
      */
     public static function configure(
@@ -72,15 +95,83 @@ class Log
         bool $development = false,
         string $minLevel = self::LEVEL_DEBUG,
     ): void {
-        self::$logDir = rtrim($logDir, '/');
-        self::$stdout = $development;
-        self::$humanReadable = $development;
+        // Directory: env override > caller arg
+        $envDir = DotEnv::getEnv('TINA4_LOG_DIR');
+        self::$logDir = rtrim($envDir !== null && $envDir !== '' ? $envDir : $logDir, '/');
+
+        // File: TINA4_LOG_FILE may be a relative filename (joined with dir) or
+        // an absolute path (split into dir + filename). Empty/null => default.
+        $envFile = DotEnv::getEnv('TINA4_LOG_FILE');
+        if ($envFile !== null && $envFile !== '') {
+            if (str_contains($envFile, DIRECTORY_SEPARATOR) || str_contains($envFile, '/')) {
+                self::$logDir = rtrim(dirname($envFile), '/');
+                self::$logFile = basename($envFile);
+            } else {
+                self::$logFile = $envFile;
+            }
+        } else {
+            self::$logFile = 'tina4.log';
+        }
+
         self::$minLevel = strtoupper($minLevel);
 
-        // Read rotation config from env (with defaults)
-        $maxSizeMb = (int) (DotEnv::getEnv('TINA4_LOG_MAX_SIZE') ?? '10');
-        self::$maxFileSize = $maxSizeMb * 1024 * 1024;
-        self::$keepFiles = (int) (DotEnv::getEnv('TINA4_LOG_KEEP') ?? '5');
+        // Format: env > development flag default
+        $envFormat = strtolower((string) (DotEnv::getEnv('TINA4_LOG_FORMAT') ?? ''));
+        if ($envFormat === 'text') {
+            self::$humanReadable = true;
+        } elseif ($envFormat === 'json') {
+            self::$humanReadable = false;
+        } else {
+            self::$humanReadable = $development;
+        }
+
+        // Output: env > development flag default
+        $envOutput = strtolower((string) (DotEnv::getEnv('TINA4_LOG_OUTPUT') ?? ''));
+        switch ($envOutput) {
+            case 'stdout':
+                self::$stdout = true;
+                self::$fileOutput = false;
+                break;
+            case 'file':
+                self::$stdout = false;
+                self::$fileOutput = true;
+                break;
+            case 'both':
+                self::$stdout = true;
+                self::$fileOutput = true;
+                break;
+            default:
+                self::$stdout = $development;
+                self::$fileOutput = true;
+                break;
+        }
+
+        // Critical level enabled flag
+        self::$criticalEnabled = DotEnv::isTruthy(DotEnv::getEnv('TINA4_LOG_CRITICAL', 'false'));
+
+        // Rotation — bytes, 0 disables. Falls back to legacy TINA4_LOG_MAX_SIZE (MB)
+        // and TINA4_LOG_KEEP for back-compat.
+        $rotateSize = DotEnv::getEnv('TINA4_LOG_ROTATE_SIZE');
+        if ($rotateSize !== null && $rotateSize !== '') {
+            self::$maxFileSize = (int) $rotateSize;
+        } else {
+            $legacyMb = DotEnv::getEnv('TINA4_LOG_MAX_SIZE');
+            if ($legacyMb !== null && $legacyMb !== '') {
+                self::$maxFileSize = (int) $legacyMb * 1024 * 1024;
+            } else {
+                self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
+            }
+        }
+
+        $rotateKeep = DotEnv::getEnv('TINA4_LOG_ROTATE_KEEP');
+        if ($rotateKeep !== null && $rotateKeep !== '') {
+            self::$keepFiles = (int) $rotateKeep;
+        } else {
+            $legacyKeep = DotEnv::getEnv('TINA4_LOG_KEEP');
+            self::$keepFiles = $legacyKeep !== null && $legacyKeep !== ''
+                ? (int) $legacyKeep
+                : self::DEFAULT_ROTATE_KEEP;
+        }
     }
 
     /**
@@ -132,6 +223,21 @@ class Log
     }
 
     /**
+     * Log a critical message. No-op unless TINA4_LOG_CRITICAL is truthy.
+     *
+     * Critical messages always mirror to the error log (same as ERROR/WARNING)
+     * regardless of the configured min level — but the entire level is
+     * suppressed when TINA4_LOG_CRITICAL is unset/false.
+     */
+    public static function critical(string $message, array $context = []): void
+    {
+        if (!self::$criticalEnabled) {
+            return;
+        }
+        self::log(self::LEVEL_CRITICAL, $message, $context);
+    }
+
+    /**
      * Write a log entry.
      */
     /**
@@ -160,14 +266,17 @@ class Log
             self::writeStdout($level, $line);
         }
 
-        // Always write ALL levels to the main file (raw log, no filtering), strip ANSI codes
-        self::writeToFile(self::$logFile, self::stripAnsi($line));
+        // File output is gated by TINA4_LOG_OUTPUT (default: enabled).
+        if (self::$fileOutput) {
+            // Always write ALL levels to the main file (raw log, no filtering), strip ANSI codes
+            self::writeToFile(self::$logFile, self::stripAnsi($line));
 
-        // Mirror WARNING and ERROR into the dedicated error log so
-        // developers can tail errors without the INFO/DEBUG noise.
-        // Parity with tina4-python's debug/_error_writer.
-        if ((self::LEVEL_PRIORITY[$level] ?? 0) >= self::LEVEL_PRIORITY[self::LEVEL_WARNING]) {
-            self::writeToFile(self::$errorFile, self::stripAnsi($line));
+            // Mirror WARNING and above into the dedicated error log so
+            // developers can tail errors without the INFO/DEBUG noise.
+            // Parity with tina4-python's debug/_error_writer.
+            if ((self::LEVEL_PRIORITY[$level] ?? 0) >= self::LEVEL_PRIORITY[self::LEVEL_WARNING]) {
+                self::writeToFile(self::$errorFile, self::stripAnsi($line));
+            }
         }
     }
 
@@ -265,8 +374,8 @@ class Log
 
         $filePath = $dir . DIRECTORY_SEPARATOR . $fileName;
 
-        // Rotate if file exceeds max size
-        if (is_file($filePath) && filesize($filePath) >= self::$maxFileSize) {
+        // Rotate if file exceeds max size. TINA4_LOG_ROTATE_SIZE=0 disables.
+        if (self::$maxFileSize > 0 && is_file($filePath) && filesize($filePath) >= self::$maxFileSize) {
             self::rotateLog($filePath);
         }
 
@@ -279,6 +388,20 @@ class Log
     private static function rotateLog(string $filePath): void
     {
         $keep = self::$keepFiles;
+
+        if ($keep <= 0) {
+            // Truncate-only — no backups retained.
+            @unlink($filePath);
+            return;
+        }
+
+        // Delete any rotated files beyond the keep window
+        // (covers shrinking _KEEP between runs).
+        $extra = $keep + 1;
+        while (is_file($filePath . '.' . $extra)) {
+            @unlink($filePath . '.' . $extra);
+            $extra++;
+        }
 
         // Delete the oldest rotated file if it exists
         $oldest = $filePath . '.' . $keep;
@@ -309,7 +432,59 @@ class Log
         self::$logFile = 'tina4.log';
         self::$errorFile = 'error.log';
         self::$stdout = false;
+        self::$fileOutput = true;
         self::$humanReadable = false;
+        self::$criticalEnabled = false;
         self::$minLevel = self::LEVEL_DEBUG;
+        self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
+        self::$keepFiles = self::DEFAULT_ROTATE_KEEP;
+    }
+
+    /** Test helper — current rotation size in bytes (0 disables rotation). */
+    public static function rotateSize(): int
+    {
+        return self::$maxFileSize;
+    }
+
+    /** Test helper — current rotation keep count. */
+    public static function rotateKeep(): int
+    {
+        return self::$keepFiles;
+    }
+
+    /** Test helper — resolved log directory after configure(). */
+    public static function logDir(): string
+    {
+        return self::$logDir;
+    }
+
+    /** Test helper — resolved primary log filename after configure(). */
+    public static function logFile(): string
+    {
+        return self::$logFile;
+    }
+
+    /** Test helper — whether stdout output is enabled. */
+    public static function stdoutEnabled(): bool
+    {
+        return self::$stdout;
+    }
+
+    /** Test helper — whether file output is enabled. */
+    public static function fileOutputEnabled(): bool
+    {
+        return self::$fileOutput;
+    }
+
+    /** Test helper — whether human-readable (text) format is active. */
+    public static function isHumanReadable(): bool
+    {
+        return self::$humanReadable;
+    }
+
+    /** Test helper — whether Log::critical() is currently active. */
+    public static function criticalEnabled(): bool
+    {
+        return self::$criticalEnabled;
     }
 }

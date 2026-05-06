@@ -28,6 +28,53 @@ class GraphQL
     }
 
     /**
+     * Register an HTTP endpoint that executes incoming GraphQL queries against
+     * this instance. Path defaults to TINA4_GRAPHQL_ENDPOINT (default
+     * "/graphql"). Idempotent at the env level — call once after schema setup.
+     *
+     * Body shape: {"query": "...", "variables": {...}, "operationName": "..."}
+     */
+    public function register(?string $endpoint = null): void
+    {
+        if ($endpoint === null || $endpoint === '') {
+            $envPath = DotEnv::getEnv('TINA4_GRAPHQL_ENDPOINT');
+            $endpoint = ($envPath !== null && $envPath !== '') ? $envPath : '/graphql';
+        }
+        if (!str_starts_with($endpoint, '/')) {
+            $endpoint = '/' . $endpoint;
+        }
+
+        $self = $this;
+        Router::post($endpoint, function (Request $request, Response $response) use ($self) {
+            $body = $request->body;
+            if (is_string($body)) {
+                $decoded = json_decode($body, true);
+                $body = is_array($decoded) ? $decoded : [];
+            } elseif (!is_array($body)) {
+                $body = [];
+            }
+            $query = (string) ($body['query'] ?? '');
+            $vars = is_array($body['variables'] ?? null) ? $body['variables'] : null;
+            $result = $self->execute($query, $vars);
+            return $response->json($result);
+        })->noAuth();
+    }
+
+    /**
+     * Resolved GraphQL endpoint URL based on TINA4_GRAPHQL_ENDPOINT.
+     * Useful for tests and dev tooling.
+     */
+    public static function resolvedEndpoint(): string
+    {
+        $envPath = DotEnv::getEnv('TINA4_GRAPHQL_ENDPOINT');
+        $endpoint = ($envPath !== null && $envPath !== '') ? $envPath : '/graphql';
+        if (!str_starts_with($endpoint, '/')) {
+            $endpoint = '/' . $endpoint;
+        }
+        return $endpoint;
+    }
+
+    /**
      * Register a type definition.
      *
      * @param string $name   Type name
@@ -566,6 +613,13 @@ class GraphQL
      */
     public function fromOrm(ORM $ormInstance): self
     {
+        // TINA4_GRAPHQL_AUTO_SCHEMA — when explicitly false, callers asking for
+        // auto-schema generation get a clean self instead of an introspected one.
+        // Defaults to true to match Python's tina4_python.graphql behavior.
+        if (!DotEnv::isTruthy(DotEnv::getEnv('TINA4_GRAPHQL_AUTO_SCHEMA', 'true'))) {
+            return $this;
+        }
+
         $db = $ormInstance->getDb();
         if ($db === null) {
             // Try to resolve the database the same way ORM::ensureDb() does

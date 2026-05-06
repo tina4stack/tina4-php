@@ -39,6 +39,17 @@ class DotEnv
      */
     public static function loadEnv(string $path = '.env', bool $overwrite = false): void
     {
+        // Allow operators to redirect the default '.env' lookup via the
+        // TINA4_ENV_FILE process-level env var (only when caller didn't
+        // pass an explicit, non-default path). Lets containers point at
+        // /run/secrets/.env or similar without code changes.
+        if ($path === '.env') {
+            $envOverride = getenv('TINA4_ENV_FILE');
+            if ($envOverride !== false && $envOverride !== '') {
+                $path = $envOverride;
+            }
+        }
+
         if (!is_file($path) || !is_readable($path)) {
             throw new \RuntimeException("DotEnv: Cannot read file '{$path}'");
         }
