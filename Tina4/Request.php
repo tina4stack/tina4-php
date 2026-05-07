@@ -97,7 +97,25 @@ class Request
         ?array $files = null,
     ) {
         $this->method = strtoupper($method ?? ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        $this->headers = $headers ?? self::parseHeaders();
+
+        // Normalise caller-provided header keys to lowercase. parseHeaders()
+        // already lowercases when it builds the array itself, but a number
+        // of upstream entry points (Apache+PHP-FPM with custom mappings,
+        // some proxies, hand-written test fixtures) hand headers in with
+        // the original case — `Content-Type`, `Authorization`, etc. The
+        // constructor only ever looks them up by lowercase key, so without
+        // this normalisation the content-type detection silently misses
+        // and `multipart/form-data` bodies fall through as raw bytes
+        // (issue tina4-book#135 follow-up — Kerneels' May-7 repro).
+        if ($headers === null) {
+            $this->headers = self::parseHeaders();
+        } else {
+            $normalised = [];
+            foreach ($headers as $name => $value) {
+                $normalised[strtolower((string)$name)] = $value;
+            }
+            $this->headers = $normalised;
+        }
         $this->contentType = $this->headers['content-type'] ?? '';
 
         // Parse cookies
