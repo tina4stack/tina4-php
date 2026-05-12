@@ -142,6 +142,37 @@ class Router
     }
 
     /**
+     * Register an explicit HEAD route.
+     *
+     * By default the framework auto-handles HEAD by falling back to the GET
+     * route and stripping the body (RFC 9110 §9.3.2). Use this method only
+     * when you need a HEAD handler that does something different from GET —
+     * e.g. cheaper existence-check logic, custom validator headers without
+     * the cost of building the body.
+     *
+     * The framework still strips the response body for you on the way out —
+     * HEAD MUST NOT return content, even if your handler does, so we
+     * enforce that unconditionally rather than relying on developer care.
+     */
+    public static function head(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
+    {
+        return self::addRoute('HEAD', $path, $handler, $swaggerMeta, $middleware, $template);
+    }
+
+    /**
+     * Register an explicit OPTIONS route.
+     *
+     * By default the framework auto-handles OPTIONS by building an Allow
+     * header from every method registered for the path and returning 204
+     * (RFC 9110 §9.3.7). Use this method to take over that behaviour —
+     * e.g. to return a richer OPTIONS payload describing the resource.
+     */
+    public static function options(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
+    {
+        return self::addRoute('OPTIONS', $path, $handler, $swaggerMeta, $middleware, $template);
+    }
+
+    /**
      * Register a route for any HTTP method.
      */
     public static function any(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
@@ -289,10 +320,28 @@ class Router
         $method = strtoupper($method);
         $path = '/' . trim($path, '/');
 
+        // RFC 9110 §9.3.2: HEAD is identical to GET except no body. If the
+        // app didn't register a dedicated HEAD route, transparently fall
+        // back to the GET route. dispatchInner strips the body on the way
+        // out so the handler doesn't need to know HEAD even happened.
+        if ($method === 'HEAD' && empty(self::$routes['HEAD']) && !empty(self::$routes['GET'])) {
+            return self::matchInTable('GET', $path);
+        }
+
         if (!isset(self::$routes[$method])) {
             return null;
         }
 
+        return self::matchInTable($method, $path);
+    }
+
+    /**
+     * Match a path against the route table for a single, already-uppercased
+     * method. Extracted so HEAD's auto-fallback can reuse the GET table
+     * without duplicating the param-extraction logic.
+     */
+    private static function matchInTable(string $method, string $path): ?array
+    {
         foreach (self::$routes[$method] as $route) {
             if (preg_match($route['regex'], $path, $matches)) {
                 $params = [];
@@ -328,6 +377,50 @@ class Router
         }
 
         return null;
+    }
+
+    /**
+     * Return the list of HTTP methods registered for a given path, in the
+     * order they appear in $ALL_METHODS. Used by dispatchInner to build the
+     * `Allow:` header on 405 / OPTIONS responses (RFC 9110 §10.2.1, §9.3.7).
+     *
+     * If GET is registered for the path, HEAD and OPTIONS are appended
+     * implicitly — the framework handles those automatically, so they
+     * count as supported even without explicit registration.
+     *
+     * @return string[] e.g. ['GET', 'POST', 'HEAD', 'OPTIONS']
+     */
+    private static function methodsAllowedForPath(string $path): array
+    {
+        $path = '/' . trim($path, '/');
+        $methods = [];
+
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as $m) {
+            if (empty(self::$routes[$m])) {
+                continue;
+            }
+            foreach (self::$routes[$m] as $route) {
+                if (preg_match($route['regex'], $path)) {
+                    $methods[] = $m;
+                    break;
+                }
+            }
+        }
+
+        // GET implies HEAD and OPTIONS auto-handling. Always append them
+        // (without duplicates) whenever any concrete method exists for
+        // the path — every path the router knows about supports OPTIONS,
+        // and any path with GET supports HEAD.
+        if (!empty($methods)) {
+            if (in_array('GET', $methods, true) && !in_array('HEAD', $methods, true)) {
+                $methods[] = 'HEAD';
+            }
+            if (!in_array('OPTIONS', $methods, true)) {
+                $methods[] = 'OPTIONS';
+            }
+        }
+
+        return $methods;
     }
 
     /**
@@ -429,6 +522,24 @@ class Router
             }
         }
 
+        // RFC 9110 §9.3.2: the server MUST NOT send content in a HEAD
+        // response. Apply unconditionally — even an explicit Router::head()
+        // handler that accidentally returned a body gets the body stripped
+        // here, so the framework can't ship a non-conformant HEAD response
+        // no matter what the handler did.
+        //
+        // Content-Length is preserved (as the byte count the GET-equivalent
+        // body WOULD have been) so cache validators, link checkers, and
+        // monitoring probes get useful size information from the HEAD probe.
+        // RFC 9110 §9.3.2 SHOULD — same headers as the equivalent GET.
+        if (strtoupper($request->method) === 'HEAD') {
+            $body = $result->getBody();
+            if ($body !== '') {
+                $result->header('Content-Length', (string) strlen($body));
+                $result->setBody('');
+            }
+        }
+
         return $result;
     }
 
@@ -481,14 +592,43 @@ class Router
         $result = self::match($request->method, $request->path);
 
         if ($result === null) {
-            // Try serving a static file before returning 404
+            // RFC 9110 conformance — if the path itself has registered methods
+            // but the request's method isn't one of them, we owe the client
+            // 405 (not 404) with an Allow header. §15.5.6 + §10.2.1.
+            //
+            // OPTIONS gets special handling: §9.3.7 says an OPTIONS request to
+            // an existing resource returns 204 No Content with the same Allow
+            // header. We treat it as a 204-shaped 405 — same scan, different
+            // status — so the client can discover the resource's method set.
+            //
+            // TRACE and CONNECT (and any other unknown methods like PROPFIND)
+            // fall into this path naturally when the resource exists — they
+            // get 405, never 200, because the framework deliberately doesn't
+            // ship handlers for them.
+            $allowedMethods = self::methodsAllowedForPath($request->path);
+            if (!empty($allowedMethods)) {
+                $allowHeader = implode(', ', $allowedMethods);
+                if (strtoupper($request->method) === 'OPTIONS') {
+                    $response->header('Allow', $allowHeader);
+                    // 204 No Content — OPTIONS responses have no body by
+                    // convention. Use status setter, not the JSON helper,
+                    // so body stays empty.
+                    return $response->status(204);
+                }
+                $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request->path);
+                $errorResp->header('Allow', $allowHeader);
+                return self::injectDevToolbar($request, $errorResp, 'error');
+            }
+
+            // Path is genuinely unknown — try static file before 404.
             $staticResponse = StaticFiles::tryServe($request->path, self::$basePath);
             if ($staticResponse !== null) {
                 return $staticResponse;
             }
 
             // Try serving a template file (e.g. /hello -> src/templates/hello.twig or hello.html)
-            if ($request->method === 'GET') {
+            // HEAD on a template path falls back here too, matching GET's behaviour.
+            if ($request->method === 'GET' || $request->method === 'HEAD') {
                 $tplFile = self::resolveTemplate($request->path);
                 if ($tplFile !== null) {
                     return $response->render($tplFile, []);
