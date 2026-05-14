@@ -361,10 +361,25 @@ abstract class ORM
         $this->_db->startTransaction();
         try {
             if ($this->_exists || ($pkValue !== null && $this->recordExists($pkValue))) {
-                $this->update();
+                $ok = $this->update();
             } else {
-                $this->insert();
+                $ok = $this->insert();
             }
+
+            // insert()/update() return false when the adapter's exec()
+            // fails WITHOUT throwing — e.g. an UPDATE that references a
+            // public model property with no matching DB column. Before
+            // this check, save() only caught exceptions: a bare false
+            // return slipped through, the empty transaction was
+            // committed, and save() returned $this (the success signal).
+            // Callers relying on the documented `save(): static|false`
+            // contract believed the row persisted when nothing changed —
+            // silent data loss (issue tina4-php#114).
+            if ($ok === false) {
+                $this->_db->rollback();
+                return false;
+            }
+
             $this->_db->commit();
         } catch (\Exception $e) {
             $this->_db->rollback();

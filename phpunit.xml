@@ -64,6 +64,7 @@
             <file>tests/LiveReloadTest.php</file>
             <file>tests/Issue106Test.php</file>
             <file>tests/Issue135Test.php</file>
+            <file>tests/Issue114Test.php</file>
             <file>tests/CorsIntegrationTest.php</file>
             <file>tests/I18nLeafAliasTest.php</file>
             <file>tests/LandingPageTest.php</file>
