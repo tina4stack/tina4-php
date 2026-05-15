@@ -37,7 +37,10 @@ class RequestV3Test extends TestCase
     {
         $request = Request::create(path: '/api/users?page=1&limit=10');
         $this->assertSame('/api/users', $request->path);
-        $this->assertSame('/api/users?page=1&limit=10', $request->url);
+        // $url is the full absolute URL — scheme://host[:port]/path[?query].
+        // Cross-framework parity with Python/Ruby/Node.
+        $this->assertSame('http://localhost/api/users?page=1&limit=10', $request->url);
+        $this->assertSame('page=1&limit=10', $request->queryString);
     }
 
     public function testQueryParsing(): void

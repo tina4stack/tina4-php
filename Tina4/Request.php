@@ -20,8 +20,11 @@ class Request
     /** @var string Request path without query string */
     public readonly string $path;
 
-    /** @var string Full URL including query string */
+    /** @var string Full absolute URL (scheme://host[:port]/path[?query]) */
     public readonly string $url;
+
+    /** @var string Raw query string (no leading "?") */
+    public readonly string $queryString;
 
     /** @var array<string, mixed> Route dynamic parameters (e.g. {id}) */
     public array $params = [];
@@ -145,14 +148,31 @@ class Request
         $uri = $path ?? ($_SERVER['REQUEST_URI'] ?? '/');
         $questionMark = strpos($uri, '?');
         $this->path = $questionMark !== false ? substr($uri, 0, $questionMark) : $uri;
-        $this->url = $uri;
+
+        // Resolve the raw query string before $this->query is parsed —
+        // both the parsed dict and the original string are useful to apps.
+        $this->queryString = $questionMark !== false
+            ? substr($uri, $questionMark + 1)
+            : ($_SERVER['QUERY_STRING'] ?? '');
+
+        // Reconstruct the full absolute URL (scheme://host[:port]/path[?query]).
+        // Honours x-forwarded-proto / x-forwarded-host so apps behind a proxy
+        // still see the URL the client actually used. Matches Python/Ruby/Node parity.
+        $scheme = $this->headers['x-forwarded-proto']
+            ?? ((($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+        $host = $this->headers['x-forwarded-host']
+            ?? ($this->headers['host'] ?? ($_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost')));
+        $url = "{$scheme}://{$host}{$this->path}";
+        if ($this->queryString !== '') {
+            $url .= '?' . $this->queryString;
+        }
+        $this->url = $url;
 
         // Parse query
         if ($query !== null) {
             $this->query = $query;
         } else {
-            $queryString = $questionMark !== false ? substr($uri, $questionMark + 1) : ($_SERVER['QUERY_STRING'] ?? '');
-            parse_str($queryString, $parsed);
+            parse_str($this->queryString, $parsed);
             $this->query = $parsed;
         }
 
