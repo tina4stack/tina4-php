@@ -421,7 +421,14 @@ class WebSocket
      */
     public static function parseHttpHeaders(string $data): array
     {
-        $lines = explode("\r\n", $data);
+        // Stop at the blank line separating headers from body (RFC 9112 §2.2).
+        // Without this guard, multipart body-part headers (e.g. a part's own
+        // `Content-Type: application/pdf`) would overwrite the real request
+        // `Content-Type: multipart/form-data; boundary=...`, breaking file
+        // uploads on the stream-socket server (tina4-book#139).
+        $headerEnd = strpos($data, "\r\n\r\n");
+        $headerSection = $headerEnd !== false ? substr($data, 0, $headerEnd) : $data;
+        $lines = explode("\r\n", $headerSection);
         $headers = [];
 
         if (!empty($lines[0])) {
