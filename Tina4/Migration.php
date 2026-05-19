@@ -498,37 +498,177 @@ class Migration
     }
 
     /**
-     * Create the migrations tracking table if it doesn't exist.
+     * Create the migrations tracking table — or upgrade a legacy v2 table
+     * to the v3 shape if one is already present.
+     *
+     * v2 shape (tina4-php ^2.x):
+     *   migration_id VARCHAR(14) PRIMARY KEY, description VARCHAR(1000),
+     *   content BLOB, passed INTEGER
+     *
+     * v3 shape:
+     *   id INTEGER PRIMARY KEY, migration VARCHAR, batch INTEGER, applied_at TIMESTAMP
+     *
+     * See tina4-php#115.
      */
     private function ensureMigrationsTable(): void
     {
         if (!$this->db->tableExists(self::MIGRATIONS_TABLE)) {
-            if ($this->isFirebird()) {
-                // Firebird: no AUTOINCREMENT, no TEXT type, use generator for IDs
-                try {
-                    $this->db->exec("CREATE GENERATOR GEN_TINA4_MIGRATION_ID");
-                    $this->db->exec("COMMIT");
-                } catch (\Throwable) {
-                    // Generator may already exist
-                }
-                $this->db->exec("
-                    CREATE TABLE " . self::MIGRATIONS_TABLE . " (
-                        id INTEGER NOT NULL PRIMARY KEY,
-                        migration VARCHAR(500) NOT NULL UNIQUE,
-                        batch INTEGER NOT NULL,
-                        applied_at VARCHAR(50) DEFAULT CURRENT_TIMESTAMP
-                    )
-                ");
-            } else {
-                $this->db->exec("
-                    CREATE TABLE " . self::MIGRATIONS_TABLE . " (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        migration VARCHAR(255) NOT NULL UNIQUE,
-                        batch INTEGER NOT NULL,
-                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ");
+            $this->createV3Table();
+            return;
+        }
+
+        if ($this->isLegacyV2Schema()) {
+            $this->upgradeV2ToV3();
+        }
+    }
+
+    /**
+     * Detect a v2-shaped tina4_migration table by column presence.
+     * v2 has `migration_id`; v3 has `migration` (without the `_id` suffix).
+     */
+    private function isLegacyV2Schema(): bool
+    {
+        try {
+            $cols = $this->db->getColumns(self::MIGRATIONS_TABLE);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $names = array_map(
+            fn($c) => strtolower((string)($c['name'] ?? '')),
+            $cols
+        );
+
+        return in_array('migration_id', $names, true)
+            && !in_array('migration', $names, true);
+    }
+
+    /**
+     * In-place upgrade of a v2 tina4_migration table to the v3 shape.
+     *
+     * 1. ALTER TABLE ADD the v3 columns (`migration`, `batch`, `applied_at`)
+     *    alongside the existing v2 columns. v2 columns are left in place so
+     *    a manual rollback is possible — they are simply ignored from now on.
+     * 2. Backfill each v2 row's `migration` value from a file-on-disk match
+     *    keyed by the 14-character timestamp prefix in `migration_id`.
+     *    Fall back to `migration_id + '.sql'` when no file matches.
+     * 3. All legacy entries get `batch = 1`.
+     */
+    private function upgradeV2ToV3(): void
+    {
+        Log::warning(
+            "Detected legacy v2 tina4_migration schema — performing in-place upgrade to v3"
+        );
+
+        // Step 1: add the v3 columns. Each ALTER is wrapped in a try/catch
+        // because a partial previous upgrade may have already added some.
+        $alters = $this->isFirebird()
+            ? [
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD migration VARCHAR(500)",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD batch INTEGER DEFAULT 1",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD applied_at VARCHAR(50) DEFAULT 'legacy'",
+            ]
+            : [
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN migration VARCHAR(500)",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN batch INTEGER DEFAULT 1",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN applied_at VARCHAR(50) DEFAULT 'legacy'",
+            ];
+
+        foreach ($alters as $sql) {
+            try {
+                $this->db->exec($sql);
+            } catch (\Throwable $e) {
+                // Column may already exist from a prior partial upgrade.
+                Log::debug("v2→v3 upgrade: ALTER skipped — {$e->getMessage()}");
             }
+        }
+
+        // Step 2: build a map of 14-char timestamp prefix → file basename
+        // from the current migrations directory so legacy rows can be
+        // resolved to the correct v3 `migration` value even when renames
+        // happened between v2 and v3.
+        $fileMap = [];
+        foreach ($this->getMigrationFiles() as $file) {
+            $base = basename($file);
+            if (preg_match('/^(\d{14})/', $base, $m)) {
+                $fileMap[$m[1]] = $base;
+            }
+        }
+
+        // Step 3: backfill every v2 row.
+        try {
+            $v2Rows = $this->db->query(
+                "SELECT migration_id, passed FROM " . self::MIGRATIONS_TABLE
+            );
+        } catch (\Throwable $e) {
+            Log::error("v2→v3 upgrade: failed to read legacy rows — {$e->getMessage()}");
+            return;
+        }
+
+        $backfilled = 0;
+        $failedInV2 = 0;
+
+        foreach ($v2Rows as $row) {
+            $prefix = (string)($row['migration_id'] ?? '');
+            if ($prefix === '') {
+                continue;
+            }
+
+            $migration = $fileMap[$prefix] ?? ($prefix . '.sql');
+
+            try {
+                $this->db->exec(
+                    "UPDATE " . self::MIGRATIONS_TABLE
+                    . " SET migration = :m, batch = 1 WHERE migration_id = :p",
+                    [':m' => $migration, ':p' => $prefix]
+                );
+                $backfilled++;
+                if ((int)($row['passed'] ?? 0) === 0) {
+                    $failedInV2++;
+                }
+            } catch (\Throwable $e) {
+                Log::error("v2→v3 upgrade: failed to backfill {$prefix} — {$e->getMessage()}");
+            }
+        }
+
+        $note = $failedInV2 > 0
+            ? " ({$failedInV2} were marked passed=0 in v2 — review manually)"
+            : '';
+        Log::info(
+            "v2→v3 tina4_migration upgrade complete: {$backfilled} rows backfilled{$note}"
+        );
+    }
+
+    /**
+     * Create the v3 tina4_migration table.
+     */
+    private function createV3Table(): void
+    {
+        if ($this->isFirebird()) {
+            // Firebird: no AUTOINCREMENT, no TEXT type, use generator for IDs
+            try {
+                $this->db->exec("CREATE GENERATOR GEN_TINA4_MIGRATION_ID");
+                $this->db->exec("COMMIT");
+            } catch (\Throwable) {
+                // Generator may already exist
+            }
+            $this->db->exec("
+                CREATE TABLE " . self::MIGRATIONS_TABLE . " (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    migration VARCHAR(500) NOT NULL UNIQUE,
+                    batch INTEGER NOT NULL,
+                    applied_at VARCHAR(50) DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
+        } else {
+            $this->db->exec("
+                CREATE TABLE " . self::MIGRATIONS_TABLE . " (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    migration VARCHAR(255) NOT NULL UNIQUE,
+                    batch INTEGER NOT NULL,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
         }
     }
 
