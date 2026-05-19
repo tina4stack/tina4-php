@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.12.11 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.12.12 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -918,7 +918,7 @@ $result = SqlTranslation::remember(
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive
-- Tests: 2,238 passing
+- Tests: 2,257 passing
 
 ## Links
 
