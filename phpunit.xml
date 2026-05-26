@@ -22,6 +22,7 @@
             <file>tests/RouterSessionStartTest.php</file>
             <file>tests/MiddlewareTest.php</file>
             <file>tests/RouteDiscoveryV3Test.php</file>
+            <file>tests/RouteDiscoveryReloadTest.php</file>
             <file>tests/SQLite3AdapterTest.php</file>
             <file>tests/DatabaseDriversTest.php</file>
             <file>tests/ORMV3Test.php</file>

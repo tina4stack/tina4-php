@@ -367,6 +367,15 @@ class App
     }
 
     /**
+     * Get the project base path. Used by the dev reload endpoint to locate
+     * src/routes/ for re-discovery on file changes.
+     */
+    public function getBasePath(): string
+    {
+        return $this->basePath;
+    }
+
+    /**
      * Check if the app is running.
      */
     public function isRunning(): bool

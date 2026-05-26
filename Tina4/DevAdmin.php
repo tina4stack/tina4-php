@@ -142,6 +142,18 @@ class DevAdmin
                 }
             }
 
+            // Re-discover so new files in src/routes/ register without a
+            // server restart. RouteDiscovery::rescan() is idempotent —
+            // already-loaded files are skipped, only the new ones run.
+            try {
+                $newRoutes = RouteDiscovery::rescan();
+                if (!empty($newRoutes)) {
+                    Log::info('Re-discovered ' . count($newRoutes) . ' new route(s) on reload');
+                }
+            } catch (\Throwable $e) {
+                Log::error('Re-discover on reload failed: ' . $e->getMessage());
+            }
+
             return $response->json(['ok' => true, 'type' => $type]);
         });
 
