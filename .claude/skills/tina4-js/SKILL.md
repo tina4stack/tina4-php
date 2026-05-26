@@ -1,17 +1,19 @@
 ---
 name: tina4-js
 description: >
-  Use whenever working with tina4-js — the lightweight reactive frontend framework (13.6KB bundled).
-  Trigger on any mention of tina4-js, tina4 signals, Tina4Element, tina4 html tagged templates,
-  tina4 routing, tina4 WebSocket client, or tina4 API client. Also trigger when the user is building
-  a client-rendered frontend for a Tina4 backend, or when they're working with signals, Web Components,
-  reactive templates, or islands architecture in a tina4-js project. If the working directory contains
-  tina4-js code (imports from 'tina4js'), use this skill for all frontend tasks.
+  Use whenever working with tina4-js — the lightweight reactive frontend framework.
+  Trigger on any mention of tina4-js, tina4 signals, persistent signals, persist(),
+  Tina4Element, tina4 html tagged templates, tina4 routing, tina4 WebSocket client,
+  tina4 API client, or persistent storage of UI preferences. Also trigger when the user
+  is building a client-rendered frontend for a Tina4 backend, or when they're working
+  with signals, Web Components, reactive templates, islands architecture, or persisted
+  state in a tina4-js project. If the working directory contains tina4-js code (imports
+  from 'tina4js'), use this skill for all frontend tasks.
 ---
 
-# tina4-js — Reactive Frontend Framework (v1.0.12)
+# tina4-js — Reactive Frontend Framework (v1.2.5)
 
-tina4-js is a lightweight reactive frontend framework (13.6KB bundled IIFE). Zero dependencies,
+tina4-js is a lightweight reactive frontend framework (16.4KB bundled IIFE). Zero dependencies,
 no virtual DOM, no build complexity. It uses signals for reactivity, tagged template literals
 for DOM, and Web Components for encapsulation.
 
@@ -19,8 +21,24 @@ for DOM, and Web Components for encapsulation.
 ```html
 <script src="/js/tina4js.min.js"></script>
 ```
-This exposes all APIs globally — no imports needed. The bundle is also shipped inside all four
-Tina4 backend framework repos (PHP, Python, Go, TypeScript).
+This exposes all APIs globally — no imports needed. The IIFE bundle is also shipped inside
+tina4-css (`dist/tina4js.min.js`) so all Tina4 backend frameworks get it automatically.
+
+**Building the IIFE bundle:**
+```bash
+npm run build                 # Vite build → ES/CJS modules in dist/
+npm run build:types           # TypeScript declarations
+# IIFE for script-tag usage:
+npx esbuild src/index.ts --bundle --minify --format=iife --global-name=Tina4 --outfile=dist/tina4js.min.js --target=es2021
+```
+
+The IIFE wraps the library in a self-executing function and exposes everything on `window.Tina4`:
+```html
+<script src="/js/tina4js.min.js"></script>
+<script>
+    const { signal, computed, html, Tina4Element, api, ws, sse, pwa } = Tina4;
+</script>
+```
 
 **This skill exists because AI agents consistently get tina4-js patterns wrong.** The syntax
 looks simple but has specific rules. Getting them wrong produces silent bugs — things render
@@ -348,6 +366,55 @@ await fetch('/api/upload', {
 });
 ```
 
+### GraphQL Queries
+
+Use `api.graphql()` to send GraphQL queries and mutations. It sends a POST with `{ query, variables }`
+and returns `{ data, errors }`.
+
+```ts
+// Simple query
+const { data, errors } = await api.graphql('/api/graphql',
+    '{ products(limit: 10) { id name price } }'
+);
+
+// Query with variables
+const { data } = await api.graphql('/api/graphql',
+    'query ($term: String!) { search_products(term: $term) { id name slug price } }',
+    { term: searchInput.value }
+);
+
+// Mutation
+const { data } = await api.graphql('/api/graphql',
+    'mutation ($input: CreateProductInput!) { createProduct(input: $input) { id } }',
+    { input: { name: 'Widget', price: 29.99 } }
+);
+```
+
+**Reactive search example — debounced GraphQL search with live results:**
+```ts
+const term = signal('');
+const results = signal([]);
+
+let timer;
+effect(() => {
+    const q = term.value;
+    clearTimeout(timer);
+    if (q.length < 2) { results.value = []; return; }
+    timer = setTimeout(async () => {
+        const { data } = await api.graphql('/api/graphql',
+            '{ search_products(term: "' + q.replace(/"/g, '\\"') + '") { id name slug price } }'
+        );
+        results.value = data?.search_products || [];
+    }, 300);
+});
+
+html`
+<input .value=${term} @input=${(e) => { term.value = e.target.value; }} placeholder="Search...">
+<ul>${() => results.value.map(p => html`
+    <li><a href="/products/${p.slug}">${p.name} — $${p.price}</a></li>
+`)}</ul>`;
+```
+
 ### List with Add/Remove
 ```ts
 const items = signal<{ id: number; text: string }[]>([]);
@@ -492,13 +559,71 @@ router.navigate('/users/42');
 
 **Navigation:** Use standard `<a href="#/path">` links (hash mode) or `<a href="/path">` (history mode). The router intercepts clicks automatically.
 
+## Persistent Signal Storage (v1.2.5+)
+
+Wrap a signal so its value survives a page refresh, backed by localStorage or sessionStorage.
+Opt-in per signal, zero dependencies, tree-shakeable. **Read STORAGE.md before you use it.**
+
+```ts
+import { signal } from 'tina4js';
+import { persist, clearPersistedKeys } from 'tina4js/storage';
+
+const theme = persist(signal('light'),  { key: 'theme' });
+const cart  = persist(signal([]),       { key: 'cart', syncTabs: true });
+
+theme.value = 'dark';   // survives a refresh; second tab sees the cart change
+
+// On logout, wipe persisted user state
+clearPersistedKeys(['cart', 'lastFilter']);
+```
+
+**What `persist()` returns:** the same signal you passed in, with two extras attached —
+`.clear()` removes the key from storage, `.dispose()` stops the write effect.
+
+**Options:** `key` (required), `storage: 'local'|'session'`, custom `serializer` for Date /
+Map / Set, `version` + `migrate` for stored-shape changes between deploys, `syncTabs` for
+cross-tab updates, `silenceCredentialWarning` to silence false positives like `tokenColor`.
+
+### What this must never store
+
+`localStorage` is XSS-readable. Any script on the origin reads every value. The framework
+warns loudly the first time it sees a credential-shaped key or value. Never put any of these
+behind `persist()`:
+
+- Auth tokens, JWTs, session IDs, API keys — use `httpOnly` + `Secure` + `SameSite` cookies.
+- Passwords, including "encrypted" or "hashed" client-side ones.
+- Personal data (names, emails, phone numbers, addresses, IDs) — POPIA/GDPR exposure.
+- Payment data (card numbers, CVV, expiry) — not PCI-DSS compliant.
+- Permission flags, roles, `isAdmin` booleans — the user can edit them in devtools.
+- Encryption keys, OTP seeds, secrets.
+- Server-of-record state (orders, balances, ledger entries) — fetch fresh from the database.
+- Anything that must not survive a logout — clear it via `clearPersistedKeys()` on logout.
+
+### What it is for
+
+Theme preference, language, sidebar collapsed state, last-used filter, onboarding flags,
+local-only draft text, guest cart contents. Small things the user chose, the user expects
+back, and an attacker gains nothing from reading.
+
+### Safety guarantees the framework gives you
+
+- **SSR-safe.** No `window`/`localStorage` means `persist()` is a silent no-op. No crash.
+- **Quota-safe.** `QuotaExceededError` is logged and skipped; the signal still updates.
+- **Credential warnings.** Loud `console.warn` once per key for key names matching
+  `token|password|secret|apikey|auth|credential|jwt|bearer|otp|private_key|session_id`,
+  for JWT-shaped string values, and for objects with credential-shape fields.
+- **No "encrypted" option.** Encryption with a key sitting in the same bundle is theatre,
+  not security. Offering it would mislead.
+- **Opt-in cross-tab sync.** `syncTabs: true` per signal. Off by default.
+
+Full details, examples (Date round-trip, version migration, logout wipe), and the complete
+dangers table live in `STORAGE.md` at the repo root.
+
 ## Cloudflare Workers
 
 tina4-js runs on Cloudflare Workers with Durable Objects for WebSocket state. The IIFE bundle
 and all client-side code works as-is; the WebSocket client (`ws.connect()`) connects to Worker
 endpoints backed by Durable Objects for persistent state across connections.
-
-## Reference Files
 
 ## Quick Reference — Commonly Missed APIs
 
@@ -522,11 +647,23 @@ pwa.register({
 // API interceptor signatures
 api.intercept('request', (config) => { /* config: RequestInit & { headers: Record<string, string> } */ });
 api.intercept('response', (resp) => { /* resp: { status, data, ok, headers } */ });
+
+// GraphQL queries and mutations
+const { data, errors } = await api.graphql('/api/graphql', '{ users { id name } }');
+const { data } = await api.graphql('/api/graphql', 'query($id: Int!) { user(id: $id) { name } }', { id: 42 });
+
+// persist — wrap any signal with localStorage / sessionStorage persistence
+import { persist, clearPersistedKeys } from 'tina4js/storage';
+const theme = persist(signal('light'), { key: 'theme' });
+// theme.clear() removes the stored key; theme.dispose() stops the write effect.
+// clearPersistedKeys(['cart', 'lastFilter']) on logout to wipe user state.
+// See STORAGE.md for the full "must never store" list. localStorage is XSS-readable.
 ```
 
 ## Reference Files
 
-- **`references/signals-and-reactivity.md`** — Full signal, computed, effect, batch, isSignal API with
-  edge cases and gotchas. Read for any reactive state work.
+- **`references/signals-and-reactivity.md`** — Full signal, computed, effect, batch, isSignal,
+  and persist API with edge cases and gotchas. Read for any reactive state work, including
+  persistence.
 - **`references/html-and-components.md`** — html template bindings, Tina4Element Web Components,
   lifecycle, routing, API client, WebSocket. Read for any UI/component work.
