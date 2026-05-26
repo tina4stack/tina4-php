@@ -450,8 +450,8 @@ Key `.env` variables:
 ```bash
 # Core
 TINA4_DEBUG=true                        # Enable debug mode
-DATABASE_PATH=app.db                    # SQLite database path (or use DATABASE_URL)
-DATABASE_URL=postgres://localhost/mydb  # Connection URL for any database
+DATABASE_PATH=app.db                    # SQLite database path (or use TINA4_DATABASE_URL)
+TINA4_DATABASE_URL=postgres://localhost/mydb  # Connection URL for any database
 SECRET=your-jwt-secret                  # JWT signing secret
 TINA4_LOCALE=en                         # Localization language
 

@@ -169,7 +169,7 @@ $db = Database::create('mssql://localhost:1433/mydb', username: 'sa', password: 
 $db = Database::create('sqlserver://localhost:1433/mydb', username: 'sa', password: 'pass');
 $db = Database::create('firebird://localhost:3050/path/to/db.fdb', username: 'SYSDBA', password: 'masterkey');
 
-// Create from DATABASE_URL env var (also reads DATABASE_USERNAME, DATABASE_PASSWORD)
+// Create from TINA4_DATABASE_URL env var (also reads TINA4_DATABASE_USERNAME, TINA4_DATABASE_PASSWORD)
 $db = Database::fromEnv();
 $db = Database::fromEnv('CUSTOM_DB_URL');
 
@@ -213,7 +213,7 @@ $url->password;  // 'pass'
 $url->getDsn();  // 'host:5432/mydb'
 
 // From env
-$url = DatabaseUrl::fromEnv('DATABASE_URL');
+$url = DatabaseUrl::fromEnv('TINA4_DATABASE_URL');
 ```
 
 ### ORM — Active Record

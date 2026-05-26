@@ -279,7 +279,7 @@ results = db.fetch(
 
 ## Database Connection Strings
 
-Same format in every language (set in `.env` as `DATABASE_URL`):
+Same format in every language (set in `.env` as `TINA4_DATABASE_URL`):
 ```
 sqlite://data/app.db
 postgres://user:password@localhost:5432/mydb
@@ -291,11 +291,11 @@ firebird://user:password@localhost:3050/mydb
 ```python
 # Python
 from tina4 import Database
-db = Database.from_env()  # reads DATABASE_URL
+db = Database.from_env()  # reads TINA4_DATABASE_URL
 ```
 ```php
 // PHP
-$db = \Tina4\Database\Database::fromEnv();  // reads DATABASE_URL
+$db = \Tina4\Database\Database::fromEnv();  // reads TINA4_DATABASE_URL
 ```
 
 ## Migrations

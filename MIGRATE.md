@@ -156,8 +156,8 @@ $db = DatabaseFactory::create("mssql://sa:password@localhost:1433/mydb");
 Or read from environment:
 
 ```php
-// v3 — reads DATABASE_URL from .env
-$url = \Tina4\DotEnv::getEnv('DATABASE_URL');
+// v3 — reads TINA4_DATABASE_URL from .env
+$url = \Tina4\DotEnv::getEnv('TINA4_DATABASE_URL');
 $db = DatabaseFactory::create($url);
 ```
 
@@ -322,7 +322,7 @@ SECRET=your-random-secret-here
 |----|-----|-------|
 | `TINA4_DEBUG_LEVEL` (array) | `TINA4_DEBUG` (boolean) | `true`/`false` instead of log level array |
 | `TINA4_AUTO_COMMIT` | `TINA4_AUTOCOMMIT` | No underscore between AUTO and COMMIT |
-| `DATABASE_PATH` | `DATABASE_URL` | Standard URL format |
+| `DATABASE_PATH` | `TINA4_DATABASE_URL` | Standard URL format |
 
 ### Debug Settings
 
@@ -484,7 +484,7 @@ These did not exist in v2:
 
 3. **Convert routes.** Replace `Get::add($path, $fn)` with `Router::get($path, $fn)`. Do the same for `Post`, `Put`, `Patch`, `Delete`, and `Any`. Swap the callback signature from `($response, $request)` to `(Request $request, Response $response)`.
 
-4. **Update database connections.** Replace `new DataSQLite3("file.db")` with `DatabaseFactory::create("sqlite:///file.db")`. Replace all `Data*` class instantiations with `DatabaseFactory::create()` using URL format. Set `DATABASE_URL` in `.env`.
+4. **Update database connections.** Replace `new DataSQLite3("file.db")` with `DatabaseFactory::create("sqlite:///file.db")`. Replace all `Data*` class instantiations with `DatabaseFactory::create()` using URL format. Set `TINA4_DATABASE_URL` in `.env`.
 
 5. **Update ORM models.** Pass the database adapter to constructors: `new User($db)`. Replace `asArray()` with `toArray()`. Add relationship properties (`hasMany`, `belongsTo`, `hasOne`) where needed.
 

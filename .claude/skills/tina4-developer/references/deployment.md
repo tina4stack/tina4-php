@@ -277,7 +277,7 @@ services:
     environment:
       - TINA4_DEBUG=false
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=sqlite:///data/app.db
+      - TINA4_DATABASE_URL=sqlite:///data/app.db
     volumes:
       - app-data:/app/data
     restart: unless-stopped
@@ -299,7 +299,7 @@ Pass secrets at runtime, never bake them into images:
 docker run -d \
   -p 7146:7146 \
   -e JWT_SECRET=your-secret \
-  -e DATABASE_URL=sqlite:///data/app.db \
+  -e TINA4_DATABASE_URL=sqlite:///data/app.db \
   -e TINA4_DEBUG=false \
   -v $(pwd)/data:/app/data \
   my-app
