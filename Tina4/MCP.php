@@ -799,6 +799,133 @@ class McpDevTools
             return $value;
         };
 
+        // ── Defensive write helpers (parity with tina4-python) ────────
+        //
+        // The supervisor occasionally feeds prose ("The plan requires…")
+        // as a path, drops bare `routes/foo.php` outside of `src/`, or
+        // overwrites a 5KB controller with a 50-byte stub. The four
+        // helpers below are the same defensive wrappers used in the
+        // Python build: log every action, refuse prose, canonicalise
+        // bare top-level dirs into `src/<dir>/`, and back up the prior
+        // content before any overwrite. Mirrors:
+        //   tina4_python/mcp/tools.py — _agent_log, _looks_like_prose,
+        //   _normalize_coder_path, _agent_backup.
+
+        $agentLog = function (string $category, string $message) use ($projectRoot): void {
+            try {
+                $logDir = $projectRoot . DIRECTORY_SEPARATOR . '.tina4';
+                if (!is_dir($logDir)) {
+                    @mkdir($logDir, 0755, true);
+                }
+                $logPath = $logDir . DIRECTORY_SEPARATOR . 'agent.log';
+                $ts = gmdate('Y-m-d\TH:i:s\Z');
+                @file_put_contents($logPath, "{$ts} [{$category}] {$message}\n", FILE_APPEND);
+            } catch (\Throwable $e) {
+                // logging must never fail the actual call
+            }
+            // Mirror to stderr so the supervisor can see it in the live log.
+            @fwrite(STDERR, "  [agent {$category}] {$message}\n");
+        };
+
+        // Returns an error string if the path looks like prose rather
+        // than a filesystem path, or null when the path is well-formed.
+        // PHP closures can return nullable strings via the `?string`
+        // return type — no boxing needed.
+        $looksLikeProse = function (string $relPath): ?string {
+            if ($relPath === '' || trim($relPath) === '') {
+                return 'path is empty';
+            }
+            if (strlen($relPath) > 300) {
+                return 'path too long (' . strlen($relPath) . ' chars); use a real filename';
+            }
+            $badSubstrings = ['`', "\n", "\t", '  ', ' — ', ' (', ' [', '?', '*', '<', '>', '|'];
+            foreach ($badSubstrings as $bad) {
+                if (strpos($relPath, $bad) !== false) {
+                    $rendered = json_encode($bad);
+                    return "path contains illegal character sequence {$rendered} — looks like prose, not a filename";
+                }
+            }
+            $segments = explode('/', $relPath);
+            foreach ($segments as $seg) {
+                if ($seg === '' || $seg === '.' || $seg === '..') {
+                    continue;
+                }
+                if (strlen($seg) > 80) {
+                    $preview = substr($seg, 0, 60);
+                    return "path segment too long: '{$preview}'… — use a short filename";
+                }
+                if (!preg_match('/^[A-Za-z0-9._\-]+$/', $seg)) {
+                    return "path segment '{$seg}' contains disallowed characters — stick to [A-Za-z0-9._-]";
+                }
+            }
+            return null;
+        };
+
+        // Rewrite bare top-level Tina4-conventional directories into
+        // their `src/<dir>/` canonical form. Tina4 only auto-discovers
+        // under `src/`, so a file at `templates/foo.twig` is dead
+        // weight. Logs every rewrite to `.tina4/agent.log` under
+        // `write.path_normalized`.
+        $normalizeCoderPath = function (string $relPath) use ($agentLog): string {
+            $passthroughPrefixes = ['src/', 'migrations/', 'plan/', 'tests/', 'test/', '.tina4/'];
+            $passthroughFiles = [
+                'app.py', 'app.ts', 'app.rb', 'index.php',
+                'composer.json', 'package.json', 'Gemfile',
+                'pyproject.toml', 'requirements.txt',
+                '.env', '.env.example',
+            ];
+            foreach ($passthroughPrefixes as $p) {
+                if (str_starts_with($relPath, $p)) {
+                    return $relPath;
+                }
+            }
+            if (in_array($relPath, $passthroughFiles, true)) {
+                return $relPath;
+            }
+            foreach (['routes', 'orm', 'templates', 'seeds', 'controllers', 'models', 'middleware'] as $d) {
+                if (str_starts_with($relPath, $d . '/')) {
+                    $rewritten = 'src/' . $relPath;
+                    $agentLog('write.path_normalized', "{$relPath} → {$rewritten}");
+                    return $rewritten;
+                }
+            }
+            return $relPath;
+        };
+
+        // Copy `target` into `.tina4/backups/` with a timestamped name.
+        // Returns the relative backup path on success, null on failure.
+        $agentBackup = function (string $target) use ($projectRoot, $agentLog): ?string {
+            try {
+                if (!is_file($target)) {
+                    return null;
+                }
+                $backupDir = $projectRoot . DIRECTORY_SEPARATOR . '.tina4' . DIRECTORY_SEPARATOR . 'backups';
+                if (!is_dir($backupDir)) {
+                    @mkdir($backupDir, 0755, true);
+                }
+                $rel = $target;
+                $prefix = $projectRoot . DIRECTORY_SEPARATOR;
+                if (str_starts_with($target, $prefix)) {
+                    $rel = substr($target, strlen($prefix));
+                }
+                $safe = str_replace(['/', '\\'], '__', $rel);
+                $ts = gmdate('Y-m-d\TH-i-s\Z');
+                $backupName = "{$safe}.{$ts}.bak";
+                $backupPath = $backupDir . DIRECTORY_SEPARATOR . $backupName;
+                $bytes = @file_get_contents($target);
+                if ($bytes === false) {
+                    return null;
+                }
+                if (@file_put_contents($backupPath, $bytes) === false) {
+                    return null;
+                }
+                return '.tina4/backups/' . $backupName;
+            } catch (\Throwable $e) {
+                $agentLog('write.backup_failed', "{$target}: " . $e->getMessage());
+                return null;
+            }
+        };
+
         // ── Database Tools ────────────────────────────────────
 
         $server->registerTool('database_query', function (string $sql, string $params = '[]') {
@@ -907,15 +1034,66 @@ class McpDevTools
             return file_get_contents($p);
         }, 'Read a project file');
 
-        $server->registerTool('file_write', function (string $path, string $content) use ($safePath, $projectRoot) {
+        $server->registerTool('file_write', function (string $path, string $content) use ($safePath, $projectRoot, $looksLikeProse, $normalizeCoderPath, $agentBackup, $agentLog) {
+            // 1. Reject prose-as-path BEFORE any normalisation or
+            //    resolution — the path-escape guard inside $safePath
+            //    only catches `..` climbs, not sentence-as-filename.
+            $proseErr = $looksLikeProse($path);
+            if ($proseErr !== null) {
+                $msg = "Invalid path '{$path}': {$proseErr}";
+                $agentLog('write.refused', $msg);
+                return ['error' => $msg, 'refused' => true];
+            }
+            // 2. Canonicalise `routes/foo.php` → `src/routes/foo.php`
+            //    so the truncation guard and backup see the same path
+            //    the file will actually land at.
+            $path = $normalizeCoderPath($path);
             $p = $safePath($path);
+            // 3. Compute old/new size + line counts for the truncation
+            //    guard and audit log.
+            $oldBytes = is_file($p) ? (@file_get_contents($p) ?: '') : '';
+            $oldSize = strlen($oldBytes);
+            $oldLines = substr_count($oldBytes, "\n");
+            $newSize = strlen($content);
+            $newLines = substr_count($content, "\n");
+            $relPath = str_replace($projectRoot . DIRECTORY_SEPARATOR, '', $p);
+
+            // 4. Truncation guard — refuse suspicious shrinkage on
+            //    non-trivial files. Mirrors Python's:
+            //      old_size > 200 and (new_size*100) < (old_size*30)
+            if ($oldSize > 200 && ($newSize * 100) < ($oldSize * 30)) {
+                $msg = "REFUSED {$relPath} (would shrink {$oldSize} → {$newSize} bytes / " .
+                    "{$oldLines} → {$newLines} lines, looks truncated)";
+                $agentLog('write.refused', $msg);
+                return [
+                    'error' => $msg,
+                    'refused' => true,
+                    'old_bytes' => $oldSize,
+                    'new_bytes' => $newSize,
+                ];
+            }
+
+            // 5. Backup before overwrite — only if there's prior content.
+            $backupRel = $oldSize > 0 ? $agentBackup($p) : null;
+
             $dir = dirname($p);
             if (!is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
-            file_put_contents($p, $content);
-            $relPath = str_replace($projectRoot . DIRECTORY_SEPARATOR, '', $p);
-            return ['written' => $relPath, 'bytes' => strlen($content)];
+            if (file_put_contents($p, $content) === false) {
+                $agentLog('write.failed', "{$relPath}: file_put_contents returned false");
+                return ['error' => "Could not write {$relPath}"];
+            }
+
+            // 6. Audit log.
+            $backupNote = $backupRel ?: '(no prior file)';
+            $agentLog('write.ok', "{$relPath} ({$oldSize}B/{$oldLines}L → {$newSize}B/{$newLines}L, backup: {$backupNote})");
+
+            $result = ['written' => $relPath, 'bytes' => $newSize];
+            if ($backupRel) {
+                $result['backup'] = $backupRel;
+            }
+            return $result;
         }, 'Write or update a project file');
 
         // file_patch — targeted replace. The supervisor's system prompt
@@ -925,7 +1103,16 @@ class McpDevTools
         // fail with "Unknown tool: file_patch". Mirrors the Python
         // implementation byte-for-byte, including the count guard that
         // rejects ambiguous matches before they corrupt the file.
-        $server->registerTool('file_patch', function (string $path, string $old_string, string $new_string, int $count = 1) use ($safePath, $projectRoot) {
+        $server->registerTool('file_patch', function (string $path, string $old_string, string $new_string, int $count = 1) use ($safePath, $projectRoot, $looksLikeProse, $normalizeCoderPath, $agentBackup, $agentLog) {
+            // Same defensive ordering as file_write: prose-check first
+            // so the early failure mode is consistent across both tools.
+            $proseErr = $looksLikeProse($path);
+            if ($proseErr !== null) {
+                $msg = "Invalid path '{$path}': {$proseErr}";
+                $agentLog('patch.refused', $msg);
+                return ['error' => $msg, 'refused' => true];
+            }
+            $path = $normalizeCoderPath($path);
             $p = $safePath($path);
             if (!file_exists($p) || !is_file($p)) {
                 return ['error' => "File not found: $path"];
@@ -947,15 +1134,29 @@ class McpDevTools
             // PHP's str_replace replaces all matches; we already verified
             // the count matches, so a single bulk replace is correct.
             $updated = str_replace($old_string, $new_string, $original);
+
+            // Backup before overwrite — same path as file_write so
+            // recovery is uniform regardless of which tool touched the file.
+            $backupRel = $agentBackup($p);
+
             if (file_put_contents($p, $updated) === false) {
+                $agentLog('patch.failed', "{$path}: file_put_contents returned false");
                 return ['error' => "Could not write $path"];
             }
             $relPath = str_replace($projectRoot . DIRECTORY_SEPARATOR, '', $p);
-            return [
+            $oldSize = strlen($original);
+            $newSize = strlen($updated);
+            $backupNote = $backupRel ?: '(none)';
+            $agentLog('patch.ok', "{$relPath} (replaced {$count}× old_string, {$oldSize}B → {$newSize}B, backup: {$backupNote})");
+            $result = [
                 'patched' => $relPath,
                 'replacements' => $count,
-                'bytes' => strlen($updated),
+                'bytes' => $newSize,
             ];
+            if ($backupRel) {
+                $result['backup'] = $backupRel;
+            }
+            return $result;
         }, 'Targeted edit: replace old_string with new_string in a file');
 
         $server->registerTool('file_list', function (string $path = '.') use ($safePath) {

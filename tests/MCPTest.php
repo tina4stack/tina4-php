@@ -767,4 +767,204 @@ class MCPTest extends TestCase
         $this->assertSame('hi world', $server->callTool('greet', []));
         $this->assertSame('hi alice', $server->callTool('greet', ['name' => 'alice']));
     }
+
+    // ── Defensive file_write helpers (parity with tina4-python) ─────────
+
+    /**
+     * Recursively delete a directory — used by the defensive write
+     * test teardown. PHP has no stdlib equivalent and the standard
+     * test sandbox lives under sys_get_temp_dir() so we don't risk
+     * touching anything outside.
+     */
+    private function rmrf(string $path): void
+    {
+        if (!file_exists($path)) {
+            return;
+        }
+        if (is_file($path) || is_link($path)) {
+            @unlink($path);
+            return;
+        }
+        $entries = @scandir($path) ?: [];
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $this->rmrf($path . DIRECTORY_SEPARATOR . $entry);
+        }
+        @rmdir($path);
+    }
+
+    public function testFileWriteRefusesProsePaths(): void
+    {
+        $server = new McpServer('/test-write-prose', 'Prose Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+            $result = $server->callTool('file_write', [
+                'path' => 'The plan requires implementing a thing — go figure',
+                'content' => 'irrelevant',
+            ]);
+            $this->assertIsArray($result);
+            $this->assertArrayHasKey('error', $result, 'prose path should be refused');
+            $this->assertTrue($result['refused'] ?? false, 'refused flag should be set');
+            $this->assertStringContainsString('prose', strtolower($result['error']));
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
+
+    public function testFileWriteNormalizesBareRoutes(): void
+    {
+        $server = new McpServer('/test-write-normalize', 'Normalize Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+            $result = $server->callTool('file_write', [
+                'path' => 'routes/foo.php',
+                'content' => "<?php // hello\n",
+            ]);
+            $this->assertIsArray($result);
+            $this->assertArrayNotHasKey('error', $result, 'bare routes/foo.php should be normalised, not rejected');
+
+            // File should land at src/routes/foo.php, not routes/foo.php.
+            $this->assertFileExists($tmpDir . '/src/routes/foo.php');
+            $this->assertFileDoesNotExist($tmpDir . '/routes/foo.php');
+
+            // agent.log should record the path_normalized rewrite.
+            $logPath = $tmpDir . '/.tina4/agent.log';
+            $this->assertFileExists($logPath);
+            $log = file_get_contents($logPath);
+            $this->assertStringContainsString('write.path_normalized', $log);
+            $this->assertStringContainsString('routes/foo.php → src/routes/foo.php', $log);
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
+
+    public function testFileWriteBacksUpExisting(): void
+    {
+        $server = new McpServer('/test-write-backup', 'Backup Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        mkdir($tmpDir . '/src/routes', 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+
+            // Seed an existing file the LLM is about to overwrite.
+            $original = str_repeat("// original line\n", 20);
+            file_put_contents($tmpDir . '/src/routes/foo.php', $original);
+
+            $newContent = str_repeat("// rewritten line\n", 20);
+            $result = $server->callTool('file_write', [
+                'path' => 'src/routes/foo.php',
+                'content' => $newContent,
+            ]);
+
+            $this->assertIsArray($result);
+            $this->assertArrayNotHasKey('error', $result, 'sane overwrite should succeed');
+            $this->assertArrayHasKey('backup', $result, 'should return backup path on overwrite');
+            $this->assertStringStartsWith('.tina4/backups/', $result['backup']);
+
+            // Backup directory should hold a copy of the original.
+            $backupDir = $tmpDir . '/.tina4/backups';
+            $this->assertDirectoryExists($backupDir);
+            $backups = array_values(array_filter(scandir($backupDir), fn($e) => $e !== '.' && $e !== '..'));
+            $this->assertNotEmpty($backups, 'backup file should exist');
+            $backupContent = file_get_contents($backupDir . '/' . $backups[0]);
+            $this->assertSame($original, $backupContent, 'backup should match original contents');
+
+            // The live file should now hold the new content.
+            $this->assertSame($newContent, file_get_contents($tmpDir . '/src/routes/foo.php'));
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
+
+    public function testFileWriteTruncationGuard(): void
+    {
+        $server = new McpServer('/test-write-truncation', 'Truncation Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        mkdir($tmpDir . '/src', 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+
+            // Seed a 500-byte file. 50 bytes back is 10% — well under
+            // the 30% floor — so the write must be refused.
+            $original = str_repeat('a', 500);
+            $target = $tmpDir . '/src/big.php';
+            file_put_contents($target, $original);
+
+            $result = $server->callTool('file_write', [
+                'path' => 'src/big.php',
+                'content' => str_repeat('b', 50),
+            ]);
+            $this->assertIsArray($result);
+            $this->assertArrayHasKey('error', $result, 'truncation should be refused');
+            $this->assertTrue($result['refused'] ?? false, 'refused flag should be set');
+            $this->assertSame(500, $result['old_bytes']);
+            $this->assertSame(50, $result['new_bytes']);
+            $this->assertStringContainsString('REFUSED', $result['error']);
+
+            // Original file must be untouched.
+            $this->assertSame($original, file_get_contents($target));
+
+            // agent.log should record write.refused.
+            $logPath = $tmpDir . '/.tina4/agent.log';
+            $this->assertFileExists($logPath);
+            $this->assertStringContainsString('write.refused', file_get_contents($logPath));
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
+
+    public function testFileWritePathPassthrough(): void
+    {
+        $server = new McpServer('/test-write-passthrough', 'Passthrough Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+            $result = $server->callTool('file_write', [
+                'path' => 'src/routes/foo.php',
+                'content' => "<?php // already canonical\n",
+            ]);
+            $this->assertIsArray($result);
+            $this->assertArrayNotHasKey('error', $result);
+
+            // File should land exactly at src/routes/foo.php with no rewrite.
+            $this->assertFileExists($tmpDir . '/src/routes/foo.php');
+
+            // No path_normalized entry should appear for a canonical path.
+            $logPath = $tmpDir . '/.tina4/agent.log';
+            if (file_exists($logPath)) {
+                $this->assertStringNotContainsString('write.path_normalized', file_get_contents($logPath));
+            }
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
 }
