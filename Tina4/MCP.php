@@ -926,6 +926,110 @@ class McpDevTools
             }
         };
 
+        // Verify a freshly-written PHP file actually parses. Mirrors the
+        // Python build's `_verify_python_import()` — catches hallucinated
+        // syntax (unclosed braces, missing semicolons in function bodies,
+        // bogus `use` statements) BEFORE the next request hits a broken
+        // file and the server fataled.  Returns null on success, or the
+        // captured "Parse error: …" line on failure.
+        //
+        // Only checks files under `src/` that end in `.php`. Skips:
+        //   - bootstrap.php, index.php, app.php  (framework entry points
+        //     that load the whole world — `php -l` of a bootstrap can
+        //     succeed even when the file does nothing useful, and they
+        //     reference autoload classes that aren't visible to a
+        //     standalone lint).
+        //   - PHPUnit test files matching `*Test.php` (their parse path
+        //     pulls in TestCase which isn't autoloaded in a plain lint).
+        // Uses proc_open with a 5s timeout so we capture stdout (where
+        // PHP writes the "Parse error: …" line — yes, stdout not stderr).
+        $verifyPhpSyntax = function (string $relPath) use ($projectRoot): ?string {
+            if (!str_ends_with($relPath, '.php')) {
+                return null;
+            }
+            if (!str_starts_with($relPath, 'src/')) {
+                return null;
+            }
+            $name = basename($relPath);
+            // Framework-init files have their own loading patterns —
+            // skip them the way Python skips __init__.py / conftest.py.
+            if (in_array($name, ['bootstrap.php', 'index.php', 'app.php'], true)) {
+                return null;
+            }
+            if (str_ends_with($name, 'Test.php')) {
+                return null;
+            }
+            $absPath = $projectRoot . DIRECTORY_SEPARATOR . $relPath;
+            if (!is_file($absPath)) {
+                return null;
+            }
+            $descriptors = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
+            $cmd = ['php', '-l', $absPath];
+            $proc = @proc_open($cmd, $descriptors, $pipes, $projectRoot);
+            if (!is_resource($proc)) {
+                return null; // can't verify — skip silently
+            }
+            fclose($pipes[0]);
+            // Non-blocking reads with a 5s wall clock.
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            $stdout = '';
+            $stderr = '';
+            $deadline = microtime(true) + 5.0;
+            while (true) {
+                $status = proc_get_status($proc);
+                $stdout .= (string) stream_get_contents($pipes[1]);
+                $stderr .= (string) stream_get_contents($pipes[2]);
+                if (!$status['running']) {
+                    break;
+                }
+                if (microtime(true) > $deadline) {
+                    @proc_terminate($proc, 9);
+                    fclose($pipes[1]);
+                    fclose($pipes[2]);
+                    @proc_close($proc);
+                    return 'verification subprocess timed out after 5s';
+                }
+                usleep(20000);
+            }
+            // Final drain.
+            $stdout .= (string) stream_get_contents($pipes[1]);
+            $stderr .= (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $exit = proc_close($proc);
+            if ($exit === 0) {
+                return null;
+            }
+            // PHP writes the human-readable "Parse error: …" line to
+            // STDOUT (the "PHP Parse error: …" line goes to stderr).
+            // Pull the first stdout line that starts with "Parse error:"
+            // and strip the trailing "Errors parsing …" footer.
+            $lines = preg_split('/\r\n|\n|\r/', trim($stdout)) ?: [];
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                if (str_starts_with($line, 'Parse error:') || str_starts_with($line, 'Fatal error:')) {
+                    return $line;
+                }
+            }
+            // Fallback to stderr if stdout was empty (older PHP, weird env).
+            $errLines = preg_split('/\r\n|\n|\r/', trim($stderr)) ?: [];
+            foreach ($errLines as $line) {
+                $line = trim($line);
+                if ($line !== '' && !str_starts_with($line, 'Errors parsing')) {
+                    return $line;
+                }
+            }
+            return "php -l failed (exit {$exit}, no diagnostic output)";
+        };
+
         // ── Database Tools ────────────────────────────────────
 
         $server->registerTool('database_query', function (string $sql, string $params = '[]') {
@@ -1034,7 +1138,7 @@ class McpDevTools
             return file_get_contents($p);
         }, 'Read a project file');
 
-        $server->registerTool('file_write', function (string $path, string $content) use ($safePath, $projectRoot, $looksLikeProse, $normalizeCoderPath, $agentBackup, $agentLog) {
+        $server->registerTool('file_write', function (string $path, string $content) use ($safePath, $projectRoot, $looksLikeProse, $normalizeCoderPath, $agentBackup, $agentLog, $verifyPhpSyntax) {
             // 1. Reject prose-as-path BEFORE any normalisation or
             //    resolution — the path-escape guard inside $safePath
             //    only catches `..` climbs, not sentence-as-filename.
@@ -1093,6 +1197,16 @@ class McpDevTools
             if ($backupRel) {
                 $result['backup'] = $backupRel;
             }
+
+            // 7. Post-write syntax check — only matters for .php files
+            //    under src/. Surface the parse error in the tool result
+            //    so the LLM sees it on its next turn, AND log to agent.log
+            //    so the supervisor can trace broken writes.
+            $importErr = $verifyPhpSyntax($relPath);
+            if ($importErr !== null) {
+                $result['import_error'] = $importErr;
+                $agentLog('write.import_failed', "{$relPath}: {$importErr}");
+            }
             return $result;
         }, 'Write or update a project file');
 
@@ -1103,7 +1217,7 @@ class McpDevTools
         // fail with "Unknown tool: file_patch". Mirrors the Python
         // implementation byte-for-byte, including the count guard that
         // rejects ambiguous matches before they corrupt the file.
-        $server->registerTool('file_patch', function (string $path, string $old_string, string $new_string, int $count = 1) use ($safePath, $projectRoot, $looksLikeProse, $normalizeCoderPath, $agentBackup, $agentLog) {
+        $server->registerTool('file_patch', function (string $path, string $old_string, string $new_string, int $count = 1) use ($safePath, $projectRoot, $looksLikeProse, $normalizeCoderPath, $agentBackup, $agentLog, $verifyPhpSyntax) {
             // Same defensive ordering as file_write: prose-check first
             // so the early failure mode is consistent across both tools.
             $proseErr = $looksLikeProse($path);
@@ -1155,6 +1269,16 @@ class McpDevTools
             ];
             if ($backupRel) {
                 $result['backup'] = $backupRel;
+            }
+
+            // Post-patch syntax check — same defensive net as file_write.
+            // A bad str_replace can leave a PHP file with a dangling
+            // brace or unterminated string; surface it inline so the
+            // LLM doesn't have to wait for a 500 to find out.
+            $importErr = $verifyPhpSyntax($relPath);
+            if ($importErr !== null) {
+                $result['import_error'] = $importErr;
+                $agentLog('patch.import_failed', "{$relPath}: {$importErr}");
             }
             return $result;
         }, 'Targeted edit: replace old_string with new_string in a file');

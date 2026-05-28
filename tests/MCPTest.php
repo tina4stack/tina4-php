@@ -967,4 +967,116 @@ class MCPTest extends TestCase
             $this->rmrf($tmpDir);
         }
     }
+
+    // ── Tier 2: post-write PHP syntax verification (parity with Python) ──
+
+    public function testFileWriteCatchesPhpSyntaxError(): void
+    {
+        $server = new McpServer('/test-write-syntax-err', 'Syntax Err Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+
+            // Real parse error — opening brace where a parameter is expected.
+            // `php -l` will exit non-zero with "Parse error: syntax error,
+            // unexpected token '{'…".
+            $result = $server->callTool('file_write', [
+                'path' => 'src/routes/broken.php',
+                'content' => "<?php\nfunction foo( {\n",
+            ]);
+
+            $this->assertIsArray($result);
+            $this->assertArrayHasKey('import_error', $result, 'syntax error should surface as import_error');
+            $this->assertStringContainsString('Parse error', $result['import_error']);
+
+            // The file should still be written (we surface the error, we
+            // don't refuse the write — the LLM needs to see what landed
+            // on disk to fix it).
+            $this->assertFileExists($tmpDir . '/src/routes/broken.php');
+
+            // agent.log should record write.import_failed.
+            $logPath = $tmpDir . '/.tina4/agent.log';
+            $this->assertFileExists($logPath);
+            $log = file_get_contents($logPath);
+            $this->assertStringContainsString('write.import_failed', $log);
+            $this->assertStringContainsString('src/routes/broken.php', $log);
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
+
+    public function testFileWriteSkipsNonPhpFiles(): void
+    {
+        $server = new McpServer('/test-write-nonphp', 'NonPHP Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+
+            // A .json file with content that would be a PHP parse error
+            // if it were lint-checked. The verifier must skip it entirely.
+            $result = $server->callTool('file_write', [
+                'path' => 'src/data/config.json',
+                'content' => "this is { not valid php at all (",
+            ]);
+
+            $this->assertIsArray($result);
+            $this->assertArrayNotHasKey('error', $result);
+            $this->assertArrayNotHasKey('import_error', $result, '.json files must not be syntax-checked');
+            $this->assertFileExists($tmpDir . '/src/data/config.json');
+
+            // And a .twig template — same rule, no PHP lint.
+            $result2 = $server->callTool('file_write', [
+                'path' => 'src/templates/foo.twig',
+                'content' => "{% if x %}{{ unclosed",
+            ]);
+            $this->assertIsArray($result2);
+            $this->assertArrayNotHasKey('import_error', $result2);
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
+
+    public function testFileWriteSkipsFilesOutsideSrc(): void
+    {
+        $server = new McpServer('/test-write-outside-src', 'Outside Src Test');
+        $tmpDir = sys_get_temp_dir() . '/mcp_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            McpDevTools::register($server);
+
+            // Broken PHP, but under tests/ — the verifier only checks
+            // files under src/, so no import_error should surface.
+            $result = $server->callTool('file_write', [
+                'path' => 'tests/foo.php',
+                'content' => "<?php function broken( {\n",
+            ]);
+
+            $this->assertIsArray($result);
+            $this->assertArrayNotHasKey('error', $result);
+            $this->assertArrayNotHasKey('import_error', $result, 'files outside src/ must not be syntax-checked');
+            $this->assertFileExists($tmpDir . '/tests/foo.php');
+
+            // agent.log should NOT contain write.import_failed for this path.
+            $logPath = $tmpDir . '/.tina4/agent.log';
+            if (file_exists($logPath)) {
+                $this->assertStringNotContainsString('write.import_failed', file_get_contents($logPath));
+            }
+        } finally {
+            chdir($oldCwd);
+            $this->rmrf($tmpDir);
+        }
+    }
 }
