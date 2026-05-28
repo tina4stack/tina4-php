@@ -214,6 +214,13 @@ class DevAdmin
         // Register PHP error/exception handlers so they are captured in the Error Tracker
         ErrorTracker::register();
 
+        // Tier 4: customer feedback widget. Routes are env-gated at the
+        // handler level (the master switch is TINA4_ENABLE_FEEDBACK +
+        // TINA4_FEEDBACK_WHITELIST), so production deployments with the
+        // env flags off still register the routes but reject all traffic
+        // with 403. This keeps the routing surface deterministic.
+        Feedback::register();
+
         // Auto-discovery: drop `.tina4/mcp.json` so MCP-aware AI tools
         // (Claude Code, Cursor, etc.) discover the local Live Docs +
         // MCP server without the user having to author config. See

@@ -843,7 +843,37 @@ class Router
         // Dev toolbar injection — also covers 404 / 403 / 500 paths via
         // injectDevToolbar() helper called from those return sites above.
         $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
-        return self::injectDevToolbar($request, $finalResponse, $matchedPattern);
+        $finalResponse = self::injectDevToolbar($request, $finalResponse, $matchedPattern);
+
+        // Tier 4: customer feedback widget injection. Runs AFTER the dev
+        // toolbar so its <script> sits next to the toolbar's marker tags —
+        // both target the LAST </body> independently and are idempotent.
+        // No-op when TINA4_ENABLE_FEEDBACK / TINA4_FEEDBACK_WHITELIST aren't
+        // both set, or when the requesting user isn't on the list.
+        return self::injectFeedbackWidget($request, $finalResponse);
+    }
+
+    /**
+     * Inject the customer feedback widget <script> into HTML responses for
+     * whitelisted users. Mirrors {@see injectDevToolbar()} content-type +
+     * dev-path gating — the actual whitelist/marker logic lives in
+     * {@see Feedback::injectFeedbackWidget()}.
+     */
+    private static function injectFeedbackWidget(Request $request, Response $finalResponse): Response
+    {
+        $contentType = $finalResponse->getContentType() ?? '';
+        if (!str_contains($contentType, 'text/html')) {
+            return $finalResponse;
+        }
+        $body = $finalResponse->getBody();
+        if (!str_contains($body, '</body>')) {
+            return $finalResponse;
+        }
+        $injected = Feedback::injectFeedbackWidget($request, $body);
+        if ($injected !== $body) {
+            $finalResponse->setBody($injected);
+        }
+        return $finalResponse;
     }
 
     /**
