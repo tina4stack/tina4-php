@@ -162,4 +162,85 @@ class ErrorOverlayTest extends TestCase
         putenv('TINA4_DEBUG');
         $this->assertFalse(ErrorOverlay::isDebugMode());
     }
+
+    /**
+     * When a frame's source file is modified AFTER the overlay was
+     * generated, the rendered HTML must surface a "FILE MODIFIED @ ..."
+     * pill so the user knows the displayed source may not match what
+     * actually raised the error. We force this by throwing an exception
+     * inside a tempfile we control, then touching the file forward.
+     *
+     * We match the badge's structural HTML rather than the bare
+     * "FILE MODIFIED" string — because the overlay also renders a
+     * snippet of the test source code, and this test file literally
+     * contains the words "FILE MODIFIED" in its assertions, which
+     * would produce false positives.
+     */
+    public function testStaleBadgeAppearsWhenFileModifiedAfterCapture(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'tina4_overlay_') . '.php';
+        file_put_contents($tmp, "<?php\nfunction tina4_overlay_stale_trigger() {\n    throw new \\RuntimeException('boom from temp');\n}\n");
+        try {
+            require $tmp;
+            try {
+                tina4_overlay_stale_trigger();
+                $this->fail('expected exception');
+            } catch (\RuntimeException $e) {
+                // Push the file's mtime well past "now" so it appears
+                // newer than the overlay's capturedAt stamp.
+                touch($tmp, time() + 5);
+                clearstatcache(true, $tmp);
+                $html = ErrorOverlay::renderErrorOverlay($e);
+                // Match the actual badge HTML — the peach background
+                // + font-weight 700 is the signature of the stale pill,
+                // never produced by rendered source-code snippets.
+                $this->assertMatchesRegularExpression(
+                    '/background:#fab387;[^"]*">\s*FILE MODIFIED @ \d{2}:\d{2}:\d{2} UTC/',
+                    $html
+                );
+                $this->assertStringContainsString('source may not match what failed</span>', $html);
+            }
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    /**
+     * Conversely, when the file is older than the overlay's
+     * capturedAt stamp, the stale badge must NOT appear. Touch the
+     * file backwards to make it definitively pre-overlay.
+     *
+     * Match the badge's structural HTML — checking for the bare
+     * substring "FILE MODIFIED" would false-positive on the rendered
+     * source snippet of this very test file (which contains those
+     * words in its assertions).
+     */
+    public function testStaleBadgeAbsentWhenFileUnchanged(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'tina4_overlay_') . '.php';
+        file_put_contents($tmp, "<?php\nfunction tina4_overlay_fresh_trigger() {\n    throw new \\RuntimeException('boom from temp fresh');\n}\n");
+        try {
+            require $tmp;
+            try {
+                // Backdate the file before throwing — when the overlay
+                // stamps capturedAt = now, the file mtime is well in
+                // the past, so no badge should appear.
+                touch($tmp, time() - 10);
+                clearstatcache(true, $tmp);
+                tina4_overlay_fresh_trigger();
+                $this->fail('expected exception');
+            } catch (\RuntimeException $e) {
+                $html = ErrorOverlay::renderErrorOverlay($e);
+                // Look for the badge HTML signature, not the bare
+                // "FILE MODIFIED" substring (which appears in the
+                // source-code preview of this very test file).
+                $this->assertDoesNotMatchRegularExpression(
+                    '/background:#fab387;[^"]*">\s*FILE MODIFIED @/',
+                    $html
+                );
+            }
+        } finally {
+            @unlink($tmp);
+        }
+    }
 }

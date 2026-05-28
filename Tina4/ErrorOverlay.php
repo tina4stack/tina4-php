@@ -51,6 +51,15 @@ class ErrorOverlay
      */
     public static function renderErrorOverlay(\Throwable $e, ?array $request = null): string
     {
+        // Single timestamp stamped when the overlay starts rendering. Each
+        // stack frame compares its source file's mtime against this — if
+        // the file changed AFTER the error was captured (which happens
+        // constantly when an AI coder rewrites the file between page
+        // loads) the frame header gets a peach "FILE MODIFIED @ ..." pill
+        // so the user knows the displayed source may no longer match what
+        // actually raised the error.
+        $capturedAt = microtime(true);
+
         $excType = get_class($e);
         $excMsg = $e->getMessage();
         $file = $e->getFile();
@@ -63,14 +72,14 @@ class ErrorOverlay
         $devToolbar = self::renderInlineToolbar($request);
 
         // ── Main error location ──
-        $framesHtml = self::formatFrame($file, $line, '{main}');
+        $framesHtml = self::formatFrame($file, $line, '{main}', $capturedAt);
 
         // ── Stack trace frames ──
         foreach ($trace as $frame) {
             $frameFile = $frame['file'] ?? '[internal]';
             $frameLine = $frame['line'] ?? 0;
             $frameFunc = ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '');
-            $framesHtml .= self::formatFrame($frameFile, $frameLine, $frameFunc);
+            $framesHtml .= self::formatFrame($frameFile, $frameLine, $frameFunc, $capturedAt);
         }
 
         // ── Request info ──
@@ -300,7 +309,18 @@ HTML;
             . $rows . "</div>";
     }
 
-    private static function formatFrame(string $filename, int $lineno, string $funcName): string
+    /**
+     * Render a single stack frame.
+     *
+     * When the source file's mtime is newer than $capturedAt (with a
+     * 0.5 second margin to absorb filesystem-noise false positives) the
+     * frame header gets a peach "FILE MODIFIED @ HH:MM:SS UTC" badge —
+     * this protects against the "AI coder rewrote the file between
+     * generating the overlay and the browser rendering it" confusion
+     * where the displayed source no longer matches what actually
+     * raised the error.
+     */
+    private static function formatFrame(string $filename, int $lineno, string $funcName, float $capturedAt = 0.0): string
     {
         $source = ($filename && $lineno > 0) ? self::formatSourceBlock($filename, $lineno) : '';
         $e_file = self::esc($filename);
@@ -310,6 +330,19 @@ HTML;
         $green = self::GREEN;
         $subtext = self::SUBTEXT;
 
+        $staleBadge = '';
+        if ($capturedAt > 0.0 && $filename !== '' && is_file($filename)) {
+            $mtime = @filemtime($filename);
+            if ($mtime !== false && $mtime > $capturedAt + 0.5) {
+                $mtimeIso = gmdate('H:i:s', $mtime);
+                $peach = self::PEACH;
+                $bg = self::BG;
+                $staleBadge = " <span style=\"background:{$peach};color:{$bg};padding:1px 8px;"
+                    . "border-radius:3px;font-size:11px;font-weight:700;margin-left:6px;\">"
+                    . "FILE MODIFIED @ {$mtimeIso} UTC — source may not match what failed</span>";
+            }
+        }
+
         return "<div style=\"margin-bottom:16px;\">"
             . "<div style=\"margin-bottom:4px;\">"
             . "<span style=\"color:{$blue};\">{$e_file}</span>"
@@ -317,6 +350,7 @@ HTML;
             . "<span style=\"color:{$yellow};\">{$lineno}</span>"
             . "<span style=\"color:{$subtext};\"> in </span>"
             . "<span style=\"color:{$green};\">{$e_func}</span>"
+            . $staleBadge
             . "</div>"
             . $source
             . "</div>";

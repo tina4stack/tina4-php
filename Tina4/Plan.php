@@ -182,32 +182,78 @@ class Plan
 
     // ── Public API ─────────────────────────────────────────────────
 
+    /**
+     * All plan files — merged from `plan/` (user-curated canonical) and
+     * `.tina4/plans/` (where the Rust supervisor's planner writes).
+     *
+     * Two directories exist because of a historic split: the framework
+     * treats `plan/` as the canonical project location, but the Rust
+     * agent's planner writes to `.tina4/plans/` (alongside other
+     * AI-state artefacts like chat history). Until those are unified we
+     * read both so plans created either way are discoverable. On
+     * filename collision the `plan/` copy wins. Output is sorted
+     * newest-first by filename — plan filenames lead with unix
+     * timestamps, so reverse-name-sort == reverse-chronological.
+     *
+     * Each entry carries a `path` field relative to project root so the
+     * SPA can open the right file in the editor regardless of which
+     * directory the plan came from.
+     */
     public static function listPlans(): array
     {
-        $dir = self::planDir();
         $current = self::currentName();
-        $out = [];
-        $files = glob($dir . '/*.md') ?: [];
-        sort($files);
-        foreach ($files as $path) {
-            $parsed = self::parse((string) file_get_contents($path));
-            $total = count($parsed['steps']);
-            $done = 0;
-            foreach ($parsed['steps'] as $s) {
-                if (!empty($s['done'])) {
-                    $done++;
-                }
-            }
-            $basename = basename($path);
-            $stem = pathinfo($basename, PATHINFO_FILENAME);
-            $out[] = [
-                'name' => $basename,
-                'title' => $parsed['title'] !== '' ? $parsed['title'] : $stem,
-                'steps_total' => $total,
-                'steps_done' => $done,
-                'is_current' => $basename === $current,
-            ];
+        $root = self::projectRoot();
+
+        // Order matters for dedup — user-curated plan/ wins over .tina4/plans/.
+        $dirs = [];
+        $planDir = self::planDir();
+        if (is_dir($planDir)) {
+            $dirs[] = $planDir;
         }
+        $rustPlans = $root . '/.tina4/plans';
+        if (is_dir($rustPlans)) {
+            $dirs[] = $rustPlans;
+        }
+
+        $seen = [];
+        $out = [];
+        foreach ($dirs as $dir) {
+            $files = glob($dir . '/*.md') ?: [];
+            sort($files);
+            foreach ($files as $path) {
+                $basename = basename($path);
+                if (isset($seen[$basename])) {
+                    continue; // plan/ wins over .tina4/plans/ on name clash
+                }
+                $seen[$basename] = true;
+                $parsed = self::parse((string) file_get_contents($path));
+                $total = count($parsed['steps']);
+                $done = 0;
+                foreach ($parsed['steps'] as $s) {
+                    if (!empty($s['done'])) {
+                        $done++;
+                    }
+                }
+                $stem = pathinfo($basename, PATHINFO_FILENAME);
+                $absPath = str_replace('\\', '/', (string)(realpath($path) ?: $path));
+                $relPath = str_starts_with($absPath, $root . '/')
+                    ? substr($absPath, strlen($root) + 1)
+                    : $absPath;
+                $out[] = [
+                    'name' => $basename,
+                    'title' => $parsed['title'] !== '' ? $parsed['title'] : $stem,
+                    'steps_total' => $total,
+                    'steps_done' => $done,
+                    'is_current' => $basename === $current,
+                    // Relative path from project root — lets the SPA
+                    // open the right file regardless of source dir.
+                    'path' => $relPath,
+                ];
+            }
+        }
+
+        // Newest first by filename (filenames start with unix timestamps).
+        usort($out, fn($a, $b) => strcmp($b['name'], $a['name']));
         return $out;
     }
 
