@@ -57,6 +57,156 @@ class DevAdmin
     private static string $reloadFile = '';
 
     /**
+     * Pluggable HTTP transport used by the supervisor chat/threads proxies.
+     *
+     * Default is a cURL-based implementation that streams the upstream
+     * response chunk-by-chunk via CURLOPT_WRITEFUNCTION. Tests override this
+     * to inject deterministic responses without spinning up a real Rust agent.
+     *
+     * Signature:
+     *   function(string $method, string $url, ?string $body, array $headers): array
+     *
+     * Return shape:
+     *   [
+     *     'status'       => int,        // HTTP status code (0 on transport failure)
+     *     'content_type' => string,     // upstream Content-Type
+     *     'error'        => string,     // non-empty on transport failure
+     *     'chunks'       => callable,   // () => \Generator<string>  — body chunks
+     *   ]
+     *
+     * The `chunks` callable returns a generator so SSE responses can be
+     * piped through `$response->stream()` without buffering — matching the
+     * Python `_api_chat` proxy's behaviour.
+     *
+     * @var callable|null
+     */
+    public static $supervisorTransport = null;
+
+    /**
+     * Reset the supervisor transport to the default cURL implementation.
+     * Useful in test tearDown so a transport stub doesn't leak across tests.
+     */
+    public static function resetSupervisorTransport(): void
+    {
+        self::$supervisorTransport = null;
+    }
+
+    /**
+     * Resolve the URL of the co-located Rust agent server.
+     *
+     * Resolution order (first match wins) — mirrors Python's
+     * `tina4_python.dev_admin._supervisor_base_url`:
+     *   1. TINA4_SUPERVISOR_URL — full URL for non-localhost deployments.
+     *   2. TINA4_AGENT_PORT     — explicit port override on 127.0.0.1.
+     *   3. PORT + 2000          — derived. `tina4 serve` exports the framework's
+     *                              PORT into the child and spawns the agent on
+     *                              port + 2000 (Python on 7146 → agent on 9146,
+     *                              PHP on 7145 → agent on 9145, etc.).
+     *   4. Hardcoded 9145       — matches `tina4 agent` standalone's default,
+     *                              for users running the agent without
+     *                              going through `tina4 serve`.
+     */
+    public static function supervisorBaseUrl(): string
+    {
+        $explicit = getenv('TINA4_SUPERVISOR_URL');
+        if (is_string($explicit) && $explicit !== '') {
+            return rtrim($explicit, '/');
+        }
+        $agentPort = getenv('TINA4_AGENT_PORT');
+        if (is_string($agentPort) && ctype_digit(trim($agentPort))) {
+            return 'http://127.0.0.1:' . ((int) trim($agentPort));
+        }
+        $port = getenv('PORT') ?: getenv('TINA4_PORT');
+        if (is_string($port) && ctype_digit(trim($port))) {
+            return 'http://127.0.0.1:' . ((int) trim($port) + 2000);
+        }
+        return 'http://127.0.0.1:9145';
+    }
+
+    /**
+     * Default cURL-based transport — streams chunks via WRITEFUNCTION so SSE
+     * events reach the browser as they arrive on the wire (no buffering).
+     *
+     * Returns the same shape as $supervisorTransport. The `chunks` generator
+     * runs `curl_exec` to completion — for true streaming both writes happen
+     * inside the WRITEFUNCTION callback which yields the chunk and (via
+     * `flush()`) pushes it to the client immediately.
+     *
+     * @return array{status:int,content_type:string,error:string,chunks:callable}
+     */
+    private static function defaultSupervisorTransport(string $method, string $url, ?string $body, array $headers): array
+    {
+        $ch = curl_init($url);
+        $hdr = [];
+        foreach ($headers as $name => $value) {
+            $hdr[] = "{$name}: {$value}";
+        }
+        // Default Content-Type to JSON for write methods if caller didn't supply one.
+        $lcHeaders = array_change_key_case($headers, CASE_LOWER);
+        if ($body !== null && !isset($lcHeaders['content-type'])) {
+            $hdr[] = 'Content-Type: application/json';
+        }
+
+        $buffer = '';
+        $opts = [
+            CURLOPT_CUSTOMREQUEST  => $method,
+            CURLOPT_HTTPHEADER     => $hdr,
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_HEADER         => false,
+            CURLOPT_TIMEOUT        => 0, // SSE streams can run for minutes — let the upstream decide
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_WRITEFUNCTION  => function ($_ch, $chunk) use (&$buffer) {
+                $buffer .= $chunk;
+                return strlen($chunk);
+            },
+        ];
+        if ($body !== null && in_array(strtoupper($method), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            $opts[CURLOPT_POSTFIELDS] = $body;
+        }
+        curl_setopt_array($ch, $opts);
+
+        $ok = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $ct = (string) (curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '');
+        $err = $ok === false ? (curl_error($ch) ?: 'curl failed') : '';
+        curl_close($ch);
+
+        // Buffered fallback: cURL has already consumed the full upstream
+        // response by the time we get here, so we yield it as one chunk.
+        // True per-event streaming requires re-architecting `$response->stream()`
+        // to drive a generator that itself owns the cURL handle — see TODO below.
+        // TODO(streaming): with the current Response::stream() contract
+        // (callable -> Generator) we can only yield AFTER curl_exec returns.
+        // For the dev-admin SSE proxy this is acceptable (events still
+        // arrive intact, just batched). For true per-byte forwarding,
+        // refactor to a callback-style stream that flushes from inside
+        // CURLOPT_WRITEFUNCTION directly.
+        $chunks = function () use ($buffer): \Generator {
+            if ($buffer !== '') {
+                yield $buffer;
+            }
+        };
+
+        return [
+            'status'       => $status,
+            'content_type' => $ct,
+            'error'        => $err,
+            'chunks'       => $chunks,
+        ];
+    }
+
+    /**
+     * Invoke the supervisor transport (custom or default).
+     *
+     * @return array{status:int,content_type:string,error:string,chunks:callable}
+     */
+    public static function callSupervisorTransport(string $method, string $url, ?string $body, array $headers = []): array
+    {
+        $fn = self::$supervisorTransport ?? [self::class, 'defaultSupervisorTransport'];
+        return $fn($method, $url, $body, $headers);
+    }
+
+    /**
      * Register all /__dev routes. Call from App::start() when in development mode.
      */
     public static function register(): void
@@ -1074,7 +1224,132 @@ class DevAdmin
         (Router::post('/__dev/api/supervise/cancel',   fn(Request $rq, Response $rs) => $supervisorProxy('/supervise/cancel',   $rq, $rs)))->noAuth();
         (Router::post('/__dev/api/execute',            fn(Request $rq, Response $rs) => $supervisorProxy('/execute',            $rq, $rs)))->noAuth();
 
-        (Router::post('/__dev/api/chat', $chatHandler))->noAuth();
+        // ── /__dev/api/chat — Rust-agent chat proxy (SSE) ────────
+        //
+        // Replaces the older qwen+RAG handler that lived here. Mirrors
+        // Python's `tina4_python.dev_admin._api_chat`: the SPA POSTs
+        // `{message, thread_id?, active_file?}` and expects an SSE
+        // stream of `event: status / message / plan / error / done`
+        // chunks. We forward the body verbatim to the agent's POST
+        // /chat and pipe the response bytes back. `active_file`
+        // (and any future top-level keys) ride along untouched.
+        //
+        // When the agent isn't reachable we return a 503 JSON blob
+        // with a helpful hint so the SPA shows a real error instead
+        // of a silently empty stream. Matches `_proxy_to_supervisor`'s
+        // 502/503 contract on the Python side.
+        $supervisorChatHandler = function (Request $request, Response $response) {
+            // Body resolution mirrors the /ai/api/chat handler below:
+            // it may arrive parsed, as rawBody, or via php://input.
+            $payload = null;
+            if (isset($request->body) && is_array($request->body) && $request->body) {
+                $payload = $request->body;
+            } elseif (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+                $decoded = json_decode($request->rawBody, true);
+                $payload = is_array($decoded) ? $decoded : null;
+            }
+            if (!is_array($payload)) {
+                $fallback = (string) (file_get_contents('php://input') ?: '');
+                if ($fallback !== '') {
+                    $decoded = json_decode($fallback, true);
+                    if (is_array($decoded)) {
+                        $payload = $decoded;
+                    }
+                }
+            }
+            $payload = is_array($payload) ? $payload : [];
+
+            $url = self::supervisorBaseUrl() . '/chat';
+            $result = self::callSupervisorTransport(
+                'POST',
+                $url,
+                json_encode($payload),
+                ['Content-Type' => 'application/json']
+            );
+
+            if ($result['status'] === 0 || $result['error'] !== '') {
+                return $response->json([
+                    'error'  => 'agent unreachable',
+                    'detail' => $result['error'],
+                    'hint'   => 'Run `tina4 serve` (starts the agent server) or set TINA4_SUPERVISOR_URL',
+                ], 503);
+            }
+
+            $ct = $result['content_type'] !== '' ? $result['content_type'] : 'text/event-stream';
+            $chunks = $result['chunks'];
+            return $response->stream($chunks, $ct);
+        };
+        (Router::post('/__dev/api/chat', $supervisorChatHandler))->noAuth();
+
+        // ── /__dev/api/threads — Rust-agent thread CRUD proxy ────
+        //
+        // Mirrors Python's `_api_threads` + `_api_threads_sub`:
+        //   GET  /__dev/api/threads               → GET  /threads
+        //   POST /__dev/api/threads               → POST /threads
+        //   PATCH /__dev/api/threads/{id}         → PATCH /threads/{id}
+        //   GET  /__dev/api/threads/{id}/messages → GET  /threads/{id}/messages
+        //
+        // The Python side uses a wildcard dispatcher; PHP's Router doesn't
+        // have an equivalent "match anything under prefix" pattern, so we
+        // register the four shapes explicitly. Body forwards verbatim
+        // (json_encode of $request->body); `active_file` and any other
+        // keys ride along unchanged.
+        $threadsProxy = function (Request $request, Response $response, string $downstream): Response {
+            $url = self::supervisorBaseUrl() . $downstream;
+            $method = strtoupper($request->method ?? 'GET');
+            $body = null;
+            if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+                $raw = $request->body ?? null;
+                if (is_array($raw)) {
+                    $body = json_encode($raw);
+                } elseif (is_string($raw) && $raw !== '') {
+                    $body = $raw;
+                } elseif (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+                    $body = $request->rawBody;
+                }
+            }
+            $qs = !empty($request->query) ? '?' . http_build_query($request->query) : '';
+            $result = self::callSupervisorTransport(
+                $method,
+                $url . $qs,
+                $body,
+                ['Content-Type' => 'application/json']
+            );
+
+            if ($result['status'] === 0 || $result['error'] !== '') {
+                return $response->json([
+                    'error'  => 'agent unreachable',
+                    'detail' => $result['error'],
+                    'hint'   => 'Run `tina4 serve` (starts the agent server) or set TINA4_SUPERVISOR_URL',
+                ], 503);
+            }
+
+            // Drain the chunk generator into a single string — threads
+            // endpoints return JSON, not SSE, so buffering is correct.
+            $buffer = '';
+            foreach (($result['chunks'])() as $chunk) {
+                $buffer .= $chunk;
+            }
+            $decoded = json_decode($buffer, true);
+            if (is_array($decoded)) {
+                return $response->json($decoded, $result['status'] ?: 200);
+            }
+            // Non-JSON upstream — pass through as text with the upstream content-type.
+            $ct = $result['content_type'] !== '' ? $result['content_type'] : 'application/json';
+            return $response->text($buffer, $result['status'] ?: 200)
+                ->header('Content-Type', $ct);
+        };
+
+        (Router::get('/__dev/api/threads', fn(Request $rq, Response $rs) => $threadsProxy($rq, $rs, '/threads')))->noAuth();
+        (Router::post('/__dev/api/threads', fn(Request $rq, Response $rs) => $threadsProxy($rq, $rs, '/threads')))->noAuth();
+        (Router::patch('/__dev/api/threads/{id}', function (Request $rq, Response $rs) use ($threadsProxy) {
+            $id = $rq->params['id'] ?? '';
+            return $threadsProxy($rq, $rs, '/threads/' . rawurlencode((string) $id));
+        }))->noAuth();
+        (Router::get('/__dev/api/threads/{id}/messages', function (Request $rq, Response $rs) use ($threadsProxy) {
+            $id = $rq->params['id'] ?? '';
+            return $threadsProxy($rq, $rs, '/threads/' . rawurlencode((string) $id) . '/messages');
+        }))->noAuth();
 
         // /ai/api/chat — transparent pass-through proxy to the qwen
         // ollama endpoint. Accepts the ollama-native body

@@ -28,6 +28,10 @@ class DevAdminTest extends TestCase
         Router::clear();
         MessageLog::reset();
         RequestInspector::reset();
+        // Supervisor transport is a class-level static — tests that stub
+        // it MUST reset, but tearDown belt-and-braces in case one forgets.
+        DevAdmin::resetSupervisorTransport();
+        putenv('TINA4_SUPERVISOR_URL');
     }
 
     // ── Registration ────────────────────────────────────────────
@@ -1034,6 +1038,267 @@ class DevAdminTest extends TestCase
         $this->assertArrayHasKey('password', $json);
 
         $db->close();
+    }
+
+    // ── Supervisor proxy: chat + threads (Python parity) ───────────
+    //
+    // Mirror Python's `_api_chat` / `_api_threads` / `_api_threads_sub`
+    // proxies. We stub `DevAdmin::$supervisorTransport` so tests don't
+    // need a live Rust agent — the stub records every outbound call and
+    // returns a scripted response. Each test asserts the URL, method,
+    // and body that PHP would have hit on the wire, plus the shape of
+    // the response the SPA receives back.
+
+    /**
+     * Captured outbound supervisor calls from the test stub. We park them on
+     * the test instance because returning a reference array from a helper
+     * and capturing it by-ref inside the closure rebinds the reference on
+     * function return — the closure would write to a phantom array.
+     * @var array<int, array{method:string, url:string, body:?string, headers:array}>
+     */
+    private array $capturedSupervisorCalls = [];
+
+    private function captureSupervisorCalls(array $script = []): void
+    {
+        // $script: optional [statusCode, body, contentType] per call, in order.
+        // Defaults to 200 / "[]" / application/json when the test doesn't care.
+        $this->capturedSupervisorCalls = [];
+        $index = 0;
+        $self = $this;
+        DevAdmin::$supervisorTransport = function (string $method, string $url, ?string $body, array $headers) use ($self, &$index, $script): array {
+            $self->capturedSupervisorCalls[] = [
+                'method'  => $method,
+                'url'     => $url,
+                'body'    => $body,
+                'headers' => $headers,
+            ];
+            [$status, $payload, $ct] = $script[$index] ?? [200, '[]', 'application/json'];
+            $index++;
+            return [
+                'status'       => $status,
+                'content_type' => $ct,
+                'error'        => '',
+                'chunks'       => function () use ($payload): \Generator { yield $payload; },
+            ];
+        };
+    }
+
+    public function testSupervisorUrlOverride(): void
+    {
+        // Explicit URL wins over derived ports — matches Python's resolution
+        // order in _supervisor_base_url(). Trailing slash gets trimmed so the
+        // proxy doesn't end up calling //chat or //threads.
+        $previous = getenv('TINA4_SUPERVISOR_URL');
+        putenv('TINA4_SUPERVISOR_URL=http://example.com:1234/');
+        try {
+            $this->assertSame('http://example.com:1234', DevAdmin::supervisorBaseUrl());
+        } finally {
+            // Restore env so we don't pollute later tests.
+            if ($previous === false) {
+                putenv('TINA4_SUPERVISOR_URL');
+            } else {
+                putenv('TINA4_SUPERVISOR_URL=' . $previous);
+            }
+        }
+    }
+
+    public function testSupervisorUrlDefaultsTo9145(): void
+    {
+        // Bare framework, no env: matches `tina4 agent` standalone default.
+        $prev = ['TINA4_SUPERVISOR_URL' => getenv('TINA4_SUPERVISOR_URL'),
+                 'TINA4_AGENT_PORT'     => getenv('TINA4_AGENT_PORT'),
+                 'PORT'                 => getenv('PORT'),
+                 'TINA4_PORT'           => getenv('TINA4_PORT')];
+        foreach (array_keys($prev) as $key) putenv($key);
+        try {
+            $this->assertSame('http://127.0.0.1:9145', DevAdmin::supervisorBaseUrl());
+        } finally {
+            foreach ($prev as $key => $val) {
+                $val === false ? putenv($key) : putenv("$key=$val");
+            }
+        }
+    }
+
+    public function testThreadsListProxiesToSupervisor(): void
+    {
+        $this->captureSupervisorCalls([
+            [200, json_encode(['threads' => [['id' => 'abc', 'title' => 'hello']]]), 'application/json'],
+        ]);
+        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/threads');
+        $this->assertNotNull($callback, 'GET /__dev/api/threads must be registered');
+
+        $request = Request::create('GET', '/__dev/api/threads');
+        $response = new Response(true);
+        /** @var Response $result */
+        $result = $callback($request, $response);
+
+        $captured = $this->capturedSupervisorCalls;
+        $this->assertCount(1, $captured, 'Exactly one upstream call');
+        $this->assertSame('GET', $captured[0]['method']);
+        $this->assertSame('http://agent.test:9145/threads', $captured[0]['url']);
+        $this->assertNull($captured[0]['body']);
+
+        $json = json_decode($result->getBody(), true);
+        $this->assertArrayHasKey('threads', $json);
+        $this->assertSame('abc', $json['threads'][0]['id']);
+
+        DevAdmin::resetSupervisorTransport();
+        putenv('TINA4_SUPERVISOR_URL');
+    }
+
+    public function testChatProxyForwardsActiveFile(): void
+    {
+        // The SPA POSTs {message, thread_id?, active_file?} and expects the
+        // active_file blob (path / language / content) to reach the Rust
+        // agent verbatim — that's what lets the planner see the file the
+        // user has open in the editor without an extra round-trip.
+        $this->captureSupervisorCalls([
+            [200, "event: status\ndata: ok\n\nevent: done\ndata: {}\n\n", 'text/event-stream'],
+        ]);
+        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('POST', '/__dev/api/chat');
+        $this->assertNotNull($callback, 'POST /__dev/api/chat must be registered');
+
+        $payload = [
+            'message'     => 'fix the bug',
+            'thread_id'   => 'thread-1',
+            'active_file' => [
+                'path'     => 'src/foo.php',
+                'language' => 'php',
+                'content'  => "<?php\necho 'hi';\n",
+            ],
+        ];
+        $request = Request::create('POST', '/__dev/api/chat', body: $payload);
+        $response = new Response(true);
+        /** @var Response $result */
+        $result = $callback($request, $response);
+
+        $captured = $this->capturedSupervisorCalls;
+        $this->assertCount(1, $captured);
+        $this->assertSame('POST', $captured[0]['method']);
+        $this->assertSame('http://agent.test:9145/chat', $captured[0]['url']);
+
+        // Body must be valid JSON and round-trip with the same keys —
+        // including active_file. If the proxy drops or rewrites keys,
+        // the editor-aware code path breaks silently.
+        $decoded = json_decode($captured[0]['body'], true);
+        $this->assertIsArray($decoded);
+        $this->assertSame('fix the bug', $decoded['message']);
+        $this->assertSame('thread-1', $decoded['thread_id']);
+        $this->assertArrayHasKey('active_file', $decoded);
+        $this->assertSame('src/foo.php', $decoded['active_file']['path']);
+        $this->assertSame("<?php\necho 'hi';\n", $decoded['active_file']['content']);
+
+        // Response is the SSE stream piped through unchanged. In testing
+        // mode Response::stream() collects the chunks into the body.
+        $body = $result->getBody();
+        $this->assertStringContainsString('event: status', $body);
+        $this->assertStringContainsString('event: done', $body);
+
+        DevAdmin::resetSupervisorTransport();
+        putenv('TINA4_SUPERVISOR_URL');
+    }
+
+    public function testThreadsPatchUpdatesUpstream(): void
+    {
+        // PATCH /threads/{id} is how the SPA archives/renames a thread.
+        // Body forwards verbatim — body shape is the agent's contract, not
+        // the framework's, so we just check the bytes match.
+        $this->captureSupervisorCalls([
+            [200, json_encode(['id' => 'thread-42', 'archived' => true]), 'application/json'],
+        ]);
+        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('PATCH', '/__dev/api/threads/{id}');
+        $this->assertNotNull($callback, 'PATCH /__dev/api/threads/{id} must be registered');
+
+        $request = Request::create('PATCH', '/__dev/api/threads/thread-42', body: ['archived' => true]);
+        // The Router populates ->params during dispatch — we're calling the
+        // callback directly, so populate it manually to mimic real routing.
+        $request->params = ['id' => 'thread-42'];
+        $response = new Response(true);
+        /** @var Response $result */
+        $result = $callback($request, $response);
+
+        $captured = $this->capturedSupervisorCalls;
+        $this->assertCount(1, $captured);
+        $this->assertSame('PATCH', $captured[0]['method']);
+        $this->assertSame('http://agent.test:9145/threads/thread-42', $captured[0]['url']);
+
+        $decoded = json_decode($captured[0]['body'], true);
+        $this->assertSame(['archived' => true], $decoded);
+
+        $json = json_decode($result->getBody(), true);
+        $this->assertTrue($json['archived']);
+
+        DevAdmin::resetSupervisorTransport();
+        putenv('TINA4_SUPERVISOR_URL');
+    }
+
+    public function testThreadsMessagesProxiesGet(): void
+    {
+        // /__dev/api/threads/{id}/messages — message history for one thread.
+        // Verifies the wildcard-style sub-route is registered and the
+        // {id} param survives URL-encoding into the upstream path.
+        $this->captureSupervisorCalls([
+            [200, json_encode(['messages' => [['role' => 'user', 'content' => 'hi']]]), 'application/json'],
+        ]);
+        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('GET', '/__dev/api/threads/{id}/messages');
+        $this->assertNotNull($callback, 'GET /__dev/api/threads/{id}/messages must be registered');
+
+        $request = Request::create('GET', '/__dev/api/threads/abc/messages');
+        $request->params = ['id' => 'abc'];
+        $response = new Response(true);
+        /** @var Response $result */
+        $result = $callback($request, $response);
+
+        $captured = $this->capturedSupervisorCalls;
+        $this->assertSame('GET', $captured[0]['method']);
+        $this->assertSame('http://agent.test:9145/threads/abc/messages', $captured[0]['url']);
+
+        $json = json_decode($result->getBody(), true);
+        $this->assertSame('hi', $json['messages'][0]['content']);
+
+        DevAdmin::resetSupervisorTransport();
+        putenv('TINA4_SUPERVISOR_URL');
+    }
+
+    public function testChatProxyReturns503WhenAgentUnreachable(): void
+    {
+        // Parity with Python: when the agent is unreachable, the SPA must
+        // get a structured 503 with a `hint` field so the chat panel can
+        // show "Run `tina4 serve`" instead of a dead spinner.
+        DevAdmin::$supervisorTransport = function (): array {
+            return [
+                'status'       => 0,
+                'content_type' => '',
+                'error'        => 'Connection refused',
+                'chunks'       => function (): \Generator { yield ''; },
+            ];
+        };
+        DevAdmin::register();
+
+        $callback = $this->findRouteCallback('POST', '/__dev/api/chat');
+        $request = Request::create('POST', '/__dev/api/chat', body: ['message' => 'hi']);
+        $response = new Response(true);
+        /** @var Response $result */
+        $result = $callback($request, $response);
+
+        $this->assertSame(503, $result->getStatusCode());
+        $json = json_decode($result->getBody(), true);
+        $this->assertSame('agent unreachable', $json['error']);
+        $this->assertArrayHasKey('hint', $json);
+
+        DevAdmin::resetSupervisorTransport();
     }
 
     // ── Helper ─────────────────────────────────────────────────────
