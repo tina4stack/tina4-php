@@ -592,6 +592,9 @@ class FirebirdAdapter implements DatabaseAdapter
             $queryFn = $this->fn . 'query';
             $result = @$queryFn($context, $sql);
         } else {
+            // ibase/fbird only speaks ? — translate :named from the ORM/QueryBuilder.
+            [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+
             $prepareFn = $this->fn . 'prepare';
             $executeFn = $this->fn . 'execute';
 

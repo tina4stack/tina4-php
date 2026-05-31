@@ -183,6 +183,61 @@ class SqlTranslation
         return $sql;
     }
 
+    /**
+     * Translate :named placeholders to ? positional, reordering $params to
+     * match the order of occurrence in the SQL. Designed for adapters whose
+     * underlying driver only speaks positional placeholders (mysqli, sqlsrv,
+     * ibase/fbird, pgsql) but whose callers (ORM save(), QueryBuilder) emit
+     * :named because that is what PDO would accept.
+     *
+     * Behaviour:
+     *   - Skips string literals ('…' and "…") and SQL comments
+     *     (-- … line comments and / * … * / block comments) so a literal
+     *     :colon inside a string is never touched.
+     *   - Duplicate names bind one value per occurrence — `WHERE id = :id
+     *     AND parent_id = :id` adds the value to the output array twice.
+     *   - Accepts both ':name' and 'name' as keys in $params (PDO-style
+     *     and either-or).
+     *   - Unknown :name (not in $params) is left in place; the driver
+     *     surfaces the real "no such placeholder" error.
+     *   - SQL with no colons or no :name tokens passes through unchanged,
+     *     with $params reduced to array_values() for safety.
+     *
+     * @param string $sql    SQL that may contain :named placeholders.
+     * @param array  $params Associative array keyed by :name or name.
+     * @return array{0: string, 1: array} [translatedSql, orderedValues]
+     */
+    public static function namedToPositional(string $sql, array $params): array
+    {
+        if (!str_contains($sql, ':')) {
+            return [$sql, array_values($params)];
+        }
+
+        $reordered = [];
+        $out = preg_replace_callback(
+            // Match a string literal, a line comment, or a block comment
+            // first (preserved as-is); else match :name.
+            "/(?:'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"|--[^\n]*|\\/\\*.*?\\*\\/)|:([a-zA-Z_][a-zA-Z0-9_]*)/s",
+            function ($m) use ($params, &$reordered) {
+                if (!isset($m[1]) || $m[1] === '') {
+                    return $m[0]; // string or comment, preserved
+                }
+                $name = $m[1];
+                if (array_key_exists(':' . $name, $params)) {
+                    $reordered[] = $params[':' . $name];
+                } elseif (array_key_exists($name, $params)) {
+                    $reordered[] = $params[$name];
+                } else {
+                    return ':' . $name; // unknown — leave it for the driver to complain
+                }
+                return '?';
+            },
+            $sql
+        );
+
+        return [$out, $reordered];
+    }
+
     // ── RETURNING Clause Handling ────────────────────────────────────
 
     /**

@@ -75,6 +75,12 @@ class PostgresAdapter implements DatabaseAdapter
         $this->lastError = null;
 
         try {
+            // pg_query_params binds positionally by $1, $2…; named placeholders
+            // emitted by ORM/QueryBuilder must be translated to ? first
+            // (then convertPlaceholders rewrites ? to $N).
+            if (!empty($params)) {
+                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+            }
             $pgSql = $this->convertPlaceholders($sql);
 
             if (empty($params)) {
@@ -169,6 +175,12 @@ class PostgresAdapter implements DatabaseAdapter
         $this->lastError = null;
 
         try {
+            // pg_query_params binds positionally by $1, $2…; named placeholders
+            // emitted by ORM/QueryBuilder must be translated to ? first
+            // (then convertPlaceholders rewrites ? to $N).
+            if (!empty($params)) {
+                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+            }
             $pgSql = $this->convertPlaceholders($sql);
 
             if (empty($params)) {

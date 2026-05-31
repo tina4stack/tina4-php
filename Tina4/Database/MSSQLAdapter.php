@@ -101,6 +101,10 @@ class MSSQLAdapter implements DatabaseAdapter
         $this->lastError = null;
 
         try {
+            if (!empty($params)) {
+                // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.
+                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+            }
             $values = empty($params) ? [] : array_values($params);
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
@@ -175,6 +179,10 @@ class MSSQLAdapter implements DatabaseAdapter
         $this->lastError = null;
 
         try {
+            if (!empty($params)) {
+                // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.
+                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+            }
             $values = empty($params) ? [] : array_values($params);
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
