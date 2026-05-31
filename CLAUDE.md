@@ -835,6 +835,7 @@ SqlTranslation::ilikeToLike(string $sql): string          // ILIKE -> LOWER() LI
 SqlTranslation::concatPipesToFunc(string $sql): string    // || -> CONCAT()
 SqlTranslation::autoIncrementSyntax(string $sql, string $dialect): string
 SqlTranslation::placeholderStyle(string $sql, string $style): string  // ? -> :1,:2 or %s
+SqlTranslation::namedToPositional(string $sql, array $params): array  // :name -> ?, reorders params (used by MySQL/MSSQL/Firebird/Postgres adapters; skips string literals + comments; duplicate names bind once per occurrence)
 SqlTranslation::hasReturning(string $sql): bool
 SqlTranslation::extractReturning(string $sql): array      // ['sql' => ..., 'columns' => [...]]
 
