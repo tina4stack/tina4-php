@@ -23,8 +23,132 @@ class GraphQL
     /** @var array<string, array> Registered mutations: name => [args, returnType, resolver] */
     private array $mutations = [];
 
+    /** @var array<string, array<string, callable>> Field resolvers for object types. */
+    private array $fieldResolvers = [];
+
+    /**
+     * Class-level resolver registry — populated by GraphQL::resolve()
+     * BEFORE any GraphQL instance is constructed. When __construct() runs,
+     * the instance drains the registry into its schema. This is what
+     * makes the documented decorator-style pattern work at import time:
+     * modules register via static `GraphQL::resolve("Query", "users", $fn)`
+     * before the singleton is even created.
+     *
+     * Structure: [type][field] => callable
+     * type is "Query", "Mutation", or any object type name.
+     *
+     * @var array<string, array<string, callable>>
+     */
+    private static array $classResolvers = [];
+
+    /** The "default" instance set via GraphQL::setDefault() — receives post-startup resolve() calls. */
+    private static ?self $defaultInstance = null;
+
     public function __construct()
     {
+        // Drain any resolvers registered via the class-level GraphQL::resolve()
+        // BEFORE this instance was constructed.
+        foreach (self::$classResolvers as $typeName => $fields) {
+            foreach ($fields as $fieldName => $resolver) {
+                $this->attachResolver($typeName, $fieldName, $resolver);
+            }
+        }
+    }
+
+    /**
+     * Decorator-style resolver registration — matches the cross-framework
+     * @GraphQL.resolve() pattern shipped in Python tina4_python 3.13.0.
+     *
+     *     GraphQL::resolve("Query", "products", function ($root, $args) {
+     *         return (new Product())->select();
+     *     });
+     *
+     *     GraphQL::resolve("Mutation", "createProduct", function ($root, $args) {
+     *         $p = new Product($args["input"]);
+     *         return $p->save()->toArray();
+     *     });
+     *
+     *     GraphQL::resolve("Product", "reviews", function ($product, $args) {
+     *         return (new Review())->where("product_id = ?", [$product["id"]]);
+     *     });
+     *
+     * Resolvers registered before any GraphQL instance exists accumulate
+     * in a class-level registry; new GraphQL() drains them into its
+     * schema. Resolvers registered AFTER an instance is set as default
+     * (via setDefault) are wired in immediately.
+     *
+     * @param string   $typeName  "Query", "Mutation", or an object type name
+     * @param string   $fieldName Field name within the type
+     * @param callable $resolver  function($root, $args, $context = []) — returns the field value
+     */
+    public static function resolve(string $typeName, string $fieldName, callable $resolver): void
+    {
+        self::$classResolvers[$typeName] ??= [];
+        self::$classResolvers[$typeName][$fieldName] = $resolver;
+
+        // If a default instance is active, attach immediately so post-startup
+        // registrations take effect without re-instantiation.
+        if (self::$defaultInstance !== null) {
+            self::$defaultInstance->attachResolver($typeName, $fieldName, $resolver);
+        }
+    }
+
+    /**
+     * Designate `$instance` as the default singleton. Post-startup
+     * GraphQL::resolve() calls wire into this instance's live schema.
+     */
+    public static function setDefault(self $instance): void
+    {
+        self::$defaultInstance = $instance;
+    }
+
+    /**
+     * Wire a single resolver into the live schema.
+     *
+     * For Query/Mutation, lands in $this->queries / $this->mutations.
+     * For object types, stored in $this->fieldResolvers so the executor
+     * can dispatch during nested field resolution.
+     */
+    private function attachResolver(string $typeName, string $fieldName, callable $resolver): void
+    {
+        if ($typeName === 'Query') {
+            $existing = $this->queries[$fieldName] ?? [];
+            $existing['resolve'] = $resolver;
+            $existing['args'] ??= [];
+            $existing['type'] ??= 'String';
+            $this->queries[$fieldName] = $existing;
+            return;
+        }
+        if ($typeName === 'Mutation') {
+            $existing = $this->mutations[$fieldName] ?? [];
+            $existing['resolve'] = $resolver;
+            $existing['args'] ??= [];
+            $existing['type'] ??= 'String';
+            $this->mutations[$fieldName] = $existing;
+            return;
+        }
+        // Object-type field resolver — stash for the executor to consult
+        $this->fieldResolvers[$typeName] ??= [];
+        $this->fieldResolvers[$typeName][$fieldName] = $resolver;
+    }
+
+    /**
+     * Get the field resolver registered for an object type, if any.
+     * Used by the executor during nested field resolution.
+     */
+    public function getFieldResolver(string $typeName, string $fieldName): ?callable
+    {
+        return $this->fieldResolvers[$typeName][$fieldName] ?? null;
+    }
+
+    /**
+     * Test-only — clear the class-level resolver registry. Used by parity
+     * tests to avoid bleed-over between cases.
+     */
+    public static function _clearClassResolvers(): void
+    {
+        self::$classResolvers = [];
+        self::$defaultInstance = null;
     }
 
     /**
