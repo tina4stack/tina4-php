@@ -18,17 +18,57 @@ class Api
     private array $headers = [];
 
     /**
-     * @param string $baseUrl    Base URL for all requests
-     * @param string $authHeader Authorization header value (e.g. "Bearer token")
-     * @param int    $timeout    Request timeout in seconds
-     * @param bool   $ignoreSSL  Skip SSL certificate verification
+     * @param string      $baseUrl      Base URL for all requests
+     * @param string      $authHeader   Authorization header value (e.g. "Bearer token")
+     * @param int         $timeout      Request timeout in seconds
+     * @param bool        $ignoreSSL    Skip SSL certificate verification (legacy flag)
+     * @param string|null $bearerToken  Optional bearer token — sugar for set_bearer_token() at construction
+     * @param string|null $username     Optional basic-auth username (paired with $password)
+     * @param string|null $password     Optional basic-auth password
+     * @param array|null  $headers      Optional headers to addHeaders() at construction
+     * @param bool|null   $verifySSL    Positive form of $ignoreSSL — when explicitly false, disables SSL verification
+     *
+     * The ergonomic kwargs (since 3.13.1) match the cross-framework Api
+     * constructor surface so callers no longer need three follow-up setter
+     * calls. Pass via named arguments:
+     *
+     *     new Api("https://api.example.com", bearerToken: "sk-abc");
+     *     new Api("https://api.example.com", username: "u", password: "p", headers: ["X-Tenant" => "acme"]);
+     *
+     * Bearer wins over basic-auth when both are passed. $verifySSL=false
+     * is equivalent to $ignoreSSL=true; legacy $ignoreSSL wins when both
+     * supplied for backward compatibility.
      */
-    public function __construct(string $baseUrl = '', string $authHeader = '', int $timeout = 30, bool $ignoreSSL = false)
-    {
+    public function __construct(
+        string $baseUrl = '',
+        string $authHeader = '',
+        int $timeout = 30,
+        bool $ignoreSSL = false,
+        ?string $bearerToken = null,
+        ?string $username = null,
+        ?string $password = null,
+        ?array $headers = null,
+        ?bool $verifySSL = null
+    ) {
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->authHeader = $authHeader;
         $this->timeout = $timeout;
-        $this->ignoreSSL = $ignoreSSL;
+
+        // ── kwarg sugar ────────────────────────────────────────────────
+        // Bearer takes precedence over basic-auth when both passed.
+        if ($bearerToken !== null) {
+            $this->setBearerToken($bearerToken);
+        } elseif ($username !== null && $password !== null) {
+            $this->setBasicAuth($username, $password);
+        }
+
+        if ($headers !== null && $headers !== []) {
+            $this->addHeaders($headers);
+        }
+
+        // verifySSL=false is the positive-form of ignoreSSL=true.
+        // ignoreSSL wins when both are explicitly supplied.
+        $this->ignoreSSL = $ignoreSSL || ($verifySSL === false);
     }
 
     /**

@@ -79,8 +79,11 @@ class DatabaseTest extends TestCase
         unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
         DotEnv::resetEnv();
 
+        // 3.13.1: Database::getConnection() now always returns a Database,
+        // falling back to in-memory SQLite when no env var is set. Matches
+        // Python tina4_python.database.Database.get_connection() behaviour.
         $result = Database::getConnection();
-        $this->assertNull($result);
+        $this->assertInstanceOf(Database::class, $result);
     }
 
     // -- fetch() ----------------------------------------------------------------

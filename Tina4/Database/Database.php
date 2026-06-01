@@ -142,6 +142,7 @@ class Database implements DatabaseAdapter
         return new self($url, $autoCommit, $username, $password, $pool);
     }
 
+
     /**
      * Create a Database instance from the TINA4_DATABASE_URL environment variable.
      *
@@ -322,6 +323,28 @@ class Database implements DatabaseAdapter
             adapter: $adapter,
             sql:     $sql,
         );
+    }
+
+    /**
+     * Fetch rows and return the records array directly.
+     *
+     * Symmetric with `fetchOne()`. For the common case where you just want
+     * the rows and don't need the `DatabaseResult` metadata (count, limit,
+     * offset, sql, error, last_id), this is one less attribute access than
+     * `fetch(...)->records`.
+     *
+     *     $rows = $db->fetchAll("SELECT * FROM users WHERE active = ?", [1]);
+     *     foreach ($rows as $row) {
+     *         echo $row['name'], PHP_EOL;
+     *     }
+     *
+     * Returns `[]` (not `null`) when no rows match. Cross-framework parity
+     * with Python `db.fetch_all()`, Ruby `db.fetch_all`, and Node
+     * `db.fetchAll()`.
+     */
+    public function fetchAll(string $sql, array $params = [], int $limit = 100, int $offset = 0): array
+    {
+        return $this->fetch($sql, $params, $limit, $offset)->records;
     }
 
     /**
@@ -796,12 +819,34 @@ class Database implements DatabaseAdapter
     /**
      * Convenience alias for fromEnv().
      *
-     * @param string $envKey Environment variable name (default: TINA4_DATABASE_URL)
-     * @return self|null Null if the env var is not set
+     * Open a database connection — convention name matching SQLAlchemy
+     * `engine.connect()` and the cross-framework Database.get_connection()
+     * surface (Python tina4_python.database.Database.get_connection).
+     *
+     *     $db = Database::getConnection();                       // from TINA4_DATABASE_URL env
+     *     $db = Database::getConnection('CUSTOM_URL_ENV');       // from a different env var
+     *     $db = Database::getConnection('sqlite:///app.db');     // explicit URL
+     *     $db = Database::getConnection('postgres://...', username: 'u', password: 'p');
+     *
+     * The first argument may be either an env-var NAME (back-compat path)
+     * or a connection URL — anything containing `:` is treated as a URL,
+     * otherwise it's looked up via DotEnv. Falls back to in-memory SQLite
+     * when no URL can be resolved.
      */
-    public static function getConnection(string $envKey = 'TINA4_DATABASE_URL'): ?self
+    public static function getConnection(string $urlOrEnvKey = 'TINA4_DATABASE_URL', ?bool $autoCommit = null, string $username = '', string $password = '', int $pool = 0): self
     {
-        return self::fromEnv($envKey);
+        // Treat anything with a scheme separator as a URL; otherwise it's
+        // an env var name to look up.
+        if (str_contains($urlOrEnvKey, '://') || str_starts_with($urlOrEnvKey, 'sqlite:')) {
+            return new self($urlOrEnvKey, $autoCommit, $username, $password, $pool);
+        }
+
+        $db = self::fromEnv($urlOrEnvKey, $autoCommit, $pool);
+        if ($db !== null) {
+            return $db;
+        }
+        // Fallback: in-memory SQLite — same as Python tina4_python's default.
+        return new self('sqlite::memory:', $autoCommit, $username, $password, $pool);
     }
 
     /**
