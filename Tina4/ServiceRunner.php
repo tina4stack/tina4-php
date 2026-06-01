@@ -55,6 +55,47 @@ class ServiceRunner
     }
 
     /**
+     * Register a class-based service (subclass of {@see Service}) by name.
+     *
+     * Wraps the Service's `run()` method as the handler callable that
+     * ServiceRunner::start() invokes. The service's `stop()` method is
+     * also wired up so `ServiceRunner::stop($name)` shuts it down
+     * cleanly — see Service::shouldStop().
+     *
+     *     class EmailQueueWorker extends Service { ... }
+     *     ServiceRunner::registerService('emails', new EmailQueueWorker(), ['daemon' => true]);
+     *
+     * The default options set `daemon => true` because Service subclasses
+     * manage their own loop inside `run()`. Override via `$options`.
+     *
+     * @param string  $name    Unique service name
+     * @param Service $service Service instance to register
+     * @param array   $options Same option keys as {@see register()};
+     *                         defaults to ['daemon' => true]
+     */
+    public static function registerService(string $name, Service $service, array $options = []): void
+    {
+        // Service subclasses manage their own loop, so default to daemon mode.
+        $options = array_merge(['daemon' => true], $options);
+        // Stash the instance so stop() can call $service->stop()
+        self::$services[$name] = [
+            'handler'   => $service->asCallable(),
+            'options'   => array_merge([
+                'timing' => '',
+                'daemon' => true,
+                'maxRetries' => 3,
+                'timeout' => 0,
+            ], $options),
+            'instance' => $service,
+        ];
+        self::$status[$name] = [
+            'pid' => null,
+            'running' => false,
+            'startedAt' => null,
+        ];
+    }
+
+    /**
      * Discover services from PHP files in a directory.
      * Each file must return an array with 'name', 'handler', and optional 'timing', 'daemon', etc.
      *
