@@ -44,10 +44,7 @@ class AuthV3Test extends TestCase
 
         // Sign with no-arg getToken (resolves from env) and verify the same way
         $token = Auth::getToken(['sub' => 'tester']);
-        $this->assertTrue(
-            Auth::validToken($token),
-            'Auth must resolve TINA4_SECRET consistently between getToken and validToken'
-        );
+        $this->assertNotNull(Auth::validToken($token), 'Auth must resolve TINA4_SECRET consistently between getToken and validToken');
 
         putenv('TINA4_SECRET'); // clear getenv side
         // $_ENV is restored by tearDown
@@ -62,7 +59,7 @@ class AuthV3Test extends TestCase
         putenv('TINA4_SECRET=explicit-runtime-secret');
 
         $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret');
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
 
         putenv('TINA4_SECRET');
     }
@@ -77,7 +74,7 @@ class AuthV3Test extends TestCase
         $token = Auth::getToken(['sub' => 'tester'], 'getenv-value');
 
         // No-arg validation must use getenv() — same source getToken used
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
 
         putenv('TINA4_SECRET');
     }
@@ -94,7 +91,7 @@ class AuthV3Test extends TestCase
 
         // If the algorithm resolution were broken, signing or verification
         // would mismatch. PASS proves both resolve identically.
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
 
         putenv('TINA4_SECRET');
         putenv('TINA4_JWT_ALGORITHM');
@@ -157,7 +154,7 @@ class AuthV3Test extends TestCase
     {
         $token = Auth::getToken(['sub' => '123', 'role' => 'admin']);
 
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals('123', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
@@ -171,7 +168,7 @@ class AuthV3Test extends TestCase
         $result = Auth::validToken($token);
         $_ENV['TINA4_SECRET'] = $this->secret;
 
-        $this->assertFalse($result);
+        $this->assertNull($result);
     }
 
     public function testVerifyTokenTampered(): void
@@ -182,7 +179,7 @@ class AuthV3Test extends TestCase
         $parts[1] = rtrim(strtr(base64_encode('{"sub":"hacked","iat":' . time() . ',"exp":' . (time() + 3600) . '}'), '+/', '-_'), '=');
         $tampered = implode('.', $parts);
 
-        $this->assertFalse(Auth::validToken($tampered));
+        $this->assertNull(Auth::validToken($tampered));
     }
 
     public function testVerifyTokenExpired(): void
@@ -190,19 +187,19 @@ class AuthV3Test extends TestCase
         // Generate a token with exp set in the past
         $token = Auth::getToken(['sub' => '123', 'exp' => time() - 10], 0);
 
-        $this->assertFalse(Auth::validToken($token));
+        $this->assertNull(Auth::validToken($token));
     }
 
     public function testVerifyTokenMalformed(): void
     {
-        $this->assertFalse(Auth::validToken('not.a.valid.token'));
-        $this->assertFalse(Auth::validToken('only-one-part'));
-        $this->assertFalse(Auth::validToken(''));
+        $this->assertNull(Auth::validToken('not.a.valid.token'));
+        $this->assertNull(Auth::validToken('only-one-part'));
+        $this->assertNull(Auth::validToken(''));
     }
 
     public function testVerifyTokenInvalidBase64(): void
     {
-        $this->assertFalse(Auth::validToken('abc.!!!.def'));
+        $this->assertNull(Auth::validToken('abc.!!!.def'));
     }
 
     // ── JWT Decode Without Verification ───────────────────────────
@@ -271,7 +268,7 @@ class AuthV3Test extends TestCase
 
         // Verify with public key
         $_ENV['TINA4_SECRET'] = $publicKey;
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals('rs256-user', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
@@ -305,7 +302,7 @@ class AuthV3Test extends TestCase
         $_ENV['TINA4_SECRET'] = $this->secret;
         unset($_ENV['TINA4_JWT_ALGORITHM']);
 
-        $this->assertFalse($result);
+        $this->assertNull($result);
     }
 
     public function testRS256HeaderAlgorithm(): void
@@ -544,7 +541,7 @@ class AuthV3Test extends TestCase
         $this->assertNotNull($refreshed);
         $this->assertNotSame($original, $refreshed);
 
-        $this->assertTrue(Auth::validToken($refreshed));
+        $this->assertNotNull(Auth::validToken($refreshed));
         $payload = Auth::getPayload($refreshed);
         $this->assertEquals('user-1', $payload['sub']);
         $this->assertEquals('admin', $payload['role']);
@@ -562,7 +559,7 @@ class AuthV3Test extends TestCase
         $original = Auth::getToken(['sub' => '1'], 60);
         $refreshed = Auth::refreshToken($original, 120);
 
-        $this->assertTrue(Auth::validToken($refreshed));
+        $this->assertNotNull(Auth::validToken($refreshed));
         $payload = Auth::getPayload($refreshed);
         $this->assertEqualsWithDelta($payload['iat'] + 7200, $payload['exp'], 5);
     }
@@ -589,7 +586,7 @@ class AuthV3Test extends TestCase
         $_ENV['TINA4_SECRET'] = $this->secret;
         unset($_ENV['TINA4_JWT_ALGORITHM']);
 
-        $this->assertFalse($result);
+        $this->assertNull($result);
     }
 
     // ── Password Edge Cases ──────────────────────────────────────
@@ -610,12 +607,12 @@ class AuthV3Test extends TestCase
 
     public function testTwoPartToken(): void
     {
-        $this->assertFalse(Auth::validToken('header.payload'));
+        $this->assertNull(Auth::validToken('header.payload'));
     }
 
     public function testFourPartToken(): void
     {
-        $this->assertFalse(Auth::validToken('a.b.c.d'));
+        $this->assertNull(Auth::validToken('a.b.c.d'));
     }
 
     public function testGetPayloadTwoParts(): void
@@ -628,7 +625,7 @@ class AuthV3Test extends TestCase
     public function testSubClaimPreserved(): void
     {
         $token = Auth::getToken(['sub' => 'user:1', 'iss' => 'tina4']);
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals('user:1', $payload['sub']);
         $this->assertEquals('tina4', $payload['iss']);
@@ -637,7 +634,7 @@ class AuthV3Test extends TestCase
     public function testCustomClaimsPreserved(): void
     {
         $token = Auth::getToken(['roles' => ['admin', 'editor'], 'org' => 'acme']);
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals(['admin', 'editor'], $payload['roles']);
         $this->assertEquals('acme', $payload['org']);

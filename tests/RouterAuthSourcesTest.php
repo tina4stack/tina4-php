@@ -119,7 +119,7 @@ class RouterAuthSourcesTest extends TestCase
 
         $freshToken = $response->getHeader('FreshToken');
         $this->assertNotNull($freshToken, 'FreshToken header should be set when body token validates');
-        $this->assertTrue(Auth::validToken($freshToken, $this->secret), 'FreshToken should be a valid JWT');
+        $this->assertNotNull(Auth::validToken($freshToken, $this->secret), 'FreshToken should be a valid JWT');
     }
 
     public function testNoFreshTokenHeaderWhenBearerHeaderUsed(): void

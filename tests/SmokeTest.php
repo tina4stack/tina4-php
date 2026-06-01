@@ -294,18 +294,18 @@ class SmokeTest extends TestCase
         $this->assertCount(3, $parts);
 
         // Validate token
-        $this->assertTrue(Auth::validToken($token));
+        $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertSame('user-1', $payload['sub']);
         $this->assertSame('admin', $payload['role']);
 
         // Expired token rejected
         $expired = Auth::getToken(['sub' => 'x', 'exp' => time() - 10], expiresIn: 0);
-        $this->assertFalse(Auth::validToken($expired));
+        $this->assertNull(Auth::validToken($expired));
 
         // Wrong secret rejected
         $_ENV['TINA4_SECRET'] = 'wrong-secret';
-        $this->assertFalse(Auth::validToken($token));
+        $this->assertNull(Auth::validToken($token));
         $_ENV['TINA4_SECRET'] = $secret;
 
         // Password hashing
@@ -1344,7 +1344,7 @@ class SmokeTest extends TestCase
         $this->assertNotNull($newToken);
         $this->assertNotSame($token, $newToken);
 
-        $this->assertTrue(Auth::validToken($newToken));
+        $this->assertNotNull(Auth::validToken($newToken));
         $payload = Auth::getPayload($newToken);
         $this->assertSame('user-1', $payload['sub']);
     }

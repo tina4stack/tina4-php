@@ -68,9 +68,16 @@ class Auth
      * Validate a JWT token's signature and expiry.
      *
      * @param string $token The JWT string
-     * @return bool True if the token is valid, false otherwise
+     * @return array<string,mixed>|null Decoded payload on success, null if invalid/expired/malformed
+     *
+     * 3.13.0 — return type changed from `bool` to `array|null`. The decoded
+     * payload is returned on success, matching the convention used by
+     * firebase/php-jwt and python-jose. Legacy `if (Auth::validToken($t))`
+     * patterns keep working because a non-empty array is truthy and null is
+     * falsy. Callers that want the payload no longer need a separate
+     * `getPayload($t)` call.
      */
-    public static function validToken(string $token, ?string $secret = null): bool
+    public static function validToken(string $token, ?string $secret = null): ?array
     {
         $secret = $secret ?? (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if ($secret === '') {
@@ -79,7 +86,7 @@ class Auth
         $algorithm = (getenv('TINA4_JWT_ALGORITHM') ?: ($_ENV['TINA4_JWT_ALGORITHM'] ?? '')) ?: 'HS256';
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
-            return false;
+            return null;
         }
 
         [$headerB64, $payloadB64, $signatureB64] = $parts;
@@ -90,39 +97,39 @@ class Auth
         if ($algorithm === 'HS256') {
             $expected = self::sign($signingInput, $secret, $algorithm);
             if (!hash_equals($expected, $signatureB64)) {
-                return false;
+                return null;
             }
         } elseif ($algorithm === 'RS256') {
             $sigBytes = self::base64urlDecode($signatureB64);
             $publicKey = openssl_pkey_get_public($secret);
             if ($publicKey === false) {
-                return false;
+                return null;
             }
             $result = openssl_verify($signingInput, $sigBytes, $publicKey, OPENSSL_ALGO_SHA256);
             if ($result !== 1) {
-                return false;
+                return null;
             }
         } else {
-            return false;
+            return null;
         }
 
         // Decode payload
         $payloadJson = self::base64urlDecode($payloadB64);
         if ($payloadJson === false) {
-            return false;
+            return null;
         }
 
         $payload = json_decode($payloadJson, true);
         if (!is_array($payload)) {
-            return false;
+            return null;
         }
 
         // Check expiration
         if (isset($payload['exp']) && time() > $payload['exp']) {
-            return false;
+            return null;
         }
 
-        return true;
+        return $payload;
     }
 
     /**
