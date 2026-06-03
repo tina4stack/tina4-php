@@ -417,4 +417,174 @@ class LogTest extends TestCase
         $content = file_get_contents($logFile);
         $this->assertStringContainsString('req-human-123', $content);
     }
+
+    // ── Caller-name injection — feature #41 ──────────────────────────
+    // When TINA4_LOG_FUNC=true, log lines include the calling function
+    // name so a tail -f gives "super_trooper - message" context for free.
+    // Default behaviour is unchanged when the env var is absent or false.
+
+    /** Helper — clears the env var so each test starts neutral. */
+    private function clearLogFunc(): void
+    {
+        unset($_ENV['TINA4_LOG_FUNC']);
+        @putenv('TINA4_LOG_FUNC');
+    }
+
+    /** Helper — sets TINA4_LOG_FUNC to the given value (both $_ENV + getenv). */
+    private function setLogFunc(string $value): void
+    {
+        $_ENV['TINA4_LOG_FUNC'] = $value;
+        @putenv("TINA4_LOG_FUNC={$value}");
+    }
+
+    public function testCallerNameNotInjectedByDefault(): void
+    {
+        $this->clearLogFunc();
+        Log::info('hello');
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $content = trim(file_get_contents($logFile));
+        $decoded = json_decode($content, true);
+
+        $this->assertArrayNotHasKey('function', $decoded);
+        $this->assertSame('hello', $decoded['message']);
+    }
+
+    public function testCallerNameInjectedWhenEnabled(): void
+    {
+        $this->setLogFunc('true');
+        try {
+            Log::info('hello');
+        } finally {
+            $this->clearLogFunc();
+        }
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $content = trim(file_get_contents($logFile));
+        $decoded = json_decode($content, true);
+
+        $this->assertArrayHasKey('function', $decoded);
+        $this->assertSame(__FUNCTION__, $decoded['function']);
+    }
+
+    /**
+     * @dataProvider logFuncTruthyValues
+     */
+    public function testCallerNameAcceptsTruthyVariants(string $value): void
+    {
+        $this->setLogFunc($value);
+        try {
+            $caller = Log::callerName();
+        } finally {
+            $this->clearLogFunc();
+        }
+        $this->assertSame(__FUNCTION__, $caller, "TINA4_LOG_FUNC={$value} should enable injection");
+    }
+
+    public static function logFuncTruthyValues(): array
+    {
+        return array_map(fn($v) => [$v], ['1', 'true', 'TRUE', 'on', 'yes', 'y', 't']);
+    }
+
+    /**
+     * @dataProvider logFuncFalsyValues
+     */
+    public function testCallerNameRejectsFalsyVariants(string $value): void
+    {
+        $this->setLogFunc($value);
+        try {
+            $caller = Log::callerName();
+        } finally {
+            $this->clearLogFunc();
+        }
+        $this->assertNull($caller, "TINA4_LOG_FUNC={$value} should NOT enable injection");
+    }
+
+    public static function logFuncFalsyValues(): array
+    {
+        return array_map(fn($v) => [$v], ['0', 'false', 'off', 'no', 'n', 'f', '']);
+    }
+
+    public function testCallerNameInJsonMode(): void
+    {
+        // JSON is the default (production) format — assert the key lands
+        // alongside "message" and "level" so jq pipelines can group on it.
+        $this->setLogFunc('true');
+        try {
+            Log::info('json msg');
+        } finally {
+            $this->clearLogFunc();
+        }
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $decoded = json_decode(trim(file_get_contents($logFile)), true);
+
+        $this->assertArrayHasKey('function', $decoded);
+        $this->assertSame(__FUNCTION__, $decoded['function']);
+        $this->assertSame('json msg', $decoded['message']);
+    }
+
+    public function testCallerNameInHumanReadableMode(): void
+    {
+        // Human format puts [caller] between [request-id] and the message.
+        Log::configure(logDir: $this->tempDir, development: true);
+        Log::setRequestId('req-human');
+        $this->setLogFunc('true');
+        try {
+            Log::info('text msg');
+        } finally {
+            $this->clearLogFunc();
+        }
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $content = file_get_contents($logFile);
+
+        $this->assertStringContainsString('[' . __FUNCTION__ . ']', $content);
+        $this->assertStringContainsString('[req-human]', $content);
+        // Order: [request-id] before [function] before message.
+        $reqPos = strpos($content, '[req-human]');
+        $funcPos = strpos($content, '[' . __FUNCTION__ . ']');
+        $msgPos = strpos($content, 'text msg');
+        $this->assertNotFalse($reqPos);
+        $this->assertNotFalse($funcPos);
+        $this->assertNotFalse($msgPos);
+        $this->assertLessThan($funcPos, $reqPos, 'request-id should appear before caller-name');
+        $this->assertLessThan($msgPos, $funcPos, 'caller-name should appear before message');
+    }
+
+    public function testCallerNameFiltersClosure(): void
+    {
+        // PHP renders closures as "{closure}" in debug_backtrace. Those
+        // are noise (no useful symbol), so callerName() must return null
+        // rather than emit a meaningless "[{closure}]" segment.
+        $this->setLogFunc('true');
+        try {
+            $closure = function () {
+                return Log::callerName();
+            };
+            $caller = $closure();
+        } finally {
+            $this->clearLogFunc();
+        }
+        $this->assertNull($caller, '{closure} frames should be filtered, not leaked');
+    }
+
+    public function testCallerNameEndToEndViaPublicApi(): void
+    {
+        // End-to-end via Log::info — proves the frame walk handles the
+        // full call chain (info → log → buildEntry → callerName).
+        $this->setLogFunc('true');
+        try {
+            Log::info('end to end');
+        } finally {
+            $this->clearLogFunc();
+        }
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $decoded = json_decode(trim(file_get_contents($logFile)), true);
+
+        $this->assertArrayHasKey('function', $decoded);
+        $this->assertSame(__FUNCTION__, $decoded['function']);
+        $this->assertSame('end to end', $decoded['message']);
+    }
 }

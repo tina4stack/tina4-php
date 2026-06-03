@@ -297,11 +297,84 @@ class Log
             $entry['request_id'] = self::$requestId;
         }
 
+        // Inject caller function name when TINA4_LOG_FUNC is enabled.
+        // Default off — zero overhead unless opted in. Parity with
+        // tina4-python's Log._caller_name (feature #41).
+        $caller = self::callerName();
+        if ($caller !== null) {
+            $entry['function'] = $caller;
+        }
+
         if (!empty($context)) {
             $entry['context'] = $context;
         }
 
         return $entry;
+    }
+
+    /**
+     * Frame method/function names that belong to Log itself.
+     *
+     * The frame walk skips past these so the caller name lands on the
+     * first non-Log frame. Kept here so tests can introspect and so
+     * future internal wrappers can extend it without forking the walk.
+     *
+     * @var array<int,string>
+     */
+    private const OWN_FRAMES = [
+        'callerName', 'buildEntry', 'formatHumanReadable',
+        'log', 'debug', 'info', 'warning', 'error', 'critical',
+    ];
+
+    /**
+     * Return the function name that called Log::{debug,info,warning,error}.
+     *
+     * Active only when ``TINA4_LOG_FUNC`` is truthy — the lookup uses
+     * ``debug_backtrace`` which is ~5% overhead per log call. Walks past
+     * Log's own frames (see ``OWN_FRAMES``) to land on the real caller,
+     * so the count is robust whether the test invokes ``buildEntry``
+     * directly or goes through ``Log::info`` → ``log`` → ``buildEntry``.
+     *
+     * Returns ``null`` if the stack is too shallow, if the matched frame
+     * is anonymous (``{closure}``), or if anything goes wrong — never
+     * throws. Parity feature #41 across all four Tina4 frameworks.
+     */
+    public static function callerName(): ?string
+    {
+        try {
+            if (!Env::bool('TINA4_LOG_FUNC')) {
+                return null;
+            }
+            $frames = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+            // Walk past Log's own frames. Cap the walk to defend against
+            // pathological wrapper depth.
+            $cap = min(16, count($frames));
+            for ($i = 0; $i < $cap; $i++) {
+                $frame = $frames[$i] ?? null;
+                if ($frame === null) {
+                    return null;
+                }
+                $function = $frame['function'] ?? null;
+                if ($function === null || $function === '') {
+                    continue;
+                }
+                // Skip frames inside Log itself.
+                if (in_array($function, self::OWN_FRAMES, true)) {
+                    continue;
+                }
+                // Anonymous closures show up as "{closure}" (PHP < 8.4)
+                // or "{closure:File::method():line}" (PHP 8.4+) — both
+                // start with "{closure" and carry no useful symbol, so
+                // filter them out instead of leaking gibberish.
+                if (str_starts_with($function, '{closure')) {
+                    return null;
+                }
+                return $function;
+            }
+            return null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -316,6 +389,12 @@ class Log
 
         if (isset($entry['request_id'])) {
             $parts[] = '[' . $entry['request_id'] . ']';
+        }
+
+        // Optional caller-name segment — only present when TINA4_LOG_FUNC
+        // was truthy at the time buildEntry() ran (feature #41).
+        if (isset($entry['function'])) {
+            $parts[] = '[' . $entry['function'] . ']';
         }
 
         $parts[] = $entry['message'];
