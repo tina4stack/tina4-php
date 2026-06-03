@@ -337,39 +337,80 @@ class ScssCompiler
 
     private function evalMath(string $scss): string
     {
-        return preg_replace_callback(
-            '#([\d.]+[a-z%]*)\s*([+\-*/])\s*([\d.]+[a-z%]*)#',
-            function ($m) {
-                try {
-                    preg_match('#[\d.]+#', $m[1], $num1Match);
-                    preg_match('#[\d.]+#', $m[3], $num2Match);
-                    if (empty($num1Match) || empty($num2Match)) {
-                        return $m[0];
-                    }
-                    $num1 = (float)$num1Match[0];
-                    $num2 = (float)$num2Match[0];
+        // Mixed-unit arithmetic is left verbatim — that is exactly what CSS
+        // calc() is for, and folding it silently produces invalid output
+        // (see tina4-php#116). Math inside calc(...) is preserved untouched
+        // on the same principle: the author asked the browser to compute it.
+        //
+        // Rules for folding:
+        //   * Both operands unitless                  -> fold
+        //   * Same unit on both operands              -> fold, keep unit
+        //   * One operand unitless for * or /         -> fold, keep the other unit
+        //   * Anything else (mixed units on +/-, etc) -> leave verbatim
 
-                    preg_match('#[a-z%]+#', $m[1], $unitMatch);
-                    $unit = $unitMatch[0] ?? '';
-
-                    $op = trim($m[2]);
-                    switch ($op) {
-                        case '+': $result = $num1 + $num2; break;
-                        case '-': $result = $num1 - $num2; break;
-                        case '*': $result = $num1 * $num2; break;
-                        case '/': $result = $num2 != 0 ? $num1 / $num2 : 0; break;
-                        default: return $m[0];
-                    }
-
-                    if ($result == (int)$result) {
-                        return (int)$result . $unit;
-                    }
-                    return sprintf('%.2f', $result) . $unit;
-                } catch (\Throwable $e) {
-                    return $m[0];
-                }
+        // Step 1 - mask calc(...) ranges so the math regex cannot eat into them.
+        $placeholders = [];
+        $masked = preg_replace_callback(
+            '#calc\([^()]*\)#',
+            function ($m) use (&$placeholders) {
+                $placeholders[] = $m[0];
+                return "\x00CALC" . (count($placeholders) - 1) . "\x00";
             },
             $scss
+        );
+
+        // Step 2 - run the math fold on what remains.
+        $folded = preg_replace_callback(
+            '#([\d.]+)([a-z%]*)\s*([+\-*/])\s*([\d.]+)([a-z%]*)#',
+            function ($m) {
+                $full = $m[0];
+                try {
+                    $num1 = (float)$m[1];
+                    $unit1 = $m[2] ?? '';
+                    $op = $m[3];
+                    $num2 = (float)$m[4];
+                    $unit2 = $m[5] ?? '';
+                } catch (\Throwable $e) {
+                    return $full;
+                }
+
+                // Decide result unit; bail if units are incompatible.
+                if ($unit1 === $unit2) {
+                    $unit = $unit1;
+                } elseif (($op === '*' || $op === '/') && $unit1 === '') {
+                    $unit = $unit2;
+                } elseif (($op === '*' || $op === '/') && $unit2 === '') {
+                    $unit = $unit1;
+                } else {
+                    return $full;
+                }
+
+                switch ($op) {
+                    case '+': $result = $num1 + $num2; break;
+                    case '-': $result = $num1 - $num2; break;
+                    case '*': $result = $num1 * $num2; break;
+                    case '/':
+                        if ($num2 == 0) return $full;
+                        $result = $num1 / $num2;
+                        break;
+                    default: return $full;
+                }
+
+                if ($result == (int)$result) {
+                    return (int)$result . $unit;
+                }
+                return sprintf('%.2f', $result) . $unit;
+            },
+            $masked
+        );
+
+        // Step 3 - restore the calc() ranges verbatim.
+        return preg_replace_callback(
+            "#\x00CALC(\d+)\x00#",
+            function ($m) use ($placeholders) {
+                return $placeholders[(int)$m[1]];
+            },
+            $folded
         );
     }
 

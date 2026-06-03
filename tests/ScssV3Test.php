@@ -109,6 +109,64 @@ class ScssV3Test extends TestCase
         $this->assertStringContainsString('25px', $css);
     }
 
+    // ── Mixed-unit arithmetic — regression for tina4-php#116 ──
+    //
+    // Before the fix, the evaluator extracted the unit from the first
+    // operand only and dropped the second's, silently producing wrong CSS:
+    //   100vh - 170px → -70vh (negative, layout-breaking)
+    //   100% - 20px   → 80%
+    // After the fix, mixed-unit expressions are left verbatim so the
+    // browser computes them — that is exactly what calc() is for.
+
+    public function testMixedUnitsOutsideCalcLeftVerbatim(): void
+    {
+        $scss = '.box { max-height: 100vh - 170px; }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('100vh', $css);
+        $this->assertStringContainsString('170px', $css);
+        $this->assertStringNotContainsString('-70vh', $css);
+    }
+
+    public function testMixedUnitsPercentPxLeftVerbatim(): void
+    {
+        $scss = '.box { width: 100% - 20px; }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('100%', $css);
+        $this->assertStringContainsString('20px', $css);
+        $this->assertStringNotContainsString('80%', $css);
+    }
+
+    public function testCalcWithMixedUnitsPreserved(): void
+    {
+        $scss = '.box { max-height: calc(100vh - 170px); }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('calc(100vh - 170px)', $css);
+    }
+
+    public function testCalcWithPercentAndPxPreserved(): void
+    {
+        $scss = '.box { width: calc(50% + 10px); }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('calc(50% + 10px)', $css);
+    }
+
+    public function testSameUnitStillFolds(): void
+    {
+        // Regression guard — the fix must NOT break valid arithmetic.
+        $scss = '.box { width: 10px + 5px; padding: 1rem + 2rem; }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('15px', $css);
+        $this->assertStringContainsString('3rem', $css);
+    }
+
+    public function testUnitlessMultiplicationStillFolds(): void
+    {
+        // 2 * 5px is valid CSS-style arithmetic and should fold.
+        $scss = '.box { width: 2 * 5px; }';
+        $css = $this->compiler->compile($scss);
+        $this->assertStringContainsString('10px', $css);
+    }
+
     public function testDeepNesting(): void
     {
         $scss = '.a { .b { .c { color: red; } } }';
