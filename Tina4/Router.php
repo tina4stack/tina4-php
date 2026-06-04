@@ -219,11 +219,14 @@ class Router
             $route = &self::$routes[self::$lastRouteMethod][self::$lastRouteIndex];
             $route['middleware'] = array_merge($route['middleware'], $middleware);
 
-            // Custom middleware means developer handles auth — disable built-in
-            // gate unless ->secure() was explicitly called.
-            if (empty($route['secure'])) {
-                $route['noAuth'] = true;
-            }
+            // Middleware is purely additive — it never opens up auth as a
+            // side effect. Developers explicitly open write routes with
+            // ->noAuth() (or Router::any()) and lock GET routes with
+            // ->secure(). Pre-3.13.2 this branch silently set
+            // noAuth=true whenever middleware was attached, which let
+            // POST/PUT/PATCH/DELETE routes serve unauthenticated traffic
+            // the moment a logging or CORS middleware landed on them —
+            // a security footgun. tina4-book#141 PY-10-02 parity fix.
 
             // If this was registered via any(), apply to all methods
             if ($this->wasAnyRoute()) {
@@ -231,9 +234,6 @@ class Router
                     $idx = $this->findMatchingRoute($method, $route['pattern']);
                     if ($idx !== null) {
                         self::$routes[$method][$idx]['middleware'] = $route['middleware'];
-                        if (empty($route['secure'])) {
-                            self::$routes[$method][$idx]['noAuth'] = true;
-                        }
                     }
                 }
             }
@@ -333,6 +333,36 @@ class Router
         }
 
         return self::matchInTable($method, $path);
+    }
+
+    /**
+     * Detect Express-style "function middleware" — a Closure (or other
+     * non-class callable) that declares 3+ parameters. The third is the
+     * `$next` continuation; the middleware calls `$next($req, $resp)` to
+     * descend into the chain, or returns its own Response to
+     * short-circuit. Class-string middleware (resolved via class_exists)
+     * is dispatched separately via the before_ / after_ method pattern.
+     *
+     * Two-arg closures keep the legacy "filter" behaviour: run inline,
+     * return false/Response to short-circuit. tina4-book#141 PY-10-01.
+     */
+    private static function isFunctionMiddleware(mixed $mw): bool
+    {
+        // Class strings → before_ / after_ dispatch, not function-style.
+        if (is_string($mw)) {
+            return false;
+        }
+        if (!($mw instanceof \Closure) && !is_callable($mw)) {
+            return false;
+        }
+        try {
+            $ref = $mw instanceof \Closure
+                ? new \ReflectionFunction($mw)
+                : new \ReflectionMethod($mw, '__invoke');
+        } catch (\Throwable) {
+            return false;
+        }
+        return $ref->getNumberOfParameters() >= 3;
     }
 
     /**
@@ -647,6 +677,13 @@ class Router
         // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
         // Use ->noAuth() or @noauth to opt out.
         // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
+        //
+        // Note: presence of custom middleware does NOT relax this gate
+        // (tina4-book#141 PY-10-02 parity fix). Pre-3.13.2 PHP silently
+        // opened write routes the moment any logging/CORS middleware was
+        // attached. Middleware is now purely additive — developers
+        // explicitly open routes with ->noAuth() and lock GETs with
+        // ->secure().
         $isDevAdmin = str_starts_with($request->url, '/__dev') || str_starts_with($request->url, '/api/gallery/') || str_starts_with($request->url, '/gallery/');
         $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $requiresAuth = false;
@@ -654,12 +691,8 @@ class Router
         if ($isDevAdmin) {
             // Dev admin routes never require auth
             $requiresAuth = false;
-        } elseif (!empty($route['middleware'])) {
-            // Route has custom middleware — developer handles auth themselves.
-            // Only enforce built-in auth if explicitly marked ->secure().
-            $requiresAuth = !empty($route['secure']);
         } elseif ($isWriteMethod) {
-            // Write routes with no custom middleware require auth unless ->noAuth()
+            // Write routes require auth unless ->noAuth()
             $requiresAuth = empty($route['noAuth']);
         } else {
             // Read routes require auth only when explicitly marked secure
@@ -716,8 +749,24 @@ class Router
             }
         }
 
-        // Run middleware chain
+        // Split middleware into two groups:
+        //   - class-style (string class names) → before_*/before static
+        //     methods run inline before the handler. Two-arg closures
+        //     ($req, $resp) are also treated as "filter" style here.
+        //   - function-style continuation middleware (closures/callables
+        //     declaring 3+ parameters: $req, $resp, $next). These wrap
+        //     the route handler Express-style — each one calls $next to
+        //     descend, or returns early to short-circuit. This is the
+        //     pattern documented in chapter 10 for 8+ examples; pre-3.13.2
+        //     PHP silently ignored the $next argument and ran them as
+        //     two-arg filters, which made the example bodies dead code.
+        //     tina4-book#141 PY-10-01 parity fix.
+        $functionMiddlewares = [];
         foreach ($route['middleware'] as $mw) {
+            if (self::isFunctionMiddleware($mw)) {
+                $functionMiddlewares[] = $mw;
+                continue;
+            }
             // Resolve middleware: string class name → call before() methods (Python parity)
             if (is_string($mw)) {
                 // Try as class name (exact, PascalCase, or ucfirst)
@@ -775,8 +824,13 @@ class Router
             }
         }
 
-        // Invoke the handler — inject path params by name, then request/response
-        try {
+        // Build the route handler invocation as a closure so function-style
+        // middleware can wrap it Express-style. Each middleware in
+        // $functionMiddlewares is given a $next continuation that either
+        // invokes the next layer or — at the innermost layer — runs the
+        // actual route callback. Iteration is reversed so the first
+        // declared middleware ends up as the outermost wrapper.
+        $invokeRouteHandler = function (Request $request, Response $response) use ($route): mixed {
             $ref = new \ReflectionFunction($route['callback']);
             $refParams = $ref->getParameters();
             $routeParams = $request->params;
@@ -799,9 +853,21 @@ class Router
                 }
             }
 
-            $handlerResult = count($args) === 0
+            return count($args) === 0
                 ? ($route['callback'])()
                 : ($route['callback'])(...$args);
+        };
+
+        $handlerChain = $invokeRouteHandler;
+        foreach (array_reverse($functionMiddlewares) as $mw) {
+            $next = $handlerChain;
+            $handlerChain = static function (Request $req, Response $resp) use ($mw, $next): mixed {
+                return $mw($req, $resp, $next);
+            };
+        }
+
+        try {
+            $handlerResult = $handlerChain($request, $response);
         } catch (\Throwable $e) {
             if (ErrorOverlay::isDebugMode()) {
                 // Rich error overlay with stack trace, source context, and line numbers

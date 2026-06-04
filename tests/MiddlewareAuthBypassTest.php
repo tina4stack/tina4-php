@@ -1,14 +1,19 @@
 <?php
 
 /**
- * Tests for middleware-skips-auth behaviour.
+ * Regression tests for middleware-vs-auth semantics.
  *
- * When a route has custom middleware, the built-in Bearer token auth gate
- * is skipped — the developer's middleware handles auth. This allows
- * OAuth cookie-based sessions and other non-Bearer auth patterns.
+ * Pre-3.13.2 attaching ->middleware([SomeClass::class]) to a write route
+ * silently set noAuth=true, which let any POST/PUT/PATCH/DELETE serve
+ * unauthenticated traffic the moment a logging or CORS middleware
+ * landed on it — a security footgun documented in tina4-book#141 as
+ * PY-10-02. The fix makes middleware purely additive: it never relaxes
+ * the auth gate. Developers explicitly open routes with ->noAuth() and
+ * lock GET routes with ->secure().
  *
- * Use ->secure() to explicitly re-enable the built-in gate on routes
- * that have middleware.
+ * This file is the regression guard. Each test below pins the new
+ * semantic — the historical "middleware implies noAuth" behaviour must
+ * stay buried.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -34,46 +39,46 @@ class MiddlewareAuthBypassTest extends TestCase
         Router::clear();
     }
 
-    // ── Write routes with middleware skip built-in auth ──────────────
+    // ── Write routes with middleware STILL require auth ──────────────
 
-    public function testPostWithMiddlewareSkipsAuth(): void
+    public function testPostWithMiddlewareStillRequiresAuth(): void
     {
         Router::post("/api/tasks", fn($rq, $rs) => $rs("ok"))
             ->middleware([DummyOAuthMiddleware::class]);
 
         $match = Router::match('POST', '/api/tasks');
         $this->assertNotNull($match);
-        $this->assertTrue(!empty($match['route']['noAuth']), 'POST with middleware should have noAuth=true');
+        $this->assertTrue(empty($match['route']['noAuth']), 'POST + middleware must NOT auto-set noAuth (PY-10-02)');
     }
 
-    public function testPutWithMiddlewareSkipsAuth(): void
+    public function testPutWithMiddlewareStillRequiresAuth(): void
     {
         Router::put("/api/tasks/{id}", fn($rq, $rs) => $rs("ok"))
             ->middleware([DummyOAuthMiddleware::class]);
 
         $match = Router::match('PUT', '/api/tasks/1');
         $this->assertNotNull($match);
-        $this->assertTrue(!empty($match['route']['noAuth']), 'PUT with middleware should have noAuth=true');
+        $this->assertTrue(empty($match['route']['noAuth']), 'PUT + middleware must NOT auto-set noAuth (PY-10-02)');
     }
 
-    public function testPatchWithMiddlewareSkipsAuth(): void
+    public function testPatchWithMiddlewareStillRequiresAuth(): void
     {
         Router::patch("/api/tasks/{id}", fn($rq, $rs) => $rs("ok"))
             ->middleware([DummyOAuthMiddleware::class]);
 
         $match = Router::match('PATCH', '/api/tasks/1');
         $this->assertNotNull($match);
-        $this->assertTrue(!empty($match['route']['noAuth']), 'PATCH with middleware should have noAuth=true');
+        $this->assertTrue(empty($match['route']['noAuth']), 'PATCH + middleware must NOT auto-set noAuth (PY-10-02)');
     }
 
-    public function testDeleteWithMiddlewareSkipsAuth(): void
+    public function testDeleteWithMiddlewareStillRequiresAuth(): void
     {
         Router::delete("/api/tasks/{id}", fn($rq, $rs) => $rs("ok"))
             ->middleware([DummyOAuthMiddleware::class]);
 
         $match = Router::match('DELETE', '/api/tasks/1');
         $this->assertNotNull($match);
-        $this->assertTrue(!empty($match['route']['noAuth']), 'DELETE with middleware should have noAuth=true');
+        $this->assertTrue(empty($match['route']['noAuth']), 'DELETE + middleware must NOT auto-set noAuth (PY-10-02)');
     }
 
     // ── Write routes WITHOUT middleware still require auth ───────────
@@ -87,7 +92,7 @@ class MiddlewareAuthBypassTest extends TestCase
         $this->assertTrue(empty($match['route']['noAuth']), 'POST without middleware should NOT have noAuth');
     }
 
-    // ── ->secure() re-enables auth even with middleware ──────────────
+    // ── ->secure() still enables auth on GET routes ──────────────────
 
     public function testPostWithMiddlewareAndSecureRequiresAuth(): void
     {

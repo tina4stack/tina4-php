@@ -38,8 +38,18 @@ class Request
     /** @var string Raw request body */
     public readonly string $rawBody;
 
-    /** @var array<string, string> Request headers (normalised to lowercase keys) */
-    public readonly array $headers;
+    /**
+     * Request headers — case-insensitive associative access.
+     *
+     * Behaves like an array for ArrayAccess / iteration / count, but
+     * lookups are case-insensitive: ``$request->headers['Content-Type']``,
+     * ``$request->headers['content-type']`` and
+     * ``$request->headers['CONTENT-TYPE']`` all return the same value
+     * (tina4-book#141 PY-10-03 — parity with Python/Ruby/Node).
+     *
+     * @var CaseInsensitiveArray
+     */
+    public readonly CaseInsensitiveArray $headers;
 
     /** @var string Client IP address (supports X-Forwarded-For) */
     public readonly string $ip;
@@ -110,15 +120,16 @@ class Request
         // this normalisation the content-type detection silently misses
         // and `multipart/form-data` bodies fall through as raw bytes
         // (issue tina4-book#135 follow-up — Kerneels' May-7 repro).
-        if ($headers === null) {
-            $this->headers = self::parseHeaders();
-        } else {
-            $normalised = [];
-            foreach ($headers as $name => $value) {
-                $normalised[strtolower((string)$name)] = $value;
-            }
-            $this->headers = $normalised;
-        }
+        // HTTP header field-names are case-insensitive (RFC 7230 §3.2).
+        // Wrap the parsed/passed-in array in CaseInsensitiveArray so user
+        // code can write `$request->headers['Content-Type']` or
+        // `$request->headers['content-type']` interchangeably — matches
+        // chapter 10 documented examples and Python/Ruby/Node parity
+        // (tina4-book#141 PY-10-03). Caller-provided original-case keys
+        // are preserved internally for round-tripping; lookups are
+        // case-insensitive.
+        $source = $headers === null ? self::parseHeaders() : $headers;
+        $this->headers = new CaseInsensitiveArray($source);
         $this->contentType = $this->headers['content-type'] ?? '';
 
         // Parse cookies
