@@ -314,6 +314,13 @@ class I18nLeafAliasTest extends TestCase
 
     /**
      * Reset the static Frond singleton in Response so tests are isolated.
+     *
+     * Also wipes the Frond class-level filter/global/test registries —
+     * since Frond's static facade (``Frond::addFilter`` etc.) writes
+     * through to a class registry that every later ``new Frond()`` drains
+     * in its constructor, leaking that registry between tests would cause
+     * cross-test contamination (e.g. an earlier test wires ``t`` for i18n
+     * and a later "no-locales" test would inherit it).
      */
     private function resetFrondSingleton(): void
     {
@@ -325,5 +332,7 @@ class I18nLeafAliasTest extends TestCase
         $prop2 = $ref->getProperty('frameworkFrond');
         $prop2->setAccessible(true);
         $prop2->setValue(null, null);
+
+        \Tina4\Frond::clearRegistry();
     }
 }

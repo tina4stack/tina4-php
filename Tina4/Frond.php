@@ -16,6 +16,25 @@ class Frond
     private array $tests = [];
     private array $cache = [];
     private bool $sandboxed = false;
+
+    /**
+     * Class-level registry for filters registered before any instance exists.
+     *
+     * Mirrors Python's ``Frond._class_filters`` — when a module calls
+     * ``Frond::addFilter("money", $fn)`` statically at app-startup, the filter
+     * is stored here and drained into every subsequent ``new Frond()``. This
+     * lets app.php register filters once, and have every later request's
+     * Frond pick them up automatically without manual wiring.
+     *
+     * @var array<string, callable>
+     */
+    private static array $classFilters = [];
+
+    /** @var array<string, mixed> Class-level registry for globals (see $classFilters). */
+    private static array $classGlobals = [];
+
+    /** @var array<string, callable> Class-level registry for tests (see $classFilters). */
+    private static array $classTests = [];
     private ?array $sandboxFilters = null;
     private ?array $sandboxTags = null;
     private ?array $sandboxVars = null;
@@ -80,6 +99,14 @@ class Frond
         $this->registerBuiltinFilters();
         $this->registerBuiltinTests();
         $this->registerBuiltinGlobals();
+
+        // Drain class-level registries into this instance. Mirrors Python's
+        // ``self._globals.update(Frond._class_globals)`` etc. — filters/globals/
+        // tests registered statically via Frond::addFilter() before this
+        // instance was constructed will now be available on $this.
+        $this->filters = array_merge($this->filters, self::$classFilters);
+        $this->globals = array_merge($this->globals, self::$classGlobals);
+        $this->tests = array_merge($this->tests, self::$classTests);
     }
 
     /* ───────────────────── public API ───────────────────── */
@@ -167,16 +194,6 @@ class Frond
         $this->dottedSplitCache = [];
     }
 
-    public function addFilter(string $name, callable $fn): void
-    {
-        $this->filters[$name] = $fn;
-    }
-
-    public function addGlobal(string $name, mixed $value): void
-    {
-        $this->globals[$name] = $value;
-    }
-
     /**
      * Get all registered filters (built-in + custom).
      *
@@ -197,9 +214,82 @@ class Frond
         return $this->globals;
     }
 
-    public function addTest(string $name, callable $fn): void
+    /**
+     * Clear the class-level filter/global/test registries.
+     *
+     * Useful in test fixtures to prevent leaking state between tests. Does
+     * NOT affect built-in filters/globals/tests on existing or future
+     * instances — only the user-registered class-level entries are cleared.
+     * Mirrors Python's ``Frond.clear_registry()``.
+     */
+    public static function clearRegistry(): void
     {
-        $this->tests[$name] = $fn;
+        self::$classFilters = [];
+        self::$classGlobals = [];
+        self::$classTests = [];
+    }
+
+    /**
+     * Instance dispatch for ``addFilter`` / ``addGlobal`` / ``addTest``.
+     *
+     * PHP cannot declare a static and an instance method with the same name,
+     * so we use ``__call`` (instance side) + ``__callStatic`` (class side)
+     * to implement Python's ``_ClassOrInstanceMethod`` pattern:
+     *
+     *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry only
+     *   ``$frond->addFilter("money", $fn)`` → ``__call``       → class registry AND
+     *                                                            instance's local map
+     *
+     * Future ``new Frond()`` instances drain the class registry in their
+     * constructor, so filters/globals/tests registered statically at
+     * app-startup propagate to every later instance automatically.
+     */
+    public function __call(string $method, array $args): mixed
+    {
+        switch ($method) {
+            case 'addFilter':
+                [$name, $fn] = $args;
+                self::$classFilters[$name] = $fn;
+                $this->filters[$name] = $fn;
+                return null;
+            case 'addGlobal':
+                [$name, $value] = $args;
+                self::$classGlobals[$name] = $value;
+                $this->globals[$name] = $value;
+                return null;
+            case 'addTest':
+                [$name, $fn] = $args;
+                self::$classTests[$name] = $fn;
+                $this->tests[$name] = $fn;
+                return null;
+        }
+        throw new \BadMethodCallException(sprintf('Frond::%s does not exist', $method));
+    }
+
+    /**
+     * Static dispatch for ``Frond::addFilter`` / ``addGlobal`` / ``addTest``.
+     *
+     * See ``__call`` for the dual static/instance call semantics. Static
+     * calls only touch the class registry — the next ``new Frond()``
+     * constructor drains it into the instance.
+     */
+    public static function __callStatic(string $method, array $args): mixed
+    {
+        switch ($method) {
+            case 'addFilter':
+                [$name, $fn] = $args;
+                self::$classFilters[$name] = $fn;
+                return null;
+            case 'addGlobal':
+                [$name, $value] = $args;
+                self::$classGlobals[$name] = $value;
+                return null;
+            case 'addTest':
+                [$name, $fn] = $args;
+                self::$classTests[$name] = $fn;
+                return null;
+        }
+        throw new \BadMethodCallException(sprintf('Frond::%s does not exist', $method));
     }
 
     public function sandbox(?array $filters = null, ?array $tags = null, ?array $vars = null): self
