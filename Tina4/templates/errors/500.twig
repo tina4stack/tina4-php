@@ -27,7 +27,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
         <div class="error-title">Server Error</div>
     </div>
     <div class="error-msg">Something went wrong while processing your request.</div>
-    <pre class="error-trace">{{ error_message }}</pre>
+    {% if error_message %}<pre class="error-trace">{{ error_message }}</pre>{% endif %}
     <div class="error-footer">
         <span class="error-hint">Fix the error and save to auto-reload</span>
         <span class="error-id">{{ request_id }}</span>

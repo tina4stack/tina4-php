@@ -869,6 +869,36 @@ class Router
         try {
             $handlerResult = $handlerChain($request, $response);
         } catch (\Throwable $e) {
+            // v3.13.7: Surface route failures to observability (CloudWatch,
+            // Sentry, etc.) BEFORE rendering the 500. Listeners get the
+            // canonical {exception, request} pair — same shape as Python /
+            // Ruby / Node. Listener throws are swallowed + warning-logged
+            // so a broken listener can't break the 500 page.
+            Log::error(sprintf(
+                'Route error: %s: %s',
+                $e::class,
+                $e->getMessage()
+            ), [
+                'method' => $request->method ?? null,
+                'path'   => $request->path ?? null,
+            ]);
+            try {
+                Events::emit('tina4.request.error', [
+                    'exception' => $e,
+                    'request'   => $request,
+                ]);
+            } catch (\Throwable $listenerErr) {
+                try {
+                    Log::warning(sprintf(
+                        'Listener for tina4.request.error raised: %s: %s',
+                        $listenerErr::class,
+                        $listenerErr->getMessage()
+                    ));
+                } catch (\Throwable) {
+                    // Log failures must never block the 500 render.
+                }
+            }
+
             if (ErrorOverlay::isDebugMode()) {
                 // Rich error overlay with stack trace, source context, and line numbers
                 $overlayHtml = ErrorOverlay::renderErrorOverlay($e, [
@@ -883,10 +913,13 @@ class Router
                 ]);
                 return $response->html($overlayHtml, 500);
             }
-            $errorMessage = $e->getMessage() . "\n" . $e->getTraceAsString();
+            // v3.13.7 SECURITY (CWE-209): production response body must
+            // NOT contain the stack trace. The trace stays in Log::error
+            // above and in any listener consumers. Clients only see the
+            // generic page + request_id.
             $errorResp = self::renderError($response, 500, 'Server Error', $request->path, [
-                'error_message' => $errorMessage,
-                'request_id' => substr(md5(uniqid('', true)), 0, 12),
+                'error_message' => '',
+                'request_id'    => substr(md5(uniqid('', true)), 0, 12),
             ]);
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
