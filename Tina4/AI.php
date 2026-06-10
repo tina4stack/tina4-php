@@ -123,6 +123,139 @@ class AI
      *
      * @return string[] Files created (relative paths)
      */
+    // ── v3.13.9: non-destructive context-file writer ───────────────────
+    //
+    // Pre-v3.13.9 the installer wrote a full developer guide to CLAUDE.md
+    // (and the other context files) on every run, clobbering whatever the
+    // user had put there. Now it writes only a marker-bracketed Tina4
+    // skill block — pointing the assistant at .claude/skills/tina4-*/SKILL.md
+    // — and leaves the rest of the file alone.
+
+    /** @return array{0:string,1:string} `[start, end]` markers for ``$contextFile``. */
+    private static function markersFor(string $contextFile): array
+    {
+        if (str_ends_with(strtolower($contextFile), '.md')) {
+            return ["<!-- tina4-skills:start -->", "<!-- tina4-skills:end -->"];
+        }
+        return ["# tina4-skills:start", "# tina4-skills:end"];
+    }
+
+    /** Return the marker-bracketed Tina4 skill registration block. */
+    private static function skillBlock(string $contextFile): string
+    {
+        [$start, $end] = self::markersFor($contextFile);
+        if (str_ends_with(strtolower($contextFile), '.md')) {
+            $body = "## Tina4 Skills\n\n"
+                . "When working on this Tina4 project, these skills give the assistant project-aware behaviour:\n\n"
+                . "- **tina4-developer** — Read `.claude/skills/tina4-developer/SKILL.md` before building features.\n"
+                . "- **tina4-js** — Read `.claude/skills/tina4-js/SKILL.md` for frontend work.\n"
+                . "- **tina4-maintainer** — Read `.claude/skills/tina4-maintainer/SKILL.md` for framework-level changes.\n\n"
+                . "See https://tina4.com for full docs.";
+        } else {
+            $body = "Tina4 Skills — read these files before working on this project:\n"
+                . "  .claude/skills/tina4-developer/SKILL.md   (feature development)\n"
+                . "  .claude/skills/tina4-js/SKILL.md          (frontend / tina4-js)\n"
+                . "  .claude/skills/tina4-maintainer/SKILL.md  (framework-level changes)\n"
+                . "Docs: https://tina4.com";
+        }
+        return "{$start}\n{$body}\n{$end}";
+    }
+
+    /** True iff both start and end markers appear in order. */
+    private static function hasMarkers(string $existing, string $start, string $end): bool
+    {
+        $sIdx = strpos($existing, $start);
+        if ($sIdx === false) {
+            return false;
+        }
+        return strpos($existing, $end, $sIdx + strlen($start)) !== false;
+    }
+
+    /** Replace the bracketed block in ``$existing`` with ``$block``. */
+    private static function replaceMarkerBlock(string $existing, string $block, string $start, string $end): string
+    {
+        $sIdx = strpos($existing, $start);
+        if ($sIdx === false) {
+            return rtrim($existing) . "\n\n" . $block . "\n";
+        }
+        $eIdx = strpos($existing, $end, $sIdx + strlen($start));
+        if ($eIdx === false) {
+            return rtrim($existing) . "\n\n" . $block . "\n";
+        }
+        $before = rtrim(substr($existing, 0, $sIdx));
+        $after = ltrim(substr($existing, $eIdx + strlen($end)), "\n");
+        $glueBefore = $before !== '' ? "\n\n" : '';
+        $glueAfter = $after !== '' ? "\n" . $after : "\n";
+        return $before . $glueBefore . $block . $glueAfter;
+    }
+
+    /**
+     * True if the file starts with a header the pre-v3.13.9 installer
+     * wrote. Used to migrate one-time off the old clobber-style install.
+     */
+    private static function looksLikeOldFrameworkInstall(string $existing): bool
+    {
+        $head = substr(ltrim($existing), 0, 400);
+        $headers = [
+            "# Tina4 Python",
+            "# Tina4 PHP",
+            "# Tina4 Ruby",
+            "# CLAUDE.md — AI Developer Guide for tina4-nodejs",
+            "# CLAUDE.md - AI Developer Guide for tina4-nodejs",
+        ];
+        foreach ($headers as $h) {
+            if (str_starts_with($head, $h)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Write the context file non-destructively. Returns a human-readable
+     * action verb for the caller's log line.
+     *
+     * Four branches:
+     *   1. Doesn't exist  → write framework guide + skill block
+     *   2. Has markers    → refresh just the skill block (idempotent)
+     *   3. Old header     → migrate: replace old dump with new guide + block
+     *   4. User content   → append the skill block, preserve everything else
+     */
+    private static function writeOrMerge(string $contextPath, string $contextFile, string $frameworkGuide): string
+    {
+        $block = self::skillBlock($contextFile);
+        [$start, $end] = self::markersFor($contextFile);
+
+        if (!file_exists($contextPath)) {
+            file_put_contents($contextPath, rtrim($frameworkGuide) . "\n\n" . $block . "\n");
+            return "Installed";
+        }
+
+        $existing = file_get_contents($contextPath);
+        if ($existing === false) {
+            $existing = '';
+        }
+
+        if (self::hasMarkers($existing, $start, $end)) {
+            $newContent = self::replaceMarkerBlock($existing, $block, $start, $end);
+            file_put_contents($contextPath, $newContent);
+            return "Refreshed skill block in";
+        }
+
+        if (self::looksLikeOldFrameworkInstall($existing)) {
+            $head = ltrim($existing);
+            $preamble = substr($existing, 0, strlen($existing) - strlen($head));
+            $newContent = (trim($preamble) !== '' ? rtrim($preamble) . "\n\n" : '')
+                . rtrim($frameworkGuide) . "\n\n" . $block . "\n";
+            file_put_contents($contextPath, $newContent);
+            return "Migrated (replaced old framework dump in)";
+        }
+
+        $newContent = rtrim($existing) . "\n\n" . $block . "\n";
+        file_put_contents($contextPath, $newContent);
+        return "Appended skill block to";
+    }
+
     private static function installForTool(string $root, array $tool, string $context): array
     {
         $created = [];
@@ -142,9 +275,8 @@ class AI
             mkdir($parentDir, 0755, true);
         }
 
-        // Always overwrite — user chose to install
-        file_put_contents($contextPath, $context);
-        $action = file_exists($contextPath) ? "Updated" : "Installed";
+        // v3.13.9: non-destructive write — see writeOrMerge below.
+        $action = self::writeOrMerge($contextPath, $tool['context_file'], $context);
         $relative = ltrim(str_replace($root, '', $contextPath), '/');
         $created[] = $relative;
         echo "  \e[32m[OK]\e[0m {$action} {$relative}\n";
