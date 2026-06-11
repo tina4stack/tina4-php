@@ -22,6 +22,12 @@ namespace Tina4;
 
 class Server
 {
+    /**
+     * Seconds to wait for socket writability when the send buffer is full
+     * before treating the client as gone. See writeFully().
+     */
+    private const WRITE_STALL_TIMEOUT = 5;
+
     /** @var resource|null Server socket */
     private $socket = null;
 
@@ -568,37 +574,72 @@ class Server
         $httpResponse .= "\r\n";
         $httpResponse .= $responseBody;
 
-        // IMPORTANT: fwrite() on a non-blocking stream socket may return
-        // a short write count when the OS send buffer fills (~300-400KB
-        // on macOS). A single fwrite() silently truncates any response
-        // larger than the buffer — the dev-admin JS bundle (~954KB)
-        // hits this exact failure mode, causing Chrome to hang at
-        // "bundle pending" because Content-Length doesn't match the
-        // bytes actually delivered. Loop until the full payload is
-        // written, yielding between attempts so other clients don't
-        // starve if the buffer is full.
-        $total = strlen($httpResponse);
-        $written = 0;
-        while ($written < $total) {
-            $n = @fwrite($client, substr($httpResponse, $written));
-            if ($n === false || $n === 0) {
-                // Socket closed / errored — give up to avoid a tight loop.
-                break;
-            }
-            $written += $n;
-            if ($written < $total) {
-                // Yield briefly so the kernel drains the send buffer.
-                // stream_select requires variables passed by reference.
-                $sr = [];
-                $sw = [$client];
-                $se = [];
-                @stream_select($sr, $sw, $se, 0, 10000);
-            }
-        }
+        // Write the full payload, tolerating a non-blocking send buffer.
+        $this->writeFully($client, $httpResponse);
 
         if (!$keepAlive) {
             $this->removeClient($client);
         }
+    }
+
+    /**
+     * Write a payload in full to a non-blocking client socket.
+     *
+     * fwrite() on a non-blocking stream socket returns a SHORT count — or
+     * exactly 0 (EAGAIN, "try again") — when the OS send buffer fills
+     * (~200KB-1MB depending on platform). A `0` return is NOT a closed
+     * socket: it means the buffer is momentarily full and the kernel has
+     * not yet drained it onto the wire.
+     *
+     * Pre-v3.13.12 the loop treated `$n === 0` as fatal and `break`ed,
+     * silently truncating any response larger than the send buffer. A
+     * ~4MB attachment download returned 200 with the correct
+     * Content-Length but only ~1-2MB of body, so nginx logged
+     * "upstream prematurely closed connection while reading upstream"
+     * and the browser showed a failed download. The cutoff varied run
+     * to run because it depended on how much fit before the first 0.
+     *
+     * The fix: on `0`, block on writability (with a no-progress timeout)
+     * and retry; only give up on a real error (`false`) or a client that
+     * has genuinely stopped reading. substr() is bounded to 512KB chunks
+     * so we don't recopy the entire remaining tail every iteration
+     * (O(n) total instead of O(n^2)).
+     *
+     * @param resource $client Client socket (non-blocking)
+     * @param string   $data   Full payload (headers + body)
+     * @return int Bytes actually written
+     */
+    private function writeFully($client, string $data): int
+    {
+        $total = strlen($data);
+        $written = 0;
+        $chunkSize = 524288; // 512KB
+
+        while ($written < $total) {
+            $n = @fwrite($client, substr($data, $written, $chunkSize));
+
+            if ($n === false) {
+                // Real write error (socket closed / reset) — stop.
+                break;
+            }
+
+            if ($n === 0) {
+                // Send buffer full (EAGAIN). Wait for the kernel to drain
+                // it before retrying. stream_select needs by-ref vars.
+                // A 5s window with no writability means the peer is gone.
+                $sr = [];
+                $sw = [$client];
+                $se = [];
+                if (@stream_select($sr, $sw, $se, self::WRITE_STALL_TIMEOUT) === 0) {
+                    break; // timed out waiting for writability — client gone
+                }
+                continue;
+            }
+
+            $written += $n;
+        }
+
+        return $written;
     }
 
     /**
@@ -885,7 +926,7 @@ class Server
             . "Connection: close\r\n"
             . "\r\n"
             . $body;
-        @fwrite($client, $response);
+        $this->writeFully($client, $response);
         $this->removeClient($client);
     }
 

@@ -74,6 +74,8 @@
             <file>tests/LandingPageTest.php</file>
             <file>tests/PostgresUuidPkTest.php</file>
             <file>tests/PlanListTest.php</file>
+            <file>tests/SqlNormalizerTest.php</file>
+            <file>tests/ServerLargeResponseTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>
