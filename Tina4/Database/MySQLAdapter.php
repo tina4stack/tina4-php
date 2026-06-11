@@ -157,7 +157,9 @@ class MySQLAdapter implements DatabaseAdapter
             $countResult = $this->query($countSql, $params);
             $total = (int)($countResult[0]['total'] ?? 0);
 
-            $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
+            // default — give me ALL rows).
+            $pagedSql = $limit <= 0 ? $sql : "{$sql} LIMIT {$limit} OFFSET {$offset}";
             $data = $this->query($pagedSql, $params);
 
             return [

@@ -156,9 +156,10 @@ class SQLite3Adapter implements DatabaseAdapter
             $countResult = $this->query($countSql, $params);
             $total = (int)($countResult[0]['total'] ?? 0);
 
-            // Apply pagination — skip if SQL already has LIMIT
+            // Apply pagination — skip if SQL already has LIMIT, or if
+            // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
             $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
-            if (stripos($sqlNoComments, 'LIMIT') !== false) {
+            if ($limit <= 0 || stripos($sqlNoComments, 'LIMIT') !== false) {
                 $pagedSql = $sql;
             } else {
                 $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";

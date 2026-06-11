@@ -144,13 +144,16 @@ class MSSQLAdapter implements DatabaseAdapter
             $countResult = $this->query($countSql, $params);
             $total = (int)($countResult[0]['total'] ?? 0);
 
-            // MSSQL pagination: OFFSET...FETCH NEXT (requires ORDER BY)
-            // If no ORDER BY present, add a neutral one
+            // MSSQL pagination: OFFSET...FETCH NEXT (requires ORDER BY).
+            // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
+            // default — give me ALL rows).
             $pagedSql = $sql;
-            if (!preg_match('/\bORDER\s+BY\b/i', $pagedSql)) {
-                $pagedSql .= " ORDER BY (SELECT NULL)";
+            if ($limit > 0) {
+                if (!preg_match('/\bORDER\s+BY\b/i', $pagedSql)) {
+                    $pagedSql .= " ORDER BY (SELECT NULL)";
+                }
+                $pagedSql .= " OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
             }
-            $pagedSql .= " OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
 
             $data = $this->query($pagedSql, $params);
 

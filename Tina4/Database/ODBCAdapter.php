@@ -110,17 +110,18 @@ class ODBCAdapter implements DatabaseAdapter
             // COUNT(*) column may be uppercased by some ODBC drivers
             $total = (int) ($countRow['total'] ?? $countRow['TOTAL'] ?? 0);
 
-            // Pagination — skip if SQL already has LIMIT or FETCH
+            // Pagination — skip if SQL already has LIMIT/FETCH or if
+            // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
             $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
             if (
-                stripos($sqlNoComments, 'LIMIT') !== false
+                $limit <= 0
+                || stripos($sqlNoComments, 'LIMIT') !== false
                 || stripos($sqlNoComments, 'FETCH NEXT') !== false
                 || stripos($sqlNoComments, 'FETCH FIRST') !== false
             ) {
                 $pagedSql = $sql;
             } else {
                 // Try OFFSET/FETCH NEXT (SQL standard, supported by most ODBC targets)
-                // Fall back to LIMIT/OFFSET for drivers that support it
                 $pagedSql = "{$sql} OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
             }
 

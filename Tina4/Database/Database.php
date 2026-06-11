@@ -341,8 +341,12 @@ class Database implements DatabaseAdapter
      * Returns `[]` (not `null`) when no rows match. Cross-framework parity
      * with Python `db.fetch_all()`, Ruby `db.fetch_all`, and Node
      * `db.fetchAll()`.
+     *
+     * v3.13.12: default `$limit` is **0** (no truncation) — the method
+     * name says `fetchAll`, so it returns all matching rows. Pre-v3.13.12
+     * silently truncated to 100. Pass an explicit `$limit` to cap.
      */
-    public function fetchAll(string $sql, array $params = [], int $limit = 100, int $offset = 0): array
+    public function fetchAll(string $sql, array $params = [], int $limit = 0, int $offset = 0): array
     {
         return $this->fetch($sql, $params, $limit, $offset)->records;
     }

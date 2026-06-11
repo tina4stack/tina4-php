@@ -109,4 +109,62 @@ class SqlNormalizerTest extends TestCase
             unlink($tmpFile);
         }
     }
+
+    // ── v3.13.12: fetchAll returns ALL rows by default ────────────────
+
+    /**
+     * Seed a 150-row SQLite DB through Database::create and return [Database, tmpFile].
+     *
+     * @return array{0: \Tina4\Database\Database, 1: string}
+     */
+    private function seedBigDb(): array
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'tina4_fetch_all_') . '.db';
+        $db = \Tina4\Database\Database::create('sqlite:///' . $tmpFile);
+        $db->execute('CREATE TABLE rows (id INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER)');
+        for ($i = 0; $i < 150; $i++) {
+            $db->execute('INSERT INTO rows (n) VALUES (?)', [$i]);
+        }
+        return [$db, $tmpFile];
+    }
+
+    public function testFetchAllReturnsAllRowsByDefault(): void
+    {
+        [$db, $tmpFile] = $this->seedBigDb();
+        try {
+            // Pre-v3.13.12: silently truncated to 100. v3.13.12: returns all 150.
+            $rows = $db->fetchAll('SELECT * FROM rows ORDER BY n');
+            $this->assertCount(
+                150,
+                $rows,
+                'fetchAll must return ALL rows by default (was silently truncated to 100 pre-v3.13.12)'
+            );
+        } finally {
+            unlink($tmpFile);
+        }
+    }
+
+    public function testFetchAllExplicitLimitStillCaps(): void
+    {
+        [$db, $tmpFile] = $this->seedBigDb();
+        try {
+            $rows = $db->fetchAll('SELECT * FROM rows ORDER BY n', [], 10);
+            $this->assertCount(10, $rows, 'Explicit limit must still cap');
+        } finally {
+            unlink($tmpFile);
+        }
+    }
+
+    public function testFetchDefaultStillPaginatesTo100(): void
+    {
+        [$db, $tmpFile] = $this->seedBigDb();
+        try {
+            // fetch() (paginated sibling) keeps its 100-row default — only fetchAll changed.
+            $result = $db->fetch('SELECT * FROM rows ORDER BY n');
+            $this->assertCount(100, $result->records, 'fetch() default page size unchanged');
+            $this->assertSame(150, $result->count, 'count still reflects the whole set');
+        } finally {
+            unlink($tmpFile);
+        }
+    }
 }

@@ -174,10 +174,16 @@ class FirebirdAdapter implements DatabaseAdapter
             $countResult = $this->query($countSql, $params);
             $total = (int)($countResult[0]['TOTAL'] ?? $countResult[0]['total'] ?? 0);
 
-            // Firebird pagination: ROWS X TO Y (1-based)
-            $startRow = $offset + 1;
-            $endRow = $offset + $limit;
-            $pagedSql = "{$sql} ROWS {$startRow} TO {$endRow}";
+            // Firebird pagination: ROWS X TO Y (1-based).
+            // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
+            // default — give me ALL rows).
+            if ($limit <= 0) {
+                $pagedSql = $sql;
+            } else {
+                $startRow = $offset + 1;
+                $endRow = $offset + $limit;
+                $pagedSql = "{$sql} ROWS {$startRow} TO {$endRow}";
+            }
             $data = $this->query($pagedSql, $params);
 
             return [
