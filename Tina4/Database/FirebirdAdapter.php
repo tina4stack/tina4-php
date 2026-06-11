@@ -21,6 +21,8 @@ namespace Tina4\Database;
  */
 class FirebirdAdapter implements DatabaseAdapter
 {
+    use SqlNormalizerTrait;
+
     /** @var resource|null */
     private mixed $db = null;
     /** @var resource|null Active transaction handle */
@@ -163,6 +165,8 @@ class FirebirdAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        // v3.13.12: strip trailing `;` before COUNT(*) wrap + ROWS pagination.
+        $sql = self::stripTrailingSemicolons($sql);
 
         try {
             // Count total
@@ -195,6 +199,7 @@ class FirebirdAdapter implements DatabaseAdapter
 
     public function fetchOne(string $sql, array $params = []): ?array
     {
+        $sql = self::stripTrailingSemicolons($sql);
         $rows = $this->query($sql, $params);
         return $rows[0] ?? null;
     }

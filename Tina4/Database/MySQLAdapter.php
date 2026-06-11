@@ -14,6 +14,8 @@ namespace Tina4\Database;
  */
 class MySQLAdapter implements DatabaseAdapter
 {
+    use SqlNormalizerTrait;
+
     private ?\mysqli $db = null;
     private ?string $lastError = null;
     private bool $autoCommit;
@@ -147,6 +149,8 @@ class MySQLAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
+        $sql = self::stripTrailingSemicolons($sql);
 
         try {
             $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
@@ -175,6 +179,7 @@ class MySQLAdapter implements DatabaseAdapter
 
     public function fetchOne(string $sql, array $params = []): ?array
     {
+        $sql = self::stripTrailingSemicolons($sql);
         $rows = $this->query($sql, $params);
         return $rows[0] ?? null;
     }

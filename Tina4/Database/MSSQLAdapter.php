@@ -14,6 +14,8 @@ namespace Tina4\Database;
  */
 class MSSQLAdapter implements DatabaseAdapter
 {
+    use SqlNormalizerTrait;
+
     /** @var resource|null */
     private mixed $db = null;
     private ?string $lastError = null;
@@ -133,6 +135,8 @@ class MSSQLAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        // v3.13.12: strip trailing `;` before COUNT(*) wrap + OFFSET/FETCH append.
+        $sql = self::stripTrailingSemicolons($sql);
 
         try {
             // Count total
@@ -169,6 +173,7 @@ class MSSQLAdapter implements DatabaseAdapter
 
     public function fetchOne(string $sql, array $params = []): ?array
     {
+        $sql = self::stripTrailingSemicolons($sql);
         $rows = $this->query($sql, $params);
         return $rows[0] ?? null;
     }
