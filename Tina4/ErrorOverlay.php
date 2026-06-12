@@ -121,7 +121,7 @@ class ErrorOverlay
             ['Platform', PHP_OS],
             ['SAPI', PHP_SAPI],
             ['Debug', getenv('TINA4_DEBUG') ?: ($_ENV['TINA4_DEBUG'] ?? 'false')],
-            ['Log Level', getenv('TINA4_LOG_LEVEL') ?: ($_ENV['TINA4_LOG_LEVEL'] ?? 'ERROR')],
+            ['Log Level', getenv('TINA4_LOG_LEVEL') ?: ($_ENV['TINA4_LOG_LEVEL'] ?? 'INFO')],
         ];
         $envSection = self::collapsible('Environment', self::table($envPairs));
 

@@ -286,8 +286,12 @@ class EnvVarTest extends TestCase
 
     public function testTina4LogOutputDefault(): void
     {
+        // v3.13.14: stdout is ON by default even in production — containers
+        // read PID 1 stdout (docker logs / k8s). File output stays on too,
+        // so the default is effectively "both". Pre-v3.13.14 production
+        // defaulted to file-only, which is why deployed apps got no logs.
         Log::configure(logDir: $this->tempDir, development: false);
-        $this->assertFalse(Log::stdoutEnabled());
+        $this->assertTrue(Log::stdoutEnabled());
         $this->assertTrue(Log::fileOutputEnabled());
     }
 

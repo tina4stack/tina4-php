@@ -93,7 +93,7 @@ class Log
     public static function configure(
         string $logDir = 'logs',
         bool $development = false,
-        string $minLevel = self::LEVEL_DEBUG,
+        string $minLevel = self::LEVEL_INFO,
     ): void {
         // Directory: env override > caller arg
         $envDir = DotEnv::getEnv('TINA4_LOG_DIR');
@@ -114,6 +114,14 @@ class Log
         }
 
         self::$minLevel = strtoupper($minLevel);
+        // v3.13.14: TINA4_LOG_LEVEL env overrides the caller arg (parity with
+        // Python/Ruby/Node, which all read the env). Default is now INFO (was
+        // effectively DEBUG) so deployed apps surface request/startup/warn/error
+        // without debug noise.
+        $envLevel = strtoupper((string) (DotEnv::getEnv('TINA4_LOG_LEVEL') ?? ''));
+        if ($envLevel !== '' && isset(self::LEVEL_PRIORITY[$envLevel])) {
+            self::$minLevel = $envLevel;
+        }
 
         // Format: env > development flag default
         $envFormat = strtolower((string) (DotEnv::getEnv('TINA4_LOG_FORMAT') ?? ''));
@@ -141,7 +149,11 @@ class Log
                 self::$fileOutput = true;
                 break;
             default:
-                self::$stdout = $development;
+                // v3.13.14: stdout is ON by default (was: only in dev). Containers
+                // read PID 1 stdout (docker logs / k8s); the old dev-only default
+                // meant deployed apps logged to a file inside the container that
+                // nobody could see. TINA4_LOG_OUTPUT=file still opts out.
+                self::$stdout = true;
                 self::$fileOutput = true;
                 break;
         }
@@ -418,8 +430,10 @@ class Log
             self::LEVEL_ERROR => "\033[31m",   // Red
         ];
 
-        $reset = "\033[0m";
-        $color = $colors[$level] ?? '';
+        // v3.13.14: only colourise in human-readable (dev) mode. In production
+        // the line is JSON — ANSI codes would corrupt it for log aggregators.
+        $color = self::$humanReadable ? ($colors[$level] ?? '') : '';
+        $reset = self::$humanReadable ? "\033[0m" : '';
 
         if (defined('STDOUT')) {
             $stdout = \STDOUT;
@@ -429,6 +443,11 @@ class Log
 
         if (is_resource($stdout)) {
             @fwrite($stdout, $color . $line . $reset);
+            // v3.13.14: flush so logs appear immediately under the long-running
+            // built-in server (stream_socket_server) instead of sitting in the
+            // stream's userspace buffer — otherwise `docker logs` lags or, on an
+            // abrupt stop, loses the tail.
+            @fflush($stdout);
         } else {
             // Fallback: use error_log when stdout isn't available
             error_log(strip_tags($line));

@@ -587,4 +587,72 @@ class LogTest extends TestCase
         $this->assertSame(__FUNCTION__, $decoded['function']);
         $this->assertSame('end to end', $decoded['message']);
     }
+
+    // ── v3.13.14: stdout-on-by-default + INFO default (Docker logs) ──────
+    // The built-in server runs as PID 1 in a container; docker logs / k8s
+    // read PID 1 stdout. Pre-v3.13.14 production set $stdout=false (file
+    // only) and there was no TINA4_LOG_LEVEL env read, so deployed apps
+    // "weren't getting logs". fwrite(STDOUT) bypasses PHPUnit's output
+    // buffer, so we assert the behavioural flags via reflection.
+
+    private function logProp(string $name): mixed
+    {
+        $ref = new ReflectionProperty(Log::class, $name);
+        $ref->setAccessible(true);
+        return $ref->getValue();
+    }
+
+    public function testStdoutEnabledInProduction(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, development: false);
+        $this->assertTrue(
+            $this->logProp('stdout'),
+            'production must log to stdout (docker logs reads PID 1 stdout)'
+        );
+    }
+
+    public function testDefaultMinLevelIsInfo(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir);
+        $this->assertSame(
+            Log::LEVEL_INFO,
+            $this->logProp('minLevel'),
+            'default level is INFO (parity with Python/Ruby/Node)'
+        );
+    }
+
+    public function testLogLevelEnvOverridesDefault(): void
+    {
+        unset($_ENV['TINA4_LOG_LEVEL']);
+        @putenv('TINA4_LOG_LEVEL=ERROR');
+        $_ENV['TINA4_LOG_LEVEL'] = 'ERROR';
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir);
+            $this->assertSame(Log::LEVEL_ERROR, $this->logProp('minLevel'));
+        } finally {
+            unset($_ENV['TINA4_LOG_LEVEL']);
+            @putenv('TINA4_LOG_LEVEL');
+        }
+    }
+
+    public function testOutputFileKeepsStdoutSilent(): void
+    {
+        unset($_ENV['TINA4_LOG_OUTPUT']);
+        @putenv('TINA4_LOG_OUTPUT=file');
+        $_ENV['TINA4_LOG_OUTPUT'] = 'file';
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, development: false);
+            $this->assertFalse(
+                $this->logProp('stdout'),
+                'TINA4_LOG_OUTPUT=file must opt out of stdout'
+            );
+        } finally {
+            unset($_ENV['TINA4_LOG_OUTPUT']);
+            @putenv('TINA4_LOG_OUTPUT');
+        }
+    }
 }
