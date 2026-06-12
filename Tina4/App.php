@@ -109,7 +109,15 @@ class App
         $msg = implode("\n", $lines);
 
         if ($exit) {
-            fwrite(STDERR, $msg);
+            // v3.13.14 (#119): the STDERR constant is only auto-defined for the
+            // `cli` SAPI — NOT for `cli-server` (the built-in dev server) or
+            // some FPM setups. In `namespace Tina4` a bare `STDERR` resolves to
+            // `Tina4\STDERR` then the global `\STDERR`; when neither exists the
+            // legacy-env guard died with "Undefined constant Tina4\STDERR",
+            // masking the actionable migration message. Use the php://stderr
+            // stream, which every SAPI provides.
+            $stderr = defined('STDERR') ? \STDERR : fopen('php://stderr', 'wb');
+            fwrite($stderr, $msg);
             exit(2);
         }
         throw new \RuntimeException($msg);

@@ -824,7 +824,14 @@ class McpDevTools
                 // logging must never fail the actual call
             }
             // Mirror to stderr so the supervisor can see it in the live log.
-            @fwrite(STDERR, "  [agent {$category}] {$message}\n");
+            // v3.13.14 (#119, same class): STDERR isn't defined under cli-server
+            // — and a bare `STDERR` in `namespace Tina4` fatals with "Undefined
+            // constant Tina4\STDERR" (the `@` does NOT suppress that fatal in
+            // PHP 8). Use the php://stderr stream, available in every SAPI.
+            $stderr = defined('STDERR') ? \STDERR : @fopen('php://stderr', 'wb');
+            if ($stderr) {
+                @fwrite($stderr, "  [agent {$category}] {$message}\n");
+            }
         };
 
         // Returns an error string if the path looks like prose rather

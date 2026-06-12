@@ -274,4 +274,85 @@ class LegacyEnvGuardTest extends TestCase
             );
         }
     }
+
+    // ── #119: the exit branch must not crash under cli-server ────────────
+    // STDERR is only auto-defined for the `cli` SAPI. Under `cli-server`
+    // (the built-in dev server) a bare `STDERR` in namespace Tina4 fataled
+    // with "Undefined constant Tina4\STDERR", masking the migration message.
+    // PHPUnit runs under `cli` (STDERR defined), so this reproduces the real
+    // SAPI by booting an actual `php -S` subprocess and reading its stderr.
+
+    public function testExitBranchWritesMigrationMessageUnderCliServer(): void
+    {
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        if ($autoload === false) {
+            $this->markTestSkipped('vendor/autoload.php not found');
+        }
+
+        $router = tempnam(sys_get_temp_dir(), 'tina4_119_') . '.php';
+        file_put_contents($router, <<<PHP
+        <?php
+        require '{$autoload}';
+        putenv('SMTP_HOST=smtp.example.com');
+        \$_ENV['SMTP_HOST'] = 'smtp.example.com';
+        \\Tina4\\App::checkLegacyEnvVars(true); // writes migration msg + exit(2)
+        echo 'REACHED_AFTER_GUARD'; // must never run
+        PHP);
+
+        $port = 7100 + (getmypid() % 800);
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'], // capture the server's stderr
+        ];
+        $proc = @proc_open(
+            [PHP_BINARY, '-S', "127.0.0.1:{$port}", $router],
+            $descriptors,
+            $pipes
+        );
+        if (!is_resource($proc)) {
+            @unlink($router);
+            $this->markTestSkipped('could not start php -S');
+        }
+        stream_set_blocking($pipes[2], false);
+
+        try {
+            // Wait for the dev server to accept connections.
+            $up = false;
+            for ($i = 0; $i < 50; $i++) {
+                $c = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.1);
+                if ($c) { fclose($c); $up = true; break; }
+                usleep(100000);
+            }
+            if (!$up) {
+                $this->markTestSkipped("dev server did not come up on :{$port}");
+            }
+
+            // One request triggers the boot guard.
+            $body = @file_get_contents("http://127.0.0.1:{$port}/");
+            usleep(200000); // let the server flush stderr
+
+            $stderr = stream_get_contents($pipes[2]);
+
+            // The actionable migration message must reach stderr...
+            $this->assertStringContainsString('TINA4_', $stderr, 'migration message should reach stderr');
+            // ...and the bug must be gone.
+            $this->assertStringNotContainsString(
+                'Undefined constant',
+                $stderr,
+                '#119: bare STDERR must not fatal under cli-server'
+            );
+            // The guard exits before the trailing echo.
+            $this->assertNotSame('REACHED_AFTER_GUARD', (string) $body);
+        } finally {
+            foreach ($pipes as $p) {
+                if (is_resource($p)) {
+                    fclose($p);
+                }
+            }
+            proc_terminate($proc);
+            proc_close($proc);
+            @unlink($router);
+        }
+    }
 }
