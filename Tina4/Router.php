@@ -458,6 +458,9 @@ class Router
      */
     public static function dispatch(Request $request, Response $response): Response
     {
+        // v3.13.14: stamp the request start so we can log elapsed time below.
+        $reqStart = microtime(true);
+
         // Start PHP's native session so $_SESSION writes persist across
         // requests on every SAPI — Apache + PHP-FPM, FastCGI, CGI,
         // command-line — not just on the built-in dev server.
@@ -570,7 +573,33 @@ class Router
             }
         }
 
+        // Request log line (v3.13.14). On by default in dev (so `tina4 serve`
+        // shows request activity on stdout), opt-in in production via
+        // TINA4_LOG_REQUESTS. Routed through Tina4\Log so it lands on stdout
+        // like every other log. Same format across all four frameworks.
+        if (self::requestLoggingEnabled()) {
+            $elapsed = round((microtime(true) - $reqStart) * 1000, 3);
+            $status = $result->getStatusCode();
+            Log::info("{$request->method} {$request->path} -> {$status} ({$elapsed}ms)");
+        }
+
         return $result;
+    }
+
+    /**
+     * Whether to emit a per-request log line (v3.13.14).
+     *
+     * TINA4_LOG_REQUESTS is the explicit control (true/false). When unset,
+     * request logging follows dev mode: on under TINA4_DEBUG, off in
+     * production. Same contract across all four frameworks.
+     */
+    private static function requestLoggingEnabled(): bool
+    {
+        $val = DotEnv::getEnv('TINA4_LOG_REQUESTS');
+        if ($val !== null && $val !== '') {
+            return DotEnv::isTruthy($val);
+        }
+        return DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
     }
 
     /**

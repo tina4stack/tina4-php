@@ -44,8 +44,9 @@ class RequestLogger
     /**
      * Log the request after the route handler has completed.
      *
-     * Outputs a single info-level line:
-     *   GET /api/users 12.34ms
+     * Outputs a single info-level line (v3.13.14 — now includes the
+     * status code for parity with Python/Ruby/Node):
+     *   GET /api/users -> 200 (12.34ms)
      *
      * @param Request $request
      * @param Response $response
@@ -57,8 +58,9 @@ class RequestLogger
         $startTime = self::$startTimes[$key] ?? microtime(true);
         unset(self::$startTimes[$key]);
 
-        $elapsed = round((microtime(true) - $startTime) * 1000, 2);
-        Log::info("{$request->method} {$request->path} {$elapsed}ms");
+        $elapsed = round((microtime(true) - $startTime) * 1000, 3);
+        $status = $response->getStatusCode();
+        Log::info("{$request->method} {$request->path} -> {$status} ({$elapsed}ms)");
         return [$request, $response];
     }
 
