@@ -340,16 +340,35 @@ class SQLite3Adapter implements DatabaseAdapter
 
     public function tableExists(string $table): bool
     {
-        $rows = $this->query(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name = :name",
-            [':name' => $table]
-        );
+        // v3.13.14 (#48): honour an attached-database prefix ("attached.table").
+        // SQLite's "schema" is an ATTACH alias with its own sqlite_master.
+        [$schema, $tbl] = self::splitSchema($table);
+        if ($schema !== null && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $schema)) {
+            $rows = $this->query(
+                "SELECT name FROM {$schema}.sqlite_master WHERE type='table' AND name = :name",
+                [':name' => $tbl]
+            );
+        } else {
+            $rows = $this->query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = :name",
+                [':name' => $table]
+            );
+        }
         return count($rows) > 0;
     }
 
     public function getColumns(string $table): array
     {
-        $rows = $this->query("PRAGMA table_info('{$table}')");
+        // v3.13.14 (#48): honour an attached-database prefix via
+        // PRAGMA <schema>.table_info(<table>).
+        [$schema, $tbl] = self::splitSchema($table);
+        if ($schema !== null
+            && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $schema)
+            && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $tbl)) {
+            $rows = $this->query("PRAGMA {$schema}.table_info('{$tbl}')");
+        } else {
+            $rows = $this->query("PRAGMA table_info('{$table}')");
+        }
         $columns = [];
 
         foreach ($rows as $row) {

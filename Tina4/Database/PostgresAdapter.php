@@ -14,6 +14,12 @@ namespace Tina4\Database;
  */
 class PostgresAdapter implements DatabaseAdapter
 {
+    // Provides stripTrailingSemicolons() (v3.13.12) and splitSchema() (v3.13.14 #48).
+    // This adapter referenced both helpers but never mixed the trait in, so every
+    // fetch()/fetchOne()/getColumns() fatalled on PostgreSQL — undetected because
+    // the PG test suite skips without a live server.
+    use SqlNormalizerTrait;
+
     /** @var \PgSql\Connection|resource|null */
     private mixed $db = null;
     private ?string $lastError = null;
@@ -390,26 +396,32 @@ class PostgresAdapter implements DatabaseAdapter
 
     public function tableExists(string $table): bool
     {
-        $rows = $this->query(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = $1",
-            [$table]
-        );
-        return count($rows) > 0;
+        // v3.13.14 (#48): to_regclass() resolves a (possibly schema-qualified)
+        // relation name using the same rules as a FROM clause (search_path
+        // included), returning NULL if absent. Pre-fix this hardcoded
+        // schemaname='public' and matched the whole dotted string as a flat
+        // tablename, so a table in a non-public schema was invisible.
+        $rows = $this->query("SELECT to_regclass($1) AS oid", [$table]);
+        return count($rows) > 0 && ($rows[0]['oid'] ?? null) !== null;
     }
 
     public function getColumns(string $table): array
     {
+        // v3.13.14 (#48): honour a schema-qualified name; default to public.
+        [$schema, $tbl] = self::splitSchema($table);
+        $schema = $schema ?? 'public';
         $sql = "SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
                     CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN true ELSE false END AS is_primary
                 FROM information_schema.columns c
                 LEFT JOIN information_schema.key_column_usage kcu
                     ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name
+                    AND c.table_schema = kcu.table_schema
                 LEFT JOIN information_schema.table_constraints tc
                     ON kcu.constraint_name = tc.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
-                WHERE c.table_name = $1
+                WHERE c.table_name = $1 AND c.table_schema = $2
                 ORDER BY c.ordinal_position";
 
-        $rows = $this->query($sql, [$table]);
+        $rows = $this->query($sql, [$tbl, $schema]);
         $columns = [];
 
         foreach ($rows as $row) {
@@ -427,8 +439,20 @@ class PostgresAdapter implements DatabaseAdapter
 
     public function getTables(): array
     {
-        $rows = $this->query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename");
-        return array_column($rows, 'tablename');
+        // v3.13.14 (#48): list every user schema; public tables stay bare,
+        // others are returned schema-qualified so they round-trip back through
+        // tableExists()/getColumns().
+        $rows = $this->query(
+            "SELECT schemaname, tablename FROM pg_tables
+             WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+             ORDER BY schemaname, tablename"
+        );
+        return array_map(
+            fn($r) => $r['schemaname'] === 'public'
+                ? $r['tablename']
+                : $r['schemaname'] . '.' . $r['tablename'],
+            $rows
+        );
     }
 
     public function lastInsertId(): int|string

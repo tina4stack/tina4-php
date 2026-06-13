@@ -318,28 +318,35 @@ class MSSQLAdapter implements DatabaseAdapter
 
     public function tableExists(string $table): bool
     {
+        // v3.13.14 (#48): honour a schema-qualified name ("dbo.widget"); a
+        // bare name matches in any schema (unchanged). Schemas are everyday
+        // in SQL Server, and pre-fix any qualified table_name was invisible.
+        [$schema, $tbl] = self::splitSchema($table);
         $rows = $this->query(
-            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = ?",
-            [$table]
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = ? AND (? IS NULL OR TABLE_SCHEMA = ?)",
+            [$tbl, $schema, $schema]
         );
         return count($rows) > 0;
     }
 
     public function getColumns(string $table): array
     {
+        // v3.13.14 (#48): honour a schema-qualified name; bare = any schema.
+        [$schema, $tbl] = self::splitSchema($table);
         $sql = "SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE, c.COLUMN_DEFAULT,
                     CASE WHEN kcu.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END AS is_primary
                 FROM INFORMATION_SCHEMA.COLUMNS c
                 LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
                     ON c.TABLE_NAME = kcu.TABLE_NAME AND c.COLUMN_NAME = kcu.COLUMN_NAME
+                    AND c.TABLE_SCHEMA = kcu.TABLE_SCHEMA
                     AND kcu.CONSTRAINT_NAME IN (
                         SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
                         WHERE CONSTRAINT_TYPE = 'PRIMARY KEY' AND TABLE_NAME = c.TABLE_NAME
                     )
-                WHERE c.TABLE_NAME = ?
+                WHERE c.TABLE_NAME = ? AND (? IS NULL OR c.TABLE_SCHEMA = ?)
                 ORDER BY c.ORDINAL_POSITION";
 
-        $rows = $this->query($sql, [$table]);
+        $rows = $this->query($sql, [$tbl, $schema, $schema]);
         $columns = [];
 
         foreach ($rows as $row) {

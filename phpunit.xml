@@ -78,6 +78,7 @@
             <file>tests/ServerLargeResponseTest.php</file>
             <file>tests/RequestLoggingTest.php</file>
             <file>tests/LegacyEnvGuardTest.php</file>
+            <file>tests/SchemaQualifiedTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>

@@ -291,9 +291,12 @@ class MySQLAdapter implements DatabaseAdapter
 
     public function tableExists(string $table): bool
     {
+        // v3.13.14 (#48): honour a database-qualified name ("otherdb.table");
+        // default to the connected database. In MySQL "schema" == database.
+        [$schema, $tbl] = self::splitSchema($table);
         $rows = $this->query(
-            "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
-            [$table]
+            "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = COALESCE(?, DATABASE()) AND TABLE_NAME = ?",
+            [$schema, $tbl]
         );
         return count($rows) > 0;
     }
