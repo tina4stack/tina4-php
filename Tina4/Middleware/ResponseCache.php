@@ -744,55 +744,6 @@ class ResponseCache
 }
 
 // ── Module-level convenience functions ──────────────────────────
-
-/**
- * Get a default cache instance (lazy singleton).
- */
-function cache_instance(): ResponseCache
-{
-    static $instance = null;
-    if ($instance === null) {
-        $instance = new ResponseCache();
-    }
-    return $instance;
-}
-
-/**
- * Get a value from the cache by key.
- */
-function cache_get(string $key): mixed
-{
-    return cache_instance()->_internalGet($key);
-}
-
-/**
- * Store a value in the cache with optional TTL.
- */
-function cache_set(string $key, mixed $value, int $ttl = 0): void
-{
-    cache_instance()->_internalSet($key, $value, $ttl);
-}
-
-/**
- * Delete a key from the cache.
- */
-function cache_delete(string $key): bool
-{
-    return cache_instance()->_internalDelete($key);
-}
-
-/**
- * Clear all entries from the cache.
- */
-function cache_clear(): void
-{
-    cache_instance()->clear();
-}
-
-/**
- * Return cache statistics.
- */
-function cache_stats(): array
-{
-    return cache_instance()->getStats();
-}
+// The namespace-level cache_instance()/cache_get()/cache_set()/cache_delete()/
+// cache_clear()/cache_stats() helpers live in CacheFunctions.php so they are
+// available via composer `files` autoload without first touching this class.
