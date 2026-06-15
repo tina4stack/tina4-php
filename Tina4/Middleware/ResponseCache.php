@@ -17,31 +17,36 @@
  * (beforeCache, afterCache) and is NOT exposed publicly. Use the middleware
  * by attaching ResponseCache to your route, not by calling lookup/store directly.
  *
- * Backends are selected via the TINA4_CACHE_BACKEND env var:
- *   memory — in-process array cache (default, zero deps)
- *   redis  — Redis / Valkey (uses ext-redis or raw RESP over TCP)
- *   file   — JSON files in data/cache/
+ * Backends are selected via the TINA4_CACHE_BACKEND env var and built by the
+ * unified \Tina4\Cache\CacheFactory:
+ *   memory    — in-process array cache (default, zero deps)
+ *   file      — JSON files in data/cache/
+ *   redis     — Redis (ext-redis or raw RESP over TCP)
+ *   valkey    — Valkey (Redis wire-protocol; reuses the redis transport)
+ *   memcached — Memcached (zero-dep text protocol over a socket)
+ *   mongodb   — MongoDB TTL collection
+ *   database  — tina4_cache table in any Tina4-supported database
  *
- * Environment variables:
- *   TINA4_CACHE_BACKEND      — memory | redis | file  (default: memory)
- *   TINA4_CACHE_URL           — redis://localhost:6379  (redis only)
+ * When a configured network/driver backend is unreachable, the factory logs a
+ * warning and falls back to the FILE backend (a real cache, not a no-op).
+ *
+ * Environment variables (LOCKED scheme, parity with Python):
+ *   TINA4_CACHE_BACKEND      — memory|file|redis|valkey|memcached|mongodb|database
+ *   TINA4_CACHE_URL           — connection for redis/valkey/memcached/mongo, OR a
+ *                               SQL URL for database (falls back to TINA4_DATABASE_URL)
  *   TINA4_CACHE_TTL           — default TTL in seconds  (default: 60, 0 = disabled)
  *   TINA4_CACHE_MAX_ENTRIES   — maximum cache entries   (default: 1000)
+ *   TINA4_CACHE_DIR           — file backend directory  (default: data/cache)
+ *   TINA4_CACHE_USERNAME / TINA4_CACHE_PASSWORD — redis/valkey/mongo credentials
  */
 
 namespace Tina4\Middleware;
 
+use Tina4\Cache\CacheBackend;
+use Tina4\Cache\CacheFactory;
+
 class ResponseCache
 {
-    // ── Backend interface constants ──────────────────────────────
-
-    private const BACKEND_MEMORY = 'memory';
-    private const BACKEND_REDIS = 'redis';
-    private const BACKEND_FILE = 'file';
-
-    /** @var array<string, array{body: string, contentType: string, statusCode: int, expiresAt: float}> */
-    private static array $memoryStore = [];
-
     /** @var int Default TTL in seconds */
     private int $ttl;
 
@@ -54,14 +59,14 @@ class ResponseCache
     /** @var string Active backend name */
     private string $backend;
 
-    /** @var string Redis URL */
-    private string $redisUrl;
+    /** @var string Connection URL (redis/valkey/memcached/mongo or SQL for database) */
+    private string $cacheUrl;
 
     /** @var string File cache directory */
     private string $cacheDir;
 
-    /** @var \Redis|null Redis extension client */
-    private ?\Redis $redisClient = null;
+    /** @var CacheBackend The unified pluggable backend */
+    private CacheBackend $backendImpl;
 
     /** @var int Hit counter */
     private static int $hits = 0;
@@ -74,8 +79,8 @@ class ResponseCache
      *   'ttl'         => int    Default TTL in seconds (default: 60)
      *   'maxEntries'  => int    Maximum cache entries (default: 1000)
      *   'statusCodes' => int[]  Status codes to cache (default: [200])
-     *   'backend'     => string Cache backend: memory|redis|file
-     *   'cacheUrl'    => string Redis URL
+     *   'backend'     => string Cache backend (memory|file|redis|valkey|memcached|mongodb|database)
+     *   'cacheUrl'    => string Connection URL
      *   'cacheDir'    => string File cache directory
      */
     public function __construct(array $config = [])
@@ -89,52 +94,21 @@ class ResponseCache
         $this->ttl = $config['ttl'] ?? ($envTtl !== false ? (int)$envTtl : 60);
         $this->maxEntries = $config['maxEntries'] ?? ($envMax !== false ? (int)$envMax : 1000);
         $this->statusCodes = $config['statusCodes'] ?? [200];
-        $this->backend = $config['backend'] ?? ($envBackend !== false ? strtolower(trim($envBackend)) : self::BACKEND_MEMORY);
-        $this->redisUrl = $config['cacheUrl'] ?? ($envUrl !== false ? $envUrl : 'redis://localhost:6379');
+        $this->backend = $config['backend'] ?? ($envBackend !== false ? strtolower(trim($envBackend)) : 'memory');
+        $this->cacheUrl = $config['cacheUrl'] ?? ($envUrl !== false ? $envUrl : '');
         $this->cacheDir = $config['cacheDir'] ?? ($envDir !== false ? $envDir : 'data/cache');
 
-        // Initialize backend
-        if ($this->backend === self::BACKEND_REDIS) {
-            $this->initRedis();
-        } elseif ($this->backend === self::BACKEND_FILE) {
-            $this->initFileDir();
-        }
-    }
-
-    // ── Backend initialization ───────────────────────────────────
-
-    private function initRedis(): void
-    {
-        if (extension_loaded('redis')) {
-            try {
-                $parsed = $this->parseRedisUrl($this->redisUrl);
-                $this->redisClient = new \Redis();
-                $this->redisClient->connect($parsed['host'], $parsed['port'], 5.0);
-                if ($parsed['db'] > 0) {
-                    $this->redisClient->select($parsed['db']);
-                }
-            } catch (\Exception $e) {
-                $this->redisClient = null;
-            }
-        }
-    }
-
-    private function parseRedisUrl(string $url): array
-    {
-        $cleaned = str_replace('redis://', '', $url);
-        $parts = explode(':', $cleaned);
-        $host = $parts[0] ?: 'localhost';
-        $portAndDb = isset($parts[1]) ? explode('/', $parts[1]) : ['6379'];
-        $port = (int)($portAndDb[0] ?: 6379);
-        $db = isset($portAndDb[1]) ? (int)$portAndDb[1] : 0;
-        return ['host' => $host, 'port' => $port, 'db' => $db];
-    }
-
-    private function initFileDir(): void
-    {
-        if (!is_dir($this->cacheDir)) {
-            @mkdir($this->cacheDir, 0755, true);
-        }
+        // Build the unified backend. The factory handles availability probing
+        // and graceful file-fallback, and reports the real backend name (so a
+        // redis backend that fell back will report "file").
+        $this->backendImpl = CacheFactory::create(
+            backend: $this->backend,
+            url: $this->cacheUrl !== '' ? $this->cacheUrl : null,
+            maxEntries: $this->maxEntries,
+            cacheDir: $this->cacheDir,
+        );
+        // Reflect the actual backend chosen (post-fallback).
+        $this->backend = $this->backendImpl->name();
     }
 
     // ── Middleware hooks ─────────────────────────────────────────
@@ -209,7 +183,7 @@ class ResponseCache
             'statusCode' => $statusCode,
             'expiresAt' => microtime(true) + $this->ttl,
         ];
-        $this->backendSet($cacheKey, $entry, $this->ttl);
+        $this->backendImpl->set($cacheKey, $entry, $this->ttl);
 
         return [$request, $response];
     }
@@ -230,24 +204,24 @@ class ResponseCache
         }
 
         $key = $this->cacheKey($method, $url);
-        $entry = $this->backendGet($key);
+        $entry = $this->backendImpl->get($key);
 
-        if ($entry === null) {
+        if (!is_array($entry)) {
             self::$misses++;
             return null;
         }
 
-        if (microtime(true) > $entry['expiresAt']) {
-            $this->backendDelete($key);
+        if (isset($entry['expiresAt']) && microtime(true) > $entry['expiresAt']) {
+            $this->backendImpl->delete($key);
             self::$misses++;
             return null;
         }
 
         self::$hits++;
         return [
-            'body' => $entry['body'],
-            'contentType' => $entry['contentType'],
-            'statusCode' => $entry['statusCode'],
+            'body' => $entry['body'] ?? '',
+            'contentType' => $entry['contentType'] ?? 'application/json',
+            'statusCode' => $entry['statusCode'] ?? 200,
         ];
     }
 
@@ -276,7 +250,7 @@ class ResponseCache
             'expiresAt' => microtime(true) + $this->ttl,
         ];
 
-        $this->backendSet($key, $entry, $this->ttl);
+        $this->backendImpl->set($key, $entry, $this->ttl);
     }
 
     // ── Internal direct KV (used by namespace-level cache_get/set/delete) ──
@@ -286,18 +260,18 @@ class ResponseCache
      */
     private function internalGet(string $key): mixed
     {
-        $entry = $this->backendGet('direct:' . $key);
-        if ($entry === null) {
+        $entry = $this->backendImpl->get('direct:' . $key);
+        if (!is_array($entry)) {
             self::$misses++;
             return null;
         }
         if (isset($entry['expiresAt']) && microtime(true) > $entry['expiresAt']) {
-            $this->backendDelete('direct:' . $key);
+            $this->backendImpl->delete('direct:' . $key);
             self::$misses++;
             return null;
         }
         self::$hits++;
-        return $entry['value'] ?? $entry;
+        return $entry['value'] ?? null;
     }
 
     /**
@@ -308,9 +282,9 @@ class ResponseCache
         $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
         $entry = [
             'value' => $value,
-            'expiresAt' => $effectiveTtl > 0 ? microtime(true) + $effectiveTtl : PHP_FLOAT_MAX,
+            'expiresAt' => $effectiveTtl > 0 ? microtime(true) + $effectiveTtl : null,
         ];
-        $this->backendSet('direct:' . $key, $entry, $effectiveTtl);
+        $this->backendImpl->set('direct:' . $key, $entry, $effectiveTtl);
     }
 
     /**
@@ -318,229 +292,7 @@ class ResponseCache
      */
     private function internalDelete(string $key): bool
     {
-        return $this->backendDelete('direct:' . $key);
-    }
-
-    // ── Backend operations ───────────────────────────────────────
-
-    private function backendGet(string $key): ?array
-    {
-        switch ($this->backend) {
-            case self::BACKEND_REDIS:
-                return $this->redisGet($key);
-            case self::BACKEND_FILE:
-                return $this->fileGet($key);
-            default:
-                return self::$memoryStore[$key] ?? null;
-        }
-    }
-
-    private function backendSet(string $key, array $entry, int $ttl): void
-    {
-        switch ($this->backend) {
-            case self::BACKEND_REDIS:
-                $this->redisSet($key, $entry, $ttl);
-                break;
-            case self::BACKEND_FILE:
-                $this->fileSet($key, $entry, $ttl);
-                break;
-            default:
-                // Evict oldest if at capacity
-                if (count(self::$memoryStore) >= $this->maxEntries) {
-                    $firstKey = array_key_first(self::$memoryStore);
-                    if ($firstKey !== null) {
-                        unset(self::$memoryStore[$firstKey]);
-                    }
-                }
-                self::$memoryStore[$key] = $entry;
-                break;
-        }
-    }
-
-    private function backendDelete(string $key): bool
-    {
-        switch ($this->backend) {
-            case self::BACKEND_REDIS:
-                return $this->redisDelete($key);
-            case self::BACKEND_FILE:
-                return $this->fileDelete($key);
-            default:
-                if (isset(self::$memoryStore[$key])) {
-                    unset(self::$memoryStore[$key]);
-                    return true;
-                }
-                return false;
-        }
-    }
-
-    // ── Redis backend operations ─────────────────────────────────
-
-    private function redisGet(string $key): ?array
-    {
-        $fullKey = 'tina4:cache:' . $key;
-
-        if ($this->redisClient !== null) {
-            try {
-                $raw = $this->redisClient->get($fullKey);
-                if ($raw === false) {
-                    return null;
-                }
-                return json_decode($raw, true);
-            } catch (\Exception $e) {
-                return null;
-            }
-        }
-
-        // Fallback: raw RESP over TCP
-        return $this->respGet($fullKey);
-    }
-
-    private function redisSet(string $key, array $entry, int $ttl): void
-    {
-        $fullKey = 'tina4:cache:' . $key;
-        $serialized = json_encode($entry);
-
-        if ($this->redisClient !== null) {
-            try {
-                if ($ttl > 0) {
-                    $this->redisClient->setex($fullKey, $ttl, $serialized);
-                } else {
-                    $this->redisClient->set($fullKey, $serialized);
-                }
-            } catch (\Exception $e) {
-            }
-            return;
-        }
-
-        // Fallback: raw RESP
-        if ($ttl > 0) {
-            $this->respCommand('SETEX', $fullKey, (string)$ttl, $serialized);
-        } else {
-            $this->respCommand('SET', $fullKey, $serialized);
-        }
-    }
-
-    private function redisDelete(string $key): bool
-    {
-        $fullKey = 'tina4:cache:' . $key;
-
-        if ($this->redisClient !== null) {
-            try {
-                return $this->redisClient->del($fullKey) > 0;
-            } catch (\Exception $e) {
-                return false;
-            }
-        }
-
-        $result = $this->respCommand('DEL', $fullKey);
-        return $result === '1';
-    }
-
-    private function respGet(string $key): ?array
-    {
-        $result = $this->respCommand('GET', $key);
-        if ($result === null) {
-            return null;
-        }
-        $decoded = json_decode($result, true);
-        return is_array($decoded) ? $decoded : null;
-    }
-
-    private function respCommand(string ...$args): ?string
-    {
-        try {
-            $parsed = $this->parseRedisUrl($this->redisUrl);
-            $cmd = '*' . count($args) . "\r\n";
-            foreach ($args as $arg) {
-                $cmd .= '$' . strlen($arg) . "\r\n" . $arg . "\r\n";
-            }
-
-            $sock = @fsockopen($parsed['host'], $parsed['port'], $errno, $errstr, 5);
-            if (!$sock) {
-                return null;
-            }
-
-            if ($parsed['db'] > 0) {
-                $selectCmd = "*2\r\n\$6\r\nSELECT\r\n\$" . strlen((string)$parsed['db']) . "\r\n" . $parsed['db'] . "\r\n";
-                fwrite($sock, $selectCmd);
-                fread($sock, 1024);
-            }
-
-            fwrite($sock, $cmd);
-            $response = fread($sock, 65536);
-            fclose($sock);
-
-            if ($response === false) {
-                return null;
-            }
-
-            if (str_starts_with($response, '+')) {
-                return trim(substr($response, 1));
-            } elseif (str_starts_with($response, '$-1')) {
-                return null;
-            } elseif (str_starts_with($response, '$')) {
-                $lines = explode("\r\n", $response);
-                return $lines[1] ?? null;
-            } elseif (str_starts_with($response, ':')) {
-                return trim(substr($response, 1));
-            }
-
-            return null;
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    // ── File backend operations ──────────────────────────────────
-
-    private function fileKeyPath(string $key): string
-    {
-        return $this->cacheDir . '/' . hash('sha256', $key) . '.json';
-    }
-
-    private function fileGet(string $key): ?array
-    {
-        $path = $this->fileKeyPath($key);
-        if (!file_exists($path)) {
-            return null;
-        }
-        try {
-            $data = json_decode(file_get_contents($path), true);
-            if (!is_array($data)) {
-                return null;
-            }
-            if (isset($data['expiresAt']) && microtime(true) > $data['expiresAt']) {
-                @unlink($path);
-                return null;
-            }
-            return $data;
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    private function fileSet(string $key, array $entry, int $ttl): void
-    {
-        $this->initFileDir();
-
-        // Evict oldest if at capacity
-        $files = glob($this->cacheDir . '/*.json');
-        if ($files !== false && count($files) >= $this->maxEntries) {
-            usort($files, fn($a, $b) => filemtime($a) <=> filemtime($b));
-            @unlink($files[0]);
-        }
-
-        $path = $this->fileKeyPath($key);
-        @file_put_contents($path, json_encode($entry));
-    }
-
-    private function fileDelete(string $key): bool
-    {
-        $path = $this->fileKeyPath($key);
-        if (file_exists($path)) {
-            return @unlink($path);
-        }
-        return false;
+        return $this->backendImpl->delete('direct:' . $key);
     }
 
     // ── Public management methods ────────────────────────────────
@@ -552,38 +304,14 @@ class ResponseCache
      */
     public function getStats(): array
     {
-        $this->sweep();
-
-        $size = 0;
-        $keys = [];
-
-        switch ($this->backend) {
-            case self::BACKEND_REDIS:
-                if ($this->redisClient !== null) {
-                    try {
-                        $redisKeys = $this->redisClient->keys('tina4:cache:*');
-                        $size = count($redisKeys);
-                        $keys = $redisKeys;
-                    } catch (\Exception $e) {
-                    }
-                }
-                break;
-            case self::BACKEND_FILE:
-                $files = glob($this->cacheDir . '/*.json');
-                $size = $files !== false ? count($files) : 0;
-                break;
-            default:
-                $size = count(self::$memoryStore);
-                $keys = array_keys(self::$memoryStore);
-                break;
-        }
+        $stats = $this->backendImpl->stats();
 
         return [
             'hits' => self::$hits,
             'misses' => self::$misses,
-            'size' => $size,
-            'backend' => $this->backend,
-            'keys' => $keys,
+            'size' => $stats['size'] ?? 0,
+            'backend' => $stats['backend'] ?? $this->backend,
+            'keys' => [],
         ];
     }
 
@@ -594,78 +322,29 @@ class ResponseCache
     {
         self::$hits = 0;
         self::$misses = 0;
-
-        switch ($this->backend) {
-            case self::BACKEND_REDIS:
-                if ($this->redisClient !== null) {
-                    try {
-                        $keys = $this->redisClient->keys('tina4:cache:*');
-                        if (!empty($keys)) {
-                            $this->redisClient->del(...$keys);
-                        }
-                    } catch (\Exception $e) {
-                    }
-                }
-                break;
-            case self::BACKEND_FILE:
-                $files = glob($this->cacheDir . '/*.json');
-                if ($files !== false) {
-                    foreach ($files as $file) {
-                        @unlink($file);
-                    }
-                }
-                break;
-            default:
-                self::$memoryStore = [];
-                break;
-        }
+        $this->backendImpl->clear();
     }
 
     /**
      * Remove expired entries from the cache.
      *
+     * Delegates to the backend's sweep(): in-process backends (memory/file)
+     * actively reap expired entries and report the count; network/driver
+     * backends expire server-side via TTL and report 0.
+     *
      * @return int Number of entries removed
      */
     public function sweep(): int
     {
-        $removed = 0;
-        $now = microtime(true);
-
-        switch ($this->backend) {
-            case self::BACKEND_FILE:
-                $files = glob($this->cacheDir . '/*.json');
-                if ($files !== false) {
-                    foreach ($files as $file) {
-                        try {
-                            $data = json_decode(file_get_contents($file), true);
-                            if (is_array($data) && isset($data['expiresAt']) && $now > $data['expiresAt']) {
-                                @unlink($file);
-                                $removed++;
-                            }
-                        } catch (\Exception $e) {
-                        }
-                    }
-                }
-                break;
-            default:
-                foreach (self::$memoryStore as $key => $entry) {
-                    if (isset($entry['expiresAt']) && $now > $entry['expiresAt']) {
-                        unset(self::$memoryStore[$key]);
-                        $removed++;
-                    }
-                }
-                break;
-        }
-
-        return $removed;
+        return $this->backendImpl->sweep();
     }
 
     /**
-     * Get the active backend name.
+     * Get the active backend name (post-fallback).
      */
     public function getBackend(): string
     {
-        return $this->backend;
+        return $this->backendImpl->name();
     }
 
     // ── Static module-level API (parity with Python) ─────────────

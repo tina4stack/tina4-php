@@ -213,18 +213,19 @@ class ResponseCacheTest extends TestCase
 
     public function testSweepRemovesExpiredEntries(): void
     {
+        // Per-instance backends (parity with Python's _MemoryBackend) — sweep
+        // operates on the same instance's store, so seed and sweep on one cache.
         $cache = new ResponseCache(['ttl' => 1]);
         $cache->_internalStore('GET', '/sweep1', 'a', 'text/plain', 200);
         $cache->_internalStore('GET', '/sweep2', 'b', 'text/plain', 200);
+        $this->assertEquals(2, $cache->getStats()['size']);
 
-        usleep(1100000); // 1.1 seconds
+        usleep(1100000); // 1.1 seconds — both entries now expired
 
-        // Store one more that is not expired
-        $fresh = new ResponseCache(['ttl' => 60]);
-        $fresh->_internalStore('GET', '/fresh', 'c', 'text/plain', 200);
-
-        $removed = $fresh->sweep();
+        // A sweep reports the entries it reaped (size drops from 2 to 0).
+        $removed = $cache->sweep();
         $this->assertEquals(2, $removed);
+        $this->assertEquals(0, $cache->getStats()['size']);
     }
 
     // -- Backend selection ---------------------------------------------------

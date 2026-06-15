@@ -222,22 +222,25 @@ class CacheTest extends TestCase
 
     public function testSweepRemovesOnlyExpired(): void
     {
+        // Per-instance backends (parity with Python's _MemoryBackend) — sweep
+        // operates on the same instance's store. Seed two short-lived entries
+        // and one long-lived entry on ONE cache, then let only the short ones
+        // expire before sweeping.
         $cache = new ResponseCache(['ttl' => 1]);
-
         $cache->_internalStore('GET', '/old1', 'a', 'text/plain', 200);
         $cache->_internalStore('GET', '/old2', 'b', 'text/plain', 200);
 
-        usleep(1100000); // 1.1s — these two are now expired
+        // A long-lived entry stored via the direct KV API (own 60s TTL) on the
+        // SAME backend instance — it must survive the sweep.
+        $cache->_internalSet('keep', 'c', 60);
 
-        // Add a fresh one
-        $fresh = new ResponseCache(['ttl' => 60]);
-        $fresh->_internalStore('GET', '/new', 'c', 'text/plain', 200);
+        usleep(1100000); // 1.1s — the two GET entries are now expired
 
-        $removed = $fresh->sweep();
+        $removed = $cache->sweep();
         $this->assertEquals(2, $removed);
 
         // Fresh entry survives
-        $this->assertNotNull($fresh->_internalLookup('GET', '/new'));
+        $this->assertEquals('c', $cache->_internalGet('keep'));
     }
 
     // ── Overwrite behavior ─────────────────────────────────────────

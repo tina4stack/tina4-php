@@ -5,6 +5,7 @@
     "autoload": {
         "psr-4": {
             "Tina4\\": "Tina4/",
+            "Tina4\\Cache\\": "Tina4/Cache/",
             "Tina4\\Database\\": "Tina4/Database/",
             "Tina4\\Middleware\\": "Tina4/Middleware/",
             "Tina4\\Queue\\": "Tina4/Queue/",

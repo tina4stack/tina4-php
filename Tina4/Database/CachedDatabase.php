@@ -66,6 +66,17 @@ class CachedDatabase implements DatabaseAdapter
     /** @var array<string, array{expires: float, value: mixed}> */
     private array $cache = [];
 
+    /**
+     * Persistent mode (TINA4_DB_CACHE=true) routes through the unified
+     * CacheBackend (TINA4_DB_CACHE_BACKEND, default memory) so multiple
+     * instances can share one cache with global write-invalidation. Request-
+     * scoped mode keeps the in-process $cache above (ephemeral, fastest,
+     * never serialized). Parity with Python's Database._cache_backend.
+     *
+     * @var \Tina4\Cache\CacheBackend|null
+     */
+    private ?\Tina4\Cache\CacheBackend $cacheBackend = null;
+
     public function __construct(DatabaseAdapter $adapter, ?bool $enabled = null, ?int $ttl = null)
     {
         $this->adapter = $adapter;
@@ -85,6 +96,19 @@ class CachedDatabase implements DatabaseAdapter
             $this->ttl = (int) (\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING_TTL') ?? '5');
         }
 
+        // Persistent mode → shared unified CacheBackend. Request-scoped mode
+        // stays in the in-process $cache (never serialized).
+        if ($this->persistent) {
+            try {
+                $this->cacheBackend = \Tina4\Cache\CacheFactory::create(
+                    backend: \Tina4\DotEnv::getEnv('TINA4_DB_CACHE_BACKEND') ?? 'memory',
+                    url: \Tina4\DotEnv::getEnv('TINA4_DB_CACHE_URL'),
+                );
+            } catch (\Throwable) {
+                $this->cacheBackend = null; // fall back to the in-process dict
+            }
+        }
+
         // Register this wrapper so resetRequestCaches() can reach it.
         if (self::$instances === null) {
             self::$instances = new \WeakMap();
@@ -101,6 +125,15 @@ class CachedDatabase implements DatabaseAdapter
 
     private function cacheGet(string $key): mixed
     {
+        // Persistent mode → shared CacheBackend (serialized result). The
+        // backend returns the reconstructed value, or null on miss.
+        if ($this->cacheBackend !== null) {
+            $raw = $this->cacheBackend->get($key);
+            return is_array($raw) && array_key_exists('value', $raw)
+                ? $raw['value']
+                : null;
+        }
+        // Request-scoped mode → in-process dict (stores the value directly).
         if (!isset($this->cache[$key])) {
             return null;
         }
@@ -113,6 +146,13 @@ class CachedDatabase implements DatabaseAdapter
 
     private function cacheSet(string $key, mixed $value): void
     {
+        // Persistent mode → serialize (records list / row dict) into the shared
+        // backend so other instances reconstruct it cross-process. The "value"
+        // wrapper lets us distinguish a cached null fetchOne from a miss.
+        if ($this->cacheBackend !== null) {
+            $this->cacheBackend->set($key, ['value' => $value], $this->ttl);
+            return;
+        }
         $this->cache[$key] = [
             'expires' => microtime(true) + $this->ttl,
             'value' => $value,
@@ -121,6 +161,10 @@ class CachedDatabase implements DatabaseAdapter
 
     private function cacheInvalidate(): void
     {
+        if ($this->cacheBackend !== null) {
+            $this->cacheBackend->clear();
+            return;
+        }
         $this->cache = [];
     }
 
@@ -167,6 +211,19 @@ class CachedDatabase implements DatabaseAdapter
      */
     public function cacheStats(): array
     {
+        // Persistent mode → report the shared backend's size + name.
+        if ($this->cacheBackend !== null) {
+            $bs = $this->cacheBackend->stats();
+            return [
+                'enabled' => true,
+                'mode' => 'persistent',
+                'hits' => $this->hits,
+                'misses' => $this->misses,
+                'size' => $bs['size'] ?? 0,
+                'ttl' => $this->ttl,
+                'backend' => $bs['backend'] ?? $this->cacheBackend->name(),
+            ];
+        }
         return [
             'enabled' => $this->enabled,
             'mode' => $this->persistent ? 'persistent' : ($this->requestScoped ? 'request' : 'off'),
@@ -186,6 +243,9 @@ class CachedDatabase implements DatabaseAdapter
         $this->cache = [];
         $this->hits = 0;
         $this->misses = 0;
+        if ($this->cacheBackend !== null) {
+            $this->cacheBackend->clear();
+        }
     }
 
     // ── DatabaseAdapter interface ─────────────────────────────

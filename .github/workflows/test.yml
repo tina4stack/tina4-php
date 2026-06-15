@@ -9,12 +9,73 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      # Cache backend services — mirror the local docker harness ports so the
+      # CacheBackendsTest network backends run for real in CI. Tests skip a
+      # backend when its service is unreachable, so this stays green even if a
+      # service fails to start.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      valkey:
+        image: valkey/valkey:8
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      memcached:
+        image: memcached:1.6
+        ports:
+          - 11211:11211
+        options: >-
+          --health-cmd "timeout 2 bash -c '</dev/tcp/127.0.0.1/11211'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1}).ok' || mongo --quiet --eval 'db.runCommand({ping:1}).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+
+      # Password-protected Redis (requirepass s3cret, port 6381) for the auth
+      # round-trip and wrong-password-falls-back-to-file tests. Started as a
+      # plain container so --requirepass is deterministic from the first
+      # connection (GitHub `services:` has no command field). Optional — the
+      # auth tests skip cleanly if it is unreachable.
+      - name: Start password-protected Redis (redis-auth)
+        run: |
+          docker run -d --name redis-auth -p 6381:6379 redis:7 redis-server --requirepass s3cret
+          for i in $(seq 1 15); do
+            if docker exec redis-auth redis-cli -a s3cret ping 2>/dev/null | grep -q PONG; then
+              echo "redis-auth ready"; break
+            fi
+            sleep 1
+          done
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
