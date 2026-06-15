@@ -20,6 +20,7 @@
             <file>tests/ResponseV3Test.php</file>
             <file>tests/ResponseAutoSerializeTest.php</file>
             <file>tests/OrmConstructTest.php</file>
+            <file>tests/OrmBindDatabaseTest.php</file>
             <file>tests/RouterV3Test.php</file>
             <file>tests/RouterSessionStartTest.php</file>
             <file>tests/MiddlewareTest.php</file>

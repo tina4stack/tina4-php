@@ -109,7 +109,7 @@ class ORMV3Test extends TestCase
         $this->db->exec("CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, post_id INTEGER)");
         $this->db->exec("CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, bio TEXT, user_id INTEGER)");
         $this->db->exec("CREATE TABLE typed_widgets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, display_label TEXT, price_cents INTEGER)");
-        \Tina4\ORM::setGlobalDb($this->db);
+        \Tina4\ORM::bindDatabase($this->db);
     }
 
     protected function tearDown(): void
@@ -392,8 +392,8 @@ class ORMV3Test extends TestCase
 
         // Temporarily clear global DB to test the no-DB error path
         $savedDb = $this->db;
-        \Tina4\ORM::setGlobalDb(new class implements \Tina4\Database\DatabaseAdapter {
-            // Dummy adapter that throws — we just need setGlobalDb to accept something
+        \Tina4\ORM::bindDatabase(new class implements \Tina4\Database\DatabaseAdapter {
+            // Dummy adapter that throws — we just need bindDatabase to accept something
             // so we can test the "no instance db" path
             public function open(): void {}
             public function close(): void {}
@@ -420,7 +420,7 @@ class ORMV3Test extends TestCase
             $user->name = 'Alice';
             $user->save();
         } finally {
-            \Tina4\ORM::setGlobalDb($savedDb);
+            \Tina4\ORM::bindDatabase($savedDb);
         }
     }
 

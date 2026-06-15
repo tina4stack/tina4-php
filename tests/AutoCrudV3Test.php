@@ -36,7 +36,7 @@ class AutoCrudV3Test extends TestCase
         $_ENV['TINA4_SECRET'] = $this->secret;
         $this->db = new SQLite3Adapter(':memory:');
         $this->db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT, price REAL)");
-        \Tina4\ORM::setGlobalDb($this->db);
+        \Tina4\ORM::bindDatabase($this->db);
     }
 
     protected function tearDown(): void

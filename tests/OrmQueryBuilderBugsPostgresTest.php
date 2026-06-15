@@ -91,7 +91,7 @@ class OrmQueryBuilderBugsPostgresTest extends TestCase
         $this->db = Database::create($url, autoCommit: true, username: self::PG_USER, password: self::PG_PASS);
 
         self::$savedGlobalDb = \Tina4\ORM::getGlobalDb();
-        \Tina4\ORM::setGlobalDb($this->db);
+        \Tina4\ORM::bindDatabase($this->db);
 
         $this->dropAll();
         $this->seed();
@@ -104,7 +104,7 @@ class OrmQueryBuilderBugsPostgresTest extends TestCase
                 $this->dropAll();
             } finally {
                 if (self::$savedGlobalDb !== null) {
-                    \Tina4\ORM::setGlobalDb(self::$savedGlobalDb);
+                    \Tina4\ORM::bindDatabase(self::$savedGlobalDb);
                 }
                 $this->db->close();
             }

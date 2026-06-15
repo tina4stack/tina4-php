@@ -42,7 +42,7 @@ class Issue114Test extends TestCase
         $this->db->exec(
             "INSERT INTO reservation (id, status, is_confirmed) VALUES (1, 'PAID', 0)"
         );
-        \Tina4\ORM::setGlobalDb($this->db);
+        \Tina4\ORM::bindDatabase($this->db);
     }
 
     protected function tearDown(): void

@@ -65,11 +65,24 @@ abstract class ORM
      */
     public array $foreignKeys = [];
 
-    /** @var DatabaseAdapter|null Instance database connection */
-    protected ?DatabaseAdapter $_db = null;
+    /**
+     * Per-model database connection. May be:
+     *   - a DatabaseAdapter instance (direct binding), or
+     *   - a string naming a connection registered via ORM::bindDatabase($db, name: '...'), or
+     *   - null → resolves from the global default / App / TINA4_DATABASE_URL.
+     *
+     * Declared public so subclasses can override it (e.g. `public DatabaseAdapter|string|null $_db = 'analytics';`).
+     * PHP property types are invariant, so an override must repeat this exact type.
+     *
+     * @var DatabaseAdapter|string|null
+     */
+    public DatabaseAdapter|string|null $_db = null;
 
-    /** @var DatabaseAdapter|null Global database for static methods (set via ORM::setGlobalDb or App::setDatabase) */
+    /** @var DatabaseAdapter|null Global default database for static methods (set via ORM::bindDatabase or App::setDatabase) */
     private static ?DatabaseAdapter $_globalDb = null;
+
+    /** @var array<string, DatabaseAdapter> Named connection registry (set via ORM::bindDatabase($db, name: '...')) */
+    protected static array $_namedDbs = [];
 
     /**
      * Cross-model registry: maps target model class name → list of has-many relationship specs.
@@ -80,12 +93,22 @@ abstract class ORM
     private static array $_fkRegistry = [];
 
     /**
-     * Set the global database for all ORM models.
-     * Equivalent to Python's orm_bind(db) or Ruby's Tina4.database = db.
+     * Bind a database to ORM models. Equivalent to Python's bind_database(db, name=None).
+     *
+     *   - $name === null → set the global default used by all models without a $_db.
+     *   - $name !== null → register a named connection. A model can then select it via
+     *     `public DatabaseAdapter|string|null $_db = '<name>';`.
+     *
+     * @param DatabaseAdapter $db   The connection to bind.
+     * @param string|null     $name Optional connection name (e.g. 'analytics', 'audit').
      */
-    public static function setGlobalDb(DatabaseAdapter $db): void
+    public static function bindDatabase(DatabaseAdapter $db, ?string $name = null): void
     {
-        self::$_globalDb = $db;
+        if ($name === null) {
+            self::$_globalDb = $db;
+        } else {
+            self::$_namedDbs[$name] = $db;
+        }
     }
 
     /**
@@ -97,8 +120,36 @@ abstract class ORM
     }
 
     /**
-     * Resolve the database for static methods.
-     * Checks: instance $_db → global $_globalDb → App::getDatabase() → Database::fromEnv()
+     * Resolve the connection for a model instance.
+     *
+     * Resolution order:
+     *   1. $instance->_db is a DatabaseAdapter → use it directly.
+     *   2. $instance->_db is a string → look it up in the named-connection registry.
+     *   3. $instance->_db is null → fall back to resolveDb() (global → App → .env).
+     *
+     * @throws \RuntimeException If a named connection is referenced but not registered.
+     */
+    protected static function resolveDbFor(ORM $instance): DatabaseAdapter
+    {
+        $db = $instance->_db;
+        if ($db instanceof DatabaseAdapter) {
+            return $db;
+        }
+        if (is_string($db)) {
+            if (!isset(self::$_namedDbs[$db])) {
+                throw new \RuntimeException(
+                    "Named database '{$db}' not found. "
+                    . "Call ORM::bindDatabase(\$db, name: '{$db}') first."
+                );
+            }
+            return self::$_namedDbs[$db];
+        }
+        return static::resolveDb();
+    }
+
+    /**
+     * Resolve the global/default database for static methods.
+     * Checks: global $_globalDb → App::getDatabase() → Database::fromEnv()
      */
     protected static function resolveDb(): DatabaseAdapter
     {
@@ -113,7 +164,7 @@ abstract class ORM
         if ($envDb !== null) {
             return $envDb;
         }
-        throw new \RuntimeException('No database configured. Call ORM::setGlobalDb(), App::setDatabase(), or set TINA4_DATABASE_URL in .env');
+        throw new \RuntimeException('No database configured. Call ORM::bindDatabase(), App::setDatabase(), or set TINA4_DATABASE_URL in .env');
     }
 
     /** @var array<string, mixed> Storage for undeclared/dynamic properties only (from joins, extras) */
@@ -143,7 +194,7 @@ abstract class ORM
     public static function query(): QueryBuilder
     {
         $instance = new static();
-        return QueryBuilder::fromTable($instance->tableName, $instance->_db ?? static::resolveDb());
+        return QueryBuilder::fromTable($instance->tableName, static::resolveDbFor($instance));
     }
 
     /**
@@ -227,7 +278,7 @@ abstract class ORM
             if (!isset($autoCrudRegistered[$class])) {
                 $autoCrudRegistered[$class] = true;
                 try {
-                    $crud = new AutoCrud($this->_db ?? self::resolveDb());
+                    $crud = new AutoCrud(static::resolveDbFor($this));
                     $crud->register($class);
                     $crud->generateRoutes();
                 } catch (\Throwable $e) {
@@ -428,7 +479,7 @@ abstract class ORM
     public static function findById(int|string $id, ?array $include = null): ?static
     {
         $instance = new static();
-        $db = $instance->_db ?? static::resolveDb();
+        $db = static::resolveDbFor($instance);
 
         $pkColumn = $instance->getDbColumn($instance->primaryKey);
         $sql = "SELECT * FROM {$instance->tableName} WHERE {$pkColumn} = ?";
@@ -581,7 +632,7 @@ abstract class ORM
         }
 
         $instance = new static();
-        $db = $instance->_db ?? static::resolveDb();
+        $db = static::resolveDbFor($instance);
 
         $conditions = [];
         $params = [];
@@ -820,7 +871,7 @@ abstract class ORM
      */
     public function exists(int|string $pkValue): bool
     {
-        $db = $this->_db ?? static::resolveDb();
+        $db = static::resolveDbFor($this);
         $pkColumn = $this->getDbColumn($this->primaryKey);
         $sql = "SELECT 1 FROM {$this->tableName} WHERE {$pkColumn} = ?";
         if ($this->softDelete) {
@@ -1389,6 +1440,9 @@ abstract class ORM
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
             'foreignKeys', 'tableFilter',
+            // $_db is a connection selector, never a column — exclude it even
+            // when a subclass redeclares it (e.g. public $_db = 'analytics';).
+            '_db',
         ];
 
         $columns = [];
@@ -1652,6 +1706,9 @@ abstract class ORM
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
             'foreignKeys', 'tableFilter',
+            // $_db is a connection selector, never a column — exclude it even
+            // when a subclass redeclares it (e.g. public $_db = 'analytics';).
+            '_db',
         ];
 
         $props = [];
@@ -2015,30 +2072,18 @@ abstract class ORM
      */
     private function ensureDb(): void
     {
-        if ($this->_db !== null) {
+        // Already a live adapter — nothing to do.
+        if ($this->_db instanceof DatabaseAdapter) {
             return;
         }
 
-        // Try global DB first (set via ORM::setGlobalDb or App::setDatabase)
-        if (self::$_globalDb !== null) {
-            $this->_db = self::$_globalDb;
+        // String → named-connection registry (throws a clear error if missing).
+        if (is_string($this->_db)) {
+            $this->_db = static::resolveDbFor($this);
             return;
         }
 
-        // Try App::getDatabase()
-        $appDb = App::getDatabase();
-        if ($appDb !== null) {
-            $this->_db = $appDb;
-            return;
-        }
-
-        // Try auto-discovery from TINA4_DATABASE_URL
-        $discovered = \Tina4\Database\Database::fromEnv();
-        if ($discovered !== null) {
-            $this->_db = $discovered;
-            return;
-        }
-
-        throw new \RuntimeException('ORM: No database connection. Call ORM::setGlobalDb(), App::setDatabase(), or set TINA4_DATABASE_URL in .env');
+        // null → global default → App → TINA4_DATABASE_URL.
+        $this->_db = static::resolveDb();
     }
 }
