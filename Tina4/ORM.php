@@ -823,6 +823,57 @@ abstract class ORM
     }
 
     /**
+     * Read a foreign-key value off this model given the DB *column* name.
+     *
+     * A foreignKeys declaration like `['author_id' => 'Author']` names the FK
+     * by its snake_case DB column. With autoMap on, fill() stores that value
+     * under the camelCase property `authorId` and records
+     * `fieldMapping = ['authorId' => 'author_id']`. So reading the column name
+     * directly (`$this->author_id`) returns null. This reverse-maps the column
+     * back to its property (via fieldMapping, falling back to snakeToCamel for
+     * autoMap models) and reads the value from the declared property or the
+     * dynamic-property bag — whichever holds it.
+     *
+     * Used by belongsTo(), belongsToMethod(), and the eager-load belongsTo /
+     * hasMany-grouping branches so the documented snake_case FK form resolves.
+     *
+     * @param string $fkColumn The FK column name (e.g. "author_id").
+     * @return mixed The FK value, or null if unset.
+     */
+    public function resolveFkValue(string $fkColumn): mixed
+    {
+        // column → property: explicit reverse mapping wins, then autoMap's
+        // snakeToCamel, finally the column name itself (no mapping at all).
+        $reverse = array_flip($this->fieldMapping);
+        $property = $reverse[$fkColumn] ?? null;
+        if ($property === null) {
+            $camel = self::snakeToCamel($fkColumn);
+            $property = $camel !== $fkColumn ? $camel : $fkColumn;
+        }
+
+        // Declared public property set natively by PHP — read it directly.
+        if (property_exists($this, $property) && isset($this->$property)) {
+            return $this->$property;
+        }
+
+        // Otherwise it's a dynamic property (undeclared extra from fill()).
+        if (array_key_exists($property, $this->_dynamicProps)) {
+            return $this->_dynamicProps[$property];
+        }
+
+        // Last resort: the raw column name may itself be a dynamic property
+        // (e.g. autoMap disabled and no fieldMapping entry).
+        if (array_key_exists($fkColumn, $this->_dynamicProps)) {
+            return $this->_dynamicProps[$fkColumn];
+        }
+        if (property_exists($this, $fkColumn) && isset($this->$fkColumn)) {
+            return $this->$fkColumn;
+        }
+
+        return null;
+    }
+
+    /**
      * Run a raw SQL SELECT and return model instances.
      * Maps to Python: select(sql, params, limit, skip)
      *
@@ -1142,7 +1193,7 @@ abstract class ORM
             $foreignKey = rtrim($related->tableName, 's') . '_id';
         }
 
-        $fkValue = $this->$foreignKey ?? null;
+        $fkValue = $this->resolveFkValue($foreignKey);
         if ($fkValue === null) {
             return null;
         }
@@ -1803,10 +1854,12 @@ abstract class ORM
                     self::eagerLoad($related, $nested, $db);
                 }
 
-                // Group by FK
+                // Group by FK — resolveFkValue() reverse-maps the FK column
+                // through fieldMapping so a snake_case FK on a camelCase
+                // (autoMap) property still groups correctly.
                 $grouped = [];
                 foreach ($related as $record) {
-                    $fkVal = $record->__get($foreignKey);
+                    $fkVal = $record->resolveFkValue($foreignKey);
                     // Skip records whose FK is null — they cannot match any parent PK
                     // (avoids PHP 8.5 "null as array offset" deprecation)
                     if ($fkVal === null) {
@@ -1834,7 +1887,7 @@ abstract class ORM
 
                 $fkValues = [];
                 foreach ($instances as $inst) {
-                    $fkVal = $inst->__get($foreignKey);
+                    $fkVal = $inst->resolveFkValue($foreignKey);
                     if ($fkVal !== null) {
                         $fkValues[$fkVal] = true;
                     }
@@ -1864,7 +1917,7 @@ abstract class ORM
                 }
 
                 foreach ($instances as $inst) {
-                    $fkVal = $inst->__get($foreignKey);
+                    $fkVal = $inst->resolveFkValue($foreignKey);
                     $inst->_relCache[$relName] = $lookup[$fkVal] ?? null;
                 }
             }
@@ -1907,7 +1960,7 @@ abstract class ORM
      */
     private function belongsToMethod(string $relatedClass, string $foreignKey): ?ORM
     {
-        $fkValue = $this->$foreignKey ?? null;
+        $fkValue = $this->resolveFkValue($foreignKey);
         if ($fkValue === null) {
             return null;
         }

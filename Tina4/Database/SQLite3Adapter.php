@@ -156,10 +156,11 @@ class SQLite3Adapter implements DatabaseAdapter
             $countResult = $this->query($countSql, $params);
             $total = (int)($countResult[0]['total'] ?? 0);
 
-            // Apply pagination — skip if SQL already has LIMIT, or if
+            // Apply pagination — skip if the SQL already ends with its own
+            // LIMIT clause (appending a second one is a syntax error), or if
             // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
-            $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
-            if ($limit <= 0 || stripos($sqlNoComments, 'LIMIT') !== false) {
+            $sqlNoComments = self::stripTrailingSemicolons(preg_replace('/--.*$/m', '', $sql));
+            if ($limit <= 0 || self::hasTrailingLimit($sqlNoComments)) {
                 $pagedSql = $sql;
             } else {
                 $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
@@ -458,6 +459,10 @@ class SQLite3Adapter implements DatabaseAdapter
      */
     private function bindParams(\SQLite3Stmt $stmt, array $params): void
     {
+        // SQLite has no native boolean — a BooleanField column is INTEGER, so
+        // bind PHP booleans as 1/0. Without this they fall to SQLITE3_TEXT and
+        // `false` binds as '' (same class of bug as the PG adapter).
+        $params = self::normalizeBoolParams($params, nativeBoolean: false);
         foreach ($params as $key => $value) {
             $paramKey = is_int($key) ? $key + 1 : $key;
             $type = match (true) {

@@ -62,6 +62,90 @@ class SqlNormalizerTest extends TestCase
         $this->assertSame('SELECT 1', $this->strip('SELECT 1'));
     }
 
+    // ── hasTrailingLimit (Bug 4 — double-LIMIT detection) ──────────────
+
+    /** Reflection helper for the protected static hasTrailingLimit(). */
+    private function hasTrailingLimit(string $sql): bool
+    {
+        $ref = new ReflectionClass(SQLite3Adapter::class);
+        $method = $ref->getMethod('hasTrailingLimit');
+        $method->setAccessible(true);
+        return $method->invoke(null, $sql);
+    }
+
+    public function testHasTrailingLimitSimple(): void
+    {
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT 1'));
+    }
+
+    public function testHasTrailingLimitWithOffset(): void
+    {
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT 5 OFFSET 10'));
+    }
+
+    public function testHasTrailingLimitWithOrderBy(): void
+    {
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t ORDER BY id DESC LIMIT 1'));
+    }
+
+    public function testHasTrailingLimitPlaceholder(): void
+    {
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT ?'));
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT $1 OFFSET $2'));
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT :max'));
+    }
+
+    public function testHasTrailingLimitMysqlCommaForm(): void
+    {
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT 10, 20'));
+    }
+
+    public function testHasTrailingLimitTrailingWhitespace(): void
+    {
+        $this->assertTrue($this->hasTrailingLimit('SELECT * FROM t LIMIT 1   '));
+    }
+
+    public function testNoTrailingLimitWhenAbsent(): void
+    {
+        $this->assertFalse($this->hasTrailingLimit('SELECT * FROM t ORDER BY id'));
+        $this->assertFalse($this->hasTrailingLimit('SELECT * FROM t'));
+    }
+
+    public function testNoTrailingLimitWhenLimitNotAtEnd(): void
+    {
+        // LIMIT inside a subquery, not terminating the outer statement —
+        // appending pagination is still safe here.
+        $this->assertFalse(
+            $this->hasTrailingLimit('SELECT * FROM (SELECT * FROM t LIMIT 5) AS q WHERE q.id > 0')
+        );
+    }
+
+    /**
+     * Integration: SQLite3Adapter::fetch must NOT double-append LIMIT when the
+     * user SQL already ends with its own LIMIT clause (Bug 4).
+     */
+    public function testFetchDoesNotDoubleAppendLimit(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'tina4_dbl_limit_') . '.db';
+        $adapter = new SQLite3Adapter($tmpFile);
+        $adapter->open();
+        try {
+            $adapter->execute('CREATE TABLE widgets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)');
+            for ($i = 1; $i <= 3; $i++) {
+                $adapter->execute('INSERT INTO widgets (name) VALUES (?)', ["w{$i}"]);
+            }
+
+            // Pre-fix: "... LIMIT 1 LIMIT 100 OFFSET 0" is a syntax error and
+            // the adapter swallows it into an empty result.
+            $result = $adapter->fetch('SELECT * FROM widgets ORDER BY id DESC LIMIT 1');
+            $this->assertCount(1, $result['data'], 'fetch must honour the user LIMIT, not error out');
+            $this->assertSame('w3', $result['data'][0]['name']);
+        } finally {
+            $adapter->close();
+            unlink($tmpFile);
+        }
+    }
+
     public function testInternalSemicolonUntouched(): void
     {
         // Trailing `;` after the literal — should still strip

@@ -159,7 +159,12 @@ class MySQLAdapter implements DatabaseAdapter
 
             // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
             // default — give me ALL rows).
-            $pagedSql = $limit <= 0 ? $sql : "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            // Skip the append when the user SQL already ends with its own
+            // LIMIT clause — a second LIMIT is a syntax error that would
+            // otherwise be swallowed into an empty result.
+            $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
+                ? $sql
+                : "{$sql} LIMIT {$limit} OFFSET {$offset}";
             $data = $this->query($pagedSql, $params);
 
             return [
@@ -445,7 +450,9 @@ class MySQLAdapter implements DatabaseAdapter
             return;
         }
 
-        $values = array_values($params);
+        // MySQL BOOLEAN is TINYINT(1); bind PHP booleans as 1/0 (otherwise the
+        // default 's' arm stringifies `false` to '' — same class of bug as PG).
+        $values = self::normalizeBoolParams(array_values($params), nativeBoolean: false);
         $types = '';
 
         foreach ($values as $value) {

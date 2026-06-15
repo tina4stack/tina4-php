@@ -107,7 +107,9 @@ class MSSQLAdapter implements DatabaseAdapter
                 // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.
                 [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
             }
-            $values = empty($params) ? [] : array_values($params);
+            // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
+            // stringifies `false` to '' — same class of bug as PG).
+            $values = empty($params) ? [] : self::normalizeBoolParams(array_values($params), nativeBoolean: false);
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
                 : @sqlsrv_query($this->db, $sql, $values);
@@ -191,7 +193,9 @@ class MSSQLAdapter implements DatabaseAdapter
                 // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.
                 [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
             }
-            $values = empty($params) ? [] : array_values($params);
+            // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
+            // stringifies `false` to '' — same class of bug as PG).
+            $values = empty($params) ? [] : self::normalizeBoolParams(array_values($params), nativeBoolean: false);
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
                 : @sqlsrv_query($this->db, $sql, $values);

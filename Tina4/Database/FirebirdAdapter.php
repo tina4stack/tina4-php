@@ -619,7 +619,10 @@ class FirebirdAdapter implements DatabaseAdapter
                 return false;
             }
 
-            $values = array_values($params);
+            // Firebird has no native boolean — a BooleanField column is INTEGER,
+            // so bind PHP booleans as 1/0 (ibase otherwise stringifies `false`
+            // to '' — same class of bug as PG).
+            $values = self::normalizeBoolParams(array_values($params), nativeBoolean: false);
             $result = @$executeFn($stmt, ...$values);
         }
 

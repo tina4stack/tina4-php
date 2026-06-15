@@ -46,6 +46,35 @@ trait SqlNormalizerTrait
     }
 
     /**
+     * Detect whether user SQL already ends with a LIMIT clause.
+     *
+     * fetch()/fetchOne() append `LIMIT {n} OFFSET {m}` for pagination. When
+     * the user's own SQL already ends with `... LIMIT 1` (or
+     * `... LIMIT 5 OFFSET 10`), appending a second LIMIT produces invalid SQL
+     * (`... LIMIT 1 LIMIT 100 OFFSET 0`) that the engine rejects — and the
+     * adapter swallows the error and returns an empty result. Adapters that
+     * paginate with LIMIT/OFFSET (PostgreSQL, MySQL, SQLite) must skip the
+     * append when this returns true.
+     *
+     * Matches a trailing `LIMIT <int|?|$n|:name> [OFFSET <int|?|$n|:name>]`
+     * (with an optional trailing semicolon already stripped by
+     * stripTrailingSemicolons()). The MySQL `LIMIT offset, count` comma form
+     * is also recognised.
+     *
+     * @param string $sql User-supplied SQL.
+     * @return bool True when a LIMIT clause already terminates the statement.
+     */
+    protected static function hasTrailingLimit(string $sql): bool
+    {
+        $val = '(?:\d+|\?|\$\d+|:\w+)';
+        return (bool) preg_match(
+            '/\bLIMIT\s+' . $val . '(?:\s*,\s*' . $val . ')?'
+            . '(?:\s+OFFSET\s+' . $val . ')?\s*$/i',
+            $sql
+        );
+    }
+
+    /**
      * Split a possibly-qualified table name into [schema, table].
      *
      * v3.13.14 (#48): a model whose table name is qualified — PostgreSQL
@@ -65,5 +94,36 @@ trait SqlNormalizerTrait
             return [null, $name];
         }
         return [substr($name, 0, $dot), substr($name, $dot + 1)];
+    }
+
+    /**
+     * Normalise PHP booleans in a bound-parameter list to literals the driver
+     * and column type accept.
+     *
+     * Every PHP DB extension stringifies a bound `false` to '' (ext-pgsql via
+     * pg_query_params, mysqli bind_param, ext-sqlite3 SQLITE3_TEXT), which the
+     * engine then rejects — PostgreSQL: `invalid input syntax for type
+     * boolean: ""`. So `fetch('... WHERE active = ?', [false])` errored and
+     * silently returned 0 rows. (Python's psycopg2 binds bool natively.)
+     *
+     * The literal depends on how the column is stored, mirroring the
+     * engine-aware create_table mapping:
+     *   - $nativeBoolean = true  (PostgreSQL native BOOLEAN) → 't' / 'f'
+     *   - $nativeBoolean = false (SQLite, Firebird → INTEGER; MySQL TINYINT;
+     *                             MSSQL BIT) → 1 / 0
+     *
+     * Only top-level scalars are touched; nulls/strings/numbers pass through.
+     *
+     * @param array<mixed> $params
+     * @return array<mixed>
+     */
+    protected static function normalizeBoolParams(array $params, bool $nativeBoolean = false): array
+    {
+        foreach ($params as $key => $value) {
+            if (is_bool($value)) {
+                $params[$key] = $nativeBoolean ? ($value ? 't' : 'f') : ($value ? 1 : 0);
+            }
+        }
+        return $params;
     }
 }

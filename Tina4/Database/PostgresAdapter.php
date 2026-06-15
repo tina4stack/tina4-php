@@ -150,7 +150,13 @@ class PostgresAdapter implements DatabaseAdapter
 
             // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
             // default — give me ALL rows).
-            $pagedSql = $limit <= 0 ? $sql : "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            // When the user SQL already ends with its own LIMIT clause, don't
+            // append a second one — `... LIMIT 1 LIMIT 100 OFFSET 0` is a PG
+            // syntax error that would otherwise be swallowed into an empty
+            // result.
+            $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
+                ? $sql
+                : "{$sql} LIMIT {$limit} OFFSET {$offset}";
             $data = $this->query($pagedSql, $params);
 
             return [
@@ -585,7 +591,11 @@ class PostgresAdapter implements DatabaseAdapter
         foreach ($params as $value) {
             $values[] = $value;
         }
-        return $values;
+        // PostgreSQL has a native BOOLEAN; ext-pgsql sends params as text and
+        // stringifies PHP `false` to '' — which PG rejects ("invalid input
+        // syntax for type boolean"). Bind booleans as 't'/'f' so they
+        // round-trip. (Top-level scalars only — IN-clause arrays pass through.)
+        return self::normalizeBoolParams($values, nativeBoolean: true);
     }
 
     /**

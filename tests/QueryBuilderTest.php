@@ -717,4 +717,68 @@ class QueryBuilderTest extends TestCase
         $row = QueryBuilder::fromTable('empty_table', $this->db)->first();
         $this->assertNull($row);
     }
+
+    // -------------------------------------------------------------------------
+    // Bug 1 — first()/count() must consume a DatabaseResult, not just the raw
+    // adapter ['data' => ...] shape.
+    //
+    // QueryBuilder built from ORM::query() runs against the Database facade,
+    // whose fetch() returns a DatabaseResult object (not the raw adapter
+    // array). first()/count() read $result['data'][...] which is null on a
+    // DatabaseResult (ArrayAccess only indexes by integer) — so first()
+    // returned null and count() returned 0 even with matching rows. These
+    // tests drive the builder through the facade to lock in the fix on every
+    // engine (SQLite here; the PG-gated suite re-checks against live Postgres).
+    // -------------------------------------------------------------------------
+
+    private function facadeDb(): \Tina4\Database\Database
+    {
+        $db = \Tina4\Database\Database::create('sqlite::memory:');
+        $db->execute("CREATE TABLE qb_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, active INTEGER)");
+        $db->execute("INSERT INTO qb_users (name, active) VALUES ('Alice', 1)");
+        $db->execute("INSERT INTO qb_users (name, active) VALUES ('Bob', 1)");
+        $db->execute("INSERT INTO qb_users (name, active) VALUES ('Carol', 0)");
+        return $db;
+    }
+
+    public function testFirstThroughFacadeReturnsRow(): void
+    {
+        $db = $this->facadeDb();
+        // Sanity: facade.fetch() really returns a DatabaseResult (the shape that
+        // exposed the bug).
+        $this->assertInstanceOf(
+            \Tina4\Database\DatabaseResult::class,
+            $db->fetch('SELECT * FROM qb_users')
+        );
+
+        $row = QueryBuilder::fromTable('qb_users', $db)
+            ->where('name = ?', ['Alice'])
+            ->first();
+
+        $this->assertIsArray($row, 'first() must return the row when run against the Database facade');
+        $this->assertSame('Alice', $row['name']);
+    }
+
+    public function testCountThroughFacadeReturnsInteger(): void
+    {
+        $db = $this->facadeDb();
+
+        $count = QueryBuilder::fromTable('qb_users', $db)
+            ->where('active = ?', [1])
+            ->count();
+
+        $this->assertSame(2, $count, 'count() must return the matching row count via the facade');
+    }
+
+    public function testExistsThroughFacade(): void
+    {
+        $db = $this->facadeDb();
+
+        $this->assertTrue(
+            QueryBuilder::fromTable('qb_users', $db)->where('name = ?', ['Bob'])->exists()
+        );
+        $this->assertFalse(
+            QueryBuilder::fromTable('qb_users', $db)->where('name = ?', ['Nobody'])->exists()
+        );
+    }
 }

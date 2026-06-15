@@ -128,7 +128,7 @@ class Database implements DatabaseAdapter
     /**
      * Create a Database instance from a connection URL string.
      *
-     * @param string $url Connection URL (e.g. "sqlite::memory:", "pgsql://user:pass@host/db")
+     * @param string $url Connection URL (e.g. "sqlite::memory:", "postgres://user:pass@host/db")
      * @param bool|null $autoCommit Override auto-commit setting
      * @param string $username Database username
      * @param string $password Database password

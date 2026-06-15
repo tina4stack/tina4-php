@@ -14,7 +14,8 @@ namespace Tina4;
  * Supported formats:
  *   sqlite:///path/to/database.db
  *   sqlite::memory:
- *   pgsql://user:pass@host:port/dbname
+ *   postgres://user:pass@host:port/dbname
+ *   postgresql://user:pass@host:port/dbname
  *   mysql://user:pass@host:port/dbname
  *   mssql://user:pass@host:port/dbname
  *   firebird://user:pass@host:port/path/to/database.fdb

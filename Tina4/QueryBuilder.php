@@ -255,11 +255,9 @@ class QueryBuilder
             $this->offsetVal ?? 0
         );
 
-        if (isset($result['data']) && !empty($result['data'])) {
-            return $result['data'][0];
-        }
+        $records = self::extractRecords($result);
 
-        return null;
+        return $records[0] ?? null;
     }
 
     /**
@@ -286,14 +284,45 @@ class QueryBuilder
             0
         );
 
-        if (isset($result['data'][0]['cnt'])) {
-            return (int)$result['data'][0]['cnt'];
-        }
-        if (isset($result['data'][0]['CNT'])) {
-            return (int)$result['data'][0]['CNT'];
+        $records = self::extractRecords($result);
+        $row = $records[0] ?? null;
+
+        if (is_array($row)) {
+            if (isset($row['cnt'])) {
+                return (int)$row['cnt'];
+            }
+            if (isset($row['CNT'])) {
+                return (int)$row['CNT'];
+            }
         }
 
         return 0;
+    }
+
+    /**
+     * Normalise the value returned by DatabaseAdapter::fetch() into a plain
+     * list of row arrays.
+     *
+     * The Database facade returns a DatabaseResult (which exposes its rows via
+     * ->records and integer-indexed ArrayAccess), while a raw adapter returns
+     * the ['data' => [...]] array shape. get(), first() and count() must all
+     * consume whichever shape they are handed — reading $result['data'] off a
+     * DatabaseResult yields null (ArrayAccess only indexes by integer), which
+     * is what previously made first() return null and count() return 0 even
+     * when rows matched.
+     *
+     * @param mixed $result Result from DatabaseAdapter::fetch()
+     * @return array<int, array<string, mixed>>
+     */
+    private static function extractRecords(mixed $result): array
+    {
+        if ($result instanceof \Tina4\Database\DatabaseResult) {
+            return $result->records;
+        }
+        if (is_array($result)) {
+            return $result['data'] ?? $result;
+        }
+        return [];
     }
 
     /**
