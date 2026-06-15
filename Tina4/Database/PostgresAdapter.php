@@ -101,22 +101,19 @@ class PostgresAdapter implements DatabaseAdapter
                 return [];
             }
 
-            // Detect binary (bytea) columns for auto-encoding
-            $binaryColumns = [];
-            $numFields = pg_num_fields($result);
-            for ($i = 0; $i < $numFields; $i++) {
-                if (pg_field_type($result, $i) === 'bytea') {
-                    $binaryColumns[] = pg_field_name($result, $i);
-                }
-            }
+            // ext-pgsql has no automatic type map — pg_fetch_assoc() returns
+            // EVERY column as a PHP string (id "1", bool 't', floats "1.5").
+            // Build a name→caster map once per result so a Tina4 app on SQLite
+            // (native-ish types) sees the SAME shapes on PostgreSQL, matching
+            // the Python (psycopg2) and Node (node-postgres) adapters.
+            $casters = $this->buildColumnCasters($result);
 
             $rows = [];
             while ($row = pg_fetch_assoc($result)) {
-                // Auto-decode bytea columns: PostgreSQL returns hex-escaped
-                // strings (\x...) via pg_fetch_assoc. Unescape to raw bytes.
-                foreach ($binaryColumns as $col) {
-                    if (isset($row[$col]) && $row[$col] !== null) {
-                        $row[$col] = pg_unescape_bytea($row[$col]);
+                foreach ($casters as $col => $cast) {
+                    // Skip nulls — a NULL column stays null in every engine.
+                    if (isset($row[$col])) {
+                        $row[$col] = $cast($row[$col]);
                     }
                 }
                 $rows[] = $row;
@@ -605,5 +602,77 @@ class PostgresAdapter implements DatabaseAdapter
     private function isInsert(string $sql): bool
     {
         return (bool)preg_match('/^\s*INSERT\b/i', $sql);
+    }
+
+    /**
+     * Build a per-result map of column name → value caster.
+     *
+     * ext-pgsql returns every column as a PHP string. We inspect each
+     * field's PostgreSQL type once (via pg_field_type) and pre-compute a
+     * cheap closure that coerces the cell to the native PHP type the other
+     * Tina4 frameworks (Python/psycopg2, Node/node-postgres) and SQLite3
+     * return. Computing the casters once per result — not per cell — keeps
+     * the fetch loop tight.
+     *
+     * Type map (must-fix conversions are int + bool — they break `===` and
+     * boolean logic):
+     *   int2/int4/int8           → int
+     *   bool                     → bool   ('t' → true, 'f' → false)
+     *   float4/float8/numeric    → float  (numeric may lose precision; float
+     *                                       is accepted for parity — see report)
+     *   bytea                    → raw bytes (unescaped, unchanged behaviour)
+     *   everything else          → left as string (text/varchar/uuid/json/
+     *                                       jsonb/timestamp/date/time/…)
+     *
+     * Columns left as strings cost nothing: they get no entry in the map, so
+     * the fetch loop never touches them.
+     *
+     * @param \PgSql\Result|resource $result A pg_query[_params] result handle
+     * @return array<string, callable(string):mixed>
+     */
+    private function buildColumnCasters($result): array
+    {
+        $casters = [];
+        $numFields = pg_num_fields($result);
+
+        for ($i = 0; $i < $numFields; $i++) {
+            $name = pg_field_name($result, $i);
+            $type = pg_field_type($result, $i);
+
+            $caster = match ($type) {
+                // Integers: int2 (smallint), int4 (integer/serial),
+                // int8 (bigint/bigserial). bigint can exceed PHP_INT_MAX on
+                // 32-bit builds — (int) is correct on 64-bit, which is the
+                // only supported target.
+                'int2', 'int4', 'int8' => static fn(string $v): int => (int) $v,
+
+                // Booleans: PG hands back 't' / 'f'.
+                'bool' => static fn(string $v): bool => $v === 't',
+
+                // Floating point + arbitrary-precision numeric. numeric is
+                // cast to float for parity with psycopg2/node-postgres default
+                // shapes; this can lose precision on very large/precise values
+                // (documented as a known minor diff).
+                'float4', 'float8', 'numeric' => static fn(string $v): float => (float) $v,
+
+                // Binary: PG returns hex-escaped (\x…) strings via
+                // pg_fetch_assoc — unescape to raw bytes (pre-existing
+                // behaviour, now folded into the single caster pass).
+                'bytea' => static fn(string $v): string => pg_unescape_bytea($v),
+
+                // text / varchar / char / uuid / json / jsonb / timestamp /
+                // timestamptz / date / time / interval / etc. → leave as
+                // string. json/jsonb stay raw strings (caller decodes if it
+                // wants an array). timestamps stay strings — conventional in
+                // PHP and what SQLite returns too.
+                default => null,
+            };
+
+            if ($caster !== null) {
+                $casters[$name] = $caster;
+            }
+        }
+
+        return $casters;
     }
 }

@@ -175,12 +175,16 @@ class CreateTablePostgresTest extends TestCase
         $row = $result[0];
         $this->assertSame('hello', $row['name']);
 
-        // PG returns a real BOOLEAN as 't'/'f' (proves the column is BOOLEAN,
-        // not INTEGER, and that no TRUE→1 translation ran).
-        $this->assertContains($row['active'], ['t', 'f', true, false, 'true', 'false']);
-        $this->assertSame('t', $row['active'], 'inserted true should round-trip as a real PG boolean');
+        // Native-type reads: a PG BOOLEAN column comes back as a real PHP
+        // bool (proves the column is BOOLEAN, not INTEGER, AND that the
+        // adapter coerces 't'/'f' → true/false to match Python/Node/SQLite).
+        $this->assertIsBool($row['active'], 'PG boolean must read back as a native PHP bool');
+        $this->assertTrue($row['active'], 'inserted true should round-trip as boolean true');
 
-        // Timestamp round-trips.
+        // SERIAL PK reads back as a native int (not the string "1").
+        $this->assertIsInt($row['id'], 'PG integer/serial must read back as a native PHP int');
+
+        // Timestamp round-trips (left as a string — conventional in PHP).
         $this->assertStringStartsWith('2026-06-15 12:34:56', (string) $row['created_at']);
     }
 
@@ -227,6 +231,94 @@ class CreateTablePostgresTest extends TestCase
         $second = new CtPgWidget($this->db);
         $this->assertTrue($second->createTable(),
             'createTable() should return true (no-op) when the table already exists');
+    }
+
+    /**
+     * Native-type reads (v3.13.17): ext-pgsql returns every column as a
+     * string, so the adapter must coerce per-column using the PG field type.
+     * A Tina4 app built on SQLite (native-ish types) must see the SAME shapes
+     * on PostgreSQL, matching the Python (psycopg2) and Node (node-postgres)
+     * reference adapters.
+     *
+     * The must-fix conversions are int + bool (they break `===` and boolean
+     * logic). float/numeric come back as float; text/varchar/timestamp stay
+     * strings (timestamp-as-string is a conventional, documented minor diff).
+     */
+    public function testPostgresReadsReturnNativePhpTypes(): void
+    {
+        $this->db->execute('DROP TABLE IF EXISTS t4_native_types');
+        $this->db->execute(
+            'CREATE TABLE t4_native_types ('
+            . '  id SERIAL PRIMARY KEY,'
+            . '  big_id BIGINT,'
+            . '  small_id SMALLINT,'
+            . '  name VARCHAR(50),'
+            . '  active BOOLEAN,'
+            . '  score NUMERIC(10,2),'
+            . '  ratio DOUBLE PRECISION,'
+            . '  created_at TIMESTAMP'
+            . ')'
+        );
+        $this->db->commit();
+
+        $this->db->execute(
+            "INSERT INTO t4_native_types"
+            . " (big_id, small_id, name, active, score, ratio, created_at)"
+            . " VALUES (9000000000, 7, 'alpha', TRUE, 12.50, 3.14, '2026-06-15 12:34:56')"
+        );
+        $this->db->execute(
+            "INSERT INTO t4_native_types"
+            . " (big_id, small_id, name, active, score, ratio, created_at)"
+            . " VALUES (NULL, NULL, 'beta', FALSE, NULL, NULL, NULL)"
+        );
+        $this->db->commit();
+
+        $rows = $this->db->fetch('SELECT * FROM t4_native_types ORDER BY id')->records;
+        $this->assertCount(2, $rows);
+
+        // Row 1 — every typed column coerced to its native PHP type.
+        $row = $rows[0];
+        $this->assertIsInt($row['id'],       'SERIAL/integer must be int, not "1"');
+        $this->assertSame(1, $row['id']);
+        $this->assertIsInt($row['big_id'],   'bigint (int8) must be int');
+        $this->assertSame(9000000000, $row['big_id']);
+        $this->assertIsInt($row['small_id'], 'smallint (int2) must be int');
+        $this->assertSame(7, $row['small_id']);
+
+        $this->assertIsBool($row['active'],  'boolean must be bool, not "t"');
+        $this->assertTrue($row['active']);
+
+        $this->assertIsFloat($row['score'],  'numeric must be float for parity');
+        $this->assertSame(12.5, $row['score']);
+        $this->assertIsFloat($row['ratio'],  'float8 must be float');
+        $this->assertSame(3.14, $row['ratio']);
+
+        // varchar + timestamp stay strings (documented minor diff vs Python).
+        $this->assertIsString($row['name']);
+        $this->assertSame('alpha', $row['name']);
+        $this->assertIsString($row['created_at']);
+        $this->assertStringStartsWith('2026-06-15 12:34:56', $row['created_at']);
+
+        // Row 2 — boolean false coerces correctly; NULLs stay null (not 0/false).
+        $row = $rows[1];
+        $this->assertIsBool($row['active']);
+        $this->assertFalse($row['active'], "'f' must coerce to boolean false");
+        $this->assertNull($row['big_id'],   'NULL int must stay null, not 0');
+        $this->assertNull($row['score'],    'NULL numeric must stay null, not 0.0');
+        $this->assertNull($row['created_at']);
+
+        // fetchOne() uses the same query() fetch path — assert it coerces too.
+        $one = $this->db->fetchOne('SELECT id, active FROM t4_native_types ORDER BY id LIMIT 1');
+        $this->assertIsInt($one['id']);
+        $this->assertIsBool($one['active']);
+
+        // json_encode shape matches Python: id is 1 (not "1"), active is true.
+        $encoded = json_encode($rows[0]);
+        $this->assertStringContainsString('"id":1', $encoded);
+        $this->assertStringContainsString('"active":true', $encoded);
+
+        $this->db->execute('DROP TABLE IF EXISTS t4_native_types');
+        $this->db->commit();
     }
 
     /**
