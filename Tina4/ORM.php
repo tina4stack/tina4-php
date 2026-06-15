@@ -185,9 +185,33 @@ abstract class ORM
      * @param DatabaseAdapter|null $db Database adapter
      * @param array<string, mixed> $data Initial data to populate
      */
-    public function __construct(?DatabaseAdapter $db = null, array $data = [])
+    public function __construct(DatabaseAdapter|array|string|null $db = null, array $data = [])
     {
-        $this->_db = $db;
+        // The first arg is the DB adapter (legacy) OR the record data itself —
+        // an array (new Widget($body)) or a JSON object string
+        // (new Widget('{"id":1}')). Detect by type so all of these work:
+        //   new Widget($db, $data)   new Widget(data: $body)
+        //   new Widget($body)        new Widget('{"json":1}')
+        if ($db instanceof DatabaseAdapter) {
+            $this->_db = $db;
+        } elseif (is_string($db)) {
+            $decoded = json_decode($db, true);
+            if (!is_array($decoded)) {
+                throw new \InvalidArgumentException(static::class . '(): invalid JSON string passed to constructor.');
+            }
+            $data = $decoded;
+        } elseif (is_array($db)) {
+            $data = $db;
+        }
+
+        // A single model is one record — reject a non-empty list with a clear
+        // message (parity with Python/Ruby/Node).
+        if (!empty($data) && array_is_list($data)) {
+            throw new \InvalidArgumentException(
+                static::class . '() expects an object/associative array or JSON object string '
+                . 'for one record — got a list. Map over the list to build many records.'
+            );
+        }
 
         if (!empty($data)) {
             $this->fill($data);
