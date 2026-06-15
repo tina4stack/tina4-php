@@ -43,7 +43,7 @@ Router::get("/api/private", function($request, $response) {
 
 // Template rendering
 Router::get("/dashboard", function($request, $response) {
-    return $response->template("dashboard.twig", ["title" => "Dashboard"]);
+    return $response->render("dashboard.twig", ["title" => "Dashboard"]);
 });
 
 // Wildcard routes
