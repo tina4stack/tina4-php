@@ -1151,13 +1151,40 @@ abstract class ORM
     }
 
     /**
-     * Create the table for this model from its column definitions.
+     * Create the table for this model from its declared column definitions.
      * Maps to Python: create_table()
      *
-     * Uses getColumns() on the adapter to introspect, falls back to
-     * generating DDL from the model's data keys if the table does not exist.
+     * Generates engine-aware CREATE TABLE DDL from the model's typed public
+     * properties. PHP models declare columns as typed public properties (e.g.
+     * `public int $id = 0; public string $name = ''; public bool $active = false;`)
+     * rather than Field objects, so types are derived from the property's
+     * declared PHP type:
      *
-     * @return bool True on success
+     *   int        → INTEGER
+     *   float      → REAL
+     *   bool       → engine-aware boolean (see below)
+     *   \DateTime / \DateTimeInterface, or a name ending in _at / *date* / *time*
+     *              → engine-aware timestamp (see below)
+     *   string (default) → VARCHAR(255)
+     *
+     * Engine-aware boolean type (mirrors tina4-python v3.13.16):
+     *   postgresql / mysql → BOOLEAN   (native; psycopg/pgsql binds PHP bool as BOOLEAN)
+     *   mssql              → BIT
+     *   sqlite / firebird / other → INTEGER
+     *
+     * Engine-aware datetime type:
+     *   postgresql / firebird → TIMESTAMP  (neither has a DATETIME type)
+     *   else                  → DATETIME
+     *
+     * The primary key column gets `PRIMARY KEY AUTOINCREMENT`, which
+     * SqlTranslation::autoIncrementSyntax() rewrites per engine
+     * (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, etc.).
+     *
+     * Returns false (not true) when the CREATE actually fails — the adapter
+     * swallows the driver error into error() and returns false, so claiming
+     * success here would be a silent, misleading pass on PostgreSQL.
+     *
+     * @return bool True on success, false when the DDL failed.
      */
     public function createTable(): bool
     {
@@ -1167,12 +1194,211 @@ abstract class ORM
             return true;
         }
 
-        $pkColumn = $this->getDbColumn($this->primaryKey);
-        $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} ({$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT)";
+        $dialect = $this->detectDialect();
+
+        // Engine-aware boolean column type. SQLite has no native bool and
+        // Firebird's BOOLEAN round-trip is uneven across versions, so both
+        // stay on INTEGER; PG/MySQL get native BOOLEAN; MSSQL gets BIT.
+        $boolSql = match ($dialect) {
+            'postgresql', 'mysql' => 'BOOLEAN',
+            'mssql' => 'BIT',
+            default => 'INTEGER',
+        };
+
+        // PostgreSQL and Firebird have no DATETIME type — emit TIMESTAMP.
+        $datetimeSql = in_array($dialect, ['postgresql', 'firebird'], true)
+            ? 'TIMESTAMP'
+            : 'DATETIME';
+
+        $pkProperty = $this->primaryKey;
+        $colDefs = [];
+
+        foreach ($this->getColumnDefinitions() as $name => $def) {
+            $type = $def['type'];
+            $colName = $this->resolveDbColumn($name);
+            $isPk = ($name === $pkProperty);
+
+            if ($isPk) {
+                // INTEGER PRIMARY KEY AUTOINCREMENT — translated per engine below.
+                $colDefs[] = implode(' ', [$colName, 'INTEGER', 'PRIMARY KEY', 'AUTOINCREMENT']);
+                continue;
+            }
+
+            $sqlType = match ($type) {
+                'int'      => 'INTEGER',
+                'float'    => 'REAL',
+                'bool'     => $boolSql,
+                'datetime' => $datetimeSql,
+                default    => 'VARCHAR(255)',
+            };
+
+            $parts = [$colName, $sqlType];
+
+            // Engine-aware boolean DEFAULT: a native BOOLEAN column (PG/MySQL)
+            // needs TRUE/FALSE; an INTEGER- or BIT-backed bool (SQLite, Firebird,
+            // MSSQL) needs 1/0. `DEFAULT 0` on a PG BOOLEAN raises
+            // "default expression is of type integer".
+            if ($type === 'bool' && $def['hasDefault'] && is_bool($def['default'])) {
+                if ($boolSql === 'BOOLEAN') {
+                    $parts[] = 'DEFAULT ' . ($def['default'] ? 'TRUE' : 'FALSE');
+                } else {
+                    $parts[] = 'DEFAULT ' . ($def['default'] ? '1' : '0');
+                }
+            }
+
+            $colDefs[] = implode(' ', $parts);
+        }
+
+        // Always guarantee a primary key column even if the model declares
+        // no typed properties beyond the framework defaults.
+        if (empty($colDefs)) {
+            $pkColumn = $this->resolveDbColumn($pkProperty);
+            $colDefs[] = "{$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT";
+        }
+
+        $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
+
+        // Translate the generic AUTOINCREMENT to the engine's syntax
+        // (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, …).
+        $sql = SqlTranslation::autoIncrementSyntax($sql, $dialect);
 
         $result = $this->_db->execute($sql);
         $this->_db->commit();
-        return $result;
+
+        // Don't claim success when the DDL failed. Two failure signals:
+        //   1. execute() returned false (the adapter swallows the driver error
+        //      into error()).
+        //   2. The Database facade's execute() can return true even when the
+        //      underlying adapter failed, so verify the table actually exists
+        //      now — the only engine-agnostic proof the CREATE took effect.
+        // Either way, returning true here used to leave a table un-created
+        // while reporting a silent, misleading pass (notably on PostgreSQL).
+        if ($result === false || !$this->_db->tableExists($this->tableName)) {
+            Log::error("createTable failed for {$this->tableName}: " . ($this->_db->error() ?? 'unknown error'), ['sql' => $sql]);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Resolve a property name to its DB column name, applying the same
+     * autoMap (camelCase → snake_case) + fieldMapping path that getDbData()
+     * uses for INSERT/UPDATE. This guarantees the DDL column names match the
+     * column names the ORM later emits on save() — otherwise createTable()
+     * would emit `createdat` while INSERT emits `created_at`.
+     */
+    private function resolveDbColumn(string $name): string
+    {
+        if ($this->autoMap && !isset($this->fieldMapping[$name])) {
+            $snaked = self::camelToSnake($name);
+            if ($snaked !== $name) {
+                $this->fieldMapping[$name] = $snaked;
+            }
+        }
+        return $this->getDbColumn($name);
+    }
+
+    /**
+     * Map this model's declared typed public properties to column definitions.
+     * Each entry is ['type' => logical type, 'hasDefault' => bool,
+     * 'default' => mixed], where logical type is one of
+     * 'int' | 'float' | 'bool' | 'datetime' | 'string'. The primary key is
+     * always included even when its property is not declared on the subclass.
+     *
+     * @return array<string, array{type: string, hasDefault: bool, default: mixed}>
+     */
+    private function getColumnDefinitions(): array
+    {
+        static $frameworkProps = [
+            'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
+            'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
+            'foreignKeys', 'tableFilter',
+        ];
+
+        $columns = [];
+        $ref = new \ReflectionObject($this);
+
+        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+            if ($prop->isStatic()) {
+                continue;
+            }
+            $name = $prop->getName();
+            if (in_array($name, $frameworkProps, true)) {
+                continue;
+            }
+            // Skip ORM base-class framework properties; only map subclass columns.
+            if ($prop->getDeclaringClass()->getName() === self::class) {
+                continue;
+            }
+
+            $columns[$name] = [
+                'type'       => $this->logicalTypeFor($prop, $name),
+                'hasDefault' => $prop->hasDefaultValue(),
+                'default'    => $prop->hasDefaultValue() ? $prop->getDefaultValue() : null,
+            ];
+        }
+
+        // The primary key must always be a column even if undeclared.
+        if (!isset($columns[$this->primaryKey])) {
+            $columns = [$this->primaryKey => ['type' => 'int', 'hasDefault' => false, 'default' => null]] + $columns;
+        }
+
+        return $columns;
+    }
+
+    /**
+     * Derive a logical column type from a property's declared PHP type,
+     * falling back to a name heuristic for datetime columns.
+     */
+    private function logicalTypeFor(\ReflectionProperty $prop, string $name): string
+    {
+        $phpType = $prop->getType();
+        $typeName = ($phpType instanceof \ReflectionNamedType) ? $phpType->getName() : null;
+
+        // Normalise camelCase to snake_case so the datetime name heuristic
+        // matches both `created_at` and `createdAt`.
+        $snaked = self::camelToSnake($name);
+
+        return match (true) {
+            $typeName === 'int'   => 'int',
+            $typeName === 'float' => 'float',
+            $typeName === 'bool'  => 'bool',
+            $typeName === \DateTime::class
+                || $typeName === \DateTimeImmutable::class
+                || $typeName === \DateTimeInterface::class => 'datetime',
+            (bool) preg_match('/(_at$|date|time)/i', $snaked) => 'datetime',
+            default => 'string',
+        };
+    }
+
+    /**
+     * Resolve the SQL dialect for the current connection, unwrapping the
+     * Database / CachedDatabase facades to reach the concrete adapter.
+     * Returns one of: postgresql, mysql, mssql, firebird, sqlite, odbc,
+     * mongodb, sqlite (default).
+     */
+    private function detectDialect(): string
+    {
+        $adapter = $this->_db;
+        // Unwrap Database facade and CachedDatabase wrapper.
+        while (method_exists($adapter, 'getAdapter')) {
+            $next = $adapter->getAdapter();
+            if ($next === $adapter || !$next instanceof DatabaseAdapter) {
+                break;
+            }
+            $adapter = $next;
+        }
+
+        return match (true) {
+            $adapter instanceof \Tina4\Database\PostgresAdapter => 'postgresql',
+            $adapter instanceof \Tina4\Database\MySQLAdapter    => 'mysql',
+            $adapter instanceof \Tina4\Database\MSSQLAdapter    => 'mssql',
+            $adapter instanceof \Tina4\Database\FirebirdAdapter => 'firebird',
+            $adapter instanceof \Tina4\Database\MongoDBAdapter  => 'mongodb',
+            $adapter instanceof \Tina4\Database\ODBCAdapter     => 'odbc',
+            default => 'sqlite',
+        };
     }
 
     /**

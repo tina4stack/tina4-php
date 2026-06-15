@@ -73,6 +73,7 @@
             <file>tests/I18nLeafAliasTest.php</file>
             <file>tests/LandingPageTest.php</file>
             <file>tests/PostgresUuidPkTest.php</file>
+            <file>tests/CreateTablePostgresTest.php</file>
             <file>tests/PlanListTest.php</file>
             <file>tests/SqlNormalizerTest.php</file>
             <file>tests/ServerLargeResponseTest.php</file>
