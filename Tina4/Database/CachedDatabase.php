@@ -11,22 +11,22 @@
  * Write operations (insert, update, delete, execute) invalidate the entire cache.
  *
  * One store, two layers (mirrors tina4_python connection.py exactly):
- *   • request-scoped (DEFAULT ON, off-switch TINA4_QUERY_CACHE=false) — dedupes
+ *   • request-scoped (DEFAULT ON, off-switch TINA4_AUTO_CACHING=false) — dedupes
  *     identical SELECTs to protect the DB from rapid repeat reads. Cleared at the
  *     START of every HTTP request AND on any write, with a short safety TTL
- *     (TINA4_QUERY_CACHE_TTL, default 5s) for non-request contexts (CLI/workers).
+ *     (TINA4_AUTO_CACHING_TTL, default 5s) for non-request contexts (CLI/workers).
  *   • persistent (opt-in, TINA4_DB_CACHE=true) — cross-request TTL cache that is
  *     NOT cleared per request; entries expire by TINA4_DB_CACHE_TTL (default 30s).
  *
  * .env knobs:
  *   TINA4_DB_CACHE=true          # persistent cross-request cache (default: false)
  *   TINA4_DB_CACHE_TTL=30        # persistent TTL in seconds (default: 30)
- *   TINA4_QUERY_CACHE=true       # request-scoped cache (default: true)
- *   TINA4_QUERY_CACHE_TTL=5      # request-scoped TTL in seconds (default: 5)
+ *   TINA4_AUTO_CACHING=true       # request-scoped cache (default: true)
+ *   TINA4_AUTO_CACHING_TTL=5      # request-scoped TTL in seconds (default: 5)
  *
  * enabled = persistent || requestScoped
  * mode    = persistent ? "persistent" : (requestScoped ? "request" : "off")
- * ttl     = persistent ? TINA4_DB_CACHE_TTL : TINA4_QUERY_CACHE_TTL
+ * ttl     = persistent ? TINA4_DB_CACHE_TTL : TINA4_AUTO_CACHING_TTL
  *
  * IMPORTANT: Tina4 PHP runs a LONG-RUNNING built-in server, so in-memory state
  * persists across requests. The request dispatcher calls
@@ -72,7 +72,7 @@ class CachedDatabase implements DatabaseAdapter
 
         // Persistent (opt-in) takes precedence over request-scoped (default-on).
         $this->persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
-        $this->requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_QUERY_CACHE') ?? 'true');
+        $this->requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'true');
 
         // $enabled is an explicit override (used by tests); otherwise derive it.
         $this->enabled = $enabled ?? ($this->persistent || $this->requestScoped);
@@ -82,7 +82,7 @@ class CachedDatabase implements DatabaseAdapter
         } elseif ($this->persistent) {
             $this->ttl = (int) (\Tina4\DotEnv::getEnv('TINA4_DB_CACHE_TTL') ?? '30');
         } else {
-            $this->ttl = (int) (\Tina4\DotEnv::getEnv('TINA4_QUERY_CACHE_TTL') ?? '5');
+            $this->ttl = (int) (\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING_TTL') ?? '5');
         }
 
         // Register this wrapper so resetRequestCaches() can reach it.

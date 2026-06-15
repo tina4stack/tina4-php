@@ -9,7 +9,7 @@
  * identical reads. Mirrors tina4_python tests/test_db_query_cache.py exactly.
  *
  * Layers:
- *   • request-scoped (DEFAULT ON, off-switch TINA4_QUERY_CACHE=false) — dedupes
+ *   • request-scoped (DEFAULT ON, off-switch TINA4_AUTO_CACHING=false) — dedupes
  *     identical SELECTs, cleared per request + on writes, short safety TTL.
  *   • persistent (opt-in TINA4_DB_CACHE=true) — cross-request TTL cache, NOT
  *     cleared per request.
@@ -47,7 +47,7 @@ class DbQueryCacheTest extends TestCase
         // Start from a clean slate every test — the default-on behaviour must
         // be observed with NO env overrides leaking in from a previous case.
         \Tina4\DotEnv::resetEnv();
-        foreach (['TINA4_DB_CACHE', 'TINA4_DB_CACHE_TTL', 'TINA4_QUERY_CACHE', 'TINA4_QUERY_CACHE_TTL'] as $k) {
+        foreach (['TINA4_DB_CACHE', 'TINA4_DB_CACHE_TTL', 'TINA4_AUTO_CACHING', 'TINA4_AUTO_CACHING_TTL'] as $k) {
             $this->clearEnv($k);
         }
     }
@@ -55,7 +55,7 @@ class DbQueryCacheTest extends TestCase
     protected function tearDown(): void
     {
         \Tina4\DotEnv::resetEnv();
-        foreach (['TINA4_DB_CACHE', 'TINA4_DB_CACHE_TTL', 'TINA4_QUERY_CACHE', 'TINA4_QUERY_CACHE_TTL'] as $k) {
+        foreach (['TINA4_DB_CACHE', 'TINA4_DB_CACHE_TTL', 'TINA4_AUTO_CACHING', 'TINA4_AUTO_CACHING_TTL'] as $k) {
             $this->clearEnv($k);
         }
     }
@@ -136,7 +136,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testQueryCacheFalseDisables(): void
     {
-        $this->setEnv('TINA4_QUERY_CACHE', 'false');
+        $this->setEnv('TINA4_AUTO_CACHING', 'false');
         $db = $this->makeDb();
         $stats = $db->cacheStats();
         $this->assertFalse($stats['enabled']);

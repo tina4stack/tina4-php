@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.21 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.23 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -744,6 +744,10 @@ ResponseCache::clearCache(): void      // Flush all cached entries
 \Tina4\Middleware\cache_stats(): array
 ```
 
+The `\Tina4\Middleware\cache_*` helpers autoload on a plain `require` of the
+package — previously they fataled with "undefined function" until the
+`ResponseCache` class had been referenced first.
+
 ### Container — Lightweight dependency injection container
 
 ```php
@@ -968,7 +972,7 @@ $result = SqlTranslation::remember(
 - CLI scaffolding: `composer tina4 generate model/route/migration/middleware`
 - Production server: `composer start --production` (OPcache auto-config)
 - Frond pre-compilation for 2.8x template render improvement
-- DB query caching: `TINA4_DB_CACHE=true` env var, `cache_stats()`, `cache_clear()`
+- DB query caching: request-scoped auto cache **on by default** (`TINA4_AUTO_CACHING=true`, TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes; persistent cross-request cache opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s); `cacheStats()` reports `mode` (request/persistent/off), `cacheClear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
 - Queue backends: file (default), RabbitMQ, Kafka, MongoDB
 - Cache backends: memory (default), Redis, file
@@ -981,7 +985,7 @@ $result = SqlTranslation::remember(
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive
-- Tests: 2,433 passing
+- Tests: 2,992 passing
 
 ## Links
 
