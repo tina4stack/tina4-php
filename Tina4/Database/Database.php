@@ -373,13 +373,24 @@ class Database implements DatabaseAdapter
     public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         try {
-            $result = $this->getNextAdapter()->execute($sql, $params);
-            $this->lastError = null;
+            $adapter = $this->getNextAdapter();
+            $result = $adapter->execute($sql, $params);
             $upper = strtoupper(trim($sql));
             if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
                 str_starts_with($upper, 'EXEC ') || str_starts_with($upper, 'SELECT ')) {
+                $this->lastError = null;
                 return $result instanceof DatabaseResult ? $result : new DatabaseResult(records: is_array($result) ? $result : []);
             }
+            // Plain write/DDL: the adapter returns a boolean and records the
+            // driver error in error(). Unlike Python/Ruby/Node — whose adapters
+            // raise on failure (caught below) — PHP adapters return false, so we
+            // must propagate it. Previously this returned true unconditionally,
+            // silently masking failed INSERT/UPDATE/DELETE/DDL.
+            if ($result === false) {
+                $this->lastError = $adapter->error();
+                return false;
+            }
+            $this->lastError = null;
             return true;
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
