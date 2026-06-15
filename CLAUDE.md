@@ -85,7 +85,7 @@ Tina4/                   # Core framework classes (namespace Tina4\)
   App.php                # Application bootstrap & built-in server
   Router.php             # Route dispatcher
   Request.php            # HTTP request wrapper
-  Response.php           # HTTP response builder (with template() method)
+  Response.php           # HTTP response builder (with render() method)
   Frond.php              # Built-in Twig-compatible template engine
   Events.php             # Event/observer system
   AI.php                 # AI coding assistant detection & context scaffolding
@@ -462,17 +462,17 @@ The `Response` object supports rendering Twig templates via the built-in `Frond`
 
 ```php
 Router::get("/dashboard", function (Request $request, Response $response) {
-    return $response->template("dashboard.twig", [
+    return $response->render("dashboard.twig", [
         "title" => "Dashboard",
         "user" => $currentUser,
     ]);
 });
 
 // With custom status code and template directory
-$response->template("error.twig", ["code" => 404], 404, 'src/templates');
+$response->render("error.twig", ["code" => 404], 404, 'src/templates');
 ```
 
-The `template()` method uses `Frond` (built-in Twig-compatible engine, zero dependencies) and defaults to looking in `src/templates/`.
+The `render()` method uses `Frond` (built-in Twig-compatible engine, zero dependencies) and defaults to looking in `src/templates/`.
 
 ### Frond — Built-in Twig-compatible template engine
 
