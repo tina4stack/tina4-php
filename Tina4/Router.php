@@ -461,6 +461,16 @@ class Router
         // v3.13.14: stamp the request start so we can log elapsed time below.
         $reqStart = microtime(true);
 
+        // Request-scoped DB query cache (default-on). Tina4 PHP runs a
+        // LONG-RUNNING built-in server, so in-memory cache state persists
+        // across requests. Clear the request-scoped layer on every live
+        // connection at the START of each request so cached rows never leak
+        // across requests (zero cross-request staleness). Persistent-mode
+        // connections (TINA4_DB_CACHE=true) are left untouched. Every server
+        // path — built-in Server, Swoole, RoadRunner, PHP-FPM — funnels
+        // through dispatch(), so this is the universal request entry point.
+        \Tina4\Database\CachedDatabase::resetRequestCaches();
+
         // Start PHP's native session so $_SESSION writes persist across
         // requests on every SAPI — Apache + PHP-FPM, FastCGI, CGI,
         // command-line — not just on the built-in dev server.

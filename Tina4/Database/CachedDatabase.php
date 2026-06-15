@@ -10,22 +10,54 @@
  * Wraps a DatabaseAdapter and caches SELECT results from fetch() and fetchOne().
  * Write operations (insert, update, delete, execute) invalidate the entire cache.
  *
- * Opt-in via .env:
- *   TINA4_DB_CACHE=true          # enable (default: false)
- *   TINA4_DB_CACHE_TTL=30        # TTL in seconds (default: 30)
+ * One store, two layers (mirrors tina4_python connection.py exactly):
+ *   • request-scoped (DEFAULT ON, off-switch TINA4_QUERY_CACHE=false) — dedupes
+ *     identical SELECTs to protect the DB from rapid repeat reads. Cleared at the
+ *     START of every HTTP request AND on any write, with a short safety TTL
+ *     (TINA4_QUERY_CACHE_TTL, default 5s) for non-request contexts (CLI/workers).
+ *   • persistent (opt-in, TINA4_DB_CACHE=true) — cross-request TTL cache that is
+ *     NOT cleared per request; entries expire by TINA4_DB_CACHE_TTL (default 30s).
+ *
+ * .env knobs:
+ *   TINA4_DB_CACHE=true          # persistent cross-request cache (default: false)
+ *   TINA4_DB_CACHE_TTL=30        # persistent TTL in seconds (default: 30)
+ *   TINA4_QUERY_CACHE=true       # request-scoped cache (default: true)
+ *   TINA4_QUERY_CACHE_TTL=5      # request-scoped TTL in seconds (default: 5)
+ *
+ * enabled = persistent || requestScoped
+ * mode    = persistent ? "persistent" : (requestScoped ? "request" : "off")
+ * ttl     = persistent ? TINA4_DB_CACHE_TTL : TINA4_QUERY_CACHE_TTL
+ *
+ * IMPORTANT: Tina4 PHP runs a LONG-RUNNING built-in server, so in-memory state
+ * persists across requests. The request dispatcher calls
+ * CachedDatabase::resetRequestCaches() at the start of every request so the
+ * request-scoped layer never serves rows across requests.
  *
  * Usage:
  *   $database = Database::create('sqlite:///app.db');
  *   $db = new CachedDatabase($database->getAdapter());
  *   $db->fetch("SELECT * FROM users");   // cached on second call
- *   $db->cacheStats();                   // ["enabled" => true, "hits" => 1, ...]
+ *   $db->cacheStats();                   // ["enabled" => true, "mode" => "request", ...]
  */
 
 namespace Tina4\Database;
 
 class CachedDatabase implements DatabaseAdapter
 {
+    /**
+     * Live CachedDatabase instances, so the request dispatcher can clear the
+     * request-scoped query cache on every wrapper at the start of a request.
+     *
+     * Held as weak references so a closed/garbage-collected connection does
+     * not keep the wrapper alive.
+     *
+     * @var \WeakMap<CachedDatabase, true>|null
+     */
+    private static ?\WeakMap $instances = null;
+
     private DatabaseAdapter $adapter;
+    private bool $persistent;
+    private bool $requestScoped;
     private bool $enabled;
     private int $ttl;
     private int $hits = 0;
@@ -37,8 +69,27 @@ class CachedDatabase implements DatabaseAdapter
     public function __construct(DatabaseAdapter $adapter, ?bool $enabled = null, ?int $ttl = null)
     {
         $this->adapter = $adapter;
-        $this->enabled = $enabled ?? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
-        $this->ttl = $ttl ?? (int) (\Tina4\DotEnv::getEnv('TINA4_DB_CACHE_TTL') ?? '30');
+
+        // Persistent (opt-in) takes precedence over request-scoped (default-on).
+        $this->persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
+        $this->requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_QUERY_CACHE') ?? 'true');
+
+        // $enabled is an explicit override (used by tests); otherwise derive it.
+        $this->enabled = $enabled ?? ($this->persistent || $this->requestScoped);
+
+        if ($ttl !== null) {
+            $this->ttl = $ttl;
+        } elseif ($this->persistent) {
+            $this->ttl = (int) (\Tina4\DotEnv::getEnv('TINA4_DB_CACHE_TTL') ?? '30');
+        } else {
+            $this->ttl = (int) (\Tina4\DotEnv::getEnv('TINA4_QUERY_CACHE_TTL') ?? '5');
+        }
+
+        // Register this wrapper so resetRequestCaches() can reach it.
+        if (self::$instances === null) {
+            self::$instances = new \WeakMap();
+        }
+        self::$instances[$this] = true;
     }
 
     // ── Cache helpers ─────────────────────────────────────────
@@ -74,18 +125,56 @@ class CachedDatabase implements DatabaseAdapter
     }
 
     /**
-     * Return cache statistics.
+     * Clear the request-scoped query cache at the START of an HTTP request.
      *
-     * @return array{enabled: bool, hits: int, misses: int, size: int, ttl: int}
+     * No-op in persistent mode (TINA4_DB_CACHE=true) so cross-request entries
+     * survive up to their TTL. Cumulative hit/miss counters are preserved
+     * (parity with Python's Database.cache_new_request()).
+     */
+    public function cacheNewRequest(): void
+    {
+        if ($this->requestScoped && !$this->persistent) {
+            $this->cache = [];
+        }
+    }
+
+    /**
+     * Clear the request-scoped query cache on every live CachedDatabase wrapper.
+     *
+     * The request dispatcher (Router::dispatch) calls this at the START of each
+     * HTTP request so request-scoped caching never serves rows across requests
+     * (zero cross-request staleness). Persistent-mode wrappers are left alone.
+     * Parity with Python's Database.reset_request_caches().
+     */
+    public static function resetRequestCaches(): void
+    {
+        if (self::$instances === null) {
+            return;
+        }
+        foreach (self::$instances as $instance => $_) {
+            try {
+                $instance->cacheNewRequest();
+            } catch (\Throwable) {
+                // Never let a single bad connection break request dispatch.
+            }
+        }
+    }
+
+    /**
+     * Return cache statistics reflecting the real cache.
+     *
+     * @return array{enabled: bool, mode: string, hits: int, misses: int, size: int, ttl: int, backend: string}
      */
     public function cacheStats(): array
     {
         return [
             'enabled' => $this->enabled,
+            'mode' => $this->persistent ? 'persistent' : ($this->requestScoped ? 'request' : 'off'),
             'hits' => $this->hits,
             'misses' => $this->misses,
             'size' => count($this->cache),
             'ttl' => $this->ttl,
+            'backend' => 'memory',
         ];
     }
 

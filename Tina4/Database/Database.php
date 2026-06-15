@@ -199,7 +199,15 @@ class Database implements DatabaseAdapter
     }
 
     /**
-     * Get the underlying DatabaseAdapter.
+     * Get the underlying DatabaseAdapter for driver-specific operations.
+     *
+     * Returns the RAW driver adapter (e.g. SQLite3Adapter), unwrapping the
+     * transparent query-cache decorator if present. This matches Python's
+     * Database.get_adapter(), whose query cache lives inside the Database
+     * class rather than in a wrapper — callers reaching for getAdapter()
+     * want the real driver (getDatabase(), driver-specific methods, etc.),
+     * not the cache shell. Cached reads/writes still flow through the
+     * wrapper via the internal getNextAdapter().
      *
      * With pooling enabled, returns the next adapter via round-robin.
      *
@@ -207,7 +215,11 @@ class Database implements DatabaseAdapter
      */
     public function getAdapter(): DatabaseAdapter
     {
-        return $this->getNextAdapter();
+        $adapter = $this->getNextAdapter();
+        if ($adapter instanceof CachedDatabase) {
+            return $adapter->getAdapter();
+        }
+        return $adapter;
     }
 
     /**
@@ -248,7 +260,7 @@ class Database implements DatabaseAdapter
      */
     public function checkout(): DatabaseAdapter
     {
-        return $this->getNextAdapter();
+        return $this->getAdapter();
     }
 
     /**
@@ -887,26 +899,35 @@ class Database implements DatabaseAdapter
     // -------------------------------------------------------------------------
 
     /**
-     * Wrap an adapter in CachedDatabase if TINA4_DB_CACHE is enabled.
+     * Wrap an adapter in CachedDatabase when query caching is active.
      *
-     * The CachedDatabase reads TINA4_DB_CACHE and TINA4_DB_CACHE_TTL env vars
-     * internally, so no explicit config is needed here.
+     * Caching is ON BY DEFAULT (request-scoped layer). The wrapper reads
+     * TINA4_QUERY_CACHE / TINA4_DB_CACHE and their TTL env vars internally,
+     * so no explicit config is needed here. We only SKIP wrapping when caching
+     * is fully off — i.e. the request-scoped off-switch is set AND the
+     * persistent cache is not enabled:
+     *
+     *   TINA4_QUERY_CACHE=false  AND  TINA4_DB_CACHE != true   → no wrapper
+     *
+     * Mirrors Python: enabled = persistent || requestScoped.
      *
      * @param DatabaseAdapter $adapter
      * @return DatabaseAdapter Original adapter or CachedDatabase wrapper
      */
     private static function wrapWithCache(DatabaseAdapter $adapter): DatabaseAdapter
     {
-        if (\Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false')) {
+        $persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
+        $requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_QUERY_CACHE') ?? 'true');
+        if ($persistent || $requestScoped) {
             return new CachedDatabase($adapter);
         }
         return $adapter;
     }
 
     /**
-     * Get query cache statistics (if caching is enabled).
+     * Get query cache statistics reflecting the real cache.
      *
-     * @return array{enabled: bool, hits: int, misses: int, size: int, ttl: int}
+     * @return array{enabled: bool, mode: string, hits: int, misses: int, size: int, ttl: int, backend: string}
      */
     public function cacheStats(): array
     {
@@ -914,7 +935,15 @@ class Database implements DatabaseAdapter
         if ($adapter instanceof CachedDatabase) {
             return $adapter->cacheStats();
         }
-        return ['enabled' => false, 'hits' => 0, 'misses' => 0, 'size' => 0, 'ttl' => 0];
+        return [
+            'enabled' => false,
+            'mode' => 'off',
+            'hits' => 0,
+            'misses' => 0,
+            'size' => 0,
+            'ttl' => 0,
+            'backend' => 'memory',
+        ];
     }
 
     /**
