@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.23 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.24 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -723,8 +723,14 @@ responses is performed by the middleware hooks and is NOT exposed publicly.
 
 | Env Variable | Default | Description |
 |---|---|---|
+| `TINA4_CACHE_BACKEND` | memory | Backend: `memory` \| `file` \| `redis` \| `valkey` \| `memcached` \| `mongodb` \| `database` |
+| `TINA4_CACHE_URL` | — | Connection for redis/valkey/memcached/mongodb, OR a SQL URL for `database` (falls back to `TINA4_DATABASE_URL`) |
+| `TINA4_CACHE_USERNAME` / `TINA4_CACHE_PASSWORD` | — | Credentials (mirrors `TINA4_DATABASE_USERNAME`/`_PASSWORD`); may also be embedded in `TINA4_CACHE_URL` (`redis://user:pass@host`, `redis://:pass@host`, `mongodb://user:pass@host`). memcached is unauthenticated |
 | `TINA4_CACHE_TTL` | 60 | Default TTL in seconds (0 = disabled) |
 | `TINA4_CACHE_MAX_ENTRIES` | 1000 | Maximum cache entries |
+| `TINA4_CACHE_DIR` | data/cache | Directory for the `file` backend |
+
+The response/KV cache supports seven backends, selected by `TINA4_CACHE_BACKEND`. **Graceful fallback**: if a configured backend's driver is missing or the service/credentials are unreachable or wrong, the cache logs a warning and falls back to the **file** backend — a real persistent cache, never a silent no-op.
 
 ```php
 use Tina4\Middleware\ResponseCache;
@@ -972,10 +978,10 @@ $result = SqlTranslation::remember(
 - CLI scaffolding: `composer tina4 generate model/route/migration/middleware`
 - Production server: `composer start --production` (OPcache auto-config)
 - Frond pre-compilation for 2.8x template render improvement
-- DB query caching: request-scoped auto cache **on by default** (`TINA4_AUTO_CACHING=true`, TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes; persistent cross-request cache opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s); `cacheStats()` reports `mode` (request/persistent/off), `cacheClear()`
+- DB query caching: request-scoped auto cache **on by default** (`TINA4_AUTO_CACHING=true`, TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes; persistent cross-request cache opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s) routed through the unified backend set via `TINA4_DB_CACHE_BACKEND` (memory/file/redis/valkey/memcached/mongodb/database) + `TINA4_DB_CACHE_URL` so instances share one cache with global write-invalidation; `cacheStats()` reports `mode` (request/persistent/off) and `backend`, `cacheClear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
 - Queue backends: file (default), RabbitMQ, Kafka, MongoDB
-- Cache backends: memory (default), Redis, file
+- Cache backends (`Tina4\Cache`): unified set across response/KV and persistent DB cache — `memory` (default), `file`, `redis`, `valkey`, `memcached`, `mongodb`, `database` — selected via `TINA4_CACHE_BACKEND` (+ `TINA4_CACHE_URL`/credentials); falls back to the file backend if a backend is unreachable
 - Session handlers: file, Redis/Valkey, MongoDB, database. `TINA4_SESSION_SAMESITE` env var controls SameSite attribute (default: Lax)
 - QueryBuilder with NoSQL/MongoDB support (`toMongo()`)
 - WebSocket backplane (Redis pub/sub) for horizontal scaling
@@ -985,7 +991,7 @@ $result = SqlTranslation::remember(
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive
-- Tests: 2,992 passing
+- Tests: 3,010 passing
 
 ## Links
 
