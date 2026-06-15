@@ -110,6 +110,10 @@ class Response
     {
         $this->statusCode = $statusCode;
 
+        // Normalise ORM models / collections / query results so handlers can
+        // `return $response($model)` without serialising by hand.
+        $data = $this->jsonable($data);
+
         if ($contentType !== null) {
             $this->headers['Content-Type'] = $contentType;
             if (is_array($data)) {
@@ -195,8 +199,39 @@ class Response
     {
         $this->statusCode = $status;
         $this->headers['Content-Type'] = 'application/json';
-        $this->body = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $this->body = json_encode($this->jsonable($data), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         return $this;
+    }
+
+    /**
+     * Normalise domain objects into JSON-serialisable structures so handlers can
+     * `return $response($model)` / `$response->json($model)` without calling
+     * ->toDict() by hand:
+     *
+     *   return $response($user);              // ORM model      -> array
+     *   return $response(User::all());        // array<ORM>      -> array<array>
+     *   return $response($db->fetch($sql));   // DatabaseResult  -> array<array>
+     *
+     * Plain arrays / scalars pass through unchanged (arrays still have any ORM
+     * members converted, so ['user' => $model] serialises correctly too).
+     */
+    private function jsonable(mixed $data): mixed
+    {
+        if (is_object($data)) {
+            if (method_exists($data, 'toDict')) {
+                return $data->toDict();                 // ORM model
+            }
+            if (method_exists($data, 'toArray') && property_exists($data, 'records')) {
+                return $data->toArray();                 // DatabaseResult
+            }
+        }
+        if (is_array($data)) {
+            return array_map(
+                static fn ($item) => (is_object($item) && method_exists($item, 'toDict')) ? $item->toDict() : $item,
+                $data
+            );
+        }
+        return $data;
     }
 
     /**
