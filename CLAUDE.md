@@ -146,9 +146,9 @@ Router::any(string $routePath, $function): Router
 
 // Modifiers (chained)
 ->middleware(array $functionNames): Router
-->cache(bool $default = true): Router
-->noCache(bool $default = false): Router
-->secure(bool $default = true): Router
+->cache(): Router
+->noCache(): Router
+->secure(): Router
 ```
 
 ### Database — Database connection (v3)
@@ -178,15 +178,13 @@ $db = Database::create($url, autoCommit: true);
 // Or set TINA4_AUTOCOMMIT=true in .env to enable globally
 
 // Adapter methods (all adapters implement DatabaseAdapter)
-$db->fetch($sql, $limit, $offset): ?DataResult
+$db->fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
 $db->execute($sql, $params)
 $db->exec($sql, $params)           // alias for execute()
 $db->startTransaction()
-$db->commit($transactionId = null)
-$db->rollback($transactionId = null)
-$db->autoCommit(bool $onState = true): void
+$db->commit(): void
+$db->rollback(): void
 $db->tableExists(string $tableName): bool
-$db->getDatabase(): array
 $db->getLastId(): string
 $db->getNextId(string $table, string $pkColumn = 'id', ?string $generatorName = null): int
     // Race-safe ID generation using atomic sequence table (tina4_sequences).
@@ -245,7 +243,7 @@ $user->forceDelete(): bool
 $user->restore(): bool
 $user->load($sql, $params, $include): bool  // selectOne into $this; true if found
 $user->validate(): array               // Empty = valid
-$user->exists(): bool
+$user->exists($pkValue): bool
 $user->toDict($include): array         // Primary dict method (aliases: toAssoc, toObject)
 $user->toAssoc($include): array        // Alias for toDict
 $user->toArray(): array                // Flat indexed list of values
@@ -266,7 +264,7 @@ $user->count($conditions, $params): int
 $user->findOrFail($id): static
 $user->withTrashed($filter, $params, $limit, $offset): array
 $user->scope($name, $filterSql, $params): void  // Registers reusable named method: User::active()
-$user->createTable($columns): bool
+$user->createTable(): bool
 
 // Static methods
 User::create($data): static
@@ -347,7 +345,7 @@ Max upload size: `TINA4_MAX_UPLOAD_SIZE` env var (default 10MB).
 Auth::getToken($payload, $secret=null, $expiresIn=60): string
 Auth::validToken($token, $secret=null): ?array
 Auth::getPayload($token): ?array
-Auth::refreshToken($token, $secret=null, $expiresIn=60): ?string
+Auth::refreshToken($token, $expiresIn=60): ?string
 Auth::hashPassword($password, $salt=null, $iterations=260000): string  // PBKDF2-SHA256, $ delimiter
 Auth::checkPassword($password, $hash): bool
 Auth::validateApiKey($provided, $expected=null): bool  // reads TINA4_API_KEY from env
@@ -391,7 +389,7 @@ $db->getColumns($tableName): array
 $request->cookies  // Parsed from Cookie header
 $request->query    // Query string params
 $response->xml($content, $status): self
-$response->stream(callable $generator, string $contentType = 'text/event-stream', int $status = 200): void  // SSE/streaming
+$response->stream(callable $source, string $contentType = 'text/event-stream'): self  // SSE/streaming
 ```
 
 ### Response — Template rendering
@@ -439,8 +437,8 @@ $frond->unsandbox(): self
 
 ```php
 $auth = new \Tina4\Auth();
-Auth::getToken(array $payload, string $secret, int $expiresIn = 3600, string $algorithm = 'HS256'): string
-Auth::validToken(string $token, string $secret, string $algorithm = 'HS256'): ?array
+Auth::getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string
+Auth::validToken(string $token, ?string $secret = null): ?array
 Auth::getPayload(string $token): ?array
 ```
 
@@ -448,7 +446,7 @@ Auth::getPayload(string $token): ?array
 
 ```php
 $api = new \Tina4\Api(?string $baseURL = "", string $authHeader = "")
-$api->sendRequest(string $restService = "", string $requestType = "GET", $body = null, string $contentType = "application/json"): array
+$api->sendRequest(string $method = "GET", string $path = "", $body = null, string $contentType = "application/json"): array
 $api->addHeaders(array $headers): void
 $api->setBasicAuth(string $username, string $password): void
 ```
@@ -456,7 +454,7 @@ $api->setBasicAuth(string $username, string $password): void
 ### Migration — Database migrations
 
 ```php
-$migration = new \Tina4\Migration(string $migrationPath = "./migrations", string $delim = ";")
+$migration = new \Tina4\Migration(DatabaseAdapter $db, string $migrationsDir = "src/migrations", string $delimiter = ";")
 $migration->migrate(): array
 ```
 
