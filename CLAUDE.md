@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.18 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.19 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -196,6 +196,37 @@ $db->error()
 
 **`tina4_sequences` table** — Auto-created by `getNextId()` on first use for SQLite, MySQL, and MSSQL. Stores the current sequence value per table. Do not modify this table manually.
 
+#### Binding the ORM to a database
+
+ORM models resolve their connection through `\Tina4\ORM::bindDatabase()`. There are three ways to provide one:
+
+```php
+use Tina4\ORM;
+use Tina4\Database\Database;
+
+// (a) .env auto-default — NO call needed.
+//     Models auto-bind to TINA4_DATABASE_URL (via Database::fromEnv()).
+//     Apps relying on the .env default need no change.
+
+// (b) Override the default binding explicitly:
+\Tina4\ORM::bindDatabase(Database::create('sqlite:///app.db'));
+
+// (c) Named / secondary connections — register under a name, then point a model at it:
+\Tina4\ORM::bindDatabase(
+    Database::create('postgres://localhost:5432/analytics', username: 'u', password: 'p'),
+    name: 'analytics'
+);
+
+class Visit extends \Tina4\ORM {
+    // String selects a named connection; resolves to the 'analytics' adapter above.
+    public \Tina4\Database\DatabaseAdapter|string|null $_db = 'analytics';
+}
+```
+
+Resolution order per model: instance `$_db` (an adapter, or a string naming a bound connection)
+-> default `\Tina4\ORM::bindDatabase()` binding -> `Database::fromEnv()`. A missing named
+connection throws a clear error. `bindDatabase` is the only binder — there is no `setGlobalDb`.
+
 #### DatabaseUrl — Connection URL parser
 
 ```php
@@ -235,8 +266,17 @@ class User extends \Tina4\ORM {
 // → declaring model gets belongsTo entry (column name minus _id)
 // → referenced model gets hasMany entry (declaring class lowercased + 's', or related_name)
 
+// Constructor — the first argument is type-detected:
+$user = new User();                        // empty record
+$user = new User($request);                // populate from a Request
+$user = new User(['name' => 'Alice']);     // array data-first (no need for the data: arg)
+$user = new User('{"name": "Alice"}');     // JSON object string -> one record
+$user = new User(data: ['name' => 'Alice']); // explicit named arg (still works)
+$user = new User($db, ['name' => 'Alice']);  // $db adapter first (still works)
+// Passing a LIST (e.g. [['a'],['b']] or a JSON array) throws InvalidArgumentException —
+// a single-record constructor cannot hold many records. Map over the list to build many.
+
 // Instance methods
-$user = new User($request);
 $user->save(): static|false            // Returns $this on success (fluent), false on failure
 $user->delete(): bool
 $user->forceDelete(): bool
@@ -391,6 +431,30 @@ $request->query    // Query string params
 $response->xml($content, $status): self
 $response->stream(callable $source, string $contentType = 'text/event-stream'): self  // SSE/streaming
 ```
+
+### Response — Auto-serializing domain objects
+
+`$response(...)` and `$response->json(...)` auto-serialize an ORM model, an array of
+models, or a `DatabaseResult` (from `$db->fetch(...)`) straight to JSON — no manual
+`->toDict()` / `->toJson()` needed:
+
+```php
+Router::get("/api/users", function (Request $request, Response $response) {
+    return $response((new User())->all());        // array of models -> JSON array
+});
+
+Router::get("/api/users/{id}", function (Request $request, Response $response, $id) {
+    return $response((new User())->findById($id)); // single model -> JSON object
+});
+
+Router::get("/api/raw", function (Request $request, Response $response) use ($db) {
+    return $response($db->fetch("select * from users")); // DatabaseResult -> JSON array
+});
+```
+
+A single model becomes a JSON object; an array of models or a `DatabaseResult` becomes a
+JSON array. Plain arrays and strings behave exactly as before — this is purely additive.
+`Response::json()` still pretty-prints.
 
 ### Response — Template rendering
 
@@ -917,7 +981,7 @@ $result = SqlTranslation::remember(
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive
-- Tests: 2,416 passing
+- Tests: 2,433 passing
 
 ## Links
 
