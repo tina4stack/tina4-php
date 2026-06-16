@@ -305,4 +305,48 @@ TWIG);
             );
         }
     }
+
+    // ── 17 — magic methods declared via @method docblock tags ──────────
+
+    public function testMagicMethodTagsAreIndexed(): void
+    {
+        // Frond's addFilter/addGlobal/addTest dispatch through __call/__callStatic
+        // (no token-parseable declaration) — the @method docblock tags surface them.
+        $docs = $this->docs();
+        foreach (['addFilter', 'addGlobal', 'addTest'] as $name) {
+            $spec = $docs->methodSpec('Tina4\\Frond', $name);
+            $this->assertNotNull($spec, "Frond::{$name} must be indexed from its @method tag");
+            $this->assertStringStartsWith($name . '(', (string)$spec['signature']);
+        }
+    }
+
+    // ── 18 — class-qualified search ranks the owning method ────────────
+
+    public function testClassQualifiedSearchRanksOwningMethod(): void
+    {
+        foreach (['Frond.addTest', 'Frond addTest'] as $query) {
+            $hits = $this->docs()->search($query, 3);
+            $this->assertNotEmpty($hits, "no hits for {$query}");
+            $this->assertSame(
+                'Tina4\\Frond::addTest',
+                $hits[0]['fqn'] ?? '',
+                "{$query} should rank Frond::addTest #1",
+            );
+        }
+    }
+
+    // ── 19 — lookups resolve a bare class name ─────────────────────────
+
+    public function testLookupResolvesBareClassName(): void
+    {
+        $docs = $this->docs();
+        $spec = $docs->classSpec('Database');
+        $this->assertNotNull($spec, 'bare class name must resolve');
+        $this->assertStringEndsWith('Database', (string)$spec['fqn']);
+        $this->assertNotNull($docs->methodSpec('Database', 'execute'));
+        // A leading backslash resolves to the same class.
+        $this->assertNotNull($docs->classSpec('\\Tina4\\Database\\Database'));
+        // A truly unknown name still returns null (no false positives).
+        $this->assertNull($docs->classSpec('DefinitelyNotAClass'));
+    }
 }

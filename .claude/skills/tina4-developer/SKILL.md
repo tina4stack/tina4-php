@@ -18,6 +18,27 @@ Tina4's philosophy is **"Simple. Fast. Human."** — everything should be intuit
 code, and just work. The framework is smart about developer intent: return an object and it becomes
 JSON, POST a JSON body and it's automatically parsed, put a file in `src/routes/` and it's a route.
 
+## Verify Against the Live API — Don't Guess
+
+Tina4 reflects its own running code into a **live API index** — the source of truth for which classes
+and methods exist, and their exact signatures, in the version installed in *this* project. It never
+drifts the way training data or prose docs can. Three MCP tools expose it whenever the dev server is
+running (`tina4 serve` with `TINA4_DEBUG=true`):
+
+- **`api_search("render template")`** — ranked search across framework + your own code; returns fqn, signature, file:line. Run it BEFORE assuming a method exists.
+- **`api_class("Frond")`** — every method on a class, with signatures. A bare name (`Frond`), an import path, or the full fqn all resolve.
+- **`api_method("Frond", "add_test")`** — exact signature, params, return type, file and line for one method (`addTest` in PHP/Node).
+
+```
+api_search("queue consume")     -> finds Queue.consume and its signature
+api_class("Database")           -> every method on Database, with signatures
+api_method("Frond", "add_test") -> add_test(name, fn)
+```
+
+- **Unsure of a name or signature? Look it up — don't recall it.** A 5-second `api_method` call beats a hallucinated method that costs 20 minutes of debugging.
+- **`api_*` is live reflection (exact code); `docs_search` searches the prose docs.** Use `api_*` for signatures, `docs_search` for "how do I X" guidance.
+- If `api_search`/`api_class` returns nothing for a name you expected, it probably **does not exist** in this version — tell the developer rather than inventing it.
+
 ## Quick Start
 
 A Tina4 app is just a directory structure. No config files, no build steps:

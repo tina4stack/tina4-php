@@ -7,6 +7,10 @@ namespace Tina4;
  *
  * Supports: variables, filters, control structures (if/for/set/include/extends/block/macro/cache),
  * expression evaluation, template inheritance, auto-escaping, sandboxing, whitespace control, and comments.
+ *
+ * @method static void addFilter(string $name, callable $fn) Register a custom Twig filter (usable as {{ value | name }}).
+ * @method static void addGlobal(string $name, mixed $value) Register a global value available in every template.
+ * @method static void addTest(string $name, callable $fn) Register a custom test (usable as {% if x is name %}).
  */
 class Frond
 {

@@ -45,6 +45,16 @@ looks simple but has specific rules. Getting them wrong produces silent bugs —
 once but never update, buttons don't disable, inputs don't bind. This reference is the source
 of truth, derived from the actual source code.
 
+## Backend API Lookups — Use the Live Index
+
+tina4-js talks to a Tina4 backend (Python / PHP / Ruby / Node). When you need a backend route's shape,
+an ORM field, or a framework method signature, don't guess from memory — query the running backend's
+live API index through its MCP tools (available with `tina4 serve` + `TINA4_DEBUG=true`):
+`api_search("…")` to find a class or method, `api_class("User")` for its full surface, and
+`api_method("Database", "fetch")` for an exact signature. These reflect the actual installed version,
+so the frontend wires up against real endpoints instead of invented ones. (For frontend reactivity
+itself — signals, `html`, components — the rules below are the source of truth.)
+
 ## The Three Rules That Fix 90% of Mistakes
 
 Before writing any tina4-js code, internalize these:

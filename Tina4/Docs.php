@@ -160,11 +160,11 @@ class Docs
     public function classSpec(string $fqn): ?array
     {
         $this->ensureIndex();
-        $key = $this->classKey($fqn);
-        $entry = $this->indexCache[$key] ?? null;
-        if ($entry === null || ($entry['kind'] ?? '') !== 'class') {
+        $key = $this->resolveClassKey($fqn);
+        if ($key === null) {
             return null;
         }
+        $entry = $this->indexCache[$key];
         // Collect method entries from the index (token-parsed, always fresh).
         $methods = [];
         $prefix = $entry['fqn'] . '::';
@@ -214,11 +214,11 @@ class Docs
     public function methodSpec(string $classFqn, string $methodName): ?array
     {
         $this->ensureIndex();
-        $key = $this->classKey($classFqn);
-        $classEntry = $this->indexCache[$key] ?? null;
-        if ($classEntry === null) {
+        $key = $this->resolveClassKey($classFqn);
+        if ($key === null) {
             return null;
         }
+        $classEntry = $this->indexCache[$key];
         $methodKey = $classEntry['fqn'] . '::' . $methodName;
         $entry = $this->indexCache[$methodKey] ?? null;
         if ($entry === null || ($entry['kind'] ?? '') !== 'method') {
@@ -493,7 +493,71 @@ class Docs
                 ];
                 $entries[$fqn . '::' . $mName] = $methodEntry;
             }
+            // Magic methods declared via @method docblock tags (e.g. Frond's
+            // addFilter/addGlobal/addTest, dispatched through __call/__callStatic).
+            // Token parsing can't see them — the @method tag is their only contract.
+            foreach ($this->parseMethodTags($cls['doc']) as $tag) {
+                $mKey = $fqn . '::' . $tag['name'];
+                if (isset($entries[$mKey])) {
+                    continue; // a real declaration always wins over a doc tag
+                }
+                $entries[$mKey] = [
+                    'fqn'        => $mKey,
+                    'kind'       => 'method',
+                    'name'       => $tag['name'],
+                    'class'      => $fqn,
+                    'signature'  => $tag['signature'],
+                    'summary'    => $tag['summary'] !== '' ? $tag['summary'] : $classEntry['summary'],
+                    'file'       => $relFile,
+                    'line'       => $cls['line'],
+                    'version'    => $this->version,
+                    'source'     => $source,
+                    'visibility' => 'public',
+                    'static'     => $tag['static'],
+                    'docblock'   => $tag['summary'],
+                    '_private'   => false,
+                ];
+            }
         }
+    }
+
+    /**
+     * Extract @method tags from a class docblock. Magic methods dispatched via
+     * __call / __callStatic have no token-parseable declaration, so the
+     * `@method [static] [returnType] name(params) [description]` tag is the
+     * only way to surface them in the index.
+     *
+     * @return array<int,array{name:string,signature:string,static:bool,summary:string}>
+     */
+    private function parseMethodTags(string $doc): array
+    {
+        if ($doc === '' || !str_contains($doc, '@method')) {
+            return [];
+        }
+        $out = [];
+        foreach (preg_split("/\r?\n/", $doc) ?: [] as $line) {
+            $clean = trim(preg_replace('#^\s*/?\*+/?\s?#', '', $line) ?? '');
+            if (!str_starts_with($clean, '@method')) {
+                continue;
+            }
+            if (!preg_match('/@method\s+(static\s+)?(?:([^\s(]+)\s+)?(\w+)\s*\(([^)]*)\)\s*(.*)$/', $clean, $m)) {
+                continue;
+            }
+            $static = trim($m[1] ?? '') !== '';
+            $ret    = trim($m[2] ?? '');
+            $name   = $m[3];
+            $params = trim($m[4] ?? '');
+            $desc   = trim($m[5] ?? '');
+            $sig    = $name . '(' . $params . ')'
+                . ($ret !== '' && $ret !== 'void' ? ': ' . $ret : '');
+            $out[] = [
+                'name'      => $name,
+                'signature' => $sig,
+                'static'    => $static,
+                'summary'   => $desc,
+            ];
+        }
+        return $out;
     }
 
     /**
@@ -985,6 +1049,33 @@ class Docs
                 $score += 1;
             }
         }
+        // Class-qualified queries ("Frond.addTest" / "Frond::addTest" / "Frond addTest"):
+        // score the owning class so the qualifier steers ranking instead of being dead weight.
+        $class = (string)($entry['class'] ?? '');
+        if ($class !== '') {
+            $pos = strrpos($class, '\\');
+            $parent = strtolower($pos !== false ? substr($class, $pos + 1) : $class);
+            if ($parent !== '') {
+                $qNorm = preg_replace('/[:.\\\\]+/', '.', $joined) ?? $joined;
+                if ($qNorm === $parent . '.' . $name || $qNorm === $parent . '.' . $nameStripped) {
+                    $score += 6;  // exact "Class.method" intent — strongest signal
+                }
+                foreach ($tokens as $tk) {
+                    if ($tk === $parent) {
+                        $score += 2.5;
+                    } elseif ($tk !== '' && str_starts_with($parent, $tk)) {
+                        $score += 1;
+                    }
+                }
+            }
+        }
+        // Any token that is a whole segment of the fqn (namespace / class / method).
+        $fqnSegs = array_filter(preg_split('/[\\\\:.\s]+/', strtolower((string)($entry['fqn'] ?? ''))) ?: []);
+        foreach ($tokens as $tk) {
+            if ($tk !== '' && in_array($tk, $fqnSegs, true)) {
+                $score += 1;
+            }
+        }
         // Substring fallback — if the whole joined query appears in the name
         if ($joined !== '' && $score === 0.0 && str_contains($name, $joined)) {
             $score += 2;
@@ -1174,6 +1265,52 @@ class Docs
     private function classKey(string $fqn): string
     {
         return ltrim($fqn, '\\');
+    }
+
+    /**
+     * Resolve a class to its index key by exact FQN, or — for a bare name
+     * ("Database") or partial path — by matching the class name (last segment),
+     * disambiguating by requiring the given segments to appear in the stored key.
+     * Returns null if nothing matches.
+     */
+    private function resolveClassKey(string $given): ?string
+    {
+        $this->ensureIndex();
+        $key = $this->classKey($given);
+        $entry = $this->indexCache[$key] ?? null;
+        if ($entry !== null && ($entry['kind'] ?? '') === 'class') {
+            return $key;       // 1. exact
+        }
+        $gsegs = array_values(array_filter(preg_split('/[\\\\.]+/', $key) ?: []));
+        $gname = $gsegs !== [] ? strtolower((string)end($gsegs)) : strtolower($key);
+        $cands = [];
+        foreach ($this->indexCache ?? [] as $k => $e) {
+            if (($e['kind'] ?? '') !== 'class') {
+                continue;
+            }
+            $segs = preg_split('/[\\\\.]+/', $k) ?: [];
+            if (strtolower((string)end($segs)) === $gname) {
+                $cands[] = $k;
+            }
+        }
+        if (count($cands) === 1) {
+            return $cands[0];  // 2a. unique class-name match
+        }
+        if ($cands !== []) {   // 2b. disambiguate by segment subset, then shortest
+            $subset = array_values(array_filter($cands, function (string $k) use ($gsegs): bool {
+                $segs = array_map('strtolower', preg_split('/[\\\\.]+/', $k) ?: []);
+                foreach ($gsegs as $s) {
+                    if (!in_array(strtolower($s), $segs, true)) {
+                        return false;
+                    }
+                }
+                return true;
+            }));
+            $pool = $subset !== [] ? $subset : $cands;
+            usort($pool, fn(string $a, string $b): int => (strlen($a) <=> strlen($b)) ?: strcmp($a, $b));
+            return $pool[0];
+        }
+        return null;
     }
 
     private static function mcpInstance(): self
