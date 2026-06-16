@@ -723,7 +723,12 @@ class Router
         // attached. Middleware is now purely additive — developers
         // explicitly open routes with ->noAuth() and lock GETs with
         // ->secure().
-        $isDevAdmin = str_starts_with($request->url, '/__dev') || str_starts_with($request->url, '/api/gallery/') || str_starts_with($request->url, '/gallery/');
+        // Match on $request->path (the path portion, e.g. "/__dev/api/reload"),
+        // NOT $request->url (the full "scheme://host/path" — which never starts
+        // with "/__dev" so the bypass silently never fired and write routes
+        // under /__dev returned 401). The trailing-slash redirect branch above
+        // already uses $request->path; this aligns with it.
+        $isDevAdmin = str_starts_with($request->path, '/__dev') || str_starts_with($request->path, '/api/gallery/') || str_starts_with($request->path, '/gallery/');
         $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $requiresAuth = false;
 
@@ -1264,6 +1269,7 @@ class Router
             'pattern' => $fullPath,
             'regex' => $parsed['regex'],
             'paramNames' => $parsed['paramNames'],
+            'paramTypes' => $parsed['paramTypes'],
             'callback' => $handler,
             'middleware' => array_merge(self::$groupMiddleware, $middleware),
             'cache' => false,

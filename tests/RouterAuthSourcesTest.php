@@ -255,6 +255,56 @@ class RouterAuthSourcesTest extends TestCase
         $this->assertEquals('test-value', $response->getHeader('X-Custom'));
     }
 
+    // ── /__dev auth-bypass path check ────────────────────────────
+    // Dev admin routes (/__dev/...) are always public — the DevReload
+    // CLI POSTs /__dev/api/reload with no token. The public-route guard
+    // must test $request->path, NOT $request->url: the latter is the
+    // full "http://host/__dev/api/reload" which never starts with
+    // "/__dev", so the bypass silently never fired and a write route
+    // under /__dev got 401'd by the secure-by-default write gate.
+
+    public function testDevWriteRouteBypassesAuthGate(): void
+    {
+        // Registered WITHOUT ->noAuth(): a POST is secure-by-default, so
+        // if the /__dev bypass doesn't fire this 401s. The fix makes it run.
+        Router::post('/__dev/api/reload', function ($request, $response) {
+            return $response->json(['reloaded' => true]);
+        });
+
+        // No Authorization header, no formToken, no session token.
+        $request = $this->createRequest('POST', '/__dev/api/reload');
+        $response = $this->dispatchInner($request, new Response(true));
+
+        $this->assertNotEquals(401, $response->getStatusCode(), '/__dev write route must NOT be rejected 401 by the auth gate');
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals(['reloaded' => true], json_decode($response->getBody(), true));
+    }
+
+    public function testGalleryWriteRouteBypassesAuthGate(): void
+    {
+        // Sibling prefix check in the same guard — /api/gallery/ and
+        // /gallery/ must use $request->path too.
+        Router::post('/api/gallery/deploy', fn($rq, $rs) => $rs->json(['ok' => true]));
+
+        $request = $this->createRequest('POST', '/api/gallery/deploy');
+        $response = $this->dispatchInner($request, new Response(true));
+
+        $this->assertNotEquals(401, $response->getStatusCode(), '/api/gallery write route must NOT be 401 by the auth gate');
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testNonDevWriteRouteStillRequiresAuth(): void
+    {
+        // Control: a normal write route with no token still 401s — the
+        // path-based bypass must not accidentally open everything.
+        Router::post('/api/items', fn($rq, $rs) => $rs->json(['ok' => true]));
+
+        $request = $this->createRequest('POST', '/api/items');
+        $response = $this->dispatchInner($request, new Response(true));
+
+        $this->assertEquals(401, $response->getStatusCode(), 'Non-dev write route with no token must still be 401');
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private function createRequest(

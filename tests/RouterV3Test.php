@@ -475,4 +475,102 @@ class RouterV3Test extends TestCase
             $this->assertStringContainsString('uuid', $e->getMessage());
         }
     }
+
+    // ── Typed-parameter VALUE coercion (parity with tina4-python) ────
+    // {id:int} must hand the handler a real int, {price:float} a real
+    // float; every other type (and untyped params) stays a string.
+    // Canonical cross-framework behaviour — Ruby already coerces; Python
+    // and Node are being changed in parallel to match. URL matching is
+    // unchanged — these tests pin the coerced PHP TYPE the handler sees.
+
+    public function testIntParamCoercedToInteger(): void
+    {
+        Router::get('/users/{id:int}', function (Request $req, Response $res) {
+            return $res->json([
+                'id'   => $req->params['id'],
+                'type' => gettype($req->params['id']),
+            ]);
+        });
+
+        $request = Request::create(method: 'GET', path: '/users/42');
+        $response = new Response(testing: true);
+        $body = Router::dispatch($request, $response)->getJsonBody();
+
+        $this->assertSame('integer', $body['type'], '{id:int} must coerce to a real int');
+        $this->assertSame(42, $body['id']);
+    }
+
+    public function testIntegerAliasCoercedToInteger(): void
+    {
+        Router::get('/users/{id:integer}', fn($req, $res) => $res->json(['id' => $req->params['id']]));
+
+        $match = Router::match('GET', '/users/7');
+        $this->assertNotNull($match);
+        $this->assertIsInt($match['params']['id'], '{id:integer} must coerce to a real int');
+        $this->assertSame(7, $match['params']['id']);
+    }
+
+    public function testFloatParamCoercedToFloat(): void
+    {
+        Router::get('/products/{price:float}', function (Request $req, Response $res) {
+            return $res->json([
+                'price' => $req->params['price'],
+                'type'  => gettype($req->params['price']),
+            ]);
+        });
+
+        $request = Request::create(method: 'GET', path: '/products/19.99');
+        $response = new Response(testing: true);
+        $body = Router::dispatch($request, $response)->getJsonBody();
+
+        $this->assertSame('double', $body['type'], '{price:float} must coerce to a real float');
+        $this->assertSame(19.99, $body['price']);
+    }
+
+    public function testNumberAliasCoercedToFloat(): void
+    {
+        Router::get('/products/{price:number}', fn($req, $res) => $res->json(['ok' => true]));
+
+        $match = Router::match('GET', '/products/3.5');
+        $this->assertNotNull($match);
+        $this->assertIsFloat($match['params']['price'], '{price:number} must coerce to a real float');
+        $this->assertSame(3.5, $match['params']['price']);
+    }
+
+    public function testUntypedParamStaysString(): void
+    {
+        Router::get('/users/{id}', fn($req, $res) => $res->json(['ok' => true]));
+
+        $match = Router::match('GET', '/users/42');
+        $this->assertNotNull($match);
+        $this->assertIsString($match['params']['id'], 'Untyped {id} must stay a string');
+        $this->assertSame('42', $match['params']['id']);
+    }
+
+    public function testStringTypedParamStaysString(): void
+    {
+        Router::get('/users/{name:string}', fn($req, $res) => $res->json(['ok' => true]));
+
+        $match = Router::match('GET', '/users/42');
+        $this->assertNotNull($match);
+        $this->assertIsString($match['params']['name'], '{name:string} must stay a string');
+        $this->assertSame('42', $match['params']['name']);
+    }
+
+    public function testNonNumericTypedParamsStayStrings(): void
+    {
+        // alpha / alnum / slug / uuid / path all remain strings — only
+        // int/integer and float/number coerce.
+        Router::get('/a/{v:alpha}', fn($req, $res) => $res->json(['ok' => true]));
+        Router::get('/b/{v:alnum}', fn($req, $res) => $res->json(['ok' => true]));
+        Router::get('/c/{v:slug}', fn($req, $res) => $res->json(['ok' => true]));
+        Router::get('/d/{v:uuid}', fn($req, $res) => $res->json(['ok' => true]));
+        Router::get('/e/{v:path}', fn($req, $res) => $res->json(['ok' => true]));
+
+        $this->assertIsString(Router::match('GET', '/a/abc')['params']['v']);
+        $this->assertIsString(Router::match('GET', '/b/abc123')['params']['v']);
+        $this->assertIsString(Router::match('GET', '/c/hello-world')['params']['v']);
+        $this->assertIsString(Router::match('GET', '/d/550e8400-e29b-41d4-a716-446655440000')['params']['v']);
+        $this->assertIsString(Router::match('GET', '/e/some/deep/path')['params']['v']);
+    }
 }
