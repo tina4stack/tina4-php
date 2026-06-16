@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.24 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.26 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -173,9 +173,11 @@ $db = Database::create('firebird://localhost:3050/path/to/db.fdb', username: 'SY
 $db = Database::fromEnv();
 $db = Database::fromEnv('CUSTOM_DB_URL');
 
-// Auto-commit control — defaults to off (safe). Override per-connection or via env:
-$db = Database::create($url, autoCommit: true);
-// Or set TINA4_AUTOCOMMIT=true in .env to enable globally
+// Auto-commit control — defaults to ON: a standalone write commits on its own
+// connection (durable + visible across a pool); explicit transactions
+// (startTransaction/commit/rollback) stay atomic. Override per-connection or
+// set TINA4_AUTOCOMMIT=false in .env for strict manual-commit mode:
+$db = Database::create($url, autoCommit: false);
 
 // Adapter methods (all adapters implement DatabaseAdapter)
 $db->fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
@@ -991,7 +993,7 @@ $result = SqlTranslation::remember(
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive
-- Tests: 3,010 passing
+- Tests: 3,011 passing
 
 ## Links
 

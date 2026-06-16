@@ -63,7 +63,7 @@ class FirebirdAdapter implements DatabaseAdapter
         }
 
         $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');
-        $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
+        $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : true);
         $this->open();
     }
 

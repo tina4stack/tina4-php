@@ -160,6 +160,31 @@ class PoolTransactionAtomicityTest extends TestCase
         );
     }
 
+    public function testStandaloneWriteVisibleAcrossPool(): void
+    {
+        // A standalone write (no explicit transaction) auto-commits on its own
+        // connection and must be visible from the next round-robin connection.
+        $db = $this->pooledDb(3);
+
+        // No startTransaction() — standalone writes that must commit.
+        $db->execute("INSERT INTO t (id, val) VALUES (100, 'p')");
+        $db->execute("INSERT INTO t (id, val) VALUES (200, 'q')");
+
+        $allVisible = true;
+        for ($i = 0; $i < 8; $i++) {
+            $row = $db->fetchOne('SELECT count(*) AS n FROM t');
+            if ((int) ($row['n'] ?? -1) !== 2) {
+                $allVisible = false;
+            }
+        }
+        $db->close();
+
+        $this->assertTrue(
+            $allVisible,
+            'standalone write not visible from a round-robin connection (autocommit on)'
+        );
+    }
+
     public function testPinHonouredAcrossExecutesUnderPool(): void
     {
         // While pinned, every call to getAdapter() must return the same

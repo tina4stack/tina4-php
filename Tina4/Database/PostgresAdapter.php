@@ -46,7 +46,7 @@ class PostgresAdapter implements DatabaseAdapter
         }
 
         $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');
-        $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : false);
+        $this->autoCommit = $autoCommit ?? ($envAutoCommit !== null ? filter_var($envAutoCommit, FILTER_VALIDATE_BOOLEAN) : true);
         $this->open();
     }
 
@@ -58,7 +58,12 @@ class PostgresAdapter implements DatabaseAdapter
 
         $dsn = $this->buildDsn($this->connectionString);
 
-        $conn = @pg_connect($dsn);
+        // PGSQL_CONNECT_FORCE_NEW: without it, pg_connect() reuses one libpq
+        // connection for every adapter sharing a DSN — so a pool of N adapters
+        // would all share ONE connection (and closing one would break the
+        // rest). Forcing a new connection makes each pooled adapter genuinely
+        // independent, matching psycopg2 / node-pg / the pg gem.
+        $conn = @pg_connect($dsn, PGSQL_CONNECT_FORCE_NEW);
         if ($conn === false) {
             $this->lastError = 'Failed to connect to PostgreSQL';
             throw new \RuntimeException("PostgresAdapter: {$this->lastError}");
