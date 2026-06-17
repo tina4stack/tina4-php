@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.35 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.36 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -64,10 +64,14 @@ The `tina4` Rust CLI is the sole file watcher for the Tina4 stack — PHP has no
 
 1. `tina4 serve` watches `src/`, `migrations/`, `.env`. Noise is filtered (Access/Metadata events, `__pycache__`, `.git`, `node_modules`, `vendor`, `logs`, `.log`/`.db*`/`.swp` files) and a real mtime check defeats overlayfs spurious events.
 2. On a real change, the CLI POSTs `/__dev/api/reload` to the running PHP server.
-3. `DevAdmin` bumps its in-memory `$reloadMtime` counter and sets `$pendingReload = true`. `GET /__dev/api/mtime` returns the counter for the polling fallback.
-4. The PHP server's inline reload script (injected by the dev toolbar) listens on WebSocket `/__dev_reload` (primary) and polls `/__dev/api/mtime` every 3s (fallback). On a change it reloads the page, or swaps the stylesheet if the change was CSS.
+3. `DevAdmin` bumps its in-memory `$reloadMtime` counter, calls `opcache_invalidate()` on the changed `.php` file, and re-discovers routes via `RouteDiscovery::rescan()` — all **in-process**, so the worker keeps the same PID (no respawn). It then **broadcasts** a JSON message `{type, file, mtime}` directly to every browser on the `/__dev_reload` WebSocket via `Server::getInstance()->broadcastWebSocket(...)`. The wire `type` is normalised to `"css"` (for `.css`/`.scss`) or `"reload"` otherwise; the broadcast is wrapped in `try/catch` so a failure (or zero clients) never breaks the endpoint. `GET /__dev/api/mtime` still returns the counter for the polling fallback, and `$pendingReload` remains a belt-and-braces idle-tick signal (cleared once the in-request broadcast runs, so the server never double-fires).
+4. The PHP server's injected reload client is **WebSocket-primary**: it opens `/__dev_reload` (ws/wss by page protocol) and acts on a `{type:reload|change|css}` message instantly — CSS swaps `<link rel=stylesheet>` hrefs with a cache-bust query, everything else does a full `location.reload()`. It **stops** the `/__dev/api/mtime` poll the moment the socket connects and only **starts** it (every 3 s) when the socket drops, reconnecting after ~2 s. So there is no polling in normal operation. The poll fallback uses a null mtime sentinel (not `0`) and reloads when the polled mtime **differs** (not just when greater), so the first change after load isn't swallowed and a counter reset on restart still triggers. The `/__dev_reload` route is registered debug-only in `Server::start()` (skipped on the AI/stable port, where the reload client is also suppressed).
 
-No file-based sentinel is used — everything is in-memory. This matches the Python/Ruby/Node implementations.
+No file-based sentinel is used — everything is in-memory. Code changes re-import in-process (no respawn). This matches the Python/Ruby/Node implementations.
+
+**Route hot-reload (no restart).** `RouteDiscovery` is mtime-tracked: on each `rescan()` it re-reads file mtimes (`clearstatcache()` first) and re-loads a route file when it is **new** or its **mtime increased**, skipping unchanged files. Editing an existing route file therefore takes effect without a server restart — `Router` registers `(method, path)` with **replace-in-place** semantics (latest wins), so the re-loaded handler replaces the stale one instead of being shadowed by an appended duplicate. The reload path only ever touches files **under the discovered `src/routes/` directory** — framework and `vendor` files are never re-included.
+
+Caveat — convention route files (`get.php`/`post.php`/… that `return` a closure) hot-reload cleanly. Inline files made purely of `Router::get/post/...` calls also hot-reload. But an inline file that declares **top-level functions, classes, traits, interfaces, enums, or constants** cannot be safely re-included (PHP would fatal with "cannot redeclare"); the reload path detects this, logs a warning, and leaves the old handler in place. Edit such a file and you must **restart the server** for its route changes to apply. Prefer the one-verb-per-file convention or keep inline route files declaration-free to get hot reload.
 
 ## Project Structure
 

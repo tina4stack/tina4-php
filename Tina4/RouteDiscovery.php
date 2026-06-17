@@ -44,6 +44,16 @@ class RouteDiscovery
     private static array $seenFiles = [];
 
     /**
+     * Last-seen modification time per file (filepath => mtime). Lets rescan()
+     * re-load a file whose mtime increased (an EXISTING route file was edited)
+     * while still skipping unchanged files. Without this, a changed file is
+     * never re-run and the server keeps serving the stale handler.
+     *
+     * @var array<string, int>
+     */
+    private static array $lastMtimes = [];
+
+    /**
      * Last directory passed to scan(). Lets the reload endpoint re-discover
      * without needing the caller to remember the original path.
      */
@@ -71,6 +81,7 @@ class RouteDiscovery
     public static function reset(): void
     {
         self::$seenFiles = [];
+        self::$lastMtimes = [];
         self::$lastRoutesDir = '';
     }
 
@@ -81,11 +92,16 @@ class RouteDiscovery
      *   1. File-system routing: get.php, post.php, etc. that return a closure
      *   2. Inline routing: any .php file that calls Router::get() / Router::post() etc. directly
      *
-     * Idempotent: files seen on a previous call are skipped, so calling
-     * scan() repeatedly (e.g. on /__dev/api/reload) only loads NEW files.
+     * mtime-aware: a file is (re)loaded when it is NEW or its mtime increased
+     * (an existing route file was edited), and skipped only when it has been
+     * seen AND is unchanged. Calling scan() repeatedly (e.g. on
+     * /__dev/api/reload) therefore re-imports edited route files — combined
+     * with Router's replace-in-place semantics, the edit takes effect without
+     * a server restart — while staying cheap and idempotent for unchanged
+     * files.
      *
      * @param string $routesDir The base directory to scan (e.g., src/routes)
-     * @return array<int, array{method: string, path: string, file: string}> List of newly-discovered routes
+     * @return array<int, array{method: string, path: string, file: string}> List of newly-discovered or reloaded routes
      */
     public static function scan(string $routesDir): array
     {
@@ -95,6 +111,10 @@ class RouteDiscovery
             return $discovered;
         }
 
+        // Read fresh mtimes — PHP caches stat() results per request, and a
+        // same-second rewrite would otherwise look unchanged.
+        clearstatcache();
+
         $routesDir = rtrim(str_replace('\\', '/', $routesDir), '/');
         self::$lastRoutesDir = $routesDir;
         [$conventionFiles, $inlineFiles] = self::findRouteFiles($routesDir);
@@ -103,7 +123,11 @@ class RouteDiscovery
 
         // 1. Convention-based routes (get.php, post.php, etc.)
         foreach ($conventionFiles as $file) {
-            if (isset(self::$seenFiles[$file])) {
+            // Skip only when seen AND unchanged. Convention files are loaded
+            // with `require` below, which re-executes cleanly on every call —
+            // so an edited file simply re-runs its `return function (...)`
+            // and re-registers, with Router replacing the stale entry.
+            if (!self::shouldLoad($file)) {
                 continue;
             }
             $relativePath = substr($file, strlen($routesDir));
@@ -135,6 +159,7 @@ class RouteDiscovery
             }
 
             self::$seenFiles[$file] = true;
+            self::$lastMtimes[$file] = self::mtimeOf($file);
             $discovered[] = [
                 'method' => $method,
                 'path' => $urlPath,
@@ -144,12 +169,36 @@ class RouteDiscovery
 
         // 2. Inline route files (any other .php file that registers routes directly)
         foreach ($inlineFiles as $file) {
-            if (isset(self::$seenFiles[$file])) {
+            $alreadySeen = isset(self::$seenFiles[$file]);
+
+            if ($alreadySeen && !self::shouldLoad($file)) {
+                // Seen and unchanged — nothing to do.
                 continue;
             }
+
+            // An EXISTING inline file that changed needs re-execution to pick
+            // up edited routes. require_once won't re-run it, and a plain
+            // require would fatally redeclare any top-level function/class/etc
+            // the file defines. So we only re-execute when the file is safe to
+            // re-run (no top-level declarations — just Router::get/post/...
+            // calls). Files with top-level declarations are recorded so they
+            // stop being re-scanned, but their routes will NOT hot-reload; the
+            // user must restart the server. Honest caveat — see CLAUDE.md.
+            if ($alreadySeen && !self::isSafeToReExecute($file)) {
+                self::$lastMtimes[$file] = self::mtimeOf($file);
+                Log::warning(
+                    "Inline route file changed but declares top-level functions/classes, " .
+                    "so it can't be safely re-included: {$file}. Restart the server to pick up its route changes."
+                );
+                continue;
+            }
+
             try {
-                $result = require_once $file;
+                // First load uses require_once (cannot double-include); a safe
+                // changed file is re-run with require so its routes re-register.
+                $result = $alreadySeen ? require $file : require_once $file;
                 self::$seenFiles[$file] = true;
+                self::$lastMtimes[$file] = self::mtimeOf($file);
                 // Only count files that return a callable as route files
                 if (is_callable($result)) {
                     $discovered[] = [
@@ -285,6 +334,157 @@ class RouteDiscovery
         }
 
         return [$conventionFiles, $inlineFiles];
+    }
+
+    /**
+     * Decide whether a discovered file should be (re)loaded.
+     *
+     * Loads when the file is NEW (never seen) or CHANGED (mtime increased).
+     * Skips only when it has been seen AND is unchanged. The scope guard means
+     * files outside the discovered routes dir are never loaded — though
+     * findRouteFiles() already only ever yields files under that dir, this is
+     * a defence-in-depth check so we never touch framework/vendor files.
+     */
+    private static function shouldLoad(string $file): bool
+    {
+        if (!self::isWithinRoutesDir($file)) {
+            return false;
+        }
+        if (!isset(self::$seenFiles[$file])) {
+            return true;
+        }
+        return self::mtimeOf($file) > (self::$lastMtimes[$file] ?? 0);
+    }
+
+    /**
+     * Fresh mtime for a file, or 0 if it can't be read.
+     */
+    private static function mtimeOf(string $file): int
+    {
+        $mtime = @filemtime($file);
+        return $mtime === false ? 0 : $mtime;
+    }
+
+    /**
+     * Scope guard: a file may only be (re)loaded if it lives under the routes
+     * directory passed to the most recent scan(). Framework, vendor, and any
+     * other source files are off-limits to the reload path.
+     */
+    private static function isWithinRoutesDir(string $file): bool
+    {
+        if (self::$lastRoutesDir === '') {
+            return false;
+        }
+        $normalised = str_replace('\\', '/', $file);
+        $prefix = rtrim(self::$lastRoutesDir, '/') . '/';
+        return str_starts_with($normalised, $prefix);
+    }
+
+    /**
+     * Whether an inline route file is safe to re-execute on a hot reload.
+     *
+     * Re-running a file that declares top-level functions, classes, traits,
+     * interfaces, enums, or named constants would fatal with "cannot
+     * redeclare". Convention route files don't hit this (they `return` a
+     * closure), but arbitrary inline files might. We do a lightweight source
+     * scan and treat any top-level declaration as unsafe — such a file is left
+     * loaded as-is, and its route edits won't hot-reload until a restart.
+     *
+     * This is deliberately conservative: a false "unsafe" only costs a manual
+     * restart for that one file, whereas a false "safe" would crash the
+     * server.
+     */
+    private static function isSafeToReExecute(string $file): bool
+    {
+        $source = @file_get_contents($file);
+        if ($source === false) {
+            return false;
+        }
+
+        // Tokenise so keywords inside strings/comments don't trigger a false
+        // positive, and so `function ()` (closures/arrow fns — safe) are
+        // distinguished from `function name()` (named declarations — unsafe).
+        $tokens = @token_get_all($source);
+        if (!is_array($tokens)) {
+            return false;
+        }
+
+        $declaring = [T_CLASS, T_INTERFACE, T_TRAIT];
+        if (defined('T_ENUM')) {
+            $declaring[] = T_ENUM;
+        }
+
+        $count = count($tokens);
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!is_array($token)) {
+                continue;
+            }
+            $id = $token[0];
+
+            // class / interface / trait / enum — but not ::class.
+            if (in_array($id, $declaring, true)) {
+                $prev = self::previousMeaningfulToken($tokens, $i);
+                if ($prev !== null && is_array($prev) && $prev[0] === T_DOUBLE_COLON) {
+                    continue; // Foo::class — not a declaration
+                }
+                return false;
+            }
+
+            // A named function declaration: `function foo(`. A closure or
+            // arrow fn is `function (` / `fn (` and is safe to re-run.
+            if ($id === T_FUNCTION) {
+                $next = self::nextMeaningfulToken($tokens, $i);
+                if ($next !== null && is_array($next) && $next[0] === T_STRING) {
+                    return false;
+                }
+            }
+
+            // Top-level `const NAME = ...` (T_CONST). Class constants are also
+            // T_CONST but live inside a class body — and any file with a class
+            // body already returned false above. Function-level `const` isn't
+            // legal in PHP, so a surviving T_CONST here is a global constant.
+            if ($id === T_CONST) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Previous non-whitespace token before index $i, or null.
+     *
+     * @param array<int, array{0:int,1:string,2:int}|string> $tokens
+     * @return array{0:int,1:string,2:int}|string|null
+     */
+    private static function previousMeaningfulToken(array $tokens, int $i): array|string|null
+    {
+        for ($j = $i - 1; $j >= 0; $j--) {
+            if (is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                continue;
+            }
+            return $tokens[$j];
+        }
+        return null;
+    }
+
+    /**
+     * Next non-whitespace token after index $i, or null.
+     *
+     * @param array<int, array{0:int,1:string,2:int}|string> $tokens
+     * @return array{0:int,1:string,2:int}|string|null
+     */
+    private static function nextMeaningfulToken(array $tokens, int $i): array|string|null
+    {
+        $count = count($tokens);
+        for ($j = $i + 1; $j < $count; $j++) {
+            if (is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                continue;
+            }
+            return $tokens[$j];
+        }
+        return null;
     }
 
     /**

@@ -53,6 +53,18 @@ class DevAdmin
         return self::$bootTime;
     }
 
+    /** Last reload counter (mtime) reported to POST /__dev/api/reload. */
+    public static function getReloadMtime(): int
+    {
+        return self::$reloadMtime;
+    }
+
+    /** Last file path reported to POST /__dev/api/reload. */
+    public static function getReloadFile(): string
+    {
+        return self::$reloadFile;
+    }
+
     /** Last file path reported to POST /__dev/api/reload (for logging/UI). */
     private static string $reloadFile = '';
 
@@ -274,8 +286,10 @@ class DevAdmin
         });
 
         // API: Trigger browser reload — called by the Rust CLI when it detects file changes.
-        // Sets a flag that Server reads on its next tick to broadcast via WebSocket,
-        // and bumps the in-memory counter so the polling fallback detects the change.
+        // Bumps the in-memory counter so the polling fallback detects the change, then
+        // broadcasts an instant WebSocket message to every /__dev_reload client (the
+        // WebSocket-primary path). $pendingReload remains as a belt-and-braces signal so
+        // the server's idle tick re-broadcasts if the broadcast below couldn't run.
         Router::post('/__dev/api/reload', function (Request $request, Response $response) {
             self::$pendingReload = true;
             self::$reloadMtime = time();
@@ -309,6 +323,34 @@ class DevAdmin
                 }
             } catch (\Throwable $e) {
                 Log::error('Re-discover on reload failed: ' . $e->getMessage());
+            }
+
+            // WebSocket-primary reload: push an instant {type, file, mtime}
+            // message to every browser connected on /__dev_reload. The toolbar
+            // client (and the dev-admin dashboard) act on it immediately — the
+            // mtime poll above is only a fallback for when the socket is down.
+            // CSS changes swap stylesheets; everything else triggers a full
+            // page reload, so we normalise the wire `type` to "css" / "reload"
+            // (the HTTP response still echoes the caller's original type).
+            // Wrapped so a broadcast failure (or zero clients) never 500s the
+            // endpoint — mirrors Python's _api_reload broadcast.
+            $wsType = ($type === 'css') ? 'css' : 'reload';
+            try {
+                $server = Server::getInstance();
+                if ($server !== null) {
+                    $payload = json_encode([
+                        'type' => $wsType,
+                        'file' => self::$reloadFile,
+                        'mtime' => self::$reloadMtime,
+                    ]);
+                    $server->broadcastWebSocket($payload, '/__dev_reload');
+                    // The broadcast already covered live clients — clear the
+                    // idle-tick flag so the server doesn't send a second,
+                    // payload-less reload a moment later.
+                    self::$pendingReload = false;
+                }
+            } catch (\Throwable $e) {
+                Log::error('Dev-reload WebSocket broadcast failed: ' . $e->getMessage());
             }
 
             return $response->json(['ok' => true, 'type' => $type]);
@@ -2718,9 +2760,71 @@ HTML;
 OVERLAYSCRIPT;
 
         if (!self::$suppressReload) {
+            // WebSocket-primary dev reloader. The running server pushes a
+            // {type,file,mtime} message over /__dev_reload the moment a file
+            // changes — instant refresh, no polling in normal operation. The
+            // mtime poll is a FALLBACK only: it starts when the socket is down
+            // and stops the instant the socket connects. Mirrors the Python
+            // toolbar client exactly (null sentinel + differ-not-greater poll,
+            // reconnect after ~2s). On a {reload|change} message we do a full
+            // location.reload(); on {css} (or a .css/.scss file) we swap
+            // stylesheet hrefs with a cache-bust query instead.
             $toolbar .= <<<'RELOADSCRIPT'
 <script>
-(function(){var ws,delay=1000,maxDelay=30000,fails=0,mt=0,pollStarted=false;function tryWs(){var p=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(p+'//'+location.host+'/__dev_reload');ws.onopen=function(){delay=1000;fails=0;};ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='reload')location.reload();if(d.type==='css')document.querySelectorAll('link[rel=stylesheet]').forEach(function(l){l.href=l.href.split('?')[0]+'?v='+Date.now();});}catch(x){}};ws.onclose=function(){if(fails<3){delay=Math.min(delay*2,maxDelay);fails++;setTimeout(tryWs,delay);}else{startPolling();}};ws.onerror=function(){ws.close();};}catch(e){startPolling();}}function startPolling(){if(pollStarted)return;pollStarted=true;setInterval(function(){fetch('/__dev/api/mtime').then(function(r){return r.json();}).then(function(d){if(!d||!d.mtime)return;if(mt===0){mt=d.mtime;return;}if(d.mtime>mt){mt=d.mtime;location.reload();}}).catch(function(){});},3000);}tryWs();})();
+(function(){
+    var _t4_css_exts=['.css','.scss'],_t4_debounce=null;
+    var _t4_interval=3000;
+    var _t4_ws=null,_t4_poll_timer=null,_t4_mtime=null;
+    function _t4_apply(d){
+        d=d||{};
+        var f=d.file||'',t=d.type||'';
+        var isCss=t==='css'||_t4_css_exts.some(function(e){return f.endsWith(e)});
+        if(isCss){
+            var links=document.querySelectorAll('link[rel="stylesheet"]');
+            links.forEach(function(l){
+                var href=l.getAttribute('href');
+                if(href){l.setAttribute('href',href.split('?')[0]+'?_t4='+(d.mtime||Date.now()))}
+            });
+        }else{
+            location.reload();
+        }
+    }
+    function _t4_poll(){
+        fetch('/__dev/api/mtime').then(function(r){return r.json()}).then(function(d){
+            if(_t4_mtime===null){_t4_mtime=d.mtime;return;}
+            if(d.mtime!==_t4_mtime){
+                _t4_mtime=d.mtime;
+                if(_t4_debounce)clearTimeout(_t4_debounce);
+                _t4_debounce=setTimeout(function(){_t4_apply(d);},500);
+            }
+        }).catch(function(){});
+    }
+    function _t4_startPoll(){
+        if(_t4_poll_timer)return;
+        _t4_mtime=null;
+        _t4_poll_timer=setInterval(_t4_poll,_t4_interval);
+    }
+    function _t4_stopPoll(){
+        if(_t4_poll_timer){clearInterval(_t4_poll_timer);_t4_poll_timer=null;}
+    }
+    function _t4_connect(){
+        var url=(location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/__dev_reload';
+        try{_t4_ws=new WebSocket(url);}catch(_){_t4_startPoll();return;}
+        _t4_ws.addEventListener('open',function(){_t4_stopPoll();});
+        _t4_ws.addEventListener('message',function(ev){
+            var d=null;
+            try{d=typeof ev.data==='string'?JSON.parse(ev.data):null;}catch(_){}
+            if(!d)return;
+            if(d.type==='reload'||d.type==='change'||d.type==='css'){
+                if(_t4_debounce)clearTimeout(_t4_debounce);
+                _t4_debounce=setTimeout(function(){_t4_apply(d);},150);
+            }
+        });
+        _t4_ws.addEventListener('close',function(){_t4_ws=null;_t4_startPoll();setTimeout(_t4_connect,2000);});
+        _t4_ws.addEventListener('error',function(){try{_t4_ws&&_t4_ws.close();}catch(_){}});
+    }
+    _t4_connect();
+})();
 </script>
 RELOADSCRIPT;
         }

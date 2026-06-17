@@ -1348,7 +1348,7 @@ class Router
             // Not a closure or reflection failed — ignore
         }
 
-        self::$routes[$method][] = [
+        $entry = [
             'pattern' => $fullPath,
             'regex' => $parsed['regex'],
             'paramNames' => $parsed['paramNames'],
@@ -1364,8 +1364,29 @@ class Router
             'template' => $template,
         ];
 
+        // Replace in place when the same (method, path) is registered again —
+        // latest wins. Without this, a re-loaded route file (DevReload editing
+        // an existing handler) would APPEND a duplicate and matchInTable would
+        // keep returning the FIRST (stale) entry, so the edit never takes
+        // effect. Distinct paths keep their original slot, so order and
+        // first-match behaviour are preserved.
+        $existingIndex = null;
+        foreach (self::$routes[$method] as $index => $existing) {
+            if ($existing['pattern'] === $fullPath) {
+                $existingIndex = $index;
+                break;
+            }
+        }
+
+        if ($existingIndex !== null) {
+            self::$routes[$method][$existingIndex] = $entry;
+            self::$lastRouteIndex = $existingIndex;
+        } else {
+            self::$routes[$method][] = $entry;
+            self::$lastRouteIndex = count(self::$routes[$method]) - 1;
+        }
+
         self::$lastRouteMethod = $method;
-        self::$lastRouteIndex = count(self::$routes[$method]) - 1;
 
         return new self();
     }

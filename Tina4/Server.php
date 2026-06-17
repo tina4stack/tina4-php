@@ -37,6 +37,24 @@ class Server
     /** @var array<int, string> Read buffers keyed by socket resource ID */
     private array $buffers = [];
 
+    /**
+     * @var self|null The running server instance.
+     *
+     * Set in start(). Lets in-request handlers (notably POST
+     * /__dev/api/reload) reach the live WebSocket client registry and
+     * broadcast directly — mirroring Python's module-level `_ws_manager`
+     * which `_api_reload` broadcasts through. Single-process server, so a
+     * single static handle is sufficient (and is null outside a running
+     * server, e.g. PHPUnit).
+     */
+    private static ?self $instance = null;
+
+    /** Return the running server instance, or null when none is running. */
+    public static function getInstance(): ?self
+    {
+        return self::$instance;
+    }
+
     /** @var array<string, array{socket: resource, path: string, buffer: string, id: string}> WebSocket clients keyed by connection ID */
     private array $wsClients = [];
 
@@ -218,6 +236,7 @@ class Server
 
         stream_set_blocking($this->socket, false);
         $this->running = true;
+        self::$instance = $this;
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         // Disable the internal file watcher when launched by the Rust CLI (--managed).
         // The Rust CLI owns file watching, SCSS compilation, and browser reload.
@@ -1191,6 +1210,10 @@ class Server
             @fclose($this->aiSocket);
             $this->aiSocket = null;
         }
+
+        if (self::$instance === $this) {
+            self::$instance = null;
+        }
     }
 
     /**
@@ -1378,12 +1401,22 @@ class Server
 
     /**
      * Send a reload signal to all connected dev clients via WebSocket.
+     *
+     * Emits the same {type, file, mtime} payload shape as the
+     * POST /__dev/api/reload handler so both the toolbar client and the
+     * dev-admin dashboard react identically. This path covers the idle-tick
+     * fallback ($pendingReload) and the internal file watcher
+     * (onFilesChanged) — file/mtime come from the last reported reload.
      */
     private function broadcastReload(): void
     {
-        $message = json_encode(['type' => 'reload', 'timestamp' => time()]);
+        $message = json_encode([
+            'type' => 'reload',
+            'file' => DevAdmin::getReloadFile(),
+            'mtime' => DevAdmin::getReloadMtime(),
+        ]);
         $this->broadcastWebSocket($message, '/__dev_reload');
-        Log::info("Hot reload: browser refresh sent to " . count($this->reloadSubscribers) . " client(s)");
+        Log::info("Hot reload: browser refresh sent to " . count($this->wsClients) . " client(s)");
     }
 
     /**

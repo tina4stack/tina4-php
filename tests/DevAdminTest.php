@@ -87,14 +87,15 @@ class DevAdminTest extends TestCase
         $this->assertContains('/__dev/api/system', $patterns);
     }
 
-    public function testRegisterAddsDuplicateDevRoute(): void
+    public function testRegisterCollapsesDuplicateDevRoute(): void
     {
         DevAdmin::register();
-        $patterns = array_column(Router::getRoutes(), 'pattern');
-        // Both /__dev and /__dev/ are registered but Router normalizes trailing slash
-        // so both show up as /__dev. Verify at least two GET routes for /__dev exist.
+        // Both /__dev and /__dev/ are registered with the SAME handler, and the
+        // Router normalizes the trailing slash so both resolve to /__dev. With
+        // replace-in-place registration the duplicate collapses to exactly one
+        // GET route (latest wins) instead of leaving a redundant second entry.
         $devRoutes = array_filter(Router::getRoutes(), fn($r) => $r['pattern'] === '/__dev' && $r['method'] === 'GET');
-        $this->assertGreaterThanOrEqual(2, count($devRoutes));
+        $this->assertCount(1, $devRoutes, 'Duplicate /__dev registration must collapse to one GET route');
     }
 
     public function testRegisterRouteCount(): void
