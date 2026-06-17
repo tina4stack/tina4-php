@@ -24,7 +24,7 @@ $container->singleton('i18n', fn() => new I18n('src/locales', 'en'));
 
 // ── Database Setup ─────────────────────────────────────────────
 $db = $container->get('db');
-ORM::setGlobalDb($db);
+ORM::bindDatabase($db);
 \Tina4\App::setDatabase($db);
 
 $migration = new \Tina4\Migration($db, './migrations');
