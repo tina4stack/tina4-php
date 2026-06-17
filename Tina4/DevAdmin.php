@@ -2434,6 +2434,12 @@ class DevAdmin
      */
     private static function devAdminLang(string $path): string
     {
+        // No-extension Dockerfile detection (matches Python master) — a bare
+        // "Dockerfile" has no extension, so the match() below would miss it.
+        $base = strtolower(basename($path));
+        if (in_array($base, ['dockerfile', 'dockerfile.dev', 'dockerfile.prod'], true)) {
+            return 'dockerfile';
+        }
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         return match ($ext) {
             'py'               => 'python',
@@ -2445,13 +2451,18 @@ class DevAdmin
             'yaml', 'yml'      => 'yaml',
             'sql'              => 'sql',
             'md'               => 'markdown',
-            'html', 'htm'      => 'html',
+            'html', 'htm', 'xml' => 'html',
             'twig', 'jinja'    => 'twig',
-            'css'              => 'css',
-            'scss', 'sass'     => 'scss',
+            'css', 'scss', 'sass' => 'css',
             'toml'             => 'toml',
             'env'              => 'env',
-            'sh', 'bash'       => 'shell',
+            'sh', 'bash', 'bat', 'cmd', 'ps1' => 'shell',
+            'rs'               => 'rust',
+            'go'               => 'go',
+            'java'             => 'java',
+            'gemspec', 'rake'  => 'ruby',
+            'svg'              => 'svg',
+            'txt', 'csv', 'log' => 'text',
             'dockerfile'       => 'dockerfile',
             default            => 'text',
         };
