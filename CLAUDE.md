@@ -988,7 +988,7 @@ $result = SqlTranslation::remember(
 - QueryBuilder with NoSQL/MongoDB support (`toMongo()`)
 - WebSocket backplane (Redis pub/sub) for horizontal scaling
 - SameSite=Lax default on session cookies (`TINA4_SESSION_SAMESITE`)
-- `tina4 init` generates Dockerfile and .dockerignore
+- `tina4 deploy docker` generates Dockerfile and .dockerignore
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
