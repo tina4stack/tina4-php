@@ -207,6 +207,56 @@ class RouterV3Test extends TestCase
         $this->assertSame(401, $result->getStatusCode());
     }
 
+    // --- String middleware spec: "ResponseCache:300" (Feature 3) ---
+
+    public function testResponseCacheStringMiddlewareCachesWithHeaders(): void
+    {
+        \Tina4\Middleware\ResponseCache::clearCache();
+        $calls = 0;
+
+        // Route declares the cache via a string spec — no import needed.
+        Router::get('/api/widgets', function ($req, $res) use (&$calls) {
+            $calls++;
+            return $res->json(['call' => $calls]);
+        })->middleware(['ResponseCache:300']);
+
+        // First request → MISS, handler runs, X-Cache-TTL reflects the spec.
+        $miss = Router::dispatch(
+            Request::create(method: 'GET', path: '/api/widgets'),
+            new Response(testing: true)
+        );
+        $this->assertSame('MISS', $miss->getHeader('X-Cache'));
+        $this->assertSame('300', $miss->getHeader('X-Cache-TTL'));
+        $this->assertSame(1, $calls);
+
+        // Second request → HIT, handler does NOT run again, body is replayed.
+        $hit = Router::dispatch(
+            Request::create(method: 'GET', path: '/api/widgets'),
+            new Response(testing: true)
+        );
+        $this->assertSame('HIT', $hit->getHeader('X-Cache'));
+        $this->assertSame('300', $hit->getHeader('X-Cache-TTL'));
+        $this->assertSame(1, $calls, 'handler must not run on a cache HIT');
+        $this->assertStringContainsString('"call": 1', $hit->getBody());
+    }
+
+    public function testResponseCacheStringMiddlewareWithoutTtlUsesDefault(): void
+    {
+        \Tina4\Middleware\ResponseCache::clearCache();
+
+        Router::get('/api/plain', fn($req, $res) => $res->json(['ok' => true]))
+            ->middleware(['ResponseCache']);
+
+        $resp = Router::dispatch(
+            Request::create(method: 'GET', path: '/api/plain'),
+            new Response(testing: true)
+        );
+
+        // Bare "ResponseCache" → default TTL (60) from env/constructor default.
+        $this->assertSame('MISS', $resp->getHeader('X-Cache'));
+        $this->assertSame('60', $resp->getHeader('X-Cache-TTL'));
+    }
+
     // --- Route Groups ---
 
     public function testGroupPrefix(): void

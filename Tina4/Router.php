@@ -53,6 +53,15 @@ class Router
     /** @var string Method of the last registered route */
     private static ?string $lastRouteMethod = null;
 
+    /**
+     * Memoised continuations for string middleware specs ("ResponseCache:300")
+     * so one ResponseCache instance (and its backend) is reused across requests
+     * — parity with Python resolving the spec once at registration.
+     *
+     * @var array<string, \Closure>
+     */
+    private static array $resolvedStringMiddleware = [];
+
     /** @var array<string, string>|null Cached template lookup: url_path => template_file */
     private static ?array $templateCache = null;
 
@@ -363,6 +372,68 @@ class Router
             return false;
         }
         return $ref->getNumberOfParameters() >= 3;
+    }
+
+    /**
+     * Resolve a string middleware spec to an Express-style continuation
+     * closure, or null if the string is not a known parameterised middleware.
+     *
+     * Mirrors Python's `_resolve_string_middleware` registry. Accepts:
+     *   "ResponseCache"      → ResponseCache with default TTL
+     *   "ResponseCache:300"  → ResponseCache with ttl=300
+     *
+     * The returned closure ($req, $resp, $next) delegates to
+     * ResponseCache::handle(), which short-circuits with a cached HIT
+     * (skipping $next) or runs the handler via $next and stores the result on
+     * a MISS — stamping X-Cache / X-Cache-TTL in both paths. This is the path
+     * the dispatcher actually invokes (function-style middleware), so the
+     * headers land on both the hit and miss responses the dispatcher returns.
+     *
+     * Unknown / plain class-name strings return null so the caller's
+     * before_* static-method loop handles them unchanged.
+     */
+    private static function resolveStringMiddleware(string $spec): ?\Closure
+    {
+        $head = strstr($spec, ':', true);
+        $name = $head !== false ? $head : $spec;
+        $tail = $head !== false ? substr($spec, strlen($head) + 1) : '';
+
+        // Registry of string-addressable instance middleware (parity with
+        // Python). Only ResponseCache participates today; add entries here as
+        // other instance middleware gain string specs.
+        if ($name !== 'ResponseCache') {
+            return null;
+        }
+
+        // Memoise one continuation per spec. Python resolves the string once at
+        // route-registration time, so a single ResponseCache instance (and its
+        // backend) is reused across requests — that is what makes the cache
+        // actually hit on the 2nd request. PHP resolves per dispatch, so cache
+        // the closure here to get the same single-instance behaviour.
+        if (isset(self::$resolvedStringMiddleware[$spec])) {
+            return self::$resolvedStringMiddleware[$spec];
+        }
+
+        // Parse the first colon-arg as the TTL (e.g. "ResponseCache:300").
+        $config = [];
+        if ($tail !== '') {
+            $firstArg = strstr($tail, ':', true);
+            $ttlArg = $firstArg !== false ? $firstArg : $tail;
+            if (is_numeric($ttlArg)) {
+                $config['ttl'] = (int) $ttlArg;
+            }
+        }
+
+        $cache = new \Tina4\Middleware\ResponseCache($config);
+
+        // ResponseCache::handle() is a self-contained continuation: lookup +
+        // HIT short-circuit + MISS store, stamping X-Cache headers in every
+        // path, without mutating the Request.
+        $closure = static function (Request $request, Response $response, callable $next) use ($cache): mixed {
+            return $cache->handle($request, $response, $next);
+        };
+        self::$resolvedStringMiddleware[$spec] = $closure;
+        return $closure;
     }
 
     /**
@@ -807,6 +878,17 @@ class Router
         //     tina4-book#141 PY-10-01 parity fix.
         $functionMiddlewares = [];
         foreach ($route['middleware'] as $mw) {
+            // String specs for known instance middleware ("ResponseCache",
+            // "ResponseCache:300") resolve to an Express-style continuation
+            // that runs the instance's before/after hooks around the handler.
+            // Parity with Python's _resolve_string_middleware registry. Returns
+            // null for plain class strings (handled by the before_* loop below).
+            if (is_string($mw)) {
+                $resolved = self::resolveStringMiddleware($mw);
+                if ($resolved !== null) {
+                    $mw = $resolved;
+                }
+            }
             if (self::isFunctionMiddleware($mw)) {
                 $functionMiddlewares[] = $mw;
                 continue;
@@ -1227,6 +1309,7 @@ class Router
         self::$lastRouteIndex = null;
         self::$lastRouteMethod = null;
         self::$basePath = '.';
+        self::$resolvedStringMiddleware = [];
     }
 
     /**

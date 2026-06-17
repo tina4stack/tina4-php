@@ -265,9 +265,12 @@ class CachedDatabase implements DatabaseAdapter
         return $this->adapter->query($sql, $params);
     }
 
-    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array
+    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0, bool $noCache = false): array
     {
-        if ($this->enabled) {
+        // $noCache=true bypasses the query cache for this one call — no lookup,
+        // no store — and runs straight against the adapter. Works in either
+        // cache mode. Parity with Python Database.fetch(no_cache=True).
+        if ($this->enabled && !$noCache) {
             $key = $this->cacheKey($sql . ":L{$limit}:O{$offset}", $params);
             $cached = $this->cacheGet($key);
             if ($cached !== null) {
@@ -282,9 +285,10 @@ class CachedDatabase implements DatabaseAdapter
         return $this->adapter->fetch($sql, $params, $limit, $offset);
     }
 
-    public function fetchOne(string $sql, array $params = []): ?array
+    public function fetchOne(string $sql, array $params = [], bool $noCache = false): ?array
     {
-        if ($this->enabled) {
+        // $noCache=true bypasses the query cache for this one call (see fetch()).
+        if ($this->enabled && !$noCache) {
             $key = $this->cacheKey($sql . ':ONE', $params);
             $cached = $this->cacheGet($key);
             if ($cached !== null) {

@@ -315,12 +315,17 @@ class Database implements DatabaseAdapter
      * @param array<mixed> $params Bound parameters
      * @param int $limit Max rows to return
      * @param int $offset Starting offset
+     * @param bool $noCache When true, bypass the query cache for this call —
+     *   no lookup, no store — and run straight against the connection. Default
+     *   false preserves caching. Parity with Python Database.fetch(no_cache=).
      * @return DatabaseResult
      */
-    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
+    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0, bool $noCache = false): DatabaseResult
     {
         $adapter = $this->getNextAdapter();
-        $raw = $adapter->fetch($sql, $params, $limit, $offset);
+        $raw = $adapter instanceof CachedDatabase
+            ? $adapter->fetch($sql, $params, $limit, $offset, $noCache)
+            : $adapter->fetch($sql, $params, $limit, $offset);
 
         $records = $raw['data'] ?? [];
         $columns = !empty($records) ? array_keys($records[0]) : [];
@@ -357,10 +362,12 @@ class Database implements DatabaseAdapter
      * v3.13.12: default `$limit` is **0** (no truncation) — the method
      * name says `fetchAll`, so it returns all matching rows. Pre-v3.13.12
      * silently truncated to 100. Pass an explicit `$limit` to cap.
+     *
+     * `$noCache=true` bypasses the query cache for this one call (see fetch()).
      */
-    public function fetchAll(string $sql, array $params = [], int $limit = 0, int $offset = 0): array
+    public function fetchAll(string $sql, array $params = [], int $limit = 0, int $offset = 0, bool $noCache = false): array
     {
-        return $this->fetch($sql, $params, $limit, $offset)->records;
+        return $this->fetch($sql, $params, $limit, $offset, $noCache)->records;
     }
 
     /**
@@ -368,11 +375,15 @@ class Database implements DatabaseAdapter
      *
      * @param string $sql SQL query
      * @param array<mixed> $params Bound parameters
+     * @param bool $noCache When true, bypass the query cache for this call (see fetch()).
      * @return array<string, mixed>|null
      */
-    public function fetchOne(string $sql, array $params = []): ?array
+    public function fetchOne(string $sql, array $params = [], bool $noCache = false): ?array
     {
-        return $this->getNextAdapter()->fetchOne($sql, $params);
+        $adapter = $this->getNextAdapter();
+        return $adapter instanceof CachedDatabase
+            ? $adapter->fetchOne($sql, $params, $noCache)
+            : $adapter->fetchOne($sql, $params);
     }
 
     /**

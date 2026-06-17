@@ -20,6 +20,8 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Middleware\ResponseCache;
+use Tina4\Request;
+use Tina4\Response;
 
 class ResponseCacheTest extends TestCase
 {
@@ -27,6 +29,59 @@ class ResponseCacheTest extends TestCase
     {
         // Reset the module-level singleton state before each test
         ResponseCache::clearCache();
+    }
+
+    // -- X-Cache response headers (Feature 2) --------------------------------
+
+    public function testHandleSetsMissThenHitHeaders(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $handler = static fn(Request $req, Response $res): Response => $res->json(['n' => 1]);
+
+        // First request through the continuation → MISS (handler runs, stored).
+        $req1 = Request::create(method: 'GET', path: '/api/cached');
+        $miss = $cache->handle($req1, new Response(testing: true), $handler);
+        $this->assertSame('MISS', $miss->getHeader('X-Cache'));
+        $this->assertSame('60', $miss->getHeader('X-Cache-TTL'));
+
+        // Second request → HIT (served from cache, handler NOT run).
+        $ran = false;
+        $hitHandler = static function (Request $req, Response $res) use (&$ran): Response {
+            $ran = true;
+            return $res->json(['n' => 999]);
+        };
+        $req2 = Request::create(method: 'GET', path: '/api/cached');
+        $hit = $cache->handle($req2, new Response(testing: true), $hitHandler);
+        $this->assertSame('HIT', $hit->getHeader('X-Cache'));
+        $this->assertSame('60', $hit->getHeader('X-Cache-TTL'));
+        $this->assertFalse($ran, 'handler must not run on a cache HIT');
+        // HIT replays the originally cached body, not the new handler body.
+        $this->assertStringContainsString('"n": 1', $hit->getBody());
+    }
+
+    public function testHandleNoCacheControlHeader(): void
+    {
+        $cache = new ResponseCache(['ttl' => 30]);
+        $handler = static fn(Request $req, Response $res): Response => $res->json(['ok' => true]);
+        $req = Request::create(method: 'GET', path: '/no-cc');
+        $resp = $cache->handle($req, new Response(testing: true), $handler);
+
+        $this->assertSame('MISS', $resp->getHeader('X-Cache'));
+        $this->assertSame('30', $resp->getHeader('X-Cache-TTL'));
+        // Parity with Python/Ruby: ResponseCache does NOT emit Cache-Control.
+        $this->assertNull($resp->getHeader('Cache-Control'));
+    }
+
+    public function testHandleNonGetIsNotCachedAndUnmarked(): void
+    {
+        $cache = new ResponseCache(['ttl' => 60]);
+        $handler = static fn(Request $req, Response $res): Response => $res->json(['ok' => true]);
+        $req = Request::create(method: 'POST', path: '/api/cached');
+        $resp = $cache->handle($req, new Response(testing: true), $handler);
+
+        // Non-GET passes straight through — no caching, no X-Cache header.
+        $this->assertNull($resp->getHeader('X-Cache'));
+        $this->assertNull($cache->_internalLookup('GET', '/api/cached'));
     }
 
     // -- Internal store / lookup (via middleware test seams) -----------------

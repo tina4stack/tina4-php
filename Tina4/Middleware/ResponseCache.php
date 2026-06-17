@@ -138,15 +138,21 @@ class ResponseCache
         $url = (string)($request->url ?? $request->path ?? '/');
         $hit = $this->internalLookup($method, $url);
         if ($hit !== null) {
-            // Replay the cached response
+            // Replay the cached response and mark it as a cache HIT.
             if (is_callable($response)) {
                 $response = $response($hit['body'], $hit['statusCode'], $hit['contentType']);
             }
+            $this->markCacheHeaders($response, 'HIT');
             return [$request, $response];
         }
 
-        // Tag for afterCache
+        // Tag for afterCache and stamp a provisional MISS header. afterCache
+        // re-stamps MISS once the body is captured, but stamping here too
+        // guarantees the header is present even on dispatch paths that don't
+        // invoke afterCache (the router's class-string middleware loop only
+        // runs before* hooks).
         $request->_cacheKey = $this->cacheKey($method, $url);
+        $this->markCacheHeaders($response, 'MISS');
         return [$request, $response];
     }
 
@@ -169,13 +175,13 @@ class ResponseCache
             return [$request, $response];
         }
 
-        $statusCode = (int)($response->statusCode ?? $response->httpCode ?? 200);
+        $statusCode = $this->extractStatus($response);
         if (!in_array($statusCode, $this->statusCodes, true)) {
             return [$request, $response];
         }
 
-        $body = (string)($response->body ?? $response->content ?? '');
-        $contentType = (string)($response->contentType ?? 'application/json');
+        $body = $this->extractBody($response);
+        $contentType = $this->extractContentType($response);
 
         $entry = [
             'body' => $body,
@@ -185,7 +191,135 @@ class ResponseCache
         ];
         $this->backendImpl->set($cacheKey, $entry, $this->ttl);
 
+        // This response was produced by the handler (not served from cache),
+        // so it is a MISS — stamp the X-Cache headers the dispatcher returns.
+        $this->markCacheHeaders($response, 'MISS');
+
         return [$request, $response];
+    }
+
+    /**
+     * Express-style continuation — the entry point the router uses when this
+     * middleware is attached as a string spec ("ResponseCache:300").
+     *
+     * Self-contained: it performs the lookup, short-circuits on a HIT (skipping
+     * the handler), or runs the handler via $next and stores the result on a
+     * MISS — all without mutating the Request (unlike the before/after hook
+     * pair, which tags request->_cacheKey). Sets X-Cache / X-Cache-TTL on the
+     * response it returns in every path.
+     *
+     * @param object   $request  Tina4 request
+     * @param object   $response Tina4 response
+     * @param callable $next     Continuation that runs the rest of the chain
+     * @return object The (possibly cached) response
+     */
+    public function handle(object $request, object $response, callable $next): object
+    {
+        // Non-cacheable (disabled or non-GET) → straight through, no headers.
+        $method = strtoupper((string)($request->method ?? 'GET'));
+        if ($this->ttl <= 0 || $method !== 'GET') {
+            return $this->normaliseResponse($next($request, $response), $response);
+        }
+
+        $url = (string)($request->url ?? $request->path ?? '/');
+        $hit = $this->internalLookup($method, $url);
+        if ($hit !== null) {
+            // HIT — replay the cached body and stamp X-Cache: HIT.
+            if (is_callable($response)) {
+                $response = $response($hit['body'], $hit['statusCode'], $hit['contentType']);
+            }
+            $this->markCacheHeaders($response, 'HIT');
+            return $response;
+        }
+
+        // MISS — run the handler, store the result, stamp X-Cache: MISS.
+        $finalResponse = $this->normaliseResponse($next($request, $response), $response);
+
+        $statusCode = $this->extractStatus($finalResponse);
+        if (in_array($statusCode, $this->statusCodes, true)) {
+            $this->backendImpl->set($this->cacheKey($method, $url), [
+                'body' => $this->extractBody($finalResponse),
+                'contentType' => $this->extractContentType($finalResponse),
+                'statusCode' => $statusCode,
+                'expiresAt' => microtime(true) + $this->ttl,
+            ], $this->ttl);
+        }
+        $this->markCacheHeaders($finalResponse, 'MISS');
+        return $finalResponse;
+    }
+
+    /**
+     * Normalise a handler return value (Response | array | string | other)
+     * into a Response with a populated body, mirroring the router dispatcher
+     * so the cache always stores real content.
+     */
+    private function normaliseResponse(mixed $result, object $response): object
+    {
+        if (is_object($result) && method_exists($result, 'getBody')) {
+            return $result; // already a Response
+        }
+        if (is_array($result) && method_exists($response, 'json')) {
+            return $response->json($result);
+        }
+        if (is_string($result) && method_exists($response, 'html')) {
+            return $response->html($result);
+        }
+        return $response;
+    }
+
+    /**
+     * Stamp X-Cache / X-Cache-TTL headers on a response. Best-effort: uses
+     * Response::header() when available, else writes a public `$headers`
+     * array. No Cache-Control header is set (parity with Python/Ruby).
+     */
+    private function markCacheHeaders(object $response, string $state): void
+    {
+        if (method_exists($response, 'header')) {
+            $response->header('X-Cache', $state);
+            $response->header('X-Cache-TTL', (string)$this->ttl);
+            return;
+        }
+        if (isset($response->headers) && is_array($response->headers)) {
+            $response->headers['X-Cache'] = $state;
+            $response->headers['X-Cache-TTL'] = (string)$this->ttl;
+        }
+    }
+
+    /**
+     * Best-effort body extraction. Response stores its body privately and
+     * exposes it via getBody(); fall back to public body/content props.
+     */
+    private function extractBody(object $response): string
+    {
+        if (method_exists($response, 'getBody')) {
+            return (string)$response->getBody();
+        }
+        return (string)($response->body ?? $response->content ?? '');
+    }
+
+    /**
+     * Best-effort content-type extraction (getContentType(), then props).
+     */
+    private function extractContentType(object $response): string
+    {
+        if (method_exists($response, 'getContentType')) {
+            $ct = $response->getContentType();
+            if ($ct !== null && $ct !== '') {
+                return (string)$ct;
+            }
+        }
+        return (string)($response->contentType ?? 'application/json');
+    }
+
+    /**
+     * Best-effort status extraction (getStatusCode(), then props).
+     */
+    private function extractStatus(object $response): int
+    {
+        if (method_exists($response, 'getStatusCode')) {
+            return (int)$response->getStatusCode();
+        }
+        return (int)($response->statusCode ?? $response->httpCode ?? 200);
     }
 
     // ── Internal lookup / store (response cache, NOT public) ─────
