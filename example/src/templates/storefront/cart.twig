@@ -26,7 +26,7 @@
             <tbody>
                 {% for item in cart_items %}
                     <tr id="cart-row-{{ item.productId }}">
-                        <td><img src="{{ item.imageUrl }}" alt="{{ item.name }}" width="60"></td>
+                        <td><img src="{{ item.image_url }}" alt="{{ item.name }}" width="60"></td>
                         <td>{{ item.name }}</td>
                         <td class="text-end">
                             <div class="qty-spinner">

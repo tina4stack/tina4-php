@@ -42,12 +42,12 @@
             <label>{{ t("product_image") }}</label>
             <div class="row">
                 <div class="col" style="max-width:160px;">
-                    <img id="image-preview" src="{{ product.imageUrl }}" alt="Preview" class="product-detail-image mb-2">
+                    <img id="image-preview" src="{{ product.image_url }}" alt="Preview" class="product-detail-image mb-2">
                 </div>
                 <div class="col">
                     <input type="file" id="image-file" accept="image/*" class="form-control mb-2">
                     <div id="upload-status" class="text-muted"></div>
-                    <input type="hidden" id="image_url" name="image_url" value="{{ product.imageUrl }}">
+                    <input type="hidden" id="image_url" name="image_url" value="{{ product.image_url }}">
                 </div>
             </div>
         </div>
