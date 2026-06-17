@@ -2022,6 +2022,60 @@ class DevAdmin
             }
         });
 
+        // ── MCP JSON-RPC + SSE (real MCP clients) ─────────────────
+        //
+        // The REST shim above is what the browser dev-admin panel
+        // speaks. Real MCP clients (Claude Code / Claude Desktop) speak
+        // the JSON-RPC 2.0 + SSE transport instead. Both endpoints share
+        // the SAME default McpServer as the REST shim, so the tool set is
+        // identical. These are only registered in development mode (the
+        // whole of register() is gated on TINA4_DEBUG), so production
+        // never exposes them. Mirrors the tina4-python fix that added the
+        // JSON-RPC handlers next to the REST shim in _handle_dev_admin.
+        //
+        // POST /__dev/mcp and POST /__dev/mcp/message both feed the same
+        // handler — the bare path is what `.tina4/mcp.json` advertises and
+        // the /message suffix is the SSE-advertised endpoint. Notifications
+        // (no id) get a 204; everything else returns the JSON-RPC response.
+        $mcpMessageHandler = function (Request $request, Response $response) {
+            $server = McpServer::getDefaultServer();
+            // Prefer the framework-parsed body (array). Fall back to the raw
+            // string so a hand-rolled client posting text/plain still works.
+            $body = $request->body;
+            if (is_array($body) && !empty($body)) {
+                $raw = $body;
+            } elseif (is_string($body) && $body !== '') {
+                $raw = $body;
+            } elseif (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+                $raw = $request->rawBody;
+            } else {
+                $raw = is_array($body) ? $body : (string) $body;
+            }
+            $result = $server->handleMessage($raw);
+            if ($result === '') {
+                // Notification / no-id request — no body, just acknowledge.
+                return $response('', 204);
+            }
+            return $response->json(json_decode($result, true));
+        };
+        (Router::post('/__dev/mcp', $mcpMessageHandler))->noAuth();
+        (Router::post('/__dev/mcp/message', $mcpMessageHandler))->noAuth();
+
+        // GET /__dev/mcp/sse — SSE handshake. MCP clients open this stream
+        // first; the server replies with a single `endpoint` event telling
+        // the client where to POST JSON-RPC messages. We point it at the
+        // sibling /__dev/mcp/message route registered above. This is one
+        // fixed frame, not a long-lived stream, so we set it as a normal
+        // response body carrying the text/event-stream content-type — the
+        // built-in server writes $response->getBody() to the socket itself,
+        // whereas Response::stream() does direct SAPI output the socket
+        // server cannot carry (and FPM would chunk-truncate a one-shot).
+        (Router::get('/__dev/mcp/sse', function (Request $request, Response $response) {
+            return $response
+                ->text("event: endpoint\ndata: /__dev/mcp/message\n\n")
+                ->header('Content-Type', 'text/event-stream');
+        }))->noAuth();
+
         // ── Scaffold: + Route / + Model / + Migration / + Middleware
         Router::get('/__dev/api/scaffold', function (Request $request, Response $response) {
             return $response->json(['kinds' => [
