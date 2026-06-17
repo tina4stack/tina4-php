@@ -43,6 +43,7 @@ class Queue
     private string $backend;
     private string $basePath;
     private int $maxRetries;
+    private int $retryBackoff;
     private string $topic;
 
     /** @var LiteBackend File-based queue backend */
@@ -55,7 +56,7 @@ class Queue
      * Unified Queue constructor.
      *
      * @param string $backend    Queue backend type: 'file', 'rabbitmq', 'kafka'
-     * @param array  $config     Configuration: path, maxRetries, and backend-specific options
+     * @param array  $config     Configuration: path, maxRetries, retryBackoff, and backend-specific options
      * @param string $topic      Default topic/queue name
      */
     public function __construct(string $backend = 'file', array $config = [], string $topic = 'default')
@@ -63,10 +64,13 @@ class Queue
         $this->backend = getenv('TINA4_QUEUE_BACKEND') ?: $backend;
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');
         $this->maxRetries = $config['maxRetries'] ?? 3;
+        // Seconds to delay a failed job's automatic re-enqueue (parity with
+        // Python's retry_backoff). 0 = retry on the next pop()/consume().
+        $this->retryBackoff = (int)($config['retryBackoff'] ?? 0);
         $this->topic = $topic;
 
         // Always initialise the lite (file) backend
-        $this->liteBackend = new LiteBackend($this->basePath, $this->maxRetries);
+        $this->liteBackend = new LiteBackend($this->basePath, $this->maxRetries, $this->retryBackoff);
 
         // Initialize external backends
         if ($this->backend === 'rabbitmq') {
@@ -209,11 +213,9 @@ class Queue
                 try {
                     $handler($jobs);
                 } catch (\Throwable $e) {
-                    foreach ($jobs as $job) {
-                        $job['status'] = 'failed';
-                        $job['error'] = $e->getMessage();
-                        $job['attempts'] = ($job['attempts'] ?? 0) + 1;
-                        $this->liteBackend->writeFailed($queue, $job);
+                    // Route each job through the auto retry → dead-letter lifecycle.
+                    foreach ($jobs as $jobData) {
+                        $this->failJob($queue, $jobData, $e->getMessage());
                     }
                 }
                 $processed += count($jobs);
@@ -230,12 +232,9 @@ class Queue
                 try {
                     $handler($job);
                 } catch (\Throwable $e) {
-                    // Mark as failed
-                    $job['status'] = 'failed';
-                    $job['error'] = $e->getMessage();
-                    $job['attempts'] = ($job['attempts'] ?? 0) + 1;
-
-                    $this->liteBackend->writeFailed($queue, $job);
+                    // Auto retry → dead-letter: re-enqueue while retries remain,
+                    // otherwise move to the dead-letter store.
+                    $this->failJob($queue, $job, $e->getMessage());
                 }
 
                 $processed++;
@@ -271,13 +270,36 @@ class Queue
     }
 
     /**
-     * Write a job to the failed store (called by Job::fail).
+     * Record a failed attempt for a job and apply the auto retry → dead-letter
+     * lifecycle (called by Job::fail() and the process() error handler).
      *
-     * @internal Used by Job — not part of the public Queue API
+     * Increments attempts + stores the error; re-enqueues to pending while
+     * retries remain (after retryBackoff), otherwise moves to the dead-letter
+     * store once attempts >= maxRetries.
+     *
+     * @internal Used by Job and process() — not a primary public Queue verb
      */
-    public function writeFailed(string $topic, array $jobData): void
+    public function failJob(string $topic, array $jobData, string $error = ''): void
     {
-        $this->liteBackend->writeFailed($topic, $jobData);
+        // External brokers manage retries/dead-lettering themselves.
+        if ($this->externalBackend !== null) {
+            return;
+        }
+        $this->liteBackend->failJob($topic, $jobData, $error);
+    }
+
+    /**
+     * Explicitly re-queue a job (called by Job::retry()). Always re-enqueues
+     * regardless of the retry limit — a manual override, distinct from failJob().
+     *
+     * @internal Used by Job — not a primary public Queue verb
+     */
+    public function retryJob(string $topic, array $jobData, int $delaySeconds = 0): void
+    {
+        if ($this->externalBackend !== null) {
+            return;
+        }
+        $this->liteBackend->retryJob($topic, $jobData, $delaySeconds);
     }
 
     /**

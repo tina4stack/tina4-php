@@ -20,15 +20,19 @@ class LiteBackend implements QueueBackend
 {
     private string $basePath;
     private int $maxRetries;
+    private int $retryBackoff;
 
     /**
-     * @param string $basePath   Base filesystem path for queue directories
-     * @param int    $maxRetries Maximum retry attempts before a job is considered dead
+     * @param string $basePath     Base filesystem path for queue directories
+     * @param int    $maxRetries   Maximum retry attempts before a job is dead-lettered
+     * @param int    $retryBackoff Seconds to delay a job's automatic re-enqueue on fail()
+     *                             (0 = retry on the very next pop()/consume() iteration)
      */
-    public function __construct(string $basePath = 'data/queue', int $maxRetries = 3)
+    public function __construct(string $basePath = 'data/queue', int $maxRetries = 3, int $retryBackoff = 0)
     {
         $this->basePath = $basePath;
         $this->maxRetries = $maxRetries;
+        $this->retryBackoff = $retryBackoff;
     }
 
     // -------------------------------------------------------------------------
@@ -68,21 +72,25 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Pop the next available (pending, non-delayed) message from a topic.
+     * Gather every pending, non-delayed job for a topic, ordered by the
+     * dequeue policy: highest priority first, ties broken oldest-first
+     * (created_at ASC). The stored priority and created_at fields are the
+     * ordering keys — not the filename — so pop()/consume() honour priority
+     * instead of being pure FIFO.
      *
-     * @param string $topic The queue/topic name
-     * @return array|null Job data or null if empty
+     * @param string $topic Queue/topic name
+     * @return array<int, array{file: string, data: array}> Ordered candidates
      */
-    public function dequeue(string $topic): ?array
+    private function availableCandidates(string $topic): array
     {
         $queuePath = $this->queuePath($topic);
         if (!is_dir($queuePath)) {
-            return null;
+            return [];
         }
 
         $files = glob($queuePath . '/*.queue-data');
         if (empty($files)) {
-            return null;
+            return [];
         }
 
         $candidates = [];
@@ -90,34 +98,54 @@ class LiteBackend implements QueueBackend
 
         foreach ($files as $file) {
             $data = json_decode(file_get_contents($file), true);
-            if ($data === null || $data['status'] !== 'pending') {
+            if ($data === null || ($data['status'] ?? '') !== 'pending') {
                 continue;
             }
-
             if (!empty($data['delay_until']) && (float)$data['delay_until'] > $nowMicro) {
-                continue;
+                continue; // still delayed
             }
-
             $candidates[] = ['file' => $file, 'data' => $data];
         }
 
-        if (empty($candidates)) {
-            return null;
-        }
+        // priority DESC, then created_at ASC (oldest first). created_at is a
+        // zero-padded microtime string, so string compare == chronological.
+        usort($candidates, function ($a, $b) {
+            $pa = (int)($a['data']['priority'] ?? 0);
+            $pb = (int)($b['data']['priority'] ?? 0);
+            if ($pa !== $pb) {
+                return $pb <=> $pa; // higher priority first
+            }
+            return strcmp((string)($a['data']['created_at'] ?? ''), (string)($b['data']['created_at'] ?? ''));
+        });
 
-        usort($candidates, fn($a, $b) => strcmp($a['data']['created_at'], $b['data']['created_at']));
-
-        $chosen = $candidates[0];
-        $job = $chosen['data'];
-        $job['topic'] = $topic;
-
-        unlink($chosen['file']);
-
-        return $job;
+        return $candidates;
     }
 
     /**
-     * Pop up to $count pending jobs at once. Returns a partial batch if fewer available.
+     * Pop the next available (pending, non-delayed) message from a topic.
+     * Returns the highest-priority job first; ties broken oldest-first.
+     *
+     * @param string $topic The queue/topic name
+     * @return array|null Job data or null if empty
+     */
+    public function dequeue(string $topic): ?array
+    {
+        foreach ($this->availableCandidates($topic) as $candidate) {
+            // Claim the job by deleting the file. If another worker beat us
+            // to it, skip to the next candidate.
+            if (@unlink($candidate['file'])) {
+                $job = $candidate['data'];
+                $job['topic'] = $topic;
+                return $job;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Pop up to $count pending jobs at once, highest priority first.
+     * Returns a partial batch if fewer available.
      *
      * @param string $topic Queue/topic name
      * @param int    $count Maximum number of jobs to return
@@ -125,38 +153,8 @@ class LiteBackend implements QueueBackend
      */
     public function dequeueBatch(string $topic, int $count): array
     {
-        $queuePath = $this->queuePath($topic);
-        if (!is_dir($queuePath)) {
-            return [];
-        }
-
-        $files = glob($queuePath . '/*.queue-data');
-        if (empty($files)) {
-            return [];
-        }
-
-        $candidates = [];
-        $nowMicro = microtime(true);
-
-        foreach ($files as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            if ($data === null || $data['status'] !== 'pending') {
-                continue;
-            }
-            if (!empty($data['delay_until']) && (float)$data['delay_until'] > $nowMicro) {
-                continue;
-            }
-            $candidates[] = ['file' => $file, 'data' => $data];
-        }
-
-        if (empty($candidates)) {
-            return [];
-        }
-
-        usort($candidates, fn($a, $b) => strcmp($a['data']['created_at'], $b['data']['created_at']));
-
         $jobs = [];
-        foreach ($candidates as $candidate) {
+        foreach ($this->availableCandidates($topic) as $candidate) {
             if (count($jobs) >= $count) {
                 break;
             }
@@ -182,17 +180,27 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Re-queue a message for retry.
+     * Re-queue a message for retry (writes it back to the pending queue).
      *
-     * @param string $topic   The queue/topic name
-     * @param array  $message The message data
+     * Re-enqueued jobs get a fresh created_at so that within a priority tier
+     * they sort behind jobs that have not yet been attempted. The attempts
+     * count already reflects the latest failure.
+     *
+     * @param string $topic        The queue/topic name
+     * @param array  $message      The message data
+     * @param int    $delaySeconds Seconds to delay availability (0 = immediate)
      */
-    public function requeue(string $topic, array $message): void
+    public function requeue(string $topic, array $message, int $delaySeconds = 0): void
     {
         $queuePath = $this->queuePath($topic);
         $this->ensureDir($queuePath);
 
         $message['status'] = 'pending';
+        $message['created_at'] = $this->now();
+        $message['delay_until'] = $delaySeconds > 0
+            ? sprintf('%.6f', microtime(true) + $delaySeconds)
+            : null;
+
         file_put_contents(
             $queuePath . '/' . $message['id'] . '.queue-data',
             json_encode($message, JSON_PRETTY_PRINT)
@@ -200,7 +208,8 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Send a message to the dead letter (failed) queue.
+     * Send a message to the dead letter (failed) queue. Terminal until a
+     * manual retryFailed()/retry() revives it.
      *
      * @param string $topic   The original queue/topic name
      * @param array  $message The message data
@@ -210,11 +219,62 @@ class LiteBackend implements QueueBackend
         $failedPath = $this->queuePath($topic) . '/failed';
         $this->ensureDir($failedPath);
 
-        $message['status'] = 'failed';
+        $message['status'] = 'dead';
+        $message['failed_at'] = $this->now();
         file_put_contents(
             $failedPath . '/' . $message['id'] . '.queue-data',
             json_encode($message, JSON_PRETTY_PRINT)
         );
+    }
+
+    /**
+     * Record a failed attempt for a job (the automatic fail() lifecycle).
+     *
+     * Increments attempts and stores the error. If the job still has retries
+     * left (attempts < maxRetries) it is automatically re-enqueued to the
+     * pending queue — so the next pop()/consume() iteration picks it up again
+     * — after the configured retryBackoff delay. Once it has been attempted
+     * maxRetries times (attempts >= maxRetries) it is moved to the dead-letter
+     * store, where deadLetters() returns it.
+     *
+     * @param string $topic   The queue/topic name
+     * @param array  $jobData Job data (must contain id, payload/priority/attempts)
+     * @param string $error   Failure reason
+     * @return array The job data with the incremented attempts + error applied
+     */
+    public function failJob(string $topic, array $jobData, string $error = ''): array
+    {
+        $jobData['attempts'] = (int)($jobData['attempts'] ?? 0) + 1;
+        $jobData['error'] = $error;
+
+        if ($jobData['attempts'] < $this->maxRetries) {
+            $this->requeue($topic, $jobData, $this->retryBackoff);
+        } else {
+            $this->deadLetter($topic, $jobData);
+        }
+
+        return $jobData;
+    }
+
+    /**
+     * Explicit re-queue requested by the caller (Job::retry()).
+     *
+     * Always re-enqueues regardless of the retry limit — this is a manual
+     * override, distinct from the automatic failJob() path. Increments
+     * attempts and clears the error.
+     *
+     * @param string $topic        The queue/topic name
+     * @param array  $jobData      Job data
+     * @param int    $delaySeconds Seconds to delay availability
+     * @return array The job data with the incremented attempts applied
+     */
+    public function retryJob(string $topic, array $jobData, int $delaySeconds = 0): array
+    {
+        $jobData['attempts'] = (int)($jobData['attempts'] ?? 0) + 1;
+        $jobData['error'] = null;
+        $this->requeue($topic, $jobData, $delaySeconds);
+
+        return $jobData;
     }
 
     /**
@@ -241,39 +301,42 @@ class LiteBackend implements QueueBackend
     // -------------------------------------------------------------------------
 
     /**
+     * Statuses that live in the failed/ (dead-letter) directory rather than
+     * as pending files in the queue directory.
+     */
+    private const DEAD_STATES = ['failed', 'dead', 'dead_letter'];
+
+    /**
      * Count messages by status.
      *
+     * For a dead state ('failed', 'dead', 'dead_letter') every file in the
+     * dead-letter dir is counted regardless of its exact stored status string.
+     * For any other status, the pending queue dir is scanned and filtered.
+     *
      * @param string $topic  The queue/topic name
-     * @param string $status Job status: 'pending', 'failed', or other
+     * @param string $status Job status: 'pending', 'failed', 'dead', etc.
      * @return int
      */
     public function count(string $topic, string $status = 'pending'): int
     {
-        if ($status === 'failed') {
-            $failedPath = $this->queuePath($topic) . '/failed';
-            if (!is_dir($failedPath)) {
-                return 0;
-            }
+        $scanDir = in_array($status, self::DEAD_STATES, true)
+            ? $this->queuePath($topic) . '/failed'
+            : $this->queuePath($topic);
 
-            $n = 0;
-            foreach (glob($failedPath . '/*.queue-data') as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['status'] ?? '') === 'failed') {
-                    $n++;
-                }
-            }
-            return $n;
-        }
-
-        $queuePath = $this->queuePath($topic);
-        if (!is_dir($queuePath)) {
+        if (!is_dir($scanDir)) {
             return 0;
         }
 
         $n = 0;
-        foreach (glob($queuePath . '/*.queue-data') as $file) {
+        foreach (glob($scanDir . '/*.queue-data') as $file) {
             $data = json_decode(file_get_contents($file), true);
-            if ($data !== null && ($data['status'] ?? '') === $status) {
+            if ($data === null) {
+                continue;
+            }
+            if (in_array($status, self::DEAD_STATES, true)) {
+                // Every file in failed/ is a dead-letter — count them all.
+                $n++;
+            } elseif (($data['status'] ?? '') === $status) {
                 $n++;
             }
         }
@@ -298,22 +361,33 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Get all failed jobs for a topic.
+     * Get jobs that have failed at least once but are still being retried.
+     *
+     * Under the auto-retry lifecycle a failed-but-retryable job lives in the
+     * PENDING queue (not the dead-letter dir), so this scans the queue dir for
+     * pending jobs with 0 < attempts < maxRetries. Dead-lettered jobs are
+     * returned by deadLetters() instead.
      *
      * @param string $topic The queue/topic name
-     * @return array List of failed job arrays
+     * @return array List of failed (retrying) job arrays
      */
     public function failed(string $topic): array
     {
-        $failedPath = $this->queuePath($topic) . '/failed';
-        if (!is_dir($failedPath)) {
+        $queuePath = $this->queuePath($topic);
+        if (!is_dir($queuePath)) {
             return [];
         }
 
         $jobs = [];
-        foreach (glob($failedPath . '/*.queue-data') as $file) {
+        $files = glob($queuePath . '/*.queue-data');
+        sort($files);
+        foreach ($files as $file) {
             $data = json_decode(file_get_contents($file), true);
-            if ($data !== null) {
+            if ($data === null) {
+                continue;
+            }
+            $attempts = (int)($data['attempts'] ?? 0);
+            if ($attempts > 0 && $attempts < $this->maxRetries) {
                 $jobs[] = $data;
             }
         }
@@ -321,14 +395,17 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Retry a specific failed job by ID.
+     * Revive a specific dead-letter job by ID back to the pending queue.
      *
-     * When $topic is null, all topic subdirectories under basePath are searched.
+     * This is a manual override (Queue::retry($jobId) / Job::retry()) — it
+     * always revives a dead-letter regardless of attempt count, incrementing
+     * attempts. When $topic is null, all topic subdirectories under basePath
+     * are searched. Returns false only if no dead-letter with that id exists.
      *
      * @param string      $jobId        Job ID to retry
      * @param string|null $topic        Topic name, or null to search all topics
-     * @param int         $delaySeconds Delay before the retried job becomes available
-     * @return bool True if job was found and re-queued
+     * @param int         $delaySeconds Delay before the revived job becomes available
+     * @return bool True if a dead-letter was found and re-queued
      */
     public function retry(string $jobId, ?string $topic = null, int $delaySeconds = 0): bool
     {
@@ -342,8 +419,7 @@ class LiteBackend implements QueueBackend
         }
 
         foreach ($queueDirs as $queueDir) {
-            $failedPath = $queueDir . '/failed';
-            $failedFile = $failedPath . '/' . $jobId . '.queue-data';
+            $failedFile = $queueDir . '/failed/' . $jobId . '.queue-data';
 
             if (!file_exists($failedFile)) {
                 continue;
@@ -354,20 +430,10 @@ class LiteBackend implements QueueBackend
                 return false;
             }
 
-            if (($data['attempts'] ?? 0) >= $this->maxRetries) {
-                return false;
-            }
-
-            $data['status'] = 'pending';
-            $data['error'] = null;
-            $data['attempts'] = ($data['attempts'] ?? 0) + 1;
-
-            if ($delaySeconds > 0) {
-                $data['delay_until'] = sprintf('%.6f', microtime(true) + $delaySeconds);
-            }
-
-            $this->ensureDir($queueDir);
-            file_put_contents($queueDir . '/' . $jobId . '.queue-data', json_encode($data, JSON_PRETTY_PRINT));
+            // Manual revive — always re-queue, regardless of the retry limit.
+            $data['attempts'] = (int)($data['attempts'] ?? 0) + 1;
+            $topicName = $data['topic'] ?? basename($queueDir);
+            $this->requeue($topicName, $data, $delaySeconds);
             unlink($failedFile);
 
             return true;
@@ -377,22 +443,26 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Get dead letter jobs — failed jobs that have exceeded max retries.
+     * Get dead letter jobs — failed jobs that have exhausted their retries.
      *
-     * @param string $topic The queue/topic name
+     * @param string   $topic      The queue/topic name
+     * @param int|null $maxRetries Override the threshold (defaults to the backend's)
      * @return array List of dead job arrays
      */
-    public function deadLetters(string $topic): array
+    public function deadLetters(string $topic, ?int $maxRetries = null): array
     {
+        $limit = $maxRetries ?? $this->maxRetries;
         $failedPath = $this->queuePath($topic) . '/failed';
         if (!is_dir($failedPath)) {
             return [];
         }
 
         $jobs = [];
-        foreach (glob($failedPath . '/*.queue-data') as $file) {
+        $files = glob($failedPath . '/*.queue-data');
+        sort($files);
+        foreach ($files as $file) {
             $data = json_decode(file_get_contents($file), true);
-            if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
+            if ($data !== null && (int)($data['attempts'] ?? 0) >= $limit) {
                 $data['status'] = 'dead';
                 $jobs[] = $data;
             }
@@ -403,47 +473,33 @@ class LiteBackend implements QueueBackend
     /**
      * Purge jobs by status.
      *
-     * @param string $status Status to purge: 'completed', 'failed', 'dead', 'pending'
-     * @param string $topic  The queue/topic name
+     * For a dead state ('failed', 'dead', 'dead_letter') every file in the
+     * dead-letter dir is removed. For any other status, the pending queue dir
+     * is scanned and filtered by the stored status.
+     *
+     * @param string   $status     Status to purge: 'completed', 'failed', 'dead', 'pending'
+     * @param string   $topic      The queue/topic name
+     * @param int|null $maxRetries Unused for the scan-all dead-letter behaviour; kept for API parity
      * @return int Number of jobs purged
      */
-    public function purge(string $status, string $topic): int
+    public function purge(string $status, string $topic, ?int $maxRetries = null): int
     {
-        $count = 0;
+        $scanDir = in_array($status, self::DEAD_STATES, true)
+            ? $this->queuePath($topic) . '/failed'
+            : $this->queuePath($topic);
 
-        if ($status === 'dead') {
-            $failedPath = $this->queuePath($topic) . '/failed';
-            if (!is_dir($failedPath)) {
-                return 0;
+        if (!is_dir($scanDir)) {
+            return 0;
+        }
+
+        $count = 0;
+        foreach (glob($scanDir . '/*.queue-data') as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data === null) {
+                continue;
             }
-            foreach (glob($failedPath . '/*.queue-data') as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['attempts'] ?? 0) >= $this->maxRetries) {
-                    unlink($file);
-                    $count++;
-                }
-            }
-        } elseif ($status === 'failed') {
-            $failedPath = $this->queuePath($topic) . '/failed';
-            if (!is_dir($failedPath)) {
-                return 0;
-            }
-            foreach (glob($failedPath . '/*.queue-data') as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['attempts'] ?? 0) < $this->maxRetries) {
-                    unlink($file);
-                    $count++;
-                }
-            }
-        } else {
-            $queuePath = $this->queuePath($topic);
-            if (!is_dir($queuePath)) {
-                return 0;
-            }
-            foreach (glob($queuePath . '/*.queue-data') as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if ($data !== null && ($data['status'] ?? '') === $status) {
-                    unlink($file);
+            if (in_array($status, self::DEAD_STATES, true) || ($data['status'] ?? '') === $status) {
+                if (@unlink($file)) {
                     $count++;
                 }
             }
@@ -453,13 +509,16 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Re-queue all failed jobs (under max retries) back to pending.
+     * Re-queue dead-letter jobs that are under the (possibly raised) limit
+     * back to pending. A fresh created_at/available_at is assigned.
      *
-     * @param string $topic The queue/topic name
+     * @param string   $topic      The queue/topic name
+     * @param int|null $maxRetries Override the threshold (defaults to the backend's)
      * @return int Number of jobs re-queued
      */
-    public function retryFailed(string $topic): int
+    public function retryFailed(string $topic, ?int $maxRetries = null): int
     {
+        $limit = $maxRetries ?? $this->maxRetries;
         $queuePath = $this->queuePath($topic);
         $failedPath = $queuePath . '/failed';
 
@@ -470,19 +529,11 @@ class LiteBackend implements QueueBackend
         $count = 0;
         foreach (glob($failedPath . '/*.queue-data') as $file) {
             $data = json_decode(file_get_contents($file), true);
-            if ($data === null || ($data['attempts'] ?? 0) >= $this->maxRetries) {
+            if ($data === null || (int)($data['attempts'] ?? 0) >= $limit) {
                 continue;
             }
 
-            $data['status'] = 'pending';
-            $data['error'] = null;
-
-            $this->ensureDir($queuePath);
-            file_put_contents(
-                $queuePath . '/' . $data['id'] . '.queue-data',
-                json_encode($data, JSON_PRETTY_PRINT)
-            );
-
+            $this->requeue($topic, $data, 0);
             unlink($file);
             $count++;
         }
@@ -516,22 +567,6 @@ class LiteBackend implements QueueBackend
         }
 
         return null;
-    }
-
-    /**
-     * Write a failed job record directly (used by process() error handler).
-     *
-     * @param string $topic  The queue/topic name
-     * @param array  $jobData The job data with 'status' = 'failed'
-     */
-    public function writeFailed(string $topic, array $jobData): void
-    {
-        $failedPath = $this->queuePath($topic) . '/failed';
-        $this->ensureDir($failedPath);
-        file_put_contents(
-            $failedPath . '/' . $jobData['id'] . '.queue-data',
-            json_encode($jobData, JSON_PRETTY_PRINT)
-        );
     }
 
     /**
