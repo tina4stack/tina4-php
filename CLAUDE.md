@@ -409,10 +409,14 @@ missing — gitignored) so subsequent boots reuse it. The write is guarded: if
 `.env.local` can't be written it keeps the in-memory secret and warns — boot never
 crashes. In **CI or production** with a blank secret it NEVER generates or
 persists anything — it logs an actionable warning naming exactly what to set
-(`openssl rand -hex 32`). At boot the framework loads `.env`, then **`.env.local`
-as an override** (the standard "local overrides, gitignored" pattern), so a
-previously-generated dev secret wins. Both `.env.local` and the scaffolded
-project's `.gitignore` exclude `.env.local`.
+(`openssl rand -hex 32`). At boot the framework loads env with strict
+precedence **real-env > `.env.local` > `.env`**: it loads `.env.local` first,
+then `.env`, both with `overwrite: false` (first-wins), so a variable already
+set in the real process environment is never clobbered, `.env.local` then fills
+local-only keys (a previously-generated dev secret still wins over `.env`), and
+`.env` fills the rest. A stray gitignored `.env.local` can therefore never
+override an explicitly-set real env var (e.g. a production `TINA4_SECRET`). Both
+`.env.local` and the scaffolded project's `.gitignore` exclude `.env.local`.
 
 ### Session
 

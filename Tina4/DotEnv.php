@@ -95,13 +95,23 @@ class DotEnv
             // Parse the value
             $value = self::parseValue($value);
 
-            // Only set if not already defined or overwrite is true
+            // Set only if not already defined or overwrite is true (first-wins
+            // when overwrite is false). The internal registry must track the
+            // SAME precedence as the real process env — storing every parsed
+            // value unconditionally would make getEnv() return the last-loaded
+            // value and silently defeat the real-env > .env.local > .env order.
             if ($overwrite || (!isset($_ENV[$key]) && getenv($key) === false)) {
                 self::setVariable($key, $value);
+                self::$variables[$key] = $value;
+            } elseif (!isset(self::$variables[$key])) {
+                // Key already present in the real env but not yet mirrored into
+                // our registry — record the winning (real) value so getEnv()'s
+                // registry-first lookup stays consistent with getenv()/$_ENV.
+                $existing = $_ENV[$key] ?? getenv($key);
+                if ($existing !== false) {
+                    self::$variables[$key] = (string) $existing;
+                }
             }
-
-            // Always store in our internal registry
-            self::$variables[$key] = $value;
         }
 
         self::$loaded = true;

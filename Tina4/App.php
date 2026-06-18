@@ -248,24 +248,35 @@ class App
         // Set base path for static file serving
         Router::$basePath = $this->basePath;
 
-        // Load environment — TINA4_ENV_FILE may override the default '.env'
-        // location. Bootstrap order: probe the env *before* loading, so
-        // a process-level export wins; fall back to the default path.
+        // Load environment with strict precedence: real-env > .env.local > .env.
+        //
+        // DotEnv::loadEnv(overwrite: false) is FIRST-WINS — it sets a key only
+        // if it is not already present in the process env. So to get the
+        // precedence above we load in *priority order*, each with overwrite
+        // FALSE: a variable already set by the real environment (exported
+        // before boot) is never clobbered, then .env.local fills local-only
+        // keys, then .env fills whatever remains.
+        //
+        // NOTE: .env.local is loaded BEFORE .env (never with overwrite: true).
+        // A stray gitignored .env.local — e.g. one auto-generated on a prior
+        // dev boot — must NEVER override a value explicitly set in the real
+        // process environment (that broke an integration test where a real
+        // TINA4_SECRET was signed against, and is security-relevant for a real
+        // production TINA4_SECRET).
+        $envLocal = $this->basePath . DIRECTORY_SEPARATOR . '.env.local';
+        if (is_file($envLocal)) {
+            DotEnv::loadEnv($envLocal, overwrite: false);
+        }
+
+        // TINA4_ENV_FILE may override the default '.env' location. Probe the
+        // env *before* loading so a process-level export wins; fall back to
+        // the default path. Loaded LAST (lowest precedence), overwrite false.
         $envFileName = DotEnv::getEnv('TINA4_ENV_FILE') ?? '.env';
         $envFile = self::isAbsolutePath($envFileName)
             ? $envFileName
             : $this->basePath . DIRECTORY_SEPARATOR . $envFileName;
         if (is_file($envFile)) {
-            DotEnv::loadEnv($envFile);
-        }
-
-        // Load .env.local AFTER .env as an OVERRIDE — the standard "local
-        // overrides, gitignored" pattern. .env loads without clobbering real
-        // process env; .env.local then wins (overwrite: true) so a previously
-        // generated dev secret is picked up on the next boot.
-        $envLocal = $this->basePath . DIRECTORY_SEPARATOR . '.env.local';
-        if (is_file($envLocal)) {
-            DotEnv::loadEnv($envLocal, overwrite: true);
+            DotEnv::loadEnv($envFile, overwrite: false);
         }
 
         // Dev-secret bootstrap — run once at boot, after env load and before

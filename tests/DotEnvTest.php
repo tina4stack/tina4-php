@@ -44,7 +44,7 @@ class DotEnvTest extends TestCase
         $this->removeDir($this->tempDir);
 
         // Clean env vars we set
-        foreach (['TEST_KEY', 'TEST_QUOTED', 'TEST_SINGLE', 'TEST_EXPORT', 'DB_HOST', 'DB_URL', 'REQUIRED_KEY', 'EMPTY_VAL', 'SPACED'] as $key) {
+        foreach (['TEST_KEY', 'TEST_QUOTED', 'TEST_SINGLE', 'TEST_EXPORT', 'DB_HOST', 'DB_URL', 'REQUIRED_KEY', 'EMPTY_VAL', 'SPACED', 'TINA4_SECRET'] as $key) {
             putenv($key);
             unset($_ENV[$key], $_SERVER[$key]);
         }
@@ -221,5 +221,74 @@ class DotEnvTest extends TestCase
         DotEnv::loadEnv($envFile);
 
         $this->assertEquals('value_with_spaces', DotEnv::getEnv('SPACED'));
+    }
+
+    /**
+     * Run the App boot env-load sequence (App::__construct) verbatim:
+     *   load .env.local  (overwrite: false)   # priority order, real env wins
+     *   load .env        (overwrite: false)
+     * yielding strict precedence: real-env > .env.local > .env.
+     */
+    private function runBootLoadSequence(): void
+    {
+        $envLocal = $this->tempDir . '/.env.local';
+        if (is_file($envLocal)) {
+            DotEnv::loadEnv($envLocal, overwrite: false);
+        }
+        $envFile = $this->tempDir . '/.env';
+        if (is_file($envFile)) {
+            DotEnv::loadEnv($envFile, overwrite: false);
+        }
+    }
+
+    /**
+     * Regression — dotenv precedence (a): real-env beats .env.local.
+     *
+     * A real process env var set BEFORE boot must WIN over a stray gitignored
+     * .env.local (e.g. one auto-generated on a prior dev boot). The bug — which
+     * loaded .env.local with overwrite: true — would clobber the real value with
+     * `from_local`, breaking an integration test that signs a token with the real
+     * secret, and is security-relevant for a real production TINA4_SECRET.
+     */
+    public function testEnvLocalPrecedenceRealEnvWins(): void
+    {
+        // A real, explicitly-set process env var (exported before boot).
+        putenv('TINA4_SECRET=from_real');
+        $_ENV['TINA4_SECRET'] = 'from_real';
+        $_SERVER['TINA4_SECRET'] = 'from_real';
+
+        // A stray gitignored .env.local trying to override it.
+        file_put_contents($this->tempDir . '/.env.local', "TINA4_SECRET=from_local\n");
+
+        $this->runBootLoadSequence();
+
+        // Real env MUST win — assert on the actual process-env layer that the
+        // framework (Auth) reads via getenv()/$_ENV, not just DotEnv's view.
+        $this->assertEquals('from_real', getenv('TINA4_SECRET'));
+        $this->assertEquals('from_real', $_ENV['TINA4_SECRET']);
+        $this->assertEquals('from_real', DotEnv::getEnv('TINA4_SECRET'));
+    }
+
+    /**
+     * Regression — dotenv precedence (b): .env.local beats .env.
+     *
+     * With NO real TINA4_SECRET set, .env.local must override .env (the standard
+     * "local overrides, gitignored" pattern), so a previously-generated dev
+     * secret in .env.local still wins over a committed .env value.
+     */
+    public function testEnvLocalPrecedenceLocalBeatsDotenv(): void
+    {
+        // No real TINA4_SECRET in the process env.
+        putenv('TINA4_SECRET');
+        unset($_ENV['TINA4_SECRET'], $_SERVER['TINA4_SECRET']);
+
+        file_put_contents($this->tempDir . '/.env', "TINA4_SECRET=from_dotenv\n");
+        file_put_contents($this->tempDir . '/.env.local', "TINA4_SECRET=from_local\n");
+
+        $this->runBootLoadSequence();
+
+        $this->assertEquals('from_local', getenv('TINA4_SECRET'));
+        $this->assertEquals('from_local', $_ENV['TINA4_SECRET']);
+        $this->assertEquals('from_local', DotEnv::getEnv('TINA4_SECRET'));
     }
 }
