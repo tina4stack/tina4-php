@@ -185,7 +185,14 @@ class PostgresAdapter implements DatabaseAdapter
     public function fetchOne(string $sql, array $params = []): ?array
     {
         $sql = self::stripTrailingSemicolons($sql);
+        // FAIL LOUD (v3.13.37, DB-contract A): query() clears lastError on
+        // entry and records the driver error on failure (returning []), so a
+        // non-null lastError after the call means the statement failed — RAISE
+        // it instead of returning null (which a caller would read as "no row").
         $rows = $this->query($sql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('PostgreSQL fetchOne() failed: ' . $this->lastError);
+        }
         return $rows[0] ?? null;
     }
 

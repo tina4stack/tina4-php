@@ -75,6 +75,27 @@ class Database implements DatabaseAdapter
      */
     private ?DatabaseAdapter $pinnedAdapter = null;
 
+    /**
+     * @var int Explicit-transaction depth counter (DB-contract C, v3.13.37).
+     *
+     * startTransaction() increments; commit()/rollback() decrement. A second
+     * startTransaction() on a connection that's already mid-transaction is a
+     * nested begin — most engines silently commit or no-op an inner BEGIN,
+     * leaving the connection mid-transaction with the caller none the wiser.
+     * We keep this depth counter and log a warning instead of silently
+     * re-beginning; the inner commit just unwinds the depth, the OUTER commit
+     * is the real one. Parity with Python's _tx_local.depth.
+     */
+    private int $txDepth = 0;
+
+    /**
+     * @var bool Whether the current pin came from an explicit startTransaction()
+     *           (vs an internal pin like getNextId's). getNextId's SQLite path
+     *           must NOT open a nested BEGIN IMMEDIATE while a user transaction
+     *           is open on the same connection.
+     */
+    private bool $insideExplicitTransaction = false;
+
     /** @var string Connection URL for lazy pool creation */
     private string $url;
 
@@ -323,9 +344,23 @@ class Database implements DatabaseAdapter
     public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0, bool $noCache = false): DatabaseResult
     {
         $adapter = $this->getNextAdapter();
-        $raw = $adapter instanceof CachedDatabase
-            ? $adapter->fetch($sql, $params, $limit, $offset, $noCache)
-            : $adapter->fetch($sql, $params, $limit, $offset);
+
+        // FAIL LOUD (v3.13.37, DB-contract A): the adapter's fetch() RAISES on a
+        // bad statement (no swallow-to-empty-result). Mirror the Python master's
+        // _fetch_direct: clear lastError on success, and on a SQL error capture
+        // the cause on getError() — preferring the adapter's own error message
+        // (set in its error path) over the str() of the exception — BEFORE the
+        // re-raise. Engines that don't expose their own lastError still get a
+        // populated getError() via $e->getMessage().
+        try {
+            $raw = $adapter instanceof CachedDatabase
+                ? $adapter->fetch($sql, $params, $limit, $offset, $noCache)
+                : $adapter->fetch($sql, $params, $limit, $offset);
+            $this->lastError = null;
+        } catch (\Throwable $e) {
+            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            throw $e;
+        }
 
         $records = $raw['data'] ?? [];
         $columns = !empty($records) ? array_keys($records[0]) : [];
@@ -381,9 +416,25 @@ class Database implements DatabaseAdapter
     public function fetchOne(string $sql, array $params = [], bool $noCache = false): ?array
     {
         $adapter = $this->getNextAdapter();
-        return $adapter instanceof CachedDatabase
-            ? $adapter->fetchOne($sql, $params, $noCache)
-            : $adapter->fetchOne($sql, $params);
+
+        // FAIL LOUD (v3.13.37, DB-contract A): fetchOne() used to call the
+        // adapter directly, so a SQL error raised (good) but getError() stayed
+        // null — the public API couldn't read the cause. Route it through the
+        // same error-capturing path fetch() uses: clear lastError on success,
+        // and on a SQL error capture the cause (adapter->error() preferred over
+        // the exception message) BEFORE the re-raise. Because it raises before
+        // the CachedDatabase wrapper can store the result, a buried failure can
+        // never be cached. Mirrors the Python master's _fetch_one_direct.
+        try {
+            $result = $adapter instanceof CachedDatabase
+                ? $adapter->fetchOne($sql, $params, $noCache)
+                : $adapter->fetchOne($sql, $params);
+            $this->lastError = null;
+            return $result;
+        } catch (\Throwable $e) {
+            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            throw $e;
+        }
     }
 
     /**
@@ -545,32 +596,93 @@ class Database implements DatabaseAdapter
     /**
      * Begin a transaction. Pins the adapter for the whole transaction so
      * executes and the final commit/rollback all run on the same connection.
+     *
+     * Nested-begin guard (v3.13.37, DB-contract C): a second startTransaction()
+     * on a connection that already has an open transaction is a double-begin —
+     * the inner BEGIN silently commits or no-ops on most engines, leaving the
+     * connection mid-transaction with the caller none the wiser. We keep a
+     * depth counter and log a clear warning instead of silently re-beginning.
+     * The pin stays on the original adapter so commit/rollback still land on
+     * the right connection.
      */
     public function startTransaction(): void
     {
+        if ($this->pinnedAdapter !== null && $this->insideExplicitTransaction) {
+            // Nested begin — warn and bump the depth; do NOT begin again.
+            \Tina4\Log::warning(
+                'startTransaction() called while a transaction is already open '
+                . '(depth would become ' . ($this->txDepth + 1) . '). Nested '
+                . 'transactions are not supported — the existing transaction '
+                . 'stays open on its pinned connection and this nested begin is '
+                . 'ignored. Commit or rollback the outer transaction first.'
+            );
+            $this->txDepth++;
+            return;
+        }
         $adapter = $this->getNextAdapter();
         $this->pinnedAdapter = $adapter;
+        $this->insideExplicitTransaction = true;
+        $this->txDepth = 1;
         $adapter->startTransaction();
     }
 
     /**
      * Commit the current transaction and release the adapter pin.
+     *
+     * FAIL LOUD (v3.13.37, DB-contract C): if the underlying commit raises,
+     * capture getError() and RE-RAISE — never swallow. On failure the
+     * transaction pin is RETAINED so the caller's follow-up rollback() lands on
+     * the SAME connection (clearing it would leak a dirty connection back into
+     * the pool and route the rollback to a different one). The pin is cleared
+     * ONLY on a successful commit. An inner commit of an ignored nested begin
+     * just unwinds the depth — the outer commit is the real one.
      */
     public function commit(): void
     {
+        if ($this->txDepth > 1) {
+            // Inner commit of an ignored nested begin — just unwind the depth.
+            $this->txDepth--;
+            return;
+        }
         $adapter = $this->getNextAdapter();
-        $adapter->commit();
+        try {
+            $adapter->commit();
+            $this->lastError = null;
+        } catch (\Throwable $e) {
+            // Keep the pin so rollback() reaches this same connection.
+            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            throw $e;
+        }
+        // Success — release the pin.
         $this->pinnedAdapter = null;
+        $this->insideExplicitTransaction = false;
+        $this->txDepth = 0;
     }
 
     /**
      * Rollback the current transaction and release the adapter pin.
+     *
+     * Rollback is the terminal cleanup of a transaction, so it ALWAYS clears the
+     * pin (and the depth counter) — even after a failed commit it routes to the
+     * retained pinned connection and cleans it up. If the underlying rollback
+     * itself raises, getError() is captured and the error re-raised, but the pin
+     * is still released so a poisoned connection doesn't stay pinned forever.
      */
     public function rollback(): void
     {
         $adapter = $this->getNextAdapter();
-        $adapter->rollback();
-        $this->pinnedAdapter = null;
+        try {
+            $adapter->rollback();
+            $this->lastError = null;
+        } catch (\Throwable $e) {
+            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            throw $e;
+        } finally {
+            // Terminal cleanup — always release the pin.
+            $this->pinnedAdapter = null;
+            $this->insideExplicitTransaction = false;
+            $this->txDepth = 0;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -642,58 +754,282 @@ class Database implements DatabaseAdapter
     }
 
     /**
-     * Get the next ID from the tina4_sequences table (atomic UPDATE + SELECT).
+     * Best-effort MAX(pk) seed for a new sequence row. Returns 0 if the target
+     * table is missing or empty. Parity with Python's _sequence_seed_value.
      *
-     * If no row exists for the sequence, seeds it from MAX(pkColumn) of the target table.
+     * @param DatabaseAdapter $adapter
+     * @param string|null $table
+     * @param string $pkColumn
+     * @return int
+     */
+    private function sequenceSeedValue(DatabaseAdapter $adapter, ?string $table, string $pkColumn): int
+    {
+        if ($table === null || $table === '') {
+            return 0;
+        }
+        try {
+            $maxRow = $adapter->fetchOne("SELECT MAX({$pkColumn}) AS max_id FROM {$table}");
+            if ($maxRow !== null) {
+                $val = $maxRow['max_id'] ?? $maxRow['MAX_ID'] ?? null;
+                if ($val !== null) {
+                    return (int) $val;
+                }
+            }
+        } catch (\Throwable) {
+            // Table doesn't exist — start at 0.
+        }
+        return 0;
+    }
+
+    /**
+     * Atomically increment and return the next value from tina4_sequences.
+     *
+     * v3.13.37 (DB-contract B): the old read-increment-read path had a RACE —
+     * two concurrent callers could read the same current_value and return the
+     * same id (duplicate primary keys). This now uses a single atomic
+     * increment-and-return per engine, pinned to ONE connection so the two
+     * statements (where two are needed) land on the same connection:
+     *
+     *   - SQLite: serialise the whole op under a `BEGIN IMMEDIATE` write
+     *     transaction (acquires SQLite's file write lock before the UPDATE and
+     *     holds it through the SELECT) — race-safe across processes. PHP's
+     *     ext-sqlite3 double-executes an `UPDATE ... RETURNING` when the result
+     *     is fetched (the write applies TWICE), so we deliberately use
+     *     `UPDATE +1` then `SELECT current_value` under the lock instead of
+     *     RETURNING — exactly the Python master's pre-3.35 shape.
+     *   - MySQL: `UPDATE ... SET current_value = LAST_INSERT_ID(current_value+1)`
+     *     then `SELECT LAST_INSERT_ID()` on the SAME connection (LAST_INSERT_ID
+     *     is per-connection → race-safe).
+     *   - MSSQL: `UPDATE ... SET current_value += 1 OUTPUT inserted.current_value`
+     *     — one atomic statement; read the OUTPUT row.
+     *
+     * Seeding the row is race-safe: an atomic insert-if-absent (INSERT OR
+     * IGNORE / INSERT IGNORE / INSERT ... WHERE NOT EXISTS) seeded from MAX(pk)
+     * runs BEFORE the increment, so there is never a read-then-insert gap. On
+     * error we RAISE (never silently fall back to 1).
      *
      * @param string $seqName Sequence name (e.g. "users.id")
      * @param string|null $table Table to seed from
      * @param string $pkColumn Primary key column to seed from
-     * @param DatabaseAdapter $adapter
+     * @param DatabaseAdapter $adapter The (possibly cache-wrapped) pinned adapter
      * @return int The next available ID
      */
     private function sequenceNext(string $seqName, ?string $table, string $pkColumn, DatabaseAdapter $adapter): int
     {
+        // Resolve the raw driver adapter (unwrap the cache decorator) so the
+        // SQLite low-level path can reach the live SQLite3 connection, and so
+        // engine dispatch is reliable even when query caching is on.
+        $raw = $adapter instanceof CachedDatabase ? $adapter->getAdapter() : $adapter;
+
+        if ($raw instanceof SQLite3Adapter) {
+            // If we're already inside an explicit transaction the connection is
+            // mid-transaction — opening a nested BEGIN IMMEDIATE would fail
+            // ("cannot start a transaction within a transaction"). In that case
+            // the outer transaction already serialises the increment, so skip
+            // our own BEGIN/COMMIT.
+            $insideTxn = $this->pinnedAdapter !== null && $this->insideExplicitTransaction;
+            return $this->sequenceNextSqlite($raw, $seqName, $table, $pkColumn, !$insideTxn);
+        }
+
         $this->ensureSequenceTable($adapter);
 
-        // Check if sequence row exists
-        $row = $adapter->fetchOne(
-            'SELECT current_value FROM tina4_sequences WHERE seq_name = ?',
-            [$seqName]
+        if ($raw instanceof MySQLAdapter) {
+            return $this->sequenceNextMysql($adapter, $seqName, $table, $pkColumn);
+        }
+        if ($raw instanceof MSSQLAdapter) {
+            return $this->sequenceNextMssql($adapter, $seqName, $table, $pkColumn);
+        }
+        // PostgreSQL fallback / any other engine routed here — generic
+        // atomic-ish path (seed insert-if-absent, then +1, then SELECT).
+        return $this->sequenceNextGeneric($adapter, $seqName, $table, $pkColumn);
+    }
+
+    /**
+     * SQLite atomic sequence-next.
+     *
+     * Runs ensure-table + race-safe seed + atomic increment under a single
+     * `BEGIN IMMEDIATE` write transaction directly on the live SQLite3
+     * connection. IMMEDIATE acquires SQLite's file write lock up front, so the
+     * UPDATE and the read-back SELECT are atomic with respect to every other
+     * connection/process — no two callers can read the same counter. We avoid
+     * `UPDATE ... RETURNING` because PHP's ext-sqlite3 executes the write a
+     * SECOND time when the RETURNING result is fetched (the increment would
+     * apply twice).
+     *
+     * @param SQLite3Adapter $raw
+     * @param string $seqName
+     * @param string|null $table
+     * @param string $pkColumn
+     * @return int
+     */
+    private function sequenceNextSqlite(SQLite3Adapter $raw, string $seqName, ?string $table, string $pkColumn, bool $ownTransaction = true): int
+    {
+        $conn = $raw->getConnection();
+        if ($conn === null) {
+            throw new \RuntimeException('getNextId: SQLite adapter has no live connection');
+        }
+        // Don't let a slow concurrent writer error out with SQLITE_BUSY — wait
+        // for the write lock instead (the fork concurrency test depends on this).
+        @$conn->busyTimeout(5000);
+
+        $conn->exec(
+            'CREATE TABLE IF NOT EXISTS tina4_sequences ('
+            . 'seq_name VARCHAR(200) NOT NULL PRIMARY KEY, '
+            . 'current_value INTEGER NOT NULL DEFAULT 0)'
         );
 
-        if ($row === null) {
-            // Seed from MAX(pk_column) of the target table
-            $seed = 0;
-            if ($table !== null) {
-                try {
-                    $maxRow = $adapter->fetchOne("SELECT MAX({$pkColumn}) AS max_id FROM {$table}");
-                    if ($maxRow !== null) {
-                        $seed = (int) ($maxRow['max_id'] ?? $maxRow['MAX_ID'] ?? 0);
-                    }
-                } catch (\Throwable) {
-                    // Table does not exist — start from 0
-                }
-            }
+        $seed = $this->sequenceSeedValue($raw, $table, $pkColumn);
 
+        // The whole increment runs inside one IMMEDIATE write transaction so
+        // the seed + UPDATE + read-back are atomic under SQLite's file write
+        // lock — race-safe across connections/processes. Skip BEGIN/COMMIT when
+        // we're already inside an outer explicit transaction (a nested BEGIN
+        // would fail) — the outer transaction already serialises us.
+        if ($ownTransaction) {
+            $conn->exec('BEGIN IMMEDIATE');
+        }
+        try {
+            $insert = $conn->prepare(
+                'INSERT OR IGNORE INTO tina4_sequences (seq_name, current_value) VALUES (?, ?)'
+            );
+            $insert->bindValue(1, $seqName, SQLITE3_TEXT);
+            $insert->bindValue(2, $seed, SQLITE3_INTEGER);
+            $insert->execute();
+            $insert->close();
+
+            $update = $conn->prepare(
+                'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ?'
+            );
+            $update->bindValue(1, $seqName, SQLITE3_TEXT);
+            $update->execute();
+            $update->close();
+
+            $select = $conn->prepare(
+                'SELECT current_value FROM tina4_sequences WHERE seq_name = ?'
+            );
+            $select->bindValue(1, $seqName, SQLITE3_TEXT);
+            $result = $select->execute();
+            $row = $result ? $result->fetchArray(SQLITE3_ASSOC) : false;
+            $select->close();
+
+            if ($ownTransaction) {
+                $conn->exec('COMMIT');
+            }
+        } catch (\Throwable $e) {
+            if ($ownTransaction) {
+                @$conn->exec('ROLLBACK');
+            }
+            throw $e;
+        }
+
+        if ($row === false || !isset($row['current_value'])) {
+            throw new \RuntimeException(
+                "getNextId: sequence row '{$seqName}' vanished mid-increment"
+            );
+        }
+        return (int) $row['current_value'];
+    }
+
+    /**
+     * MySQL atomic sequence-next via per-connection LAST_INSERT_ID.
+     *
+     * @param DatabaseAdapter $adapter The pinned adapter (same connection both calls).
+     * @param string $seqName
+     * @param string|null $table
+     * @param string $pkColumn
+     * @return int
+     */
+    private function sequenceNextMysql(DatabaseAdapter $adapter, string $seqName, ?string $table, string $pkColumn): int
+    {
+        // Race-safe seed: INSERT IGNORE is a no-op if the row already exists.
+        $seed = $this->sequenceSeedValue($adapter, $table, $pkColumn);
+        $adapter->execute(
+            'INSERT IGNORE INTO tina4_sequences (seq_name, current_value) VALUES (?, ?)',
+            [$seqName, $seed]
+        );
+        // LAST_INSERT_ID(expr) stashes expr in THIS connection's session var and
+        // returns it — atomic per-connection, no read-back race.
+        $adapter->execute(
+            'UPDATE tina4_sequences SET current_value = LAST_INSERT_ID(current_value + 1) WHERE seq_name = ?',
+            [$seqName]
+        );
+        $row = $adapter->fetchOne('SELECT LAST_INSERT_ID() AS next_id');
+        if ($row === null) {
+            throw new \RuntimeException(
+                "getNextId: LAST_INSERT_ID() returned nothing for '{$seqName}'"
+            );
+        }
+        return (int) ($row['next_id'] ?? reset($row));
+    }
+
+    /**
+     * MSSQL atomic sequence-next via a single UPDATE ... OUTPUT statement.
+     *
+     * @param DatabaseAdapter $adapter
+     * @param string $seqName
+     * @param string|null $table
+     * @param string $pkColumn
+     * @return int
+     */
+    private function sequenceNextMssql(DatabaseAdapter $adapter, string $seqName, ?string $table, string $pkColumn): int
+    {
+        // Race-safe seed: INSERT only when absent (single statement).
+        $seed = $this->sequenceSeedValue($adapter, $table, $pkColumn);
+        $adapter->execute(
+            'INSERT INTO tina4_sequences (seq_name, current_value) '
+            . 'SELECT ?, ? WHERE NOT EXISTS '
+            . '(SELECT 1 FROM tina4_sequences WHERE seq_name = ?)',
+            [$seqName, $seed, $seqName]
+        );
+        // Single atomic statement: increment + return the new value via OUTPUT.
+        // The MSSQL adapter's execute() doesn't surface the OUTPUT rows, so read
+        // them through fetchOne() on the same pinned connection.
+        $row = $adapter->fetchOne(
+            'UPDATE tina4_sequences SET current_value = current_value + 1 '
+            . 'OUTPUT inserted.current_value AS next_id WHERE seq_name = ?',
+            [$seqName]
+        );
+        if ($row === null || !isset($row['next_id'])) {
+            throw new \RuntimeException(
+                "getNextId: OUTPUT produced no row for sequence '{$seqName}'"
+            );
+        }
+        return (int) $row['next_id'];
+    }
+
+    /**
+     * Generic fallback atomic-ish sequence-next (e.g. PostgreSQL sequence-table
+     * fallback, or any other engine routed here). Seeds if absent via an
+     * insert-if-absent, then increments and reads on the pinned connection.
+     *
+     * @param DatabaseAdapter $adapter
+     * @param string $seqName
+     * @param string|null $table
+     * @param string $pkColumn
+     * @return int
+     */
+    private function sequenceNextGeneric(DatabaseAdapter $adapter, string $seqName, ?string $table, string $pkColumn): int
+    {
+        $seed = $this->sequenceSeedValue($adapter, $table, $pkColumn);
+        try {
             $adapter->execute(
                 'INSERT INTO tina4_sequences (seq_name, current_value) VALUES (?, ?)',
                 [$seqName, $seed]
             );
+        } catch (\Throwable) {
+            // Row likely already exists (PK conflict) — fine, keep going.
         }
-
-        // Atomic increment
         $adapter->execute(
             'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ?',
             [$seqName]
         );
-
-        // Read back the new value
         $row = $adapter->fetchOne(
             'SELECT current_value FROM tina4_sequences WHERE seq_name = ?',
             [$seqName]
         );
-
+        if ($row === null) {
+            throw new \RuntimeException("getNextId: sequence row '{$seqName}' missing");
+        }
         return (int) ($row['current_value'] ?? 1);
     }
 
@@ -713,10 +1049,41 @@ class Database implements DatabaseAdapter
      */
     public function getNextId(string $table, string $pkColumn = 'id', ?string $generatorName = null): int
     {
+        // Pin ONE adapter for the whole operation so the sequence-table engines
+        // that need two statements (MySQL LAST_INSERT_ID, MSSQL seed+OUTPUT) hit
+        // the SAME connection. If we're already inside a transaction the adapter
+        // is already pinned; otherwise pin here and release in the finally so
+        // the pool can rotate afterwards. Parity with Python's _sequence_next.
+        $alreadyPinned = $this->pinnedAdapter !== null;
         $adapter = $this->getNextAdapter();
+        if (!$alreadyPinned) {
+            $this->pinnedAdapter = $adapter;
+        }
+        try {
+            return $this->getNextIdPinned($table, $pkColumn, $generatorName, $adapter);
+        } finally {
+            if (!$alreadyPinned) {
+                $this->pinnedAdapter = null;
+            }
+        }
+    }
+
+    /**
+     * getNextId() body, run with the adapter pinned. Resolves the raw driver so
+     * engine dispatch works even when the query cache wrapper is active.
+     *
+     * @param string $table
+     * @param string $pkColumn
+     * @param string|null $generatorName
+     * @param DatabaseAdapter $adapter The pinned (possibly cache-wrapped) adapter.
+     * @return int
+     */
+    private function getNextIdPinned(string $table, string $pkColumn, ?string $generatorName, DatabaseAdapter $adapter): int
+    {
+        $raw = $adapter instanceof CachedDatabase ? $adapter->getAdapter() : $adapter;
 
         // Firebird — use generators (GEN_ID is atomic)
-        if ($adapter instanceof FirebirdAdapter) {
+        if ($raw instanceof FirebirdAdapter) {
             $genName = $generatorName ?? 'GEN_' . strtoupper($table) . '_ID';
 
             // Auto-create the generator if it does not exist
@@ -731,7 +1098,7 @@ class Database implements DatabaseAdapter
         }
 
         // PostgreSQL — try nextval() first, auto-create sequence if missing
-        if ($adapter instanceof PostgresAdapter) {
+        if ($raw instanceof PostgresAdapter) {
             $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
             try {
                 $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
@@ -762,8 +1129,8 @@ class Database implements DatabaseAdapter
         }
 
         // MongoDB — atomic findOneAndUpdate on tina4_sequences collection
-        if ($adapter instanceof MongoDBAdapter) {
-            return $this->mongoNextId($table, $pkColumn, $adapter);
+        if ($raw instanceof MongoDBAdapter) {
+            return $this->mongoNextId($table, $pkColumn, $raw);
         }
 
         // SQLite / MySQL / MSSQL — use race-safe sequence table

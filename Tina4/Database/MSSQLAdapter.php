@@ -140,46 +140,58 @@ class MSSQLAdapter implements DatabaseAdapter
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + OFFSET/FETCH append.
         $sql = self::stripTrailingSemicolons($sql);
 
-        try {
-            // Count total
-            $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
-            $countResult = $this->query($countSql, $params);
+        // v3.13.37 (DB-contract A): the MAIN query must FAIL LOUD — a bad
+        // statement RAISES instead of being swallowed into an empty result set
+        // (parity with execute(), fetchOne() and the Python master). The COUNT
+        // probe is best-effort and runs on a SEPARATE statement (its own
+        // sqlsrv_query inside query()), so a probe failure only defaults total
+        // to 0 and can never mask a real main-query failure.
+        $total = 0;
+        $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        $countResult = $this->query($countSql, $params);
+        if ($this->lastError === null) {
             $total = (int)($countResult[0]['total'] ?? 0);
-
-            // MSSQL pagination: OFFSET...FETCH NEXT (requires ORDER BY).
-            // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
-            // default — give me ALL rows).
-            $pagedSql = $sql;
-            if ($limit > 0) {
-                if (!preg_match('/\bORDER\s+BY\b/i', $pagedSql)) {
-                    $pagedSql .= " ORDER BY (SELECT NULL)";
-                }
-                $pagedSql .= " OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
-            }
-
-            $data = $this->query($pagedSql, $params);
-
-            return [
-                'data' => $data,
-                'total' => $total,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
-        } catch (\Exception $e) {
-            $this->lastError = $e->getMessage();
-            return [
-                'data' => [],
-                'total' => 0,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
         }
+
+        // MSSQL pagination: OFFSET...FETCH NEXT (requires ORDER BY).
+        // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
+        // default — give me ALL rows).
+        $this->lastError = null;
+        $pagedSql = $sql;
+        if ($limit > 0) {
+            if (!preg_match('/\bORDER\s+BY\b/i', $pagedSql)) {
+                $pagedSql .= " ORDER BY (SELECT NULL)";
+            }
+            $pagedSql .= " OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
+        }
+
+        $data = $this->query($pagedSql, $params);
+        // query() clears lastError on entry and records the driver error on
+        // failure (returning []), so a non-null lastError here means the MAIN
+        // query failed — RAISE it (FAILS LOUD).
+        if ($this->lastError !== null) {
+            throw new DatabaseException('MSSQL fetch() failed: ' . $this->lastError);
+        }
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'limit' => $limit,
+            'offset' => $offset,
+        ];
     }
 
     public function fetchOne(string $sql, array $params = []): ?array
     {
         $sql = self::stripTrailingSemicolons($sql);
+        // FAIL LOUD (v3.13.37, DB-contract A): query() clears lastError on
+        // entry and records the driver error on failure (returning []), so a
+        // non-null lastError after the call means the statement failed — RAISE
+        // it instead of returning null (which a caller would read as "no row").
         $rows = $this->query($sql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('MSSQL fetchOne() failed: ' . $this->lastError);
+        }
         return $rows[0] ?? null;
     }
 

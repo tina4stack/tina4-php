@@ -152,42 +152,57 @@ class MySQLAdapter implements DatabaseAdapter
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
         $sql = self::stripTrailingSemicolons($sql);
 
-        try {
-            $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
-            $countResult = $this->query($countSql, $params);
+        // v3.13.37 (DB-contract A): the MAIN query must FAIL LOUD — a bad
+        // statement RAISES instead of being swallowed into an empty result set
+        // (parity with execute(), fetchOne() and the Python master). The COUNT
+        // probe is best-effort: it runs first and its failure only defaults
+        // total to 0 — it must NEVER mask a real main-query failure. We run the
+        // probe on a SEPARATE statement (its own query() call, which uses its
+        // own prepared statement) so a probe failure can't leave the main
+        // query's cursor half-consumed.
+        $total = 0;
+        $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        $countResult = $this->query($countSql, $params);
+        if ($this->lastError === null) {
             $total = (int)($countResult[0]['total'] ?? 0);
-
-            // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
-            // default — give me ALL rows).
-            // Skip the append when the user SQL already ends with its own
-            // LIMIT clause — a second LIMIT is a syntax error that would
-            // otherwise be swallowed into an empty result.
-            $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
-                ? $sql
-                : "{$sql} LIMIT {$limit} OFFSET {$offset}";
-            $data = $this->query($pagedSql, $params);
-
-            return [
-                'data' => $data,
-                'total' => $total,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
-        } catch (\Exception $e) {
-            $this->lastError = $e->getMessage();
-            return [
-                'data' => [],
-                'total' => 0,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
         }
+
+        // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
+        // default — give me ALL rows).
+        // Skip the append when the user SQL already ends with its own
+        // LIMIT clause — a second LIMIT is a syntax error that would
+        // otherwise be swallowed into an empty result.
+        $this->lastError = null;
+        $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
+            ? $sql
+            : "{$sql} LIMIT {$limit} OFFSET {$offset}";
+        $data = $this->query($pagedSql, $params);
+        // query() clears lastError on entry and records the driver error on
+        // failure (returning []), so a non-null lastError here means the MAIN
+        // query failed — RAISE it (FAILS LOUD).
+        if ($this->lastError !== null) {
+            throw new DatabaseException('MySQL fetch() failed: ' . $this->lastError);
+        }
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'limit' => $limit,
+            'offset' => $offset,
+        ];
     }
 
     public function fetchOne(string $sql, array $params = []): ?array
     {
         $sql = self::stripTrailingSemicolons($sql);
+        // FAIL LOUD (v3.13.37, DB-contract A): query() clears lastError on
+        // entry and records the driver error on failure (returning []), so a
+        // non-null lastError after the call means the statement failed — RAISE
+        // it instead of returning null (which a caller would read as "no row").
         $rows = $this->query($sql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('MySQL fetchOne() failed: ' . $this->lastError);
+        }
         return $rows[0] ?? null;
     }
 
