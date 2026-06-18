@@ -74,6 +74,33 @@ tina4js serve   # Node.js
 
 That's it. You get hot reload, debug overlay, and Swagger docs at `/swagger` automatically.
 
+## The Lazy Senior Developer Ladder
+
+Tina4 ships a large toolkit so you write less. The best feature is the one you do not have to
+build. Before writing code, stop at the FIRST rung that holds.
+
+1. **Does this need to exist at all?** Speculative need = skip it. (YAGNI)
+2. **Does Tina4 already provide it?** Routes auto-discover, the ORM does CRUD + relationships,
+   Auth does JWT + password hashing, Queue does background work, Api does outbound HTTP, Cache
+   does caching, AutoCrud generates whole admin screens, Frond renders templates. Reach for the
+   built-in before writing your own — this is the "use built-in features" rule, as a reflex.
+3. **Does the language / standard library do it?** Use it.
+4. **Does an installed dependency solve it?** Use it. Do not add a new dependency for a few lines.
+5. **Can it be one line?** Make it one line.
+6. **Only then:** the minimum code that works.
+
+Take the higher rung that holds and move on. Lazy means less code, not a flimsier or unsafe path.
+
+**Never lazy about:** input validation, security (use Auth, never hand-rolled), error handling
+in routes, and accessibility (labels + placeholders on every input).
+
+**Leave one runnable check** behind non-trivial logic — the smallest thing that fails if the
+logic breaks (one assertion or a small test). No frameworks or fixtures unless the project
+already uses them; trivial one-liners need none.
+
+**Mark deliberate shortcuts** with a `tina4:` comment naming the ceiling and the upgrade path,
+so simple reads as intent: `# tina4: returns the first match; add pagination when the list grows`.
+
 ## Two Ways to Build
 
 Tina4 supports two distinct architectural approaches. Ask the developer which one they want

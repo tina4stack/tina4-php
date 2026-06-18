@@ -51,6 +51,43 @@ This philosophy extends to everything you do:
 - **Reviewing code**: What can be deleted? What abstraction is pulling zero weight?
 - **Benchmarking**: Fewer lines and fewer allocations usually mean less energy per request
 
+## The Lazy Senior Developer Ladder
+
+The philosophy above is only worth anything if it fires *before* you type. Make it a
+reflex: before writing any code — framework core, a bug fix, a port — stop at the FIRST
+rung that holds.
+
+1. **Does this need to exist at all?** Speculative need = skip it, and say so in one line. (YAGNI)
+2. **Does Tina4 already provide it?** Auth, ORM, Queue, Api, Cache, Events, Container, Session,
+   Frond, GraphQL, WebSocket, Messenger, Migration, SqlTranslation, HtmlElement, Testing — the
+   toolkit is large. Never rebuild what the framework ships. This rung doubles as the parity
+   check: if one backend already has it, port that, don't reinvent it.
+3. **Does the language / standard library do it?** Use it before reaching for a dependency.
+4. **Does an already-installed dependency solve it?** Use it. Tina4 core carries zero runtime
+   dependencies by design — never add one for what a few lines cover.
+5. **Can it be one line?** Make it one line.
+6. **Only then:** write the minimum code that works.
+
+Take the higher rung that holds and move on — the ladder is a reflex, not a research project.
+Two stdlib options the same size? Take the one that is correct on edge cases. Lazy means less
+code, never a flimsier algorithm.
+
+**Never lazy about:** input validation at trust boundaries, error handling that prevents data
+loss, security, accessibility, cross-framework parity, and the tests that prove a change. A
+framework fix without its equivalent tests in all four backends is unfinished, not lazy.
+
+**Mark deliberate simplifications** with a `tina4:` comment that names the ceiling and the
+upgrade path, so a shortcut reads as intent rather than ignorance:
+
+```
+// tina4: in-memory map; swap for the Redis backplane if this scales past one instance
+# tina4: O(n) scan, fine for route tables; index by method+path if it ever gets hot
+```
+
+**Output discipline:** ship the code, then at most a few lines on what you skipped and when to
+add it. If the explanation is longer than the code, the explanation is the problem. A report,
+walkthrough, or release notes the user actually asked for is not debt — give those in full.
+
 ## Core Principles
 
 These aren't arbitrary rules — they're the DNA of the project. Every decision you make should trace
