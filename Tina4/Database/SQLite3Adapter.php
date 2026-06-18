@@ -150,38 +150,38 @@ class SQLite3Adapter implements DatabaseAdapter
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
         $sql = self::stripTrailingSemicolons($sql);
 
-        try {
-            // Get total count
-            $countSql = "SELECT COUNT(*) as total FROM ({$sql})";
-            $countResult = $this->query($countSql, $params);
-            $total = (int)($countResult[0]['total'] ?? 0);
-
-            // Apply pagination — skip if the SQL already ends with its own
-            // LIMIT clause (appending a second one is a syntax error), or if
-            // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
-            $sqlNoComments = self::stripTrailingSemicolons(preg_replace('/--.*$/m', '', $sql));
-            if ($limit <= 0 || self::hasTrailingLimit($sqlNoComments)) {
-                $pagedSql = $sql;
-            } else {
-                $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
-            }
-            $data = $this->query($pagedSql, $params);
-
-            return [
-                'data' => $data,
-                'total' => $total,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
-        } catch (\Exception $e) {
-            $this->lastError = $e->getMessage();
-            return [
-                'data' => [],
-                'total' => 0,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
+        // FAIL LOUD: query() records the driver error in error() and returns
+        // []. fetch() must RAISE that instead of returning an empty result set
+        // (parity with execute() and the Python master). query() clears
+        // lastError on entry, so a non-null lastError after the call means the
+        // statement failed.
+        $countSql = "SELECT COUNT(*) as total FROM ({$sql})";
+        $countResult = $this->query($countSql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('SQLite3 fetch() failed: ' . $this->lastError);
         }
+        $total = (int)($countResult[0]['total'] ?? 0);
+
+        // Apply pagination — skip if the SQL already ends with its own
+        // LIMIT clause (appending a second one is a syntax error), or if
+        // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
+        $sqlNoComments = self::stripTrailingSemicolons(preg_replace('/--.*$/m', '', $sql));
+        if ($limit <= 0 || self::hasTrailingLimit($sqlNoComments)) {
+            $pagedSql = $sql;
+        } else {
+            $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
+        }
+        $data = $this->query($pagedSql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('SQLite3 fetch() failed: ' . $this->lastError);
+        }
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'limit' => $limit,
+            'offset' => $offset,
+        ];
     }
 
     public function exec(string $sql, array $params = []): bool
@@ -220,7 +220,15 @@ class SQLite3Adapter implements DatabaseAdapter
 
     public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
-        return $this->exec($sql, $params);
+        // FAIL LOUD: exec() records the driver error in error() and returns
+        // false on failure. execute() must RAISE that instead of swallowing it
+        // (parity with the Python master and with fetch()/fetchOne() here).
+        if ($this->exec($sql, $params) === false) {
+            throw new DatabaseException(
+                'SQLite3 execute() failed: ' . ($this->lastError ?? $this->db?->lastErrorMsg() ?? 'unknown error')
+            );
+        }
+        return true;
     }
 
     public function executeMany(string $sql, array $paramsList = []): int

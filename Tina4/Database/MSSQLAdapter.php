@@ -201,16 +201,19 @@ class MSSQLAdapter implements DatabaseAdapter
                 : @sqlsrv_query($this->db, $sql, $values);
 
             if ($stmt === false) {
+                // FAIL LOUD: capture the cause on error() AND raise.
                 $errors = sqlsrv_errors();
                 $this->lastError = $errors ? $errors[0]['message'] : 'Execute failed';
-                return false;
+                throw new DatabaseException('MSSQL execute() failed: ' . ($this->lastError ?: 'unknown error'));
             }
 
             sqlsrv_free_stmt($stmt);
             return true;
+        } catch (DatabaseException $e) {
+            throw $e;
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
-            return false;
+            throw $e;
         }
     }
 
@@ -218,8 +221,13 @@ class MSSQLAdapter implements DatabaseAdapter
     {
         $totalAffected = 0;
         foreach ($paramsList as $params) {
-            if ($this->execute($sql, $params)) {
+            // execute() now raises on failure; keep the int contract by
+            // counting only the rows that ran without throwing.
+            try {
+                $this->execute($sql, $params);
                 $totalAffected++;
+            } catch (\Exception) {
+                // skip the failed row, continue the batch
             }
         }
         return $totalAffected;

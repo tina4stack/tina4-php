@@ -169,10 +169,18 @@ class ODBCAdapter implements DatabaseAdapter
         try {
             $stmt = $this->pdo->prepare($sql);
             $this->bindParams($stmt, $params);
-            return $stmt->execute();
+            if ($stmt->execute() === false) {
+                // FAIL LOUD: capture the cause on error() AND raise.
+                $info = $stmt->errorInfo();
+                $this->lastError = $info[2] ?? 'Execute failed';
+                throw new DatabaseException('ODBC execute() failed: ' . ($this->lastError ?: 'unknown error'));
+            }
+            return true;
+        } catch (DatabaseException $e) {
+            throw $e;
         } catch (\PDOException $e) {
             $this->lastError = $e->getMessage();
-            return false;
+            throw $e;
         }
     }
 

@@ -10,18 +10,24 @@
  * Wraps a DatabaseAdapter and caches SELECT results from fetch() and fetchOne().
  * Write operations (insert, update, delete, execute) invalidate the entire cache.
  *
- * One store, two layers (mirrors tina4_python connection.py exactly):
- *   • request-scoped (DEFAULT ON, off-switch TINA4_AUTO_CACHING=false) — dedupes
+ * One store, two layers (mirrors tina4_python connection.py exactly). BOTH
+ * layers are OPT-IN / DEFAULT OFF:
+ *   • request-scoped (DEFAULT OFF, opt-in TINA4_AUTO_CACHING=true) — dedupes
  *     identical SELECTs to protect the DB from rapid repeat reads. Cleared at the
  *     START of every HTTP request AND on any write, with a short safety TTL
  *     (TINA4_AUTO_CACHING_TTL, default 5s) for non-request contexts (CLI/workers).
+ *     It is OFF by default because an on-by-default request cache is a footgun:
+ *     a `SELECT MAX(id)` (or generator read) right before an INSERT in the same
+ *     request returns a cached pre-write value → duplicate primary keys; any
+ *     read-after-write in one request shows stale state. Turn it on only for
+ *     read-heavy endpoints.
  *   • persistent (opt-in, TINA4_DB_CACHE=true) — cross-request TTL cache that is
  *     NOT cleared per request; entries expire by TINA4_DB_CACHE_TTL (default 30s).
  *
  * .env knobs:
  *   TINA4_DB_CACHE=true          # persistent cross-request cache (default: false)
  *   TINA4_DB_CACHE_TTL=30        # persistent TTL in seconds (default: 30)
- *   TINA4_AUTO_CACHING=true       # request-scoped cache (default: true)
+ *   TINA4_AUTO_CACHING=true       # request-scoped cache (default: false — opt-in)
  *   TINA4_AUTO_CACHING_TTL=5      # request-scoped TTL in seconds (default: 5)
  *
  * enabled = persistent || requestScoped
@@ -81,9 +87,12 @@ class CachedDatabase implements DatabaseAdapter
     {
         $this->adapter = $adapter;
 
-        // Persistent (opt-in) takes precedence over request-scoped (default-on).
+        // Both layers are opt-in / default OFF. Persistent (TINA4_DB_CACHE)
+        // takes precedence over request-scoped (TINA4_AUTO_CACHING) when both
+        // are enabled. Request-scoped defaults OFF to avoid the read-after-write
+        // footgun (stale MAX(id)/generator reads → duplicate keys).
         $this->persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
-        $this->requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'true');
+        $this->requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'false');
 
         // $enabled is an explicit override (used by tests); otherwise derive it.
         $this->enabled = $enabled ?? ($this->persistent || $this->requestScoped);

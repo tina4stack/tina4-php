@@ -389,48 +389,75 @@ class Database implements DatabaseAdapter
     /**
      * Execute a DDL or data manipulation statement (no result set).
      *
+     * FAIL LOUD contract (parity with the Python master and with this
+     * framework's own fetch()/fetchOne()): on a SQL error — bad statement,
+     * constraint violation, dead/aborted connection, missing driver — this
+     * sets getError() AND RAISES a {@see DatabaseException} (or lets a driver
+     * exception propagate). It never returns false. On SUCCESS the return is
+     * unchanged: true for a plain write/DDL, or a DatabaseResult for
+     * RETURNING / CALL / EXEC / SELECT — always truthy.
+     *
+     * Callers that need a bool must wrap this in try/catch (see ORM::save(),
+     * ORM::createTable(), Migration::migrate(), DevAdmin + MCP database tools).
+     *
      * @param string $sql SQL statement
      * @param array<mixed> $params Bound parameters
-     * @return bool|DatabaseResult True/false for writes, DatabaseResult for RETURNING/stored proc
+     * @return true|DatabaseResult True for writes, DatabaseResult for RETURNING/stored proc
+     * @throws DatabaseException When the statement fails (cause on getError()).
      */
     public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
+        $adapter = $this->getNextAdapter();
         try {
-            $adapter = $this->getNextAdapter();
             $result = $adapter->execute($sql, $params);
-            $upper = strtoupper(trim($sql));
-            if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
-                str_starts_with($upper, 'EXEC ') || str_starts_with($upper, 'SELECT ')) {
-                $this->lastError = null;
-                return $result instanceof DatabaseResult ? $result : new DatabaseResult(records: is_array($result) ? $result : []);
-            }
-            // Plain write/DDL: the adapter returns a boolean and records the
-            // driver error in error(). Unlike Python/Ruby/Node — whose adapters
-            // raise on failure (caught below) — PHP adapters return false, so we
-            // must propagate it. Previously this returned true unconditionally,
-            // silently masking failed INSERT/UPDATE/DELETE/DDL.
-            if ($result === false) {
-                $this->lastError = $adapter->error();
-                return false;
-            }
-            $this->lastError = null;
-            return true;
         } catch (\Exception $e) {
+            // Adapter raised (driver exception, or our own DatabaseException
+            // re-thrown from the adapter). Capture the cause and re-raise —
+            // fetch()/fetchOne() already behave this way; execute() was the
+            // lone swallower. Python master: "set last_error; raise".
             $this->lastError = $e->getMessage();
-            return false;
+            throw $e;
         }
+
+        $upper = strtoupper(trim($sql));
+        if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
+            str_starts_with($upper, 'EXEC ') || str_starts_with($upper, 'SELECT ')) {
+            $this->lastError = null;
+            return $result instanceof DatabaseResult ? $result : new DatabaseResult(records: is_array($result) ? $result : []);
+        }
+        // Plain write/DDL: PHP adapters return a boolean and record the driver
+        // error in error(). A false return means the statement failed — capture
+        // the cause and RAISE rather than return false (the old behaviour
+        // silently masked failed INSERT/UPDATE/DELETE/DDL one level up).
+        if ($result === false) {
+            $this->lastError = $adapter->error();
+            throw new DatabaseException(
+                'Database::execute() failed: ' . ($this->lastError ?? 'unknown error')
+            );
+        }
+        $this->lastError = null;
+        return true;
     }
 
     /**
      * Alias for execute() — matches adapter-level naming convention.
      *
+     * Shares execute()'s FAIL-LOUD contract: returns true on success and
+     * RAISES (never returns false) on a SQL error, with the cause on
+     * getError(). Callers that need a bool must wrap this in try/catch.
+     *
      * @param string $sql SQL statement
      * @param array<mixed> $params Bound parameters
      * @return bool True on success
+     * @throws DatabaseException When the statement fails (cause on getError()).
      */
     public function exec(string $sql, array $params = []): bool
     {
-        return $this->getNextAdapter()->execute($sql, $params);
+        $result = $this->execute($sql, $params);
+        // execute() returns a DatabaseResult for RETURNING/CALL/EXEC/SELECT;
+        // exec() promises a bool, so collapse that to true. A failure has
+        // already raised inside execute() before reaching here.
+        return $result !== false;
     }
 
     // -------------------------------------------------------------------------
@@ -912,15 +939,20 @@ class Database implements DatabaseAdapter
     /**
      * Wrap an adapter in CachedDatabase when query caching is active.
      *
-     * Caching is ON BY DEFAULT (request-scoped layer). The wrapper reads
-     * TINA4_AUTO_CACHING / TINA4_DB_CACHE and their TTL env vars internally,
-     * so no explicit config is needed here. We only SKIP wrapping when caching
-     * is fully off — i.e. the request-scoped off-switch is set AND the
-     * persistent cache is not enabled:
+     * Both cache layers are OPT-IN — the wrapper reads TINA4_AUTO_CACHING /
+     * TINA4_DB_CACHE and their TTL env vars internally, so no explicit config
+     * is needed here. The request-scoped layer DEFAULTS OFF (TINA4_AUTO_CACHING
+     * unset → false): an on-by-default request cache is a footgun — a
+     * `SELECT MAX(id)` (or generator read) right before an INSERT in the same
+     * request would return a cached pre-write value and produce duplicate
+     * primary keys; any read-after-write in one request would show stale state.
+     * Opt in via TINA4_AUTO_CACHING=true for read-heavy endpoints. We only wrap
+     * when at least one layer is enabled:
      *
-     *   TINA4_AUTO_CACHING=false  AND  TINA4_DB_CACHE != true   → no wrapper
+     *   TINA4_AUTO_CACHING=true   OR  TINA4_DB_CACHE=true   → wrapper
+     *   neither set                                          → no wrapper
      *
-     * Mirrors Python: enabled = persistent || requestScoped.
+     * Mirrors Python: enabled = persistent || requestScoped (both default off).
      *
      * @param DatabaseAdapter $adapter
      * @return DatabaseAdapter Original adapter or CachedDatabase wrapper
@@ -928,7 +960,7 @@ class Database implements DatabaseAdapter
     private static function wrapWithCache(DatabaseAdapter $adapter): DatabaseAdapter
     {
         $persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
-        $requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'true');
+        $requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'false');
         if ($persistent || $requestScoped) {
             return new CachedDatabase($adapter);
         }

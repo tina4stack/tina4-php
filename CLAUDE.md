@@ -185,8 +185,8 @@ $db = Database::create($url, autoCommit: false);
 
 // Adapter methods (all adapters implement DatabaseAdapter)
 $db->fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
-$db->execute($sql, $params)
-$db->exec($sql, $params)           // alias for execute()
+$db->execute($sql, $params)        // FAIL LOUD — RAISES on SQL error (never returns false); cause on getError(). try/catch it.
+$db->exec($sql, $params)           // alias for execute() — same raise-on-error contract
 $db->startTransaction()
 $db->commit(): void
 $db->rollback(): void
@@ -396,7 +396,23 @@ Auth::hashPassword($password, $salt=null, $iterations=260000): string  // PBKDF2
 Auth::checkPassword($password, $hash): bool
 Auth::validateApiKey($provided, $expected=null): bool  // reads TINA4_API_KEY from env
 Auth::authenticateRequest($headers, $secret=null): ?array  // Bearer JWT, falls back to API key
+Auth::ensureDevSecret($cwd=null): ?string  // dev-secret bootstrap (run once at boot)
 ```
+
+**`TINA4_SECRET` — dev secret auto-generation.** The default signing secret is
+always BLANK (never a guessable built-in). `Auth::ensureDevSecret()` runs once at
+boot (after env load, before auth is used). In local **dev** (`TINA4_DEBUG=true`,
+no `CI` env var, `TINA4_ENV` != `production`) with a blank `TINA4_SECRET`, it
+generates a cryptographically-random secret (32 bytes / 64 hex chars), sets it in
+the process env for the run, and **appends it to `.env.local`** (created if
+missing — gitignored) so subsequent boots reuse it. The write is guarded: if
+`.env.local` can't be written it keeps the in-memory secret and warns — boot never
+crashes. In **CI or production** with a blank secret it NEVER generates or
+persists anything — it logs an actionable warning naming exactly what to set
+(`openssl rand -hex 32`). At boot the framework loads `.env`, then **`.env.local`
+as an override** (the standard "local overrides, gitignored" pattern), so a
+previously-generated dev secret wins. Both `.env.local` and the scaffolded
+project's `.gitignore` exclude `.env.local`.
 
 ### Session
 
@@ -423,9 +439,18 @@ Backends: file, redis, valkey, mongodb, database.
 ### Database extras
 
 ```php
-$db->execute($sql, $params): bool|DatabaseResult  // bool for writes, DatabaseResult for RETURNING/CALL/EXEC
+$db->execute($sql, $params): bool|DatabaseResult  // SUCCESS: true for writes, DatabaseResult for RETURNING/CALL/EXEC/SELECT.
+                                                   // FAILURE: RAISES \Tina4\Database\DatabaseException — never returns false.
+                                                   // The cause is still captured on getError(). Mirrors fetch()/fetchOne(),
+                                                   // which also raise. Don't test the return — wrap in try/catch:
+                                                   //   try { $db->execute($sql); } catch (\Throwable $e) { /* $db->getError() */ }
+                                                   // Higher-level callers preserve their own contracts: ORM::save() catches
+                                                   // and returns false; ORM::createTable() catches, logs, returns false; the
+                                                   // migration runner rolls back + re-raises; dev-admin + MCP DB tools return
+                                                   // a clean {error} payload.
+$db->fetch($sql, $params, $limit, $offset): DatabaseResult  // Also RAISES on a bad statement (no swallow-to-empty-result).
 $db->getLastId(): int|string
-$db->getError(): ?string
+$db->getError(): ?string                           // Cause of the last execute()/fetch() error; cleared on the next success.
 $db->getColumns($tableName): array
 ```
 
@@ -984,7 +1009,7 @@ $result = SqlTranslation::remember(
 - CLI scaffolding: `composer tina4 generate model/route/migration/middleware`
 - Production server: `composer start --production` (OPcache auto-config)
 - Frond pre-compilation for 2.8x template render improvement
-- DB query caching: request-scoped auto cache **on by default** (`TINA4_AUTO_CACHING=true`, TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes; persistent cross-request cache opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s) routed through the unified backend set via `TINA4_DB_CACHE_BACKEND` (memory/file/redis/valkey/memcached/mongodb/database) + `TINA4_DB_CACHE_URL` so instances share one cache with global write-invalidation; `cacheStats()` reports `mode` (request/persistent/off) and `backend`, `cacheClear()`
+- DB query caching: request-scoped auto cache **off by default — opt-in via `TINA4_AUTO_CACHING=true`** (TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes. It is OFF by default because an on-by-default request cache is a footgun: a `SELECT MAX(id)` (or generator read) right before an INSERT in the same request returns a cached pre-write value → duplicate primary keys, and any read-after-write in one request shows stale state — so turn it on only for read-heavy endpoints. Persistent cross-request cache is also opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s) routed through the unified backend set via `TINA4_DB_CACHE_BACKEND` (memory/file/redis/valkey/memcached/mongodb/database) + `TINA4_DB_CACHE_URL` so instances share one cache with global write-invalidation; `cacheStats()` reports `mode` (request/persistent/off) and `backend`, `cacheClear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
 - Queue backends: file (default), RabbitMQ, Kafka, MongoDB
 - Cache backends (`Tina4\Cache`): unified set across response/KV and persistent DB cache — `memory` (default), `file`, `redis`, `valkey`, `memcached`, `mongodb`, `database` — selected via `TINA4_CACHE_BACKEND` (+ `TINA4_CACHE_URL`/credentials); falls back to the file backend if a backend is unreachable

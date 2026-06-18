@@ -80,6 +80,7 @@
             <file>tests/PostgresUuidPkTest.php</file>
             <file>tests/CreateTablePostgresTest.php</file>
             <file>tests/ExecuteFailurePostgresTest.php</file>
+            <file>tests/ExecuteRaisesTest.php</file>
             <file>tests/BooleanParamBindingTest.php</file>
             <file>tests/PlanListTest.php</file>
             <file>tests/SqlNormalizerTest.php</file>

@@ -16,6 +16,153 @@ namespace Tina4;
  */
 class Auth
 {
+    /**
+     * Actionable blank-secret warning. Emitted from the lazy per-call resolver
+     * (getToken/validToken) AND from the CI/prod path of ensureDevSecret() —
+     * identical text everywhere. It names exactly what to set and how, so an
+     * operator who hits it in CI/prod knows the next step.
+     */
+    public const BLANK_SECRET_WARNING = 'Auth: TINA4_SECRET is not set — JWT signing is insecure. '
+        . 'Set TINA4_SECRET to a random value (e.g. `openssl rand -hex 32`) in your '
+        . 'environment or .env before serving traffic.';
+
+    // ── Dev secret bootstrap ───────────────────────────────────────
+
+    /**
+     * Bootstrap a per-machine DEV signing secret.
+     *
+     * Run ONCE at server boot, after env load and before auth is used. Behaviour:
+     *   - TINA4_SECRET already set → no-op (return null).
+     *   - NOT dev, OR in CI, OR production → emit the actionable warning
+     *     (warnBlankSecret) and return null. NEVER generates or persists a
+     *     secret in CI/prod/non-dev.
+     *   - dev (TINA4_DEBUG truthy) AND not CI AND not production AND blank
+     *     secret → generate 32 random bytes (64 hex chars), set it in the
+     *     process env IMMEDIATELY (available this run), then try to APPEND
+     *     `TINA4_SECRET=<secret>` to <cwd>/.env.local (create if missing,
+     *     gitignored). On success log an INFO line. On ANY write failure keep
+     *     the in-memory secret and warn — NEVER throw (boot must not crash).
+     *
+     * SECURITY: only the dev-and-not-CI path generates; we only ever write to
+     * .env.local, never .env; the default signing secret stays BLANK (never a
+     * guessable built-in). Mirrors tina4_python.auth.ensure_dev_secret().
+     *
+     * @param string|null $cwd Directory to write .env.local into. Tests pass a
+     *   tmp dir; production callers pass null (defaults to getcwd()).
+     * @return string|null The generated secret, or null when nothing was generated.
+     */
+    public static function ensureDevSecret(?string $cwd = null): ?string
+    {
+        // Already configured — nothing to do.
+        $current = self::resolveSecret();
+        if ($current !== '') {
+            return null;
+        }
+
+        // Never generate or persist in CI, production, or non-dev. Emit the
+        // actionable warning so operators know exactly what to set.
+        if (!self::isDev() || self::isCi() || self::isProduction()) {
+            self::warnBlankSecret();
+            return null;
+        }
+
+        // Dev, not CI, not production, blank secret → mint one.
+        $newSecret = bin2hex(random_bytes(32)); // 64 hex chars / 32 bytes
+
+        // Make it available for THIS run immediately (every layer the resolver reads).
+        $_ENV['TINA4_SECRET'] = $newSecret;
+        $_SERVER['TINA4_SECRET'] = $newSecret;
+        putenv("TINA4_SECRET={$newSecret}");
+
+        // Persist to .env.local (gitignored). Guarded — a write failure must
+        // never crash boot; we keep the in-memory secret and warn.
+        $dir = $cwd ?? getcwd();
+        $path = rtrim((string) $dir, '/\\') . DIRECTORY_SEPARATOR . '.env.local';
+        try {
+            $prefix = '';
+            if (is_file($path)) {
+                $existing = file_get_contents($path);
+                if ($existing === false) {
+                    throw new \RuntimeException("could not read {$path}");
+                }
+                // If the file doesn't end in a newline, prepend one so the new
+                // key lands on its own line and we don't corrupt the last line.
+                if ($existing !== '' && !str_ends_with($existing, "\n")) {
+                    $prefix = "\n";
+                }
+            }
+            // Suppress the PHP warning a failed open emits — we detect the
+            // false return and throw our own clean exception (caught below).
+            $written = @file_put_contents($path, $prefix . "TINA4_SECRET={$newSecret}\n", FILE_APPEND);
+            if ($written === false) {
+                throw new \RuntimeException("could not write {$path}");
+            }
+            self::logInfo('Auth: generated a development secret, saved to .env.local (gitignored)');
+        } catch (\Throwable $e) {
+            // Keep the in-memory secret for this run; just warn.
+            self::logWarning(
+                'Auth: generated a development secret but could not persist it to .env.local ('
+                . $e->getMessage() . ') — using an in-memory secret for this run.'
+            );
+        }
+
+        return $newSecret;
+    }
+
+    /**
+     * Resolve TINA4_SECRET from env (putenv first, then $_ENV), '' if blank.
+     * Mirrors the lookup used by getToken()/validToken().
+     */
+    private static function resolveSecret(): string
+    {
+        return (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
+    }
+
+    /** True when running in dev (TINA4_DEBUG truthy). */
+    private static function isDev(): bool
+    {
+        return DotEnv::isTruthy((getenv('TINA4_DEBUG') ?: ($_ENV['TINA4_DEBUG'] ?? '')) ?: '');
+    }
+
+    /** True when a CI env var is truthy (de-facto CI indicator). */
+    private static function isCi(): bool
+    {
+        return DotEnv::isTruthy((getenv('CI') ?: ($_ENV['CI'] ?? '')) ?: '');
+    }
+
+    /** True when TINA4_ENV is "production". */
+    private static function isProduction(): bool
+    {
+        $env = (getenv('TINA4_ENV') ?: ($_ENV['TINA4_ENV'] ?? '')) ?: 'development';
+        return $env === 'production';
+    }
+
+    /** Emit the actionable blank-secret warning (Log if available, else trigger_error). */
+    private static function warnBlankSecret(): void
+    {
+        self::logWarning(self::BLANK_SECRET_WARNING);
+    }
+
+    /** Log at INFO via Tina4 Log if present, else print to stderr. */
+    private static function logInfo(string $message): void
+    {
+        if (class_exists(Log::class)) {
+            Log::info($message);
+            return;
+        }
+        fwrite(STDERR, $message . PHP_EOL);
+    }
+
+    /** Log at WARNING via Tina4 Log if present, else trigger a user warning. */
+    private static function logWarning(string $message): void
+    {
+        if (class_exists(Log::class)) {
+            Log::warning($message);
+            return;
+        }
+        trigger_error($message, E_USER_WARNING);
+    }
+
     // ── JWT ────────────────────────────────────────────────────────
 
     /**
@@ -39,7 +186,7 @@ class Auth
         }
         $secret = $secret ?? (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if ($secret === '') {
-            trigger_error('Auth: TINA4_SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
+            self::warnBlankSecret();
         }
 
         $algorithm = (getenv('TINA4_JWT_ALGORITHM') ?: ($_ENV['TINA4_JWT_ALGORITHM'] ?? '')) ?: 'HS256';
@@ -81,7 +228,7 @@ class Auth
     {
         $secret = $secret ?? (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if ($secret === '') {
-            trigger_error('Auth: TINA4_SECRET not set in .env — using blank secret (insecure)', E_USER_WARNING);
+            self::warnBlankSecret();
         }
         $algorithm = (getenv('TINA4_JWT_ALGORITHM') ?: ($_ENV['TINA4_JWT_ALGORITHM'] ?? '')) ?: 'HS256';
         $parts = explode('.', $token);

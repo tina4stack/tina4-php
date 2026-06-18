@@ -259,6 +259,22 @@ class App
             DotEnv::loadEnv($envFile);
         }
 
+        // Load .env.local AFTER .env as an OVERRIDE — the standard "local
+        // overrides, gitignored" pattern. .env loads without clobbering real
+        // process env; .env.local then wins (overwrite: true) so a previously
+        // generated dev secret is picked up on the next boot.
+        $envLocal = $this->basePath . DIRECTORY_SEPARATOR . '.env.local';
+        if (is_file($envLocal)) {
+            DotEnv::loadEnv($envLocal, overwrite: true);
+        }
+
+        // Dev-secret bootstrap — run once at boot, after env load and before
+        // auth is used. In dev (TINA4_DEBUG truthy, not CI, not production)
+        // with a blank TINA4_SECRET this generates a per-machine secret and
+        // persists it to .env.local (gitignored). In CI/prod it only emits an
+        // actionable warning. Never throws — boot must not crash.
+        Auth::ensureDevSecret($this->basePath);
+
         // Configure logger
         $isDev = $this->development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         Log::configure(

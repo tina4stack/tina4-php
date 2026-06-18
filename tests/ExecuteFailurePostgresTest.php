@@ -1,13 +1,16 @@
 <?php
 
 /**
- * Database::execute() must propagate adapter failure (not silently return true).
+ * Database::execute() must FAIL LOUD — RAISE on a SQL error, not return false
+ * (and definitely not silently return true).
  *
- * For a plain write/DDL (no RETURNING/CALL/EXEC/SELECT) the facade used to
+ * For a plain write/DDL (no RETURNING/CALL/EXEC/SELECT) the facade originally
  * `return true` unconditionally, discarding the adapter's boolean result.
- * PHP adapters return `false` (and record error()) on a failed statement —
- * unlike Python/Ruby/Node whose adapters raise (and are caught) — so the
- * facade reported success even when the driver failed.
+ * tina4-php#114 changed it to return false on a failed statement. The v3
+ * FAIL-LOUD contract (parity with the Python master and with this framework's
+ * own fetch()/fetchOne()) now makes execute() THROW a DatabaseException — the
+ * cause is still captured on getError(). Callers that want a bool must
+ * try/catch.
  *
  * PG-gated: skipped when ext-pgsql is missing or PostgreSQL is unreachable
  * (postgres://tina4:tina4@localhost:5432/tina4_php), matching
@@ -16,6 +19,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
+use Tina4\Database\DatabaseException;
 
 class ExecuteFailurePostgresTest extends TestCase
 {
@@ -62,28 +66,40 @@ class ExecuteFailurePostgresTest extends TestCase
         $this->assertTrue($this->db->execute("UPDATE t4_exec_fail SET name = 'x' WHERE id = 99999"));
     }
 
-    public function testExecuteReturnsFalseOnFailingDdl(): void
+    public function testExecuteThrowsOnFailingDdl(): void
     {
-        // Duplicate column name → CREATE fails. Must return false, not true.
-        $ok = $this->db->execute('CREATE TABLE t4_exec_fail (id INTEGER, id INTEGER)');
-        $this->assertFalse($ok, 'execute() must return false when the DDL fails');
+        // Duplicate column name → CREATE fails. Must THROW, not return false/true.
+        try {
+            $this->db->execute('CREATE TABLE t4_exec_fail (id INTEGER, id INTEGER)');
+            $this->fail('execute() must raise when the DDL fails');
+        } catch (\Throwable $e) {
+            $this->assertStringContainsStringIgnoringCase('more than once', $e->getMessage());
+        }
+        // The cause is still captured on getError() after the throw.
         $this->assertNotNull($this->db->getError());
         $this->assertStringContainsStringIgnoringCase('more than once', (string) $this->db->getError());
     }
 
-    public function testExecuteReturnsFalseOnFailingInsert(): void
+    public function testExecuteThrowsOnFailingInsert(): void
     {
         $this->db->execute('CREATE TABLE t4_exec_fail (id SERIAL PRIMARY KEY, name VARCHAR(50) NOT NULL)');
-        // NOT NULL violation → INSERT fails.
-        $ok = $this->db->execute('INSERT INTO t4_exec_fail (name) VALUES (NULL)');
-        $this->assertFalse($ok, 'execute() must return false when the INSERT fails');
-        $this->assertNotNull($this->db->getError());
+        // NOT NULL violation → INSERT fails → execute() must raise.
+        $this->expectException(\Throwable::class);
+        try {
+            $this->db->execute('INSERT INTO t4_exec_fail (name) VALUES (NULL)');
+        } catch (\Throwable $e) {
+            $this->assertNotNull($this->db->getError());
+            throw $e;
+        }
     }
 
-    public function testExecuteReturnsFalseOnUnknownTable(): void
+    public function testExecuteThrowsOnUnknownTable(): void
     {
-        $ok = $this->db->execute('INSERT INTO t4_does_not_exist (x) VALUES (1)');
-        $this->assertFalse($ok);
-        $this->assertNotNull($this->db->getError());
+        try {
+            $this->db->execute('INSERT INTO t4_does_not_exist (x) VALUES (1)');
+            $this->fail('execute() must raise on an unknown table');
+        } catch (\Throwable $e) {
+            $this->assertNotNull($this->db->getError());
+        }
     }
 }

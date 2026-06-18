@@ -16,6 +16,8 @@
 tests/tests/acceptance/
 tests/tests/functional/
 /.env
+/.env.local
+.env.local
 /migrations/
 /.env.test
 test.php

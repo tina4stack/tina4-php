@@ -222,8 +222,10 @@ class MongoDBAdapter implements DatabaseAdapter
             };
             return (bool) $result;
         } catch (\Exception $e) {
+            // FAIL LOUD: capture the cause on error() AND raise (parity with
+            // the SQL adapters and the Python master).
             $this->lastError = $e->getMessage();
-            return false;
+            throw $e;
         }
     }
 

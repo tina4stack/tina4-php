@@ -5,17 +5,22 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Request-scoped DB query cache (default-on) — protects the DB from rapid
- * identical reads. Mirrors tina4_python tests/test_db_query_cache.py exactly.
+ * DB query cache — BOTH layers opt-in / DEFAULT OFF. Mirrors tina4_python
+ * tests/test_db_query_cache.py exactly.
  *
  * Layers:
- *   • request-scoped (DEFAULT ON, off-switch TINA4_AUTO_CACHING=false) — dedupes
+ *   • request-scoped (DEFAULT OFF, opt-in TINA4_AUTO_CACHING=true) — dedupes
  *     identical SELECTs, cleared per request + on writes, short safety TTL.
+ *     OFF by default because an on-by-default request cache is a footgun:
+ *     a stale MAX(id)/generator read before an INSERT in the same request
+ *     yields duplicate primary keys (read-after-write returns stale state).
  *   • persistent (opt-in TINA4_DB_CACHE=true) — cross-request TTL cache, NOT
  *     cleared per request.
  *
  * NOTE: the cache mode is read at construction, so every test sets env via
- * putenv()/$_ENV BEFORE calling Database::create().
+ * putenv()/$_ENV BEFORE calling Database::create(). Behaviour tests that need
+ * the request cache ACTIVE must explicitly set TINA4_AUTO_CACHING=true — they
+ * test the opt-in feature.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -71,16 +76,19 @@ class DbQueryCacheTest extends TestCase
 
     // ── Request-scoped default ────────────────────────────────────
 
-    public function testOnByDefault(): void
+    public function testOffByDefault(): void
     {
+        // With no env vars set, BOTH cache layers are OFF — the request-scoped
+        // cache is opt-in (default OFF) to avoid the read-after-write footgun.
         $db = $this->makeDb();
         $stats = $db->cacheStats();
-        $this->assertTrue($stats['enabled']);
-        $this->assertSame('request', $stats['mode']);
+        $this->assertFalse($stats['enabled']);
+        $this->assertSame('off', $stats['mode']);
     }
 
     public function testIdenticalFetchesDedupe(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t');   // miss -> populates
         $db->fetch('SELECT * FROM t');   // hit
@@ -91,6 +99,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testWriteInvalidates(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t');
         $this->assertSame(1, $db->cacheStats()['size']);
@@ -100,6 +109,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testInsertHelperInvalidates(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t');
         $this->assertSame(1, $db->cacheStats()['size']);
@@ -111,6 +121,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testResetClearsRequestCache(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t');
         $this->assertSame(1, $db->cacheStats()['size']);
@@ -121,6 +132,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testResetPreservesCounters(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t');
         $db->fetch('SELECT * FROM t');  // one hit
@@ -174,6 +186,7 @@ class DbQueryCacheTest extends TestCase
     public function testNoCacheFetchSkipsCacheStore(): void
     {
         // A noCache read must NOT populate the cache (no store).
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t', [], 100, 0, noCache: true);
         $this->assertSame(0, $db->cacheStats()['size']);
@@ -185,6 +198,7 @@ class DbQueryCacheTest extends TestCase
         // Prime the cache with a normal read, then mutate the row underneath
         // the cache. A normal read still returns the stale cached value, but a
         // noCache read bypasses the cache entirely and sees the fresh row.
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT n FROM t WHERE id = 1');          // miss -> caches 'a'
         $db->execute("UPDATE t SET n = 'z' WHERE id = 1");   // write — but cacheInvalidate clears
@@ -204,6 +218,7 @@ class DbQueryCacheTest extends TestCase
         // the cache-invalidating write helpers (direct adapter execute keeps the
         // cache entry). A noCache fetch must return the fresh DB value, proving
         // it skipped the prior-cached value.
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT n FROM t WHERE id = 1');          // caches 'a'
         $this->assertSame(1, $db->cacheStats()['size']);
@@ -222,6 +237,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testNoCacheFetchOneSkipsCache(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetchOne('SELECT n FROM t WHERE id = 1');       // caches 'a'
 
@@ -234,6 +250,7 @@ class DbQueryCacheTest extends TestCase
 
     public function testNoCacheFetchAllSkipsCache(): void
     {
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetchAll('SELECT n FROM t WHERE id = 1');       // caches
         $sizeAfterCachedRead = $db->cacheStats()['size'];
@@ -250,6 +267,7 @@ class DbQueryCacheTest extends TestCase
     public function testNormalCachedPathStillWorksAlongsideNoCache(): void
     {
         // Mixing noCache and normal calls: the normal path still dedupes.
+        $this->setEnv('TINA4_AUTO_CACHING', 'true');
         $db = $this->makeDb();
         $db->fetch('SELECT * FROM t', [], 100, 0, noCache: true); // bypass
         $db->fetch('SELECT * FROM t');                            // miss -> caches

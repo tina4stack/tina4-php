@@ -324,7 +324,7 @@ PHP;
 
         // Create .gitignore
         if (!file_exists($targetDir . '.gitignore')) {
-            file_put_contents($targetDir . '.gitignore', "vendor/\nlogs/\n*.db\n.env\nnode_modules/\n");
+            file_put_contents($targetDir . '.gitignore', "vendor/\nlogs/\n*.db\n.env\n.env.local\nnode_modules/\n");
             echo "  Created .gitignore\n";
         }
 
@@ -385,6 +385,11 @@ DOCKERFILE;
         $envFile = $cwd . DIRECTORY_SEPARATOR . '.env';
         if (is_file($envFile) && class_exists('\Tina4\DotEnv')) {
             \Tina4\DotEnv::loadEnv($envFile);
+        }
+        // Load .env.local AFTER .env as an override (gitignored local overrides).
+        $envLocalFile = $cwd . DIRECTORY_SEPARATOR . '.env.local';
+        if (is_file($envLocalFile) && class_exists('\Tina4\DotEnv')) {
+            \Tina4\DotEnv::loadEnv($envLocalFile, overwrite: true);
         }
 
         // Parse flags from $args

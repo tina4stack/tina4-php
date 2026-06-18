@@ -107,8 +107,12 @@ class Migration
                         continue;
                     }
 
-                    $result = $this->db->exec($statement);
-                    if (!$result) {
+                    // exec() now RAISES on a SQL error (FAIL LOUD contract);
+                    // the thrown error flows to the catch below, which rolls
+                    // back and records the failure. A raw-adapter binding may
+                    // still return false instead of throwing, so keep the
+                    // explicit guard for that path.
+                    if ($this->db->exec($statement) === false) {
                         $error = $this->db->error() ?? 'Unknown error';
                         throw new \RuntimeException("Migration failed: {$error}");
                     }
@@ -212,8 +216,12 @@ class Migration
                                     continue;
                                 }
 
-                                $result = $this->db->exec($statement);
-                                if (!$result) {
+                                // exec() now RAISES on a SQL error (FAIL LOUD
+                                // contract); the rollback try/catch below rolls
+                                // back and records the failure. A raw-adapter
+                                // binding may still return false, so keep the
+                                // explicit guard for that path.
+                                if ($this->db->exec($statement) === false) {
                                     $error = $this->db->error() ?? 'Unknown error';
                                     throw new \RuntimeException("Rollback SQL failed: {$error}");
                                 }

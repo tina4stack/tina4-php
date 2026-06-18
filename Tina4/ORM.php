@@ -441,22 +441,23 @@ abstract class ORM
                 $ok = $this->insert();
             }
 
-            // insert()/update() return false when the adapter's exec()
-            // fails WITHOUT throwing — e.g. an UPDATE that references a
-            // public model property with no matching DB column. Before
-            // this check, save() only caught exceptions: a bare false
-            // return slipped through, the empty transaction was
-            // committed, and save() returned $this (the success signal).
-            // Callers relying on the documented `save(): static|false`
-            // contract believed the row persisted when nothing changed —
-            // silent data loss (issue tina4-php#114).
+            // Two failure shapes, both honoured so save() keeps its
+            // documented `save(): static|false` contract:
+            //   1. A bound raw adapter's low-level exec() still returns false
+            //      on a bad statement (e.g. an UPDATE referencing a public
+            //      model property with no matching DB column) — issue #114.
+            //   2. The Database facade's execute()/exec() now RAISES on a SQL
+            //      error (FAIL LOUD contract) — caught below.
+            // Before #114 added the false-check, a bare false slipped through,
+            // the empty transaction got committed, and save() returned $this —
+            // silent data loss.
             if ($ok === false) {
                 $this->_db->rollback();
                 return false;
             }
 
             $this->_db->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->_db->rollback();
             return false;
         }
@@ -1388,18 +1389,21 @@ abstract class ORM
         // (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, …).
         $sql = SqlTranslation::autoIncrementSyntax($sql, $dialect);
 
-        $result = $this->_db->execute($sql);
-        $this->_db->commit();
+        // execute() now RAISES on a failed CREATE (parity with the Python
+        // master, whose create_table does try { execute; commit } catch (e)
+        // { Log.error(...); return false }). createTable() keeps its bool
+        // contract by catching that and returning false. We still verify the
+        // table actually exists afterwards — the only engine-agnostic proof
+        // the CREATE took effect — so a silently no-op DDL is caught too.
+        try {
+            $this->_db->execute($sql);
+            $this->_db->commit();
+        } catch (\Throwable $e) {
+            Log::error("createTable failed for {$this->tableName}: " . $e->getMessage(), ['sql' => $sql]);
+            return false;
+        }
 
-        // Don't claim success when the DDL failed. Two failure signals:
-        //   1. execute() returned false (the adapter swallows the driver error
-        //      into error()).
-        //   2. The Database facade's execute() can return true even when the
-        //      underlying adapter failed, so verify the table actually exists
-        //      now — the only engine-agnostic proof the CREATE took effect.
-        // Either way, returning true here used to leave a table un-created
-        // while reporting a silent, misleading pass (notably on PostgreSQL).
-        if ($result === false || !$this->_db->tableExists($this->tableName)) {
+        if (!$this->_db->tableExists($this->tableName)) {
             Log::error("createTable failed for {$this->tableName}: " . ($this->_db->error() ?? 'unknown error'), ['sql' => $sql]);
             return false;
         }

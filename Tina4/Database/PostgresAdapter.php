@@ -148,37 +148,38 @@ class PostgresAdapter implements DatabaseAdapter
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
         $sql = self::stripTrailingSemicolons($sql);
 
-        try {
-            $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
-            $countResult = $this->query($countSql, $params);
-            $total = (int)($countResult[0]['total'] ?? 0);
-
-            // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
-            // default — give me ALL rows).
-            // When the user SQL already ends with its own LIMIT clause, don't
-            // append a second one — `... LIMIT 1 LIMIT 100 OFFSET 0` is a PG
-            // syntax error that would otherwise be swallowed into an empty
-            // result.
-            $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
-                ? $sql
-                : "{$sql} LIMIT {$limit} OFFSET {$offset}";
-            $data = $this->query($pagedSql, $params);
-
-            return [
-                'data' => $data,
-                'total' => $total,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
-        } catch (\Exception $e) {
-            $this->lastError = $e->getMessage();
-            return [
-                'data' => [],
-                'total' => 0,
-                'limit' => $limit,
-                'offset' => $offset,
-            ];
+        // FAIL LOUD: query() records the driver error in error() and returns
+        // []. fetch() must RAISE that instead of returning an empty result set
+        // (parity with execute() and the Python master). query() clears
+        // lastError on entry, so a non-null lastError after the call means the
+        // statement failed.
+        $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        $countResult = $this->query($countSql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('PostgreSQL fetch() failed: ' . $this->lastError);
         }
+        $total = (int)($countResult[0]['total'] ?? 0);
+
+        // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
+        // default — give me ALL rows).
+        // When the user SQL already ends with its own LIMIT clause, don't
+        // append a second one — `... LIMIT 1 LIMIT 100 OFFSET 0` is a PG
+        // syntax error that would otherwise be swallowed into an empty
+        // result.
+        $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
+            ? $sql
+            : "{$sql} LIMIT {$limit} OFFSET {$offset}";
+        $data = $this->query($pagedSql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('PostgreSQL fetch() failed: ' . $this->lastError);
+        }
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'limit' => $limit,
+            'offset' => $offset,
+        ];
     }
 
     public function fetchOne(string $sql, array $params = []): ?array
@@ -210,8 +211,11 @@ class PostgresAdapter implements DatabaseAdapter
             }
 
             if ($result === false) {
+                // FAIL LOUD: capture the cause on error() AND raise — execute()
+                // must never swallow a failed statement (parity with Python and
+                // with fetch()/fetchOne() here).
                 $this->lastError = pg_last_error($this->db);
-                return false;
+                throw new DatabaseException('PostgreSQL execute() failed: ' . ($this->lastError ?: 'unknown error'));
             }
 
             $hasReturning = $this->isInsertReturning($sql);
@@ -262,9 +266,12 @@ class PostgresAdapter implements DatabaseAdapter
             }
 
             return true;
+        } catch (DatabaseException $e) {
+            // Already captured + raised above — let it propagate unchanged.
+            throw $e;
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
-            return false;
+            throw $e;
         }
     }
 
@@ -272,8 +279,13 @@ class PostgresAdapter implements DatabaseAdapter
     {
         $totalAffected = 0;
         foreach ($paramsList as $params) {
-            if ($this->execute($sql, $params)) {
+            // execute() now raises on failure; executeMany keeps its int
+            // contract by counting only the rows that ran without throwing.
+            try {
+                $this->execute($sql, $params);
                 $totalAffected++;
+            } catch (\Exception) {
+                // skip the failed row, continue the batch
             }
         }
         return $totalAffected;

@@ -218,7 +218,8 @@ class FirebirdAdapter implements DatabaseAdapter
         try {
             $result = $this->executeInternal($sql, $params);
             if ($result === false) {
-                return false;
+                // FAIL LOUD: capture the cause on error() AND raise.
+                throw new DatabaseException('Firebird execute() failed: ' . ($this->lastError ?? 'unknown error'));
             }
 
             // If result is a resource (e.g. RETURNING), read first row for lastId
@@ -240,9 +241,11 @@ class FirebirdAdapter implements DatabaseAdapter
             }
 
             return true;
+        } catch (DatabaseException $e) {
+            throw $e;
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
-            return false;
+            throw $e;
         }
     }
 
@@ -250,8 +253,13 @@ class FirebirdAdapter implements DatabaseAdapter
     {
         $totalAffected = 0;
         foreach ($paramsList as $params) {
-            if ($this->execute($sql, $params)) {
+            // execute() now raises on failure; keep the int contract by
+            // counting only the rows that ran without throwing.
+            try {
+                $this->execute($sql, $params);
                 $totalAffected++;
+            } catch (\Exception) {
+                // skip the failed row, continue the batch
             }
         }
         return $totalAffected;

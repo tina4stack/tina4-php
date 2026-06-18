@@ -1057,8 +1057,15 @@ class McpDevTools
                 return ['error' => 'No database connection: ' . $e->getMessage()];
             }
             $paramList = json_decode($params, true) ?: [];
-            $result = $db->execute($sql, $paramList);
-            $db->commit();
+            // execute() now RAISES on a SQL error (FAIL LOUD contract); catch it
+            // and return a clean {error} payload instead of letting it throw out
+            // of the tool handler.
+            try {
+                $db->execute($sql, $paramList);
+                $db->commit();
+            } catch (\Throwable $e) {
+                return ['error' => $e->getMessage()];
+            }
             return ['success' => true, 'affected_rows' => 0];
         }, 'Execute arbitrary SQL (INSERT/UPDATE/DELETE/DDL)');
 

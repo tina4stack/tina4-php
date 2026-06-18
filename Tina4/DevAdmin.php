@@ -560,16 +560,14 @@ class DevAdmin
                     }
                 }
 
-                // Execute all statements (single write or multi-statement batch) in transaction
+                // Execute all statements (single write or multi-statement batch) in transaction.
+                // execute() now RAISES on a SQL error (FAIL LOUD contract), so
+                // the catch below rolls back and returns a clean {error} payload.
                 $totalAffected = 0;
                 $db->startTransaction();
                 try {
                     foreach ($statements as $stmt) {
-                        $ok = $db->execute($stmt);
-                        if ($ok === false) {
-                            $err = method_exists($db, 'error') ? $db->error() : 'Statement failed';
-                            throw new \RuntimeException($err ?: 'Statement failed');
-                        }
+                        $db->execute($stmt);
                         $totalAffected++;
                     }
                     $db->commit();
