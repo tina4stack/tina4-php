@@ -862,12 +862,29 @@ try {
 
 Build HTML without string concatenation. Supports void tags, attribute merging, and nested children.
 
+**XSS-safe by default.** String/scalar children are HTML-escaped on render
+(via `htmlspecialchars(..., ENT_QUOTES)`), so untrusted text can never inject a
+live tag. Nested `HtmlElement` children render themselves (no double-escape),
+and attribute values stay escaped. To emit *trusted, pre-sanitised* markup
+verbatim, wrap it in `Tina4\Raw` (or the equivalent `Tina4\SafeString`, the
+Frond escape-hatch class — both are detected and rendered unescaped).
+
 ```php
+use Tina4\HtmlElement;
+use Tina4\Raw;
+
 // Constructor
 $el = new HtmlElement(string $tag, array $attrs = [], array $children = []);
 
 // Render to HTML
 (string) $el;  // __toString()
+
+// Escaping behaviour
+echo new HtmlElement("div", [], ["<script>alert(1)</script>"]);
+// => <div>&lt;script&gt;alert(1)&lt;/script&gt;</div>   (escaped — no live tag)
+
+echo new HtmlElement("div", [], [new Raw("<b>x</b>")]);
+// => <div><b>x</b></div>                                 (raw — opt-in)
 
 // Builder pattern — append children or merge attrs via __invoke
 $el = (new HtmlElement("div"))(new HtmlElement("p"))("Hello");
@@ -1020,7 +1037,7 @@ $result = SqlTranslation::remember(
 - WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars). Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
-- Messenger (.env driven SMTP/IMAP)
+- Messenger (.env driven SMTP/IMAP). IMAP reads **fail loud**: `inbox()`/`read()`/`unread()`/`search()`/`folders()` LOG and RAISE `Tina4\MessengerConnectionError` (extends `\RuntimeException`) on a connection/auth/protocol failure instead of swallowing it into an empty result — a *successful* fetch from a genuinely empty mailbox still returns empty (`[]`/`null`/`0`) normally. `send()` is unchanged (returns `{success, message, id}`)
 - CLI scaffolding: `composer tina4 generate model/route/migration/middleware`
 - Production server: `composer start --production` (OPcache auto-config)
 - Frond pre-compilation for 2.8x template render improvement

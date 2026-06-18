@@ -312,17 +312,20 @@ class Messenger
      */
     public function inbox(string $folder = 'INBOX', int $limit = 20, int $offset = 0): array
     {
-        $imap = $this->imapConnect($folder);
-        if ($imap === null) {
-            return [];
+        try {
+            $imap = $this->imapConnect($folder);
+        } catch (\Throwable $e) {
+            throw $this->imapFail('inbox', $e);
         }
 
         try {
             $info = imap_check($imap);
+            if ($info === false) {
+                throw new MessengerConnectionError("IMAP check failed for folder '{$folder}'");
+            }
             $total = $info->Nmsgs;
 
             if ($total === 0) {
-                imap_close($imap);
                 return [];
             }
 
@@ -331,36 +334,37 @@ class Messenger
             $end = max(1, $total - $offset);
 
             if ($start > $end) {
-                imap_close($imap);
                 return [];
             }
 
             $overview = imap_fetch_overview($imap, "{$start}:{$end}", 0);
-            $messages = [];
-
-            if ($overview !== false) {
-                // Reverse to get newest first
-                $overview = array_reverse($overview);
-
-                foreach ($overview as $msg) {
-                    $messages[] = [
-                        'uid' => $msg->uid ?? 0,
-                        'msgno' => $msg->msgno ?? 0,
-                        'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
-                        'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
-                        'date' => $msg->date ?? '',
-                        'seen' => (bool)($msg->seen ?? false),
-                        'flagged' => (bool)($msg->flagged ?? false),
-                        'size' => $msg->size ?? 0,
-                    ];
-                }
+            if ($overview === false) {
+                throw new MessengerConnectionError("IMAP fetch overview failed for folder '{$folder}'");
             }
 
-            imap_close($imap);
+            $messages = [];
+
+            // Reverse to get newest first
+            $overview = array_reverse($overview);
+
+            foreach ($overview as $msg) {
+                $messages[] = [
+                    'uid' => $msg->uid ?? 0,
+                    'msgno' => $msg->msgno ?? 0,
+                    'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
+                    'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
+                    'date' => $msg->date ?? '',
+                    'seen' => (bool)($msg->seen ?? false),
+                    'flagged' => (bool)($msg->flagged ?? false),
+                    'size' => $msg->size ?? 0,
+                ];
+            }
+
             return $messages;
         } catch (\Throwable $e) {
+            throw $this->imapFail('inbox', $e);
+        } finally {
             @imap_close($imap);
-            return [];
         }
     }
 
@@ -374,20 +378,24 @@ class Messenger
      */
     public function read(int $uid, string $folder = 'INBOX', bool $markRead = true): ?array
     {
-        $imap = $this->imapConnect($folder);
-        if ($imap === null) {
-            return null;
+        try {
+            $imap = $this->imapConnect($folder);
+        } catch (\Throwable $e) {
+            throw $this->imapFail('read', $e);
         }
 
         try {
             $msgno = imap_msgno($imap, $uid);
             if ($msgno === 0) {
-                imap_close($imap);
+                // Genuinely missing UID — a successful fetch with no match, NOT an error.
                 return null;
             }
 
             $header = imap_headerinfo($imap, $msgno);
             $structure = imap_fetchstructure($imap, $uid, FT_UID);
+            if ($header === false || $structure === false) {
+                throw new MessengerConnectionError("IMAP header/structure fetch failed for uid {$uid}");
+            }
 
             $body = $this->extractBody($imap, $uid, $structure);
             $attachments = $this->extractAttachments($imap, $uid, $structure);
@@ -396,7 +404,7 @@ class Messenger
                 imap_setflag_full($imap, (string)$uid, '\\Seen', ST_UID);
             }
 
-            $result = [
+            return [
                 'uid' => $uid,
                 'msgno' => $msgno,
                 'subject' => $this->decodeMimeHeader($header->subject ?? ''),
@@ -411,12 +419,10 @@ class Messenger
                 'attachments' => $attachments,
                 'message_id' => $header->message_id ?? '',
             ];
-
-            imap_close($imap);
-            return $result;
         } catch (\Throwable $e) {
+            throw $this->imapFail('read', $e);
+        } finally {
             @imap_close($imap);
-            return null;
         }
     }
 
@@ -428,19 +434,23 @@ class Messenger
      */
     public function unread(string $folder = 'INBOX'): int
     {
-        $imap = $this->imapConnect($folder);
-        if ($imap === null) {
-            return 0;
+        try {
+            $imap = $this->imapConnect($folder);
+        } catch (\Throwable $e) {
+            throw $this->imapFail('unread', $e);
         }
 
         try {
             $status = imap_status($imap, $this->imapMailbox($folder), SA_UNSEEN);
-            $count = $status ? $status->unseen : 0;
-            imap_close($imap);
-            return $count;
+            if ($status === false) {
+                throw new MessengerConnectionError("IMAP status failed for folder '{$folder}'");
+            }
+            // A successful query with no unseen messages returns 0 (not an error).
+            return $status->unseen ?? 0;
         } catch (\Throwable $e) {
+            throw $this->imapFail('unread', $e);
+        } finally {
             @imap_close($imap);
-            return 0;
         }
     }
 
@@ -465,9 +475,10 @@ class Messenger
         bool $unseenOnly = false,
         int $limit = 20,
     ): array {
-        $imap = $this->imapConnect($folder);
-        if ($imap === null) {
-            return [];
+        try {
+            $imap = $this->imapConnect($folder);
+        } catch (\Throwable $e) {
+            throw $this->imapFail('search', $e);
         }
 
         try {
@@ -492,8 +503,10 @@ class Messenger
             $searchString = empty($criteria) ? 'ALL' : implode(' ', $criteria);
             $uids = imap_search($imap, $searchString, SE_UID);
 
+            // A successful search with no matches returns false in PHP — that is
+            // an empty result, NOT a connection/protocol failure (those fail at
+            // imapConnect() above and re-raise via imapFail()).
             if ($uids === false) {
-                imap_close($imap);
                 return [];
             }
 
@@ -526,11 +539,11 @@ class Messenger
                 ];
             }
 
-            imap_close($imap);
             return $messages;
         } catch (\Throwable $e) {
+            throw $this->imapFail('search', $e);
+        } finally {
             @imap_close($imap);
-            return [];
         }
     }
 
@@ -541,18 +554,20 @@ class Messenger
      */
     public function folders(): array
     {
-        $imap = $this->imapConnect('INBOX');
-        if ($imap === null) {
-            return [];
+        try {
+            $imap = $this->imapConnect('INBOX');
+        } catch (\Throwable $e) {
+            throw $this->imapFail('folders', $e);
         }
 
         try {
             $ref = '{' . $this->imapHost . ':' . ($this->imapPort ?? 993) . '/imap/ssl}';
             $list = imap_list($imap, $ref, '*');
 
+            // A connected server always exposes at least INBOX — false here is a
+            // list/protocol failure, so fail loud (mirrors Python's non-OK list).
             if ($list === false) {
-                imap_close($imap);
-                return [];
+                throw new MessengerConnectionError('IMAP list failed');
             }
 
             $folders = [];
@@ -562,11 +577,11 @@ class Messenger
                 $folders[] = $name;
             }
 
-            imap_close($imap);
             return $folders;
         } catch (\Throwable $e) {
+            throw $this->imapFail('folders', $e);
+        } finally {
             @imap_close($imap);
-            return [];
         }
     }
 
@@ -877,10 +892,33 @@ class Messenger
     // ── IMAP Internals ───────────────────────────────────────────
 
     /**
+     * Log an IMAP connection/protocol failure and return the error to throw.
+     *
+     * Re-uses a MessengerConnectionError as-is; otherwise wraps the underlying
+     * error so callers can `throw $this->imapFail(__FUNCTION__, $e);`. Logging
+     * happens here so a fail-loud read still leaves an audit trail. Mirrors the
+     * Python master's _imap_fail().
+     *
+     * @param string     $method The IMAP method that failed (for the log line)
+     * @param \Throwable $exc    The underlying error
+     */
+    private function imapFail(string $method, \Throwable $exc): MessengerConnectionError
+    {
+        Log::error("IMAP {$method} failed: " . $exc->getMessage());
+
+        if ($exc instanceof MessengerConnectionError) {
+            return $exc;
+        }
+
+        return new MessengerConnectionError("IMAP {$method} failed: " . $exc->getMessage(), 0, $exc);
+    }
+
+    /**
      * Open an IMAP connection.
      *
      * @param string $folder Folder name
-     * @return resource|null IMAP stream or null on failure
+     * @return resource IMAP stream
+     * @throws MessengerConnectionError On connection/auth/protocol failure
      */
     private function imapConnect(string $folder)
     {
@@ -894,7 +932,7 @@ class Messenger
         }
 
         if ($this->imapHost === null) {
-            throw new \RuntimeException('IMAP host is required. Set TINA4_MAIL_IMAP_HOST env var or pass imapHost to constructor.');
+            throw new MessengerConnectionError('IMAP host is required. Set TINA4_MAIL_IMAP_HOST env var or pass imapHost to constructor.');
         }
 
         $mailbox = $this->imapMailbox($folder);
@@ -909,7 +947,7 @@ class Messenger
 
         if ($imap === false) {
             $errors = imap_errors();
-            throw new \RuntimeException('IMAP connection failed: ' . implode('; ', $errors ?: ['Unknown error']));
+            throw new MessengerConnectionError('IMAP connection failed: ' . implode('; ', $errors ?: ['Unknown error']));
         }
 
         return $imap;

@@ -8,6 +8,8 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\HtmlElement;
+use Tina4\Raw;
+use Tina4\SafeString;
 
 class HtmlElementTest extends TestCase
 {
@@ -278,5 +280,73 @@ class HtmlElementTest extends TestCase
         $this->assertTrue(property_exists($obj, '_div'));
         $el = ($obj->_div)(['class' => 'test'], 'Hi');
         $this->assertSame('<div class="test">Hi</div>', (string) $el);
+    }
+
+    // -- XSS escaping lock-in (parity with Python master) ---------------------
+
+    public function testStringChildIsEscaped(): void
+    {
+        // A plain string child must be HTML-escaped — NOT rendered as a live tag.
+        $el = new HtmlElement('div', [], ['<script>alert(1)</script>']);
+        $html = (string) $el;
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+    }
+
+    public function testStringChildViaInvokeIsEscaped(): void
+    {
+        // Children appended through the builder are escaped too.
+        $el = (new HtmlElement('p'))('<img src=x onerror=alert(1)>');
+        $html = (string) $el;
+        $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+        $this->assertStringNotContainsString('<img', $html);
+    }
+
+    public function testRawChildRendersUnescaped(): void
+    {
+        // Raw() opts out of escaping — trusted markup renders verbatim.
+        $el = new HtmlElement('div', [], [new Raw('<b>x</b>')]);
+        $this->assertSame('<div><b>x</b></div>', (string) $el);
+    }
+
+    public function testSafeStringAliasRendersUnescaped(): void
+    {
+        // SafeString is the Frond-style alias for Raw — same raw behaviour.
+        $el = new HtmlElement('div', [], [new SafeString('<b>x</b>')]);
+        $this->assertSame('<div><b>x</b></div>', (string) $el);
+    }
+
+    public function testNestedElementRendersAsIsNoDoubleEscape(): void
+    {
+        // Nested HtmlElement children render themselves — no double-escaping.
+        $inner = new HtmlElement('b', [], ['x']);
+        $outer = new HtmlElement('div', [], [$inner]);
+        $this->assertSame('<div><b>x</b></div>', (string) $outer);
+    }
+
+    public function testMixedChildren(): void
+    {
+        // Plain string escaped, nested element as-is, Raw verbatim.
+        $el = new HtmlElement('div', [], [
+            '<script>',
+            new HtmlElement('span', [], ['safe']),
+            new Raw('<hr>'),
+        ]);
+        $this->assertSame('<div>&lt;script&gt;<span>safe</span><hr></div>', (string) $el);
+    }
+
+    public function testAttributeValueWithQuoteIsEscaped(): void
+    {
+        $el = new HtmlElement('div', ['title' => 'say "hi"'], ['x']);
+        $html = (string) $el;
+        $this->assertStringContainsString('title="say &quot;hi&quot;"', $html);
+    }
+
+    public function testAttributeValueWithLtIsEscaped(): void
+    {
+        $el = new HtmlElement('div', ['data-x' => '<b>'], ['x']);
+        $html = (string) $el;
+        $this->assertStringContainsString('data-x="&lt;b&gt;"', $html);
+        $this->assertStringNotContainsString('data-x="<b>"', $html);
     }
 }

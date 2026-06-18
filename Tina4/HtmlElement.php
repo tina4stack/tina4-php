@@ -9,6 +9,31 @@
 namespace Tina4;
 
 /**
+ * Marker for trusted, pre-sanitised HTML that must render UNESCAPED.
+ *
+ * String/scalar children of an HtmlElement are HTML-escaped by default to
+ * prevent stored/reflected XSS. Wrap a value in Raw — or the equivalent
+ * {@see SafeString} (the Frond marker, treated identically here) — to opt out
+ * of escaping when, and only when, you have already sanitised it yourself.
+ *
+ *   echo (new HtmlElement("div"))("<b>x</b>");          // &lt;b&gt;x&lt;/b&gt;  (escaped)
+ *   echo (new HtmlElement("div"))(new Raw("<b>x</b>"));  // <b>x</b>            (raw)
+ *
+ * Alias: SafeString (Tina4\SafeString — the Frond escape-hatch class).
+ */
+class Raw implements \Stringable
+{
+    public function __construct(private string $html)
+    {
+    }
+
+    public function __toString(): string
+    {
+        return $this->html;
+    }
+}
+
+/**
  * Programmatic HTML builder — avoids string concatenation.
  *
  * Usage:
@@ -126,7 +151,16 @@ class HtmlElement
         $html .= '>';
 
         foreach ($this->children as $child) {
-            $html .= (string) $child;
+            if ($child instanceof self) {
+                // Nested elements render themselves (already escape their own children).
+                $html .= (string) $child;
+            } elseif ($child instanceof Raw || $child instanceof SafeString) {
+                // Explicitly trusted markup (Raw / SafeString) — emit unescaped.
+                $html .= (string) $child;
+            } else {
+                // Plain string/scalar child — escape to defeat XSS.
+                $html .= htmlspecialchars((string) $child, ENT_QUOTES, 'UTF-8');
+            }
         }
 
         $html .= '</' . $this->tag . '>';
