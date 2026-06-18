@@ -104,6 +104,12 @@ class Server
     /** @var array<string, array<string>> Rooms: roomName => [clientId, ...] */
     private array $wsRooms = [];
 
+    /** @var WebSocketBackplaneManager|null Lazily wired on first WS broadcast. */
+    private ?WebSocketBackplaneManager $wsBackplane = null;
+
+    /** @var float Last idle-reaper sweep timestamp (WS connections). */
+    private float $wsLastReaperSweep = 0.0;
+
     /** @var array<array{callback: callable, interval: float, lastRun: float}> Registered tick callbacks */
     private array $tickCallbacks = [];
 
@@ -327,6 +333,13 @@ class Server
             if ($changed === 0) {
                 // Run registered tick callbacks (background tasks)
                 $this->runTickCallbacks();
+
+                // Single-threaded: drain any cluster broadcasts from the
+                // backplane + reap idle WS connections on idle ticks. poll()
+                // returns immediately when nothing is pending, so neither
+                // blocks the accept loop.
+                $this->wsBackplane?->poll();
+                $this->reapIdleWebSocketClients();
 
                 // Check for pending reload from Rust CLI (POST /__dev/api/reload)
                 if (DevAdmin::$pendingReload) {
@@ -675,6 +688,14 @@ class Server
             return;
         }
 
+        // Origin allow-list (opt-in via TINA4_WS_ALLOWED_ORIGINS). Unset = allow
+        // all so existing deployments are unaffected. Shared with the standalone
+        // server via WebSocket::originAllowed().
+        if (!WebSocket::originAllowed($headers)) {
+            $this->sendHttpError($client, 403, 'Forbidden: Origin not allowed');
+            return;
+        }
+
         $path = $headers['_path'] ?? '/';
 
         // Check if there is a registered WebSocket route
@@ -706,6 +727,9 @@ class Server
             'buffer' => '',
             'id' => $connectionId,
             'handler' => $matchedHandler,
+            'lastActivity' => microtime(true),
+            'fragments' => '',
+            'fragmentOpcode' => 0,
         ];
         $this->wsSocketMap[$resourceId] = $connectionId;
 
@@ -745,6 +769,7 @@ class Server
         }
 
         $wsClient['buffer'] .= $data;
+        $wsClient['lastActivity'] = microtime(true); // mark activity for the idle reaper
 
         while (true) {
             $frame = WebSocket::decodeFrame($wsClient['buffer']);
@@ -755,15 +780,37 @@ class Server
             $wsClient['buffer'] = substr($wsClient['buffer'], $frame['length']);
 
             switch ($frame['opcode']) {
+                case WebSocket::OP_CONTINUATION:
+                    // RFC 6455 §5.4 fragmentation: append to the fragments
+                    // started by a non-FIN TEXT/BINARY frame; only dispatch
+                    // once the FIN bit arrives (continuation frames carry no
+                    // type, so the original opcode governs decoding).
+                    $wsClient['fragments'] .= $frame['payload'];
+                    if ($frame['fin']) {
+                        $full = $wsClient['fragments'];
+                        $wsClient['fragments'] = '';
+                        $wsClient['fragmentOpcode'] = 0;
+                        $this->dispatchWebSocketMessage($connectionId, $socket, $full);
+                        // The handler may have closed the connection — the
+                        // &$wsClient reference would then dangle, so stop.
+                        if (!isset($this->wsClients[$connectionId])) {
+                            return;
+                        }
+                    }
+                    break;
+
                 case WebSocket::OP_TEXT:
                 case WebSocket::OP_BINARY:
-                    // Reuse the persisted connection so route-style callbacks survive
-                    $connection = $wsClient['connection']
-                        ?? new WebSocketConnection($connectionId, $wsClient['path'], $socket, $this);
-                    try {
-                        ($wsClient['handler'])($connection, $frame['payload'], 'message');
-                    } catch (\Throwable $e) {
-                        Log::error('WebSocket message handler error: ' . $e->getMessage());
+                    if ($frame['fin']) {
+                        // Unfragmented message — dispatch immediately.
+                        $this->dispatchWebSocketMessage($connectionId, $socket, $frame['payload']);
+                        if (!isset($this->wsClients[$connectionId])) {
+                            return;
+                        }
+                    } else {
+                        // Start of a fragmented message — buffer until FIN.
+                        $wsClient['fragmentOpcode'] = $frame['opcode'];
+                        $wsClient['fragments'] = $frame['payload'];
                     }
                     break;
 
@@ -790,7 +837,183 @@ class Server
     }
 
     /**
+     * Dispatch a fully-assembled WebSocket message (single-frame OR reassembled
+     * from continuation fragments) to its route handler.
+     */
+    private function dispatchWebSocketMessage(string $connectionId, $socket, string $payload): void
+    {
+        $wsClient = $this->wsClients[$connectionId] ?? null;
+        if ($wsClient === null) {
+            return;
+        }
+        // Reuse the persisted connection so route-style callbacks survive.
+        $connection = $wsClient['connection']
+            ?? new WebSocketConnection($connectionId, $wsClient['path'], $socket, $this);
+        try {
+            ($wsClient['handler'])($connection, $payload, 'message');
+        } catch (\Throwable $e) {
+            Log::error('WebSocket message handler error: ' . $e->getMessage());
+        }
+    }
+
+    // ── Backplane (multi-instance scaling) ──────────────────────
+    //
+    // The RedisBackplane/NATSBackplane/factory already existed but were never
+    // wired into a broadcast, so a broadcast only reached this process and
+    // multi-instance scaling was dead. We now lazily wire the backplane on the
+    // first broadcast: deliver to LOCAL connections, then publish an envelope
+    // to the shared "tina4:ws" channel for sibling instances. Inbound sibling
+    // messages are drained by the event-loop idle tick (poll()) and relayed to
+    // LOCAL connections only (never re-published — that would loop the cluster).
+    // See {@see WebSocketBackplaneManager} for the envelope shape + origin guard.
+
+    /** Lazily wire the backplane (idempotent, best-effort) on first broadcast. */
+    private function ensureWebSocketBackplane(): void
+    {
+        if ($this->wsBackplane === null) {
+            $this->wsBackplane = new WebSocketBackplaneManager(
+                fn(string $kind, ?string $room, ?string $path, ?string $exclude, string $message)
+                    => $this->relayWebSocketLocal($kind, $room, $path, $exclude, $message)
+            );
+        }
+        $this->wsBackplane->ensure();
+    }
+
+    /**
+     * Relay sink for the backplane: deliver a remote-originated message to
+     * LOCAL connections only, by kind. Never re-publishes.
+     */
+    private function relayWebSocketLocal(string $kind, ?string $room, ?string $path, ?string $exclude, string $message): void
+    {
+        if ($kind === 'room') {
+            if ($room !== null) {
+                $this->deliverToRoomLocal($room, $message, $exclude !== null ? [$exclude] : null);
+            }
+        } elseif ($kind === 'path') {
+            $this->deliverWebSocketLocal($message, $path, $exclude);
+        } else { // 'all' (and anything unknown)
+            $this->deliverWebSocketLocal($message, null, $exclude);
+        }
+    }
+
+    /**
+     * Deliver to LOCAL clients (optionally path-filtered), resiliently: a
+     * failed write detects + prunes the dead client and delivery continues to
+     * the rest. One dead/slow client never aborts the broadcast. Never
+     * publishes to the backplane.
+     */
+    private function deliverWebSocketLocal(string $message, ?string $path, ?string $excludeId): void
+    {
+        $frame = WebSocket::buildFrame($message);
+        $dead = [];
+        foreach ($this->wsClients as $id => $client) {
+            if ($excludeId !== null && $id === $excludeId) {
+                continue;
+            }
+            if ($path !== null && ($client['path'] ?? '/') !== $path) {
+                continue;
+            }
+            if (!$this->safeWriteWebSocket($client['socket'], $frame)) {
+                $dead[] = $id;
+            }
+        }
+        foreach ($dead as $id) {
+            $this->removeWebSocketClient($id);
+        }
+    }
+
+    /**
+     * Deliver to LOCAL members of a room, resiliently (prune dead clients).
+     *
+     * @param string[]|null $excludeIds
+     */
+    private function deliverToRoomLocal(string $roomName, string $message, ?array $excludeIds): void
+    {
+        $members = $this->wsRooms[$roomName] ?? [];
+        $frame = WebSocket::buildFrame($message);
+        $dead = [];
+        foreach ($members as $clientId) {
+            if ($excludeIds !== null && in_array($clientId, $excludeIds, true)) {
+                continue;
+            }
+            if (!isset($this->wsClients[$clientId])) {
+                continue;
+            }
+            if (!$this->safeWriteWebSocket($this->wsClients[$clientId]['socket'], $frame)) {
+                $dead[] = $clientId;
+            }
+        }
+        foreach ($dead as $id) {
+            $this->removeWebSocketClient($id);
+        }
+    }
+
+    /**
+     * Write a frame to a client socket, returning false if the write fails (so
+     * the caller prunes the dead client). A closed/invalid resource or a failed
+     * fwrite both mean the peer is gone — one dead client never aborts a
+     * broadcast to the rest.
+     */
+    private function safeWriteWebSocket($socket, string $frame): bool
+    {
+        if (!is_resource($socket)) {
+            return false;
+        }
+        return @fwrite($socket, $frame) !== false;
+    }
+
+    /**
+     * Reap WebSocket connections idle past TINA4_WS_IDLE_TIMEOUT seconds.
+     * Opt-in/non-breaking: 0/unset disables the reaper. Throttled to one sweep
+     * per second (this runs on every idle tick).
+     *
+     * @return int Number reaped.
+     */
+    public function reapIdleWebSocketClients(): int
+    {
+        $timeout = (float)(
+            $_ENV['TINA4_WS_IDLE_TIMEOUT']
+            ?? getenv('TINA4_WS_IDLE_TIMEOUT')
+            ?: 0
+        );
+        if ($timeout <= 0) {
+            return 0;
+        }
+        $now = microtime(true);
+        if (($now - $this->wsLastReaperSweep) < 1.0) {
+            return 0;
+        }
+        $this->wsLastReaperSweep = $now;
+
+        $stale = [];
+        foreach ($this->wsClients as $id => $client) {
+            $last = $client['lastActivity'] ?? $now;
+            if (($now - $last) > $timeout) {
+                $stale[] = $id;
+            }
+        }
+        foreach ($stale as $id) {
+            $closeFrame = WebSocket::buildFrame(
+                pack('n', WebSocket::CLOSE_GOING_AWAY) . 'idle timeout',
+                WebSocket::OP_CLOSE
+            );
+            if (isset($this->wsClients[$id])) {
+                @fwrite($this->wsClients[$id]['socket'], $closeFrame);
+            }
+            $this->removeWebSocketClient($id);
+        }
+        if (!empty($stale)) {
+            Log::info('WebSocket idle reaper closed ' . count($stale) . ' connection(s)');
+        }
+        return count($stale);
+    }
+
+    /**
      * Broadcast a WebSocket message to all clients on a given path.
+     *
+     * Delivers to LOCAL connections first (resilient — a dead client never
+     * aborts delivery to the rest), then publishes to sibling instances over
+     * the backplane when TINA4_WS_BACKPLANE is configured.
      *
      * @param string      $message   Message to send
      * @param string|null $path      Only broadcast to clients on this path (null = all)
@@ -798,16 +1021,9 @@ class Server
      */
     public function broadcastWebSocket(string $message, ?string $path = null, ?string $excludeId = null): void
     {
-        $frame = WebSocket::buildFrame($message);
-        foreach ($this->wsClients as $id => $client) {
-            if ($excludeId !== null && $id === $excludeId) {
-                continue;
-            }
-            if ($path !== null && $client['path'] !== $path) {
-                continue;
-            }
-            @fwrite($client['socket'], $frame);
-        }
+        $this->ensureWebSocketBackplane();
+        $this->deliverWebSocketLocal($message, $path, $excludeId);
+        $this->wsBackplane?->publish($path !== null ? 'path' : 'all', $message, null, $path, $excludeId);
     }
 
     /**
@@ -841,19 +1057,17 @@ class Server
 
     /**
      * Broadcast a message to all members of a room.
+     *
+     * Delivers to LOCAL room members first (resilient — prunes dead clients),
+     * then fans out over the backplane: a room can span instances, so each one
+     * delivers to its own members.
      */
     public function broadcastToRoom(string $roomName, string $message, ?array $excludeIds = null): void
     {
-        $members = $this->wsRooms[$roomName] ?? [];
-        $frame = WebSocket::buildFrame($message);
-        foreach ($members as $clientId) {
-            if ($excludeIds !== null && in_array($clientId, $excludeIds, true)) {
-                continue;
-            }
-            if (isset($this->wsClients[$clientId])) {
-                @fwrite($this->wsClients[$clientId]['socket'], $frame);
-            }
-        }
+        $this->ensureWebSocketBackplane();
+        $this->deliverToRoomLocal($roomName, $message, $excludeIds);
+        $exclude = (is_array($excludeIds) && count($excludeIds) === 1) ? $excludeIds[0] : null;
+        $this->wsBackplane?->publish('room', $message, $roomName, null, $exclude);
     }
 
     /**
@@ -910,7 +1124,12 @@ class Server
         unset($this->clients[$resourceId]);
         unset($this->buffers[$resourceId]);
         unset($this->aiPortConnections[$resourceId]);
-        @fclose($socket);
+        // Guard the close: a pruned dead client's socket may already be closed,
+        // and fclose() on a non-resource raises an uncatchable TypeError in
+        // PHP 8 — which would crash the very broadcast that is pruning it.
+        if (is_resource($socket)) {
+            @fclose($socket);
+        }
     }
 
     /**
@@ -1211,6 +1430,9 @@ class Server
             $this->aiSocket = null;
         }
 
+        // Tear down the WS backplane subscription, if any.
+        $this->wsBackplane?->close();
+
         if (self::$instance === $this) {
             self::$instance = null;
         }
@@ -1239,6 +1461,52 @@ class Server
             ];
         }
         return $result;
+    }
+
+    /**
+     * Register an already-upgraded WebSocket client directly.
+     *
+     * Used by the live upgrade path and by tests/embedders that want to attach
+     * a socket without driving the HTTP handshake. The handler defaults to a
+     * no-op so a test can register a pair and broadcast to it.
+     *
+     * @param string        $connectionId Unique connection id
+     * @param resource       $socket       The (upgraded) socket resource
+     * @param string        $path         WebSocket route path
+     * @param callable|null $handler      Route handler ($conn, $data, $event)
+     */
+    public function registerWebSocketClient(string $connectionId, $socket, string $path = '/', ?callable $handler = null): void
+    {
+        $handler ??= function ($conn, $data, $event) {};
+        $this->wsClients[$connectionId] = [
+            'socket' => $socket,
+            'path' => $path,
+            'buffer' => '',
+            'id' => $connectionId,
+            'handler' => $handler,
+            'lastActivity' => microtime(true),
+            'fragments' => '',
+            'fragmentOpcode' => 0,
+        ];
+        if (is_resource($socket)) {
+            $this->wsSocketMap[(int)$socket] = $connectionId;
+        }
+    }
+
+    /**
+     * Inject a backplane manager (test seam — lets a test attach a
+     * {@see WebSocketBackplaneManager} wired to a fake bus, exactly as
+     * ensureWebSocketBackplane() would in production).
+     */
+    public function setWebSocketBackplane(WebSocketBackplaneManager $manager): void
+    {
+        $this->wsBackplane = $manager;
+    }
+
+    /** Return the wired backplane manager (or null). Test/introspection seam. */
+    public function getWebSocketBackplane(): ?WebSocketBackplaneManager
+    {
+        return $this->wsBackplane;
     }
 
     /**

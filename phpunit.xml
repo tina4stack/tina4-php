@@ -40,6 +40,7 @@
             <file>tests/QueueV3Test.php</file>
             <file>tests/GraphQLV3Test.php</file>
             <file>tests/WebSocketV3Test.php</file>
+            <file>tests/WebSocketHardeningTest.php</file>
             <file>tests/ServiceRunnerV3Test.php</file>
             <file>tests/SqlTranslationTest.php</file>
             <file>tests/ResponseCacheTest.php</file>

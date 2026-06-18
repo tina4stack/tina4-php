@@ -14,7 +14,8 @@
         "files": [
             "Tina4/Constants.php",
             "Tina4/MCP.php",
-            "Tina4/Middleware/CacheFunctions.php"
+            "Tina4/Middleware/CacheFunctions.php",
+            "Tina4/WebSocketBackplane.php"
         ]
     },
     "require": {

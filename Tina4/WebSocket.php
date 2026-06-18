@@ -29,6 +29,7 @@ class WebSocket
     public const CLOSE_NORMAL = 1000;
     public const CLOSE_GOING_AWAY = 1001;
     public const CLOSE_PROTOCOL_ERROR = 1002;
+    public const CLOSE_POLICY_VIOLATION = 1008;
 
     private int $port;
     private string $host;
@@ -40,7 +41,11 @@ class WebSocket
     /** @var array<string, array> Route-style handlers keyed by path */
     private array $_handlers = [];
 
-    /** @var array<string, array> Connected clients: clientId => [socket, ip, connected_at, buffer, path, rooms] */
+    /**
+     * @var array<string, array> Connected clients keyed by clientId. Each entry:
+     *   socket, ip, connected_at, buffer, path, rooms, lastActivity,
+     *   fragments (string), fragmentOpcode (int)
+     */
     private array $clients = [];
 
     /** @var array<string, array<string>> Rooms: roomName => [clientId, ...] */
@@ -50,6 +55,12 @@ class WebSocket
     private $server = null;
 
     private bool $running = false;
+
+    /** @var WebSocketBackplaneManager|null Lazily wired on first broadcast. */
+    private ?WebSocketBackplaneManager $backplane = null;
+
+    /** @var float Last idle-reaper sweep timestamp. */
+    private float $lastReaperSweep = 0.0;
 
     /**
      * @param int   $port   Port to listen on
@@ -135,16 +146,94 @@ class WebSocket
      */
     public function broadcast(string $message, ?array $excludeIds = null, ?string $path = null): void
     {
+        $this->ensureBackplane();
+        // Deliver to LOCAL connections first (resilient — a dead client never
+        // aborts delivery to the rest), then fan out to sibling instances.
+        $this->deliverLocal($message, $excludeIds, $path, null);
+        $exclude = (is_array($excludeIds) && count($excludeIds) === 1) ? $excludeIds[0] : null;
+        if ($this->backplane !== null) {
+            $this->backplane->publish($path !== null ? 'path' : 'all', $message, null, $path, $exclude);
+        }
+    }
+
+    /**
+     * Deliver a message to LOCAL connections only, resiliently. A failed write
+     * detects + prunes the dead client and delivery continues to the rest.
+     * Never publishes to the backplane (callers decide that).
+     *
+     * @param string[]|null $excludeIds Client IDs to skip
+     * @param string|null   $path       Only deliver to clients on this path (null = all)
+     * @param string|null   $room       Only deliver to members of this room (null = ignore)
+     */
+    private function deliverLocal(string $message, ?array $excludeIds, ?string $path, ?string $room): void
+    {
         $frame = self::buildFrame($message);
-        foreach ($this->clients as $id => $client) {
-            if ($excludeIds && in_array($id, $excludeIds)) {
+        $targets = $room !== null ? ($this->rooms[$room] ?? []) : array_keys($this->clients);
+        $dead = [];
+        foreach ($targets as $id) {
+            if (!isset($this->clients[$id])) {
                 continue;
             }
+            if ($excludeIds && in_array($id, $excludeIds, true)) {
+                continue;
+            }
+            $client = $this->clients[$id];
             if ($path !== null && ($client['path'] ?? '/') !== $path) {
                 continue;
             }
-            $this->writeToSocket($client['socket'], $frame);
+            if (!$this->safeWrite($client['socket'], $frame)) {
+                $dead[] = $id;
+            }
         }
+        foreach ($dead as $id) {
+            $this->disconnectClient($id);
+        }
+    }
+
+    /**
+     * Relay sink handed to the backplane manager: deliver a remote-originated
+     * message to LOCAL connections only (never re-publishes — that would loop
+     * the cluster). Dispatches by kind: room / path / all.
+     */
+    private function relayLocal(string $kind, ?string $room, ?string $path, ?string $exclude, string $message): void
+    {
+        $excludeIds = $exclude !== null ? [$exclude] : null;
+        if ($kind === 'room') {
+            if ($room !== null) {
+                $this->deliverLocal($message, $excludeIds, null, $room);
+            }
+        } elseif ($kind === 'path') {
+            if ($path !== null) {
+                $this->deliverLocal($message, $excludeIds, $path, null);
+            }
+        } else { // 'all' (and anything unknown)
+            $this->deliverLocal($message, $excludeIds, null, null);
+        }
+    }
+
+    /** Lazily wire the backplane (idempotent, best-effort) on first broadcast. */
+    private function ensureBackplane(): void
+    {
+        if ($this->backplane === null) {
+            $this->backplane = new WebSocketBackplaneManager(
+                fn(string $kind, ?string $room, ?string $path, ?string $exclude, string $message)
+                    => $this->relayLocal($kind, $room, $path, $exclude, $message)
+            );
+        }
+        $this->backplane->ensure();
+    }
+
+    /**
+     * Write to a socket, returning false if the write failed (so the caller can
+     * prune a dead/slow client). A partial/false fwrite means the peer is gone.
+     */
+    private function safeWrite($socket, string $data): bool
+    {
+        if (!is_resource($socket)) {
+            return false;
+        }
+        $written = @fwrite($socket, $data);
+        return $written !== false;
     }
 
     /**
@@ -159,7 +248,10 @@ class WebSocket
             return;
         }
         $frame = self::buildFrame($message);
-        $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
+        // Resilient: a dead target is pruned, never silently left lingering.
+        if (!$this->safeWrite($this->clients[$clientId]['socket'], $frame)) {
+            $this->disconnectClient($clientId);
+        }
     }
 
     // ── Rooms ──────────────────────────────────────────────────
@@ -256,19 +348,13 @@ class WebSocket
      */
     public function broadcastToRoom(string $roomName, string $message, ?array $excludeIds = null): void
     {
-        $members = $this->rooms[$roomName] ?? [];
-        if (empty($members)) {
-            return;
-        }
-        $frame = self::buildFrame($message);
-        foreach ($members as $clientId) {
-            if ($excludeIds && in_array($clientId, $excludeIds, true)) {
-                continue;
-            }
-            if (!isset($this->clients[$clientId])) {
-                continue;
-            }
-            $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
+        $this->ensureBackplane();
+        // Local delivery first (resilient), then fan out — a room can span
+        // instances, so each one delivers to its own members.
+        $this->deliverLocal($message, $excludeIds, null, $roomName);
+        $exclude = (is_array($excludeIds) && count($excludeIds) === 1) ? $excludeIds[0] : null;
+        if ($this->backplane !== null) {
+            $this->backplane->publish('room', $message, $roomName, null, $exclude);
         }
     }
 
@@ -286,6 +372,10 @@ class WebSocket
 
         stream_set_blocking($this->server, false);
         $this->running = true;
+
+        // Wire the backplane up front so a clustered deployment relays inbound
+        // sibling broadcasts even before this instance does its own broadcast.
+        $this->ensureBackplane();
 
         while ($this->running) {
             $read = [$this->server];
@@ -305,6 +395,11 @@ class WebSocket
                 }
                 continue;
             }
+            // Drain any cluster messages + reap idle connections on every
+            // iteration (single-threaded: never block the select loop on the
+            // backplane — poll() returns immediately when nothing is pending).
+            $this->backplane?->poll();
+            $this->reapIdle();
             if ($changed === 0) {
                 continue;
             }
@@ -356,6 +451,48 @@ class WebSocket
     public function stop(): void
     {
         $this->running = false;
+        $this->backplane?->close();
+    }
+
+    /**
+     * Close connections whose last inbound frame is older than
+     * TINA4_WS_IDLE_TIMEOUT seconds. Opt-in and non-breaking: 0/unset disables
+     * the reaper entirely (current behaviour). Sweeps at most every second so a
+     * busy loop doesn't re-scan every tick.
+     *
+     * @return int Number of connections reaped.
+     */
+    public function reapIdle(): int
+    {
+        $timeout = (float)(
+            $_ENV['TINA4_WS_IDLE_TIMEOUT']
+            ?? getenv('TINA4_WS_IDLE_TIMEOUT')
+            ?: 0
+        );
+        if ($timeout <= 0) {
+            return 0;
+        }
+        $now = microtime(true);
+        // Throttle sweeps; reapIdle() runs on every loop iteration.
+        if (($now - $this->lastReaperSweep) < 1.0) {
+            return 0;
+        }
+        $this->lastReaperSweep = $now;
+
+        $stale = [];
+        foreach ($this->clients as $id => $client) {
+            $last = $client['lastActivity'] ?? $client['connected_at'] ?? $now;
+            if (($now - $last) > $timeout) {
+                $stale[] = $id;
+            }
+        }
+        foreach ($stale as $id) {
+            $this->close($id, self::CLOSE_GOING_AWAY, 'idle timeout');
+        }
+        if (!empty($stale)) {
+            Log::info('WebSocket idle reaper closed ' . count($stale) . ' connection(s)');
+        }
+        return count($stale);
     }
 
     /**
@@ -384,6 +521,38 @@ class WebSocket
         $frame = self::buildFrame($payload, self::OP_CLOSE);
         $this->writeToSocket($this->clients[$clientId]['socket'], $frame);
         $this->disconnectClient($clientId);
+    }
+
+    /**
+     * Return true if the upgrade request's Origin is permitted.
+     *
+     * Controlled by TINA4_WS_ALLOWED_ORIGINS — a comma-separated list of exact
+     * origins (e.g. "https://app.example.com,https://admin.example.com").
+     *
+     * Empty/unset = allow ALL origins (current behaviour, non-breaking). When
+     * the list is set, only requests whose Origin header exactly matches a
+     * listed value are allowed, and a missing Origin header is rejected. The
+     * header lookup is case-insensitive on the key (parseHttpHeaders lowercases
+     * keys, but accept either form for callers that pass raw headers).
+     *
+     * @param array $headers Parsed HTTP headers
+     */
+    public static function originAllowed(array $headers): bool
+    {
+        $raw = trim((string)(
+            $_ENV['TINA4_WS_ALLOWED_ORIGINS']
+            ?? getenv('TINA4_WS_ALLOWED_ORIGINS')
+            ?: ''
+        ));
+        if ($raw === '') {
+            return true; // No allow-list configured — permit everything.
+        }
+        $allowed = array_filter(array_map('trim', explode(',', $raw)), fn($o) => $o !== '');
+        if (empty($allowed)) {
+            return true;
+        }
+        $origin = $headers['origin'] ?? $headers['Origin'] ?? null;
+        return $origin !== null && in_array($origin, $allowed, true);
     }
 
     /**
@@ -578,6 +747,14 @@ class WebSocket
             return;
         }
 
+        // Origin allow-list (opt-in via TINA4_WS_ALLOWED_ORIGINS). Unset = allow
+        // all, so this never breaks an existing deployment.
+        if (!self::originAllowed($headers)) {
+            @fwrite($socket, "HTTP/1.1 403 Forbidden\r\n\r\n");
+            @fclose($socket);
+            return;
+        }
+
         // Send handshake response
         $response = self::buildHandshakeResponse($wsKey);
         @fwrite($socket, $response);
@@ -591,9 +768,12 @@ class WebSocket
             'socket' => $socket,
             'ip' => $peerName ?: 'unknown',
             'connected_at' => time(),
+            'lastActivity' => microtime(true),
             'buffer' => '',
             'path' => $headers['_path'] ?? '/',
             'rooms' => [],
+            'fragments' => '',
+            'fragmentOpcode' => 0,
         ];
 
         // Fire open event
@@ -620,6 +800,7 @@ class WebSocket
         }
 
         $client['buffer'] .= $data;
+        $client['lastActivity'] = microtime(true); // mark activity for the idle reaper
 
         while (true) {
             $frame = self::decodeFrame($client['buffer']);
@@ -630,14 +811,30 @@ class WebSocket
             $client['buffer'] = substr($client['buffer'], $frame['length']);
 
             switch ($frame['opcode']) {
+                case self::OP_CONTINUATION:
+                    // RFC 6455 §5.4 fragmentation: append to the buffered
+                    // fragments started by a non-FIN TEXT/BINARY frame. Only
+                    // dispatch once the FIN bit arrives, decoding under the
+                    // ORIGINAL opcode (continuation frames carry no type).
+                    $client['fragments'] .= $frame['payload'];
+                    if ($frame['fin']) {
+                        $full = $client['fragments'];
+                        $client['fragments'] = '';
+                        $client['fragmentOpcode'] = 0;
+                        $this->dispatchMessage($clientId, $full);
+                    }
+                    break;
+
                 case self::OP_TEXT:
                 case self::OP_BINARY:
-                    if (isset($this->handlers['message'])) {
-                        try {
-                            ($this->handlers['message'])($clientId, $frame['payload']);
-                        } catch (\Throwable $e) {
-                            $this->fireError($clientId, $e);
-                        }
+                    if ($frame['fin']) {
+                        // Unfragmented message — dispatch immediately.
+                        $this->dispatchMessage($clientId, $frame['payload']);
+                    } else {
+                        // Start of a fragmented message — buffer and wait for
+                        // the continuation frames + FIN.
+                        $client['fragmentOpcode'] = $frame['opcode'];
+                        $client['fragments'] = $frame['payload'];
                     }
                     break;
 
@@ -677,7 +874,12 @@ class WebSocket
                 }
             }
         }
-        @fclose($socket);
+        // Guard the close: a pruned dead client's socket may already be closed,
+        // and fclose() on a non-resource raises an uncatchable TypeError in
+        // PHP 8 — which would crash the broadcast that is pruning it.
+        if (is_resource($socket)) {
+            @fclose($socket);
+        }
         unset($this->clients[$clientId]);
 
         if (isset($this->handlers['close'])) {
@@ -685,6 +887,21 @@ class WebSocket
                 ($this->handlers['close'])($clientId);
             } catch (\Throwable $e) {
                 // Ignore errors in close handler
+            }
+        }
+    }
+
+    /**
+     * Dispatch a fully-assembled message (single-frame OR reassembled from
+     * fragments) to the 'message' handler.
+     */
+    private function dispatchMessage(string $clientId, string $payload): void
+    {
+        if (isset($this->handlers['message'])) {
+            try {
+                ($this->handlers['message'])($clientId, $payload);
+            } catch (\Throwable $e) {
+                $this->fireError($clientId, $e);
             }
         }
     }

@@ -1036,7 +1036,7 @@ $result = SqlTranslation::remember(
 - Queue system with Kafka, RabbitMQ, and MongoDB backends
 - Session handlers for MongoDB and Valkey/Redis. `TINA4_SESSION_SAMESITE` env var (default: Lax)
 - GraphQL query execution
-- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars). Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
+- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis/NATS pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars) — **wired into the live broadcast path**: every `broadcastWebSocket()`/`broadcastToRoom()` delivers to LOCAL connections first then publishes an envelope `{src,kind,exclude,room,path,+text|b64}` to the shared `tina4:ws` channel (identical shape across all 4 frameworks); sibling instances drain it on the event-loop idle tick and relay to their own LOCAL connections only (origin guard drops our own echo by stable per-process id — no double-delivery, no cluster loop). Backplane failure logs + degrades to local-only, never crashes a broadcast. Broadcasts are resilient: a dead/slow client is pruned and never aborts delivery to the rest. **Security**: optional origin allow-list via `TINA4_WS_ALLOWED_ORIGINS` (comma-separated; empty/unset = allow all — non-breaking; set = reject mismatched/missing Origin with 403 on every upgrade path). **Idle reaper**: `TINA4_WS_IDLE_TIMEOUT` (seconds; 0/unset = disabled) closes connections idle past the timeout. RFC 6455 fragmented messages (`OP_CONTINUATION`) are reassembled before dispatch. Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
 - Messenger (.env driven SMTP/IMAP). IMAP reads **fail loud**: `inbox()`/`read()`/`unread()`/`search()`/`folders()` LOG and RAISE `Tina4\MessengerConnectionError` (extends `\RuntimeException`) on a connection/auth/protocol failure instead of swallowing it into an empty result — a *successful* fetch from a genuinely empty mailbox still returns empty (`[]`/`null`/`0`) normally. `send()` is unchanged (returns `{success, message, id}`)
@@ -1049,14 +1049,14 @@ $result = SqlTranslation::remember(
 - Cache backends (`Tina4\Cache`): unified set across response/KV and persistent DB cache — `memory` (default), `file`, `redis`, `valkey`, `memcached`, `mongodb`, `database` — selected via `TINA4_CACHE_BACKEND` (+ `TINA4_CACHE_URL`/credentials); falls back to the file backend if a backend is unreachable
 - Session handlers: file, Redis/Valkey, MongoDB, database. `TINA4_SESSION_SAMESITE` env var controls SameSite attribute (default: Lax)
 - QueryBuilder with NoSQL/MongoDB support (`toMongo()`)
-- WebSocket backplane (Redis pub/sub) for horizontal scaling
+- WebSocket backplane (Redis/NATS pub/sub) for horizontal scaling — wired into the live broadcast path with an origin guard + local-first delivery (see the WebSocket bullet above)
 - SameSite=Lax default on session cookies (`TINA4_SESSION_SAMESITE`)
 - `tina4 deploy docker` generates Dockerfile and .dockerignore
 - Gallery: 7 interactive examples with Try It deploy at `/__dev/`
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
-- SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive
-- Tests: 3,011 passing
+- SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive. Hardened: the stream stops cleanly on client disconnect (`connection_aborted()`) and a generator that raises mid-stream is logged via `Log::error` and ends cleanly — the request worker never crashes
+- Tests: 3,184 passing
 
 ## Links
 

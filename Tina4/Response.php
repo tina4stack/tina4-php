@@ -413,11 +413,17 @@ class Response
     public function stream(callable $source, string $contentType = 'text/event-stream'): self
     {
         if ($this->testing) {
-            // In testing mode, collect all chunks into body
+            // In testing mode, collect all chunks into body. A generator that
+            // raises mid-stream is logged and ends cleanly (whatever it yielded
+            // before the error is kept) — the handler/worker never crashes.
             $gen = $source();
             $this->body = '';
-            foreach ($gen as $chunk) {
-                $this->body .= $chunk;
+            try {
+                foreach ($gen as $chunk) {
+                    $this->body .= $chunk;
+                }
+            } catch (\Throwable $exc) {
+                Log::error('SSE/stream source error: ' . $exc->getMessage());
             }
             $this->headers['Content-Type'] = $contentType;
             $this->sent = true;
@@ -458,19 +464,28 @@ class Response
             header("{$name}: {$value}");
         }
 
-        // Stream chunks from generator
+        // Stream chunks from the generator. Two failure modes are handled so
+        // the worker/handler never crashes mid-stream:
+        //   1. Client disconnect — connection_aborted() ends the stream cleanly.
+        //   2. The generator/source itself raises — log it and stop cleanly.
         $gen = $source();
-        foreach ($gen as $chunk) {
-            echo $chunk;
-            if (ob_get_level() > 0) {
-                ob_flush();
-            }
-            flush();
+        try {
+            foreach ($gen as $chunk) {
+                echo $chunk;
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
 
-            // Check if client disconnected
-            if (connection_aborted()) {
-                break;
+                // Check if client disconnected
+                if (connection_aborted()) {
+                    break;
+                }
             }
+        } catch (\Throwable $exc) {
+            // The generator raised mid-stream. Log and end the stream cleanly
+            // rather than letting the exception kill the request worker.
+            Log::error('SSE/stream source error: ' . $exc->getMessage());
         }
 
         return $this;
