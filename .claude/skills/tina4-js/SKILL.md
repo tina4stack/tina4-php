@@ -55,6 +55,32 @@ live API index through its MCP tools (available with `tina4 serve` + `TINA4_DEBU
 so the frontend wires up against real endpoints instead of invented ones. (For frontend reactivity
 itself — signals, `html`, components — the rules below are the source of truth.)
 
+## The Lazy Frontend Ladder
+
+The frontend is where over-building hurts most: a component library for a button, a state
+manager for three variables, an npm dependency for what the platform already does. tina4-js is
+~1.5KB precisely because it leans on the browser. Before adding code or a dependency, stop at the
+FIRST rung that holds.
+
+1. **Does this need to exist at all?** (YAGNI)
+2. **Does the platform already do it?** `<input type="date">` over a date-picker lib, `<dialog>`
+   over a modal lib, CSS `:has()` / grid / `position: sticky` over layout JS, native form
+   validation attributes over a validation lib, `<details>` over an accordion component. The
+   browser is the biggest dependency you already shipped — use it.
+3. **Does tina4-js already do it?** `signal` + `computed` for state (no store library), `html`
+   bindings + `${() => ...}` for reactivity (no virtual DOM), `?attr` / `.prop` bindings,
+   `Tina4Element` for components, and the `router` / `api` / `ws` / `sse` / `persist` modules.
+   Do not import React/Vue patterns here.
+4. **Is there an installed dependency that covers it?** Use it. Adding a new npm package to a
+   1.5KB app is a decision, not a reflex.
+5. **Can it be one line?** Make it one line.
+6. **Only then:** the minimum code that works.
+
+**Never lazy about:** XSS safety (use `${value}` text binding, never `${htmlString}`; `.innerHTML`
+only for trusted/sanitised HTML), accessibility (labels, roles, keyboard), and the bindings that
+actually make the UI reactive — a frozen `${signal.value}` where you needed `${signal}` is a bug,
+not brevity. Mark a deliberate shortcut with a `tina4:` comment that names its ceiling.
+
 ## The Three Rules That Fix 90% of Mistakes
 
 Before writing any tina4-js code, internalize these:
