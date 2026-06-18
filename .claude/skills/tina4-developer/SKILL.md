@@ -257,6 +257,17 @@ When helping a developer build with Tina4, always follow these:
    they can drop into their project. Brief explanation, then the code.
 
 
+6. **Tina4CSS + frond.js are the default frontend stack** — For any server-rendered page,
+   form, or AJAX interaction, use the framework's built-in **Tina4CSS** (a Bootstrap-compatible
+   drop-in, ~24KB, ships in `src/public/css/`) and **frond.js** (`/js/frond.js` — AJAX, forms,
+   modals, notifications, WebSocket reconnect). They are already installed: no CDN, no npm, no
+   Bootstrap, no jQuery, no Tailwind. Reach for them BY DEFAULT — don't add a UI framework or a
+   JS helper library when the built-in one is already there and themed.
+   - Layout / components: Tina4CSS classes (`container`, `row`, `col`, `card`, `btn`, `form-control`, `navbar`, the `mt-*`/`d-flex` utilities). Bootstrap muscle memory works.
+   - AJAX form POST: `saveForm("formId", "/endpoint", "messageId")` from frond.js — auto-collects inputs, handles the form token and file uploads.
+   - Load a partial: `loadPage("/route", "targetId")`. Low-level call: `sendRequest(url, data, method, cb)`.
+   - The reactive **tina4-js** frontend is the exception, not the rule — use it only for a decoupled SPA (see "Two Ways to Build"); for normal server-rendered apps, Tina4CSS + frond.js is the path.
+
 ### @noauth Is a Last Resort — Not a Default
 
 `@noauth()` makes a write route (POST/PUT/PATCH/DELETE) publicly accessible with NO authentication.
