@@ -905,11 +905,19 @@ class Router
                 }
 
                 if ($className !== null) {
-                    // Call all before_* / before static methods (matches Python's middleware pattern)
+                    // Call all before_* / before static methods. Definition
+                    // order is preserved (get_class_methods returns declaration
+                    // order) — never alphabetical. Each invocation is wrapped:
+                    // a throwing before* is logged + converted to a clean 500
+                    // (M2), never an unhandled crash.
                     $methods = get_class_methods($className);
                     foreach ($methods as $method) {
                         if (str_starts_with($method, 'before')) {
-                            $mwResult = $className::$method($request, $response);
+                            try {
+                                $mwResult = $className::$method($request, $response);
+                            } catch (\Throwable $error) {
+                                return Middleware::middleware500($response, $className, $method, $error);
+                            }
                             if ($mwResult instanceof Response) {
                                 return $mwResult;
                             }
@@ -928,13 +936,21 @@ class Router
 
                 // Fallback: try as callable function name
                 if (is_callable($mw)) {
-                    $mwResult = $mw($request, $response);
+                    try {
+                        $mwResult = $mw($request, $response);
+                    } catch (\Throwable $error) {
+                        return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+                    }
                 } else {
                     Log::warning("Middleware not found: {$mw}");
                     continue;
                 }
             } elseif (is_callable($mw)) {
-                $mwResult = $mw($request, $response);
+                try {
+                    $mwResult = $mw($request, $response);
+                } catch (\Throwable $error) {
+                    return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+                }
             } else {
                 continue;
             }
