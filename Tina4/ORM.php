@@ -1412,6 +1412,69 @@ abstract class ORM
     }
 
     /**
+     * Public field-definition map for the seeder (FakeData::seedOrm / seedModels).
+     *
+     * Mirrors Python's `orm_class._fields`: returns one entry per seedable
+     * column, keyed by the *property* name, in the shape FakeData::forField()
+     * understands plus the metadata the seeder needs for ordering and FK-value
+     * resolution:
+     *
+     *   [
+     *     'authorId' => [
+     *       'type'           => 'int',          // logical type (int|float|bool|datetime|string)
+     *       'column'         => 'author_id',    // resolved DB column name
+     *       'primary_key'    => false,
+     *       'auto_increment' => false,
+     *       'foreign_key'    => ['model' => 'Author', 'related_name' => 'posts'],  // or null
+     *     ],
+     *     ...
+     *   ]
+     *
+     * The primary key is flagged `primary_key => true`. An integer PK named
+     * like an auto-increment id is flagged `auto_increment => true` so the
+     * seeder skips it (parity with Python's auto-increment PK skip).
+     *
+     * @return array<string, array{type: string, column: string, primary_key: bool, auto_increment: bool, foreign_key: array{model: string, related_name: ?string}|null}>
+     */
+    public function getFieldDefinitions(): array
+    {
+        // Normalise the FK declarations to a column => ['model','related_name'] map.
+        $fkByColumn = [];
+        foreach ($this->foreignKeys as $fkColumn => $config) {
+            if (is_string($config)) {
+                $fkByColumn[$fkColumn] = ['model' => $config, 'related_name' => null];
+            } elseif (is_array($config)) {
+                $fkByColumn[$fkColumn] = [
+                    'model' => $config['model'] ?? '',
+                    'related_name' => $config['related_name'] ?? null,
+                ];
+            }
+        }
+
+        $defs = [];
+        foreach ($this->getColumnDefinitions() as $name => $def) {
+            $column = $this->resolveDbColumn($name);
+            $isPk = ($name === $this->primaryKey) || ($column === $this->primaryKey);
+            // Auto-increment heuristic: an integer primary key is treated as
+            // database-generated (skipped by the seeder), matching Python's
+            // auto_increment PK skip and createTable()'s AUTOINCREMENT PK.
+            $autoIncrement = $isPk && $def['type'] === 'int';
+
+            $foreignKey = $fkByColumn[$column] ?? $fkByColumn[$name] ?? null;
+
+            $defs[$name] = [
+                'type'           => $def['type'],
+                'column'         => $column,
+                'primary_key'    => $isPk,
+                'auto_increment' => $autoIncrement,
+                'foreign_key'    => $foreignKey,
+            ];
+        }
+
+        return $defs;
+    }
+
+    /**
      * Resolve a property name to its DB column name, applying the same
      * autoMap (camelCase → snake_case) + fieldMapping path that getDbData()
      * uses for INSERT/UPDATE. This guarantees the DDL column names match the

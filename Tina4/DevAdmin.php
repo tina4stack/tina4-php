@@ -608,25 +608,72 @@ class DevAdmin
             }
         });
 
-        // API: Seed fake data into a table
+        // API: Seed fake data into a table.
+        // Delegates to FakeData::seedTable so the endpoint shares the exact same
+        // visible-but-resilient per-row error handling (P1/P4b) — no unhandled
+        // row failure crashes it. Accepts optional seed/clear/strict (the old
+        // hard-coded seed is gone; reproducibility comes from the request).
         Router::post('/__dev/api/seed', function (Request $request, Response $response) {
             $table = $request->input('table') ?? '';
             $count = min((int) ($request->input('count') ?? 10), 1000);
             if ($table === '') {
                 return $response->json(['error' => 'table required'], 400);
             }
+
+            // Reproducibility (P3): optional seed (int-coerced; null if absent/invalid).
+            $rawSeed = $request->input('seed');
+            $seed = (is_int($rawSeed) || (is_string($rawSeed) && is_numeric($rawSeed)))
+                ? (int) $rawSeed
+                : null;
+            $clear = (bool) ($request->input('clear') ?? false);
+            $strict = (bool) ($request->input('strict') ?? false);
+
             try {
                 $db = App::getDatabase();
                 if ($db === null) {
                     return $response->json(['error' => "Table '{$table}' not found or has no columns"], 404);
                 }
-                // Verify table exists before claiming we seeded it
-                $probe = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [$table]);
-                if (!$probe) {
+
+                // Introspect columns; bail cleanly if the table is unknown/empty.
+                $columns = $db->getColumns($table);
+                if (empty($columns)) {
                     return $response->json(['error' => "Table '{$table}' not found or has no columns"], 404);
                 }
-                // Actual seeding via FakeData helper — TODO: wire real seeder.
-                return $response->json(['seeded' => $count, 'table' => $table]);
+
+                $fake = new \Tina4\FakeData($seed);
+
+                // Build a field_map skipping auto-increment / id PKs, then delegate.
+                $fieldMap = [];
+                foreach ($columns as $col) {
+                    $name = $col['name'] ?? '';
+                    if ($name === '') {
+                        continue;
+                    }
+                    $colType = strtoupper((string) ($col['type'] ?? ''));
+                    $isPk = !empty($col['primary']);
+                    if ($isPk && (str_contains($colType, 'AUTO') || str_contains($colType, 'SERIAL') || strtolower($name) === 'id')) {
+                        continue;
+                    }
+                    $fieldMap[$name] = self::seedGeneratorForColumn($fake, $name, $colType);
+                }
+
+                $summary = \Tina4\FakeData::seedTable(
+                    $db,
+                    $table,
+                    $count,
+                    $fieldMap,
+                    [],
+                    $clear,
+                    $seed,
+                    $strict
+                );
+
+                return $response->json([
+                    'seeded' => $summary->seeded,
+                    'failed' => $summary->failed,
+                    'errors' => $summary->errors,
+                    'table' => $table,
+                ]);
             } catch (\Throwable $e) {
                 return $response->json(['error' => $e->getMessage()], 500);
             }
@@ -2226,6 +2273,68 @@ class DevAdmin
     }
 
     // ── Dev-admin helpers ──────────────────────────────────────────
+
+    /**
+     * Pick a FakeData generator (callable) for one column from its name + SQL
+     * type — used by the dev-admin seed endpoint (P4b). Mirrors Python's
+     * dev_admin _gen_for_column.
+     *
+     * @return callable A no-arg closure returning one generated value.
+     */
+    private static function seedGeneratorForColumn(\Tina4\FakeData $fake, string $name, string $colType): callable
+    {
+        $nameLower = strtolower($name);
+        $type = strtoupper($colType);
+
+        if (str_contains($nameLower, 'email')) {
+            return fn() => $fake->email();
+        }
+        if (str_contains($nameLower, 'name') && str_contains($nameLower, 'user')) {
+            return fn() => $fake->name();
+        }
+        if (str_contains($nameLower, 'first') && str_contains($nameLower, 'name')) {
+            return fn() => $fake->firstName();
+        }
+        if (str_contains($nameLower, 'last') && str_contains($nameLower, 'name')) {
+            return fn() => $fake->lastName();
+        }
+        if (str_contains($nameLower, 'name')) {
+            return fn() => $fake->name();
+        }
+        if (str_contains($nameLower, 'phone') || str_contains($nameLower, 'tel')) {
+            return fn() => $fake->phone();
+        }
+        if (str_contains($nameLower, 'url') || str_contains($nameLower, 'link')) {
+            return fn() => $fake->url();
+        }
+        if (str_contains($nameLower, 'address')) {
+            return fn() => $fake->address();
+        }
+        if (str_contains($nameLower, 'date') || str_contains($nameLower, 'time') || str_contains($nameLower, 'created')) {
+            return fn() => $fake->datetime();
+        }
+        if (str_contains($nameLower, 'desc') || str_contains($nameLower, 'body') || str_contains($nameLower, 'content')) {
+            return fn() => $fake->paragraph();
+        }
+        if (str_contains($nameLower, 'title') || str_contains($nameLower, 'subject')) {
+            return fn() => $fake->sentence();
+        }
+        if (str_contains($nameLower, 'active') || str_contains($nameLower, 'enabled') || str_contains($nameLower, 'done')) {
+            return fn() => $fake->boolean();
+        }
+        if (str_contains($type, 'INT') || str_contains($type, 'SERIAL')) {
+            return fn() => $fake->integer(1, 10000);
+        }
+        foreach (['REAL', 'FLOAT', 'DOUBLE', 'NUMERIC', 'DECIMAL'] as $needle) {
+            if (str_contains($type, $needle)) {
+                return fn() => $fake->numeric(0, 1000, 2);
+            }
+        }
+        if (str_contains($type, 'BOOL')) {
+            return fn() => $fake->boolean();
+        }
+        return fn() => $fake->sentence();
+    }
 
     /**
      * Resolve the project root. The CWD when the server was started

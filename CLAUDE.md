@@ -628,12 +628,23 @@ $fake->currency(): string
 $fake->choice(array $items): mixed
 $fake->forField(array $fieldDef, string $columnName = ''): mixed
 
-// Bulk seeding
-FakeData::seedTable($db, string $tableName, int $count = 10, ?array $fieldMap = null, ?array $overrides = null): int
-FakeData::seedOrm(string $modelClass, int $count = 10, ?array $overrides = null): int
+// Bulk seeding — visible-but-resilient (per-row wrap; log + skip on failure,
+// or strict=true to re-raise the first failure). All three return a
+// SeedSummary {seeded, failed, errors} that also behaves as the seeded count
+// (ArrayAccess: $summary['seeded']; count($summary) === seeded).
+FakeData::seedTable($db, string $tableName, int $count = 10, array $fieldMap = [], array $overrides = [], bool $clear = false, ?int $seed = null, bool $strict = false): SeedSummary
+FakeData::seedOrm(string $modelClass, int $count = 10, array $overrides = [], bool $clear = false, ?int $seed = null, bool $strict = false): SeedSummary
+// Batch-seed FK-related models — topo-sorts by $foreignKeys so parents seed
+// before children (clears in reverse), and points child FKs at real parent PKs.
+FakeData::seedModels(array $modelClasses, int $count = 10, array $overrides = [], bool $clear = false, ?int $seed = null, bool $strict = false): array  // [ClassName => SeedSummary]
 $fake->seedDir(string $seedDir = 'src/seeds'): array
 $fake->run(callable $seeder, int $count = 10): array
 ```
+
+- **clear** (P2 idempotency): truncate the target table(s) before seeding so re-runs don't duplicate rows / trip unique-PK violations.
+- **seed** (P3 reproducibility): seeds the FakeData RNG so a run is repeatable (seedOrm/seedModels seed their own FakeData; seedTable seeds for parity — its determinism comes from the FakeData you pass through `$fieldMap`).
+- **strict** (P1): re-raise on the first failed row instead of logging + skipping.
+- The dev-admin seed endpoint (`POST /__dev/api/seed`) delegates to `seedTable` and accepts `seed`/`clear`/`strict`, returning `{seeded, failed, errors, table}`.
 
 ### Log — Logging
 
