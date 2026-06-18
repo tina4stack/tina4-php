@@ -119,7 +119,7 @@ back to one of these:
    conventions (see Naming Conventions below). But everything a developer or user SEES must be
    literally identical across all four frameworks:
    - **Connection strings** — same format (`sqlite3:app.db`, `pgsql://user:pass@host:port/db`)
-   - **Constants** — same names, same values (`TINA4_DEBUG`, `TINA4_SESSION_HANDLER`, etc.)
+   - **Constants** — same names, same values (`TINA4_DEBUG`, `TINA4_SESSION_BACKEND`, etc.)
    - **Environment variables** — same `.env` keys and expected values
    - **Log output format** — same JSON structure in production, same human-readable format in dev
    - **Debug overlay** — same 8 panels, same layout, same data

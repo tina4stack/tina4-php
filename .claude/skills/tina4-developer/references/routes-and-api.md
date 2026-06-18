@@ -6,7 +6,7 @@ Drop a file in `src/routes/` and it's auto-discovered. No registration needed.
 
 ### Python
 ```python
-from tina4 import get, post, put, delete
+from tina4_python import get, post, put, delete
 
 @get("/hello")
 async def hello(request, response):
@@ -124,7 +124,7 @@ Apply authentication, logging, or other cross-cutting concerns:
 
 ### Python
 ```python
-from tina4 import middleware
+from tina4_python import middleware
 
 class AuthCheck:
     @staticmethod
@@ -187,7 +187,7 @@ Built-in. Configure in `.env` or it defaults to allowing all origins in developm
 
 Built-in. No configuration needed for sensible defaults. Override in `.env` if needed.
 
-### RateLimiterMiddleware (v3.10.92)
+### RateLimiterMiddleware
 
 A dedicated `RateLimiterMiddleware` class is available for route-level rate limiting. In Python, the `RateLimiter` class lives in `core/rate_limiter.py`.
 

@@ -63,7 +63,7 @@ export class User extends BaseModel {
 > **v3 API** — `find_by_id(id)` for ID lookup, `find(filter)` for filtered lists.
 > Do NOT use the v2 query builder chain (`select("*").fetch()`) — it no longer exists.
 
-> **v3.10.91** — QueryBuilder's `from()` method has been renamed to avoid language keyword conflicts:
+> QueryBuilder's `from()` method has been renamed to avoid language keyword conflicts:
 > - Python / Ruby: `from_table()`
 > - PHP / Node.js: `fromTable()`
 >
@@ -245,14 +245,14 @@ For paginated JSON responses the result includes metadata:
 
 ## DatabaseResult Methods
 
-> **v3.10.92** — `DatabaseResult` gained convenience methods (Python now matches the other frameworks):
+`DatabaseResult` provides convenience methods (consistent across all frameworks):
 
 | Method | Description | Frameworks |
 |--------|-------------|------------|
 | `size()` | Returns record count | All |
-| `to_array()` | Convert to list/array | All (Python added in v3.10.92) |
-| `to_json()` | Convert to JSON string | All (Python added in v3.10.92) |
-| `to_csv()` | Convert to CSV string | All (Python added in v3.10.92) |
+| `to_array()` | Convert to list/array | All |
+| `to_json()` | Convert to JSON string | All |
+| `to_csv()` | Convert to CSV string | All |
 
 ```python
 # Python
@@ -263,18 +263,120 @@ results.to_json()    # '[{"id": 1, "name": "Alice"}, ...]'
 results.to_csv()     # 'id,name\n1,Alice\n...'
 ```
 
+## QueryBuilder — Fluent Queries with JOINs
+
+Use `QueryBuilder` for complex queries (JOINs, aggregates, GROUP BY) instead of raw SQL.
+Always prefer QueryBuilder over `db.fetch()` for maintainability.
+
+```python
+# Python
+from tina4_python.query_builder import QueryBuilder
+
+# Simple query
+users = QueryBuilder.from_table("users") \
+    .select("id", "name", "email") \
+    .where("is_active = ?", [1]) \
+    .order_by("name ASC") \
+    .limit(10) \
+    .get()                     # -> DatabaseResult
+
+# JOINs
+orders = QueryBuilder.from_table("orders o") \
+    .select("o.*", "c.name as customer_name") \
+    .join("customers c", "o.customer_id = c.id") \
+    .where("o.status = ?", ["pending"]) \
+    .order_by("o.created_at DESC") \
+    .limit(20) \
+    .get()
+
+# LEFT JOIN
+products = QueryBuilder.from_table("products p") \
+    .select("p.*", "c.name as category_name") \
+    .left_join("categories c", "p.category_id = c.id") \
+    .where("p.is_active = ?", [1]) \
+    .get()
+
+# Aggregates
+total = QueryBuilder.from_table("orders") \
+    .select("coalesce(sum(total), 0) as total") \
+    .where("status != ?", ["cancelled"]) \
+    .first()["total"]          # -> single row dict
+
+# COUNT
+count = QueryBuilder.from_table("users") \
+    .where("is_active = ?", [1]) \
+    .count()                   # -> int
+
+# GROUP BY + HAVING
+stats = QueryBuilder.from_table("orders o") \
+    .select("c.name", "count(*) as order_count") \
+    .join("customers c", "o.customer_id = c.id") \
+    .group_by("c.name") \
+    .having("count(*) > ?", [5]) \
+    .get()
+
+# From ORM model (inherits the model's DB connection)
+results = User.query() \
+    .where("age > ?", [18]) \
+    .order_by("name") \
+    .get()
+
+# Check existence
+exists = QueryBuilder.from_table("users") \
+    .where("email = ?", ["alice@example.com"]) \
+    .exists()                  # -> bool
+```
+
+```php
+// PHP
+$orders = QueryBuilder::fromTable("orders o")
+    ->select("o.*", "c.name as customer_name")
+    ->join("customers c", "o.customer_id = c.id")
+    ->orderBy("o.created_at DESC")
+    ->limit(20)
+    ->get();
+```
+
+```ruby
+# Ruby
+orders = Tina4::QueryBuilder.from_table("orders o")
+    .select("o.*", "c.name as customer_name")
+    .join("customers c", "o.customer_id = c.id")
+    .order_by("o.created_at DESC")
+    .limit(20)
+    .get
+```
+
+### QueryBuilder Methods
+
+| Method | Description |
+|--------|-------------|
+| `from_table(table)` | Start a query (Python/Ruby) |
+| `fromTable(table)` | Start a query (PHP/Node.js) |
+| `select(*cols)` | Set columns to select |
+| `where(cond, params)` | AND condition |
+| `or_where(cond, params)` | OR condition |
+| `join(table, on)` | INNER JOIN |
+| `left_join(table, on)` | LEFT JOIN |
+| `group_by(col)` | GROUP BY |
+| `having(expr, params)` | HAVING clause |
+| `order_by(expr)` | ORDER BY |
+| `limit(n, offset)` | LIMIT + optional OFFSET |
+| `get()` | Execute → DatabaseResult |
+| `first()` | Execute → single row dict or None |
+| `count()` | Execute → int |
+| `exists()` | Execute → bool |
+| `to_sql()` | Build SQL string without executing |
+| `to_mongo()` | Convert to MongoDB query document |
+
 ## Raw SQL
 
-For complex queries, bypass the ORM:
+For queries that can't be expressed with ORM or QueryBuilder, use `db.fetch()` directly:
 ```python
-from tina4 import Database
+from tina4_python.database import Database
 
-db = Database.from_env()
-results = db.fetch(
-    "SELECT u.*, COUNT(p.id) as post_count FROM users u "
-    "LEFT JOIN posts p ON p.user_id = u.id GROUP BY u.id HAVING post_count > ?",
-    [5]
-)
+db = Database("sqlite:data/app.db")
+results = db.fetch("SELECT * FROM users WHERE id = ?", [1])
 ```
 
 ## Database Connection Strings
@@ -290,7 +392,7 @@ firebird://user:password@localhost:3050/mydb
 
 ```python
 # Python
-from tina4 import Database
+from tina4_python import Database
 db = Database.from_env()  # reads TINA4_DATABASE_URL
 ```
 ```php
@@ -324,7 +426,7 @@ tina4 seed                           # Runs all seeds
 
 Quick seeding with fake data:
 ```python
-from tina4 import FakeData, seed_orm
+from tina4_python import FakeData, seed_orm
 
 fake = FakeData()
 fake.name()     # "Alice Johnson"

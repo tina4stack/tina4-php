@@ -6,7 +6,7 @@ Routes are auto-discovered from `src/routes/`. Each language uses its idiomatic 
 
 ### Python (async decorators)
 ```python
-from tina4 import get, post, put, delete
+from tina4_python import get, post, put, delete
 
 @get("/hello")
 async def hello(request, response):
@@ -67,7 +67,7 @@ Middleware runs before/after route handlers. Applied per-route or globally.
 
 ### Python
 ```python
-from tina4 import middleware
+from tina4_python import middleware
 
 class AuthCheck:
     @staticmethod
@@ -93,7 +93,7 @@ SQL-first Active Record pattern. Models are auto-discovered from `src/orm/`.
 
 ### Python
 ```python
-from tina4 import ORM, IntegerField, StringField, TextField, BooleanField
+from tina4_python import ORM, IntegerField, StringField, TextField, BooleanField
 
 class User(ORM):
     id = IntegerField(primary_key=True, auto_increment=True)
@@ -132,7 +132,7 @@ class Article(ORM):
     # Article().with_trashed().fetch() includes deleted
 ```
 
-### QueryBuilder — `from()` renamed (v3.10.91)
+### QueryBuilder — `from()` renamed
 
 The `from()` method has been renamed to `from_table()` (Python/Ruby) and `fromTable()` (PHP/Node.js). The old `from()` method is fully removed with no backward-compatibility alias.
 

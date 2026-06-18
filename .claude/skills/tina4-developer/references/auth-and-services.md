@@ -10,7 +10,7 @@ SECRET=a-long-random-string-here
 
 ### Generating Tokens (Python)
 ```python
-from tina4 import tina4_auth
+from tina4_python import tina4_auth
 
 # Login route
 @post("/login")
@@ -19,7 +19,7 @@ async def login(request, response):
     password = request.body["password"]
 
     user = User().fetch_one("email = ?", [email])
-    if not user or not tina4_auth.check_password(user.password_hash, password):
+    if not user or not tina4_auth.check_password(password, user.password_hash):
         return response.json({"error": "Invalid credentials"}, 401)
 
     token = tina4_auth.get_token({"user_id": user.id, "email": user.email})
@@ -47,14 +47,14 @@ async def get_profile(request, response):
 ### Password Hashing
 ```python
 hashed = tina4_auth.hash_password("mypassword")
-matches = tina4_auth.check_password(hashed, "mypassword")  # True
+matches = tina4_auth.check_password("mypassword", hashed)  # True
 ```
 
 ## Sessions
 
 Configure in `.env`:
 ```env
-TINA4_SESSION_HANDLER=file    # file, redis, valkey, mongodb, database
+TINA4_SESSION_BACKEND=file    # file, redis, valkey, mongodb, database
 ```
 
 ### Usage
@@ -86,7 +86,7 @@ For background jobs like sending emails, processing uploads, etc.
 
 ### Producing Messages
 ```python
-from tina4 import Queue, Producer
+from tina4_python import Queue
 
 @post("/orders")
 async def create_order(request, response):
@@ -94,7 +94,7 @@ async def create_order(request, response):
     order.save()
 
     # Queue email notification for background processing
-    Producer(Queue(topic="order-emails")).produce({
+    Queue(topic="order-emails").push({
         "order_id": order.id,
         "email": request.body["email"],
         "type": "confirmation"
@@ -105,36 +105,41 @@ async def create_order(request, response):
 
 ### Consuming Messages
 ```python
-from tina4 import Queue, Consumer
+from tina4_python import Queue
 
 # Run as a background worker
-for message in Consumer(Queue(topic="order-emails")).messages():
-    send_order_email(message.data)
-    message.ack()
+for job in Queue(topic="order-emails").consume():
+    send_order_email(job.payload)
+    job.complete()
 ```
 
 ### Priority and Delayed Jobs
 ```python
-# High priority
-Producer(queue).produce(data, priority=10)
+queue = Queue(topic="order-emails")
 
-# Delayed (process after 5 minutes)
+# High priority
+queue.produce("order-emails", data, priority=10)
+
+# Delayed (process after 5 minutes — datetime form)
 from datetime import datetime, timedelta
-Producer(queue).produce(data, delay_until=datetime.now() + timedelta(minutes=5))
+queue.produce("order-emails", data, delay_until=datetime.now() + timedelta(minutes=5))
+
+# Delayed (seconds form)
+queue.produce("order-emails", data, delay_seconds=300)
 ```
 
-## Email
+## Email (Messenger)
 
 ```python
-from tina4 import Email
+from tina4_python import Messenger
 
 @post("/contact")
 async def contact(request, response):
-    Email().send(
+    Messenger().send(
         to=request.body["email"],
         subject="Thanks for reaching out",
         body="<h1>We received your message</h1>",
-        content_type="text/html"
+        is_html=True,
     )
     return response({"status": "sent"})
 ```
@@ -143,7 +148,7 @@ async def contact(request, response):
 
 ### Server (Python)
 ```python
-from tina4 import websocket
+from tina4_python import websocket
 
 @websocket("/ws/chat")
 async def chat(connection):
@@ -169,11 +174,20 @@ document.getElementById("send").onclick = () => {
 
 Auto-generate a GraphQL API from your ORM models:
 ```python
-from tina4 import gql
+from tina4_python import GraphQL
 
-gql.schema.from_orm(User)
-gql.schema.from_orm(Post)
+gql = GraphQL()
+gql.auto_register(User, Post)
 gql.register_route("/graphql")  # GET = GraphiQL IDE, POST = queries
+```
+
+Decorator-based resolvers register at import time:
+```python
+from tina4_python import GraphQL
+
+@GraphQL.resolve("Query", "userByEmail")
+def by_email(root, args, ctx):
+    return User.find({"email": args["email"]})[0:1]
 ```
 
 Visit `/graphql` in the browser for the GraphiQL IDE.
@@ -182,13 +196,13 @@ Visit `/graphql` in the browser for the GraphiQL IDE.
 
 Decouple your app logic with events:
 ```python
-from tina4 import event, listener
+from tina4_python import on, emit
 
-@listener("user.created")
+@on("user.created")
 async def send_welcome(data):
-    Email().send(to=data["email"], subject="Welcome!", body="...")
+    Messenger().send(to=data["email"], subject="Welcome!", body="...")
 
-@listener("user.created")
+@on("user.created")
 async def setup_defaults(data):
     Settings({"user_id": data["id"], "theme": "light"}).save()
 
@@ -197,7 +211,7 @@ async def setup_defaults(data):
 async def register(request, response):
     user = User(request.body)
     user.save()
-    event.fire("user.created", {"id": user.id, "email": user.email})
+    emit("user.created", {"id": user.id, "email": user.email})
     return response(user, 201)
 ```
 
@@ -214,7 +228,7 @@ Translation files go in `src/locales/` as JSON:
 
 Set language in `.env`:
 ```env
-TINA4_LANGUAGE=en
+TINA4_LOCALE=en
 ```
 
 Use in templates:

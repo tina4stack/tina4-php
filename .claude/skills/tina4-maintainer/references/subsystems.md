@@ -81,7 +81,7 @@ Fully native RFC 6455 implementation (~300-400 lines per language). No third-par
 
 ### Route-Based Registration (Python)
 ```python
-from tina4 import websocket
+from tina4_python import websocket
 
 @websocket("/ws/chat")
 async def chat(connection):
@@ -97,7 +97,7 @@ async def chat(connection):
 Tracks all connections by ID and path. Handles upgrade handshake, frame protocol
 (FIN, opcodes, masking/unmasking, payload encoding), and auto ping/pong.
 
-### WebSocketBackplane rename (v3.10.92 — breaking)
+### WebSocketBackplane rename
 `create()` renamed to `create_backplane()` (Python/Ruby) / `createBackplane()` (PHP/Node) across all frameworks.
 
 ### Integration with Frond Live Blocks
@@ -125,7 +125,7 @@ changes via event system, re-renders Frond blocks server-side, pushes HTML fragm
 
 ### Python
 ```python
-from tina4 import tina4_auth
+from tina4_python import tina4_auth
 
 token    = tina4_auth.get_token({"user_id": 42})        # HS256 signed with SECRET env var
 is_valid = tina4_auth.valid_token(token)
@@ -145,7 +145,7 @@ Auth.validToken(token, secret);   // same as standalone validToken()
 
 ## Sessions
 
-Pluggable backends, configured via `TINA4_SESSION_HANDLER` env var.
+Pluggable backends, configured via `TINA4_SESSION_BACKEND` env var.
 
 ### Backends
 - File (default)
@@ -169,7 +169,7 @@ request.session.clear()
 Zero-dependency engine. Auto-generates schema from ORM models.
 
 ```python
-from tina4 import gql
+from tina4_python import gql
 
 gql.schema.from_orm(User)
 gql.schema.from_orm(Post)
@@ -183,7 +183,7 @@ gql.register_route("/graphql")  # GET = GraphiQL IDE, POST = queries
 Auto-generated WSDL from decorated classes.
 
 ```python
-from tina4 import WSDL, wsdl_operation
+from tina4_python import WSDL, wsdl_operation
 
 class Calculator(WSDL):
     @wsdl_operation({"Result": int})
@@ -197,7 +197,7 @@ class Calculator(WSDL):
 
 Built-in, zero-dependency. Compiles `.scss` files to CSS.
 
-### ScssCompiler parity (v3.10.92)
+### ScssCompiler parity
 - Python: `ScssCompiler` class with `compile()`, `compile_file()`, `add_import_path()`, `set_variable()`
 - PHP: Added `compileScss()`
 - Ruby: Added `compile`, `add_import_path`, `set_variable`
@@ -207,7 +207,7 @@ Built-in, zero-dependency. Compiles `.scss` files to CSS.
 
 ## i18n / Localization
 
-Translation files in `src/locales/` (JSON format). Language set via `TINA4_LANGUAGE` env var.
+Translation files in `src/locales/` (JSON format). Language set via `TINA4_LOCALE` env var.
 
 ```twig
 {{ "welcome_message"|trans }}
@@ -221,7 +221,7 @@ Translation files in `src/locales/` (JSON format). Language set via `TINA4_LANGU
 Built-in SMTP client.
 
 ```python
-from tina4 import Email
+from tina4_python import Email
 
 email = Email()
 email.send(
@@ -239,7 +239,7 @@ email.send(
 Zero-dep fake data generation with 50+ generators.
 
 ```python
-from tina4 import FakeData, seed_orm
+from tina4_python import FakeData, seed_orm
 
 fake = FakeData()
 fake.name()    # "Alice Johnson"
@@ -258,7 +258,7 @@ CLI: `tina4 seed`, `tina4 seed:create "initial users"`
 Single-call admin interface generation.
 
 ```python
-from tina4 import CRUD
+from tina4_python import CRUD
 
 @get("/api/users/crud")
 async def user_crud(request, response):
@@ -276,7 +276,7 @@ async def user_crud(request, response):
 Pub/sub within the application.
 
 ```python
-from tina4 import event, listener
+from tina4_python import event, listener
 
 @listener("user.created")
 async def send_welcome_email(data):
@@ -291,7 +291,7 @@ event.fire("user.created", {"email": user.email})
 ## REST API Client
 
 ```python
-from tina4 import Api
+from tina4_python import Api
 
 api = Api("https://api.example.com", auth_header="Bearer xyz")
 result = api.send_request("/users", method="GET")
@@ -299,7 +299,7 @@ result = api.send_request("/users", method="GET")
 
 ---
 
-## RateLimiterMiddleware (v3.10.91+)
+## RateLimiterMiddleware
 
 Wrapper class around `RateLimiter` for use as route middleware. All 4 frameworks have both `RateLimiter` and `RateLimiterMiddleware`.
 
@@ -309,7 +309,7 @@ Wrapper class around `RateLimiter` for use as route middleware. All 4 frameworks
 
 ---
 
-## ErrorOverlay renames (v3.10.92 — breaking)
+## ErrorOverlay renames
 
 Old names removed across all frameworks: `render()`, `renderProduction()`, `render_production()`, `debug_mode?`.
 
@@ -321,33 +321,33 @@ Old names removed across all frameworks: `render()`, `renderProduction()`, `rend
 
 ---
 
-## Server parity (v3.10.92)
+## Server parity
 
 - Python/Node: Added `start()` and `stop()` methods.
 - PHP/Ruby: Added `handle()` method.
 
 ---
 
-## DatabaseResult parity (v3.10.92)
+## DatabaseResult parity
 
 - Python: Added `size()`, `to_array()`, `to_json()`, `to_csv()`.
 - PHP/Node: Added `size()`.
 
 ---
 
-## QueryBuilder rename (v3.10.91 — breaking)
+## QueryBuilder rename
 
 `from()` renamed to `from_table()` (Python/Ruby) / `fromTable()` (PHP/Node) across all frameworks.
 
 ---
 
-## DevReload parity (v3.10.92)
+## DevReload parity
 
 - Node: Added `start()` and `stop()` methods.
 
 ---
 
-## DevAdmin parity (v3.10.92)
+## DevAdmin parity
 
 - Python: Added `unresolved_count()`, `clear_all()`, `reset()`, `capture()` (5-param), `register()`.
 - PHP: Added `health()`.

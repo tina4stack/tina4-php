@@ -86,11 +86,11 @@ Request ID auto-injected into all log entries for tracing.
 ### Key Variables
 ```env
 SECRET=your-jwt-secret
-DATABASE_NAME=sqlite3:data/app.db
+TINA4_DATABASE_URL=sqlite3:data/app.db
 TINA4_DEBUG=true
 TINA4_DEBUG_LEVEL=DEBUG
-TINA4_LANGUAGE=en
-TINA4_SESSION_HANDLER=file
+TINA4_LOCALE=en
+TINA4_SESSION_BACKEND=file
 SWAGGER_TITLE=My API
 API_KEY=optional-key
 ```
@@ -156,8 +156,16 @@ Local dev → Staging → Production. No shortcuts.
 ### Local Development
 ```bash
 tina4 init          # Creates project with SQLite, zero Docker needed
-tina4 serve         # Hot reload, debug overlay, Swagger UI, console
+tina4 serve         # Hot reload, SCSS compilation, debug overlay, Swagger UI
 ```
+
+**IMPORTANT:** Always use `tina4 serve` to run the dev server. Never use `python app.py`
+or `uv run python app.py` directly. The `tina4` Rust binary handles SCSS compilation,
+file watching, and browser auto-open — `python app.py` skips all of this.
+
+**CLI Guard (`--managed`):** The tina4 CLI passes `--managed` as a CLI argument when spawning
+the framework server. The framework checks `"--managed" in sys.argv` and refuses to start
+without it. To bypass (e.g. Docker, CI), set `TINA4_OVERRIDE_CLIENT=true` in `.env`.
 
 ### Staging
 ```bash
