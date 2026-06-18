@@ -42,6 +42,15 @@ class Session
     /** @var bool Whether a session is active */
     private bool $started = false;
 
+    /** @var bool Whether the data store has unsaved changes (retained across a failed save for retry) */
+    private bool $dirty = false;
+
+    /**
+     * @var bool Strict mode — when true a backend read/write/destroy/gc failure
+     *           RE-RAISES instead of logging + degrading. Set via TINA4_SESSION_STRICT.
+     */
+    private bool $strict = false;
+
     /**
      * @param string $backend 'file' or 'redis'
      * @param array  $config  Override defaults: 'path', 'ttl', 'redis_url'
@@ -51,6 +60,7 @@ class Session
         $this->backend = $backend ?: (getenv('TINA4_SESSION_HANDLER') ?: (getenv('TINA4_SESSION_BACKEND') ?: 'file'));
         $this->ttl = (int)($config['ttl'] ?? getenv('TINA4_SESSION_TTL') ?: 3600);
         $this->storagePath = $config['path'] ?? (getenv('TINA4_SESSION_PATH') ?: 'data/sessions');
+        $this->strict = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_STRICT', 'false'));
     }
 
     /**
@@ -95,6 +105,7 @@ class Session
     {
         $this->data[$key] = $value;
         $this->data['_meta']['last_accessed'] = time();
+        $this->dirty = true;
         $this->save();
     }
 
@@ -106,6 +117,7 @@ class Session
     public function delete(string $key): void
     {
         unset($this->data[$key]);
+        $this->dirty = true;
         $this->save();
     }
 
@@ -130,6 +142,7 @@ class Session
         if ($meta !== null) {
             $this->data['_meta'] = $meta;
         }
+        $this->dirty = true;
         $this->save();
     }
 
@@ -167,17 +180,26 @@ class Session
     /**
      * Regenerate the session ID, preserving data.
      *
+     * Call this immediately after a successful login or any privilege change:
+     * issuing a fresh session ID on authentication is the standard defence
+     * against session-fixation attacks (an attacker who planted a known ID
+     * before login can no longer ride the authenticated session).
+     *
      * @return string The new session ID
      */
     public function regenerate(): string
     {
         $oldData = $this->data;
-        $this->removeStorage();
+        $oldId = $this->sessionId;
 
         $this->sessionId = bin2hex(random_bytes(16));
         $this->data = $oldData;
         $this->data['_meta']['last_accessed'] = time();
+        $this->dirty = true;
         $this->save();
+
+        // Best-effort removal of the old record (log + swallow on failure).
+        $this->safeDestroy($oldId);
 
         return $this->sessionId;
     }
@@ -200,6 +222,7 @@ class Session
         if ($value !== null) {
             // Set mode
             $this->data[$flashKey] = $value;
+            $this->dirty = true;
             $this->save();
             return null;
         }
@@ -210,6 +233,7 @@ class Session
 
         $value = $this->data[$flashKey];
         unset($this->data[$flashKey]);
+        $this->dirty = true;
         $this->save();
 
         return $value;
@@ -344,12 +368,112 @@ class Session
         $this->ttl = $previousTtl;
     }
 
+    // ── Backend-failure policy (log-loud + degrade) ───────────────
+    //
+    // The policy lives HERE, at the Session boundary — one set of wrappers for
+    // every backend (file/redis/valkey/mongo/database), mirroring the Python
+    // master. A backend that throws is logged ONCE via Log::error and degraded:
+    //   read    -> empty session
+    //   write   -> best-effort (dirty flag retained for a later retry)
+    //   destroy -> swallowed
+    //   gc      -> swallowed
+    // A genuinely empty session (the backend returns no data WITHOUT throwing)
+    // is NOT a failure and is never logged. TINA4_SESSION_STRICT=true re-raises.
+
+    /**
+     * Read raw data for $sessionId via the backend; log + degrade to an empty
+     * session on failure (or re-raise when strict).
+     */
+    private function safeRead(string $sessionId): void
+    {
+        try {
+            $this->dispatchLoad();
+        } catch (\Throwable $e) {
+            Log::error(
+                "Session read failed ({$this->handlerLabel()}): " . $e->getMessage()
+            );
+            if ($this->strict) {
+                throw $e;
+            }
+            // Degrade — start from an empty, writable session.
+            $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
+        }
+    }
+
+    /**
+     * Persist the current data via the backend.
+     *
+     * @return bool true on success; false (after logging) on a degraded write,
+     *              with the dirty flag left set so a later save() can retry.
+     */
+    private function safeWrite(): bool
+    {
+        try {
+            $this->dispatchSave();
+            return true;
+        } catch (\Throwable $e) {
+            Log::error(
+                "Session write failed ({$this->handlerLabel()}): " . $e->getMessage()
+            );
+            if ($this->strict) {
+                throw $e;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Remove $sessionId from the backend; log + swallow on failure (or re-raise
+     * when strict).
+     */
+    private function safeDestroy(string $sessionId): bool
+    {
+        $previousId = $this->sessionId;
+        $this->sessionId = $sessionId;
+        try {
+            $this->dispatchRemove();
+            return true;
+        } catch (\Throwable $e) {
+            Log::error(
+                "Session destroy failed ({$this->handlerLabel()}): " . $e->getMessage()
+            );
+            if ($this->strict) {
+                throw $e;
+            }
+            return false;
+        } finally {
+            $this->sessionId = $previousId;
+        }
+    }
+
+    /**
+     * Human-readable label for the active backend handler (for log messages).
+     */
+    private function handlerLabel(): string
+    {
+        return match ($this->backend) {
+            'redis' => 'RedisSessionHandler',
+            'valkey' => 'ValkeySessionHandler',
+            'mongodb', 'mongo' => 'MongoSessionHandler',
+            'database', 'db' => 'DatabaseSessionHandler',
+            default => 'FileSessionHandler',
+        };
+    }
+
     // ── Storage Operations ────────────────────────────────────────
 
     /**
-     * Load session data from the backend.
+     * Load session data from the backend (applies the log-loud + degrade policy).
      */
     private function load(): void
+    {
+        $this->safeRead($this->sessionId);
+    }
+
+    /**
+     * Raw backend dispatch for a load — may throw; the policy lives in safeRead().
+     */
+    private function dispatchLoad(): void
     {
         match ($this->backend) {
             'redis' => $this->loadFromRedis(),
@@ -362,8 +486,25 @@ class Session
 
     /**
      * Save session data to the backend.
+     *
+     * Honours the log-loud + degrade policy: on a successful write the dirty
+     * flag is cleared; on a degraded write it is retained so a later save()
+     * retries the same data. Returns true on success, false on a degraded write.
      */
-    public function save(): void
+    public function save(): bool
+    {
+        if ($this->safeWrite()) {
+            $this->dirty = false;
+            return true;
+        }
+        // Write failed — keep dirty set for a later retry (do not crash).
+        return false;
+    }
+
+    /**
+     * Raw backend dispatch for a save — may throw; the policy lives in safeWrite().
+     */
+    private function dispatchSave(): void
     {
         match ($this->backend) {
             'redis' => $this->saveToRedis(),
@@ -375,9 +516,17 @@ class Session
     }
 
     /**
-     * Remove session data from the backend.
+     * Remove session data from the backend (applies the log-loud + degrade policy).
      */
     private function removeStorage(): void
+    {
+        $this->safeDestroy($this->sessionId);
+    }
+
+    /**
+     * Raw backend dispatch for a remove — may throw; the policy lives in safeDestroy().
+     */
+    private function dispatchRemove(): void
     {
         match ($this->backend) {
             'redis' => $this->removeFromRedis(),
@@ -401,11 +550,22 @@ class Session
         if ($maxLifetime > 0) {
             $this->ttl = $maxLifetime;
         }
-        match ($this->backend) {
-            'database', 'db' => $this->gcDatabase(),
-            'file' => $this->gcFiles(),
-            default => null, // Redis/Valkey/Mongo handle TTL natively
-        };
+        // log-loud + degrade: a GC failure is logged once and swallowed (or
+        // re-raised when strict) — it must never crash the caller.
+        try {
+            match ($this->backend) {
+                'database', 'db' => $this->gcDatabase(),
+                'file' => $this->gcFiles(),
+                default => null, // Redis/Valkey/Mongo handle TTL natively
+            };
+        } catch (\Throwable $e) {
+            Log::error(
+                "Session gc failed ({$this->handlerLabel()}): " . $e->getMessage()
+            );
+            if ($this->strict) {
+                throw $e;
+            }
+        }
     }
 
     /**

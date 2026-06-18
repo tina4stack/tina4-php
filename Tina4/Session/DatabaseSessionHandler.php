@@ -8,6 +8,12 @@
  * Database Session Handler — stores sessions in a SQL database table
  * using the Tina4 DatabaseAdapter. Zero external dependencies.
  *
+ * Every query is PARAMETERISED — the client-controlled session_id (the value of
+ * the tina4_session cookie) and the JSON-encoded data are bound as parameters,
+ * never string-interpolated into SQL. This matches the Python/Ruby/Node DB
+ * session handlers and closes a SQL-injection hole that a crafted cookie could
+ * otherwise exploit.
+ *
  * Environment variables:
  *   TINA4_DATABASE_URL        — database connection URL (used by Database::fromEnv())
  *   TINA4_SESSION_TTL         — session TTL in seconds (default: 3600)
@@ -60,17 +66,17 @@ class DatabaseSessionHandler
         $this->ensureTable();
 
         $result = $this->db->fetch(
-            "SELECT data, expires_at FROM tina4_session WHERE session_id = '{$sessionId}'",
-            [],
+            "SELECT data, expires_at FROM tina4_session WHERE session_id = ?",
+            [$sessionId],
             1
         );
 
-        if ($result === null || empty($result->records)) {
+        $row = $this->firstRow($result);
+        if ($row === null) {
             return null;
         }
 
-        $row = $result->records[0];
-        $expiresAt = (float)($row->expiresAt ?? $row->expires_at ?? 0);
+        $expiresAt = (float)($row['expiresAt'] ?? $row['expires_at'] ?? 0);
 
         if ($expiresAt < microtime(true)) {
             // Session expired — clean it up
@@ -78,7 +84,7 @@ class DatabaseSessionHandler
             return null;
         }
 
-        $data = json_decode($row->data ?? '', true);
+        $data = json_decode($row['data'] ?? '', true);
         if (!is_array($data)) {
             return null;
         }
@@ -99,22 +105,22 @@ class DatabaseSessionHandler
         $encoded = json_encode($data, JSON_UNESCAPED_SLASHES);
         $expiresAt = microtime(true) + $this->ttl;
 
-        // Check if session already exists
+        // Check if session already exists — parameterised.
         $existing = $this->db->fetch(
-            "SELECT session_id FROM tina4_session WHERE session_id = '{$sessionId}'",
-            [],
+            "SELECT session_id FROM tina4_session WHERE session_id = ?",
+            [$sessionId],
             1
         );
 
-        if ($existing !== null && !empty($existing->records)) {
+        if ($this->firstRow($existing) !== null) {
             $this->db->exec(
-                "UPDATE tina4_session SET data = '{$encoded}', expires_at = {$expiresAt} "
-                . "WHERE session_id = '{$sessionId}'"
+                "UPDATE tina4_session SET data = ?, expires_at = ? WHERE session_id = ?",
+                [$encoded, $expiresAt, $sessionId]
             );
         } else {
             $this->db->exec(
-                "INSERT INTO tina4_session (session_id, data, expires_at) "
-                . "VALUES ('{$sessionId}', '{$encoded}', {$expiresAt})"
+                "INSERT INTO tina4_session (session_id, data, expires_at) VALUES (?, ?, ?)",
+                [$sessionId, $encoded, $expiresAt]
             );
         }
 
@@ -141,7 +147,8 @@ class DatabaseSessionHandler
         $this->ensureTable();
 
         $this->db->exec(
-            "DELETE FROM tina4_session WHERE session_id = '{$sessionId}'"
+            "DELETE FROM tina4_session WHERE session_id = ?",
+            [$sessionId]
         );
         $this->db->commit();
     }
@@ -157,7 +164,8 @@ class DatabaseSessionHandler
 
         $now = microtime(true);
         $this->db->exec(
-            "DELETE FROM tina4_session WHERE expires_at > 0 AND expires_at < {$now}"
+            "DELETE FROM tina4_session WHERE expires_at > 0 AND expires_at < ?",
+            [$now]
         );
         $this->db->commit();
     }
@@ -168,6 +176,38 @@ class DatabaseSessionHandler
     public function close(): void
     {
         // Nothing to do — the DatabaseAdapter manages its own connection lifecycle.
+    }
+
+    /**
+     * Normalise the first row of a fetch() result.
+     *
+     * A raw DatabaseAdapter::fetch() returns an array shaped
+     * ['data' => [ assoc-rows... ], 'total' => n, ...]; the Database wrapper
+     * returns a DatabaseResult whose ->records holds the same assoc rows.
+     * Return the first associative row, or null when there are none.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function firstRow(mixed $result): ?array
+    {
+        if ($result === null) {
+            return null;
+        }
+
+        if (is_array($result)) {
+            $rows = $result['data'] ?? [];
+        } elseif (is_object($result) && isset($result->records)) {
+            $rows = $result->records;
+        } else {
+            return null;
+        }
+
+        if (empty($rows)) {
+            return null;
+        }
+
+        $row = $rows[0];
+        return is_array($row) ? $row : (array)$row;
     }
 
     /**
