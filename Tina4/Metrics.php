@@ -382,6 +382,130 @@ class Metrics
         return $result;
     }
 
+    // ── Top Offenders (CLI + dashboard) ───────────────────────────
+
+    /** Severity ranking for sorting (higher = more severe). */
+    private const SEVERITY_RANK = ["error" => 2, "warn" => 1, "info" => 0];
+
+    /**
+     * Rank the worst code-quality issues into a single "top offenders" list.
+     *
+     * Reuses fullAnalysis() (does NOT re-analyze — it's cached). Each offender:
+     *   ["file", "line", "kind", "severity", "score", "detail"]
+     *
+     * Rules (one offender per matching condition), SAME scoring as the master:
+     *   - function complexity > 10  → kind "complexity"
+     *         severity "error" if >20 else "warn"; score = complexity
+     *   - file loc > 500            → kind "large_file" (warn); score = loc/100
+     *   - file functions > 20       → kind "too_many_functions" (warn); score = functions/4
+     *   - file maintainability < 40 → kind "low_maintainability"
+     *         severity "error" if <20 else "warn"; score = (50 - mi)
+     *   - file has_tests false       → kind "untested" (info); score = loc/100
+     *
+     * Sorted by (severity rank, score) DESCENDING and truncated to $top.
+     *
+     * @param string $root Root directory to scan
+     * @param int    $top  Maximum offenders to return
+     * @return array{offenders: array, summary: array}
+     */
+    public static function offenders(string $root = "src", int $top = 20): array
+    {
+        $analysis = self::fullAnalysis($root);
+        if (isset($analysis["error"])) {
+            return ["offenders" => [], "summary" => ["error" => $analysis["error"]]];
+        }
+
+        $items = [];
+
+        // Function-level: cyclomatic complexity.
+        foreach ($analysis["most_complex_functions"] ?? [] as $fn) {
+            $cc = $fn["complexity"];
+            if ($cc > 10) {
+                $items[] = [
+                    "file" => $fn["file"],
+                    "line" => $fn["line"],
+                    "kind" => "complexity",
+                    "severity" => $cc > 20 ? "error" : "warn",
+                    "score" => (float)$cc,
+                    "detail" => "{$fn['name']} — cyclomatic complexity {$cc}",
+                ];
+            }
+        }
+
+        // File-level rules.
+        foreach ($analysis["file_metrics"] ?? [] as $fm) {
+            $path = $fm["path"];
+            $loc = $fm["loc"];
+            $funcs = $fm["functions"];
+            $mi = $fm["maintainability"];
+
+            if ($loc > 500) {
+                $items[] = [
+                    "file" => $path,
+                    "line" => 1,
+                    "kind" => "large_file",
+                    "severity" => "warn",
+                    "score" => $loc / 100,
+                    "detail" => "{$loc} LOC (max 500)",
+                ];
+            }
+
+            if ($funcs > 20) {
+                $items[] = [
+                    "file" => $path,
+                    "line" => 1,
+                    "kind" => "too_many_functions",
+                    "severity" => "warn",
+                    "score" => $funcs / 4,
+                    "detail" => "{$funcs} functions (max 20)",
+                ];
+            }
+
+            if ($mi < 40) {
+                $items[] = [
+                    "file" => $path,
+                    "line" => 1,
+                    "kind" => "low_maintainability",
+                    "severity" => $mi < 20 ? "error" : "warn",
+                    "score" => 50 - $mi,
+                    "detail" => "maintainability index {$mi} (min 40)",
+                ];
+            }
+
+            if (($fm["has_tests"] ?? true) === false) {
+                $items[] = [
+                    "file" => $path,
+                    "line" => 1,
+                    "kind" => "untested",
+                    "severity" => "info",
+                    "score" => $loc / 100,
+                    "detail" => "no referencing test",
+                ];
+            }
+        }
+
+        // Sort by (severity rank, score) DESC. Stable order is not required.
+        usort($items, function ($a, $b) {
+            $rankCmp = self::SEVERITY_RANK[$b["severity"]] <=> self::SEVERITY_RANK[$a["severity"]];
+            if ($rankCmp !== 0) {
+                return $rankCmp;
+            }
+            return $b["score"] <=> $a["score"];
+        });
+
+        $summary = [
+            "files_analyzed" => $analysis["files_analyzed"],
+            "total_functions" => $analysis["total_functions"],
+            "avg_complexity" => $analysis["avg_complexity"],
+            "avg_maintainability" => $analysis["avg_maintainability"],
+            "scan_mode" => $analysis["scan_mode"],
+            "scan_root" => $analysis["scan_root"],
+            "total_offenders" => count($items),
+        ];
+
+        return ["offenders" => array_slice($items, 0, $top), "summary" => $summary];
+    }
+
     // ── File Detail ─────────────────────────────────────────────────
 
     /**
@@ -1139,70 +1263,227 @@ class Metrics
     }
 
     /**
-     * Check whether a matching test file exists for a given source file.
+     * Check whether a source file has a test that ACTUALLY exercises it.
      *
-     * @param string $relPath Relative path (e.g. "Tina4/Auth.php")
+     * PRECISE detection (a bare word-mention is NOT enough — that over-reported
+     * badly: SQLite3Adapter.php looked "tested" because some test merely said
+     * "SQLite3Adapter" in passing, or because a parent-dir DatabaseTest.php
+     * existed):
+     *
+     *   1. Filename — a dedicated test file named for THIS exact module:
+     *      <Module>Test.php / test_<module>.php / <module>_test.php /
+     *      <module>_spec.php (NOT the parent directory — one DatabaseTest.php
+     *      must NOT mark every file under Database/ tested).
+     *   2. Import — a test that actually IMPORTS this file: a `use` of its
+     *      fully-qualified namespaced class (the path → namespace), or a
+     *      `new ClassName` / `ClassName::` reference to a class it DEFINES
+     *      (top-level, distinctive name > 3 chars). NO bare module-name word.
+     *
+     * Returns true only on a real, file-specific signal — so the "untested"
+     * offenders surfaced by `tina4php metrics` and the dashboard "T" badge are
+     * trustworthy. (If you wire real coverage data later, prefer it over this.)
+     *
+     * @param string $relPath Relative path (e.g. "Database/SQLite3Adapter.php")
      * @return bool
      */
     private static function hasMatchingTest(string $relPath): bool
     {
-        $name = pathinfo($relPath, PATHINFO_FILENAME);
-        // Parent directory name (e.g. "Database" from "Database/SQLite3Adapter.php")
-        $parentDir = basename(dirname($relPath));
-        $parentModule = ($parentDir !== '.' && $parentDir !== '') ? $parentDir : '';
+        $module = pathinfo($relPath, PATHINFO_FILENAME); // "SQLite3Adapter"
+        if ($module === '' || strtolower($module) === 'index') {
+            // Generic; fall through to symbol detection only.
+        }
 
-        // Stage 1: Filename matching — test_module, moduleTest, moduleSpec patterns
-        $testDirs = ['tests', 'test'];
-        foreach ($testDirs as $td) {
-            $patterns = [
-                "{$td}/{$name}Test.php",
-                "{$td}/{$name}V3Test.php",
-                "{$td}/test_{$name}.php",
-                "{$td}/{$name}_test.php",
-                "{$td}/{$name}_spec.php",
-            ];
-            // Also check parent-named tests (tests/DatabaseTest.php covers Database/SQLite3Adapter.php)
-            if ($parentModule && strtolower($parentModule) !== strtolower($name)) {
-                $patterns[] = "{$td}/{$parentModule}Test.php";
-                $patterns[] = "{$td}/{$parentModule}sTest.php";
-                $patterns[] = "{$td}/test_{$parentModule}.php";
+        // Fully-qualified namespaced class for THIS file, derived from its path:
+        //   "Database/SQLite3Adapter.php" -> "Tina4\Database\SQLite3Adapter"
+        //   "Auth.php"                    -> "Tina4\Auth"
+        // Namespace is read from the file itself (authoritative), falling back to
+        // the path-derived form so detection still works for non-Tina4 sources.
+        $absFile = self::$lastScanRoot !== '' ? self::$lastScanRoot . '/' . $relPath : $relPath;
+        $absFile = str_replace('\\', '/', $absFile);
+        $source = file_exists($absFile) ? (@file_get_contents($absFile) ?: '') : '';
+
+        $fqcn = '';
+        $definedClasses = [];
+        if ($source !== '') {
+            $tokens = @token_get_all($source);
+            if (is_array($tokens)) {
+                $ns = self::extractNamespace($tokens);
+                $definedClasses = self::extractDefinedClasses($tokens);
+                // Prefer a class that matches the filename (PSR-4), else the first.
+                $primaryClass = in_array($module, $definedClasses, true)
+                    ? $module
+                    : ($definedClasses[0] ?? $module);
+                $fqcn = $ns !== '' ? $ns . '\\' . $primaryClass : $primaryClass;
             }
-            foreach ($patterns as $p) {
-                if (file_exists($p)) {
-                    return true;
+        }
+        if ($fqcn === '') {
+            // Path-derived fallback (no parseable namespace in the file).
+            $dir = pathinfo($relPath, PATHINFO_DIRNAME);
+            $nsParts = ($dir !== '' && $dir !== '.') ? explode('/', $dir) : [];
+            $nsParts[] = $module;
+            $fqcn = implode('\\', $nsParts);
+        }
+
+        // Defined classes worth matching by bare name: top-level, distinctive
+        // (>3 chars, not leading underscore). A test referencing one of these
+        // genuinely exercises this file.
+        $matchClasses = array_values(array_filter(
+            $definedClasses,
+            fn($c) => strlen($c) > 3 && !str_starts_with($c, '_')
+        ));
+        // The filename module name itself counts as a distinctive class name
+        // only if the file actually defines it (already covered above) — we do
+        // NOT add the bare module word otherwise.
+
+        // ── Test directories to search ───────────────────────────────
+        // CWD first, then (in framework-fallback mode) walk up from the scan
+        // root to the repo that owns tests/.
+        $searchRoots = ['.'];
+        if (self::$lastScanRoot !== '') {
+            $scanRoot = self::$lastScanRoot;
+            for ($i = 0; $i < 5; $i++) {
+                foreach (['tests', 'test', 'spec'] as $d) {
+                    if (is_dir($scanRoot . '/' . $d)) {
+                        $searchRoots[] = $scanRoot;
+                        break 2;
+                    }
+                }
+                $parent = dirname($scanRoot);
+                if ($parent === $scanRoot) {
+                    break;
+                }
+                $scanRoot = $parent;
+            }
+        }
+        $searchRoots = array_values(array_unique($searchRoots));
+        $testDirs = ['tests', 'test', 'spec'];
+
+        // Stage 1: a dedicated test FILE named for THIS module (no parent-dir blanket).
+        if ($module !== '') {
+            foreach ($searchRoots as $root) {
+                foreach ($testDirs as $td) {
+                    $base = $root . '/' . $td;
+                    $candidates = [
+                        "{$base}/{$module}Test.php",
+                        "{$base}/{$module}sTest.php",
+                        "{$base}/test_{$module}.php",
+                        "{$base}/{$module}_test.php",
+                        "{$base}/{$module}_spec.php",
+                    ];
+                    foreach ($candidates as $c) {
+                        if (file_exists($c)) {
+                            return true;
+                        }
+                    }
                 }
             }
         }
 
-        // Stage 2+3: Content scan — check if any test file references this module
-        // Build the class name from the filename (already CamelCase in PHP, e.g. SQLite3Adapter)
-        $className = $name;
-        // Also build a namespace-like path for import matching
-        // e.g. "Database/SQLite3Adapter.php" → "Database\\SQLite3Adapter"
-        $namespacePath = str_replace('/', '\\', pathinfo($relPath, PATHINFO_DIRNAME) . '\\' . $name);
-        $namespacePath = ltrim(str_replace('.\\', '\\', $namespacePath), '\\');
+        // Stage 2: a test that actually IMPORTS this file's namespaced class
+        // (`use Tina4\Database\SQLite3Adapter`) or references a class it DEFINES
+        // (`new SQLite3Adapter` / `SQLite3Adapter::` / `use …\SQLite3Adapter`).
+        // NO bare module-name word match.
+        $patterns = [];
+        if ($fqcn !== '' && str_contains($fqcn, '\\')) {
+            // Match the exact FQCN as a use/import or fully-qualified reference.
+            $patterns[] = '/\\\\?' . preg_quote($fqcn, '/') . '\b/';
+        }
+        if (!empty($matchClasses)) {
+            $alt = implode('|', array_map(fn($c) => preg_quote($c, '/'), $matchClasses));
+            $patterns[] = '/\b(?:' . $alt . ')\b/';
+        }
+        if (empty($patterns)) {
+            return false;
+        }
 
-        foreach ($testDirs as $td) {
-            if (!is_dir($td)) {
-                continue;
-            }
-            $testFiles = self::globRecursive($td, '*.php');
-            foreach ($testFiles as $testFile) {
-                $content = @file_get_contents($testFile);
-                if ($content === false) {
+        foreach ($searchRoots as $root) {
+            foreach ($testDirs as $td) {
+                $base = $root . '/' . $td;
+                if (!is_dir($base)) {
                     continue;
                 }
-                // Stage 2: path/namespace matching
-                if ($namespacePath && str_contains($content, $namespacePath)) {
-                    return true;
-                }
-                // Stage 3: class name or module name mention
-                if (preg_match('/\b' . preg_quote($className, '/') . '\b/', $content)) {
-                    return true;
+                foreach (self::globRecursive($base, '*.php') as $testFile) {
+                    $content = @file_get_contents($testFile);
+                    if ($content === false) {
+                        continue;
+                    }
+                    foreach ($patterns as $pat) {
+                        if (preg_match($pat, $content)) {
+                            return true;
+                        }
+                    }
                 }
             }
         }
 
         return false;
+    }
+
+    /**
+     * Extract the (first) namespace declared in a token stream.
+     *
+     * @param array $tokens Token array from token_get_all()
+     * @return string Namespace (e.g. "Tina4\Database") or "" if none
+     */
+    private static function extractNamespace(array $tokens): string
+    {
+        $count = count($tokens);
+        for ($i = 0; $i < $count; $i++) {
+            if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_NAMESPACE) {
+                continue;
+            }
+            $name = '';
+            for ($j = $i + 1; $j < $count; $j++) {
+                $t = $tokens[$j];
+                if (!is_array($t)) {
+                    if ($t === ';' || $t === '{') {
+                        break;
+                    }
+                    continue;
+                }
+                if (in_array($t[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NS_SEPARATOR], true)) {
+                    $name .= $t[1];
+                }
+            }
+            $name = trim($name, '\\');
+            if ($name !== '') {
+                return $name;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Extract names of top-level classes/interfaces/traits/enums DEFINED in a
+     * token stream (skips anonymous `new class`).
+     *
+     * @param array $tokens Token array from token_get_all()
+     * @return array<string> Class names in declaration order
+     */
+    private static function extractDefinedClasses(array $tokens): array
+    {
+        $classes = [];
+        $count = count($tokens);
+        $defTokens = [T_CLASS, T_INTERFACE, T_TRAIT];
+        if (defined('T_ENUM')) {
+            $defTokens[] = T_ENUM;
+        }
+        for ($i = 0; $i < $count; $i++) {
+            if (!is_array($tokens[$i]) || !in_array($tokens[$i][0], $defTokens, true)) {
+                continue;
+            }
+            // Skip anonymous classes (preceded by `new`).
+            if ($tokens[$i][0] === T_CLASS) {
+                $prev = self::findPrevMeaningfulToken($tokens, $i);
+                if ($prev !== null && is_array($prev) && $prev[0] === T_NEW) {
+                    continue;
+                }
+            }
+            $nameToken = self::findNextMeaningfulToken($tokens, $i);
+            if ($nameToken !== null && is_array($nameToken) && $nameToken[0] === T_STRING) {
+                $classes[] = $nameToken[1];
+            }
+        }
+        return $classes;
     }
 }

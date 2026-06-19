@@ -13,6 +13,7 @@
  *   tina4php migrate:status         Show migration status
  *   tina4php seed                   Run seeders from src/seeds/
  *   tina4php routes                 List all registered routes
+ *   tina4php metrics [opts]         Rank top code-quality offenders (--top N, --json, --fail-on, --path)
  *   tina4php test                   Run test suite
  *   tina4php build                  Build distributable package
  *   tina4php generate <what> <name>  Generate scaffolding
@@ -133,7 +134,7 @@ function parseFields(string $fieldsStr): array
 function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
-    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear'];
+    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear', 'json'];
 
     $flags = [];
     $positional = [];
@@ -668,6 +669,98 @@ DOCKERFILE;
         break;
 
     // ────────────────────────────────────────────
+    // METRICS — Rank top code-quality offenders
+    // ────────────────────────────────────────────
+    case 'metrics':
+        // tina4php metrics                       Human report, scans src/ (or framework)
+        // tina4php metrics --top 10              Only the worst 10
+        // tina4php metrics --path Tina4          Scan a specific directory
+        // tina4php metrics --json                Machine-readable {summary,offenders} for CI
+        // tina4php metrics --fail-on warn        Exit 1 if any warn/error offender
+        // tina4php metrics --fail-on error       Exit 1 only on error-severity
+        [$metricsFlags, ] = parseFlags($args);
+
+        $top = (isset($metricsFlags['top']) && ctype_digit((string)$metricsFlags['top']))
+            ? (int)$metricsFlags['top'] : 20;
+        $asJson = isset($metricsFlags['json']);
+        $path = $metricsFlags['path'] ?? 'src';
+        $failOn = $metricsFlags['fail-on'] ?? null;
+        if (!in_array($failOn, [null, 'warn', 'error'], true)) {
+            fwrite(STDERR, "  invalid --fail-on '{$failOn}' (use warn or error)\n");
+            exit(2);
+        }
+
+        $result = \Tina4\Metrics::offenders($path, $top);
+        $summary = $result['summary'];
+        $found = $result['offenders'];
+
+        if (isset($summary['error'])) {
+            fwrite(STDERR, "  metrics error: {$summary['error']}\n");
+            exit(2);
+        }
+
+        // Decide exit code from the FULL offender set, not just the printed top-N.
+        // offenders()/fullAnalysis() is cached, so this reuses the same analysis.
+        $allOffenders = \Tina4\Metrics::offenders($path, max(1, $summary['total_offenders']))['offenders'];
+        $severities = array_column($allOffenders, 'severity');
+        $exitCode = 0;
+        if ($failOn === 'warn' && (in_array('warn', $severities, true) || in_array('error', $severities, true))) {
+            $exitCode = 1;
+        } elseif ($failOn === 'error' && in_array('error', $severities, true)) {
+            $exitCode = 1;
+        }
+
+        if ($asJson) {
+            echo json_encode(['summary' => $summary, 'offenders' => $found], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            exit($exitCode);
+        }
+
+        // ── Human report ───────────────────────────────────────────
+        $useColor = function_exists('posix_isatty') ? posix_isatty(STDOUT) : (getenv('TERM') !== false);
+        $c = function (string $text, string $code) use ($useColor): string {
+            return $useColor ? "\033[{$code}m{$text}\033[0m" : $text;
+        };
+        $sevColor = ['error' => '31', 'warn' => '33', 'info' => '2']; // red / yellow / dim
+
+        echo "\n";
+        echo "  Tina4 Metrics — {$summary['scan_mode']} scan ({$summary['scan_root']})\n";
+        echo "  files: {$summary['files_analyzed']}   "
+            . "functions: {$summary['total_functions']}   "
+            . "avg complexity: {$summary['avg_complexity']}   "
+            . "avg maintainability: {$summary['avg_maintainability']}\n";
+        echo "  offenders: {$summary['total_offenders']} total"
+            . (!empty($found) ? " (showing top " . count($found) . ")" : "") . "\n";
+        echo "\n";
+
+        if (empty($found)) {
+            echo "  " . $c("\u{2713} no offenders — clean", "32") . "\n\n";
+            exit($exitCode);
+        }
+
+        // Column widths so the table lines up.
+        $locs = array_map(fn($o) => "{$o['file']}:{$o['line']}", $found);
+        $locW = max(strlen('FILE:LINE'), max(array_map('strlen', $locs)));
+        $kindW = max(strlen('KIND'), max(array_map(fn($o) => strlen($o['kind']), $found)));
+
+        $header = sprintf("  %3s  %-8s  %-{$kindW}s  %-{$locW}s  DETAIL", '#', 'SEVERITY', 'KIND', 'FILE:LINE');
+        echo $c($header, "1") . "\n";
+        echo "  " . str_repeat('-', strlen($header) - 2) . "\n";
+        foreach ($found as $i => $o) {
+            $sev = $o['severity'];
+            $sevCell = $c(sprintf("%-8s", $sev), $sevColor[$sev]);
+            echo sprintf(
+                "  %3d  %s  %-{$kindW}s  %-{$locW}s  %s\n",
+                $i + 1,
+                $sevCell,
+                $o['kind'],
+                $locs[$i],
+                $o['detail']
+            );
+        }
+        echo "\n";
+        exit($exitCode);
+
+    // ────────────────────────────────────────────
     // ROUTES — List registered routes
     // ────────────────────────────────────────────
     case 'routes':
@@ -866,6 +959,7 @@ DOCKERFILE;
         echo "  migrate:status          Show migration status\n";
         echo "  seed                    Run seeders from src/seeds/\n";
         echo "  routes                  List all registered routes\n";
+        echo "  metrics [--top N] [--json] [--fail-on warn|error] [--path DIR]  Rank top code-quality offenders\n";
         echo "  test                    Run test suite\n";
         echo "  build                   Build distributable package\n";
         echo "  generate <what> <name>  Generate scaffolding\n";

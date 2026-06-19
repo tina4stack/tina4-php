@@ -65,6 +65,7 @@
             <file>tests/DevMailboxTest.php</file>
             <file>tests/StaticFilesTest.php</file>
             <file>tests/MetricsTest.php</file>
+            <file>tests/MetricsCliTest.php</file>
             <file>tests/CLIScaffoldingTest.php</file>
             <file>tests/CsrfMiddlewareTest.php</file>
             <file>tests/GalleryTest.php</file>
