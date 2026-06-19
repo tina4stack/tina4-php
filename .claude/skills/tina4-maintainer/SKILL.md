@@ -36,6 +36,29 @@ site, or a CLAUDE.md example — and run `docs_search` to catch prose that now d
 returns nothing for a name you expected, the name does not exist in this version: fix the code or the
 doc, do not paper over it.
 
+## Independent Verification — Never Trust a Self-Reported Green
+
+When work is produced by a subagent, a parallel agent, or a workflow — or even by a prior step in
+your own session — **do not trust its claim that tests pass.** Re-verify it yourself before you
+commit, merge, or release:
+
+- **Re-run the full suite yourself** at the exact HEAD you're about to ship (`pytest`, `phpunit`,
+  `rspec`, `npx tsx test/run-all.ts` + `npm run typecheck`). An agent's own green run has repeatedly
+  masked real bugs — the **".env.local lesson"**: a stray `.env.local` override clobbered real env
+  vars and broke an integration suite that the agent's own run had passed; only an independent
+  re-run caught it. Several cross-framework bugs (Node fragment parser, PHP backplane autoload,
+  Ruby isolated-engine WS) were caught this same way.
+- **Re-read the changed source**, not just the agent's summary. Agents over-claim (a GraphQL/WSDL
+  audit flagged a "CRITICAL file-XXE" that empirically did not exist in any framework) and
+  mis-report which file they touched — confirm the diff matches the summary.
+- **Re-derive any empirical/security claim yourself** (actually run the XXE / billion-laughs payload
+  against the parser, actually invoke the CLI) rather than accepting the agent's assessment.
+- **Confirm lock-in tests are real** — both positive AND negative cases present, and the negative
+  test genuinely fails against the old behavior.
+
+This is non-negotiable for anything that commits, merges, or releases. A re-run is trivial against
+the cost of shipping a masked regression to four public registries.
+
 ## The Guiding Philosophy
 
 > **"The best code you write is the code you don't write."**
@@ -566,6 +589,30 @@ When working on Tina4:
 - **Never merge staging into main prematurely** — v3 is a complete rewrite and is not backwards
   compatible with v2. It ships when all four frameworks reach parity and the master maintainer
   decides to release.
+
+### Release Methodology — Feature Branch Per Release (adopted 2026-06-19)
+
+**Going forward, every release is built on a dedicated release feature branch**, so the release
+line stays releasable and an urgent patch can be cut without waiting on unrelated in-flight work:
+
+1. **Cut `feature/release<version>`** (e.g. `feature/release3.13.42`) from the current release line
+   in each framework repo.
+2. **Bank everything for that release into the feature branch** — all four frameworks' parity work,
+   fixes, docs, the version bump, and release notes. The release line stays clean until cut.
+3. **On release**: merge `feature/release<version>` back into the release mainline, **independently
+   verify every framework's full suite is green at that HEAD** (see *Independent Verification*),
+   then **tag `<version>`**. The tag (matching `[0-9]*.*.*`, e.g. `3.13.42`) is what triggers the
+   publish workflow in every repo — PyPI / Packagist / RubyGems / npm, and crates.io for the Rust
+   CLI. **Merging alone never publishes; the tag does.**
+4. **Urgent patches** get their own short-lived `feature/release<patch>` off the release line —
+   banked, merged, tagged independently of any larger in-flight feature branch.
+
+**Current reality (important):** the active release line for the v3 series is the **`v3`** branch —
+every 3.13.x release is tagged there; `main` is the stale v2-era default (480+ commits behind v3).
+So "merge to main" in this methodology means **merge to the active release mainline, which is `v3`
+today**. (If the project later promotes `v3` to be the literal default branch, update this section.)
+The version line stays **3.13.x** while in flux — do FEWER, BIGGER releases (bundle many changes),
+never release-per-tiny-change.
 
 ## Communication Style — Always Dashboard-Driven
 
