@@ -44,8 +44,20 @@ class GraphQL
     /** The "default" instance set via GraphQL::setDefault() — receives post-startup resolve() calls. */
     private static ?self $defaultInstance = null;
 
+    /**
+     * Maximum selection-set nesting depth. A deeply nested query (or a circular
+     * fragment) would otherwise recurse without bound — a classic GraphQL DoS /
+     * stack-overflow vector. Counted per selection level AND per fragment spread,
+     * so circular fragments are caught too. The default (50) is far beyond any
+     * legitimate query; set TINA4_GRAPHQL_MAX_DEPTH <= 0 to disable the guard.
+     */
+    public int $maxDepth = 50;
+
     public function __construct()
     {
+        $envDepth = DotEnv::getEnv('TINA4_GRAPHQL_MAX_DEPTH', '50');
+        $this->maxDepth = is_numeric($envDepth) ? (int) $envDepth : 50;
+
         // Drain any resolvers registered via the class-level GraphQL::resolve()
         // BEFORE this instance was constructed.
         foreach (self::$classResolvers as $typeName => $fields) {
@@ -296,7 +308,7 @@ class GraphQL
         }
 
         $data = [];
-        $errs = $this->resolveSelectionsInto($op['selections'], $resolvers, null, $variables, $fragments, $data, $context);
+        $errs = $this->resolveSelectionsInto($op['selections'], $resolvers, null, $variables, $fragments, $data, $context, 1);
         $errors = array_merge($errors, $errs);
 
         $response = ['data' => $data];
@@ -449,12 +461,22 @@ class GraphQL
 
     /**
      * Resolve selections and merge results into target.
+     *
+     * Fragment spreads and inline fragments are merged (not nested).
+     *
+     * $depth is incremented on every recursive entry (field sub-selections,
+     * fragment spreads, inline fragments) and checked against $maxDepth so an
+     * over-deep query or a circular fragment fails with a structured error
+     * instead of recursing until the interpreter stack overflows.
      */
     private function resolveSelectionsInto(array $selections, array $resolvers, mixed $parent,
                                            array $variables, array $fragments, array &$target,
-                                           array $context = []): array
+                                           array $context = [], int $depth = 1): array
     {
         $errors = [];
+        if ($this->maxDepth > 0 && $depth > $this->maxDepth) {
+            return [['message' => "Query exceeds maximum depth of {$this->maxDepth}"]];
+        }
 
         foreach ($selections as $sel) {
             if (!$this->checkDirectives($sel['directives'] ?? [], $variables, $context)) {
@@ -468,7 +490,7 @@ class GraphQL
                     continue;
                 }
                 $errs = $this->resolveSelectionsInto(
-                    $frag['selections'], $resolvers, $parent, $variables, $fragments, $target, $context
+                    $frag['selections'], $resolvers, $parent, $variables, $fragments, $target, $context, $depth + 1
                 );
                 $errors = array_merge($errors, $errs);
                 continue;
@@ -476,14 +498,14 @@ class GraphQL
 
             if ($sel['kind'] === 'inline_fragment') {
                 $errs = $this->resolveSelectionsInto(
-                    $sel['selections'], $resolvers, $parent, $variables, $fragments, $target, $context
+                    $sel['selections'], $resolvers, $parent, $variables, $fragments, $target, $context, $depth + 1
                 );
                 $errors = array_merge($errors, $errs);
                 continue;
             }
 
             // Field resolution
-            [$val, $errs] = $this->resolveField($sel, $resolvers, $parent, $variables, $fragments, $context);
+            [$val, $errs] = $this->resolveField($sel, $resolvers, $parent, $variables, $fragments, $context, $depth);
             $errors = array_merge($errors, $errs);
             $key = $sel['alias'] ?? $sel['name'];
             $target[$key] = $val;
@@ -496,7 +518,7 @@ class GraphQL
      * Resolve a single field.
      */
     private function resolveField(array $sel, array $resolvers, mixed $parent,
-                                  array $variables, array $fragments, array $context = []): array
+                                  array $variables, array $fragments, array $context = [], int $depth = 1): array
     {
         $errors = [];
         $name = $sel['name'];
@@ -526,7 +548,12 @@ class GraphQL
                 try {
                     $value = $resolver(null, $args, $ctx);
                 } catch (\Throwable $e) {
-                    $errors[] = ['message' => $e->getMessage(), 'path' => [$name]];
+                    // Log the real cause; only surface the detail to the client
+                    // in debug mode — a resolver exception can carry internal
+                    // state (DB errors, credentials) that must not leak.
+                    Log::error("GraphQL resolver '{$name}' failed: " . $e->getMessage());
+                    $detail = ErrorOverlay::isDebugMode() ? $e->getMessage() : 'Internal server error';
+                    $errors[] = ['message' => $detail, 'path' => [$name]];
                     return [null, $errors];
                 }
             }
@@ -541,7 +568,7 @@ class GraphQL
             foreach ($value as $item) {
                 $obj = [];
                 $errs = $this->resolveSelectionsInto(
-                    $sel['selections'], [], $item, $variables, $fragments, $obj, $context
+                    $sel['selections'], [], $item, $variables, $fragments, $obj, $context, $depth + 1
                 );
                 $errors = array_merge($errors, $errs);
                 $result[] = $obj;
@@ -552,7 +579,7 @@ class GraphQL
         if ($value !== null) {
             $obj = [];
             $errs = $this->resolveSelectionsInto(
-                $sel['selections'], [], $value, $variables, $fragments, $obj, $context
+                $sel['selections'], [], $value, $variables, $fragments, $obj, $context, $depth + 1
             );
             $errors = array_merge($errors, $errs);
             return [$obj, $errors];

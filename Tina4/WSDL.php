@@ -230,6 +230,14 @@ abstract class WSDL
     {
         $this->onRequest($this->request);
 
+        // SOAP 1.1 (§3) forbids a Document Type Declaration in a SOAP message.
+        // Rejecting any DOCTYPE/DTD up front also closes the XML entity-expansion
+        // (billion-laughs) and external-entity (XXE) attack surface for every XML
+        // backend, regardless of parser defaults.
+        if (preg_match('/<!DOCTYPE/i', $xmlBody)) {
+            return $this->soapFault('Client', 'DOCTYPE declarations are not allowed in SOAP messages');
+        }
+
         // Suppress XML warnings and parse
         $previousErrors = libxml_use_internal_errors(true);
         $root = simplexml_load_string($xmlBody);
@@ -316,7 +324,12 @@ abstract class WSDL
             $result = $method->invokeArgs($this, $params);
             $result = $this->onResult($result);
         } catch (\Throwable $e) {
-            return $this->soapFault('Server', $e->getMessage());
+            // Log the real cause, but only leak the detail to the client in
+            // debug mode — a resolver exception can carry internal state
+            // (DB credentials, file paths) that must not reach a SOAP client.
+            Log::error("WSDL operation '{$opName}' failed: " . $e->getMessage());
+            $detail = ErrorOverlay::isDebugMode() ? $e->getMessage() : 'Internal server error';
+            return $this->soapFault('Server', $detail);
         }
 
         return $this->soapResponse($opName, $result);

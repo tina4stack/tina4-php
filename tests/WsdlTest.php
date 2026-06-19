@@ -315,12 +315,111 @@ class WsdlTest extends TestCase
 
     public function testExceptionInOperationReturnsFault(): void
     {
+        // In production (no TINA4_DEBUG) the real cause is masked to a generic
+        // message so a resolver exception never leaks internal state.
+        putenv('TINA4_DEBUG');
+        unset($_ENV['TINA4_DEBUG']);
         $body = '<Divide><a>1</a><b>0</b></Divide>';
         $xml = $this->buildSoapRequest('Divide', $body);
         $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
         $response = $calc->handle();
         $this->assertStringContainsString('soap:Fault', $response->getBody());
-        $this->assertStringContainsString('Division by zero', $response->getBody());
+        $this->assertStringContainsString('Internal server error', $response->getBody());
+        $this->assertStringNotContainsString('Division by zero', $response->getBody());
+    }
+
+    public function testServerErrorMaskedInProd(): void
+    {
+        putenv('TINA4_DEBUG');
+        unset($_ENV['TINA4_DEBUG']);
+        $body = '<Divide><a>1</a><b>0</b></Divide>';
+        $xml = $this->buildSoapRequest('Divide', $body);
+        $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
+        $response = $calc->handle();
+        $this->assertStringContainsString('<faultcode>Server</faultcode>', $response->getBody());
+        $this->assertStringContainsString('Internal server error', $response->getBody());
+        $this->assertStringNotContainsString('Division by zero', $response->getBody());
+    }
+
+    public function testServerErrorDetailInDebug(): void
+    {
+        putenv('TINA4_DEBUG=true');
+        try {
+            $body = '<Divide><a>1</a><b>0</b></Divide>';
+            $xml = $this->buildSoapRequest('Divide', $body);
+            $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
+            $response = $calc->handle();
+            $this->assertStringContainsString('<faultcode>Server</faultcode>', $response->getBody());
+            $this->assertStringContainsString('Division by zero', $response->getBody());
+        } finally {
+            putenv('TINA4_DEBUG');
+            unset($_ENV['TINA4_DEBUG']);
+        }
+    }
+
+    // ── DOCTYPE / DTD rejection (XXE + billion-laughs) ──────────
+
+    public function testDoctypeXxePayloadRejectedBeforeParsing(): void
+    {
+        // A file-disclosure XXE payload carries a DOCTYPE → rejected up front
+        // with a Client fault. The operation must never run.
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]>'
+            . '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            . '<soap:Body><Greet><name>&xxe;</name></Greet></soap:Body>'
+            . '</soap:Envelope>';
+        $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
+        $response = $calc->handle();
+        $body = $response->getBody();
+        $this->assertStringContainsString('soap:Fault', $body);
+        $this->assertStringContainsString('<faultcode>Client</faultcode>', $body);
+        $this->assertStringContainsString('DOCTYPE', $body);
+        // The Greet operation never ran — no response element, no leaked entity.
+        $this->assertStringNotContainsString('<GreetResponse>', $body);
+    }
+
+    public function testBillionLaughsPayloadRejectedBeforeParsing(): void
+    {
+        // An entity-expansion (billion-laughs) payload is a DOCTYPE → rejected.
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<!DOCTYPE lolz [<!ENTITY a "AAAAAAAAAA">'
+            . '<!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>'
+            . '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            . '<soap:Body><Greet><name>&b;</name></Greet></soap:Body>'
+            . '</soap:Envelope>';
+        $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
+        $response = $calc->handle();
+        $body = $response->getBody();
+        $this->assertStringContainsString('soap:Fault', $body);
+        $this->assertStringContainsString('<faultcode>Client</faultcode>', $body);
+        $this->assertStringContainsString('DOCTYPE', $body);
+        $this->assertStringNotContainsString('<GreetResponse>', $body);
+    }
+
+    public function testLowercaseDoctypeAlsoRejected(): void
+    {
+        // The guard is case-insensitive.
+        $xml = '<?xml version="1.0"?>'
+            . '<!doctype foo>'
+            . '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            . '<soap:Body><Add><a>1</a><b>2</b></Add></soap:Body>'
+            . '</soap:Envelope>';
+        $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
+        $response = $calc->handle();
+        $this->assertStringContainsString('DOCTYPE', $response->getBody());
+        $this->assertStringNotContainsString('<AddResponse>', $response->getBody());
+    }
+
+    public function testNormalSoapStillWorksAfterDoctypeGuard(): void
+    {
+        // POSITIVE: a normal SOAP request (no DOCTYPE) still resolves cleanly.
+        $body = '<Add><a>3</a><b>4</b></Add>';
+        $xml = $this->buildSoapRequest('Add', $body);
+        $calc = $this->makeCalculator('POST', '/calculator', [], $xml);
+        $response = $calc->handle();
+        $this->assertStringContainsString('<AddResponse>', $response->getBody());
+        $this->assertStringContainsString('<Result>7</Result>', $response->getBody());
+        $this->assertStringNotContainsString('soap:Fault', $response->getBody());
     }
 
     public function testFaultHasCorrectStructure(): void
