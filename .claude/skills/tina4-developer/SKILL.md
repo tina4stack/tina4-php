@@ -289,6 +289,37 @@ When helping a developer build with Tina4, always follow these:
    ```
    Need the rendered HTML as a string? `from tina4_python.frond import Frond; Frond.render("login.twig", data)`.
 
+8. **Use the built-in `Api` client for ALL outbound HTTP — never a raw HTTP library.** Every call
+   to another service, REST API, webhook, payment gateway, or OAuth endpoint goes through Tina4's
+   `Api`, not the language's raw tooling. This is a top reinvention mistake.
+   - **Don't:** Python `requests`/`httpx`/`urllib`; PHP `curl_*`/`file_get_contents`/Guzzle;
+     Ruby `Net::HTTP`/`HTTParty`/`Faraday`; Node `fetch`/`axios`/`node:http`. Reaching for these
+     throws away — and badly reinvents — everything below.
+   - **Do:** `Api` gives one consistent result (`{http_code, body, headers, error}`; Ruby returns
+     an `ApiResponse` with `.status`/`.json`), automatic JSON encode/decode, a default timeout,
+     bearer/basic/custom-header auth, an SSL-verify toggle for dev, **opt-in retry/backoff**
+     (`max_retries`/`maxRetries` + `retry_backoff`/`retryBackoff` — retries transport errors +
+     429/5xx, never 4xx), and a **redirect that strips `Authorization` on a cross-origin hop** so a
+     bearer token can't leak to another host.
+   ```python
+   from tina4_python.api import Api
+   api = Api("https://api.example.com", bearer_token="sk-…", max_retries=3)
+   r = api.get("/users")
+   if r["error"] is None: users = r["body"]
+   ```
+   ```php
+   $api = new \Tina4\Api("https://api.example.com"); $api->setBasicAuth($id, $secret);
+   $r = $api->sendRequest("GET", "/users");          // ['http_code'=>…, 'body'=>…, 'error'=>…]
+   ```
+   ```ruby
+   api = Tina4::Api.new("https://api.example.com", bearer_token: token, max_retries: 3)
+   r = api.get("/users")                             # r.status, r.json
+   ```
+   ```typescript
+   const api = new Api("https://api.example.com", { bearerToken: token, maxRetries: 3 });
+   const r = await api.get("/users");                // { http_code, body, error }
+   ```
+
 ### @noauth Is a Last Resort — Not a Default
 
 `@noauth()` makes a write route (POST/PUT/PATCH/DELETE) publicly accessible with NO authentication.
