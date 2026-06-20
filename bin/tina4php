@@ -556,6 +556,11 @@ DOCKERFILE;
                 foreach ($result['errors'] as $name => $err) {
                     echo "  x {$name}: {$err}\n";
                 }
+                // FAIL-FAST: the explicit migrate CLI exits non-zero on any
+                // migration failure so CI gets a failing exit code. (The
+                // startup auto-migrate hook in App::start() swallows instead —
+                // a bad migration must never take the running service down.)
+                exit(1);
             }
             if (empty($result['applied']) && empty($result['errors'])) {
                 echo "No pending migrations.\n";

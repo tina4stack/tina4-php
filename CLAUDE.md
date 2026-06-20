@@ -561,6 +561,18 @@ $migration = new \Tina4\Migration(DatabaseAdapter $db, string $migrationsDir = "
 $migration->migrate(): array
 ```
 
+**Auto-run on startup (`TINA4_AUTO_MIGRATE`, default on).** When a `migrations/`
+folder exists (with at least one `.sql` file), `App::start()` applies pending
+migrations during boot — after the DB is bound + routes discovered, before
+serving — so the schema is current with no manual `tina4 migrate` step. It is
+**non-breaking**: a failed migration is logged (`Log::error`) and the service
+still starts (a bad migration must never take the backend down); the hook runs
+at most once per process. Set `TINA4_AUTO_MIGRATE=false` (also `0`/`no`/`off`)
+to disable — e.g. multi-instance production that migrates as a separate deploy
+step, where concurrent first-apply can race. The explicit `bin/tina4php migrate`
+CLI is unaffected and stays **fail-fast**: any migration error prints and exits
+non-zero (`exit(1)`) so CI gets a failing exit code.
+
 ### Queue — Job queue with pluggable backends
 
 ```php
