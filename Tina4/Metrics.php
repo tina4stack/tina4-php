@@ -1398,11 +1398,14 @@ class Metrics
         }
 
         // Defined classes worth matching by bare name: top-level, distinctive
-        // (>3 chars, not leading underscore). A test referencing one of these
-        // genuinely exercises this file.
+        // (>2 chars, not leading underscore). A test referencing one of these
+        // genuinely exercises this file. The gate is >2 (not >3) so 3-char
+        // class names like ORM/Api/Log/App/Job/Env/Raw still count — they are
+        // distinctive enough that a bare reference in a test is a real signal,
+        // and excluding them mislabelled heavily-tested core files as untested.
         $matchClasses = array_values(array_filter(
             $definedClasses,
-            fn($c) => strlen($c) > 3 && !str_starts_with($c, '_')
+            fn($c) => strlen($c) > 2 && !str_starts_with($c, '_')
         ));
         // The filename module name itself counts as a distinctive class name
         // only if the file actually defines it (already covered above) — we do
