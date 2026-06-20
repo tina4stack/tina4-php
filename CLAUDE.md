@@ -657,8 +657,10 @@ $fake->run(callable $seeder, int $count = 10): array
 \Tina4\Log::info(string $message, array $context = []): void
 \Tina4\Log::warning(string $message, array $context = []): void
 \Tina4\Log::error(string $message, array $context = []): void
-\Tina4\Log::isEnabled(string $level): bool  // True if $level passes the min CONSOLE level (case-insensitive); reuses the stdout gate so it never disagrees with what prints. File sink records every level regardless. 'critical' also requires TINA4_LOG_CRITICAL.
-// Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR)
+\Tina4\Log::critical(string $message, array $context = []): void  // Highest severity (debug<info<warning<error<critical). ALWAYS emits like every level; mirrored into error.log (4 >= warning 2); renders magenta. No toggle.
+\Tina4\Log::isEnabled(string $level): bool  // True if $level passes the min CONSOLE level (case-insensitive); reuses the stdout gate so it never disagrees with what prints. File sink records every level regardless. 'critical' is ordinary threshold logic (it outranks error).
+// Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR | CRITICAL)
+// TINA4_LOG_CRITICAL env toggle is RETIRED (v3.13.39) — critical is first-class and always logs.
 ```
 
 ### Events — Decoupled pub/sub event system

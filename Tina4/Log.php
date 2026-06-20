@@ -59,9 +59,6 @@ class Log
     /** @var bool Whether to format as human-readable (dev mode) */
     private static bool $humanReadable = false;
 
-    /** @var bool Whether Log::critical() actually emits (TINA4_LOG_CRITICAL) */
-    private static bool $criticalEnabled = false;
-
     /** @var string Minimum log level */
     private static string $minLevel = self::LEVEL_DEBUG;
 
@@ -82,7 +79,6 @@ class Log
      *   TINA4_LOG_FILE       — primary log file path; if absolute, sets dir + filename
      *   TINA4_LOG_FORMAT     — 'text' (human-readable) or 'json'
      *   TINA4_LOG_OUTPUT     — 'stdout', 'file', or 'both'
-     *   TINA4_LOG_CRITICAL   — enable Log::critical()
      *   TINA4_LOG_ROTATE_SIZE — rotate threshold in bytes (0 disables rotation)
      *   TINA4_LOG_ROTATE_KEEP — number of rotated files to retain
      *
@@ -158,9 +154,6 @@ class Log
                 break;
         }
 
-        // Critical level enabled flag
-        self::$criticalEnabled = DotEnv::isTruthy(DotEnv::getEnv('TINA4_LOG_CRITICAL', 'false'));
-
         // Rotation — bytes, 0 disables. Falls back to legacy TINA4_LOG_MAX_SIZE (MB)
         // and TINA4_LOG_KEEP for back-compat.
         $rotateSize = DotEnv::getEnv('TINA4_LOG_ROTATE_SIZE');
@@ -235,17 +228,14 @@ class Log
     }
 
     /**
-     * Log a critical message. No-op unless TINA4_LOG_CRITICAL is truthy.
+     * Log a critical message — the highest severity (above ERROR).
      *
-     * Critical messages always mirror to the error log (same as ERROR/WARNING)
-     * regardless of the configured min level — but the entire level is
-     * suppressed when TINA4_LOG_CRITICAL is unset/false.
+     * Always emitted (like every other level), and mirrored into the error
+     * log (CRITICAL 4 >= WARNING 2). Use it for unrecoverable, alert-worthy
+     * failures.
      */
     public static function critical(string $message, array $context = []): void
     {
-        if (!self::$criticalEnabled) {
-            return;
-        }
         self::log(self::LEVEL_CRITICAL, $message, $context);
     }
 
@@ -278,10 +268,9 @@ class Log
      *         Log::debug('state', ['snapshot' => expensiveDump()]);
      *     }
      *
-     * $level is case-insensitive. "critical" additionally requires
-     * TINA4_LOG_CRITICAL to be truthy (mirroring {@see critical()}, which is a
-     * no-op unless enabled) and is evaluated at CRITICAL severity — the
-     * first-class priority that Log::critical() actually logs at.
+     * $level is case-insensitive (debug / info / warning / error / critical).
+     * "critical" is the highest severity and flows through the same ordinary
+     * threshold as every other level — there is no special-casing.
      *
      * Delegates to the same {@see shouldLog()} gate the console write uses, so
      * it never re-implements the level comparison and can never drift from the
@@ -291,9 +280,6 @@ class Log
      */
     public static function isEnabled(string $level): bool
     {
-        if (strtoupper($level) === self::LEVEL_CRITICAL) {
-            return self::$criticalEnabled && self::shouldLog(self::LEVEL_CRITICAL);
-        }
         return self::shouldLog($level);
     }
 
@@ -471,10 +457,11 @@ class Log
     private static function writeStdout(string $level, string $line): void
     {
         $colors = [
-            self::LEVEL_DEBUG => "\033[36m",   // Cyan
-            self::LEVEL_INFO => "\033[32m",    // Green
-            self::LEVEL_WARNING => "\033[33m", // Yellow
-            self::LEVEL_ERROR => "\033[31m",   // Red
+            self::LEVEL_DEBUG => "\033[36m",    // Cyan
+            self::LEVEL_INFO => "\033[32m",     // Green
+            self::LEVEL_WARNING => "\033[33m",  // Yellow
+            self::LEVEL_ERROR => "\033[31m",    // Red
+            self::LEVEL_CRITICAL => "\033[35m", // Magenta
         ];
 
         // v3.13.14: only colourise in human-readable (dev) mode. In production
@@ -579,7 +566,6 @@ class Log
         self::$stdout = false;
         self::$fileOutput = true;
         self::$humanReadable = false;
-        self::$criticalEnabled = false;
         self::$minLevel = self::LEVEL_DEBUG;
         self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
         self::$keepFiles = self::DEFAULT_ROTATE_KEEP;
@@ -625,11 +611,5 @@ class Log
     public static function isHumanReadable(): bool
     {
         return self::$humanReadable;
-    }
-
-    /** Test helper — whether Log::critical() is currently active. */
-    public static function criticalEnabled(): bool
-    {
-        return self::$criticalEnabled;
     }
 }

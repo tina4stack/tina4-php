@@ -706,14 +706,13 @@ class LogTest extends TestCase
     public function testIsEnabledMatchesInternalThresholdForAllLevels(): void
     {
         // The public predicate must equal the private console gate for every
-        // standard level — the contract that keeps it from drifting away from
-        // what the logger actually prints. (critical is excluded here because
-        // it carries the extra TINA4_LOG_CRITICAL toggle — covered separately.)
-        foreach ([Log::LEVEL_DEBUG, Log::LEVEL_INFO, Log::LEVEL_WARNING, Log::LEVEL_ERROR] as $minLevel) {
+        // level — including critical, which is now first-class and flows
+        // through the SAME ordinary threshold (no special toggle branch).
+        foreach ([Log::LEVEL_DEBUG, Log::LEVEL_INFO, Log::LEVEL_WARNING, Log::LEVEL_ERROR, Log::LEVEL_CRITICAL] as $minLevel) {
             Log::reset();
             Log::configure(logDir: $this->tempDir, minLevel: $minLevel);
 
-            foreach (['debug', 'info', 'warning', 'error'] as $level) {
+            foreach (['debug', 'info', 'warning', 'error', 'critical'] as $level) {
                 $this->assertSame(
                     $this->callShouldLog($level),
                     Log::isEnabled($level),
@@ -738,31 +737,104 @@ class LogTest extends TestCase
         $this->assertStringContainsString('below-threshold but still filed', $content);
     }
 
-    public function testIsEnabledCriticalReflectsToggle(): void
+    public function testIsEnabledCriticalIsOrdinaryThreshold(): void
     {
-        // PHP's critical() is a no-op unless TINA4_LOG_CRITICAL is truthy, and
-        // it logs at the first-class CRITICAL priority. isEnabled('critical')
-        // mirrors that: false while the toggle is off, true once enabled (with
-        // the threshold low enough to admit CRITICAL).
+        // v3.13.39: critical is first-class (the highest severity) and flows
+        // through the SAME ordinary threshold as every other level — there is
+        // no TINA4_LOG_CRITICAL toggle and no special branch. So critical is
+        // console-visible at any normal min level and only suppressed when the
+        // configured min level is ABOVE critical (which is impossible — it is
+        // the top), i.e. critical always passes.
 
-        // Toggle OFF — critical is never enabled regardless of the threshold.
+        // At the lowest threshold critical passes.
         Log::reset();
         Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_DEBUG);
-        $this->assertFalse(Log::isEnabled('critical'), 'critical is off when TINA4_LOG_CRITICAL is unset');
+        $this->assertTrue(Log::isEnabled('critical'), 'critical passes at DEBUG threshold');
 
-        // Toggle ON via env — critical now passes (CRITICAL >= DEBUG).
+        // Even at the ERROR threshold critical passes (CRITICAL 4 >= ERROR 3).
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+        $this->assertTrue(Log::isEnabled('error'), 'error passes at ERROR threshold');
+        $this->assertTrue(Log::isEnabled('critical'), 'critical outranks error, so it passes at ERROR threshold');
+
+        // At the CRITICAL threshold every lower level is suppressed but
+        // critical itself still passes.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_CRITICAL);
+        $this->assertFalse(Log::isEnabled('error'), 'error is below the CRITICAL threshold');
+        $this->assertTrue(Log::isEnabled('critical'), 'critical is at the CRITICAL threshold');
+        // Case-insensitive like every other level.
+        $this->assertTrue(Log::isEnabled('CRITICAL'), 'upper-case CRITICAL also passes');
+    }
+
+    // ── Critical: first-class top-level severity (v3.13.39) ─────────────
+    // critical is the HIGHEST severity (debug<info<warning<error<critical).
+    // It ALWAYS emits like every other level — no opt-in toggle — and lands
+    // in error.log (4 >= warning 2). No TINA4_LOG_CRITICAL env var is read.
+
+    public function testCriticalAlwaysWritesToLogFile(): void
+    {
+        // No env var set, default config — critical must STILL emit. The old
+        // TINA4_LOG_CRITICAL "enable critical()" gate is gone: a critical log
+        // must never be a silent no-op.
+        Log::critical('Disk full');
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $content = file_get_contents($logFile);
+        $this->assertStringContainsString('"level":"CRITICAL"', $content);
+        $this->assertStringContainsString('Disk full', $content);
+    }
+
+    public function testCriticalWritesToErrorLog(): void
+    {
+        // critical 4 >= warning 2, so it mirrors into error.log alongside
+        // WARNING/ERROR.
+        Log::critical('System failure');
+
+        $errorLog = $this->tempDir . '/error.log';
+        $this->assertFileExists($errorLog);
+        $content = file_get_contents($errorLog);
+        $this->assertStringContainsString('"level":"CRITICAL"', $content);
+        $this->assertStringContainsString('System failure', $content);
+    }
+
+    public function testCriticalIgnoresRetiredEnvToggle(): void
+    {
+        // The TINA4_LOG_CRITICAL env var is RETIRED — it is no longer read.
+        // Setting it false must NOT suppress a critical log (proving the
+        // toggle is truly gone, not merely defaulted on).
         unset($_ENV['TINA4_LOG_CRITICAL']);
-        @putenv('TINA4_LOG_CRITICAL=true');
-        $_ENV['TINA4_LOG_CRITICAL'] = 'true';
+        @putenv('TINA4_LOG_CRITICAL=false');
+        $_ENV['TINA4_LOG_CRITICAL'] = 'false';
         try {
             Log::reset();
-            Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_DEBUG);
-            $this->assertTrue(Log::isEnabled('critical'), 'critical is enabled when the toggle is on');
-            // Case-insensitive on the critical branch too.
-            $this->assertTrue(Log::isEnabled('CRITICAL'), 'upper-case CRITICAL also reflects the toggle');
+            Log::configure(logDir: $this->tempDir);
+            Log::critical('still logs');
+
+            $content = file_get_contents($this->tempDir . '/tina4.log');
+            $this->assertStringContainsString('"level":"CRITICAL"', $content);
+            $this->assertStringContainsString('still logs', $content);
         } finally {
             unset($_ENV['TINA4_LOG_CRITICAL']);
             @putenv('TINA4_LOG_CRITICAL');
         }
+    }
+
+    public function testCriticalIsTheHighestPriority(): void
+    {
+        // Lock in the ordering: critical outranks error, which outranks every
+        // lower level. With minLevel=ERROR the console admits error+critical
+        // but not warning; with minLevel=CRITICAL it admits ONLY critical.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+        $this->assertFalse(Log::isEnabled('warning'));
+        $this->assertTrue(Log::isEnabled('error'));
+        $this->assertTrue(Log::isEnabled('critical'), 'critical >= error');
+
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_CRITICAL);
+        $this->assertFalse(Log::isEnabled('warning'));
+        $this->assertFalse(Log::isEnabled('error'), 'error is below critical');
+        $this->assertTrue(Log::isEnabled('critical'));
     }
 }
