@@ -96,15 +96,34 @@ class WebSocket
      *
      * Matches Python's WebSocketServer.route(path) decorator pattern.
      *
+     * A WebSocket route is PUBLIC by default. Pass $secure = true (or annotate
+     * the handler with an `@secured` docblock) to require a valid JWT on the
+     * upgrade — mirrors Python's @secured() on a WS handler.
+     *
      * @param string        $path    WebSocket path to handle
      * @param callable|null $handler Optional handler; when provided, registered directly.
      *                               When null, returns a closure accepting the handler (decorator style).
+     * @param bool          $secure  Force-secure the route imperatively (default false)
      * @return callable|self Returns $this when handler is provided, else the decorator closure.
      */
-    public function route(string $path, ?callable $handler = null): callable|self
+    public function route(string $path, ?callable $handler = null, bool $secure = false): callable|self
     {
-        $register = function (callable $handler) use ($path) {
-            $this->_handlers[$path] = ['handler' => $handler];
+        $register = function (callable $handler) use ($path, $secure) {
+            // Resolve the secure flag from the docblock too, so the standalone
+            // route table mirrors the Router's auth_required for this path.
+            $routeSecure = $secure;
+            if (!$routeSecure) {
+                try {
+                    $ref = new \ReflectionFunction($handler);
+                    $doc = $ref->getDocComment();
+                    if ($doc !== false && preg_match('/@secured\b/i', $doc)) {
+                        $routeSecure = true;
+                    }
+                } catch (\Throwable) {
+                    // Not a closure or reflection failed — leave public.
+                }
+            }
+            $this->_handlers[$path] = ['handler' => $handler, 'secure' => $routeSecure, 'auth_required' => $routeSecure];
 
             // Adapter: converts decorator-style to Router's (conn, data, event) style
             $adapter = function ($conn, $data, $event) use ($handler) {
@@ -121,7 +140,7 @@ class WebSocket
                 }
             };
 
-            Router::websocket($path, $adapter);
+            Router::websocket($path, $adapter, $routeSecure);
             return $handler;
         };
 
@@ -556,6 +575,102 @@ class WebSocket
     }
 
     /**
+     * Extract a bearer token from a WS upgrade handshake.
+     *
+     * Order (mirrors Python's ws_token()):
+     *   1. The `Authorization: Bearer <jwt>` header — server/CLI/mobile clients.
+     *   2. The `Sec-WebSocket-Protocol` subprotocol in the form
+     *      `"bearer, <jwt>"` — the ONLY way a browser can pass a token, since
+     *      `new WebSocket()` cannot set headers.
+     *   3. A `?token=<jwt>` query param (parsed from the request path).
+     *
+     * Header keys arrive lowercased from parseHttpHeaders() but accept either
+     * form for callers that pass raw headers.
+     *
+     * @param array       $headers     Parsed HTTP headers (lowercase keys)
+     * @param string      $queryString Raw query string (the part after '?')
+     * @param string|null $subprotocol Explicit Sec-WebSocket-Protocol value
+     * @return string|null The token, or null when none was supplied.
+     */
+    public static function wsToken(array $headers, string $queryString = '', ?string $subprotocol = null): ?string
+    {
+        $auth = (string)($headers['authorization'] ?? $headers['Authorization'] ?? '');
+        if (strtolower(substr($auth, 0, 7)) === 'bearer ') {
+            $token = trim(substr($auth, 7));
+            return $token !== '' ? $token : null;
+        }
+
+        $proto = $subprotocol
+            ?? $headers['sec-websocket-protocol']
+            ?? $headers['Sec-WebSocket-Protocol']
+            ?? '';
+        $parts = array_values(array_filter(array_map('trim', explode(',', (string)$proto)), fn($p) => $p !== ''));
+        if (count($parts) >= 2 && strtolower($parts[0]) === 'bearer') {
+            return $parts[1] !== '' ? $parts[1] : null;
+        }
+
+        if ($queryString !== '') {
+            parse_str($queryString, $query);
+            $token = $query['token'] ?? null;
+            if (is_string($token) && $token !== '') {
+                return $token;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Per-route WebSocket authentication, checked on the upgrade.
+     *
+     * A route is secured when `$route['auth_required']` (or `$route['secure']`)
+     * is truthy — set by an `@secured` docblock on the WS handler or by an
+     * imperative `Router::websocket($path, $handler, secure: true)`. Public
+     * routes (the default) always pass, so this is non-breaking.
+     *
+     * A secured route needs a valid JWT via the Authorization header, the
+     * `bearer` subprotocol, or `?token=`. Validation goes through the same
+     * `Auth::validToken()` the HTTP routes use.
+     *
+     * Mirrors Python's ws_authorized() -> (payload, ok).
+     *
+     * @param array       $route       Matched WS route (carries auth_required/secure)
+     * @param array       $headers     Parsed HTTP headers
+     * @param string      $queryString Raw query string
+     * @param string|null $subprotocol Explicit Sec-WebSocket-Protocol value
+     * @return array{0: array<string,mixed>|null, 1: bool} [payload, ok]
+     */
+    public static function wsAuthorized(array $route, array $headers, string $queryString = '', ?string $subprotocol = null): array
+    {
+        $authRequired = $route['auth_required'] ?? $route['secure'] ?? false;
+        if (!$authRequired) {
+            return [null, true];
+        }
+        $token = self::wsToken($headers, $queryString, $subprotocol);
+        if ($token === null) {
+            return [null, false];
+        }
+        $payload = Auth::validToken($token);
+        return [$payload, $payload !== null];
+    }
+
+    /**
+     * Split a request path into [path, queryString]. The query string is the
+     * portion after the first '?'. Mirrors the Python upgrade path, which reads
+     * the query from headers['_path'].
+     *
+     * @return array{0: string, 1: string} [path, queryString]
+     */
+    public static function splitPathQuery(string $rawPath): array
+    {
+        $pos = strpos($rawPath, '?');
+        if ($pos === false) {
+            return [$rawPath, ''];
+        }
+        return [substr($rawPath, 0, $pos), substr($rawPath, $pos + 1)];
+    }
+
+    /**
      * Compute the Sec-WebSocket-Accept value per RFC 6455.
      *
      * @param string $key The Sec-WebSocket-Key header value
@@ -569,17 +684,48 @@ class WebSocket
     /**
      * Build the HTTP 101 Switching Protocols response.
      *
-     * @param string $key Sec-WebSocket-Key
+     * When the client offered the `bearer` subprotocol (browser token transport)
+     * pass $subprotocol='bearer' to echo it back as the accepted subprotocol via
+     * a `Sec-WebSocket-Protocol: bearer` response header — mirrors Python/ASGI
+     * accepting the subprotocol. Without it, omitting the header is correct.
+     *
+     * @param string      $key         Sec-WebSocket-Key
+     * @param string|null $subprotocol Accepted subprotocol to echo (e.g. 'bearer')
      * @return string
      */
-    public static function buildHandshakeResponse(string $key): string
+    public static function buildHandshakeResponse(string $key, ?string $subprotocol = null): string
     {
         $accept = self::computeAcceptKey($key);
-        return "HTTP/1.1 101 Switching Protocols\r\n"
+        $response = "HTTP/1.1 101 Switching Protocols\r\n"
              . "Upgrade: websocket\r\n"
              . "Connection: Upgrade\r\n"
-             . "Sec-WebSocket-Accept: {$accept}\r\n"
-             . "\r\n";
+             . "Sec-WebSocket-Accept: {$accept}\r\n";
+        if ($subprotocol !== null && $subprotocol !== '') {
+            $response .= "Sec-WebSocket-Protocol: {$subprotocol}\r\n";
+        }
+        return $response . "\r\n";
+    }
+
+    /**
+     * Return 'bearer' when the client offered the `bearer` subprotocol so the
+     * handshake can echo it back, else null. The browser token transport is
+     * `new WebSocket(url, ['bearer', token])`, which sends
+     * `Sec-WebSocket-Protocol: bearer, <token>`.
+     *
+     * @param array       $headers     Parsed HTTP headers (lowercase keys)
+     * @param string|null $subprotocol Explicit Sec-WebSocket-Protocol value
+     */
+    public static function acceptedSubprotocol(array $headers, ?string $subprotocol = null): ?string
+    {
+        $proto = $subprotocol
+            ?? $headers['sec-websocket-protocol']
+            ?? $headers['Sec-WebSocket-Protocol']
+            ?? '';
+        $parts = array_values(array_filter(array_map('trim', explode(',', (string)$proto)), fn($p) => $p !== ''));
+        if (!empty($parts) && strtolower($parts[0]) === 'bearer') {
+            return 'bearer';
+        }
+        return null;
     }
 
     /**
@@ -755,8 +901,28 @@ class WebSocket
             return;
         }
 
+        // Per-route authentication. A WS route is PUBLIC by default; a secured
+        // route (handler @secured docblock OR route(..., secure: true)) needs a
+        // valid JWT supplied via Authorization header, the `bearer` subprotocol,
+        // or ?token=. Checked AFTER the origin allow-list and BEFORE accepting
+        // the handshake — a missing/invalid token rejects the upgrade with 401.
+        // Mirrors Python's ws_authorized() in handle_connection().
+        [$rawPath, $queryString] = self::splitPathQuery($headers['_path'] ?? '/');
+        $route = $this->_handlers[$rawPath] ?? [];
+        [$authPayload, $ok] = self::wsAuthorized($route, $headers, $queryString);
+        if (!$ok) {
+            @fwrite($socket, "HTTP/1.1 401 Unauthorized\r\n\r\n");
+            @fclose($socket);
+            return;
+        }
+
+        // Echo the `bearer` subprotocol back when the client offered it (browser
+        // token transport), so the handshake completes for new WebSocket(url,
+        // ['bearer', token]). Mirrors ASGI accept_subprotocol.
+        $acceptProto = self::acceptedSubprotocol($headers);
+
         // Send handshake response
-        $response = self::buildHandshakeResponse($wsKey);
+        $response = self::buildHandshakeResponse($wsKey, $acceptProto);
         @fwrite($socket, $response);
 
         stream_set_blocking($socket, false);
@@ -770,7 +936,10 @@ class WebSocket
             'connected_at' => time(),
             'lastActivity' => microtime(true),
             'buffer' => '',
-            'path' => $headers['_path'] ?? '/',
+            'path' => $rawPath,
+            // Verified JWT payload on a @secured WS route, else null. Mirrors
+            // Python's connection.auth.
+            'auth' => $authPayload,
             'rooms' => [],
             'fragments' => '',
             'fragmentOpcode' => 0,

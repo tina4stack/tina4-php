@@ -696,25 +696,46 @@ class Server
             return;
         }
 
-        $path = $headers['_path'] ?? '/';
+        // The request path may carry a query string (?token=...). Split it so
+        // the route is matched on the bare path and the query is available for
+        // token extraction. Mirrors Python reading the query from _path.
+        [$path, $queryString] = WebSocket::splitPathQuery($headers['_path'] ?? '/');
 
         // Check if there is a registered WebSocket route
         $wsRoutes = Router::getWebSocketRoutes();
-        $matchedHandler = null;
+        $matchedRoute = null;
         foreach ($wsRoutes as $wsRoute) {
             if ($wsRoute['path'] === $path) {
-                $matchedHandler = $wsRoute['handler'];
+                $matchedRoute = $wsRoute;
                 break;
             }
         }
 
-        if ($matchedHandler === null) {
+        if ($matchedRoute === null) {
             $this->sendHttpError($client, 404, 'No WebSocket handler registered for this path');
             return;
         }
+        $matchedHandler = $matchedRoute['handler'];
+
+        // Per-route authentication. A WS route is PUBLIC by default; a secured
+        // route (the matched route carries auth_required, set by an @secured
+        // handler docblock OR Router::websocket(..., secure: true)) needs a
+        // valid JWT via the Authorization header, the `bearer` subprotocol, or
+        // ?token=. Checked AFTER the origin allow-list and BEFORE accepting the
+        // handshake — a missing/invalid token rejects the upgrade with 401.
+        // Public routes always pass (non-breaking). Mirrors Python ws_authorized.
+        [$authPayload, $ok] = WebSocket::wsAuthorized($matchedRoute, $headers, $queryString);
+        if (!$ok) {
+            $this->sendHttpError($client, 401, 'Unauthorized: WebSocket route requires a valid token');
+            return;
+        }
+
+        // Echo the `bearer` subprotocol back when the client offered it (browser
+        // token transport: new WebSocket(url, ['bearer', token])).
+        $acceptProto = WebSocket::acceptedSubprotocol($headers);
 
         // Send handshake response
-        $response = WebSocket::buildHandshakeResponse($wsKey);
+        $response = WebSocket::buildHandshakeResponse($wsKey, $acceptProto);
         @fwrite($client, $response);
 
         // Register as WebSocket client
@@ -733,8 +754,10 @@ class Server
         ];
         $this->wsSocketMap[$resourceId] = $connectionId;
 
-        // Create WebSocketConnection object and persist it for callback reuse
-        $connection = new WebSocketConnection($connectionId, $path, $client, $this);
+        // Create WebSocketConnection object and persist it for callback reuse.
+        // The verified JWT payload (or null on a public route) is exposed as
+        // $connection->auth — mirrors Python's connection.auth.
+        $connection = new WebSocketConnection($connectionId, $path, $client, $this, '', $headers, [], $authPayload);
         $this->wsClients[$connectionId]['connection'] = $connection;
 
         // Fire the handler with 'open' message
