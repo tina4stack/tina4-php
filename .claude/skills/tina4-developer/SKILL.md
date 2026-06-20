@@ -392,10 +392,19 @@ forms also get CSRF protection from `{{ form_token() }}`.
 **Protect a GET route** (public by default) with `@secured()` / `secure_get` / the `@secured`
 docblock. **Role / admin checks** go in `@middleware(AdminAuth)` — never `@noauth()`.
 
-**`@noauth()` is ONLY for genuinely public endpoints:** login / register (no token yet), a webhook
-receiver validated by *signature* (not a token), or an explicitly anonymous read API. It is NEVER
-for anything that writes data, costs money, returns another user's data, uploads a file, or is an
-admin action.
+**`@noauth()` switches off the *framework's* Bearer guard — it does NOT mean "no auth."** It is
+legitimate when the route is genuinely public OR the handler authenticates another way:
+- login / register — the user has no token yet;
+- a webhook receiver validated by *signature*, not a Bearer token;
+- a **SOAP / WSDL `@post`** (or similar protocol endpoint) where credentials ride in the SOAP /
+  WS-Security or HTTP headers and the service validates them **inside the handler** — `@noauth()`
+  on the route, real auth in the operation;
+- an explicitly anonymous read API.
+
+The actual footgun is `@noauth()` with **no auth anywhere** — a write route left world-open. So if
+you reach for it, the handler MUST still authenticate (signature, WS-Security, a header scheme) —
+never leave it doing nothing. Never `@noauth()` something that writes data, costs money, returns
+another user's data, uploads a file, or is an admin action *without* its own check.
 
 **Before you type `@noauth()`, ask:** can it modify data / cost money / be bot-abused / expose
 private data? Yes to any → it needs auth, not `@noauth()`. More than 2–3 `@noauth()` write routes
