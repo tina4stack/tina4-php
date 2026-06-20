@@ -661,6 +661,10 @@ $fake->run(callable $seeder, int $count = 10): array
 \Tina4\Log::isEnabled(string $level): bool  // True if $level passes the min CONSOLE level (case-insensitive); reuses the stdout gate so it never disagrees with what prints. File sink records every level regardless. 'critical' is ordinary threshold logic (it outranks error).
 // Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR | CRITICAL)
 // TINA4_LOG_CRITICAL env toggle is RETIRED (v3.13.39) — critical is first-class and always logs.
+// Output (v3.13.39): with TINA4_LOG_OUTPUT unset (default), stdout is ALWAYS on but the
+// log FILE (tina4.log + error.log) is written ONLY in dev (TINA4_DEBUG truthy). Production /
+// containers are stdout-only — no file to bloat the writable layer (12-factor). Explicit
+// TINA4_LOG_OUTPUT=file|both, OR an explicit TINA4_LOG_FILE path, still forces a file.
 ```
 
 ### Events — Decoupled pub/sub event system

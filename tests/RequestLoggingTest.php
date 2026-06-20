@@ -29,8 +29,14 @@ class RequestLoggingTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/tina4_reqlog_' . uniqid();
         mkdir($this->tempDir, 0755, true);
+        // Pin dev (TINA4_DEBUG=true) so the log FILE is written and we can
+        // assert the emitted line. Since v3.13.39 the file is dev-gated by
+        // default (prod/containers are stdout-only); `development: true`
+        // only selects human-readable format, not file output. The gate
+        // tests below set TINA4_DEBUG to their own values per-case.
+        $_ENV['TINA4_DEBUG'] = 'true';
+        @putenv('TINA4_DEBUG=true');
         Log::reset();
-        // File output on so we can assert the emitted line.
         Log::configure(logDir: $this->tempDir, development: true);
         RequestLogger::reset();
     }

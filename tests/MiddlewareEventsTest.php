@@ -192,7 +192,11 @@ class MiddlewareEventsTest extends TestCase
 
         // Point Log at a temp dir so we can assert "logged, never silent"
         // by reading the log file. Default minLevel is INFO so WARNING +
-        // ERROR both land.
+        // ERROR both land. Pin dev (TINA4_DEBUG=true) so the log FILE is
+        // written — since v3.13.39 the file is dev-gated by default
+        // (prod/containers are stdout-only).
+        $_ENV['TINA4_DEBUG'] = 'true';
+        @putenv('TINA4_DEBUG=true');
         $this->tempLogDir = sys_get_temp_dir() . '/tina4_mwevt_' . uniqid();
         mkdir($this->tempLogDir, 0755, true);
         Log::reset();
@@ -203,6 +207,8 @@ class MiddlewareEventsTest extends TestCase
     {
         Events::clear();
         Log::reset();
+        unset($_ENV['TINA4_DEBUG']);
+        @putenv('TINA4_DEBUG');
         $files = glob($this->tempLogDir . '/*');
         if ($files) {
             foreach ($files as $file) {

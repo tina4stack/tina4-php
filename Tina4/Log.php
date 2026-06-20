@@ -97,8 +97,11 @@ class Log
 
         // File: TINA4_LOG_FILE may be a relative filename (joined with dir) or
         // an absolute path (split into dir + filename). Empty/null => default.
+        // An explicit path is a hard opt-in to file output (explicit always
+        // wins — even in production), so track it for the default-output branch.
         $envFile = DotEnv::getEnv('TINA4_LOG_FILE');
-        if ($envFile !== null && $envFile !== '') {
+        $explicitLogFile = $envFile !== null && $envFile !== '';
+        if ($explicitLogFile) {
             if (str_contains($envFile, DIRECTORY_SEPARATOR) || str_contains($envFile, '/')) {
                 self::$logDir = rtrim(dirname($envFile), '/');
                 self::$logFile = basename($envFile);
@@ -149,8 +152,17 @@ class Log
                 // read PID 1 stdout (docker logs / k8s); the old dev-only default
                 // meant deployed apps logged to a file inside the container that
                 // nobody could see. TINA4_LOG_OUTPUT=file still opts out.
+                //
+                // v3.13.39: the log FILE (tina4.log + error.log) is now written by
+                // default ONLY in development (TINA4_DEBUG truthy). In production /
+                // containers the logger is stdout-only — a log file inside a
+                // container just bloats the writable layer and disk, and 12-factor
+                // wants logs on stdout for the platform to capture. An explicit
+                // TINA4_LOG_OUTPUT=file/both (handled above) or an explicit
+                // TINA4_LOG_FILE path still forces a file — explicit always wins.
                 self::$stdout = true;
-                self::$fileOutput = true;
+                self::$fileOutput = $explicitLogFile
+                    || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
                 break;
         }
 
