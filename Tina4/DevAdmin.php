@@ -1074,14 +1074,14 @@ class DevAdmin
             //   1. RAG lookup at TINA4_RAG_URL/v1/search (best-effort)
             //   2. Ollama-style chat call to TINA4_AI_URL with RAG
             //      snippets in the system prompt.
-            // Env defaults point at the shared tina4 stack on andrevanzuydam.com.
+            // Env defaults point at a local tina4 AI stack on localhost.
             $message = trim((string) ($request->input('message') ?? ''));
             if ($message === '') {
                 return $response->json(['error' => 'message required'], 400);
             }
-            $aiUrl   = getenv('TINA4_AI_URL')   ?: 'http://andrevanzuydam.com:11437/api/chat';
+            $aiUrl   = getenv('TINA4_AI_URL')   ?: 'http://localhost:11437/api/chat';
             $aiModel = getenv('TINA4_AI_MODEL') ?: 'qwen2.5-coder:14b';
-            $ragUrl  = getenv('TINA4_RAG_URL')  ?: 'http://andrevanzuydam.com:11438';
+            $ragUrl  = getenv('TINA4_RAG_URL')  ?: 'http://localhost:11438';
             $ragTopK = (int) (getenv('TINA4_RAG_TOPK') ?: '4');
 
             $httpPost = function (string $url, array $body, int $timeout = 10): array {
@@ -1180,19 +1180,19 @@ class DevAdmin
             };
         };
         (Router::get('/ai',     function (Request $request, Response $response) {
-            return $response->json(['service' => 'ai',     'url' => getenv('TINA4_AI_URL')     ?: 'http://andrevanzuydam.com:11437', 'ok' => true]);
+            return $response->json(['service' => 'ai',     'url' => getenv('TINA4_AI_URL')     ?: 'http://localhost:11437/api/chat', 'ok' => true]);
         }))->noAuth();
         (Router::get('/vision', function (Request $request, Response $response) {
-            return $response->json(['service' => 'vision', 'url' => getenv('TINA4_VISION_URL') ?: 'http://andrevanzuydam.com:11434', 'ok' => true]);
+            return $response->json(['service' => 'vision', 'url' => getenv('TINA4_VISION_URL') ?: 'http://localhost:11437/api/chat', 'ok' => true]);
         }))->noAuth();
         (Router::get('/embed',  function (Request $request, Response $response) {
-            return $response->json(['service' => 'embed',  'url' => getenv('TINA4_EMBED_URL')  ?: 'http://andrevanzuydam.com:11435', 'ok' => true]);
+            return $response->json(['service' => 'embed',  'url' => getenv('TINA4_EMBED_URL')  ?: 'http://localhost:11437/api/embeddings', 'ok' => true]);
         }))->noAuth();
         (Router::get('/image',  function (Request $request, Response $response) {
-            return $response->json(['service' => 'image',  'url' => getenv('TINA4_IMAGE_URL')  ?: 'http://andrevanzuydam.com:11436', 'ok' => true]);
+            return $response->json(['service' => 'image',  'url' => getenv('TINA4_IMAGE_URL')  ?: 'http://localhost:11437/api/generate', 'ok' => true]);
         }))->noAuth();
         (Router::get('/rag',    function (Request $request, Response $response) {
-            return $response->json(['service' => 'rag',    'url' => getenv('TINA4_RAG_URL')    ?: 'http://andrevanzuydam.com:11438', 'ok' => true]);
+            return $response->json(['service' => 'rag',    'url' => getenv('TINA4_RAG_URL')    ?: 'http://localhost:11438', 'ok' => true]);
         }))->noAuth();
 
         // ── Supervisor proxy (to the rust agent server) ──────────
@@ -1454,7 +1454,7 @@ class DevAdmin
         // tina4-python. No RAG wrapping — callers supply their own
         // system message when they want it.
         (Router::post('/ai/api/chat', function (Request $request, Response $response) {
-            $aiUrl = getenv('TINA4_AI_URL') ?: 'http://andrevanzuydam.com:11437/api/chat';
+            $aiUrl = getenv('TINA4_AI_URL') ?: 'http://localhost:11437/api/chat';
             // Body may arrive as pre-parsed array (Tina4 normalisation),
             // raw JSON string, or not at all. Handle all three.
             $payload = null;
@@ -1511,7 +1511,7 @@ class DevAdmin
         }))->noAuth();
 
         // /image/v1/images/generations — transparent passthrough to
-        // SDXL Turbo (TINA4_IMAGE_URL, default andrevanzuydam.com:11436).
+        // SDXL Turbo (TINA4_IMAGE_URL, default localhost:11437/api/generate).
         // The SPA's image-generation flow (aiGenerateImage in src/ai.ts)
         // hits this endpoint with the OpenAI Images API body shape.
         // Without this route the framework returns 404 and the user
@@ -1519,7 +1519,7 @@ class DevAdmin
         // Mirrors the /ai/api/chat proxy pattern: read body, forward
         // verbatim, return compact JSON.
         (Router::post('/image/v1/images/generations', function (Request $request, Response $response) {
-            $imageUrl = getenv('TINA4_IMAGE_URL') ?: 'http://andrevanzuydam.com:11436';
+            $imageUrl = getenv('TINA4_IMAGE_URL') ?: 'http://localhost:11437/api/generate';
             $endpoint = rtrim($imageUrl, '/') . '/v1/images/generations';
             $payload = null;
             if (isset($request->body) && is_array($request->body) && $request->body) {
