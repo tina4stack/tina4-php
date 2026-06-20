@@ -250,6 +250,54 @@ class Log
     }
 
     /**
+     * Whether a message at the given level would pass the configured minimum
+     * CONSOLE level — the same threshold that gates stdout in {@see log()}.
+     *
+     * This is the single source of truth for the level comparison: both the
+     * console write in log() and the public {@see isEnabled()} predicate call
+     * it, so the predicate can never disagree with what the logger prints.
+     * Level input is case-insensitive (mapped to the upper-case priorities).
+     *
+     * @param string $level Log level (e.g. "INFO", "info", "DEBUG").
+     */
+    private static function shouldLog(string $level): bool
+    {
+        $key = strtoupper($level);
+        return (self::LEVEL_PRIORITY[$key] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
+    }
+
+    /**
+     * Return true if a message at $level would pass the configured minimum
+     * CONSOLE level — i.e. whether the logger would actually print it to
+     * stdout. This reflects CONSOLE (stdout) visibility only: the log FILE
+     * always records every level regardless of this threshold.
+     *
+     * Use it to skip building an expensive log payload that would not be shown:
+     *
+     *     if (Log::isEnabled('debug')) {
+     *         Log::debug('state', ['snapshot' => expensiveDump()]);
+     *     }
+     *
+     * $level is case-insensitive. "critical" additionally requires
+     * TINA4_LOG_CRITICAL to be truthy (mirroring {@see critical()}, which is a
+     * no-op unless enabled) and is evaluated at CRITICAL severity — the
+     * first-class priority that Log::critical() actually logs at.
+     *
+     * Delegates to the same {@see shouldLog()} gate the console write uses, so
+     * it never re-implements the level comparison and can never drift from the
+     * real output decision.
+     *
+     * @param string $level Log level to test (e.g. "debug", "INFO", "critical").
+     */
+    public static function isEnabled(string $level): bool
+    {
+        if (strtoupper($level) === self::LEVEL_CRITICAL) {
+            return self::$criticalEnabled && self::shouldLog(self::LEVEL_CRITICAL);
+        }
+        return self::shouldLog($level);
+    }
+
+    /**
      * Write a log entry.
      */
     /**
@@ -273,8 +321,7 @@ class Log
         $line = $formatted . PHP_EOL;
 
         // Console output respects TINA4_LOG_LEVEL
-        $shouldLog = (self::LEVEL_PRIORITY[$level] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
-        if (self::$stdout && $shouldLog) {
+        if (self::$stdout && self::shouldLog($level)) {
             self::writeStdout($level, $line);
         }
 

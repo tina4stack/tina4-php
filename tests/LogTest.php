@@ -655,4 +655,114 @@ class LogTest extends TestCase
             @putenv('TINA4_LOG_OUTPUT');
         }
     }
+
+    // ----------------------------------------------------------------------
+    // Log::isEnabled — console-threshold level predicate (parity with
+    // Python's Log.is_enabled). Reflects CONSOLE (stdout) visibility only —
+    // the log file always records every level regardless. The predicate
+    // delegates to the SAME private threshold gate the console write uses,
+    // so it can never disagree with what the logger actually prints.
+    // ----------------------------------------------------------------------
+
+    /** Invoke the private console-threshold gate the logger uses for stdout. */
+    private function callShouldLog(string $level): bool
+    {
+        $ref = new ReflectionMethod(Log::class, 'shouldLog');
+        $ref->setAccessible(true);
+        return $ref->invoke(null, $level);
+    }
+
+    public function testIsEnabledAtInfoLevel(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_INFO);
+
+        $this->assertFalse(Log::isEnabled('debug'), 'debug is below the INFO threshold');
+        $this->assertTrue(Log::isEnabled('info'), 'info is at the INFO threshold');
+        $this->assertTrue(Log::isEnabled('warning'), 'warning is above the INFO threshold');
+        $this->assertTrue(Log::isEnabled('error'), 'error is above the INFO threshold');
+    }
+
+    public function testIsEnabledAtErrorLevel(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+
+        $this->assertFalse(Log::isEnabled('info'), 'info is below the ERROR threshold');
+        $this->assertFalse(Log::isEnabled('warning'), 'warning is below the ERROR threshold');
+        $this->assertTrue(Log::isEnabled('error'), 'error is at the ERROR threshold');
+    }
+
+    public function testIsEnabledIsCaseInsensitive(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_INFO);
+
+        $this->assertTrue(Log::isEnabled('INFO'), 'upper-case INFO must pass the INFO threshold');
+        $this->assertTrue(Log::isEnabled('Warning'), 'mixed-case Warning must pass');
+        $this->assertFalse(Log::isEnabled('Debug'), 'mixed-case Debug must not pass');
+    }
+
+    public function testIsEnabledMatchesInternalThresholdForAllLevels(): void
+    {
+        // The public predicate must equal the private console gate for every
+        // standard level — the contract that keeps it from drifting away from
+        // what the logger actually prints. (critical is excluded here because
+        // it carries the extra TINA4_LOG_CRITICAL toggle — covered separately.)
+        foreach ([Log::LEVEL_DEBUG, Log::LEVEL_INFO, Log::LEVEL_WARNING, Log::LEVEL_ERROR] as $minLevel) {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, minLevel: $minLevel);
+
+            foreach (['debug', 'info', 'warning', 'error'] as $level) {
+                $this->assertSame(
+                    $this->callShouldLog($level),
+                    Log::isEnabled($level),
+                    "isEnabled('$level') must equal shouldLog('$level') at minLevel=$minLevel"
+                );
+            }
+        }
+    }
+
+    public function testIsEnabledFileAlwaysRecordsRegardlessOfThreshold(): void
+    {
+        // The predicate reflects CONSOLE visibility only — even when a level is
+        // NOT console-enabled, the log file still records it.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+
+        $this->assertFalse(Log::isEnabled('debug'), 'debug is not console-visible at ERROR');
+
+        Log::debug('below-threshold but still filed');
+        $content = file_get_contents($this->tempDir . '/tina4.log');
+        $this->assertStringContainsString('"level":"DEBUG"', $content);
+        $this->assertStringContainsString('below-threshold but still filed', $content);
+    }
+
+    public function testIsEnabledCriticalReflectsToggle(): void
+    {
+        // PHP's critical() is a no-op unless TINA4_LOG_CRITICAL is truthy, and
+        // it logs at the first-class CRITICAL priority. isEnabled('critical')
+        // mirrors that: false while the toggle is off, true once enabled (with
+        // the threshold low enough to admit CRITICAL).
+
+        // Toggle OFF — critical is never enabled regardless of the threshold.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_DEBUG);
+        $this->assertFalse(Log::isEnabled('critical'), 'critical is off when TINA4_LOG_CRITICAL is unset');
+
+        // Toggle ON via env — critical now passes (CRITICAL >= DEBUG).
+        unset($_ENV['TINA4_LOG_CRITICAL']);
+        @putenv('TINA4_LOG_CRITICAL=true');
+        $_ENV['TINA4_LOG_CRITICAL'] = 'true';
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_DEBUG);
+            $this->assertTrue(Log::isEnabled('critical'), 'critical is enabled when the toggle is on');
+            // Case-insensitive on the critical branch too.
+            $this->assertTrue(Log::isEnabled('CRITICAL'), 'upper-case CRITICAL also reflects the toggle');
+        } finally {
+            unset($_ENV['TINA4_LOG_CRITICAL']);
+            @putenv('TINA4_LOG_CRITICAL');
+        }
+    }
 }

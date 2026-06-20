@@ -657,6 +657,7 @@ $fake->run(callable $seeder, int $count = 10): array
 \Tina4\Log::info(string $message, array $context = []): void
 \Tina4\Log::warning(string $message, array $context = []): void
 \Tina4\Log::error(string $message, array $context = []): void
+\Tina4\Log::isEnabled(string $level): bool  // True if $level passes the min CONSOLE level (case-insensitive); reuses the stdout gate so it never disagrees with what prints. File sink records every level regardless. 'critical' also requires TINA4_LOG_CRITICAL.
 // Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR)
 ```
 
