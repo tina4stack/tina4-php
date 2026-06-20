@@ -552,6 +552,8 @@ $api->addHeaders(array $headers): void
 $api->setBasicAuth(string $username, string $password): void
 ```
 
+**Retry/backoff (opt-in, default off):** the constructor accepts `maxRetries` (default `0`) and `retryBackoff` (default `0.5`s base, exponential). When `maxRetries > 0` a transport error or a retryable status (429/500/502/503/504) is retried; 4xx is never retried. A retried non-idempotent request may be re-sent — retries are opt-in for that reason. (PHP `file_get_contents` does not auto-follow redirects, so there is no cross-host Authorization-leak surface — the redirect auth-strip is Python-only.)
+
 ### Migration — Database migrations
 
 ```php

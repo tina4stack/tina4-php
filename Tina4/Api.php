@@ -11,11 +11,20 @@ namespace Tina4;
  */
 class Api
 {
+    /**
+     * Statuses that warrant an automatic retry when $maxRetries > 0: rate-limit
+     * (429) plus the transient server-side 5xx family. 4xx client errors (401,
+     * 404, …) are NOT retried — a repeat won't succeed.
+     */
+    private const RETRY_STATUSES = [429, 500, 502, 503, 504];
+
     private string $baseUrl;
     private string $authHeader;
     private int $timeout;
     private bool $ignoreSSL;
     private array $headers = [];
+    private int $maxRetries;
+    private float $retryBackoff;
 
     /**
      * @param string      $baseUrl      Base URL for all requests
@@ -27,6 +36,8 @@ class Api
      * @param string|null $password     Optional basic-auth password
      * @param array|null  $headers      Optional headers to addHeaders() at construction
      * @param bool|null   $verifySSL    Positive form of $ignoreSSL — when explicitly false, disables SSL verification
+     * @param int         $maxRetries   Automatic retry count (default 0 = off — non-breaking)
+     * @param float       $retryBackoff Base backoff in seconds, doubled each attempt (default 0.5)
      *
      * The ergonomic kwargs (since 3.13.1) match the cross-framework Api
      * constructor surface so callers no longer need three follow-up setter
@@ -38,6 +49,11 @@ class Api
      * Bearer wins over basic-auth when both are passed. $verifySSL=false
      * is equivalent to $ignoreSSL=true; legacy $ignoreSSL wins when both
      * supplied for backward compatibility.
+     *
+     * $maxRetries (default 0 = off) enables automatic retry with exponential
+     * backoff ($retryBackoff seconds base, doubling each attempt) on a transport
+     * error or a retryable status (429/5xx). A retried non-idempotent request
+     * (POST/…) may be re-sent — retries are opt-in for that reason.
      */
     public function __construct(
         string $baseUrl = '',
@@ -48,11 +64,15 @@ class Api
         ?string $username = null,
         ?string $password = null,
         ?array $headers = null,
-        ?bool $verifySSL = null
+        ?bool $verifySSL = null,
+        int $maxRetries = 0,
+        float $retryBackoff = 0.5
     ) {
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->authHeader = $authHeader;
         $this->timeout = $timeout;
+        $this->maxRetries = max(0, $maxRetries);
+        $this->retryBackoff = $retryBackoff;
 
         // ── kwarg sugar ────────────────────────────────────────────────
         // Bearer takes precedence over basic-auth when both passed.
@@ -165,7 +185,14 @@ class Api
     }
 
     /**
-     * Execute an HTTP request. Returns a standardized result array.
+     * Execute an HTTP request with opt-in retry/backoff. Returns a standardized
+     * result array.
+     *
+     * With $maxRetries > 0, a transport failure (http_code null) or a retryable
+     * status (429/5xx) is retried up to $maxRetries times with exponential
+     * backoff; any other outcome (2xx, 4xx, 3xx) returns at once. A retried
+     * non-idempotent request (POST/…) may be re-sent — retries are opt-in for
+     * that reason.
      *
      * @param string $method      HTTP method (GET, POST, PUT, PATCH, DELETE)
      * @param string $path        Full URL or path (appended to baseUrl if not absolute)
@@ -174,6 +201,37 @@ class Api
      * @return array{http_code: ?int, body: mixed, headers: array, error: ?string}
      */
     public function sendRequest(string $method = 'GET', string $path = '', mixed $body = null, string $contentType = 'application/json'): array
+    {
+        $attempts = $this->maxRetries + 1;
+        $result = [];
+        for ($attempt = 0; $attempt < $attempts; $attempt++) {
+            $result = $this->attempt($method, $path, $body, $contentType);
+            $code = $result['http_code'];
+            $retryable = $code === null || in_array($code, self::RETRY_STATUSES, true);
+            if (!$retryable || $attempt === $attempts - 1) {
+                return $result;
+            }
+            // Exponential backoff: retryBackoff * 2^attempt (attempt index 0-based).
+            $seconds = $this->retryBackoff * (2 ** $attempt);
+            usleep((int)($seconds * 1_000_000));
+        }
+        return $result;
+    }
+
+    /**
+     * A single HTTP attempt. Returns the standardized result array.
+     *
+     * This is the network-call seam — protected on purpose so a test can
+     * subclass and override it to return a scripted sequence of responses
+     * without touching the wire (mirrors the Python master's _open patch point).
+     *
+     * @param string $method      HTTP method (GET, POST, PUT, PATCH, DELETE)
+     * @param string $path        Full URL or path (appended to baseUrl if not absolute)
+     * @param mixed  $body        Request body
+     * @param string $contentType Content-Type header for the request body
+     * @return array{http_code: ?int, body: mixed, headers: array, error: ?string}
+     */
+    protected function attempt(string $method = 'GET', string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
 

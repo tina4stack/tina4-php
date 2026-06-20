@@ -7,6 +7,8 @@
  */
 
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use Tina4\Request;
 use Tina4\Response;
 use Tina4\Router;
@@ -19,7 +21,16 @@ use Tina4\Router;
  * silently discarded between requests. Router::dispatch now calls
  * session_start() before running the handler so $_SESSION persists
  * the way existing app code expects.
+ *
+ * Each test runs in a SEPARATE PROCESS: these tests call session_save_path()
+ * / session_start(), which PHP refuses once any output has been emitted. In a
+ * shared PHPUnit process whether that has happened depends on how many tests
+ * ran first (PHPUnit's own progress output) — fragile and order-dependent. A
+ * fresh subprocess per test makes them pass deterministically regardless of
+ * suite size or ordering.
  */
+#[RunTestsInSeparateProcesses]
+#[PreserveGlobalState(false)]
 class RouterSessionStartTest extends TestCase
 {
     private string $sessionPath;
