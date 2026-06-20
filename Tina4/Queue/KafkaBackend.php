@@ -10,6 +10,11 @@
  * Environment variables:
  *   TINA4_KAFKA_BROKERS  — comma-separated broker list (default: localhost:9092)
  *   TINA4_KAFKA_GROUP_ID — consumer group ID (default: tina4_consumer_group)
+ *
+ *   TLS/SASL (each read as TINA4_KAFKA_<NAME> first, then bare KAFKA_<NAME>):
+ *   TINA4_KAFKA_SECURITY_PROTOCOL — e.g. SSL / SASL_SSL (default: PLAINTEXT)
+ *   TINA4_KAFKA_SSL_CA_LOCATION   — CA cert path for TLS brokers/proxies
+ *   TINA4_KAFKA_SASL_MECHANISM / TINA4_KAFKA_SASL_USERNAME / TINA4_KAFKA_SASL_PASSWORD — optional SASL
  */
 
 namespace Tina4\Queue;
@@ -34,6 +39,15 @@ class KafkaBackend implements QueueBackend
     /** @var array<string, bool> Topics we have sent initial metadata for */
     private array $knownTopics = [];
 
+    /** @var array<string, string> Resolved SSL/SASL client config (empty = PLAINTEXT). */
+    private array $security = [];
+
+    /** @var array<string, string> Producer client config (bootstrap + client id + security). */
+    private array $producerConfig = [];
+
+    /** @var array<string, string> Consumer client config (adds group id + offset reset + security). */
+    private array $consumerConfig = [];
+
     /**
      * @param array $config Configuration overrides:
      *   'brokers', 'group_id'
@@ -42,6 +56,63 @@ class KafkaBackend implements QueueBackend
     {
         $this->brokers = $config['brokers'] ?? (getenv('TINA4_KAFKA_BROKERS') ?: 'localhost:9092');
         $this->groupId = $config['group_id'] ?? (getenv('TINA4_KAFKA_GROUP_ID') ?: 'tina4_consumer_group');
+
+        // Resolve SSL/SASL once and apply it to BOTH the producer and the
+        // consumer client setup (parity with the Python master's
+        // _connect_confluent merging **security into each config).
+        $this->security = self::securityConfig();
+
+        $this->producerConfig = [
+            'bootstrap.servers' => $this->brokers,
+            'client.id' => $this->clientId,
+        ] + $this->security;
+
+        $this->consumerConfig = [
+            'bootstrap.servers' => $this->brokers,
+            'client.id' => $this->clientId,
+            'group.id' => $this->groupId,
+            'auto.offset.reset' => 'earliest',
+            'enable.auto.commit' => 'false',
+        ] + $this->security;
+    }
+
+    /**
+     * Build SSL/SASL client config from env (for a TLS broker/proxy).
+     *
+     * Each setting is read from the Tina4-namespaced env var first
+     * (TINA4_KAFKA_SECURITY_PROTOCOL …) and falls back to the bare
+     * librdkafka-convention name (KAFKA_SECURITY_PROTOCOL …) that many Kafka
+     * deployments already set. Honours security.protocol (e.g. SSL, SASL_SSL),
+     * ssl.ca.location, and optional SASL (mechanism / username / password).
+     * Unset keys are omitted, leaving the PLAINTEXT default.
+     *
+     * Mirrors tina4_python/queue_backends/kafka_backend.py::_security_config.
+     *
+     * @return array<string, string>
+     */
+    public static function securityConfig(): array
+    {
+        // rdkafka key -> env suffix (read as TINA4_KAFKA_<suffix>, then KAFKA_<suffix>)
+        $mapping = [
+            'security.protocol' => 'SECURITY_PROTOCOL',
+            'ssl.ca.location' => 'SSL_CA_LOCATION',
+            'sasl.mechanism' => 'SASL_MECHANISM',
+            'sasl.username' => 'SASL_USERNAME',
+            'sasl.password' => 'SASL_PASSWORD',
+        ];
+
+        $config = [];
+        foreach ($mapping as $rdk => $suffix) {
+            $value = getenv("TINA4_KAFKA_{$suffix}");
+            if ($value === false || $value === '') {
+                $value = getenv("KAFKA_{$suffix}");
+            }
+            if ($value !== false && $value !== '') {
+                $config[$rdk] = $value;
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -54,13 +125,36 @@ class KafkaBackend implements QueueBackend
         $brokerList = explode(',', $this->brokers);
         $connected = false;
 
+        // Honour the resolved security config: an SSL/SASL_SSL security.protocol
+        // means the transport is TLS — open a tls:// socket (with the optional
+        // ssl.ca.location CA bundle) instead of a plain TCP one.
+        $protocol = strtoupper($this->security['security.protocol'] ?? 'PLAINTEXT');
+        $useTls = str_contains($protocol, 'SSL');
+
         foreach ($brokerList as $broker) {
             $broker = trim($broker);
             $parts = explode(':', $broker);
             $host = $parts[0];
             $port = (int)($parts[1] ?? 9092);
 
-            $this->socket = @fsockopen($host, $port, $errno, $errstr, 10);
+            if ($useTls) {
+                $sslOpts = ['verify_peer' => true, 'verify_peer_name' => true];
+                if (!empty($this->security['ssl.ca.location'])) {
+                    $sslOpts['cafile'] = $this->security['ssl.ca.location'];
+                }
+                $context = stream_context_create(['ssl' => $sslOpts]);
+                $this->socket = @stream_socket_client(
+                    "tls://{$host}:{$port}",
+                    $errno,
+                    $errstr,
+                    10,
+                    STREAM_CLIENT_CONNECT,
+                    $context
+                );
+            } else {
+                $this->socket = @fsockopen($host, $port, $errno, $errstr, 10);
+            }
+
             if ($this->socket) {
                 stream_set_timeout($this->socket, 30);
                 $connected = true;

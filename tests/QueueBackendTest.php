@@ -560,4 +560,118 @@ class QueueBackendTest extends TestCase
         putenv('TINA4_RABBITMQ_HOST');
         putenv('TINA4_RABBITMQ_PORT');
     }
+
+    // -- Kafka TLS/SASL security config (lock-in, parity with Python master) --
+    //
+    // KafkaBackend::securityConfig() reads SSL/SASL settings from the
+    // Tina4-namespaced env var first (TINA4_KAFKA_*), then the bare
+    // librdkafka-convention name (KAFKA_*); unset keys are omitted (PLAINTEXT
+    // default). Mirrors tina4_python ...kafka_backend.py::_security_config and
+    // its five lock-in tests.
+
+    private const KAFKA_SECURITY_VARS = [
+        'TINA4_KAFKA_SECURITY_PROTOCOL', 'KAFKA_SECURITY_PROTOCOL',
+        'TINA4_KAFKA_SSL_CA_LOCATION', 'KAFKA_SSL_CA_LOCATION',
+        'TINA4_KAFKA_SASL_MECHANISM', 'KAFKA_SASL_MECHANISM',
+        'TINA4_KAFKA_SASL_USERNAME', 'KAFKA_SASL_USERNAME',
+        'TINA4_KAFKA_SASL_PASSWORD', 'KAFKA_SASL_PASSWORD',
+    ];
+
+    private function cleanKafkaSecurityEnv(): void
+    {
+        foreach (self::KAFKA_SECURITY_VARS as $v) {
+            putenv($v);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        $this->cleanKafkaSecurityEnv();
+    }
+
+    public function testKafkaSecurityConfigNoEnvIsEmpty(): void
+    {
+        // NEGATIVE: nothing set -> [] (PLAINTEXT default left untouched).
+        $this->cleanKafkaSecurityEnv();
+        $this->assertSame([], KafkaBackend::securityConfig());
+    }
+
+    public function testKafkaSecurityConfigBareKafkaNames(): void
+    {
+        // POSITIVE: bare KAFKA_* names work as a fallback.
+        $this->cleanKafkaSecurityEnv();
+        putenv('KAFKA_SECURITY_PROTOCOL=SSL');
+        putenv('KAFKA_SSL_CA_LOCATION=/etc/ssl/ca.pem');
+
+        $this->assertSame(
+            ['security.protocol' => 'SSL', 'ssl.ca.location' => '/etc/ssl/ca.pem'],
+            KafkaBackend::securityConfig()
+        );
+    }
+
+    public function testKafkaSecurityConfigTina4NamespacedNames(): void
+    {
+        // POSITIVE: Tina4-namespaced env vars are honoured.
+        $this->cleanKafkaSecurityEnv();
+        putenv('TINA4_KAFKA_SECURITY_PROTOCOL=SASL_SSL');
+
+        $this->assertSame(
+            ['security.protocol' => 'SASL_SSL'],
+            KafkaBackend::securityConfig()
+        );
+    }
+
+    public function testKafkaSecurityConfigTina4TakesPrecedenceOverBare(): void
+    {
+        // PRECEDENCE: TINA4_KAFKA_* wins when both are set.
+        $this->cleanKafkaSecurityEnv();
+        putenv('KAFKA_SECURITY_PROTOCOL=SSL');
+        putenv('TINA4_KAFKA_SECURITY_PROTOCOL=SASL_SSL');
+
+        $cfg = KafkaBackend::securityConfig();
+        $this->assertSame('SASL_SSL', $cfg['security.protocol']);
+    }
+
+    public function testKafkaSecurityConfigSaslKeysMapped(): void
+    {
+        // POSITIVE: optional SASL creds map to the rdkafka sasl.* keys (mixed
+        // namespaced + bare, exercising the per-key fallback).
+        $this->cleanKafkaSecurityEnv();
+        putenv('TINA4_KAFKA_SASL_MECHANISM=PLAIN');
+        putenv('KAFKA_SASL_USERNAME=user');
+        putenv('KAFKA_SASL_PASSWORD=secret');
+
+        $this->assertSame(
+            ['sasl.mechanism' => 'PLAIN', 'sasl.username' => 'user', 'sasl.password' => 'secret'],
+            KafkaBackend::securityConfig()
+        );
+    }
+
+    public function testKafkaSecurityConfigAppliedToProducerAndConsumer(): void
+    {
+        // The resolved security config is merged into BOTH the producer and the
+        // consumer client setup (parity with Python's _connect_confluent).
+        $this->cleanKafkaSecurityEnv();
+        putenv('TINA4_KAFKA_SECURITY_PROTOCOL=SASL_SSL');
+        putenv('TINA4_KAFKA_SASL_MECHANISM=PLAIN');
+        putenv('TINA4_KAFKA_SASL_USERNAME=user');
+        putenv('TINA4_KAFKA_SASL_PASSWORD=secret');
+
+        $backend = new KafkaBackend();
+        $ref = new \ReflectionClass($backend);
+
+        $producer = $ref->getProperty('producerConfig')->getValue($backend);
+        $consumer = $ref->getProperty('consumerConfig')->getValue($backend);
+
+        foreach (['security.protocol', 'sasl.mechanism', 'sasl.username', 'sasl.password'] as $key) {
+            $this->assertArrayHasKey($key, $producer, "producer missing {$key}");
+            $this->assertArrayHasKey($key, $consumer, "consumer missing {$key}");
+        }
+        $this->assertSame('SASL_SSL', $producer['security.protocol']);
+        $this->assertSame('SASL_SSL', $consumer['security.protocol']);
+
+        // Consumer also carries its group + offset settings.
+        $this->assertSame('earliest', $consumer['auto.offset.reset']);
+        $this->assertArrayHasKey('group.id', $consumer);
+    }
 }
