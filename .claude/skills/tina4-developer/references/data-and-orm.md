@@ -212,11 +212,11 @@ author = post.user        # The post's author
 
 ```python
 class Article(ORM):
-    soft_delete = True  # Adds deleted_at column
+    soft_delete = True  # Uses the is_deleted column (INTEGER, 0/1)
 
 article = Article().find_by_id(1)
-article.delete()              # Sets deleted_at (soft)
-article.restore()             # Clears deleted_at
+article.delete()              # Sets is_deleted = 1 (soft)
+article.restore()             # Sets is_deleted = 0
 article.force_delete()        # Actually removes from DB
 
 # Default queries exclude deleted records

@@ -98,10 +98,13 @@ class Migration
                         continue;
                     }
 
-                    // Firebird lacks IF NOT EXISTS for ALTER TABLE ADD.
-                    // Pre-check the system catalogue so duplicate columns are
-                    // silently skipped instead of raising an error.
-                    $skipReason = $this->shouldSkipForFirebird($statement);
+                    // Idempotency on engines lacking IF NOT EXISTS:
+                    //  - Firebird ALTER TABLE ADD (pre-check RDB$RELATION_FIELDS)
+                    //  - CREATE TABLE on Firebird AND MSSQL (pre-check tableExists)
+                    // so a re-run migration with a raw DDL statement is silently
+                    // skipped instead of raising "object already exists".
+                    $skipReason = $this->shouldSkipForFirebird($statement)
+                        ?? $this->shouldSkipCreateTable($statement);
                     if ($skipReason !== null) {
                         Log::info("Migration {$fileName}: {$skipReason}");
                         continue;
@@ -306,11 +309,16 @@ class Migration
     }
 
     /**
-     * Get all migration files sorted by name (alphabetical/timestamp order).
+     * Get all migration files sorted in numeric-aware order.
      * Excludes .down.sql rollback files.
      *
-     * Both YYYYMMDDHHMMSS_name.sql and 000001_name.sql patterns are supported
-     * since they both sort correctly in alphabetical order.
+     * Files are sorted by a leading numeric / timestamp prefix so that `9_`
+     * applies before `10_` — a plain lexical sort (strcmp) misorders unpadded
+     * prefixes ("10" < "9"). Both YYYYMMDDHHMMSS_name.sql and 000001_name.sql
+     * patterns sort correctly because they are numeric prefixes. Files WITHOUT
+     * a numeric prefix sort after the numbered ones, then lexically; a warning
+     * is logged listing any such file because its order is undefined — a silent
+     * out-of-order-apply footgun.
      *
      * @return array<string> Full file paths
      */
@@ -342,10 +350,44 @@ class Migration
 
         $files = array_values(array_merge(array_values($sqlFiles), array_values($phpFiles)));
         usort($files, function (string $a, string $b): int {
-            return strcmp(basename($a), basename($b));
+            return self::migrationSortKey(basename($a)) <=> self::migrationSortKey(basename($b));
         });
 
+        // Warn about filenames without a recognised NNNNNN_/timestamp prefix —
+        // their ordering relative to numbered migrations is undefined.
+        $unprefixed = [];
+        foreach ($files as $file) {
+            if (!preg_match('/^\d+[_-]/', basename($file))) {
+                $unprefixed[] = basename($file);
+            }
+        }
+        if (!empty($unprefixed)) {
+            Log::warning(
+                "Migration file(s) without a numeric/timestamp prefix may apply out of order: "
+                . implode(', ', $unprefixed)
+            );
+        }
+
         return $files;
+    }
+
+    /**
+     * Numeric-aware sort key for a migration filename so `9_*` sorts before
+     * `10_*` (plain strcmp puts "10" before "9"). Files with a leading numeric /
+     * timestamp prefix sort first by that number; the rest sort after, lexically.
+     *
+     * Returns a comparable tuple [group, number, name] where group 0 = numeric
+     * prefix, group 1 = no prefix. The number is a zero-padded string so very
+     * long timestamp prefixes compare correctly without integer overflow.
+     *
+     * @return array{0: int, 1: string, 2: string}
+     */
+    private static function migrationSortKey(string $name): array
+    {
+        if (preg_match('/^(\d+)/', $name, $m)) {
+            return [0, str_pad($m[1], 20, '0', STR_PAD_LEFT), $name];
+        }
+        return [1, str_repeat('0', 20), $name];
     }
 
     /**
@@ -804,8 +846,14 @@ class Migration
                 continue;
             }
 
-            // Check for // delimiter (toggle in/out of slash-delimited block)
-            if (!$inDollarBlock && $i + 1 < $len && $sql[$i] === '/' && $sql[$i + 1] === '/') {
+            // Check for // delimiter (toggle in/out of slash-delimited block).
+            // The `//` must NOT be preceded by a colon, so a URL scheme
+            // (`https://…`) or any `://` literal inside a migration is never
+            // treated as a stored-proc block delimiter (which would otherwise
+            // swallow everything between two `//` occurrences and skip statement
+            // splitting). Mirrors Python's negative lookbehind `(?<!:)//`.
+            if (!$inDollarBlock && $i + 1 < $len && $sql[$i] === '/' && $sql[$i + 1] === '/'
+                && !($i > 0 && $sql[$i - 1] === ':')) {
                 $current .= '//';
                 $i += 2;
                 $inSlashBlock = !$inSlashBlock;
@@ -925,12 +973,69 @@ class Migration
     private const ALTER_ADD_PATTERN =
         '/^\s*ALTER\s+TABLE\s+(?:"([^"]+)"|(\S+))\s+ADD\s+(?:"([^"]+)"|(\S+))/i';
 
+    /** Pattern to match CREATE TABLE <name> — name may be quoted ("x"),
+     *  bracketed ([x] MSSQL) or bare. An optional IF NOT EXISTS is skipped. */
+    private const CREATE_TABLE_PATTERN =
+        '/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"([^"]+)"|\[([^\]]+)\]|(\w+))/i';
+
     /**
      * Check if the database adapter is Firebird.
      */
     private function isFirebird(): bool
     {
         return $this->db instanceof \Tina4\Database\FirebirdAdapter;
+    }
+
+    /**
+     * Check if the database adapter is MSSQL.
+     */
+    private function isMSSQL(): bool
+    {
+        return $this->db instanceof \Tina4\Database\MSSQLAdapter;
+    }
+
+    /**
+     * Make CREATE TABLE idempotent on engines lacking IF NOT EXISTS.
+     *
+     * Firebird and MSSQL do not support `CREATE TABLE IF NOT EXISTS`, so a raw
+     * CREATE in a re-run migration raises "object already exists". When the
+     * target table already exists on those engines, return a skip reason so the
+     * statement is skipped (mirrors the Firebird ALTER-TABLE-ADD idempotency
+     * guard). SQLite/MySQL/PostgreSQL support IF NOT EXISTS and are left to the
+     * engine. Only a genuine already-exists is skipped — every other error still
+     * raises.
+     */
+    private function shouldSkipCreateTable(string $statement): ?string
+    {
+        if (!$this->isFirebird() && !$this->isMSSQL()) {
+            return null;
+        }
+
+        if (!preg_match(self::CREATE_TABLE_PATTERN, $statement, $m)) {
+            return null;
+        }
+
+        // The matched group is whichever of quoted/bracketed/bare is non-empty.
+        $table = '';
+        for ($i = 1; $i <= 3; $i++) {
+            if (isset($m[$i]) && $m[$i] !== '') {
+                $table = $m[$i];
+                break;
+            }
+        }
+        if ($table === '') {
+            return null;
+        }
+
+        try {
+            if ($this->db->tableExists($table)) {
+                return "Table {$table} already exists, skipping CREATE TABLE";
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
     }
 
     /**

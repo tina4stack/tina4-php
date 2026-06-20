@@ -561,6 +561,33 @@ $migration = new \Tina4\Migration(DatabaseAdapter $db, string $migrationsDir = "
 $migration->migrate(): array
 ```
 
+**How migrations work internally:**
+
+- SQL/PHP files live in the migrations folder. They are discovered in
+  **numeric-prefix order** (`9_` before `10_`) and split on the `;` delimiter — a
+  plain lexical sort misorders unpadded prefixes (`10` < `9`). A file WITHOUT a
+  numeric/timestamp prefix logs a `Log::warning` (its order relative to the
+  numbered files is undefined). Both `NNNNNN_name.sql` and `YYYYMMDDHHMMSS_name.sql`
+  patterns sort correctly.
+- State is tracked by **row existence** in the `tina4_migration` table
+  (auto-created per engine): a migration runs once — if a row for it exists, it is
+  skipped. There is **no `passed` column** in the v3 PHP schema; a failed
+  migration is **never recorded** and nothing is deleted on failure — `migrate()`
+  collects the error and **stops** (the explicit `bin/tina4php migrate` CLI then
+  exits non-zero; it does not `passed=0` or `sys.exit` from inside the runner).
+- **Each migration FILE is wrapped in its own transaction** (`startTransaction()`
+  … `commit()`): on a failure the file rolls back, the error is logged, and the
+  run halts at that file. Already-applied files stay applied — fix the bad file
+  and re-run.
+- **Atomicity caveat:** per-file transactions are truly atomic only on engines
+  with **transactional DDL (PostgreSQL)**. MySQL, Firebird, and SQLite
+  **auto-commit DDL**, so a multi-statement migration that fails midway on those
+  engines leaves earlier statements applied — keep one logical change per file.
+  `CREATE TABLE` and `ALTER TABLE … ADD` are made idempotent on Firebird/MSSQL
+  (existence-checked via `tableExists()` / `RDB$RELATION_FIELDS`) so a re-run with
+  a raw DDL statement skips the already-existing object instead of erroring.
+  SQLite/MySQL/PostgreSQL support `IF NOT EXISTS` and are left to the engine.
+
 **Auto-run on startup (`TINA4_AUTO_MIGRATE`, default on).** When a `migrations/`
 folder exists (with at least one `.sql` file), `App::start()` applies pending
 migrations during boot — after the DB is bound + routes discovered, before
