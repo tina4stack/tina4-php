@@ -411,6 +411,36 @@ When reviewing or refactoring Tina4 code, actively hunt for:
 Don't just find problems — fix them or propose the fix. Every review should leave the
 code better than you found it.
 
+### Refactoring — Make It Smaller Without Changing What It Does
+
+Refactoring is **behaviour-preserving** improvement: the code gets smaller, clearer, and faster to
+read, and every existing test still passes **unchanged**. If a test had to change, that wasn't a
+refactor — it was a behaviour change (do that deliberately, separately, with new lock-in tests).
+The discipline:
+
+1. **Characterise first.** Before touching code with thin coverage, add tests that pin its CURRENT
+   behaviour (inputs → outputs, edge cases included). You cannot safely compact what you can't
+   prove you didn't break — these tests are the safety net the whole refactor leans on.
+2. **Measure before.** Capture a baseline: `tina4 metrics` (LOC, cyclomatic complexity,
+   maintainability per file), bundle/dist size where it matters (e.g. tina4-js's <3 KB budget —
+   `npm run test:size`), and the Carbonah numbers. A refactor that doesn't move these isn't worth
+   the risk.
+3. **One logical change per commit.** Extract-a-helper, collapse-a-duplicate, inline-a-needless-
+   indirection, replace-a-loop-with-a-built-in — each is its own commit, suite green between them.
+   Never mix a refactor with a behaviour change in one commit: a reviewer (and `git bisect`) must
+   be able to trust that a "refactor" commit changed nothing observable.
+4. **Compact, don't golf.** Smaller is the goal, but readability wins ties — prefer a stdlib/
+   built-in call or a shared helper over a clever one-liner. Deleting code is the best refactor: a
+   line removed can't rot, can't hide a bug, and ships faster.
+5. **Verify independently.** Re-run the FULL suite yourself at each step (see *Independent
+   Verification*) and re-measure. Green tests + smaller/simpler metrics + unchanged behaviour =
+   done. Green tests but bigger/more-complex metrics = revert; you made it worse.
+6. **Parity still applies.** A refactor in the Python master that changes a shared shape must be
+   mirrored; a refactor confined to one framework's internals need not be — but say which it is.
+
+Bad targets to resist: rewriting a working, well-covered module for taste; renaming public API
+"for clarity" (that's a breaking change, not a refactor); abstracting a pattern that occurs once.
+
 ### Testing Philosophy
 
 Tests are written alongside code, not after. Every feature gets:
