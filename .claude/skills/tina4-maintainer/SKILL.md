@@ -36,7 +36,7 @@ site, or a CLAUDE.md example — and run `docs_search` to catch prose that now d
 returns nothing for a name you expected, the name does not exist in this version: fix the code or the
 doc, do not paper over it.
 
-## Independent Verification — Never Trust a Self-Reported Green
+## Independent Verification & Honest Claims — Prove It, Then Qualify It
 
 When work is produced by a subagent, a parallel agent, or a workflow — or even by a prior step in
 your own session — **do not trust its claim that tests pass.** Re-verify it yourself before you
@@ -55,9 +55,18 @@ commit, merge, or release:
   against the parser, actually invoke the CLI) rather than accepting the agent's assessment.
 - **Confirm lock-in tests are real** — both positive AND negative cases present, and the negative
   test genuinely fails against the old behavior.
+- **State every claim at 100% and qualify it — never assert what you haven't proven.** No "should
+  work", no "probably passes", no "fixed" before you ran it. Scope each claim to *where you actually
+  verified it*: "3251 tests pass **on macOS, PHP 8.5**" — not "tests pass"; "green on Linux CI,
+  not yet run on Windows" when that's the truth. An unqualified claim that holds on only one
+  platform/runtime/DB engine is a false claim on every other. Qualify by **OS (Windows/macOS/Linux),
+  language version, and DB engine** whenever behaviour could differ there — sessions, file paths,
+  path separators, SSL/cert stores, native extensions, line endings, and case-sensitivity are the
+  classic per-platform divergences. If you didn't test it on a platform, say so; don't imply you did.
 
-This is non-negotiable for anything that commits, merges, or releases. A re-run is trivial against
-the cost of shipping a masked regression to four public registries.
+This is non-negotiable for anything that commits, merges, or releases — and the same honesty governs
+every status you report: a claim is either proven-and-qualified, or it is not made. A re-run is
+trivial against the cost of shipping a masked regression to four public registries.
 
 ## The Guiding Philosophy
 
