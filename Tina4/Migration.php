@@ -828,8 +828,42 @@ class Migration
      *
      * @return array<string>
      */
+    /**
+     * Normalize smart/curly quotes back to straight ASCII quotes.
+     *
+     * Editors, word processors, docs and chat apps silently convert a straight
+     * " to “ ” and a straight ' to ‘ ’ (plus primes ′ ″). Those code points are
+     * NOT valid SQL string/identifier delimiters, so a pasted-in migration fails
+     * to run ("syntax error near …"). Map them back to straight ASCII quotes —
+     * only the lookalike code points are swapped, real string CONTENTS are
+     * unchanged. Mirrors tina4-python's _normalize_quotes().
+     */
+    private static function normalizeQuotes(string $sql): string
+    {
+        return strtr($sql, [
+            // Double-quote lookalikes → straight " (ASCII 0x22)
+            "\u{201C}" => '"', // “ LEFT DOUBLE QUOTATION MARK
+            "\u{201D}" => '"', // ” RIGHT DOUBLE QUOTATION MARK
+            "\u{201E}" => '"', // „ DOUBLE LOW-9 QUOTATION MARK
+            "\u{201F}" => '"', // ‟ DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+            "\u{2033}" => '"', // ″ DOUBLE PRIME
+            // Single-quote/apostrophe lookalikes → straight ' (ASCII 0x27)
+            "\u{2018}" => "'", // ‘ LEFT SINGLE QUOTATION MARK
+            "\u{2019}" => "'", // ’ RIGHT SINGLE QUOTATION MARK
+            "\u{201A}" => "'", // ‚ SINGLE LOW-9 QUOTATION MARK
+            "\u{201B}" => "'", // ‛ SINGLE HIGH-REVERSED-9 QUOTATION MARK
+            "\u{2032}" => "'", // ′ PRIME
+        ]);
+    }
+
     private function splitStatements(string $sql): array
     {
+        // Normalize smart/curly quotes to straight ASCII first, so SQL pasted
+        // from an editor/doc (which converts " → “ ” and ' → ‘ ’) actually
+        // runs. Applied before splitting so both the migrate AND rollback paths
+        // get normalized SQL.
+        $sql = self::normalizeQuotes($sql);
+
         $statements = [];
         $current = '';
         $len = strlen($sql);

@@ -148,6 +148,32 @@ class MigrationFootgunsTest extends TestCase
         $this->assertTrue($found, 'real // stored-proc block was split incorrectly');
     }
 
+    // ── smart/curly quotes normalized before split ──────────────────────
+
+    public function testSmartQuotesNormalizedBeforeSplit(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        // Smart double quotes around an identifier + smart single quotes around
+        // a value — as an editor/doc/chat app would produce. They must become
+        // straight ASCII so the statement actually runs.
+        $sql = "CREATE TABLE \u{201C}users\u{201D} (name TEXT DEFAULT \u{2018}guest\u{2019});";
+
+        $joined = implode(' ', $this->invoke($m, 'splitStatements', [$sql]));
+
+        foreach (["\u{201C}", "\u{201D}", "\u{2018}", "\u{2019}", "\u{2032}", "\u{2033}"] as $smart) {
+            $this->assertStringNotContainsString($smart, $joined, "smart quote survived");
+        }
+        $this->assertStringContainsString('"users"', $joined);
+        $this->assertStringContainsString("'guest'", $joined);
+    }
+
+    public function testNormalizeQuotesPreservesStraightAndContent(): void
+    {
+        // Straight quotes and ordinary content are returned byte-for-byte.
+        $sql = "INSERT INTO t (v) VALUES ('plain');";
+        $this->assertSame($sql, self::staticInvoke('normalizeQuotes', [$sql]));
+    }
+
     // ── [8] numeric-aware discovery order ───────────────────────────────
 
     public function testGetMigrationFilesIsNumericAware(): void
