@@ -167,6 +167,18 @@ abstract class ORM
         throw new \RuntimeException('No database configured. Call ORM::bindDatabase(), App::setDatabase(), or set TINA4_DATABASE_URL in .env');
     }
 
+    /**
+     * Cause of the most recent failed {@see save()} (a validation message or a
+     * driver error), or null when the last save() succeeded. Mirrors the
+     * adapter's getError()/error(): after save() returns false a caller using
+     * the documented `if (!$model->save())` contract can still recover the real
+     * cause via {@see getError()} / {@see error()} / this property — the failure
+     * never vanishes silently. Cleared to null on a successful save().
+     *
+     * @var string|null
+     */
+    public ?string $lastError = null;
+
     /** @var array<string, mixed> Storage for undeclared/dynamic properties only (from joins, extras) */
     private array $_dynamicProps = [];
 
@@ -203,13 +215,21 @@ abstract class ORM
      * Usage:
      *   $user = User::create(['name' => 'Alice', 'email' => 'alice@example.com']);
      *
+     * v3.13.39: if the underlying {@see save()} fails (validation errors or a
+     * driver error), create() returns false — it does NOT hand back a
+     * possibly-unsaved instance, so a failed insert can never masquerade as a
+     * success. The failure cause is logged and available on the (discarded)
+     * instance's getError() via the same path save() uses.
+     *
      * @param array<string, mixed> $data Column => value pairs
-     * @return static The saved ORM instance
+     * @return static|false The saved ORM instance, or false when save() failed.
      */
-    public static function create(array $data = []): static
+    public static function create(array $data = []): static|false
     {
         $instance = new static(data: $data);
-        $instance->save();
+        if ($instance->save() === false) {
+            return false;
+        }
         return $instance;
     }
 
@@ -228,6 +248,29 @@ abstract class ORM
     public static function camelToSnake(string $name): string
     {
         return strtolower(preg_replace('/[A-Z]/', '_$0', lcfirst($name)));
+    }
+
+    /**
+     * Derive the default foreign-key column that points at the given model's
+     * primary key: the model's (short) class name, lowercased, + "_id".
+     *
+     * v3.13.39: aligns the FK default with the Python master
+     * (`f"{Model.__name__.lower()}_id"`). The old PHP rule naively stripped a
+     * trailing "s" off the *table name* (`rtrim($tableName, 's') . '_id'`),
+     * which broke for table names that don't pluralise by adding "s" (e.g.
+     * "people" → "people_id" wanted "person_id"; "status" → "statu_id") and
+     * disagreed with the auto-wired has-many key derivation in
+     * _processForeignKeys() (which already uses the class name). Deriving from
+     * the class name makes both sides consistent: a Post → User has-many
+     * defaults to the FK column "user_id" on posts.
+     *
+     * @param object|string $modelOrClass An ORM instance or its class name.
+     */
+    public static function defaultForeignKey(object|string $modelOrClass): string
+    {
+        $class = is_object($modelOrClass) ? $modelOrClass::class : $modelOrClass;
+        $shortName = basename(str_replace('\\', '/', $class));
+        return strtolower($shortName) . '_id';
     }
 
     /**
@@ -425,11 +468,45 @@ abstract class ORM
     /**
      * Insert or update. Returns $this on success (fluent), false on failure.
      *
+     * Fails loud, never silent (the same principle the adapter's execute()
+     * follows by RAISING). On *any* failure path save() returns false — keeping
+     * the contract callers rely on (`if (!$model->save()) { ... }`) — but it
+     * also (a) records the real cause on {@see $lastError} so the caller can
+     * recover it via {@see getError()} / {@see error()} after the fact, and
+     * (b) logs it via {@see Log::error} with model/table context. It never
+     * raises and never changes the `static|false` return shape. On success the
+     * recorded error is cleared.
+     *
+     * Two distinct failure paths, both loud:
+     *
+     *   1. **Validation** (v3.13.39): {@see validate()} runs FIRST. If it
+     *      returns errors, save() records them on $lastError, logs them, and
+     *      returns false WITHOUT touching the database — an invalid model never
+     *      reaches the driver.
+     *   2. **Database** (v3.13.39): a driver error (NOT NULL, duplicate PK,
+     *      missing table, …) is rolled back, the real cause is captured
+     *      (preferring the adapter's getError()/error(), falling back to the
+     *      exception text), logged with model/table context, recorded on
+     *      $lastError, and false is returned — the cause is no longer swallowed.
+     *
      * @return static|false
      */
     public function save(): static|false
     {
         $this->ensureDb();
+
+        // ── Change 2: validate() is enforced. An invalid model never reaches
+        // the driver — fail loud (record + log), return false, write nothing. ──
+        $errors = $this->validate();
+        if (!empty($errors)) {
+            $this->lastError = implode('; ', $errors);
+            Log::error(
+                static::class . '::save() refused: validation failed — ' . $this->lastError,
+                ['table' => $this->tableName]
+            );
+            return false;
+        }
+
         $this->_relCache = [];
         $pkValue = $this->getPrimaryKeyValue();
 
@@ -453,17 +530,81 @@ abstract class ORM
             // silent data loss.
             if ($ok === false) {
                 $this->_db->rollback();
+                // ── Change 1: fail loud, never silent. Capture the REAL cause
+                // (adapter getError()/error()), record it, and log it. ──
+                $this->lastError = $this->dbError() ?? 'save failed';
+                Log::error(
+                    static::class . "::save() failed for table '{$this->tableName}': " . $this->lastError,
+                    ['table' => $this->tableName]
+                );
                 return false;
             }
 
             $this->_db->commit();
         } catch (\Throwable $e) {
             $this->_db->rollback();
+            // ── Change 1: fail loud, never silent. Keep the false return
+            // contract, but capture the REAL cause (prefer the adapter's
+            // getError(), which execute()/exec() populate, falling back to the
+            // exception text) on $lastError so it survives, and log it with
+            // model/table context. ──
+            $this->lastError = $this->dbError() ?? $e->getMessage();
+            Log::error(
+                static::class . "::save() failed for table '{$this->tableName}': " . $this->lastError,
+                ['table' => $this->tableName]
+            );
             return false;
         }
 
+        $this->lastError = null;
         $this->_exists = true;
         return $this;
+    }
+
+    /**
+     * Return the cause of the most recent failed {@see save()}, or null.
+     *
+     * Mirrors the adapter's getError(). After save() returns false — whether
+     * from validation or a driver error — the real cause is retrievable here
+     * (and on {@see $lastError}) so a caller using the `if (!$model->save())`
+     * contract can still surface it. Cleared to null on a successful save().
+     */
+    public function getError(): ?string
+    {
+        return $this->lastError;
+    }
+
+    /**
+     * Alias for {@see getError()} — mirrors the adapter's error() accessor name
+     * so callers can use whichever convention their adapter uses.
+     */
+    public function error(): ?string
+    {
+        return $this->lastError;
+    }
+
+    /**
+     * Read the underlying driver error from the bound connection, trying the
+     * facade's getError() first (set by Database::execute()/exec() on a raised
+     * failure) and falling back to the adapter-level error(). Returns null when
+     * neither yields a cause.
+     */
+    private function dbError(): ?string
+    {
+        $db = $this->_db;
+        if (is_object($db) && method_exists($db, 'getError')) {
+            $msg = $db->getError();
+            if ($msg !== null && $msg !== '') {
+                return $msg;
+            }
+        }
+        if (is_object($db) && method_exists($db, 'error')) {
+            $msg = $db->error();
+            if ($msg !== null && $msg !== '') {
+                return $msg;
+            }
+        }
+        return null;
     }
 
     /**
@@ -583,9 +724,16 @@ abstract class ORM
         $this->_db->startTransaction();
         try {
             $result = $this->_db->exec($sql, [':id' => $pkValue]);
-            if ($result) {
-                $this->_exists = false;
+            if ($result === false) {
+                // A bound raw adapter's exec() returns false on a bad statement
+                // (the facade RAISES — caught below). Roll back the started
+                // transaction instead of committing an EMPTY one. v3.13.39: a
+                // commit() on the false path used to commit nothing, masking
+                // the failure as a clean delete.
+                $this->_db->rollback();
+                return false;
             }
+            $this->_exists = false;
             $this->_db->commit();
         } catch (\Exception $e) {
             $this->_db->rollback();
@@ -1074,13 +1222,24 @@ abstract class ORM
 
         $pkColumn = $this->getDbColumn($this->primaryKey);
         $sql = "DELETE FROM {$this->tableName} WHERE {$pkColumn} = :id";
-        $result = $this->_db->exec($sql, [':id' => $pkValue]);
 
-        if ($result) {
+        // v3.13.39: wrap exec()+commit() in a started transaction. Previously
+        // commit() was called with NO startTransaction() — committing whatever
+        // ambient/implicit transaction happened to be open (or nothing at all).
+        $this->_db->startTransaction();
+        try {
+            $result = $this->_db->exec($sql, [':id' => $pkValue]);
+            if ($result === false) {
+                $this->_db->rollback();
+                return false;
+            }
             $this->_exists = false;
+            $this->_db->commit();
+        } catch (\Exception $e) {
+            $this->_db->rollback();
+            throw $e;
         }
 
-        $this->_db->commit();
         return $result;
     }
 
@@ -1103,14 +1262,25 @@ abstract class ORM
 
         $pkColumn = $this->getDbColumn($this->primaryKey);
         $sql = "UPDATE {$this->tableName} SET is_deleted = 0 WHERE {$pkColumn} = :id";
-        $result = $this->_db->exec($sql, [':id' => $pkValue]);
 
-        if ($result) {
+        // v3.13.39: wrap exec()+commit() in a started transaction. Previously
+        // commit() was called with NO startTransaction() — committing whatever
+        // ambient/implicit transaction happened to be open (or nothing at all).
+        $this->_db->startTransaction();
+        try {
+            $result = $this->_db->exec($sql, [':id' => $pkValue]);
+            if ($result === false) {
+                $this->_db->rollback();
+                return false;
+            }
             $this->_exists = true;
             $this->is_deleted = 0;
+            $this->_db->commit();
+        } catch (\Exception $e) {
+            $this->_db->rollback();
+            throw $e;
         }
 
-        $this->_db->commit();
         return $result;
     }
 
@@ -1214,7 +1384,7 @@ abstract class ORM
         }
 
         if ($foreignKey === null) {
-            $foreignKey = rtrim($this->tableName, 's') . '_id';
+            $foreignKey = self::defaultForeignKey($this);
         }
 
         /** @var ORM $related */
@@ -1242,7 +1412,7 @@ abstract class ORM
         }
 
         if ($foreignKey === null) {
-            $foreignKey = rtrim($this->tableName, 's') . '_id';
+            $foreignKey = self::defaultForeignKey($this);
         }
 
         /** @var ORM $related */
@@ -1266,7 +1436,7 @@ abstract class ORM
         $related = new $relatedClass($this->_db);
 
         if ($foreignKey === null) {
-            $foreignKey = rtrim($related->tableName, 's') . '_id';
+            $foreignKey = self::defaultForeignKey($related);
         }
 
         $fkValue = $this->resolveFkValue($foreignKey);
@@ -1345,12 +1515,6 @@ abstract class ORM
             $colName = $this->resolveDbColumn($name);
             $isPk = ($name === $pkProperty);
 
-            if ($isPk) {
-                // INTEGER PRIMARY KEY AUTOINCREMENT — translated per engine below.
-                $colDefs[] = implode(' ', [$colName, 'INTEGER', 'PRIMARY KEY', 'AUTOINCREMENT']);
-                continue;
-            }
-
             $sqlType = match ($type) {
                 'int'      => 'INTEGER',
                 'float'    => 'REAL',
@@ -1358,6 +1522,21 @@ abstract class ORM
                 'datetime' => $datetimeSql,
                 default    => 'VARCHAR(255)',
             };
+
+            if ($isPk) {
+                // v3.13.39: honour the DECLARED primary-key type. An integer PK
+                // is auto-increment (INTEGER PRIMARY KEY AUTOINCREMENT, then
+                // translated per engine below). A string/uuid/natural PK is
+                // caller-supplied — it must NOT be forced to an autoincrement
+                // INTEGER column (which silently coerces "GC-100" to 0). It
+                // gets its real type + PRIMARY KEY and no AUTOINCREMENT.
+                if ($type === 'int') {
+                    $colDefs[] = implode(' ', [$colName, 'INTEGER', 'PRIMARY KEY', 'AUTOINCREMENT']);
+                } else {
+                    $colDefs[] = implode(' ', [$colName, $sqlType, 'PRIMARY KEY']);
+                }
+                continue;
+            }
 
             $parts = [$colName, $sqlType];
 
@@ -1891,19 +2070,17 @@ abstract class ORM
 
         if ($type === 'hasOne') {
             if ($foreignKey === null) {
-                $foreignKey = rtrim($this->tableName, 's') . '_id';
+                $foreignKey = self::defaultForeignKey($this);
             }
             return $this->hasOneMethod($relatedClass, $foreignKey);
         } elseif ($type === 'hasMany') {
             if ($foreignKey === null) {
-                $foreignKey = rtrim($this->tableName, 's') . '_id';
+                $foreignKey = self::defaultForeignKey($this);
             }
             return $this->hasManyMethod($relatedClass, $foreignKey);
         } elseif ($type === 'belongsTo') {
             if ($foreignKey === null) {
-                /** @var ORM $temp */
-                $temp = new $relatedClass($this->_db);
-                $foreignKey = rtrim($temp->tableName, 's') . '_id';
+                $foreignKey = self::defaultForeignKey($relatedClass);
             }
             return $this->belongsToMethod($relatedClass, $foreignKey);
         }
@@ -1968,7 +2145,7 @@ abstract class ORM
 
             if ($type === 'hasOne' || $type === 'hasMany') {
                 if ($foreignKey === null) {
-                    $foreignKey = rtrim($sample->tableName, 's') . '_id';
+                    $foreignKey = self::defaultForeignKey($sample);
                 }
 
                 $pkValues = [];
@@ -2030,7 +2207,7 @@ abstract class ORM
                 /** @var ORM $relTemplate */
                 $relTemplate = new $relatedClass($db);
                 if ($foreignKey === null) {
-                    $foreignKey = rtrim($relTemplate->tableName, 's') . '_id';
+                    $foreignKey = self::defaultForeignKey($relatedClass);
                 }
 
                 $fkValues = [];
