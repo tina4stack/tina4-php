@@ -684,15 +684,25 @@ class McpServer
      */
     public static function isLocalhost(): bool
     {
-        $host = getenv('TINA4_HOST_NAME') ?: 'localhost:7146';
+        $host = DotEnv::getEnv('TINA4_HOST_NAME', 'localhost:7146') ?? 'localhost:7146';
         $hostPart = explode(':', $host)[0];
         return in_array($hostPart, ['localhost', '127.0.0.1', '0.0.0.0', '::1', ''], true);
     }
 
     /**
-     * Whether the MCP subsystem should activate. Reads TINA4_MCP — defaults
-     * to true when TINA4_DEBUG is on, otherwise false. Lets prod operators
-     * keep MCP off entirely without setting TINA4_DEBUG=false.
+     * Whether the MCP subsystem should activate.
+     *
+     * Canonical enable-gate semantics (Python master parity):
+     *   - An explicit, non-empty TINA4_MCP WINS on ANY host (sysadmin
+     *     opt-in/out): truthy → on, falsy → off, regardless of debug/host.
+     *   - Otherwise MCP requires TINA4_DEBUG truthy AND the dev auto-enable
+     *     is LOCALHOST-ONLY: it activates only when {@see isLocalhost()} OR
+     *     the operator has opted into remote exposure via TINA4_MCP_REMOTE.
+     *
+     * WHY: the MCP dev tools expose powerful ops (DB query, file read/WRITE,
+     * route list). On a non-localhost TINA4_DEBUG=true deployment they must
+     * NOT auto-expose — the localhost guard + TINA4_MCP_REMOTE escape hatch
+     * close that gap.
      */
     public static function isEnabled(): bool
     {
@@ -700,7 +710,10 @@ class McpServer
         if ($explicit !== null && $explicit !== '') {
             return DotEnv::isTruthy($explicit);
         }
-        return DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+        if (!DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'))) {
+            return false;
+        }
+        return self::isLocalhost() || DotEnv::isTruthy(DotEnv::getEnv('TINA4_MCP_REMOTE'));
     }
 
     /**

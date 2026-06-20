@@ -35,6 +35,12 @@ class McpDevAdminEndpointTest extends TestCase
     {
         Router::clear();
         McpServer::resetDefaultServer();
+        // The MCP endpoints are now gated on McpServer::isEnabled().
+        // These tests assert the endpoints ARE mounted, so explicitly
+        // enable MCP for the duration of the test (explicit TINA4_MCP
+        // wins on any host).
+        putenv('TINA4_MCP=true');
+        $_ENV['TINA4_MCP'] = 'true';
     }
 
     protected function tearDown(): void
@@ -42,6 +48,8 @@ class McpDevAdminEndpointTest extends TestCase
         ErrorTracker::reset();
         Router::clear();
         McpServer::resetDefaultServer();
+        putenv('TINA4_MCP');
+        unset($_ENV['TINA4_MCP']);
     }
 
     private function findRouteCallback(string $method, string $pattern): ?callable

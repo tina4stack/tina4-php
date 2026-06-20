@@ -2066,6 +2066,17 @@ class DevAdmin
             ]);
         });
 
+        // ── MCP endpoints (REST shim + JSON-RPC/SSE) ──────────────
+        //
+        // Gated on McpServer::isEnabled() — the canonical enable gate.
+        // register() already runs only in dev (TINA4_DEBUG), but the MCP
+        // dev tools expose powerful ops (DB query, file read/WRITE, route
+        // list), so dev auto-enable is LOCALHOST-ONLY: on a non-localhost
+        // TINA4_DEBUG=true deployment these routes are NOT mounted (the
+        // dispatcher then returns 404) unless the operator opts in via
+        // TINA4_MCP_REMOTE=true, or forces it on/off via explicit TINA4_MCP.
+        // Mirrors tina4-python's is_enabled() (Python master).
+        if (McpServer::isEnabled()) {
         // ── MCP REST shim ─────────────────────────────────────────
         //
         // Python-parity: dev-admin calls /mcp/tools to enumerate
@@ -2162,6 +2173,7 @@ class DevAdmin
                 ->text("event: endpoint\ndata: /__dev/mcp/message\n\n")
                 ->header('Content-Type', 'text/event-stream');
         }))->noAuth();
+        } // end if (McpServer::isEnabled())
 
         // ── Scaffold: + Route / + Model / + Migration / + Middleware
         Router::get('/__dev/api/scaffold', function (Request $request, Response $response) {
