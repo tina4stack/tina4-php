@@ -221,6 +221,13 @@ class QueryBuilder
     /**
      * Execute the query and return the database result.
      *
+     * v3.13.39: with no ->limit() set, get() returns ALL matching rows. It
+     * previously applied a silent default LIMIT 100 — a data-loss-on-read
+     * footgun where the 101st row vanished without a trace. An explicit
+     * ->limit(n) is still honoured; toSql() never injects a default LIMIT
+     * either. Pass 0 to fetch (its "no truncation" sentinel) when no limit was
+     * requested.
+     *
      * @return mixed The result from DatabaseAdapter::fetch().
      */
     public function get(): mixed
@@ -232,7 +239,7 @@ class QueryBuilder
         return $this->db->fetch(
             $sql,
             $allParams,
-            $this->limitVal ?? 100,
+            $this->limitVal ?? 0,
             $this->offsetVal ?? 0
         );
     }
@@ -463,8 +470,20 @@ class QueryBuilder
             return [[$field => [$mongoOp => $val]], $paramIndex + 1];
         }
 
-        // Fallback
-        return [['$where' => $cond], $paramIndex];
+        // v3.13.39: no silent $where fallback. Previously an unparseable
+        // condition was wrapped as ['$where' => <raw condition string>] — a
+        // raw-JS sink that is both injection-shaped (the WHERE string runs as
+        // JavaScript on the MongoDB server) and silently different semantics
+        // from the SQL the caller wrote. Fail loud instead: name the clause so
+        // the caller fixes it rather than shipping a surprise $where.
+        throw new \InvalidArgumentException(
+            "QueryBuilder::toMongo(): cannot translate WHERE clause to a MongoDB "
+            . "filter: '{$cond}'. Supported forms: '<field> <op> ?' "
+            . "(=, !=, <>, >, >=, <, <=), '<field> LIKE ?', "
+            . "'<field> [NOT] IN (?)', '<field> IS [NOT] NULL'. "
+            . "Rewrite the condition in one of those forms (toMongo() will not "
+            . "silently emit a raw \$where JavaScript expression)."
+        );
     }
 
     /**

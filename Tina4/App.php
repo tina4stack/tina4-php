@@ -195,6 +195,9 @@ class App
      */
     private static bool $shutdownHandlerRegistered = false;
 
+    /** @var bool Guard so startup auto-migration runs at most once per process. */
+    private static bool $autoMigrated = false;
+
     private string $basePath;
 
     /** @var array<array{callback: callable, interval: float}> Pending tick callbacks to register on server start */
@@ -591,10 +594,84 @@ class App
         // Register default landing page if no "/" route exists
         $this->registerLandingPage();
 
+        // Apply pending DB migrations on startup (after DB bind + route
+        // discovery, before serving) — NON-BREAKING. See autoMigrateOnStartup().
+        $this->autoMigrateOnStartup();
+
         Log::info('Tina4 v' . self::$VERSION . ' started', [
             'base_path' => $this->basePath,
             'development' => $this->development,
         ]);
+    }
+
+    /**
+     * Apply pending DB migrations on startup — NON-BREAKING.
+     *
+     * When a `migrations/` folder exists (with at least one `.sql` file) and
+     * `TINA4_AUTO_MIGRATE` is not disabled, pending migrations are applied
+     * during boot so the schema is current with no manual `tina4 migrate`
+     * step. A failure here is logged LOUD and the service STILL starts — a bad
+     * migration must never take the backend down. (The explicit `tina4 migrate`
+     * CLI stays fail-fast so CI still gets a non-zero exit.)
+     *
+     * Disable with `TINA4_AUTO_MIGRATE=false` (also false/0/no/off) — e.g.
+     * multi-instance production that migrates as a separate deploy step
+     * (concurrent first-apply can race).
+     */
+    private function autoMigrateOnStartup(): void
+    {
+        // Run at most once per process — start() may be re-entered per request
+        // under PHP-FPM / php -S (via __invoke()/handle()); migrations must not
+        // re-run on every request.
+        if (self::$autoMigrated) {
+            return;
+        }
+        self::$autoMigrated = true;
+
+        $folder = $this->basePath . DIRECTORY_SEPARATOR . 'migrations';
+
+        // No migrations folder, or no .sql files in it → nothing to do (silent).
+        if (!is_dir($folder) || empty(glob($folder . DIRECTORY_SEPARATOR . '*.sql'))) {
+            return;
+        }
+
+        // Honour the kill switch: false/0/no/off disable (default 'true').
+        if (!DotEnv::isTruthy(DotEnv::getEnv('TINA4_AUTO_MIGRATE', 'true'))) {
+            Log::debug('TINA4_AUTO_MIGRATE is off — skipping startup migrations');
+            return;
+        }
+
+        // Resolve a database — falls back to TINA4_DATABASE_URL via getDatabase().
+        $db = self::getDatabase();
+        if ($db === null) {
+            Log::debug('Startup migrations skipped (no database configured)');
+            return;
+        }
+
+        try {
+            $migration = new Migration($db, $folder);
+            $result = $migration->migrate();
+
+            // The runner collects per-file failures into 'errors' rather than
+            // throwing; treat a non-empty 'errors' set as a failure too. A raw
+            // throw (e.g. a bad PHP migration) is caught below — either way the
+            // service still boots.
+            if (!empty($result['errors'])) {
+                $first = (string) reset($result['errors']);
+                Log::error(
+                    "Startup auto-migration failed: {$first} — the service is "
+                    . 'starting anyway. Run `tina4 migrate` to retry.'
+                );
+            } elseif (!empty($result['applied'])) {
+                $count = count($result['applied']);
+                Log::info("Applied {$count} pending migration(s) on startup");
+            }
+        } catch (\Throwable $e) {
+            Log::error(
+                "Startup auto-migration failed: {$e->getMessage()} — the service "
+                . 'is starting anyway. Run `tina4 migrate` to retry.'
+            );
+        }
     }
 
     /**

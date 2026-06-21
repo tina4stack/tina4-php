@@ -613,7 +613,7 @@ class Plan
         $userParts[] = 'Reply with ONLY the JSON array — no explanation, no markdown fences.';
         $userPrompt = implode("\n\n", $userParts);
 
-        $aiUrl = getenv('TINA4_AI_URL') ?: 'http://andrevanzuydam.com:11437/api/chat';
+        $aiUrl = getenv('TINA4_AI_URL') ?: 'http://localhost:11437/api/chat';
         $aiModel = getenv('TINA4_AI_MODEL') ?: 'qwen2.5-coder:14b';
 
         $ch = curl_init($aiUrl);

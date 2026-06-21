@@ -28,6 +28,14 @@ class WebSocketConnection
     /** Route params extracted from path pattern */
     public readonly array $params;
 
+    /**
+     * Verified JWT payload when this connection upgraded on a @secured WS route,
+     * else null on a public route. Mirrors Python's connection.auth.
+     *
+     * @var array<string,mixed>|null
+     */
+    public readonly ?array $auth;
+
     /** @var resource The underlying socket */
     private $socket;
 
@@ -44,13 +52,14 @@ class WebSocketConnection
     public $onError = null;
 
     /**
-     * @param string      $id      Unique connection ID
-     * @param string      $path    WebSocket route path
-     * @param resource    $socket  Raw socket resource
-     * @param Server|null $server  Server reference for broadcast and rooms
-     * @param string      $ip      Client IP address
-     * @param array       $headers HTTP headers from upgrade request
-     * @param array       $params  Route params from path pattern
+     * @param string                   $id      Unique connection ID
+     * @param string                   $path    WebSocket route path
+     * @param resource                 $socket  Raw socket resource
+     * @param Server|null              $server  Server reference for broadcast and rooms
+     * @param string                   $ip      Client IP address
+     * @param array                    $headers HTTP headers from upgrade request
+     * @param array                    $params  Route params from path pattern
+     * @param array<string,mixed>|null $auth    Verified JWT payload (@secured route) or null (public)
      */
     public function __construct(
         string $id,
@@ -60,6 +69,7 @@ class WebSocketConnection
         string $ip = '',
         array $headers = [],
         array $params = [],
+        ?array $auth = null,
     ) {
         $this->id = $id;
         $this->path = $path;
@@ -68,6 +78,7 @@ class WebSocketConnection
         $this->ip = $ip;
         $this->headers = $headers;
         $this->params = $params;
+        $this->auth = $auth;
     }
 
     /**

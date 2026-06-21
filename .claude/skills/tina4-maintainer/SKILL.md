@@ -36,7 +36,7 @@ site, or a CLAUDE.md example — and run `docs_search` to catch prose that now d
 returns nothing for a name you expected, the name does not exist in this version: fix the code or the
 doc, do not paper over it.
 
-## Independent Verification — Never Trust a Self-Reported Green
+## Independent Verification & Honest Claims — Prove It, Then Qualify It
 
 When work is produced by a subagent, a parallel agent, or a workflow — or even by a prior step in
 your own session — **do not trust its claim that tests pass.** Re-verify it yourself before you
@@ -55,9 +55,18 @@ commit, merge, or release:
   against the parser, actually invoke the CLI) rather than accepting the agent's assessment.
 - **Confirm lock-in tests are real** — both positive AND negative cases present, and the negative
   test genuinely fails against the old behavior.
+- **State every claim at 100% and qualify it — never assert what you haven't proven.** No "should
+  work", no "probably passes", no "fixed" before you ran it. Scope each claim to *where you actually
+  verified it*: "3251 tests pass **on macOS, PHP 8.5**" — not "tests pass"; "green on Linux CI,
+  not yet run on Windows" when that's the truth. An unqualified claim that holds on only one
+  platform/runtime/DB engine is a false claim on every other. Qualify by **OS (Windows/macOS/Linux),
+  language version, and DB engine** whenever behaviour could differ there — sessions, file paths,
+  path separators, SSL/cert stores, native extensions, line endings, and case-sensitivity are the
+  classic per-platform divergences. If you didn't test it on a platform, say so; don't imply you did.
 
-This is non-negotiable for anything that commits, merges, or releases. A re-run is trivial against
-the cost of shipping a masked regression to four public registries.
+This is non-negotiable for anything that commits, merges, or releases — and the same honesty governs
+every status you report: a claim is either proven-and-qualified, or it is not made. A re-run is
+trivial against the cost of shipping a masked regression to four public registries.
 
 ## The Guiding Philosophy
 
@@ -410,6 +419,36 @@ When reviewing or refactoring Tina4 code, actively hunt for:
 
 Don't just find problems — fix them or propose the fix. Every review should leave the
 code better than you found it.
+
+### Refactoring — Make It Smaller Without Changing What It Does
+
+Refactoring is **behaviour-preserving** improvement: the code gets smaller, clearer, and faster to
+read, and every existing test still passes **unchanged**. If a test had to change, that wasn't a
+refactor — it was a behaviour change (do that deliberately, separately, with new lock-in tests).
+The discipline:
+
+1. **Characterise first.** Before touching code with thin coverage, add tests that pin its CURRENT
+   behaviour (inputs → outputs, edge cases included). You cannot safely compact what you can't
+   prove you didn't break — these tests are the safety net the whole refactor leans on.
+2. **Measure before.** Capture a baseline: `tina4 metrics` (LOC, cyclomatic complexity,
+   maintainability per file), bundle/dist size where it matters (e.g. tina4-js's <3 KB budget —
+   `npm run test:size`), and the Carbonah numbers. A refactor that doesn't move these isn't worth
+   the risk.
+3. **One logical change per commit.** Extract-a-helper, collapse-a-duplicate, inline-a-needless-
+   indirection, replace-a-loop-with-a-built-in — each is its own commit, suite green between them.
+   Never mix a refactor with a behaviour change in one commit: a reviewer (and `git bisect`) must
+   be able to trust that a "refactor" commit changed nothing observable.
+4. **Compact, don't golf.** Smaller is the goal, but readability wins ties — prefer a stdlib/
+   built-in call or a shared helper over a clever one-liner. Deleting code is the best refactor: a
+   line removed can't rot, can't hide a bug, and ships faster.
+5. **Verify independently.** Re-run the FULL suite yourself at each step (see *Independent
+   Verification*) and re-measure. Green tests + smaller/simpler metrics + unchanged behaviour =
+   done. Green tests but bigger/more-complex metrics = revert; you made it worse.
+6. **Parity still applies.** A refactor in the Python master that changes a shared shape must be
+   mirrored; a refactor confined to one framework's internals need not be — but say which it is.
+
+Bad targets to resist: rewriting a working, well-covered module for taste; renaming public API
+"for clarity" (that's a breaking change, not a refactor); abstracting a pattern that occurs once.
 
 ### Testing Philosophy
 

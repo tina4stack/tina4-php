@@ -59,9 +59,6 @@ class Log
     /** @var bool Whether to format as human-readable (dev mode) */
     private static bool $humanReadable = false;
 
-    /** @var bool Whether Log::critical() actually emits (TINA4_LOG_CRITICAL) */
-    private static bool $criticalEnabled = false;
-
     /** @var string Minimum log level */
     private static string $minLevel = self::LEVEL_DEBUG;
 
@@ -82,7 +79,6 @@ class Log
      *   TINA4_LOG_FILE       — primary log file path; if absolute, sets dir + filename
      *   TINA4_LOG_FORMAT     — 'text' (human-readable) or 'json'
      *   TINA4_LOG_OUTPUT     — 'stdout', 'file', or 'both'
-     *   TINA4_LOG_CRITICAL   — enable Log::critical()
      *   TINA4_LOG_ROTATE_SIZE — rotate threshold in bytes (0 disables rotation)
      *   TINA4_LOG_ROTATE_KEEP — number of rotated files to retain
      *
@@ -101,8 +97,11 @@ class Log
 
         // File: TINA4_LOG_FILE may be a relative filename (joined with dir) or
         // an absolute path (split into dir + filename). Empty/null => default.
+        // An explicit path is a hard opt-in to file output (explicit always
+        // wins — even in production), so track it for the default-output branch.
         $envFile = DotEnv::getEnv('TINA4_LOG_FILE');
-        if ($envFile !== null && $envFile !== '') {
+        $explicitLogFile = $envFile !== null && $envFile !== '';
+        if ($explicitLogFile) {
             if (str_contains($envFile, DIRECTORY_SEPARATOR) || str_contains($envFile, '/')) {
                 self::$logDir = rtrim(dirname($envFile), '/');
                 self::$logFile = basename($envFile);
@@ -153,13 +152,19 @@ class Log
                 // read PID 1 stdout (docker logs / k8s); the old dev-only default
                 // meant deployed apps logged to a file inside the container that
                 // nobody could see. TINA4_LOG_OUTPUT=file still opts out.
+                //
+                // v3.13.39: the log FILE (tina4.log + error.log) is now written by
+                // default ONLY in development (TINA4_DEBUG truthy). In production /
+                // containers the logger is stdout-only — a log file inside a
+                // container just bloats the writable layer and disk, and 12-factor
+                // wants logs on stdout for the platform to capture. An explicit
+                // TINA4_LOG_OUTPUT=file/both (handled above) or an explicit
+                // TINA4_LOG_FILE path still forces a file — explicit always wins.
                 self::$stdout = true;
-                self::$fileOutput = true;
+                self::$fileOutput = $explicitLogFile
+                    || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
                 break;
         }
-
-        // Critical level enabled flag
-        self::$criticalEnabled = DotEnv::isTruthy(DotEnv::getEnv('TINA4_LOG_CRITICAL', 'false'));
 
         // Rotation — bytes, 0 disables. Falls back to legacy TINA4_LOG_MAX_SIZE (MB)
         // and TINA4_LOG_KEEP for back-compat.
@@ -235,18 +240,59 @@ class Log
     }
 
     /**
-     * Log a critical message. No-op unless TINA4_LOG_CRITICAL is truthy.
+     * Log a critical message — the highest severity (above ERROR).
      *
-     * Critical messages always mirror to the error log (same as ERROR/WARNING)
-     * regardless of the configured min level — but the entire level is
-     * suppressed when TINA4_LOG_CRITICAL is unset/false.
+     * Always emitted (like every other level), and mirrored into the error
+     * log (CRITICAL 4 >= WARNING 2). Use it for unrecoverable, alert-worthy
+     * failures.
      */
     public static function critical(string $message, array $context = []): void
     {
-        if (!self::$criticalEnabled) {
-            return;
-        }
         self::log(self::LEVEL_CRITICAL, $message, $context);
+    }
+
+    /**
+     * Whether a message at the given level would pass the configured minimum
+     * CONSOLE level — the same threshold that gates stdout in {@see log()}.
+     *
+     * This is the single source of truth for the level comparison: both the
+     * console write in log() and the public {@see isEnabled()} predicate call
+     * it, so the predicate can never disagree with what the logger prints.
+     * Level input is case-insensitive (mapped to the upper-case priorities).
+     *
+     * @param string $level Log level (e.g. "INFO", "info", "DEBUG").
+     */
+    private static function shouldLog(string $level): bool
+    {
+        $key = strtoupper($level);
+        return (self::LEVEL_PRIORITY[$key] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
+    }
+
+    /**
+     * Return true if a message at $level would pass the configured minimum
+     * CONSOLE level — i.e. whether the logger would actually print it to
+     * stdout. This reflects CONSOLE (stdout) visibility only: the log FILE
+     * always records every level regardless of this threshold.
+     *
+     * Use it to skip building an expensive log payload that would not be shown:
+     *
+     *     if (Log::isEnabled('debug')) {
+     *         Log::debug('state', ['snapshot' => expensiveDump()]);
+     *     }
+     *
+     * $level is case-insensitive (debug / info / warning / error / critical).
+     * "critical" is the highest severity and flows through the same ordinary
+     * threshold as every other level — there is no special-casing.
+     *
+     * Delegates to the same {@see shouldLog()} gate the console write uses, so
+     * it never re-implements the level comparison and can never drift from the
+     * real output decision.
+     *
+     * @param string $level Log level to test (e.g. "debug", "INFO", "critical").
+     */
+    public static function isEnabled(string $level): bool
+    {
+        return self::shouldLog($level);
     }
 
     /**
@@ -273,8 +319,7 @@ class Log
         $line = $formatted . PHP_EOL;
 
         // Console output respects TINA4_LOG_LEVEL
-        $shouldLog = (self::LEVEL_PRIORITY[$level] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
-        if (self::$stdout && $shouldLog) {
+        if (self::$stdout && self::shouldLog($level)) {
             self::writeStdout($level, $line);
         }
 
@@ -424,10 +469,11 @@ class Log
     private static function writeStdout(string $level, string $line): void
     {
         $colors = [
-            self::LEVEL_DEBUG => "\033[36m",   // Cyan
-            self::LEVEL_INFO => "\033[32m",    // Green
-            self::LEVEL_WARNING => "\033[33m", // Yellow
-            self::LEVEL_ERROR => "\033[31m",   // Red
+            self::LEVEL_DEBUG => "\033[36m",    // Cyan
+            self::LEVEL_INFO => "\033[32m",     // Green
+            self::LEVEL_WARNING => "\033[33m",  // Yellow
+            self::LEVEL_ERROR => "\033[31m",    // Red
+            self::LEVEL_CRITICAL => "\033[35m", // Magenta
         ];
 
         // v3.13.14: only colourise in human-readable (dev) mode. In production
@@ -532,7 +578,6 @@ class Log
         self::$stdout = false;
         self::$fileOutput = true;
         self::$humanReadable = false;
-        self::$criticalEnabled = false;
         self::$minLevel = self::LEVEL_DEBUG;
         self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
         self::$keepFiles = self::DEFAULT_ROTATE_KEEP;
@@ -578,11 +623,5 @@ class Log
     public static function isHumanReadable(): bool
     {
         return self::$humanReadable;
-    }
-
-    /** Test helper — whether Log::critical() is currently active. */
-    public static function criticalEnabled(): bool
-    {
-        return self::$criticalEnabled;
     }
 }

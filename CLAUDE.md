@@ -552,12 +552,53 @@ $api->addHeaders(array $headers): void
 $api->setBasicAuth(string $username, string $password): void
 ```
 
+**Retry/backoff (opt-in, default off):** the constructor accepts `maxRetries` (default `0`) and `retryBackoff` (default `0.5`s base, exponential). When `maxRetries > 0` a transport error or a retryable status (429/500/502/503/504) is retried; 4xx is never retried. A retried non-idempotent request may be re-sent — retries are opt-in for that reason. (PHP `file_get_contents` does not auto-follow redirects, so there is no cross-host Authorization-leak surface — the redirect auth-strip is Python-only.)
+
 ### Migration — Database migrations
 
 ```php
 $migration = new \Tina4\Migration(DatabaseAdapter $db, string $migrationsDir = "src/migrations", string $delimiter = ";")
 $migration->migrate(): array
 ```
+
+**How migrations work internally:**
+
+- SQL/PHP files live in the migrations folder. They are discovered in
+  **numeric-prefix order** (`9_` before `10_`) and split on the `;` delimiter — a
+  plain lexical sort misorders unpadded prefixes (`10` < `9`). A file WITHOUT a
+  numeric/timestamp prefix logs a `Log::warning` (its order relative to the
+  numbered files is undefined). Both `NNNNNN_name.sql` and `YYYYMMDDHHMMSS_name.sql`
+  patterns sort correctly.
+- State is tracked by **row existence** in the `tina4_migration` table
+  (auto-created per engine): a migration runs once — if a row for it exists, it is
+  skipped. There is **no `passed` column** in the v3 PHP schema; a failed
+  migration is **never recorded** and nothing is deleted on failure — `migrate()`
+  collects the error and **stops** (the explicit `bin/tina4php migrate` CLI then
+  exits non-zero; it does not `passed=0` or `sys.exit` from inside the runner).
+- **Each migration FILE is wrapped in its own transaction** (`startTransaction()`
+  … `commit()`): on a failure the file rolls back, the error is logged, and the
+  run halts at that file. Already-applied files stay applied — fix the bad file
+  and re-run.
+- **Atomicity caveat:** per-file transactions are truly atomic only on engines
+  with **transactional DDL (PostgreSQL)**. MySQL, Firebird, and SQLite
+  **auto-commit DDL**, so a multi-statement migration that fails midway on those
+  engines leaves earlier statements applied — keep one logical change per file.
+  `CREATE TABLE` and `ALTER TABLE … ADD` are made idempotent on Firebird/MSSQL
+  (existence-checked via `tableExists()` / `RDB$RELATION_FIELDS`) so a re-run with
+  a raw DDL statement skips the already-existing object instead of erroring.
+  SQLite/MySQL/PostgreSQL support `IF NOT EXISTS` and are left to the engine.
+
+**Auto-run on startup (`TINA4_AUTO_MIGRATE`, default on).** When a `migrations/`
+folder exists (with at least one `.sql` file), `App::start()` applies pending
+migrations during boot — after the DB is bound + routes discovered, before
+serving — so the schema is current with no manual `tina4 migrate` step. It is
+**non-breaking**: a failed migration is logged (`Log::error`) and the service
+still starts (a bad migration must never take the backend down); the hook runs
+at most once per process. Set `TINA4_AUTO_MIGRATE=false` (also `0`/`no`/`off`)
+to disable — e.g. multi-instance production that migrates as a separate deploy
+step, where concurrent first-apply can race. The explicit `bin/tina4php migrate`
+CLI is unaffected and stays **fail-fast**: any migration error prints and exits
+non-zero (`exit(1)`) so CI gets a failing exit code.
 
 ### Queue — Job queue with pluggable backends
 
@@ -655,7 +696,14 @@ $fake->run(callable $seeder, int $count = 10): array
 \Tina4\Log::info(string $message, array $context = []): void
 \Tina4\Log::warning(string $message, array $context = []): void
 \Tina4\Log::error(string $message, array $context = []): void
-// Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR)
+\Tina4\Log::critical(string $message, array $context = []): void  // Highest severity (debug<info<warning<error<critical). ALWAYS emits like every level; mirrored into error.log (4 >= warning 2); renders magenta. No toggle.
+\Tina4\Log::isEnabled(string $level): bool  // True if $level passes the min CONSOLE level (case-insensitive); reuses the stdout gate so it never disagrees with what prints. File sink records every level regardless. 'critical' is ordinary threshold logic (it outranks error).
+// Level filtering via TINA4_LOG_LEVEL env var (DEBUG | INFO | WARNING | ERROR | CRITICAL)
+// TINA4_LOG_CRITICAL env toggle is RETIRED (v3.13.39) — critical is first-class and always logs.
+// Output (v3.13.39): with TINA4_LOG_OUTPUT unset (default), stdout is ALWAYS on but the
+// log FILE (tina4.log + error.log) is written ONLY in dev (TINA4_DEBUG truthy). Production /
+// containers are stdout-only — no file to bloat the writable layer (12-factor). Explicit
+// TINA4_LOG_OUTPUT=file|both, OR an explicit TINA4_LOG_FILE path, still forces a file.
 ```
 
 ### Events — Decoupled pub/sub event system
@@ -1037,7 +1085,7 @@ $result = SqlTranslation::remember(
 - Session handlers for MongoDB and Valkey/Redis. `TINA4_SESSION_SAMESITE` env var (default: Lax)
 - GraphQL query execution. **Depth guard**: selection-set nesting is bounded by `TINA4_GRAPHQL_MAX_DEPTH` (default `50`; set `<= 0` to disable) — an over-deep query or a circular fragment fails with a structured `"Query exceeds maximum depth of N"` error (counted per selection level AND per fragment spread) instead of overflowing the stack. Resolver exceptions are captured as GraphQL errors — the message is the real cause only in debug mode (`ErrorOverlay::isDebugMode()` / `TINA4_DEBUG`); in production it is a generic `"Internal server error"` (the real cause is logged via `Log::error`, `path` preserved) so a resolver exception never leaks internal state
 - SOAP 1.1 / WSDL (`WSDL`, `#[WSDLOperation]`). **DOCTYPE rejected**: a SOAP request containing a `<!DOCTYPE>` (DTD) is rejected with a `Client` fault **before** parsing — SOAP 1.1 §3 forbids DTDs, and this closes the XML entity-expansion (billion-laughs) + external-entity (XXE) attack surface for every parser. **Error masking is debug-gated**: an operation that raises returns a `Server` fault whose `<faultstring>` is the real cause only in debug mode (`ErrorOverlay::isDebugMode()` / `TINA4_DEBUG`); in production it is a generic `"Internal server error"` and the real cause is logged via `Log::error`, so a resolver exception never leaks internal state (DB creds, file paths) to a SOAP client
-- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis/NATS pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars) — **wired into the live broadcast path**: every `broadcastWebSocket()`/`broadcastToRoom()` delivers to LOCAL connections first then publishes an envelope `{src,kind,exclude,room,path,+text|b64}` to the shared `tina4:ws` channel (identical shape across all 4 frameworks); sibling instances drain it on the event-loop idle tick and relay to their own LOCAL connections only (origin guard drops our own echo by stable per-process id — no double-delivery, no cluster loop). Backplane failure logs + degrades to local-only, never crashes a broadcast. Broadcasts are resilient: a dead/slow client is pruned and never aborts delivery to the rest. **Security**: optional origin allow-list via `TINA4_WS_ALLOWED_ORIGINS` (comma-separated; empty/unset = allow all — non-breaking; set = reject mismatched/missing Origin with 403 on every upgrade path). **Idle reaper**: `TINA4_WS_IDLE_TIMEOUT` (seconds; 0/unset = disabled) closes connections idle past the timeout. RFC 6455 fragmented messages (`OP_CONTINUATION`) are reassembled before dispatch. Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
+- WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis/NATS pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars) — **wired into the live broadcast path**: every `broadcastWebSocket()`/`broadcastToRoom()` delivers to LOCAL connections first then publishes an envelope `{src,kind,exclude,room,path,+text|b64}` to the shared `tina4:ws` channel (identical shape across all 4 frameworks); sibling instances drain it on the event-loop idle tick and relay to their own LOCAL connections only (origin guard drops our own echo by stable per-process id — no double-delivery, no cluster loop). Backplane failure logs + degrades to local-only, never crashes a broadcast. Broadcasts are resilient: a dead/slow client is pruned and never aborts delivery to the rest. **Security**: optional origin allow-list via `TINA4_WS_ALLOWED_ORIGINS` (comma-separated; empty/unset = allow all — non-breaking; set = reject mismatched/missing Origin with 403 on every upgrade path). **Per-route auth**: a WS route is PUBLIC by default (mirrors GET); mark it secured via an `@secured` handler docblock OR imperatively `Router::websocket($path, $handler, secure: true)` (both set `auth_required`). On EVERY upgrade entry point (`Server::handleWebSocketUpgrade` integrated + `WebSocket::handleNewConnection` standalone), AFTER the origin allow-list and BEFORE accepting the handshake, a secured route extracts and validates a JWT via `Auth::validToken()` — missing/invalid rejects the upgrade (401, never accepted); public routes always pass. Three token transports (checked in order, see `WebSocket::wsToken()`): `Authorization: Bearer <jwt>` header (server/CLI/mobile), the `Sec-WebSocket-Protocol: bearer, <jwt>` subprotocol (browser `new WebSocket(url, ['bearer', token])` — echoed back as the accepted subprotocol), and `?token=<jwt>` query param. The verified payload is exposed as `$connection->auth` (null on public routes). Helpers: `WebSocket::wsToken()` / `WebSocket::wsAuthorized()` (mirror Python's `ws_token` / `ws_authorized`). **Idle reaper**: `TINA4_WS_IDLE_TIMEOUT` (seconds; 0/unset = disabled) closes connections idle past the timeout. RFC 6455 fragmented messages (`OP_CONTINUATION`) are reassembled before dispatch. Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
 - Messenger (.env driven SMTP/IMAP). IMAP reads **fail loud**: `inbox()`/`read()`/`unread()`/`search()`/`folders()` LOG and RAISE `Tina4\MessengerConnectionError` (extends `\RuntimeException`) on a connection/auth/protocol failure instead of swallowing it into an empty result — a *successful* fetch from a genuinely empty mailbox still returns empty (`[]`/`null`/`0`) normally. `send()` is unchanged (returns `{success, message, id}`)

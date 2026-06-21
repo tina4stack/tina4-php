@@ -19,7 +19,7 @@ use Tina4\Response;
  *   TINA4_CORS_METHODS  — comma-separated allowed methods (default: "GET,POST,PUT,PATCH,DELETE,OPTIONS")
  *   TINA4_CORS_HEADERS  — comma-separated allowed headers (default: "Content-Type,Authorization,X-Request-ID")
  *   TINA4_CORS_MAX_AGE  — preflight cache duration in seconds (default: "86400")
- *   TINA4_CORS_CREDENTIALS — allow credentials (default: "true"); only sent when origin is not "*"
+ *   TINA4_CORS_CREDENTIALS — allow credentials (default: "false"); only sent when origin is not "*"
  */
 class CorsMiddleware
 {
@@ -40,7 +40,7 @@ class CorsMiddleware
         $this->allowedMethods = $methods ?? DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         $this->allowedHeaders = $headers ?? DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Request-ID');
         $this->maxAge = $maxAge ?? (int)DotEnv::getEnv('TINA4_CORS_MAX_AGE', '86400');
-        $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'true');
+        $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'false');
         $this->credentials = $credentials ?? in_array(strtolower($credentialsEnv), ['true', '1', 'yes'], true);
     }
 
@@ -159,7 +159,7 @@ class CorsMiddleware
      *   TINA4_CORS_METHODS  — allowed methods (default: "GET,POST,PUT,PATCH,DELETE,OPTIONS")
      *   TINA4_CORS_HEADERS  — allowed headers (default: "Content-Type,Authorization,X-Request-ID")
      *   TINA4_CORS_MAX_AGE  — preflight cache in seconds (default: "86400")
-     *   TINA4_CORS_CREDENTIALS — allow credentials (default: "true"); only sent when origin is not "*"
+     *   TINA4_CORS_CREDENTIALS — allow credentials (default: "false"); only sent when origin is not "*"
      *
      * For OPTIONS preflight requests, returns a 204 response to short-circuit the handler.
      *
@@ -173,7 +173,7 @@ class CorsMiddleware
         $methods = DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         $headers = DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Request-ID');
         $maxAge = DotEnv::getEnv('TINA4_CORS_MAX_AGE', '86400');
-        $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'true');
+        $credentialsEnv = DotEnv::getEnv('TINA4_CORS_CREDENTIALS', 'false');
         $credentials = in_array(strtolower($credentialsEnv), ['true', '1', 'yes'], true);
 
         // Resolve a single allowed origin from the request's Origin header.

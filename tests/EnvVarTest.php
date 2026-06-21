@@ -107,6 +107,20 @@ class EnvVarTest extends TestCase
         }
     }
 
+    /**
+     * Pin development mode (TINA4_DEBUG=true) so the log FILE is written.
+     *
+     * Since v3.13.39 the log file is written by default ONLY in dev — in
+     * production / containers the logger is stdout-only (no file). A test that
+     * asserts a file is written (without an explicit TINA4_LOG_OUTPUT/FILE)
+     * must therefore run in dev. TINA4_DEBUG is a TRACKED_VAR, so tearDown
+     * clears it. Mirrors Python's test fixture pinning TINA4_DEBUG=true.
+     */
+    private function enableDevLogFile(): void
+    {
+        $this->setEnv(['TINA4_DEBUG' => 'true']);
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // TINA4_HOST — bind address (Server.php)
     // ─────────────────────────────────────────────────────────────────
@@ -246,6 +260,7 @@ class EnvVarTest extends TestCase
     public function testTina4LogDirOverride(): void
     {
         $alt = $this->tempDir . '/custom_logs';
+        $this->enableDevLogFile();
         $this->setEnv(['TINA4_LOG_DIR' => $alt]);
         Log::configure();
         $this->assertSame($alt, Log::logDir());
@@ -260,6 +275,7 @@ class EnvVarTest extends TestCase
 
     public function testTina4LogFormatDefault(): void
     {
+        $this->enableDevLogFile();
         Log::configure(logDir: $this->tempDir, development: false);
         $this->assertFalse(Log::isHumanReadable());
 
@@ -270,6 +286,7 @@ class EnvVarTest extends TestCase
 
     public function testTina4LogFormatOverrideText(): void
     {
+        $this->enableDevLogFile();
         $this->setEnv(['TINA4_LOG_FORMAT' => 'text']);
         Log::configure(logDir: $this->tempDir, development: false);
         $this->assertTrue(Log::isHumanReadable());
@@ -284,15 +301,34 @@ class EnvVarTest extends TestCase
     // TINA4_LOG_OUTPUT — stdout / file / both (Log.php)
     // ─────────────────────────────────────────────────────────────────
 
-    public function testTina4LogOutputDefault(): void
+    public function testTina4LogOutputDefaultInProduction(): void
     {
-        // v3.13.14: stdout is ON by default even in production — containers
-        // read PID 1 stdout (docker logs / k8s). File output stays on too,
-        // so the default is effectively "both". Pre-v3.13.14 production
-        // defaulted to file-only, which is why deployed apps got no logs.
+        // v3.13.39: with TINA4_LOG_OUTPUT unset, stdout is ALWAYS on but the
+        // log FILE is written ONLY in dev (TINA4_DEBUG). In production /
+        // containers the logger is stdout-only — a log file inside a container
+        // just bloats the writable layer + disk, and 12-factor wants logs on
+        // stdout for the platform to capture. (TINA4_DEBUG is cleared by
+        // setUp, so this is the production default.)
         Log::configure(logDir: $this->tempDir, development: false);
+        $this->assertTrue(Log::stdoutEnabled(), 'stdout is always on');
+        $this->assertFalse(
+            Log::fileOutputEnabled(),
+            'production default is stdout-only (no file)'
+        );
+    }
+
+    public function testTina4LogOutputDefaultInDev(): void
+    {
+        // v3.13.39: in development (TINA4_DEBUG truthy) the default still
+        // writes a file alongside stdout — so local `tail -f logs/tina4.log`
+        // keeps working. Mirrors Python master.
+        $this->enableDevLogFile();
+        Log::configure(logDir: $this->tempDir, development: true);
         $this->assertTrue(Log::stdoutEnabled());
-        $this->assertTrue(Log::fileOutputEnabled());
+        $this->assertTrue(
+            Log::fileOutputEnabled(),
+            'dev default writes a file alongside stdout'
+        );
     }
 
     public function testTina4LogOutputOverrideStdout(): void
@@ -316,29 +352,39 @@ class EnvVarTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // TINA4_LOG_CRITICAL — Log::critical() gate (Log.php)
+    // TINA4_LOG_CRITICAL — RETIRED (v3.13.39). critical is now a first-class
+    // top-level severity that ALWAYS emits; the env-var "enable critical()"
+    // toggle is gone and is no longer read.
     // ─────────────────────────────────────────────────────────────────
 
-    public function testTina4LogCriticalDefault(): void
+    public function testTina4LogCriticalAlwaysEmitsByDefault(): void
     {
+        // No env var set — critical must still emit (no opt-in gate). Pin dev
+        // so the FILE assertion holds (v3.13.39: file is dev-gated by default).
+        $this->enableDevLogFile();
         Log::configure(logDir: $this->tempDir);
-        $this->assertFalse(Log::criticalEnabled());
 
-        Log::critical('should-not-emit');
-        // No file because critical was the only call and it was suppressed
-        $this->assertFileDoesNotExist($this->tempDir . '/tina4.log');
+        Log::critical('always-emits');
+        $this->assertFileExists($this->tempDir . '/tina4.log');
+        $content = file_get_contents($this->tempDir . '/tina4.log');
+        $this->assertStringContainsString('CRITICAL', $content);
+        $this->assertStringContainsString('always-emits', $content);
     }
 
-    public function testTina4LogCriticalOverride(): void
+    public function testTina4LogCriticalEnvVarIsRetired(): void
     {
-        $this->setEnv(['TINA4_LOG_CRITICAL' => 'true']);
+        // Explicitly setting the retired var to a falsy value must NOT
+        // suppress critical — proving the var is no longer read. Pin dev so
+        // the FILE assertion holds (v3.13.39: file is dev-gated by default).
+        $this->enableDevLogFile();
+        $this->setEnv(['TINA4_LOG_CRITICAL' => 'false']);
         Log::configure(logDir: $this->tempDir);
-        $this->assertTrue(Log::criticalEnabled());
 
         Log::critical('boom');
         $this->assertFileExists($this->tempDir . '/tina4.log');
         $content = file_get_contents($this->tempDir . '/tina4.log');
         $this->assertStringContainsString('CRITICAL', $content);
+        $this->assertStringContainsString('boom', $content);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -361,6 +407,7 @@ class EnvVarTest extends TestCase
     public function testRotationTriggersOnSizeOverflow(): void
     {
         // Tiny 200-byte threshold so a single info() call rolls.
+        $this->enableDevLogFile();
         $this->setEnv(['TINA4_LOG_ROTATE_SIZE' => '200', 'TINA4_LOG_ROTATE_KEEP' => '5']);
         Log::configure(logDir: $this->tempDir);
 
@@ -380,6 +427,7 @@ class EnvVarTest extends TestCase
 
     public function testRotationDisabledWhenSizeIsZero(): void
     {
+        $this->enableDevLogFile();
         $this->setEnv(['TINA4_LOG_ROTATE_SIZE' => '0']);
         Log::configure(logDir: $this->tempDir);
 
@@ -413,6 +461,7 @@ class EnvVarTest extends TestCase
     public function testRotationKeepWindow(): void
     {
         // Threshold 100 bytes, keep only 2 backups.
+        $this->enableDevLogFile();
         $this->setEnv(['TINA4_LOG_ROTATE_SIZE' => '100', 'TINA4_LOG_ROTATE_KEEP' => '2']);
         Log::configure(logDir: $this->tempDir);
 

@@ -17,6 +17,16 @@ class LogTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/tina4_log_test_' . uniqid();
         mkdir($this->tempDir, 0755, true);
+
+        // Since v3.13.39 the log FILE is written by default ONLY in dev
+        // (TINA4_DEBUG truthy) — prod/containers are stdout-only. Pin dev here
+        // so the existing file-output tests stay deterministic; the prod
+        // default (no file) is covered explicitly by the dedicated
+        // default-output tests below. Mirrors Python's test_log autouse fixture
+        // pinning TINA4_DEBUG=true.
+        $_ENV['TINA4_DEBUG'] = 'true';
+        @putenv('TINA4_DEBUG=true');
+
         Log::reset();
         Log::configure(logDir: $this->tempDir);
     }
@@ -24,6 +34,9 @@ class LogTest extends TestCase
     protected function tearDown(): void
     {
         Log::reset();
+
+        unset($_ENV['TINA4_DEBUG']);
+        @putenv('TINA4_DEBUG');
 
         // Clean up log files
         $files = glob($this->tempDir . '/*');
@@ -654,5 +667,305 @@ class LogTest extends TestCase
             unset($_ENV['TINA4_LOG_OUTPUT']);
             @putenv('TINA4_LOG_OUTPUT');
         }
+    }
+
+    // ── v3.13.39: dev/prod-aware default log FILE output ─────────────────
+    // With TINA4_LOG_OUTPUT unset (the default), stdout is ALWAYS on but the
+    // log FILE (tina4.log + error.log) is written ONLY in development
+    // (TINA4_DEBUG truthy). In production / containers the logger is
+    // stdout-only — a log file inside a container just bloats the writable
+    // layer + disk, and 12-factor wants logs on stdout for the platform to
+    // capture. Explicit TINA4_LOG_OUTPUT=file|both OR an explicit
+    // TINA4_LOG_FILE path still forces a file (explicit always wins).
+    // Mirrors tina4-python master (commit 4c6d881).
+
+    /** Force a non-dev (production) env: clear TINA4_DEBUG + TINA4_LOG_OUTPUT. */
+    private function setProductionEnv(): void
+    {
+        unset($_ENV['TINA4_DEBUG'], $_ENV['TINA4_LOG_OUTPUT'], $_ENV['TINA4_LOG_FILE']);
+        @putenv('TINA4_DEBUG');
+        @putenv('TINA4_LOG_OUTPUT');
+        @putenv('TINA4_LOG_FILE');
+    }
+
+    public function testDefaultNoFileInProduction(): void
+    {
+        // (a) prod / no-TINA4_DEBUG: NO file written — neither the main log
+        // nor the error log — even for an ERROR.
+        $this->setProductionEnv();
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, development: false);
+        Log::error('prod line');
+
+        $this->assertFileDoesNotExist($this->tempDir . '/tina4.log');
+        $this->assertFileDoesNotExist($this->tempDir . '/error.log');
+        $this->assertFalse(
+            $this->logProp('fileOutput'),
+            'production default must NOT write a log file'
+        );
+    }
+
+    public function testDefaultWritesFileInDev(): void
+    {
+        // (b) dev / TINA4_DEBUG truthy: the file IS written by default.
+        unset($_ENV['TINA4_LOG_OUTPUT'], $_ENV['TINA4_LOG_FILE']);
+        @putenv('TINA4_LOG_OUTPUT');
+        @putenv('TINA4_LOG_FILE');
+        $_ENV['TINA4_DEBUG'] = 'true';
+        @putenv('TINA4_DEBUG=true');
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, development: true);
+            Log::info('dev line');
+
+            $this->assertTrue($this->logProp('fileOutput'), 'dev default must write a file');
+            $content = file_get_contents($this->tempDir . '/tina4.log');
+            $this->assertStringContainsString('dev line', $content);
+        } finally {
+            unset($_ENV['TINA4_DEBUG']);
+            @putenv('TINA4_DEBUG');
+        }
+    }
+
+    public function testExplicitBothWritesFileEvenInProduction(): void
+    {
+        // (c) explicit TINA4_LOG_OUTPUT=both with TINA4_DEBUG off: file STILL
+        // written — explicit always wins.
+        $this->setProductionEnv();
+        $_ENV['TINA4_LOG_OUTPUT'] = 'both';
+        @putenv('TINA4_LOG_OUTPUT=both');
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, development: false);
+            Log::info('explicit both');
+
+            $this->assertTrue($this->logProp('fileOutput'), 'explicit both forces a file');
+            $content = file_get_contents($this->tempDir . '/tina4.log');
+            $this->assertStringContainsString('explicit both', $content);
+        } finally {
+            unset($_ENV['TINA4_LOG_OUTPUT']);
+            @putenv('TINA4_LOG_OUTPUT');
+        }
+    }
+
+    public function testExplicitLogFilePathForcesFileEvenInProduction(): void
+    {
+        // Explicit TINA4_LOG_FILE path also forces a file in production — even
+        // though TINA4_LOG_OUTPUT is unset and TINA4_DEBUG is off.
+        $this->setProductionEnv();
+        $_ENV['TINA4_LOG_FILE'] = 'custom.log';
+        @putenv('TINA4_LOG_FILE=custom.log');
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, development: false);
+            Log::info('explicit file path');
+
+            $this->assertTrue($this->logProp('fileOutput'), 'explicit TINA4_LOG_FILE forces a file');
+            $content = file_get_contents($this->tempDir . '/custom.log');
+            $this->assertStringContainsString('explicit file path', $content);
+        } finally {
+            unset($_ENV['TINA4_LOG_FILE']);
+            @putenv('TINA4_LOG_FILE');
+        }
+    }
+
+    public function testDefaultStillLogsToStdoutInProduction(): void
+    {
+        // (d) prod default: stdout is ALWAYS on (even with no file). The
+        // built-in server runs as PID 1; docker logs / k8s read PID 1 stdout.
+        $this->setProductionEnv();
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, development: false);
+
+        $this->assertTrue(
+            $this->logProp('stdout'),
+            'production default must still log to stdout'
+        );
+        $this->assertFalse(
+            $this->logProp('fileOutput'),
+            'production default must not write a file (stdout-only)'
+        );
+    }
+
+    // ----------------------------------------------------------------------
+    // Log::isEnabled — console-threshold level predicate (parity with
+    // Python's Log.is_enabled). Reflects CONSOLE (stdout) visibility only —
+    // the log file always records every level regardless. The predicate
+    // delegates to the SAME private threshold gate the console write uses,
+    // so it can never disagree with what the logger actually prints.
+    // ----------------------------------------------------------------------
+
+    /** Invoke the private console-threshold gate the logger uses for stdout. */
+    private function callShouldLog(string $level): bool
+    {
+        $ref = new ReflectionMethod(Log::class, 'shouldLog');
+        $ref->setAccessible(true);
+        return $ref->invoke(null, $level);
+    }
+
+    public function testIsEnabledAtInfoLevel(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_INFO);
+
+        $this->assertFalse(Log::isEnabled('debug'), 'debug is below the INFO threshold');
+        $this->assertTrue(Log::isEnabled('info'), 'info is at the INFO threshold');
+        $this->assertTrue(Log::isEnabled('warning'), 'warning is above the INFO threshold');
+        $this->assertTrue(Log::isEnabled('error'), 'error is above the INFO threshold');
+    }
+
+    public function testIsEnabledAtErrorLevel(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+
+        $this->assertFalse(Log::isEnabled('info'), 'info is below the ERROR threshold');
+        $this->assertFalse(Log::isEnabled('warning'), 'warning is below the ERROR threshold');
+        $this->assertTrue(Log::isEnabled('error'), 'error is at the ERROR threshold');
+    }
+
+    public function testIsEnabledIsCaseInsensitive(): void
+    {
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_INFO);
+
+        $this->assertTrue(Log::isEnabled('INFO'), 'upper-case INFO must pass the INFO threshold');
+        $this->assertTrue(Log::isEnabled('Warning'), 'mixed-case Warning must pass');
+        $this->assertFalse(Log::isEnabled('Debug'), 'mixed-case Debug must not pass');
+    }
+
+    public function testIsEnabledMatchesInternalThresholdForAllLevels(): void
+    {
+        // The public predicate must equal the private console gate for every
+        // level — including critical, which is now first-class and flows
+        // through the SAME ordinary threshold (no special toggle branch).
+        foreach ([Log::LEVEL_DEBUG, Log::LEVEL_INFO, Log::LEVEL_WARNING, Log::LEVEL_ERROR, Log::LEVEL_CRITICAL] as $minLevel) {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir, minLevel: $minLevel);
+
+            foreach (['debug', 'info', 'warning', 'error', 'critical'] as $level) {
+                $this->assertSame(
+                    $this->callShouldLog($level),
+                    Log::isEnabled($level),
+                    "isEnabled('$level') must equal shouldLog('$level') at minLevel=$minLevel"
+                );
+            }
+        }
+    }
+
+    public function testIsEnabledFileAlwaysRecordsRegardlessOfThreshold(): void
+    {
+        // The predicate reflects CONSOLE visibility only — even when a level is
+        // NOT console-enabled, the log file still records it.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+
+        $this->assertFalse(Log::isEnabled('debug'), 'debug is not console-visible at ERROR');
+
+        Log::debug('below-threshold but still filed');
+        $content = file_get_contents($this->tempDir . '/tina4.log');
+        $this->assertStringContainsString('"level":"DEBUG"', $content);
+        $this->assertStringContainsString('below-threshold but still filed', $content);
+    }
+
+    public function testIsEnabledCriticalIsOrdinaryThreshold(): void
+    {
+        // v3.13.39: critical is first-class (the highest severity) and flows
+        // through the SAME ordinary threshold as every other level — there is
+        // no TINA4_LOG_CRITICAL toggle and no special branch. So critical is
+        // console-visible at any normal min level and only suppressed when the
+        // configured min level is ABOVE critical (which is impossible — it is
+        // the top), i.e. critical always passes.
+
+        // At the lowest threshold critical passes.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_DEBUG);
+        $this->assertTrue(Log::isEnabled('critical'), 'critical passes at DEBUG threshold');
+
+        // Even at the ERROR threshold critical passes (CRITICAL 4 >= ERROR 3).
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+        $this->assertTrue(Log::isEnabled('error'), 'error passes at ERROR threshold');
+        $this->assertTrue(Log::isEnabled('critical'), 'critical outranks error, so it passes at ERROR threshold');
+
+        // At the CRITICAL threshold every lower level is suppressed but
+        // critical itself still passes.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_CRITICAL);
+        $this->assertFalse(Log::isEnabled('error'), 'error is below the CRITICAL threshold');
+        $this->assertTrue(Log::isEnabled('critical'), 'critical is at the CRITICAL threshold');
+        // Case-insensitive like every other level.
+        $this->assertTrue(Log::isEnabled('CRITICAL'), 'upper-case CRITICAL also passes');
+    }
+
+    // ── Critical: first-class top-level severity (v3.13.39) ─────────────
+    // critical is the HIGHEST severity (debug<info<warning<error<critical).
+    // It ALWAYS emits like every other level — no opt-in toggle — and lands
+    // in error.log (4 >= warning 2). No TINA4_LOG_CRITICAL env var is read.
+
+    public function testCriticalAlwaysWritesToLogFile(): void
+    {
+        // No env var set, default config — critical must STILL emit. The old
+        // TINA4_LOG_CRITICAL "enable critical()" gate is gone: a critical log
+        // must never be a silent no-op.
+        Log::critical('Disk full');
+
+        $logFile = $this->tempDir . '/tina4.log';
+        $content = file_get_contents($logFile);
+        $this->assertStringContainsString('"level":"CRITICAL"', $content);
+        $this->assertStringContainsString('Disk full', $content);
+    }
+
+    public function testCriticalWritesToErrorLog(): void
+    {
+        // critical 4 >= warning 2, so it mirrors into error.log alongside
+        // WARNING/ERROR.
+        Log::critical('System failure');
+
+        $errorLog = $this->tempDir . '/error.log';
+        $this->assertFileExists($errorLog);
+        $content = file_get_contents($errorLog);
+        $this->assertStringContainsString('"level":"CRITICAL"', $content);
+        $this->assertStringContainsString('System failure', $content);
+    }
+
+    public function testCriticalIgnoresRetiredEnvToggle(): void
+    {
+        // The TINA4_LOG_CRITICAL env var is RETIRED — it is no longer read.
+        // Setting it false must NOT suppress a critical log (proving the
+        // toggle is truly gone, not merely defaulted on).
+        unset($_ENV['TINA4_LOG_CRITICAL']);
+        @putenv('TINA4_LOG_CRITICAL=false');
+        $_ENV['TINA4_LOG_CRITICAL'] = 'false';
+        try {
+            Log::reset();
+            Log::configure(logDir: $this->tempDir);
+            Log::critical('still logs');
+
+            $content = file_get_contents($this->tempDir . '/tina4.log');
+            $this->assertStringContainsString('"level":"CRITICAL"', $content);
+            $this->assertStringContainsString('still logs', $content);
+        } finally {
+            unset($_ENV['TINA4_LOG_CRITICAL']);
+            @putenv('TINA4_LOG_CRITICAL');
+        }
+    }
+
+    public function testCriticalIsTheHighestPriority(): void
+    {
+        // Lock in the ordering: critical outranks error, which outranks every
+        // lower level. With minLevel=ERROR the console admits error+critical
+        // but not warning; with minLevel=CRITICAL it admits ONLY critical.
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_ERROR);
+        $this->assertFalse(Log::isEnabled('warning'));
+        $this->assertTrue(Log::isEnabled('error'));
+        $this->assertTrue(Log::isEnabled('critical'), 'critical >= error');
+
+        Log::reset();
+        Log::configure(logDir: $this->tempDir, minLevel: Log::LEVEL_CRITICAL);
+        $this->assertFalse(Log::isEnabled('warning'));
+        $this->assertFalse(Log::isEnabled('error'), 'error is below critical');
+        $this->assertTrue(Log::isEnabled('critical'));
     }
 }

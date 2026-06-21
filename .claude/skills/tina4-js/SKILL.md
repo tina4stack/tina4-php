@@ -11,7 +11,7 @@ description: >
   from 'tina4js'), use this skill for all frontend tasks.
 ---
 
-# tina4-js — Reactive Frontend Framework (v1.2.5)
+# tina4-js — Reactive Frontend Framework (v1.2.7)
 
 tina4-js is a lightweight reactive frontend framework (16.4KB bundled IIFE). Zero dependencies,
 no virtual DOM, no build complexity. It uses signals for reactivity, tagged template literals
@@ -44,6 +44,23 @@ The IIFE wraps the library in a self-executing function and exposes everything o
 looks simple but has specific rules. Getting them wrong produces silent bugs — things render
 once but never update, buttons don't disable, inputs don't bind. This reference is the source
 of truth, derived from the actual source code.
+
+## Modules — What Each One Is
+
+tina4-js is tree-shakeable: import only what you use. Eight modules, each with its own entry point.
+Per-module gzip sizes below were measured via `npm run test:size` (macOS, v1.2.7); the `core`
+bundle is the sub-3KB headline budget.
+
+| Module | Import | Public exports | Gzip | What it does |
+|--------|--------|----------------|------|--------------|
+| **core** | `tina4js` / `tina4js/core` | `signal`, `computed`, `effect`, `batch`, `isSignal`, `html`, `Tina4Element` | 1.49 KB | Reactive primitives (signals), the `html` tagged-template DOM renderer, and the `Tina4Element` Web Component base. Everything reactive lives here — the headline <3 KB bundle. |
+| **router** | `tina4js/router` | `route`, `navigate`, `router` | 0.12 KB | Hash-based client-side routing with `{param}` patterns, guards, and a `change` event. |
+| **api** | `tina4js/api` | `api` | 2.27 KB | `fetch` wrapper: Bearer + formToken auth, request/response interceptors, JSON, consistent result shape — talks to Tina4 backends. |
+| **ws** | `tina4js/ws` | `ws` | 0.89 KB | Signal-driven WebSocket client with auto-reconnect; `status`/`connected` are signals you bind straight into templates. |
+| **sse** | `tina4js/sse` | `sse` | 1.30 KB | Signal-driven Server-Sent-Events / NDJSON streaming client (same reconnect + signal-status shape as `ws`). |
+| **storage** | `tina4js/storage` | `persist`, `clearPersistedKeys` | (folds into app) | Persist a signal to `localStorage` — versioned, cross-tab, migratable. **Never store secrets/tokens/PII** — `localStorage` is XSS-readable (see `STORAGE.md`). |
+| **pwa** | `tina4js/pwa` | `pwa` | 1.16 KB | Runtime service-worker + web-manifest generation — installable/offline apps, no build step. |
+| **debug** | `import 'tina4js/debug'` | side-effect (auto-enables) | dev-only | Mounts a dev overlay (Ctrl+Shift+D) that tracks signals, components, routes, and API calls. Never ship to production. |
 
 ## Backend API Lookups — Use the Live Index
 

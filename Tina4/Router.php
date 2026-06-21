@@ -35,7 +35,7 @@ class Router
      */
     private static array $routes = [];
 
-    /** @var array<int, array{path: string, handler: callable}> Registered WebSocket routes */
+    /** @var array<int, array{path: string, handler: callable, secure: bool, auth_required: bool}> Registered WebSocket routes */
     private static array $wsRoutes = [];
 
     /** @var string Current group prefix */
@@ -1203,8 +1203,8 @@ class Router
                 'path' => $wsRoute['path'],
                 'middleware' => 0,
                 'cache' => false,
-                'secure' => false,
-                'auth_required' => false,
+                'secure' => $wsRoute['secure'] ?? false,
+                'auth_required' => $wsRoute['auth_required'] ?? ($wsRoute['secure'] ?? false),
                 'handler' => '',
                 'module' => '',
             ];
@@ -1288,19 +1288,55 @@ class Router
      *   - $message is the message payload (null for open/close events)
      *   - $event is 'open', 'message', or 'close'
      *
+     * A WebSocket route is PUBLIC by default (mirrors a GET route). It becomes
+     * secured — a valid JWT is required on the upgrade — when either:
+     *   (a) the handler carries an `@secured` docblock annotation, OR
+     *   (b) it is registered with `$secure = true` (imperative form).
+     * Both paths set `auth_required` on the route, which the upgrade entry
+     * points (Server::handleWebSocketUpgrade and WebSocket::handleNewConnection)
+     * enforce via WebSocket::wsAuthorized(). Mirrors Python's @secured() on a WS
+     * handler / route["auth_required"].
+     *
      * @param string   $path    WebSocket endpoint path (e.g. '/ws/chat')
      * @param callable $handler Handler function
+     * @param bool     $secure  Force-secure the route imperatively (default false)
      */
-    public static function websocket(string $path, callable $handler): void
+    public static function websocket(string $path, callable $handler, bool $secure = false): void
     {
         $fullPath = self::$groupPrefix . '/' . ltrim($path, '/');
         $fullPath = '/' . trim($fullPath, '/');
         $fullPath = preg_replace('#/+#', '/', $fullPath);
 
-        self::$wsRoutes[] = [
+        // Parse the handler docblock for @secured (mirrors addRoute()'s parsing
+        // for HTTP routes). Either the docblock OR the imperative $secure flag
+        // marks the route as requiring auth on the upgrade.
+        if (!$secure) {
+            try {
+                $ref = new \ReflectionFunction($handler);
+                $doc = $ref->getDocComment();
+                if ($doc !== false && preg_match('/@secured\b/i', $doc)) {
+                    $secure = true;
+                }
+            } catch (\Throwable) {
+                // Not a closure or reflection failed — leave public.
+            }
+        }
+
+        // Replace in place when the same path is re-registered (latest wins) so
+        // a DevReload re-register doesn't append a stale duplicate.
+        $entry = [
             'path' => $fullPath,
             'handler' => $handler,
+            'secure' => $secure,
+            'auth_required' => $secure,
         ];
+        foreach (self::$wsRoutes as $index => $existing) {
+            if ($existing['path'] === $fullPath) {
+                self::$wsRoutes[$index] = $entry;
+                return;
+            }
+        }
+        self::$wsRoutes[] = $entry;
     }
 
     /**

@@ -428,4 +428,309 @@ PHP);
         }
         $this->assertTrue($hasEmptyClassWarning);
     }
+
+    // ── Cyclomatic complexity accuracy (lock-in) ───────────────────
+    // Decision points are counted on CODE ONLY — never on text that merely
+    // sits inside a string literal or a comment. Mirrors the intent of the
+    // Python AST-based analyzer (tests/test_metrics.py).
+
+    /** Helper: complexity of a named function in a written-out file. */
+    private function complexityOf(string $source, string $needle): int
+    {
+        $filePath = $this->tempDir . '/CcLock_' . md5($needle . $source) . '.php';
+        file_put_contents($filePath, $source);
+        $result = Metrics::fileDetail($filePath);
+        foreach ($result['functions'] as $fn) {
+            if (str_contains($fn['name'], $needle)) {
+                return $fn['complexity'];
+            }
+        }
+        $this->fail("Function '{$needle}' was not detected in: " . json_encode(array_column($result['functions'], 'name')));
+    }
+
+    public function testComplexityIgnoresDecisionKeywordsInsideStrings(): void
+    {
+        // A method whose body is nothing but STRING literals full of decision
+        // tokens must report complexity 1 — the strings have zero real branches.
+        $source = <<<'PHP'
+<?php
+class StringHeavy
+{
+    public function noBranches(): string
+    {
+        $a = "if ($x && $y || $z) { return $q ? 1 : 2; } foreach while case catch ??";
+        $b = 'elseif for while && || ?? ? :';
+        $heredoc = <<<TXT
+        if while for && || foreach case ? :
+        TXT;
+        return $a . $b . $heredoc;
+    }
+}
+PHP;
+        $this->assertSame(1, $this->complexityOf($source, 'noBranches'));
+    }
+
+    public function testComplexityIgnoresDecisionKeywordsInsideComments(): void
+    {
+        // A method whose only "branches" live in // # and /* */ comments must
+        // report complexity 1.
+        $source = <<<'PHP'
+<?php
+class CommentHeavy
+{
+    public function noBranches(int $value): int
+    {
+        // if ($value && $value) for while case catch ? :
+        # elseif || && ?? ternary ? : here too
+        /* if for foreach while && || ?? case ? : block comment */
+        return $value;
+    }
+}
+PHP;
+        $this->assertSame(1, $this->complexityOf($source, 'noBranches'));
+    }
+
+    public function testComplexityCountsRealBranchesOnly(): void
+    {
+        // Mixed: real branches PLUS a string/comment full of decoy decision
+        // tokens. Only the REAL branches count.
+        //   base 1 + if + elseif + && + || + foreach + while + ternary(?) = 8
+        $source = <<<'PHP'
+<?php
+class Mixed
+{
+    public function classify(int $x): string
+    {
+        // decoy: if for while && || ?? ? :
+        $decoy = "if ($a && $b || $c) ? yes : no foreach while case catch ??";
+        if ($x > 1 && $x < 10) {
+            return "mid";
+        } elseif ($x > 10 || $x < 0) {
+            return "edge";
+        }
+        foreach ([1, 2] as $i) {
+            $x += $i;
+        }
+        while ($x > 100) {
+            $x -= 10;
+        }
+        return $x > 5 ? "high" : "low";
+    }
+}
+PHP;
+        $this->assertSame(8, $this->complexityOf($source, 'classify'));
+    }
+
+    public function testNullableTypeHintsDoNotInflateComplexity(): void
+    {
+        // Nullable type hints (?int $a, ?string $b, : ?bool) and a nullable-typed
+        // closure inside the body are NOT ternaries — complexity stays 1.
+        $source = <<<'PHP'
+<?php
+class Nullable
+{
+    public function typed(?int $a, ?string $b): ?bool
+    {
+        $closure = function (?int $z): ?int {
+            return $z;
+        };
+        return null;
+    }
+}
+PHP;
+        $this->assertSame(1, $this->complexityOf($source, 'typed'));
+    }
+
+    public function testGenuinelyBranchyMethodStillReportsHighComplexity(): void
+    {
+        // No real complexity is lost — a deeply branchy method scores high.
+        $source = <<<'PHP'
+<?php
+class Branchy
+{
+    public function grade(int $s): string
+    {
+        if ($s >= 90 && $s <= 100) {
+            return "A";
+        } elseif ($s >= 80 || $s === 79) {
+            return "B";
+        } elseif ($s >= 70) {
+            return "C";
+        } elseif ($s >= 60) {
+            return "D";
+        }
+        foreach (range(0, $s) as $i) {
+            if ($i % 2 === 0 && $i > 10) {
+                $s++;
+            }
+        }
+        return $s > 50 ? "pass" : "fail";
+    }
+}
+PHP;
+        $this->assertGreaterThanOrEqual(11, $this->complexityOf($source, 'grade'));
+    }
+
+    // ── Function extraction precision (lock-in) ────────────────────
+
+    public function testStringContainingCallSyntaxIsNotExtractedAsFunction(): void
+    {
+        // A string that contains `something(...)` (call-shaped text) must NOT be
+        // counted as a defined function. Only `function name(...)` declarations
+        // are real. The file defines exactly one function: realMethod.
+        $source = <<<'PHP'
+<?php
+class Decoy
+{
+    public function realMethod(): string
+    {
+        $sql = "select something(col) from t where flag(1)";
+        $code = 'name() and if() and for() and other(stuff)';
+        $this->helper->call();
+        return $sql . $code;
+    }
+}
+PHP;
+        $filePath = $this->tempDir . '/Decoy.php';
+        file_put_contents($filePath, $source);
+        $result = Metrics::fileDetail($filePath);
+
+        $names = array_column($result['functions'], 'name');
+        $this->assertCount(1, $result['functions'], 'Only the real declaration counts: ' . json_encode($names));
+        $this->assertStringContainsString('realMethod', $names[0]);
+
+        // None of the call-shaped strings leaked in as functions.
+        foreach (['something', 'flag', 'name', 'if', 'for', 'other', 'call'] as $decoy) {
+            foreach ($names as $name) {
+                $this->assertStringNotContainsString(".{$decoy}", $name);
+                $this->assertNotSame($decoy, $name);
+            }
+        }
+    }
+
+    public function testReferenceReturnMethodIsStillDetected(): void
+    {
+        // `function &name()` is a real declaration — its branches must not be
+        // lost just because of the reference-return ampersand.
+        $source = <<<'PHP'
+<?php
+class RefReturn
+{
+    public function &pick(int $x): array
+    {
+        static $store = [];
+        if ($x > 0 && $x < 10) {
+            $store[] = $x;
+        }
+        return $store;
+    }
+}
+PHP;
+        $filePath = $this->tempDir . '/RefReturn.php';
+        file_put_contents($filePath, $source);
+        $result = Metrics::fileDetail($filePath);
+
+        $names = array_column($result['functions'], 'name');
+        $found = false;
+        foreach ($result['functions'] as $fn) {
+            if (str_contains($fn['name'], 'pick')) {
+                $found = true;
+                // base 1 + if + && = 3
+                $this->assertSame(3, $fn['complexity']);
+            }
+        }
+        $this->assertTrue($found, 'reference-return method not detected: ' . json_encode($names));
+    }
+
+    // ── Test-coverage detection (hasMatchingTest) regression ───────────
+    // Mirrors the Python fix (dev_admin/metrics.py _has_matching_test):
+    // a heavily-tested file must NOT be reported as untested. Two facets:
+    //   1. a ≤3-char class name (e.g. "ORM"/"Api") referenced by bare name
+    //      in a test counts as exercised — the defined-class symbol gate was
+    //      strlen > 3 (excluding ORM/Api/Log/App), now strlen > 2;
+    //   2. a file a test `use`s by full FQCN (`use App\Widget;`) is detected.
+
+    private function fullAnalysisFlags(string $relPath): ?bool
+    {
+        $analysis = Metrics::fullAnalysis($this->tempDir . '/src');
+        foreach ($analysis['file_metrics'] ?? [] as $fm) {
+            if ($fm['path'] === $relPath) {
+                return $fm['has_tests'] ?? null;
+            }
+        }
+        return null;
+    }
+
+    public function testThreeCharClassReferencedByBareNameIsDetectedAsTested(): void
+    {
+        // Faithful to the real bug (ORM/Api/Log etc. are 3-char core classes):
+        // a 3-char class with NO dedicated *Test.php and NO `use` import,
+        // referenced only via `new Xqz()`. The old defined-class symbol gate
+        // (strlen > 3) dropped 3-char names from the bare-name match set, so
+        // this file was mislabelled UNTESTED. The gate is now strlen > 2.
+        //
+        // The CWD-rooted scan also globs this repo's real tests/ (incl. this
+        // file), so the class name is built at runtime and never appears as a
+        // verbatim token here — the assertion can ONLY be satisfied by the temp
+        // test reference below, so it truly exercises the gate fix. With the
+        // old >3 gate this test fails (no bare-name match for a 3-char class).
+        $cls = 'Xq' . 'z';            // 3 chars — exercises the >2 gate
+        $this->writePhpFile("src/{$cls}.php", "<?php\nnamespace App;\nclass {$cls}\n{\n    public function save(): bool { return true; }\n}\n");
+        $this->writePhpFile(
+            "tests/{$cls}UsageTest.php",
+            "<?php\nclass {$cls}UsageTest\n{\n    public function testSave(): void\n    {\n        \$o = new {$cls}();\n        \$o->save();\n    }\n}\n"
+        );
+
+        $this->assertTrue(
+            $this->fullAnalysisFlags("{$cls}.php"),
+            'A 3-char class (e.g. ORM/Api) referenced by bare name in a test must be detected as tested'
+        );
+    }
+
+    public function testClassUsedByFqcnIsDetectedAsTested(): void
+    {
+        // A file a test imports via its full namespaced name
+        // (`use App\<Class>;`) must be detected as exercised. Name built at
+        // runtime so the only verbatim occurrence is the temp src + test.
+        $cls = 'Wd' . 'gt' . 'Kqz';
+        $this->writePhpFile("src/{$cls}.php", "<?php\nnamespace App;\nclass {$cls}\n{\n    public function render(): string { return \"<div></div>\"; }\n}\n");
+        $this->writePhpFile(
+            "tests/{$cls}UsageTest.php",
+            "<?php\nuse App\\{$cls};\nclass {$cls}UsageTest\n{\n    public function testRender(): void\n    {\n        \$w = new {$cls}();\n        \$w->render();\n    }\n}\n"
+        );
+
+        $this->assertTrue(
+            $this->fullAnalysisFlags("{$cls}.php"),
+            'A class imported by full FQCN (use App\\<Class>) must be detected as tested'
+        );
+    }
+
+    public function testUnreferencedFileStaysUntested(): void
+    {
+        // Precision guard: a file no test references at all must remain
+        // flagged untested — the gate fix must not blanket-mark everything.
+        // The CWD-rooted scan also globs this repo's real tests/ — including
+        // THIS file — so any class-name literal written here would be found as
+        // a bare word and falsely satisfy detection. Build the name at runtime
+        // so the token never appears verbatim in this source file; the only
+        // place it exists as a word is the generated src class + the unrelated
+        // test below (which does NOT reference it).
+        $cls = 'Qz' . 'wx' . 'Vorp';
+        $this->writePhpFile("src/{$cls}.php", "<?php\nnamespace App;\nclass {$cls}\n{\n    public function method(): void {}\n}\n");
+        $this->writePhpFile('tests/UnrelatedTest.php', <<<'PHP'
+<?php
+class UnrelatedTest
+{
+    public function testNothingRelevant(): void
+    {
+        $x = 1 + 1;
+    }
+}
+PHP);
+
+        $this->assertFalse(
+            $this->fullAnalysisFlags("{$cls}.php"),
+            'A file no test references must stay flagged untested'
+        );
+    }
 }

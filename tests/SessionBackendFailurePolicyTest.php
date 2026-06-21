@@ -90,6 +90,11 @@ class SessionBackendFailurePolicyTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/tina4_sess_policy_' . uniqid();
         mkdir($this->tempDir, 0755, true);
+        // Pin dev (TINA4_DEBUG=true) so the log FILE is written — since
+        // v3.13.39 the file is dev-gated by default (prod/containers are
+        // stdout-only). This suite asserts backend failures land in the file.
+        $_ENV['TINA4_DEBUG'] = 'true';
+        @putenv('TINA4_DEBUG=true');
         Log::reset();
         Log::configure(logDir: $this->tempDir);
         putenv('TINA4_SESSION_STRICT');
@@ -99,6 +104,8 @@ class SessionBackendFailurePolicyTest extends TestCase
     protected function tearDown(): void
     {
         Log::reset();
+        unset($_ENV['TINA4_DEBUG']);
+        @putenv('TINA4_DEBUG');
         putenv('TINA4_SESSION_STRICT');
         unset($_ENV['TINA4_SESSION_STRICT']);
         foreach (glob($this->tempDir . '/*') ?: [] as $f) {

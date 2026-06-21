@@ -289,32 +289,126 @@ When helping a developer build with Tina4, always follow these:
    ```
    Need the rendered HTML as a string? `from tina4_python.frond import Frond; Frond.render("login.twig", data)`.
 
-### @noauth Is a Last Resort — Not a Default
+8. **Use the built-in `Api` client for ALL outbound HTTP — never a raw HTTP library.** Every call
+   to another service, REST API, webhook, payment gateway, or OAuth endpoint goes through Tina4's
+   `Api`, not the language's raw tooling. This is a top reinvention mistake.
+   - **Don't:** Python `requests`/`httpx`/`urllib`; PHP `curl_*`/`file_get_contents`/Guzzle;
+     Ruby `Net::HTTP`/`HTTParty`/`Faraday`; Node `fetch`/`axios`/`node:http`. Reaching for these
+     throws away — and badly reinvents — everything below.
+   - **Do:** `Api` gives one consistent result (`{http_code, body, headers, error}`; Ruby returns
+     an `ApiResponse` with `.status`/`.json`), automatic JSON encode/decode, a default timeout,
+     bearer/basic/custom-header auth, an SSL-verify toggle for dev, **opt-in retry/backoff**
+     (`max_retries`/`maxRetries` + `retry_backoff`/`retryBackoff` — retries transport errors +
+     429/5xx, never 4xx), and a **redirect that strips `Authorization` on a cross-origin hop** so a
+     bearer token can't leak to another host.
+   ```python
+   from tina4_python.api import Api
+   api = Api("https://api.example.com", bearer_token="sk-…", max_retries=3)
+   r = api.get("/users")
+   if r["error"] is None: users = r["body"]
+   ```
+   ```php
+   $api = new \Tina4\Api("https://api.example.com"); $api->setBasicAuth($id, $secret);
+   $r = $api->sendRequest("GET", "/users");          // ['http_code'=>…, 'body'=>…, 'error'=>…]
+   ```
+   ```ruby
+   api = Tina4::Api.new("https://api.example.com", bearer_token: token, max_retries: 3)
+   r = api.get("/users")                             # r.status, r.json
+   ```
+   ```typescript
+   const api = new Api("https://api.example.com", { bearerToken: token, maxRetries: 3 });
+   const r = await api.get("/users");                // { http_code, body, error }
+   ```
 
-`@noauth()` makes a write route (POST/PUT/PATCH/DELETE) publicly accessible with NO authentication.
-AI assistants and developers reach for it too quickly because it's the fastest way to "make it work."
-This is dangerous and lazy.
+### Authentication — Do It Right, Don't Reach for `@noauth()`
 
-**The rules:**
+**Tina4 is secure by default. To protect a route you usually write NOTHING.** GET routes are
+public; **POST/PUT/PATCH/DELETE already require a `Bearer` token** — the framework returns 401
+automatically when it's missing. `@noauth()` *removes* that protection and makes a write route
+world-writable. AI assistants reach for it to silence a 401 while building — that is exactly the
+wrong move, and it ships data-loss and abuse holes straight to production.
 
-1. **GET routes are already public** — You NEVER need `@noauth()` on a GET route. GET is public by default.
-2. **POST/PUT/PATCH/DELETE require auth by default** — This is intentional. Auth protects your data.
-3. **`@noauth()` is ONLY acceptable for:**
-   - Public login/register endpoints (users can't be authenticated yet)
-   - Public webhook receivers (validated by signature, not token)
-   - Public API endpoints explicitly designed for anonymous access (e.g. product search)
-4. **Admin routes MUST NEVER use `@noauth()`** — Use `@middleware(AdminAuth)` instead
-5. **Cart and checkout routes need auth** — Anonymous cart uses sessions, but checkout requires login
-6. **File upload routes MUST be authenticated** — Never allow anonymous uploads
+> **Hitting a 401 while building? SEND THE TOKEN — don't delete the guard.**
+> The 401 means auth is working. The fix is to authenticate the request, not to bypass it.
 
-**Before adding `@noauth()`, ask yourself:**
-- Can this action modify data? → It needs auth
-- Can this action cost money? → It needs auth
-- Can this action be abused by bots? → It needs auth or rate limiting
-- Is there ANY reason a logged-in user shouldn't be the one doing this? → If no, don't use `@noauth()`
+**The right way — one public login route mints a token; every other request carries it. Protected
+write routes need NO decorator.**
 
-If you find yourself putting `@noauth()` on more than 2-3 POST routes in an entire application,
-something is wrong with your auth flow.
+```python
+# Python — src/routes/auth.py
+from tina4_python.core.router import post
+from tina4_python.core.router import noauth
+from tina4_python.auth import get_token, Auth
+
+@noauth()                                    # login MUST be public — the user has no token yet
+@post("/api/login")
+async def login(request, response):
+    user = User.select_one("email = ?", [request.body["email"]])
+    if not user or not Auth.check_password(request.body["password"], user.password):
+        return response({"error": "Invalid credentials"}, 401)
+    token = get_token({"user_id": user.id, "role": user.role})   # signed with TINA4_SECRET
+    return response({"token": token})
+
+@post("/api/orders")                         # protected automatically — write nothing extra
+async def create_order(request, response):
+    auth = Auth.authenticate_request(request.headers)            # verified payload, or None
+    return response(Order({**request.body, "user_id": auth["user_id"]}).save(), 201)
+```
+```php
+// PHP — login mints, handlers verify  (mark login @noauth in its docblock)
+Router::post("/api/login", function ($request, $response) {
+    $user = User::selectOne("email = ?", [$request->body["email"]]);
+    if (!$user || !\Tina4\Auth::checkPassword($request->body["password"], $user->password))
+        return $response(["error" => "Invalid credentials"], 401);
+    return $response(["token" => \Tina4\Auth::getToken(["user_id" => $user->id])]);
+});
+// Authenticated handler:  $auth = \Tina4\Auth::authenticateRequest($request->headers);
+```
+```ruby
+# Ruby — login mints, handlers verify  (login is public; other writes need auth by default)
+Tina4::Router.post("/api/login") do |request, response|
+  user = User.select_one("email = ?", [request.body["email"]])
+  next response.call({ error: "Invalid credentials" }, 401) unless user && Tina4::Auth.check_password(request.body["password"], user.password)
+  response.json({ token: Tina4::Auth.get_token({ user_id: user.id }) })
+end
+# Authenticated handler:  auth = Tina4::Auth.authenticate_request(request.headers)
+```
+```typescript
+// Node — login mints, handlers verify  (login is public; other writes need auth by default)
+post("/api/login", async (request, response) => {
+  const user = await User.selectOne("email = ?", [request.body.email]);
+  if (!user || !Auth.checkPassword(request.body.password, user.password))
+    return response({ error: "Invalid credentials" }, 401);
+  return response({ token: Auth.getToken({ user_id: user.id }) });
+});
+// Authenticated handler:  const auth = Auth.authenticateRequest(request.headers);
+```
+
+**The client carries the token for you.** frond.js sends the current `Authorization: Bearer` on
+every `saveForm`/`sendRequest`; the tina4-js `api` client and the backend `Api` client
+(`bearer_token`/`bearerToken`) do too. Raw / `curl` clients set the header themselves. Browser
+forms also get CSRF protection from `{{ form_token() }}`.
+
+**Protect a GET route** (public by default) with `@secured()` / `secure_get` / the `@secured`
+docblock. **Role / admin checks** go in `@middleware(AdminAuth)` — never `@noauth()`.
+
+**`@noauth()` switches off the *framework's* Bearer guard — it does NOT mean "no auth."** It is
+legitimate when the route is genuinely public OR the handler authenticates another way:
+- login / register — the user has no token yet;
+- a webhook receiver validated by *signature*, not a Bearer token;
+- a **SOAP / WSDL `@post`** (or similar protocol endpoint) where credentials ride in the SOAP /
+  WS-Security or HTTP headers and the service validates them **inside the handler** — `@noauth()`
+  on the route, real auth in the operation;
+- an explicitly anonymous read API.
+
+The actual footgun is `@noauth()` with **no auth anywhere** — a write route left world-open. So if
+you reach for it, the handler MUST still authenticate (signature, WS-Security, a header scheme) —
+never leave it doing nothing. Never `@noauth()` something that writes data, costs money, returns
+another user's data, uploads a file, or is an admin action *without* its own check.
+
+**Before you type `@noauth()`, ask:** can it modify data / cost money / be bot-abused / expose
+private data? Yes to any → it needs auth, not `@noauth()`. More than 2–3 `@noauth()` write routes
+in a whole app means the auth flow is wrong — stop and fix it, don't paper over it.
 ## Language Versions
 
 Always target the latest supported versions:

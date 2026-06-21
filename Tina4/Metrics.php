@@ -683,13 +683,21 @@ class Metrics
                 continue;
             }
 
-            // Get function name
-            $nameToken = self::findNextMeaningfulToken($tokens, $i);
-            if ($nameToken === null) {
+            // Get function name. A real declaration is `function name(` (or the
+            // reference-return form `function &name(`). Step past a leading '&'
+            // so a by-reference method is still counted — its real branches must
+            // not be lost. A closure (`function (` / `function &(` / `fn(`) has
+            // no name token and is skipped.
+            $nameIndex = self::nextMeaningfulIndex($tokens, $i);
+            if ($nameIndex !== null && self::isAmpersand($tokens[$nameIndex])) {
+                $nameIndex = self::nextMeaningfulIndex($tokens, $nameIndex);
+            }
+            if ($nameIndex === null) {
                 continue;
             }
+            $nameToken = $tokens[$nameIndex];
 
-            // Anonymous function (closure) — skip
+            // Anonymous function (closure) — no name token, skip.
             if (!is_array($nameToken) || $nameToken[0] !== T_STRING) {
                 continue;
             }
@@ -793,6 +801,14 @@ class Metrics
      *
      * CC = 1 + count of: if, elseif, case, for, foreach, while, catch, &&, ||, and, or, ??, ternary ?
      *
+     * Accuracy guarantee (mirrors the Python AST analyzer's intent): decision
+     * points are counted on CODE ONLY. String-literal content (single/double
+     * quoted, heredoc/nowdoc) and comments are neutralised first, so a method
+     * whose body merely MENTIONS `&&`/`||`/`if`/`? :` inside a string or comment
+     * scores complexity for its REAL branches only. (PHP's token_get_all()
+     * already classifies string/comment bodies as their own token types — we
+     * make that explicit by skipping them, rather than relying on it implicitly.)
+     *
      * @param array $tokens Token slice
      * @return int
      */
@@ -804,6 +820,11 @@ class Metrics
             $token = $tokens[$i];
 
             if (is_array($token)) {
+                // Neutralise string/comment content — never a decision point even
+                // if the text inside reads like one ("if ($x && $y) ? a : b").
+                if (self::isStringOrCommentToken($token[0])) {
+                    continue;
+                }
                 switch ($token[0]) {
                     case T_IF:
                     case T_ELSEIF:
@@ -828,25 +849,24 @@ class Metrics
                 // Ternary operator ?
                 if ($token === "?") {
                     // Make sure it's not the null coalesce ?? (already handled)
-                    // or nullable type hint ?Type
                     if ($i + 1 < $count) {
                         $next = $tokens[$i + 1];
                         if (!is_array($next) && $next === "?") {
                             continue; // part of ?? which is handled by T_COALESCE
                         }
                     }
-                    // Check it's not a nullable type (preceded by : or ( in parameter context)
-                    $prev = null;
-                    for ($j = $i - 1; $j >= 0; $j--) {
-                        if (is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
-                            continue;
-                        }
-                        $prev = $tokens[$j];
-                        break;
-                    }
-                    // If previous token is a colon, it might be a return type; skip
-                    if ($prev !== null && !is_array($prev) && $prev === ":") {
-                        continue;
+                    // A real ternary needs a left operand. A nullable type hint
+                    // (?int $a, ?string, : ?bool, ?Foo|?Bar) sits where a TYPE —
+                    // not an expression — is expected: directly after '(', ',',
+                    // ':', '|' or '&'. In those positions the '?' is NOT a
+                    // ternary, so it must not add complexity.
+                    $prev = self::findPrevMeaningfulToken($tokens, $i);
+                    if (
+                        $prev !== null && !is_array($prev) &&
+                        ($prev === ":" || $prev === "(" || $prev === "," ||
+                            $prev === "|" || $prev === "&")
+                    ) {
+                        continue; // nullable type hint, not a ternary
                     }
                     $cc++;
                 }
@@ -854,6 +874,50 @@ class Metrics
         }
 
         return $cc;
+    }
+
+    /**
+     * True when a token id holds string-literal or comment text (whose contents
+     * must never be scanned for decision points or function declarations).
+     *
+     * Covers single/double-quoted strings, interpolation chunks, heredoc/nowdoc
+     * bodies and markers, and // # /* *\/ comments.
+     *
+     * @param int $tokenId Token type id from token_get_all()
+     * @return bool
+     */
+    private static function isStringOrCommentToken(int $tokenId): bool
+    {
+        static $ids = null;
+        if ($ids === null) {
+            $ids = [
+                T_CONSTANT_ENCAPSED_STRING => true, // '...' / "..." (no interpolation)
+                T_ENCAPSED_AND_WHITESPACE => true,  // text chunks inside "..." / heredoc
+                T_INLINE_HTML => true,              // text outside <?php ?\>
+                T_COMMENT => true,                  // // and # and /* */
+                T_DOC_COMMENT => true,              // /** */
+                T_START_HEREDOC => true,            // <<<EOT
+                T_END_HEREDOC => true,              // EOT
+            ];
+        }
+        return isset($ids[$tokenId]);
+    }
+
+    /**
+     * True when a token is an ampersand. PHP 8.1+ may emit '&' as one of the
+     * context-aware tokens (T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG /
+     * T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG); older PHP emits a bare "&" CHAR.
+     *
+     * @param mixed $token A token_get_all() entry (array or string)
+     * @return bool
+     */
+    private static function isAmpersand(mixed $token): bool
+    {
+        if (!is_array($token)) {
+            return $token === "&";
+        }
+        return (defined('T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG') && $token[0] === T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG)
+            || (defined('T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG') && $token[0] === T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG);
     }
 
     /**
@@ -1174,18 +1238,27 @@ class Metrics
      */
     private static function findNextMeaningfulToken(array $tokens, int $pos): mixed
     {
+        $idx = self::nextMeaningfulIndex($tokens, $pos);
+        return $idx === null ? null : $tokens[$idx];
+    }
+
+    /**
+     * Index of the next meaningful (non-whitespace, non-comment) token after
+     * a position, or null if none. Lets callers step token-by-token (e.g. past
+     * a reference-return '&') without re-scanning from the value.
+     *
+     * @param array $tokens All tokens
+     * @param int   $pos    Current position
+     * @return int|null
+     */
+    private static function nextMeaningfulIndex(array $tokens, int $pos): ?int
+    {
         $count = count($tokens);
         for ($i = $pos + 1; $i < $count; $i++) {
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_WHITESPACE) {
+            if (is_array($tokens[$i]) && in_array($tokens[$i][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
                 continue;
             }
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_COMMENT) {
-                continue;
-            }
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_DOC_COMMENT) {
-                continue;
-            }
-            return $tokens[$i];
+            return $i;
         }
         return null;
     }
@@ -1325,11 +1398,14 @@ class Metrics
         }
 
         // Defined classes worth matching by bare name: top-level, distinctive
-        // (>3 chars, not leading underscore). A test referencing one of these
-        // genuinely exercises this file.
+        // (>2 chars, not leading underscore). A test referencing one of these
+        // genuinely exercises this file. The gate is >2 (not >3) so 3-char
+        // class names like ORM/Api/Log/App/Job/Env/Raw still count — they are
+        // distinctive enough that a bare reference in a test is a real signal,
+        // and excluding them mislabelled heavily-tested core files as untested.
         $matchClasses = array_values(array_filter(
             $definedClasses,
-            fn($c) => strlen($c) > 3 && !str_starts_with($c, '_')
+            fn($c) => strlen($c) > 2 && !str_starts_with($c, '_')
         ));
         // The filename module name itself counts as a distinctive class name
         // only if the file actually defines it (already covered above) — we do
