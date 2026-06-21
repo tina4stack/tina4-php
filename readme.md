@@ -408,7 +408,7 @@ composer tina4 generate model User           # Scaffold a model
 
 ## Performance
 
-Benchmarked with `wrk` — 5,000 requests, 50 concurrent, median of 3 runs:
+Benchmarked with `wrk`: 5,000 requests, 50 concurrent, median of 3 runs:
 
 | Framework | JSON req/s | Deps | Features |
 |-----------|-----------|------|----------|
@@ -416,7 +416,7 @@ Benchmarked with `wrk` — 5,000 requests, 50 concurrent, median of 3 runs:
 | Slim | 5,714 | 10+ | ~6 |
 | Laravel | 445 | 50+ | ~25 |
 
-Tina4 PHP is **5× faster than Slim and 65× faster than Laravel** — with zero dependencies and 55 features built in.
+Tina4 PHP is **5× faster than Slim and 65× faster than Laravel**, with zero dependencies and 55 features built in.
 
 **Across all 4 Tina4 implementations:**
 
@@ -524,7 +524,7 @@ https://opensource.org/licenses/MIT
 
 ---
 
-<p align="center"><b>Tina4 — The Intelligent Native Application 4ramework</b><br>Simple. Fast. Human. &middot; Built for AI. Built for you.</p>
+<p align="center"><b>Tina4: The Intelligent Native Application 4ramework</b><br>Simple. Fast. Human. &middot; Built for AI. Built for you.</p>
 
 ---
 
