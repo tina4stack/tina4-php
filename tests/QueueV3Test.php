@@ -424,6 +424,58 @@ class QueueV3Test extends TestCase
         $this->assertEquals(1, $qOther->size());   // other_topic has the job
     }
 
+    // ── Queue isolation contract ────────────────────────────────
+    // A job pushed to one topic must never leak into another, and a queue on
+    // a fresh storage path must start empty. Locks in the per-topic directory
+    // layout so a future backend change can't silently cross-contaminate.
+
+    public function testTopicsAreIsolatedOnSamePath(): void
+    {
+        $topicA = new Queue('file', ['path' => $this->testPath], topic: 'topic_a');
+        $topicB = new Queue('file', ['path' => $this->testPath], topic: 'topic_b');
+
+        $topicA->push(['to' => 'a']);
+        $topicA->push(['to' => 'a2']);
+
+        // topic_b shares the base path but must see none of topic_a's jobs.
+        $this->assertEquals(0, $topicB->size());
+        $this->assertNull($topicB->pop());
+        $this->assertEquals(2, $topicA->size());
+    }
+
+    public function testDrainingOneTopicLeavesTheOtherIntact(): void
+    {
+        $topicA = new Queue('file', ['path' => $this->testPath], topic: 'topic_a');
+        $topicB = new Queue('file', ['path' => $this->testPath], topic: 'topic_b');
+        $topicA->push(['to' => 'a']);
+        $topicB->push(['to' => 'b']);
+
+        $this->assertEquals('a', $topicA->pop()['payload']['to']);
+        $this->assertNull($topicA->pop());
+
+        // topic_b is untouched.
+        $this->assertEquals(1, $topicB->size());
+        $this->assertEquals('b', $topicB->pop()['payload']['to']);
+    }
+
+    public function testFreshStoragePathStartsEmpty(): void
+    {
+        $pathTwo = sys_get_temp_dir() . '/tina4_queue_iso_' . bin2hex(random_bytes(4));
+        try {
+            $first = new Queue('file', ['path' => $this->testPath], topic: 'jobs');
+            $first->push(['n' => 1]);
+            $first->push(['n' => 2]);
+            $this->assertEquals(2, $first->size());
+
+            // A second queue on a DIFFERENT base path sees zero jobs.
+            $second = new Queue('file', ['path' => $pathTwo], topic: 'jobs');
+            $this->assertEquals(0, $second->size());
+            $this->assertNull($second->pop());
+        } finally {
+            $this->removeDir($pathTwo);
+        }
+    }
+
     // ── Priority-ordered pop ────────────────────────────────────
 
     public function testHigherPriorityPopsBeforeOlderLowerPriority(): void
