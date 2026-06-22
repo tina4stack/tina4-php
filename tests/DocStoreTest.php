@@ -23,6 +23,7 @@ use Tina4\ObjectId;
 use Tina4\SqliteCollection;
 use Tina4\SqliteDatabase;
 
+use function Tina4\docStoreMongoUri;
 use function Tina4\getCollection;
 use function Tina4\isServerless;
 use function Tina4\resetDefaultStore;
@@ -367,6 +368,36 @@ class DocStoreTest extends TestCase
                 putenv('TINA4_DOC_STORE_PATH');
             }
             @unlink($tmp);
+        }
+    }
+
+    // Parity fix: canonical TINA4_SESSION_MONGO_URI, with TINA4_SESSION_MONGO_URL
+    // accepted as a legacy alias (PHP/Python historically used _URL).
+    public function testSessionMongoUriAndUrlBothResolve(): void
+    {
+        $hadAppUri = getenv('TINA4_MONGO_URI');
+        $hadUri = getenv('TINA4_SESSION_MONGO_URI');
+        $hadUrl = getenv('TINA4_SESSION_MONGO_URL');
+        putenv('TINA4_MONGO_URI');
+        putenv('TINA4_SESSION_MONGO_URI');
+        putenv('TINA4_SESSION_MONGO_URL');
+        try {
+            putenv('TINA4_SESSION_MONGO_URI=mongodb://uri-host/db');
+            $this->assertSame('mongodb://uri-host/db', docStoreMongoUri());
+
+            putenv('TINA4_SESSION_MONGO_URI');
+            putenv('TINA4_SESSION_MONGO_URL=mongodb://url-host/db');
+            $this->assertSame('mongodb://url-host/db', docStoreMongoUri()); // legacy alias
+
+            putenv('TINA4_SESSION_MONGO_URI=mongodb://uri-host/db');
+            $this->assertSame('mongodb://uri-host/db', docStoreMongoUri()); // canonical wins
+
+            putenv('TINA4_MONGO_URI=mongodb://app-host/db');
+            $this->assertSame('mongodb://app-host/db', docStoreMongoUri()); // app-wide wins
+        } finally {
+            putenv($hadAppUri !== false ? 'TINA4_MONGO_URI=' . $hadAppUri : 'TINA4_MONGO_URI');
+            putenv($hadUri !== false ? 'TINA4_SESSION_MONGO_URI=' . $hadUri : 'TINA4_SESSION_MONGO_URI');
+            putenv($hadUrl !== false ? 'TINA4_SESSION_MONGO_URL=' . $hadUrl : 'TINA4_SESSION_MONGO_URL');
         }
     }
 }

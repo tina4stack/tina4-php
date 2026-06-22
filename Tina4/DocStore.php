@@ -1067,11 +1067,13 @@ class SqliteDatabase
 
 /**
  * The configured Mongo URI, reusing the app-wide queue/session env vars.
+ * Canonical TINA4_SESSION_MONGO_URI; TINA4_SESSION_MONGO_URL is a legacy alias.
  */
 function docStoreMongoUri(): string
 {
     return trim(
         (getenv('TINA4_MONGO_URI') ?: '')
+        ?: (getenv('TINA4_SESSION_MONGO_URI') ?: '')
         ?: (getenv('TINA4_SESSION_MONGO_URL') ?: '')
     );
 }

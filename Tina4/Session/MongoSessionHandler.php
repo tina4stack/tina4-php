@@ -44,7 +44,8 @@ class MongoSessionHandler
      */
     public function __construct(array $config = [])
     {
-        $this->mongoUrl = $config['url'] ?? (getenv('TINA4_SESSION_MONGO_URL') ?: 'mongodb://localhost:27017');
+        // Canonical TINA4_SESSION_MONGO_URI; TINA4_SESSION_MONGO_URL is a legacy alias.
+        $this->mongoUrl = $config['url'] ?? (getenv('TINA4_SESSION_MONGO_URI') ?: getenv('TINA4_SESSION_MONGO_URL') ?: 'mongodb://localhost:27017');
         $this->database = $config['database'] ?? (getenv('TINA4_SESSION_MONGO_DB') ?: 'tina4');
         $this->collection = $config['collection'] ?? 'sessions';
         $this->ttl = (int)($config['ttl'] ?? (getenv('TINA4_SESSION_TTL') ?: 3600));
