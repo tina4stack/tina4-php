@@ -101,24 +101,25 @@ class AutoCrud
             $prettyName = str_replace('_', ' ', ucwords($tableName, '_'));
             $example = $this->buildExample($modelClass);
 
-            // GET /api/{table} — list
+            // GET /api/{table} — list. 'model' tags the route so Swagger builds a
+            // components.schema from the ORM fields and $refs it (modelList -> array).
             Router::get($basePath, $this->createListHandler($modelClass))
-                ->swagger(['summary' => "List all {$prettyName}", 'tags' => [$tableName]]);
+                ->swagger(['summary' => "List all {$prettyName}", 'tags' => [$tableName], 'model' => $modelClass, 'modelList' => true]);
             $generated[] = ['method' => 'GET', 'path' => $basePath, 'table' => $tableName];
 
             // GET /api/{table}/{id} — get one
             Router::get($basePath . '/{id}', $this->createGetHandler($modelClass))
-                ->swagger(['summary' => "Get {$prettyName} by ID", 'tags' => [$tableName]]);
+                ->swagger(['summary' => "Get {$prettyName} by ID", 'tags' => [$tableName], 'model' => $modelClass]);
             $generated[] = ['method' => 'GET', 'path' => $basePath . '/{id}', 'table' => $tableName];
 
             // POST /api/{table} — create
             Router::post($basePath, $this->createCreateHandler($modelClass))
-                ->swagger(['summary' => "Create {$prettyName}", 'tags' => [$tableName], 'example' => $example]);
+                ->swagger(['summary' => "Create {$prettyName}", 'tags' => [$tableName], 'example' => $example, 'model' => $modelClass]);
             $generated[] = ['method' => 'POST', 'path' => $basePath, 'table' => $tableName];
 
             // PUT /api/{table}/{id} — update
             Router::put($basePath . '/{id}', $this->createUpdateHandler($modelClass))
-                ->swagger(['summary' => "Update {$prettyName}", 'tags' => [$tableName], 'example' => $example]);
+                ->swagger(['summary' => "Update {$prettyName}", 'tags' => [$tableName], 'example' => $example, 'model' => $modelClass]);
             $generated[] = ['method' => 'PUT', 'path' => $basePath . '/{id}', 'table' => $tableName];
 
             // DELETE /api/{table}/{id} — delete

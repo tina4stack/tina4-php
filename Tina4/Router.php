@@ -1186,6 +1186,11 @@ class Router
                     'middleware' => count($route['middleware']),
                     'cache' => $route['cache'],
                     'secure' => $route['secure'],
+                    // Expose the fluent ->noAuth() flag so consumers (Swagger) can
+                    // honour the write-secure-by-default rule. Without this key the
+                    // Swagger generator's empty($route['noAuth']) was always true and
+                    // a ->noAuth() write route was still documented as requiring auth.
+                    'noAuth' => $route['noAuth'] ?? false,
                     'auth_required' => $route['secure'] && !($route['noAuth'] ?? false),
                     'handler' => $handler,
                     'module' => $module,

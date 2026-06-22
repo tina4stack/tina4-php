@@ -53,6 +53,7 @@ class Swagger
         $spec = [
             'openapi' => '3.0.3',
             'info' => $info,
+            'servers' => self::servers(),
             'paths' => [],
             'components' => [
                 'securitySchemes' => [
@@ -67,6 +68,11 @@ class Swagger
 
         $routes = Router::getRoutes();
 
+        // Valid OpenAPI path-item methods. WebSocket routes carry method 'WS'
+        // (and any future non-HTTP verb) which is NOT a valid path-item key —
+        // emitting it makes the whole document spec-invalid, so skip them.
+        $httpMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
+
         // Group routes by path pattern
         $grouped = [];
         foreach ($routes as $route) {
@@ -78,11 +84,22 @@ class Swagger
                 continue;
             }
 
+            // Skip non-HTTP methods (e.g. WebSocket 'ws')
+            if (!in_array($method, $httpMethods, true)) {
+                continue;
+            }
+
             if (!isset($grouped[$pattern])) {
                 $grouped[$pattern] = [];
             }
             $grouped[$pattern][$method] = $route;
         }
+
+        // Accumulators: ORM models referenced (-> components.schemas), tags
+        // actually used (-> top-level tags[]), and seen operationIds (de-dup).
+        $models = [];
+        $usedTags = [];
+        $seenIds = [];
 
         foreach ($grouped as $pattern => $methods) {
             $openApiPath = self::convertPath($pattern);
@@ -90,7 +107,16 @@ class Swagger
 
             foreach ($methods as $method => $route) {
                 $tag = self::inferTag($pattern);
-                $operationId = $method . str_replace(['/', '{', '}', '-'], ['_', '', '', '_'], $pattern);
+                $baseId = $method . str_replace(['/', '{', '}', '-', '*'], ['_', '', '', '_', 'wildcard'], $pattern);
+                // De-duplicate: OpenAPI requires operationId unique across the
+                // document (str_replace collapses distinct paths to the same id).
+                $operationId = $baseId;
+                $dupN = 2;
+                while (in_array($operationId, $seenIds, true)) {
+                    $operationId = $baseId . '_' . $dupN;
+                    $dupN++;
+                }
+                $seenIds[] = $operationId;
 
                 // Parse docblock annotations from the route callback
                 $docMeta = isset($route['callback']) ? self::parseDocBlock($route['callback']) : [
@@ -154,6 +180,26 @@ class Swagger
                     $operation['deprecated'] = true;
                 }
 
+                // Collect tags for the top-level tags[] array.
+                foreach ($operation['tags'] as $t) {
+                    if (!in_array($t, $usedTags, true)) {
+                        $usedTags[] = $t;
+                    }
+                }
+
+                // ORM model -> components.schemas + $ref. AutoCrud tags routes
+                // with swagger['model']; build the schema once and reference it.
+                $ref = null;
+                $modelClass = $swaggerMeta['model'] ?? null;
+                if ($modelClass !== null && class_exists($modelClass)) {
+                    $schemaName = (new \ReflectionClass($modelClass))->getShortName();
+                    if (!isset($models[$schemaName])) {
+                        $models[$schemaName] = $modelClass;
+                    }
+                    $ref = '#/components/schemas/' . $schemaName;
+                }
+                $isModelList = !empty($swaggerMeta['modelList']);
+
                 // Add path parameters
                 if (!empty($pathParams)) {
                     $operation['parameters'] = $pathParams;
@@ -163,6 +209,7 @@ class Swagger
                 $bodyProperties = [];
                 $bodyRequired = [];
                 $queryParams = [];
+                $multipart = false;   // flipped by a @param of type file/binary
                 foreach ($docMeta['params'] as $paramDef) {
                     // If this param matches a path parameter, update its type/description
                     $isPathParam = false;
@@ -181,10 +228,21 @@ class Swagger
                     if (!$isPathParam) {
                         // For POST/PUT/PATCH, add to requestBody properties
                         if (in_array($method, ['post', 'put', 'patch'], true)) {
-                            $bodyProperties[$paramDef['name']] = [
-                                'type' => self::mapParamType($paramDef['type']),
-                                'description' => $paramDef['description'],
-                            ];
+                            // A @param of type file/binary makes the body multipart
+                            // and the property a binary string (file upload).
+                            if (in_array($paramDef['type'], ['file', 'binary'], true)) {
+                                $multipart = true;
+                                $bodyProperties[$paramDef['name']] = [
+                                    'type' => 'string',
+                                    'format' => 'binary',
+                                    'description' => $paramDef['description'],
+                                ];
+                            } else {
+                                $bodyProperties[$paramDef['name']] = [
+                                    'type' => self::mapParamType($paramDef['type']),
+                                    'description' => $paramDef['description'],
+                                ];
+                            }
                             if ($paramDef['required']) {
                                 $bodyRequired[] = $paramDef['name'];
                             }
@@ -213,26 +271,50 @@ class Swagger
 
                 // Add request body hint for methods that accept a body
                 if (in_array($method, ['post', 'put', 'patch'], true)) {
-                    $schema = ['type' => 'object'];
-                    if (!empty($bodyProperties)) {
-                        $schema['properties'] = $bodyProperties;
-                        if (!empty($bodyRequired)) {
-                            $schema['required'] = $bodyRequired;
+                    // Prefer an ORM model $ref; else build an object schema from
+                    // @param properties (or a bare object).
+                    if ($ref !== null) {
+                        $schema = ['$ref' => $ref];
+                    } else {
+                        $schema = ['type' => 'object'];
+                        if (!empty($bodyProperties)) {
+                            $schema['properties'] = $bodyProperties;
+                            if (!empty($bodyRequired)) {
+                                $schema['required'] = $bodyRequired;
+                            }
                         }
                     }
 
-                    $jsonContent = ['schema' => $schema];
+                    $mediaContent = ['schema' => $schema];
 
                     // Add request body example from @example
                     if (!empty($docMeta['examples'])) {
-                        $jsonContent['example'] = $docMeta['examples'][0];
+                        $mediaContent['example'] = $docMeta['examples'][0];
                     }
+
+                    // multipart/form-data when a @param file/binary was declared,
+                    // else application/json.
+                    $contentType = $multipart ? 'multipart/form-data' : 'application/json';
 
                     $operation['requestBody'] = [
                         'description' => 'Request payload',
                         'required' => !empty($bodyRequired),
                         'content' => [
-                            'application/json' => $jsonContent,
+                            $contentType => $mediaContent,
+                        ],
+                    ];
+                }
+
+                // ORM model response: single -> $ref, list -> array of $ref.
+                // (An explicit @example_response below still overrides per-status.)
+                if ($ref !== null) {
+                    $respSchema = $isModelList
+                        ? ['type' => 'array', 'items' => ['$ref' => $ref]]
+                        : ['$ref' => $ref];
+                    $operation['responses']['200'] = [
+                        'description' => 'Successful response',
+                        'content' => [
+                            'application/json' => ['schema' => $respSchema],
                         ],
                     ];
                 }
@@ -273,12 +355,96 @@ class Swagger
             }
         }
 
+        // Build components.schemas from any ORM models referenced by routes.
+        if (!empty($models)) {
+            $spec['components']['schemas'] = [];
+            foreach ($models as $schemaName => $modelClass) {
+                $spec['components']['schemas'][$schemaName] = self::modelSchema($modelClass);
+            }
+        }
+
+        // Top-level tags[] array (name-only is valid OpenAPI).
+        if (!empty($usedTags)) {
+            $spec['tags'] = array_map(fn($t) => ['name' => $t], $usedTags);
+        }
+
         // If no paths were found, set to empty object so JSON encodes as {}
         if (empty($spec['paths'])) {
             $spec['paths'] = new \stdClass();
         }
 
         return $spec;
+    }
+
+    /**
+     * Resolve the servers[] block. TINA4_SWAGGER_SERVERS (comma-separated URLs)
+     * wins and yields a multi-server list; else a single dev-server entry from
+     * SWAGGER_DEV_URL (default http://localhost:7145).
+     *
+     * @return array<int, array{url: string}>
+     */
+    private static function servers(): array
+    {
+        $raw = (string) (DotEnv::getEnv('TINA4_SWAGGER_SERVERS', '') ?? '');
+        $urls = array_values(array_filter(array_map('trim', explode(',', $raw)), fn($u) => $u !== ''));
+        if (!empty($urls)) {
+            return array_map(fn($u) => ['url' => $u], $urls);
+        }
+        $dev = DotEnv::getEnv('SWAGGER_DEV_URL', 'http://localhost:7145') ?? 'http://localhost:7145';
+        return [['url' => $dev]];
+    }
+
+    /**
+     * Build a components.schemas object from an ORM model's field definitions.
+     * PHP's ORM field model carries type/PK/auto-increment/FK (no choices or
+     * length constraints), so the schema emits type + format + readOnly + FK.
+     *
+     * @param class-string<ORM> $modelClass
+     * @return array<string, mixed>
+     */
+    private static function modelSchema(string $modelClass): array
+    {
+        $props = [];
+        try {
+            $instance = new $modelClass();
+            $defs = $instance->getFieldDefinitions();
+        } catch (\Throwable $e) {
+            return ['type' => 'object', 'properties' => new \stdClass()];
+        }
+
+        foreach ($defs as $name => $def) {
+            $schema = self::mapFieldType($def['type'] ?? 'string');
+            // A foreign-key column is an integer reference.
+            if (!empty($def['foreign_key'])) {
+                $schema = ['type' => 'integer'];
+            }
+            // An auto-increment primary key is database-generated (read-only).
+            if (!empty($def['auto_increment'])) {
+                $schema['readOnly'] = true;
+            }
+            $props[$name] = $schema;
+        }
+
+        return [
+            'type' => 'object',
+            'properties' => empty($props) ? new \stdClass() : $props,
+        ];
+    }
+
+    /**
+     * Map an ORM logical field type to a JSON Schema fragment.
+     *
+     * @return array<string, mixed>
+     */
+    private static function mapFieldType(string $type): array
+    {
+        return match ($type) {
+            'int'      => ['type' => 'integer'],
+            'float'    => ['type' => 'number'],
+            'bool'     => ['type' => 'boolean'],
+            'datetime' => ['type' => 'string', 'format' => 'date-time'],
+            default    => ['type' => 'string'],
+        };
     }
 
     /**
@@ -560,6 +726,11 @@ class Swagger
     private static function renderSwaggerUI(): string
     {
         $title = DotEnv::getEnv('TINA4_SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
+        // The Swagger UI assets load from a CDN by default (keeps the framework
+        // zero-dependency / small — we don't vendor ~1.4MB of swagger-ui-dist).
+        // Air-gapped deployments point TINA4_SWAGGER_UI_CDN at a self-hosted
+        // mirror (a base URL serving swagger-ui.css + swagger-ui-bundle.js).
+        $cdn = rtrim((string) (DotEnv::getEnv('TINA4_SWAGGER_UI_CDN', 'https://unpkg.com/swagger-ui-dist@5') ?? 'https://unpkg.com/swagger-ui-dist@5'), '/');
 
         return <<<HTML
 <!DOCTYPE html>
@@ -568,7 +739,7 @@ class Swagger
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{$title} — Swagger UI</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <link rel="stylesheet" href="{$cdn}/swagger-ui.css">
     <style>
         html { box-sizing: border-box; overflow-y: scroll; }
         *, *:before, *:after { box-sizing: inherit; }
@@ -578,7 +749,7 @@ class Swagger
 </head>
 <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="{$cdn}/swagger-ui-bundle.js"></script>
     <script>
         window.onload = function() {
             SwaggerUIBundle({
