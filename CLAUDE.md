@@ -460,6 +460,32 @@ $db->getError(): ?string                           // Cause of the last execute(
 $db->getColumns($tableName): array
 ```
 
+### DocStore — pymongo-style document store (zero-config SQLite fallback)
+
+`Tina4\getCollection($name)` returns a Mongo-style collection. When a Mongo URI is configured (and the `ext-mongodb` driver is present) it is a real Mongo collection; otherwise it is a `Tina4\SqliteCollection` backed by a local SQLite file using JSON1. The call sites are identical either way — only the backend differs — so you develop against a zero-dependency local store and switch to MongoDB in production by setting one env var. (The `DocStore.php` module autoloads via the composer `files` map, like `MCP.php` — run `composer dump-autoload` after a fresh checkout.)
+
+```php
+use function Tina4\getCollection;
+use function Tina4\isServerless;
+use Tina4\ObjectId;
+
+$orders = getCollection('orders');
+$res = $orders->insertOne(['customer_id' => 1, 'total' => 9.99, 'status' => 'new']);
+$orders->findOne(['_id' => $res->insertedId]);
+$orders->updateOne(['_id' => $res->insertedId], ['$set' => ['status' => 'shipped']]);
+foreach ($orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10) as $doc) {
+    // ...
+}
+$orders->countDocuments(['status' => 'shipped']);
+isServerless();   // true when running on the SQLite fallback
+```
+
+Filter operators: equality, `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$exists`, `$regex`, implicit AND, `$or`, `$and`, and dotted nested keys (`addr.city`). Updates: `$set`, `$unset`, `$inc`, replace, upsert. Cursors: `sort`, `limit`, `skip`, projection. Values round-trip (DateTime to/from ISO-8601, `ObjectId` to/from 24-hex) and stay queryable via `json_extract`. Non-goals: aggregation pipelines, `$elemMatch`, geo queries.
+
+Selection and configuration:
+- `TINA4_MONGO_URI` — app-wide Mongo URI. Falls back to `TINA4_SESSION_MONGO_URI`, then the legacy `TINA4_SESSION_MONGO_URL`. When one is set and the driver is present, `getCollection` returns a real Mongo collection.
+- `TINA4_DOC_STORE_PATH` — SQLite file for the fallback store (default `data/tina4_docstore.db`).
+
 ### Request extras
 
 ```php
