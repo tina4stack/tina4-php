@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.41 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.42 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -1102,6 +1102,19 @@ $result = SqlTranslation::remember(
 | `TINA4_SWAGGER_UI_CDN` | Base URL for the Swagger UI assets (default `https://unpkg.com/swagger-ui-dist@5`); point at a self-hosted mirror for air-gapped use. |
 | `TINA4_SWAGGER_TITLE` / `_VERSION` / `_DESCRIPTION` | `info` block title, version, description. |
 | `TINA4_SWAGGER_CONTACT_EMAIL` / `_LICENSE` | Optional `info.contact.email` and `info.license`. |
+| `TINA4_SWAGGER_OPENAPI` | OpenAPI version: `3.0.3` (default) or `3.1` (emits `3.1.0`). |
+| `TINA4_SWAGGER_BEARER_FORMAT` | `bearerFormat` on the built-in `bearerAuth` scheme (default `JWT`; e.g. `opaque` for `sk_live_` keys). |
+| `TINA4_SWAGGER_API_KEY_NAME` / `_IN` | When the name is set, emit an `apiKeyAuth` scheme with that header/query name; `_IN` is `header` (default) / `query` / `cookie`. |
+| `TINA4_SWAGGER_DEFAULT_SCHEME` | Scheme a secured route uses when its `swagger` meta declares no `security` (default `bearerAuth`). |
+| `TINA4_SWAGGER_INCLUDE` / `_EXCLUDE` | Comma-separated path-prefix allow-list / deny-list (`/swagger` + `/__dev` are always excluded). |
+
+**Per-route security + reusable schemas (v3.13.42).** Declare per route via the
+`swagger` route meta: `security` (a scheme name, a `{name: [scopes]}` map, a list
+of maps for OR, or `'public'` to force no auth) and a sibling `scopes` array;
+`requestSchema` / `responseSchemas` reference schemas registered with
+`Swagger::addSchema(name, schema)`. Register arbitrary schemes (incl. `oauth2`
+with scopes) via `Swagger::addSecurityScheme(name, definition)`. Scopes are kept
+valid: only `oauth2`/`openIdConnect` schemes carry them; `http`/`apiKey` get `[]`.
 
 ### MCP (Model Context Protocol)
 
