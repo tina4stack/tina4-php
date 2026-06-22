@@ -94,6 +94,10 @@ class Queue
             $resolvedConfig = $this->resolveMongoConfig($config);
             $resolvedConfig['visibility_timeout'] = $this->visibilityTimeout;
             $resolvedConfig['max_retries'] = $this->maxRetries;
+            // Thread retryBackoff so a requeued/rejected job's available_at is
+            // reset to now (or now + retryBackoff) instead of being stranded
+            // behind the reservation expiry (Bug B).
+            $resolvedConfig['retry_backoff'] = $this->retryBackoff;
             $this->externalBackend = new MongoBackend($resolvedConfig);
         }
     }
@@ -294,8 +298,21 @@ class Queue
      */
     public function failJob(string $topic, array $jobData, string $error = ''): void
     {
-        // External brokers manage retries/dead-lettering themselves.
         if ($this->externalBackend !== null) {
+            // Reservation-based backends (Mongo): the active store owns the
+            // requeue-or-dead-letter decision so a failed job is retried (visible
+            // again) or dead-lettered at maxRetries — not left for the reclaim
+            // timer. Broker backends (Rabbit no-ack / Kafka offsets) ignore
+            // requeue/deadLetter, so this is a safe no-op there.
+            $attempts = ((int) ($jobData['attempts'] ?? 0)) + 1;
+            $jobData['attempts'] = $attempts;
+            $jobData['error'] = $error;
+            if ($attempts >= $this->maxRetries) {
+                $this->externalBackend->deadLetter($topic, $jobData);
+                $this->externalBackend->acknowledge($topic, (string) ($jobData['id'] ?? ''));
+            } else {
+                $this->externalBackend->requeue($topic, $jobData);
+            }
             return;
         }
         $this->liteBackend->failJob($topic, $jobData, $error);
@@ -327,6 +344,10 @@ class Queue
     public function retryJob(string $topic, array $jobData, int $delaySeconds = 0): void
     {
         if ($this->externalBackend !== null) {
+            // Manual re-queue: always re-enqueue (reset availability) on the
+            // active store. Brokers ignore requeue (they own redelivery).
+            $jobData['attempts'] = ((int) ($jobData['attempts'] ?? 0)) + 1;
+            $this->externalBackend->requeue($topic, $jobData);
             return;
         }
         $this->liteBackend->retryJob($topic, $jobData, $delaySeconds);
@@ -339,6 +360,9 @@ class Queue
      */
     public function failed(): array
     {
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->failed($this->topic);
+        }
         return $this->liteBackend->failed($this->topic);
     }
 
@@ -351,6 +375,20 @@ class Queue
      */
     public function retry(?string $jobId = null, int $delaySeconds = 0): bool
     {
+        if ($this->externalBackend !== null) {
+            // Reservation-based backends: re-enqueue dead-lettered jobs onto the
+            // active store. With no id, requeue every dead letter; with an id,
+            // requeue just that job. Brokers ignore requeue (they own redelivery).
+            $dead = $this->deadLetters();
+            if ($jobId !== null) {
+                $dead = array_values(array_filter($dead, fn ($j) => (string) ($j['id'] ?? '') === $jobId));
+            }
+            if (empty($dead)) return false;
+            foreach ($dead as $job) {
+                $this->externalBackend->requeue($this->topic, $job);
+            }
+            return true;
+        }
         if ($jobId === null) {
             // Retry all dead-letter jobs
             $dead = $this->deadLetters();
@@ -376,6 +414,9 @@ class Queue
      */
     public function deadLetters(?int $maxRetries = null): array
     {
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->deadLetters($this->topic, $maxRetries ?? $this->maxRetries);
+        }
         return $this->liteBackend->deadLetters($this->topic, $maxRetries ?? $this->maxRetries);
     }
 
@@ -398,6 +439,9 @@ class Queue
      */
     public function retryFailed(?int $maxRetries = null): int
     {
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->retryFailed($this->topic, $maxRetries ?? $this->maxRetries);
+        }
         return $this->liteBackend->retryFailed($this->topic, $maxRetries ?? $this->maxRetries);
     }
 

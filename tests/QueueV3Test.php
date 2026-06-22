@@ -785,4 +785,154 @@ class QueueV3Test extends TestCase
         $this->assertNull($q->pop());
         $this->assertEquals(1, $q->size('reserved'));
     }
+
+    // ── Bug A: consume()/process()/produce() honour the topic argument ──
+    //
+    // Regression lock for the production bug (Python commit 04f9f05) where
+    // consume(topic)/process(topic) ignored their argument and drained the
+    // construction-time topic instead — so consuming a topic the queue was not
+    // built with silently yielded nothing. The asymmetry tell was that
+    // produce(topic) DID retarget. These run on the file backend but assert a
+    // framework-wide contract. (PHP was already correct because consume/process
+    // pass the topic straight through to the backend; this locks it in.)
+
+    public function testConsumeReadsFromTheRequestedTopicNotTheConstructorTopic(): void
+    {
+        // Built with 'default', but jobs live on 'alerts'.
+        $q = $this->makeQueueVt('default', 0);
+        $q->produce('alerts', ['msg' => 'fire']);
+
+        // The constructor topic is empty — the asymmetry tell.
+        $this->assertEquals(0, $q->size()); // size() uses the constructor topic 'default'
+
+        $seen = [];
+        foreach ($q->consume('alerts', null, 0) as $job) {
+            $seen[] = $job->payload['msg'];
+            $job->complete();
+        }
+
+        // consume('alerts') drained the 'alerts' jobs, not 'default' (which had none).
+        $this->assertEquals(['fire'], $seen);
+    }
+
+    public function testConsumeCompleteAcksTheRequestedTopic(): void
+    {
+        // complete() must route the ack/reservation-clear to the SAME topic the
+        // job was consumed from — otherwise a finished job is re-delivered by the
+        // reclaim path on the wrong topic. Use a live visibility timeout so a
+        // stranded reservation would be observable as a 'reserved' record.
+        $q = $this->makeQueueVt('default', 300);
+        $q->produce('alerts', ['msg' => 'ack-me']);
+
+        foreach ($q->consume('alerts', null, 0, 1) as $job) {
+            $job->complete();
+        }
+
+        // The reservation on 'alerts' was cleared (ack hit the right topic);
+        // the constructor topic 'default' was never touched.
+        $this->assertEquals(0, $q->size('reserved'));
+        $alertsReserved = glob($this->testPath . '/alerts/reserved/*.queue-data');
+        $this->assertCount(0, $alertsReserved);
+    }
+
+    public function testConsumeFailRoutesRetryToTheRequestedTopic(): void
+    {
+        // fail() must re-enqueue onto the topic the job was consumed from, not
+        // the constructor topic.
+        $q = $this->makeQueueVt('default', 0);
+        $q->produce('alerts', ['msg' => 'retry-me']);
+
+        foreach ($q->consume('alerts', null, 0, 1) as $job) {
+            $job->fail('boom');
+        }
+
+        // The retry landed back on 'alerts' (attempts incremented), and the
+        // constructor topic 'default' is still empty.
+        $this->assertEquals(0, $q->size()); // 'default'
+        $alertsQueue = new Queue('file', ['path' => $this->testPath, 'visibilityTimeout' => 0], topic: 'alerts');
+        $this->assertEquals(1, $alertsQueue->size('pending'));
+        $requeued = $alertsQueue->pop();
+        $this->assertEquals(1, $requeued['attempts']);
+        $this->assertEquals('boom', $requeued['error']);
+    }
+
+    public function testProcessReadsFromTheRequestedTopicNotTheConstructorTopic(): void
+    {
+        $q = $this->makeQueueVt('default', 0);
+        $q->produce('alerts', ['msg' => 'processed']);
+
+        $handled = [];
+        $q->process(function ($job) use (&$handled) {
+            $handled[] = $job['payload']['msg'];
+        }, 'alerts');
+
+        $this->assertEquals(['processed'], $handled);
+        // The 'alerts' topic was drained; 'default' was never touched.
+        $this->assertEquals(0, $q->size());
+    }
+
+    public function testProduceRetargetsTheNamedTopic(): void
+    {
+        // produce(topic) was always correct — lock it in alongside the consume
+        // fix so the symmetry can't regress.
+        $q = $this->makeQueueVt('default', 0);
+        $q->produce('alerts', ['msg' => 'one']);
+        $q->produce('reports', ['msg' => 'two']);
+
+        $this->assertEquals(0, $q->size()); // 'default'
+        $alerts = new Queue('file', ['path' => $this->testPath, 'visibilityTimeout' => 0], topic: 'alerts');
+        $reports = new Queue('file', ['path' => $this->testPath, 'visibilityTimeout' => 0], topic: 'reports');
+        $this->assertEquals(1, $alerts->size('pending'));
+        $this->assertEquals(1, $reports->size('pending'));
+        $this->assertEquals('one', $alerts->pop()['payload']['msg']);
+        $this->assertEquals('two', $reports->pop()['payload']['msg']);
+    }
+
+    /**
+     * Unified lifecycle (3.13.43): when an external backend is active, the Queue
+     * routes the FULL lifecycle (complete/fail/failed/deadLetters/retryFailed) to
+     * it - not the lite backend. Previously failJob/retryJob returned early for
+     * external backends and the inspection verbs read lite, so a Mongo job's
+     * fail/dead-letter/inspection silently hit the wrong store. Engine-agnostic:
+     * injects an in-memory stub backend via reflection (no Mongo driver needed).
+     */
+    public function testQueueRoutesFullLifecycleToExternalBackend(): void
+    {
+        $stub = new class implements \Tina4\Queue\QueueBackend {
+            public array $calls = [];
+            public function enqueue(string $t, array $m): string { $this->calls[] = ['enqueue', $m]; return (string)($m['id'] ?? 'x'); }
+            public function dequeue(string $t): ?array { return null; }
+            public function acknowledge(string $t, string $id): void { $this->calls[] = ['acknowledge', $id]; }
+            public function requeue(string $t, array $m): void { $this->calls[] = ['requeue', $m]; }
+            public function deadLetter(string $t, array $m): void { $this->calls[] = ['deadLetter', $m]; }
+            public function size(string $t): int { return 0; }
+            public function close(): void {}
+            public function failed(string $t): array { $this->calls[] = ['failed']; return ['F']; }
+            public function deadLetters(string $t, ?int $mr = null): array { $this->calls[] = ['deadLetters']; return ['D']; }
+            public function retryFailed(string $t, ?int $mr = null): int { $this->calls[] = ['retryFailed']; return 7; }
+        };
+
+        $q = new Queue('file', ['maxRetries' => 3], 'jobs');
+        $ref = new \ReflectionProperty(Queue::class, 'externalBackend');
+        $ref->setAccessible(true);
+        $ref->setValue($q, $stub);
+
+        $q->completeJob('jobs', 'j1');                                  // -> acknowledge
+        $q->failJob('jobs', ['id' => 'j2', 'attempts' => 0], 'boom');  // under max -> requeue
+        $q->failJob('jobs', ['id' => 'j3', 'attempts' => 2], 'boom');  // attempts 3 >= 3 -> deadLetter + ack
+        $this->assertSame(['F'], $q->failed());
+        $this->assertSame(['D'], $q->deadLetters());
+        $this->assertSame(7, $q->retryFailed());
+
+        $names = array_map(fn ($c) => $c[0], $stub->calls);
+        $this->assertContains('acknowledge', $names, 'complete() must ack the external backend');
+        $this->assertContains('requeue', $names, 'fail() under maxRetries must requeue on the external backend');
+        $this->assertContains('deadLetter', $names, 'fail() at maxRetries must dead-letter on the external backend');
+        $this->assertContains('failed', $names);
+        $this->assertContains('deadLetters', $names);
+        $this->assertContains('retryFailed', $names);
+        $dl = array_values(array_filter($stub->calls, fn ($c) => $c[0] === 'deadLetter'))[0][1];
+        $this->assertSame('j3', $dl['id']);
+        $this->assertSame(3, $dl['attempts']);
+    }
 }

@@ -35,6 +35,14 @@ class MongoBackend implements QueueBackend
     /** Max attempts before a reclaimed reservation is dead-lettered. */
     private int $maxRetries;
 
+    /**
+     * Seconds to delay a requeued (rejected/retried) job before it is eligible
+     * again. 0 = available on the very next dequeue, so a fail()'d job retries
+     * immediately (matching the file backend) instead of waiting out the
+     * visibility window.
+     */
+    private float $retryBackoff;
+
     /** @var \MongoDB\Client|null */
     private $client = null;
 
@@ -80,6 +88,7 @@ class MongoBackend implements QueueBackend
             $this->visibilityTimeout = ($env !== false && $env !== '') ? (float)$env : 300.0;
         }
         $this->maxRetries = (int)($config['max_retries'] ?? 3);
+        $this->retryBackoff = (float)($config['retry_backoff'] ?? 0);
     }
 
     /**
@@ -161,8 +170,12 @@ class MongoBackend implements QueueBackend
             return null;
         }
 
-        $doc = (array)$result;
-        return $this->bsonToArray($doc['message'] ?? []);
+        // Surface the LIVE document-level attempts/priority, not the push-time
+        // snapshot stored inside 'message'. reclaimExpired()/requeue() increment
+        // the top-level 'attempts'; without this the consumer always saw the
+        // original 0, so fail()'s attempts >= maxRetries check never tripped and
+        // a job could be retried forever instead of dead-lettering (Bug C).
+        return $this->docToJob((array)$result);
     }
 
     /**
@@ -244,6 +257,15 @@ class MongoBackend implements QueueBackend
         $id = $message['id'] ?? '';
 
         if ($id !== '') {
+            // Reset available_at so the requeued job is visible again right
+            // away (or after retryBackoff) and clear reserved_at. dequeue()
+            // pushed available_at out to the reservation expiry; leaving it
+            // there stranded a fail()'d/retried job for the full visibility
+            // window instead of retrying it on the next pop() (Bug B).
+            $available = $this->retryBackoff > 0
+                ? $this->futureDate($this->retryBackoff)
+                : new \MongoDB\BSON\UTCDateTime();
+
             // Try to update existing document back to pending
             $result = $this->collection->updateOne(
                 ['_id' => $id, 'topic' => $topic],
@@ -251,6 +273,8 @@ class MongoBackend implements QueueBackend
                     '$set' => [
                         'status' => 'pending',
                         'message' => $message,
+                        'available_at' => $available,
+                        'reserved_at' => null,
                         'updated_at' => new \MongoDB\BSON\UTCDateTime(),
                     ],
                 ]
@@ -280,6 +304,96 @@ class MongoBackend implements QueueBackend
             'topic' => $topic,
             'status' => 'pending',
         ]);
+    }
+
+    /**
+     * Get jobs that have failed at least once but are still being retried.
+     *
+     * Mirrors LiteBackend::failed() — a failed-but-retryable job is still
+     * pending (it gets re-enqueued on fail) with 0 < attempts < maxRetries.
+     *
+     * @param string $topic The queue/topic name
+     * @return array<int, array> List of failed (retrying) job arrays
+     */
+    public function failed(string $topic): array
+    {
+        $this->ensureConnected();
+
+        $cursor = $this->collection->find([
+            'topic' => $topic,
+            'status' => 'pending',
+            'attempts' => ['$gt' => 0, '$lt' => $this->maxRetries],
+        ]);
+
+        $jobs = [];
+        foreach ($cursor as $doc) {
+            $jobs[] = $this->docToJob((array)$doc);
+        }
+        return $jobs;
+    }
+
+    /**
+     * Get dead-letter jobs — failed jobs that exhausted their retries.
+     *
+     * Mongo dead letters live on the '<topic>.dead_letter' topic (written by
+     * deadLetter()). Accepts the $maxRetries kwarg the Queue passes so the call
+     * matches the LiteBackend contract — without it, queue.deadLetters() on a
+     * Mongo-backed queue would mismatch the lite signature (Bug D).
+     *
+     * @param string   $topic      The queue/topic name
+     * @param int|null $maxRetries Accepted for contract parity (dead letters are terminal)
+     * @return array<int, array> List of dead job arrays
+     */
+    public function deadLetters(string $topic, ?int $maxRetries = null): array
+    {
+        $this->ensureConnected();
+
+        $cursor = $this->collection->find(['topic' => $topic . '.dead_letter']);
+
+        $jobs = [];
+        foreach ($cursor as $doc) {
+            $job = $this->docToJob((array)$doc);
+            $job['status'] = 'dead';
+            $jobs[] = $job;
+        }
+        return $jobs;
+    }
+
+    /**
+     * Re-queue dead-letter jobs that are under the (possibly raised) limit back
+     * to pending. Accepts the $maxRetries kwarg the Queue passes so the call
+     * matches the LiteBackend contract (Bug D). Resets available_at so a revived
+     * job is visible again right away (Bug B reason).
+     *
+     * @param string   $topic      The queue/topic name
+     * @param int|null $maxRetries Override the threshold (defaults to the backend's)
+     * @return int Number of jobs re-queued
+     */
+    public function retryFailed(string $topic, ?int $maxRetries = null): int
+    {
+        $this->ensureConnected();
+
+        $limit = $maxRetries ?? $this->maxRetries;
+        $dlTopic = $topic . '.dead_letter';
+        $count = 0;
+
+        $cursor = $this->collection->find([
+            'topic' => $dlTopic,
+            'attempts' => ['$lt' => $limit],
+        ]);
+
+        foreach ($cursor as $doc) {
+            $doc = (array)$doc;
+            $message = $this->bsonToArray($doc['message'] ?? []);
+            $message['attempts'] = (int)($doc['attempts'] ?? 0);
+            // requeue() resets available_at/reserved_at and writes to the live
+            // topic, then we drop the dead-letter copy.
+            $this->requeue($topic, $message);
+            $this->collection->deleteOne(['_id' => $doc['_id'], 'topic' => $dlTopic]);
+            $count++;
+        }
+
+        return $count;
     }
 
     /** {@inheritDoc} */
@@ -335,6 +449,26 @@ class MongoBackend implements QueueBackend
         );
 
         $this->indexesCreated = true;
+    }
+
+    /**
+     * Convert a stored Mongo queue document into a job array, surfacing the
+     * LIVE top-level attempts/priority (not the push-time snapshot in 'message')
+     * — the same correctness fix dequeue() applies (Bug C).
+     *
+     * @param array $doc Raw document (already cast to array)
+     * @return array Job data
+     */
+    private function docToJob(array $doc): array
+    {
+        $message = $this->bsonToArray($doc['message'] ?? []);
+        if (array_key_exists('attempts', $doc)) {
+            $message['attempts'] = (int)$doc['attempts'];
+        }
+        if (array_key_exists('priority', $doc)) {
+            $message['priority'] = $doc['priority'];
+        }
+        return $message;
     }
 
     /**
