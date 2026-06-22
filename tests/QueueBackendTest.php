@@ -693,9 +693,13 @@ class QueueBackendTest extends TestCase
         }
     }
 
-    private function makeMongoBackendWithCollection(object $collection, float $visibilityTimeout = 300.0, int $maxRetries = 3): MongoBackend
+    private function makeMongoBackendWithCollection(object $collection, float $visibilityTimeout = 300.0, int $maxRetries = 3, float $retryBackoff = 0.0): MongoBackend
     {
-        $backend = new MongoBackend(['visibility_timeout' => $visibilityTimeout, 'max_retries' => $maxRetries]);
+        $backend = new MongoBackend([
+            'visibility_timeout' => $visibilityTimeout,
+            'max_retries' => $maxRetries,
+            'retry_backoff' => $retryBackoff,
+        ]);
         $ref = new \ReflectionClass($backend);
         $prop = $ref->getProperty('collection');
         $prop->setAccessible(true);
@@ -813,6 +817,163 @@ class QueueBackendTest extends TestCase
         $this->assertEquals(0, $backend->reclaimExpired('emails', 3));
         $this->assertCount(0, $collection->findOneAndUpdateCalls);
     }
+
+    // -- Bug B: Mongo requeue resets available_at + clears reserved_at --------
+    //
+    // dequeue() pushes available_at out to now + visibility_timeout. requeue()
+    // (the reject/requeue path) previously left available_at in the future, so a
+    // fail()'d/retried job was invisible for the whole visibility window (300s
+    // default) instead of retrying on the next pop. Now it resets available_at
+    // to now (or now + retryBackoff) and clears reserved_at.
+
+    public function testMongoRequeueResetsAvailableAtToNow(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        $collection->queueUpdateOne(1); // existing doc updated back to pending
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0);
+
+        $backend->requeue('emails', ['id' => 'msg-1', 'payload' => ['x' => 1], 'attempts' => 1]);
+
+        $this->assertCount(1, $collection->updateOneCalls);
+        $set = $collection->updateOneCalls[0]['update']['$set'];
+        $this->assertSame('pending', $set['status']);
+        $this->assertArrayHasKey('available_at', $set);
+        $this->assertNull($set['reserved_at']);
+        // retryBackoff = 0 -> available_at is "now", not the visibility-window
+        // future. Allow a small clock skew window (within ~5s of now).
+        $now = (int) round(microtime(true) * 1000);
+        $availableMs = (int) ((string) $set['available_at']);
+        $this->assertLessThanOrEqual(5000, abs($availableMs - $now), 'available_at should be ~now, not the visibility expiry');
+    }
+
+    public function testMongoRequeueRespectsRetryBackoff(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        $collection->queueUpdateOne(1);
+        // retryBackoff = 30s — the requeued job should be delayed by ~30s, but
+        // still far below the 300s visibility window.
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3, retryBackoff: 30.0);
+
+        $backend->requeue('emails', ['id' => 'msg-1', 'payload' => ['x' => 1], 'attempts' => 1]);
+
+        $set = $collection->updateOneCalls[0]['update']['$set'];
+        $now = (int) round(microtime(true) * 1000);
+        $availableMs = (int) ((string) $set['available_at']);
+        $deltaSeconds = ($availableMs - $now) / 1000.0;
+        // ~30s ahead (backoff), nowhere near the 300s visibility window.
+        $this->assertGreaterThan(20, $deltaSeconds);
+        $this->assertLessThan(60, $deltaSeconds);
+    }
+
+    // -- Bug C: Mongo dequeue surfaces the LIVE doc-level attempts -----------
+    //
+    // The document has a top-level attempts (incremented by reclaim/reject) AND
+    // a push-time snapshot inside the stored 'message'. dequeue() previously
+    // returned the snapshot (always 0) so fail()'s attempts >= max_retries check
+    // never tripped and a job retried forever. dequeue now surfaces the live
+    // top-level attempts (and priority).
+
+    public function testMongoDequeueSurfacesLiveAttempts(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        $collection->queueFindOneAndUpdate(null); // reclaim: none expired
+        // Top-level attempts=2 (live), but the snapshot inside 'message' is the
+        // stale push-time 0.
+        $collection->queueFindOneAndUpdate([
+            '_id' => 'msg-1',
+            'attempts' => 2,
+            'priority' => 7,
+            'message' => ['payload' => ['x' => 1], 'attempts' => 0, 'priority' => 0],
+            'status' => 'processing',
+        ]);
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0);
+
+        $job = $backend->dequeue('emails');
+
+        // The consumer sees the LIVE attempts/priority, not the push-time 0.
+        $this->assertSame(2, $job['attempts']);
+        $this->assertSame(7, $job['priority']);
+    }
+
+    // -- Bug D: Mongo adapter dead-letter inspection + retry contract --------
+    //
+    // The Queue passes a max_retries kwarg to deadLetters()/retryFailed(); the
+    // Mongo backend must accept it (matching the LiteBackend signature) so those
+    // calls don't blow up on MongoDB. retryFailed() also resets available_at.
+
+    public function testMongoDeadLettersAcceptsMaxRetriesKwarg(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        $collection->queueFind([
+            ['_id' => 'd1', 'attempts' => 3, 'message' => ['payload' => ['x' => 1], 'attempts' => 0]],
+        ]);
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
+
+        // Must NOT throw a TypeError on the kwarg, and must query the
+        // dead_letter topic with the LIVE attempts surfaced.
+        $dead = $backend->deadLetters('emails', 5);
+
+        $this->assertSame('emails.dead_letter', $collection->findCalls[0]['filter']['topic']);
+        $this->assertCount(1, $dead);
+        $this->assertSame(3, $dead[0]['attempts']); // live, not snapshot 0
+        $this->assertSame('dead', $dead[0]['status']);
+    }
+
+    public function testMongoRetryFailedAcceptsMaxRetriesAndResetsAvailableAt(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        // One dead-letter under the (raised) limit -> requeued.
+        $collection->queueFind([
+            ['_id' => 'd1', 'attempts' => 2, 'message' => ['id' => 'd1', 'payload' => ['x' => 1]]],
+        ]);
+        $collection->queueUpdateOne(1); // requeue() updates the doc back to pending
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
+
+        $count = $backend->retryFailed('emails', 5);
+
+        $this->assertSame(1, $count);
+        // Queried the dead_letter topic gated below the (raised) limit.
+        $this->assertSame('emails.dead_letter', $collection->findCalls[0]['filter']['topic']);
+        // requeue() ran and reset available_at + cleared reserved_at (Bug B reason).
+        $this->assertCount(1, $collection->updateOneCalls);
+        $set = $collection->updateOneCalls[0]['update']['$set'];
+        $this->assertSame('pending', $set['status']);
+        $this->assertArrayHasKey('available_at', $set);
+        $this->assertNull($set['reserved_at']);
+        // The dead-letter copy was removed.
+        $this->assertCount(1, $collection->deleteOneCalls);
+        $this->assertSame('emails.dead_letter', $collection->deleteOneCalls[0]['topic']);
+    }
+
+    public function testMongoQueueDeadLettersRetryFailedSignaturesMatchLite(): void
+    {
+        // Pure signature/contract check — runs even without ext-mongodb. The
+        // Queue passes ?int $maxRetries; the Mongo backend must accept it so the
+        // call can't TypeError (Bug D).
+        $ref = new \ReflectionClass(MongoBackend::class);
+
+        $this->assertTrue($ref->hasMethod('deadLetters'));
+        $dl = $ref->getMethod('deadLetters');
+        $this->assertSame(2, $dl->getNumberOfParameters());
+        $this->assertSame('topic', $dl->getParameters()[0]->getName());
+        $this->assertSame('maxRetries', $dl->getParameters()[1]->getName());
+        $this->assertTrue($dl->getParameters()[1]->isOptional());
+
+        $this->assertTrue($ref->hasMethod('retryFailed'));
+        $rf = $ref->getMethod('retryFailed');
+        $this->assertSame(2, $rf->getNumberOfParameters());
+        $this->assertSame('topic', $rf->getParameters()[0]->getName());
+        $this->assertSame('maxRetries', $rf->getParameters()[1]->getName());
+        $this->assertTrue($rf->getParameters()[1]->isOptional());
+
+        $this->assertTrue($ref->hasMethod('failed'));
+        $this->assertSame(1, $ref->getMethod('failed')->getNumberOfParameters());
+    }
 }
 
 /**
@@ -825,13 +986,31 @@ class FakeMongoCollection
     public array $findOneAndUpdateCalls = [];
     public array $insertOneCalls = [];
     public array $deleteOneCalls = [];
+    public array $updateOneCalls = [];
+    public array $findCalls = [];
 
     /** @var array<int, mixed> Scripted findOneAndUpdate return values (FIFO). */
     private array $scriptedFindOneAndUpdate = [];
 
+    /** @var array<int, mixed> Scripted updateOne modifiedCount values (FIFO). */
+    private array $scriptedUpdateOne = [];
+
+    /** @var array<int, array> Scripted find() result sets (FIFO). */
+    private array $scriptedFind = [];
+
     public function queueFindOneAndUpdate(?array $doc): void
     {
         $this->scriptedFindOneAndUpdate[] = $doc;
+    }
+
+    public function queueUpdateOne(int $modifiedCount): void
+    {
+        $this->scriptedUpdateOne[] = $modifiedCount;
+    }
+
+    public function queueFind(array $docs): void
+    {
+        $this->scriptedFind[] = $docs;
     }
 
     public function findOneAndUpdate(array $filter, array $update, array $options = []): ?object
@@ -839,6 +1018,24 @@ class FakeMongoCollection
         $this->findOneAndUpdateCalls[] = ['filter' => $filter, 'update' => $update, 'options' => $options];
         $doc = array_shift($this->scriptedFindOneAndUpdate);
         return $doc === null ? null : (object)$doc;
+    }
+
+    public function updateOne(array $filter, array $update, array $options = []): object
+    {
+        $this->updateOneCalls[] = ['filter' => $filter, 'update' => $update, 'options' => $options];
+        $modified = array_shift($this->scriptedUpdateOne);
+        $modified = $modified ?? 1;
+        return new class($modified) {
+            public function __construct(private int $modified) {}
+            public function getModifiedCount(): int { return $this->modified; }
+        };
+    }
+
+    public function find(array $filter = [], array $options = []): array
+    {
+        $this->findCalls[] = ['filter' => $filter, 'options' => $options];
+        $docs = array_shift($this->scriptedFind) ?? [];
+        return array_map(fn($d) => (object)$d, $docs);
     }
 
     public function insertOne(array $document): void
