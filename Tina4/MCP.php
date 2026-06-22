@@ -680,7 +680,12 @@ class McpServer
     }
 
     /**
-     * Check if the server is running on localhost.
+     * Informational only — whether the CONFIGURED host looks local.
+     *
+     * NOT the security gate. This reads TINA4_HOST_NAME (the configured bind
+     * address), which on a 0.0.0.0 bind looks "local" while still accepting
+     * remote clients. Trust decisions use {@see isRequestAllowed()} with the
+     * RAW socket peer instead. Kept for diagnostics / back-compat.
      */
     public static function isLocalhost(): bool
     {
@@ -690,19 +695,40 @@ class McpServer
     }
 
     /**
-     * Whether the MCP subsystem should activate.
+     * Whether an address is a loopback (in-process / same-host) peer.
      *
-     * Canonical enable-gate semantics (Python master parity):
-     *   - An explicit, non-empty TINA4_MCP WINS on ANY host (sysadmin
-     *     opt-in/out): truthy → on, falsy → off, regardless of debug/host.
-     *   - Otherwise MCP requires TINA4_DEBUG truthy AND the dev auto-enable
-     *     is LOCALHOST-ONLY: it activates only when {@see isLocalhost()} OR
-     *     the operator has opted into remote exposure via TINA4_MCP_REMOTE.
+     * Operates on the RAW socket peer, never X-Forwarded-For. Empty means an
+     * in-process / synthetic request (no socket) and is trusted. The
+     * `::ffff:` IPv4-mapped prefix is stripped. NOTE: 0.0.0.0 is a BIND
+     * address, never a client address, so it is deliberately NOT loopback.
      *
-     * WHY: the MCP dev tools expose powerful ops (DB query, file read/WRITE,
-     * route list). On a non-localhost TINA4_DEBUG=true deployment they must
-     * NOT auto-expose — the localhost guard + TINA4_MCP_REMOTE escape hatch
-     * close that gap.
+     * Python master parity: tina4_python.mcp.is_loopback.
+     */
+    public static function isLoopback(string $ip): bool
+    {
+        if ($ip === '') {
+            return true;
+        }
+        $ip = strtolower(trim($ip));
+        if (str_starts_with($ip, '::ffff:')) {
+            $ip = substr($ip, 7);
+        }
+        return $ip === '::1' || $ip === 'localhost' || str_starts_with($ip, '127.');
+    }
+
+    /**
+     * Capability gate — whether the MCP subsystem may run at all.
+     *
+     * Pure capability, host-INDEPENDENT (Python master parity):
+     *   - An explicit, non-empty TINA4_MCP wins: truthy → on, falsy → off.
+     *   - Otherwise MCP is a capability of any TINA4_DEBUG deployment.
+     *
+     * This NO LONGER consults the host. A debug box bound to 0.0.0.0 still
+     * "has" the capability, but {@see isRequestAllowed()} is what decides
+     * whether a given CALLER may use it — loopback always, remote only with
+     * an explicit opt-in plus a valid token. Splitting capability from
+     * per-request authorisation closes the hole where a 0.0.0.0 bind
+     * auto-exposed DB/file tools to remote unauthenticated callers.
      */
     public static function isEnabled(): bool
     {
@@ -710,10 +736,30 @@ class McpServer
         if ($explicit !== null && $explicit !== '') {
             return DotEnv::isTruthy($explicit);
         }
-        if (!DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'))) {
+        return DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+    }
+
+    /**
+     * Per-request authorisation — whether THIS caller may use MCP.
+     *
+     * @param string $remoteIp       Raw socket peer (Request::$remoteIp), never X-Forwarded-For.
+     * @param bool   $hasValidToken  True when the request carried a token matching TINA4_MCP_TOKEN.
+     *
+     * Rules (Python master parity, tina4_python.mcp.is_request_allowed):
+     *   - Capability off ({@see isEnabled()} false)        → deny.
+     *   - Loopback peer                                    → allow.
+     *   - Remote peer → only when TINA4_MCP_REMOTE is truthy AND a valid
+     *     token was presented. No configured token ⇒ remote can never pass.
+     */
+    public static function isRequestAllowed(string $remoteIp, bool $hasValidToken = false): bool
+    {
+        if (!self::isEnabled()) {
             return false;
         }
-        return self::isLocalhost() || DotEnv::isTruthy(DotEnv::getEnv('TINA4_MCP_REMOTE'));
+        if (self::isLoopback($remoteIp)) {
+            return true;
+        }
+        return DotEnv::isTruthy(DotEnv::getEnv('TINA4_MCP_REMOTE')) && $hasValidToken;
     }
 
     /**
@@ -799,7 +845,24 @@ class McpDevTools
                 }
                 $stack[] = $part;
             }
-            return $projectRoot . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $stack);
+            $full = $projectRoot . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $stack);
+            // Belt-and-braces against symlink escapes: if the resolved path
+            // already exists, canonicalise it and confirm it is still inside
+            // the project root. A symlink in the tree pointing outside would
+            // otherwise let a read/write escape the sandbox even though the
+            // `..` segment guard above is clean. New paths (parent not yet
+            // created) have no realpath and rely on that segment guard. The
+            // trailing separator on both sides defeats the `/proj` vs
+            // `/proj-evil` prefix-match pitfall.
+            $real = realpath($full);
+            if ($real !== false) {
+                $rootReal = realpath($projectRoot) ?: $projectRoot;
+                $rootPrefix = rtrim($rootReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                if (!str_starts_with($real . DIRECTORY_SEPARATOR, $rootPrefix)) {
+                    throw new \RuntimeException("Path escapes project directory: $relPath");
+                }
+            }
+            return $full;
         };
 
         $redactEnv = function (string $key, string $value): string {
@@ -1058,8 +1121,31 @@ class McpDevTools
             } catch (\Throwable $e) {
                 return ['error' => 'No database connection: ' . $e->getMessage()];
             }
-            $paramList = json_decode($params, true) ?: [];
-            $result = $db->fetch($sql, 10, 0);
+            $paramList = json_decode($params, true);
+            if (!is_array($paramList)) {
+                $paramList = [];
+            }
+            // Defense-in-depth: this tool is read-only. Strip comments, reject
+            // multiple statements, and require a leading SELECT/WITH so it can
+            // never mutate data even if reached. (database_execute is the
+            // write surface and is gated separately.) Mirrors Python master.
+            $cleaned = preg_replace('/--[^\r\n]*/', ' ', $sql);
+            $cleaned = preg_replace('#/\*.*?\*/#s', ' ', $cleaned);
+            $cleaned = trim(rtrim((string) $cleaned, "; \t\n\r"));
+            if (str_contains($cleaned, ';')) {
+                return ['error' => 'database_query rejects multiple statements'];
+            }
+            if (!preg_match('/^(select|with)\b/i', $cleaned)) {
+                return ['error' => 'database_query is read-only (SELECT/WITH only)'];
+            }
+            // BUGFIX: the old call passed `($sql, 10, 0)` — 10 landed in the
+            // $params slot (wrong type) and the bound params were dropped.
+            // Correct order is ($sql, $params, $limit, $offset).
+            try {
+                $result = $db->fetch($cleaned, $paramList, 100, 0);
+            } catch (\Throwable $e) {
+                return ['error' => $e->getMessage()];
+            }
             return ['records' => $result ? $result->records : [], 'count' => $result ? $result->count : 0];
         }, 'Execute a read-only SQL query (SELECT)');
 
@@ -1097,8 +1183,17 @@ class McpDevTools
             } catch (\Throwable $e) {
                 return ['error' => 'No database connection: ' . $e->getMessage()];
             }
-            // Use the database adapter to get table columns
-            $result = $db->fetch("SELECT * FROM $table", [], 1, 0);
+            // The table name is interpolated into the SQL — there is no bind
+            // slot for an identifier — so constrain it to a safe identifier
+            // (optionally schema-qualified) to keep it injection-proof.
+            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$/', $table)) {
+                return ['error' => 'Invalid table name'];
+            }
+            try {
+                $result = $db->fetch("SELECT * FROM $table", [], 1, 0);
+            } catch (\Throwable $e) {
+                return ['error' => $e->getMessage()];
+            }
             if ($result && !empty($result->records)) {
                 return array_keys($result->records[0]);
             }

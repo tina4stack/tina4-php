@@ -54,6 +54,16 @@ class Request
     /** @var string Client IP address (supports X-Forwarded-For) */
     public readonly string $ip;
 
+    /**
+     * Raw socket peer address — the immediate TCP client. Unlike {@see $ip}
+     * this NEVER honours X-Forwarded-For (which any caller can spoof), so it
+     * can be trusted for security decisions such as the MCP loopback/remote
+     * authorisation gate. Empty for in-process / synthetic requests.
+     *
+     * @var string
+     */
+    public readonly string $remoteIp;
+
     /** @var array<string, array> Uploaded files */
     public readonly array $files;
 
@@ -108,6 +118,7 @@ class Request
         ?array $headers = null,
         ?string $ip = null,
         ?array $files = null,
+        ?string $remoteIp = null,
     ) {
         $this->method = strtoupper($method ?? ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
@@ -211,6 +222,13 @@ class Request
 
         // IP address
         $this->ip = $ip ?? $this->resolveIp();
+
+        // Raw socket peer — explicit arg first (the built-in socket server
+        // and PSR-7/Swoole transports pass the real peer), else REMOTE_ADDR
+        // from the SAPI (php -S / FPM / Apache set it to the real client).
+        // NEVER X-Forwarded-For: a trust decision must not read a spoofable
+        // header. Empty string for in-process / synthetic requests.
+        $this->remoteIp = $remoteIp ?? ($_SERVER['REMOTE_ADDR'] ?? '');
     }
 
     /**
@@ -224,6 +242,7 @@ class Request
         array $headers = [],
         string $ip = '127.0.0.1',
         array $files = [],
+        ?string $remoteIp = null,
     ): self {
         return new self(
             method: $method,
@@ -233,6 +252,7 @@ class Request
             headers: $headers,
             ip: $ip,
             files: $files,
+            remoteIp: $remoteIp,
         );
     }
 

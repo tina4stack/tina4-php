@@ -2086,6 +2086,9 @@ class DevAdmin
         // suite on first access.
 
         Router::get('/__dev/api/mcp/tools', function (Request $request, Response $response) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['tools' => [], 'error' => 'MCP forbidden'], 404);
+            }
             try {
                 $server = McpServer::getDefaultServer();
                 return $response->json(['tools' => $server->getToolList()]);
@@ -2098,6 +2101,9 @@ class DevAdmin
         });
 
         Router::post('/__dev/api/mcp/call', function (Request $request, Response $response) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['ok' => false, 'error' => 'MCP forbidden'], 404);
+            }
             $body = self::devAdminBody($request);
             $name = (string) ($body['name'] ?? '');
             $arguments = $body['arguments'] ?? [];
@@ -2136,6 +2142,9 @@ class DevAdmin
         // the /message suffix is the SSE-advertised endpoint. Notifications
         // (no id) get a 204; everything else returns the JSON-RPC response.
         $mcpMessageHandler = function (Request $request, Response $response) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['error' => 'MCP forbidden'], 404);
+            }
             $server = McpServer::getDefaultServer();
             // Prefer the framework-parsed body (array). Fall back to the raw
             // string so a hand-rolled client posting text/plain still works.
@@ -2169,6 +2178,9 @@ class DevAdmin
         // whereas Response::stream() does direct SAPI output the socket
         // server cannot carry (and FPM would chunk-truncate a one-shot).
         (Router::get('/__dev/mcp/sse', function (Request $request, Response $response) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['error' => 'MCP forbidden'], 404);
+            }
             return $response
                 ->text("event: endpoint\ndata: /__dev/mcp/message\n\n")
                 ->header('Content-Type', 'text/event-stream');
@@ -2731,6 +2743,55 @@ class DevAdmin
             }
         }
         return [];
+    }
+
+    /**
+     * Whether the request carried a token matching TINA4_MCP_TOKEN.
+     *
+     * The token may arrive as `Authorization: Bearer <t>`, `X-MCP-Token`, or
+     * `X-Api-Key`. Compared timing-safe against TINA4_MCP_TOKEN (falling back
+     * to TINA4_API_KEY). With NO configured token this returns false, so a
+     * remote caller can never present a "valid" token by accident. Mirrors
+     * the Python dev_admin `_mcp_token_ok` helper.
+     */
+    private static function mcpTokenOk(Request $request): bool
+    {
+        $expected = DotEnv::getEnv('TINA4_MCP_TOKEN');
+        if ($expected === null || $expected === '') {
+            $expected = DotEnv::getEnv('TINA4_API_KEY');
+        }
+        if ($expected === null || $expected === '') {
+            return false;
+        }
+        $provided = '';
+        $auth = (string) ($request->headers['authorization'] ?? '');
+        if (stripos($auth, 'bearer ') === 0) {
+            $provided = trim(substr($auth, 7));
+        }
+        if ($provided === '') {
+            $provided = (string) ($request->headers['x-mcp-token'] ?? '');
+        }
+        if ($provided === '') {
+            $provided = (string) ($request->headers['x-api-key'] ?? '');
+        }
+        if ($provided === '') {
+            return false;
+        }
+        return hash_equals((string) $expected, $provided);
+    }
+
+    /**
+     * Per-request MCP authorisation gate using the RAW socket peer.
+     *
+     * Delegates to McpServer::isRequestAllowed() with Request::$remoteIp
+     * (never X-Forwarded-For) and the timing-safe token check. Loopback is
+     * always allowed; a remote caller needs TINA4_MCP_REMOTE=true plus a
+     * valid token. Mirrors the Python dev_admin `_mcp_request_allowed`.
+     */
+    private static function mcpRequestAllowed(Request $request): bool
+    {
+        $remoteIp = (string) ($request->remoteIp ?? '');
+        return McpServer::isRequestAllowed($remoteIp, self::mcpTokenOk($request));
     }
 
     // Legacy renderDashboard() removed — UI served from tina4-dev-admin.min.js

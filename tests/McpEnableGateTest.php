@@ -12,27 +12,30 @@ require_once __DIR__ . '/../Tina4/DevAdmin.php';
 
 use PHPUnit\Framework\TestCase;
 use Tina4\DevAdmin;
-use Tina4\DotEnv;
 use Tina4\ErrorTracker;
 use Tina4\McpServer;
 use Tina4\Router;
 
 /**
- * Canonical MCP enable-gate semantics (Python master parity,
- * tina4_python/mcp/__init__.py is_enabled()):
+ * MCP enable-gate semantics after the 3.13.40 capability / per-request split
+ * (Python master parity, tina4_python/mcp/__init__.py is_enabled()):
  *
- *   explicit = env(TINA4_MCP)
- *   if explicit set and non-empty: return truthy(explicit)   # any host
- *   if not truthy(TINA4_DEBUG): return false
- *   return isLocalhost() OR truthy(TINA4_MCP_REMOTE)          # dev = localhost-only
+ *   isEnabled() is a pure CAPABILITY gate, host-INDEPENDENT:
+ *     explicit = env(TINA4_MCP)
+ *     if explicit set and non-empty: return truthy(explicit)   # sysadmin override
+ *     return truthy(TINA4_DEBUG)                                # any host
  *
- * WHY: the MCP dev tools expose powerful ops (DB query, file read/WRITE,
- * route list). On a non-localhost TINA4_DEBUG=true deployment they must
- * NOT auto-expose; TINA4_MCP_REMOTE is the documented opt-in escape hatch
- * and explicit TINA4_MCP is the sysadmin override on any host.
+ * The OLD model gated route MOUNTING on a configured-host "localhost" check,
+ * which treated a 0.0.0.0 bind as local and then ran the handlers with NO
+ * per-request check — a remote unauthenticated caller could reach the DB /
+ * file tools. The fix splits the gate in two: isEnabled() decides whether MCP
+ * is a capability of the deployment (mount the routes), and
+ * isRequestAllowed() decides whether a given CALLER may use it (loopback
+ * always; remote only with TINA4_MCP_REMOTE + a valid token). The raw socket
+ * peer drives that decision, never X-Forwarded-For.
  *
- * Locks both the predicate (McpServer::isEnabled()) AND that the actual
- * /__dev/mcp route registration is gated on it.
+ * This file locks the CAPABILITY predicate and that the /__dev/mcp routes
+ * mount on it. The per-request authorisation is locked in McpSecurityTest.
  */
 class McpEnableGateTest extends TestCase
 {
@@ -75,39 +78,29 @@ class McpEnableGateTest extends TestCase
         $_ENV[$key] = $value;
     }
 
-    // ── Predicate matrix ─────────────────────────────────────────
+    // ── Capability predicate matrix ──────────────────────────────
 
     public function testNoDebugIsOff(): void
     {
-        // No TINA4_MCP, no TINA4_DEBUG → off (even on localhost).
+        // No TINA4_MCP, no TINA4_DEBUG → capability off (even on localhost).
         $this->env('TINA4_HOST_NAME', 'localhost:7146');
         $this->assertFalse(McpServer::isEnabled());
     }
 
-    public function testDebugLocalhostIsOn(): void
+    public function testDebugIsOnRegardlessOfHost(): void
     {
+        // Capability is host-independent: debug on a PUBLIC host still has the
+        // capability. Remote callers are stopped at request time, not here.
         $this->env('TINA4_DEBUG', 'true');
+        $this->env('TINA4_HOST_NAME', 'myserver.example.com:7146');
+        $this->assertTrue(McpServer::isEnabled());
+
+        // ...and on localhost.
         $this->env('TINA4_HOST_NAME', 'localhost:7146');
         $this->assertTrue(McpServer::isEnabled());
     }
 
-    public function testDebugNonLocalhostNoRemoteIsOff(): void
-    {
-        // The core security gap: debug on a public host must NOT auto-expose.
-        $this->env('TINA4_DEBUG', 'true');
-        $this->env('TINA4_HOST_NAME', 'myserver.example.com:7146');
-        $this->assertFalse(McpServer::isEnabled());
-    }
-
-    public function testDebugNonLocalhostWithRemoteIsOn(): void
-    {
-        $this->env('TINA4_DEBUG', 'true');
-        $this->env('TINA4_HOST_NAME', 'myserver.example.com:7146');
-        $this->env('TINA4_MCP_REMOTE', 'true');
-        $this->assertTrue(McpServer::isEnabled());
-    }
-
-    public function testExplicitTrueOnNonLocalhostIsOn(): void
+    public function testExplicitTrueWinsOnAnyHostWithoutDebug(): void
     {
         // Explicit TINA4_MCP=true wins on any host — even without debug.
         $this->env('TINA4_MCP', 'true');
@@ -124,7 +117,17 @@ class McpEnableGateTest extends TestCase
         $this->assertFalse(McpServer::isEnabled());
     }
 
-    // ── Route registration is gated on the predicate ─────────────
+    public function testHostNameNoLongerFlipsTheGate(): void
+    {
+        // Regression: a configured 0.0.0.0 host must NOT change the capability
+        // gate. Old code routed isEnabled() through isLocalhost(), which
+        // treated 0.0.0.0 as local. isEnabled() now ignores the host entirely.
+        $this->env('TINA4_DEBUG', 'true');
+        $this->env('TINA4_HOST_NAME', '0.0.0.0:7145');
+        $this->assertTrue(McpServer::isEnabled());
+    }
+
+    // ── Route registration is gated on the CAPABILITY predicate ──
 
     private function mcpRoutesMounted(): bool
     {
@@ -137,7 +140,7 @@ class McpEnableGateTest extends TestCase
             && in_array('GET /__dev/mcp/sse', $patterns, true);
     }
 
-    public function testRoutesMountedWhenEnabled(): void
+    public function testRoutesMountedWhenExplicitlyEnabled(): void
     {
         $this->env('TINA4_MCP', 'true');
         $this->env('TINA4_HOST_NAME', 'myserver.example.com:7146');
@@ -145,21 +148,27 @@ class McpEnableGateTest extends TestCase
         $this->assertTrue($this->mcpRoutesMounted(), 'MCP routes must mount when enabled');
     }
 
-    public function testRoutesAbsentOnDebugNonLocalhostWithoutRemote(): void
+    public function testRoutesMountedOnDebugPublicHost(): void
     {
-        // The fix in action: register() runs (dev), but the gate keeps the
-        // MCP routes off a public debug host → dispatcher 404s on them.
+        // New behaviour: routes MOUNT on any debug host (capability). The
+        // per-request gate (McpSecurityTest) is what 404s a remote caller —
+        // mounting is no longer the security boundary.
         $this->env('TINA4_DEBUG', 'true');
         $this->env('TINA4_HOST_NAME', 'myserver.example.com:7146');
+        DevAdmin::register();
+        $this->assertTrue($this->mcpRoutesMounted(), 'MCP routes mount on any debug host');
+    }
+
+    public function testRoutesAbsentWhenCapabilityOff(): void
+    {
+        // No debug, no explicit MCP → capability off → routes never mount.
+        $this->env('TINA4_HOST_NAME', 'localhost:7146');
         DevAdmin::register();
         $patterns = array_map(
             fn($r) => $r['method'] . ' ' . $r['pattern'],
             Router::getRoutes()
         );
         $this->assertNotContains('POST /__dev/mcp', $patterns);
-        $this->assertNotContains('POST /__dev/mcp/message', $patterns);
-        $this->assertNotContains('GET /__dev/mcp/sse', $patterns);
-        // The REST shim is part of the same gated block and must also be off.
         $this->assertNotContains('GET /__dev/api/mcp/tools', $patterns);
     }
 

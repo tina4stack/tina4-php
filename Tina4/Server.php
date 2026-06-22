@@ -38,6 +38,17 @@ class Server
     private array $buffers = [];
 
     /**
+     * @var array<int, string> Raw socket peer address keyed by resource ID.
+     *
+     * Captured at accept() via stream_socket_get_name() so each request can
+     * see its REAL TCP client even though stream_socket_server bypasses the
+     * PHP SAPI (where $_SERVER['REMOTE_ADDR'] would otherwise be set). The
+     * MCP loopback/remote authorisation gate relies on this — without it a
+     * 0.0.0.0-bound debug box would treat every remote caller as loopback.
+     */
+    private array $peerNames = [];
+
+    /**
      * @var self|null The running server instance.
      *
      * Set in start(). Lets in-request handlers (notably POST
@@ -352,22 +363,27 @@ class Server
             foreach ($read as $socket) {
                 if ($socket === $this->socket) {
                     // Accept new connection
-                    $client = @stream_socket_accept($this->socket, 0);
+                    $client = @stream_socket_accept($this->socket, 0, $peerName);
                     if ($client) {
                         stream_set_blocking($client, false);
                         $resourceId = (int)$client;
                         $this->clients[$resourceId] = $client;
                         $this->buffers[$resourceId] = '';
+                        // Capture the raw TCP peer once at accept — the socket
+                        // SAPI never sets $_SERVER['REMOTE_ADDR'], so this is
+                        // the only place the real client address is available.
+                        $this->peerNames[$resourceId] = self::peerIp($peerName);
                     }
                 } elseif ($socket === $this->aiSocket) {
                     // Accept new AI port connection
-                    $client = @stream_socket_accept($this->aiSocket, 0);
+                    $client = @stream_socket_accept($this->aiSocket, 0, $peerName);
                     if ($client) {
                         stream_set_blocking($client, false);
                         $resourceId = (int)$client;
                         $this->clients[$resourceId] = $client;
                         $this->buffers[$resourceId] = '';
                         $this->aiPortConnections[$resourceId] = true;
+                        $this->peerNames[$resourceId] = self::peerIp($peerName);
                     }
                 } elseif ($this->isWebSocketClient($socket)) {
                     // WebSocket data
@@ -432,6 +448,29 @@ class Server
      * Process the HTTP read buffer for a client.
      * Detects complete HTTP requests by looking for the header/body boundary.
      */
+    /**
+     * Extract the bare host from a stream_socket_get_name() peer string.
+     *
+     * The peer name is "address:port" — IPv4 "127.0.0.1:54321", bracketed
+     * IPv6 "[::1]:54321", or bare IPv6 "::1:54321" on some platforms. A port
+     * is always appended, so stripping the final ":port" segment yields the
+     * address in every case. Returns "" for a null/empty peer.
+     */
+    private static function peerIp(?string $peerName): string
+    {
+        if ($peerName === null || $peerName === '') {
+            return '';
+        }
+        $peerName = trim($peerName);
+        // Bracketed IPv6: [::1]:port
+        if ($peerName[0] === '[') {
+            $end = strpos($peerName, ']');
+            return $end !== false ? substr($peerName, 1, $end - 1) : $peerName;
+        }
+        $lastColon = strrpos($peerName, ':');
+        return $lastColon === false ? $peerName : substr($peerName, 0, $lastColon);
+    }
+
     private function processHttpBuffer($client): void
     {
         $resourceId = (int)$client;
@@ -525,6 +564,11 @@ class Server
 
         // Build Request object
         $files = $parsedFiles ?? [];
+        // Raw TCP peer captured at accept() — the only trustworthy client
+        // address under the socket SAPI. Feeds Request::$remoteIp (and the
+        // MCP loopback/remote gate) so a remote caller can't be mistaken for
+        // localhost on a 0.0.0.0 bind.
+        $peerIp = $this->peerNames[(int)$client] ?? '';
         $request = new Request(
             method: strtoupper($method),
             path: $path,
@@ -532,6 +576,7 @@ class Server
             body: $parsedBody,
             headers: $this->buildHeaderArray($headers),
             files: !empty($files) ? $files : null,
+            remoteIp: $peerIp,
         );
 
         // Populate PHP superglobals so user code that reads $_COOKIE, $_GET,
@@ -545,7 +590,8 @@ class Server
             $parsedBody,
             $headers,
             $this->host,
-            $this->port
+            $this->port,
+            $peerIp
         );
 
         // Suppress hot-reload script for AI port connections
@@ -1147,6 +1193,7 @@ class Server
         unset($this->clients[$resourceId]);
         unset($this->buffers[$resourceId]);
         unset($this->aiPortConnections[$resourceId]);
+        unset($this->peerNames[$resourceId]);
         // Guard the close: a pruned dead client's socket may already be closed,
         // and fclose() on a non-resource raises an uncatchable TypeError in
         // PHP 8 — which would crash the very broadcast that is pruning it.
@@ -1171,6 +1218,7 @@ class Server
         unset($this->clients[$resourceId]);
         unset($this->buffers[$resourceId]);
         unset($this->aiPortConnections[$resourceId]);
+        unset($this->peerNames[$resourceId]);
         @fclose($socket);
     }
 
@@ -1227,7 +1275,8 @@ class Server
         $parsedBody,
         array $headers,
         string $host,
-        int $port
+        int $port,
+        string $remoteIp = ''
     ): void {
         // SECURITY: wipe all HTTP_* keys from the previous request before we
         // populate this one. $_SERVER survives across requests because
@@ -1266,7 +1315,12 @@ class Server
         $_SERVER['SERVER_NAME'] = $host;
         $_SERVER['SERVER_PORT'] = (string)$port;
         $_SERVER['HTTP_HOST'] = $headers['host'] ?? "{$host}:{$port}";
-        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+        // Real TCP peer captured at accept() (falls back to loopback only when
+        // unknown). Previously hardcoded to 127.0.0.1, which made every client
+        // look local — a security hazard for the MCP loopback gate on a
+        // 0.0.0.0 bind. User code reading $_SERVER['REMOTE_ADDR'] now sees the
+        // true client too.
+        $_SERVER['REMOTE_ADDR'] = $remoteIp !== '' ? $remoteIp : '127.0.0.1';
         foreach ($headers as $hk => $hv) {
             if ($hk === '' || $hk[0] === '_') {
                 continue;
