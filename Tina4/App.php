@@ -101,8 +101,13 @@ class App
             $lines[] = sprintf('    %-28s  ->  %s', $old, $new);
         }
         $lines[] = '';
-        $lines[] = 'Run `tina4 env --migrate` to rewrite your .env automatically,';
-        $lines[] = 'or rename manually. See https://tina4.com/release/3.12.0';
+        $lines[] = 'Note: these may come from a .env file loaded by dotenv, not just';
+        $lines[] = 'the runtime environment - check your image / build context (a .env';
+        $lines[] = 'baked into a Docker image is loaded at startup) as well as k8s/CI env.';
+        $lines[] = '';
+        $lines[] = 'FIX: run `tina4 env --migrate` to rewrite your .env automatically';
+        $lines[] = '(it renames every legacy name to its TINA4_ form in place).';
+        $lines[] = 'Or rename manually. See https://tina4.com/release/3.12.0';
         $lines[] = 'Set TINA4_ALLOW_LEGACY_ENV=true to bypass during migration.';
         $lines[] = $sep;
         $lines[] = '';

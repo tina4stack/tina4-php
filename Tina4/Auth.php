@@ -22,9 +22,13 @@ class Auth
      * identical text everywhere. It names exactly what to set and how, so an
      * operator who hits it in CI/prod knows the next step.
      */
-    public const BLANK_SECRET_WARNING = 'Auth: TINA4_SECRET is not set — JWT signing is insecure. '
+    public const BLANK_SECRET_WARNING = 'Auth: TINA4_SECRET is not set - JWT signing is insecure. '
         . 'Set TINA4_SECRET to a random value (e.g. `openssl rand -hex 32`) in your '
-        . 'environment or .env before serving traffic.';
+        . 'environment or .env before serving traffic. '
+        . 'For LOCAL DEV, set TINA4_DEBUG=true and a per-machine secret is generated '
+        . 'automatically into .env.local (gitignored). Seeing this warning means the '
+        . 'run was NOT detected as dev - typically a container or CI without '
+        . 'TINA4_DEBUG set, or TINA4_ENV=production.';
 
     // ── Dev secret bootstrap ───────────────────────────────────────
 
