@@ -25,6 +25,16 @@ class MongoBackend implements QueueBackend
     private string $dbName;
     private string $collectionName;
 
+    /**
+     * Reservation/visibility timeout (seconds): a dequeued message is held
+     * with available_at = now + timeout; reclaimExpired() returns it once that
+     * passes (consumer died mid-flight). <= 0 disables the reclaim.
+     */
+    private float $visibilityTimeout;
+
+    /** Max attempts before a reclaimed reservation is dead-lettered. */
+    private int $maxRetries;
+
     /** @var \MongoDB\Client|null */
     private $client = null;
 
@@ -62,6 +72,14 @@ class MongoBackend implements QueueBackend
         $this->uri = $uri;
         $this->dbName = $config['db'] ?? (getenv('TINA4_MONGO_DB') ?: 'tina4');
         $this->collectionName = $config['collection'] ?? (getenv('TINA4_MONGO_COLLECTION') ?: 'tina4_queue');
+
+        if (array_key_exists('visibility_timeout', $config)) {
+            $this->visibilityTimeout = (float)$config['visibility_timeout'];
+        } else {
+            $env = getenv('TINA4_QUEUE_VISIBILITY_TIMEOUT');
+            $this->visibilityTimeout = ($env !== false && $env !== '') ? (float)$env : 300.0;
+        }
+        $this->maxRetries = (int)($config['max_retries'] ?? 3);
     }
 
     /**
@@ -88,13 +106,16 @@ class MongoBackend implements QueueBackend
         $id = $message['id'] ?? bin2hex(random_bytes(8));
         $message['id'] = $id;
 
+        $now = new \MongoDB\BSON\UTCDateTime();
         $document = [
             '_id' => $id,
             'topic' => $topic,
             'status' => 'pending',
             'message' => $message,
-            'created_at' => new \MongoDB\BSON\UTCDateTime(),
-            'updated_at' => new \MongoDB\BSON\UTCDateTime(),
+            'attempts' => (int)($message['attempts'] ?? 0),
+            'available_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
         ];
 
         $this->collection->insertOne($document);
@@ -107,15 +128,27 @@ class MongoBackend implements QueueBackend
     {
         $this->ensureConnected();
 
+        // First return any reservations whose consumer died mid-flight.
+        $this->reclaimExpired($topic, $this->maxRetries);
+
+        $now = new \MongoDB\BSON\UTCDateTime();
+
+        // The claim advances available_at to now + visibilityTimeout and records
+        // reserved_at so reclaimExpired() can return the job if the consumer dies
+        // before acknowledge()/requeue(). This is the fix for the "reserved
+        // forever" bug — previously available_at was never set or advanced.
         $result = $this->collection->findOneAndUpdate(
             [
                 'topic' => $topic,
                 'status' => 'pending',
+                'available_at' => ['$lte' => $now],
             ],
             [
                 '$set' => [
                     'status' => 'processing',
-                    'updated_at' => new \MongoDB\BSON\UTCDateTime(),
+                    'reserved_at' => $now,
+                    'available_at' => $this->futureDate($this->visibilityTimeout),
+                    'updated_at' => $now,
                 ],
             ],
             [
@@ -130,6 +163,66 @@ class MongoBackend implements QueueBackend
 
         $doc = (array)$result;
         return $this->bsonToArray($doc['message'] ?? []);
+    }
+
+    /**
+     * Return reservations whose visibility window expired (at-least-once).
+     *
+     * A message left 'processing' with available_at <= now had a consumer die
+     * before acknowledging. Each is atomically flipped back to 'pending' with
+     * attempts incremented (so the next dequeue re-delivers it); once attempts
+     * reach maxRetries it is dead-lettered (moved to topic.dead_letter and the
+     * original removed). Returns the number reclaimed. Disabled when
+     * visibilityTimeout <= 0.
+     *
+     * @param string $topic      The queue/topic name
+     * @param int    $maxRetries Attempts at/after which a reclaim dead-letters
+     * @return int Number of reservations reclaimed
+     */
+    public function reclaimExpired(string $topic, int $maxRetries): int
+    {
+        if ($this->visibilityTimeout <= 0) {
+            return 0;
+        }
+        $this->ensureConnected();
+
+        $reclaimed = 0;
+        while (true) {
+            $now = new \MongoDB\BSON\UTCDateTime();
+            $result = $this->collection->findOneAndUpdate(
+                [
+                    'topic' => $topic,
+                    'status' => 'processing',
+                    'available_at' => ['$lte' => $now],
+                ],
+                [
+                    '$set' => ['status' => 'pending', 'available_at' => $now, 'reserved_at' => null],
+                    '$inc' => ['attempts' => 1],
+                ],
+                [
+                    'sort' => ['available_at' => 1],
+                    'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
+                ]
+            );
+            if ($result === null) {
+                break;
+            }
+            $reclaimed++;
+
+            $doc = (array)$result;
+            $attempts = (int)($doc['attempts'] ?? 0);
+            if ($attempts >= $maxRetries) {
+                // Out of retries — move it to the dead-letter queue and remove
+                // the original so it is not re-delivered.
+                $message = $this->bsonToArray($doc['message'] ?? []);
+                $message['attempts'] = $attempts;
+                $message['error'] = 'reservation timed out — consumer did not acknowledge within the visibility timeout';
+                $this->deadLetter($topic, $message);
+                $this->collection->deleteOne(['_id' => $doc['_id'], 'topic' => $topic]);
+            }
+        }
+
+        return $reclaimed;
     }
 
     /** {@inheritDoc} */
@@ -197,7 +290,23 @@ class MongoBackend implements QueueBackend
         $this->indexesCreated = false;
     }
 
+    /**
+     * Get the resolved reservation/visibility timeout in seconds.
+     */
+    public function getVisibilityTimeout(): float
+    {
+        return $this->visibilityTimeout;
+    }
+
     // ── Internal Helpers ─────────────────────────────────────────
+
+    /**
+     * A UTCDateTime $seconds in the future (BSON stores ms since epoch).
+     */
+    private function futureDate(float $seconds): \MongoDB\BSON\UTCDateTime
+    {
+        return new \MongoDB\BSON\UTCDateTime((int)round((microtime(true) + $seconds) * 1000));
+    }
 
     private function ensureConnected(): void
     {

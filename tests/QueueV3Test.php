@@ -666,4 +666,123 @@ class QueueV3Test extends TestCase
             $job->complete();
         }
     }
+
+    // ── Reservation / visibility timeout (production bug regression) ──
+    //
+    // Regression lock for the production bug where a consumer that dies before
+    // job.complete() left the message stuck forever — never re-delivered, never
+    // retried, never dead-lettered. A popped job is now reserved for
+    // visibilityTimeout seconds; if it is not acked in time the next pop()
+    // reclaims it (incrementing attempts) or dead-letters it past maxRetries.
+
+    private function makeQueueVt(string $topic, float $visibilityTimeout, int $maxRetries = 3): Queue
+    {
+        return new Queue('file', [
+            'path' => $this->testPath,
+            'maxRetries' => $maxRetries,
+            'visibilityTimeout' => $visibilityTimeout,
+        ], topic: $topic);
+    }
+
+    public function testReservedJobReclaimedAfterTimeout(): void
+    {
+        $q = $this->makeQueueVt('vt', 0.05);
+
+        $q->push(['job' => 'import']);
+        $job = $q->pop();                       // consumer A reserves it
+        $this->assertNotNull($job);
+        $this->assertEquals(0, $job['attempts']);
+        $this->assertEquals(0, $q->size('pending'));   // claimed out of pending
+        $this->assertEquals(1, $q->size('reserved'));  // held as a reservation
+
+        // Consumer A "dies" — never calls complete()/fail(). After the window
+        // expires the next pop() reclaims the abandoned reservation.
+        usleep(120_000);
+        $reclaimed = $q->pop();
+        $this->assertNotNull($reclaimed);
+        $this->assertEquals('import', $reclaimed['payload']['job']);
+        $this->assertEquals(1, $reclaimed['attempts']);  // reclaim counted as one attempt
+    }
+
+    public function testReservedJobNotReclaimedBeforeTimeout(): void
+    {
+        $q = $this->makeQueueVt('vt', 30);
+
+        $q->push(['job' => 'import']);
+        $this->assertNotNull($q->pop());        // reserved
+        // The reservation is still valid — a second consumer must NOT get it.
+        $this->assertNull($q->pop());
+        $this->assertEquals(1, $q->size('reserved'));
+    }
+
+    public function testReclaimDeadLettersAfterMaxRetries(): void
+    {
+        $q = $this->makeQueueVt('vt', 0.05, maxRetries: 1);
+
+        $q->push(['job' => 'import']);
+        $this->assertNotNull($q->pop());        // reserve (attempts 0)
+        usleep(120_000);
+        // Reclaim bumps attempts to 1 (>= maxRetries) -> dead-letter, not re-served.
+        $this->assertNull($q->pop());
+        $this->assertEquals(0, $q->size('reserved'));
+        $dead = $q->deadLetters();
+        $this->assertCount(1, $dead);
+        $this->assertEquals('import', $dead[0]['payload']['job']);
+    }
+
+    public function testCompleteRemovesReservationNoReclaim(): void
+    {
+        $q = $this->makeQueueVt('vt', 0.05);
+
+        $q->push(['job' => 'import']);
+        $job = $q->pop();
+        (new \Tina4\Job($job, $q, 'vt'))->complete();   // acked — reservation cleared
+        $this->assertEquals(0, $q->size('reserved'));
+        usleep(120_000);
+        $this->assertNull($q->pop());           // nothing to reclaim
+    }
+
+    public function testFailRemovesReservation(): void
+    {
+        $q = $this->makeQueueVt('vt', 0.05, maxRetries: 3);
+
+        $q->push(['job' => 'import']);
+        $job = $q->pop();
+        (new \Tina4\Job($job, $q, 'vt'))->fail('boom');  // acked with failure -> requeued
+        $this->assertEquals(0, $q->size('reserved'));    // reservation cleared by fail()
+        // The requeued job is pending again with attempts incremented.
+        $retried = $q->pop();
+        $this->assertNotNull($retried);
+        $this->assertEquals(1, $retried['attempts']);
+    }
+
+    public function testDefaultVisibilityTimeoutIs300(): void
+    {
+        putenv('TINA4_QUEUE_VISIBILITY_TIMEOUT');
+        $q = new Queue('file', ['path' => $this->testPath], topic: 'vt');
+        $this->assertEquals(300.0, $q->getVisibilityTimeout());
+    }
+
+    public function testVisibilityTimeoutEnvOverride(): void
+    {
+        putenv('TINA4_QUEUE_VISIBILITY_TIMEOUT=42');
+        try {
+            $q = new Queue('file', ['path' => $this->testPath], topic: 'vt');
+            $this->assertEquals(42.0, $q->getVisibilityTimeout());
+        } finally {
+            putenv('TINA4_QUEUE_VISIBILITY_TIMEOUT');
+        }
+    }
+
+    public function testZeroVisibilityTimeoutDisablesReclaim(): void
+    {
+        $q = $this->makeQueueVt('vt', 0);
+
+        $q->push(['job' => 'import']);
+        $this->assertNotNull($q->pop());
+        usleep(50_000);
+        // Reclaim is disabled — the reservation stays put (opt-out / old behaviour).
+        $this->assertNull($q->pop());
+        $this->assertEquals(1, $q->size('reserved'));
+    }
 }

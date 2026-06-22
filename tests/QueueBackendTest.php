@@ -674,4 +674,180 @@ class QueueBackendTest extends TestCase
         $this->assertSame('earliest', $consumer['auto.offset.reset']);
         $this->assertArrayHasKey('group.id', $consumer);
     }
+
+    // -- MongoBackend visibility timeout / reservation reclaim ---------------
+    //
+    // Regression lock for the production bug where a consumer that dies before
+    // acknowledging left the message 'processing' forever — never re-delivered,
+    // never dead-lettered. dequeue() now advances available_at = now +
+    // visibility_timeout and stamps reserved_at; reclaimExpired() flips an
+    // expired reservation back to pending (attempts++) or dead-letters it past
+    // max_retries. ext-mongodb references real BSON/Operation classes, so the
+    // behavioural cases skip when the driver is not installed (mirroring the
+    // Python mongo mock cases, which run wherever pymongo is present).
+
+    private function requireMongoOrSkip(): void
+    {
+        if (!extension_loaded('mongodb') || !class_exists('MongoDB\\BSON\\UTCDateTime')) {
+            $this->markTestSkipped('ext-mongodb / mongodb library not installed — skipping Mongo reclaim behaviour test');
+        }
+    }
+
+    private function makeMongoBackendWithCollection(object $collection, float $visibilityTimeout = 300.0, int $maxRetries = 3): MongoBackend
+    {
+        $backend = new MongoBackend(['visibility_timeout' => $visibilityTimeout, 'max_retries' => $maxRetries]);
+        $ref = new \ReflectionClass($backend);
+        $prop = $ref->getProperty('collection');
+        $prop->setAccessible(true);
+        $prop->setValue($backend, $collection);
+        return $backend;
+    }
+
+    public function testMongoVisibilityTimeoutFromConfig(): void
+    {
+        if (!extension_loaded('mongodb')) {
+            $this->markTestSkipped('ext-mongodb not installed — cannot construct MongoBackend');
+        }
+        $backend = new MongoBackend(['visibility_timeout' => 45]);
+        $this->assertEquals(45.0, $backend->getVisibilityTimeout());
+    }
+
+    public function testMongoVisibilityTimeoutFromEnv(): void
+    {
+        if (!extension_loaded('mongodb')) {
+            $this->markTestSkipped('ext-mongodb not installed — cannot construct MongoBackend');
+        }
+        putenv('TINA4_QUEUE_VISIBILITY_TIMEOUT=42');
+        try {
+            $backend = new MongoBackend();
+            $this->assertEquals(42.0, $backend->getVisibilityTimeout());
+        } finally {
+            putenv('TINA4_QUEUE_VISIBILITY_TIMEOUT');
+        }
+    }
+
+    public function testMongoVisibilityTimeoutDefaultsTo300(): void
+    {
+        if (!extension_loaded('mongodb')) {
+            $this->markTestSkipped('ext-mongodb not installed — cannot construct MongoBackend');
+        }
+        putenv('TINA4_QUEUE_VISIBILITY_TIMEOUT');
+        $backend = new MongoBackend();
+        $this->assertEquals(300.0, $backend->getVisibilityTimeout());
+    }
+
+    public function testMongoDequeueAdvancesAvailableAtAndRecordsReservedAt(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        // dequeue's reclaim pass runs first (no expired reservations), then the
+        // claim returns this doc.
+        $collection->queueFindOneAndUpdate(null);                       // reclaim: none expired
+        $collection->queueFindOneAndUpdate(['_id' => 'msg-1', 'message' => ['payload' => ['x' => 1]], 'status' => 'processing']);
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0);
+
+        $backend->dequeue('emails');
+
+        // The CLAIM update (the second findOneAndUpdate call) must advance
+        // available_at and stamp reserved_at.
+        $claim = $collection->findOneAndUpdateCalls[1];
+        $set = $claim['update']['$set'];
+        $this->assertSame('processing', $set['status']);
+        $this->assertArrayHasKey('reserved_at', $set);
+        $this->assertArrayHasKey('available_at', $set);
+        // available_at is pushed into the future relative to the reservation stamp.
+        $this->assertGreaterThan(
+            $set['reserved_at']->toDateTime()->getTimestamp(),
+            $set['available_at']->toDateTime()->getTimestamp()
+        );
+        // The claim predicate gates on pending + available_at <= now.
+        $this->assertSame('pending', $claim['filter']['status']);
+        $this->assertArrayHasKey('available_at', $claim['filter']);
+    }
+
+    public function testMongoReclaimRequeuesUnderLimit(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        // One expired reservation (attempts after inc = 1, below max 3), then none.
+        $collection->queueFindOneAndUpdate(['_id' => 'msg-1', 'message' => ['payload' => ['x' => 1]], 'attempts' => 1]);
+        $collection->queueFindOneAndUpdate(null);
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
+
+        $count = $backend->reclaimExpired('emails', 3);
+        $this->assertEquals(1, $count);
+
+        // The reclaim flips processing -> pending and increments attempts.
+        $first = $collection->findOneAndUpdateCalls[0];
+        $this->assertSame('pending', $first['update']['$set']['status']);
+        $this->assertEquals(1, $first['update']['$inc']['attempts']);
+        // Under the limit: not dead-lettered, not deleted.
+        $this->assertCount(0, $collection->insertOneCalls);
+        $this->assertCount(0, $collection->deleteOneCalls);
+    }
+
+    public function testMongoReclaimDeadLettersPastMaxRetries(): void
+    {
+        $this->requireMongoOrSkip();
+        $collection = new FakeMongoCollection();
+        // The reclaimed doc's attempts (after inc) has hit the limit -> dead-letter.
+        $collection->queueFindOneAndUpdate(['_id' => 'msg-1', 'message' => ['payload' => ['x' => 1]], 'attempts' => 3]);
+        $collection->queueFindOneAndUpdate(null);
+        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
+
+        $count = $backend->reclaimExpired('emails', 3);
+        $this->assertEquals(1, $count);
+        // Moved to the dead-letter topic and the original removed.
+        $this->assertCount(1, $collection->insertOneCalls);
+        $this->assertSame('emails.dead_letter', $collection->insertOneCalls[0]['topic']);
+        $this->assertCount(1, $collection->deleteOneCalls);
+    }
+
+    public function testMongoReclaimDisabledWhenTimeoutZero(): void
+    {
+        if (!extension_loaded('mongodb')) {
+            $this->markTestSkipped('ext-mongodb not installed — cannot construct MongoBackend');
+        }
+        $collection = new FakeMongoCollection();
+        $backend = $this->makeMongoBackendWithCollection($collection, 0.0);
+        $this->assertEquals(0, $backend->reclaimExpired('emails', 3));
+        $this->assertCount(0, $collection->findOneAndUpdateCalls);
+    }
+}
+
+/**
+ * Minimal stand-in for \MongoDB\Collection that records calls and returns
+ * scripted results. Returned docs are wrapped as objects so MongoBackend's
+ * (array)$result cast and ['message'] access work like the real driver.
+ */
+class FakeMongoCollection
+{
+    public array $findOneAndUpdateCalls = [];
+    public array $insertOneCalls = [];
+    public array $deleteOneCalls = [];
+
+    /** @var array<int, mixed> Scripted findOneAndUpdate return values (FIFO). */
+    private array $scriptedFindOneAndUpdate = [];
+
+    public function queueFindOneAndUpdate(?array $doc): void
+    {
+        $this->scriptedFindOneAndUpdate[] = $doc;
+    }
+
+    public function findOneAndUpdate(array $filter, array $update, array $options = []): ?object
+    {
+        $this->findOneAndUpdateCalls[] = ['filter' => $filter, 'update' => $update, 'options' => $options];
+        $doc = array_shift($this->scriptedFindOneAndUpdate);
+        return $doc === null ? null : (object)$doc;
+    }
+
+    public function insertOne(array $document): void
+    {
+        $this->insertOneCalls[] = $document;
+    }
+
+    public function deleteOne(array $filter): void
+    {
+        $this->deleteOneCalls[] = $filter;
+    }
 }

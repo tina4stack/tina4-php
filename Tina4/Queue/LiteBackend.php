@@ -21,18 +21,29 @@ class LiteBackend implements QueueBackend
     private string $basePath;
     private int $maxRetries;
     private int $retryBackoff;
+    private float $visibilityTimeout;
 
     /**
-     * @param string $basePath     Base filesystem path for queue directories
-     * @param int    $maxRetries   Maximum retry attempts before a job is dead-lettered
-     * @param int    $retryBackoff Seconds to delay a job's automatic re-enqueue on fail()
-     *                             (0 = retry on the very next pop()/consume() iteration)
+     * @param string $basePath          Base filesystem path for queue directories
+     * @param int    $maxRetries        Maximum retry attempts before a job is dead-lettered
+     * @param int    $retryBackoff      Seconds to delay a job's automatic re-enqueue on fail()
+     *                                  (0 = retry on the very next pop()/consume() iteration)
+     * @param float  $visibilityTimeout Reservation/visibility timeout (seconds). When a job is
+     *                                  popped it is held in reserved/ with available_at = now +
+     *                                  visibilityTimeout. If the consumer dies before
+     *                                  complete()/fail() (crash, OOM, k8s eviction) the next
+     *                                  dequeue() reclaims it once the window expires — incrementing
+     *                                  attempts and re-enqueuing, or dead-lettering past
+     *                                  maxRetries. <= 0 disables the reclaim (a reservation then
+     *                                  lasts until the consumer acks — the old at-most-once
+     *                                  behaviour).
      */
-    public function __construct(string $basePath = 'data/queue', int $maxRetries = 3, int $retryBackoff = 0)
+    public function __construct(string $basePath = 'data/queue', int $maxRetries = 3, int $retryBackoff = 0, float $visibilityTimeout = 300.0)
     {
         $this->basePath = $basePath;
         $this->maxRetries = $maxRetries;
         $this->retryBackoff = $retryBackoff;
+        $this->visibilityTimeout = $visibilityTimeout;
     }
 
     // -------------------------------------------------------------------------
@@ -130,7 +141,14 @@ class LiteBackend implements QueueBackend
      */
     public function dequeue(string $topic): ?array
     {
+        // First return any reservations whose consumer died mid-flight.
+        $this->reclaimExpired($topic);
+
         foreach ($this->availableCandidates($topic) as $candidate) {
+            // Write the reservation BEFORE claiming the pending file, so a crash
+            // between claim and reserve can never strand the job. Only the worker
+            // that wins the unlink owns — and returns — it.
+            $this->writeReserved($topic, $candidate['data']);
             // Claim the job by deleting the file. If another worker beat us
             // to it, skip to the next candidate.
             if (@unlink($candidate['file'])) {
@@ -153,11 +171,16 @@ class LiteBackend implements QueueBackend
      */
     public function dequeueBatch(string $topic, int $count): array
     {
+        // First return any reservations whose consumer died mid-flight.
+        $this->reclaimExpired($topic);
+
         $jobs = [];
         foreach ($this->availableCandidates($topic) as $candidate) {
             if (count($jobs) >= $count) {
                 break;
             }
+            // Write the reservation BEFORE claiming the pending file (see dequeue()).
+            $this->writeReserved($topic, $candidate['data']);
             if (@unlink($candidate['file'])) {
                 $job = $candidate['data'];
                 $job['topic'] = $topic;
@@ -169,14 +192,119 @@ class LiteBackend implements QueueBackend
     }
 
     /**
-     * Acknowledge a message — no-op for file backend (message is removed on dequeue).
+     * Path to the reserved/ subdir for a topic.
+     */
+    private function reservedPath(string $topic): string
+    {
+        return $this->queuePath($topic) . '/reserved';
+    }
+
+    /**
+     * Persist a reservation record so a dead consumer's job is reclaimable.
+     *
+     * Stores reserved_at + available_at = now + visibilityTimeout. The next
+     * dequeue() reclaims this job once available_at has passed (see
+     * reclaimExpired()). acknowledge()/failJob()/retryJob() delete the record.
+     *
+     * @param string $topic   The queue/topic name
+     * @param array  $jobData The pending job's data
+     */
+    public function writeReserved(string $topic, array $jobData): void
+    {
+        $reservedPath = $this->reservedPath($topic);
+        $this->ensureDir($reservedPath);
+
+        $vt = $this->visibilityTimeout > 0 ? $this->visibilityTimeout : 0;
+        $now = microtime(true);
+
+        $record = [
+            'id'           => $jobData['id'],
+            'payload'      => $jobData['payload'] ?? ($jobData['data'] ?? null),
+            'status'       => 'reserved',
+            'priority'     => $jobData['priority'] ?? 0,
+            'attempts'     => (int)($jobData['attempts'] ?? 0),
+            'error'        => $jobData['error'] ?? null,
+            'topic'        => $jobData['topic'] ?? $topic,
+            'created_at'   => $jobData['created_at'] ?? $this->now(),
+            'reserved_at'  => sprintf('%.6f', $now),
+            'available_at' => sprintf('%.6f', $vt > 0 ? $now + $vt : $now),
+        ];
+
+        file_put_contents(
+            $reservedPath . '/' . $record['id'] . '.queue-data',
+            json_encode($record, JSON_PRETTY_PRINT)
+        );
+    }
+
+    /**
+     * Return expired reservations to the queue (at-least-once delivery).
+     *
+     * A reserved job whose available_at <= now means its consumer never
+     * acknowledged in time (crash / OOM / pod eviction). Increment attempts and
+     * either re-enqueue it (so the next dequeue picks it up) or dead-letter it
+     * once it has hit maxRetries. Disabled when visibilityTimeout <= 0.
+     *
+     * @param string $topic The queue/topic name
+     */
+    public function reclaimExpired(string $topic): void
+    {
+        if ($this->visibilityTimeout <= 0) {
+            return;
+        }
+
+        $reservedPath = $this->reservedPath($topic);
+        if (!is_dir($reservedPath)) {
+            return;
+        }
+
+        $now = microtime(true);
+        foreach (glob($reservedPath . '/*.queue-data') as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data === null) {
+                continue;
+            }
+            if ((float)($data['available_at'] ?? 0) > $now) {
+                continue; // reservation still valid
+            }
+            // Atomically claim the expired reservation by deleting its file.
+            if (!@unlink($file)) {
+                continue; // another worker reclaimed it first
+            }
+
+            $data['attempts'] = (int)($data['attempts'] ?? 0) + 1;
+            $data['error'] = 'reservation timed out — consumer did not acknowledge within the visibility timeout';
+            $topicName = $data['topic'] ?? $topic;
+
+            if ($data['attempts'] >= $this->maxRetries) {
+                $this->deadLetter($topicName, $data);
+            } else {
+                $this->requeue($topicName, $data, 0);
+            }
+        }
+    }
+
+    /**
+     * Delete a job's reservation record (best-effort).
+     *
+     * @param string $topic     The queue/topic name
+     * @param string $messageId The job ID whose reservation should be cleared
+     */
+    public function clearReservation(string $topic, string $messageId): void
+    {
+        @unlink($this->reservedPath($topic) . '/' . $messageId . '.queue-data');
+    }
+
+    /**
+     * Acknowledge a message — the pending file was claimed on dequeue and a
+     * reservation record written; acknowledge() is terminal, so drop the
+     * reservation. The job is done.
      *
      * @param string $topic     The queue/topic name
      * @param string $messageId The message ID to acknowledge
      */
     public function acknowledge(string $topic, string $messageId): void
     {
-        // File backend removes the file on dequeue — no further action needed.
+        $this->clearReservation($topic, $messageId);
     }
 
     /**
@@ -244,6 +372,9 @@ class LiteBackend implements QueueBackend
      */
     public function failJob(string $topic, array $jobData, string $error = ''): array
     {
+        // Clear the reservation — the consumer acknowledged (with a failure).
+        $this->clearReservation($topic, (string)($jobData['id'] ?? ''));
+
         $jobData['attempts'] = (int)($jobData['attempts'] ?? 0) + 1;
         $jobData['error'] = $error;
 
@@ -270,6 +401,9 @@ class LiteBackend implements QueueBackend
      */
     public function retryJob(string $topic, array $jobData, int $delaySeconds = 0): array
     {
+        // Clear the reservation — the consumer acknowledged (with a manual retry).
+        $this->clearReservation($topic, (string)($jobData['id'] ?? ''));
+
         $jobData['attempts'] = (int)($jobData['attempts'] ?? 0) + 1;
         $jobData['error'] = null;
         $this->requeue($topic, $jobData, $delaySeconds);
@@ -319,9 +453,13 @@ class LiteBackend implements QueueBackend
      */
     public function count(string $topic, string $status = 'pending'): int
     {
-        $scanDir = in_array($status, self::DEAD_STATES, true)
-            ? $this->queuePath($topic) . '/failed'
-            : $this->queuePath($topic);
+        if ($status === 'reserved') {
+            $scanDir = $this->reservedPath($topic);
+        } elseif (in_array($status, self::DEAD_STATES, true)) {
+            $scanDir = $this->queuePath($topic) . '/failed';
+        } else {
+            $scanDir = $this->queuePath($topic);
+        }
 
         if (!is_dir($scanDir)) {
             return 0;
@@ -333,8 +471,9 @@ class LiteBackend implements QueueBackend
             if ($data === null) {
                 continue;
             }
-            if (in_array($status, self::DEAD_STATES, true)) {
-                // Every file in failed/ is a dead-letter — count them all.
+            if ($status === 'reserved' || in_array($status, self::DEAD_STATES, true)) {
+                // Every file in reserved/ (or failed/) matches the requested
+                // status — count them all.
                 $n++;
             } elseif (($data['status'] ?? '') === $status) {
                 $n++;
@@ -350,13 +489,13 @@ class LiteBackend implements QueueBackend
      */
     public function clear(string $topic): void
     {
-        $queuePath = $this->queuePath($topic);
-        if (!is_dir($queuePath)) {
-            return;
-        }
-
-        foreach (glob($queuePath . '/*.queue-data') as $file) {
-            unlink($file);
+        foreach ([$this->queuePath($topic), $this->reservedPath($topic)] as $scanDir) {
+            if (!is_dir($scanDir)) {
+                continue;
+            }
+            foreach (glob($scanDir . '/*.queue-data') as $file) {
+                unlink($file);
+            }
         }
     }
 
@@ -561,7 +700,11 @@ class LiteBackend implements QueueBackend
                 continue;
             }
             if ($data['id'] === $id) {
+                // Reserve (so a dead consumer's job is reclaimable) then claim
+                // the pending file — mirrors dequeue().
+                $this->writeReserved($topic, $data);
                 unlink($file);
+                $data['topic'] = $topic;
                 return $data;
             }
         }

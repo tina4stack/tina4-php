@@ -44,6 +44,7 @@ class Queue
     private string $basePath;
     private int $maxRetries;
     private int $retryBackoff;
+    private float $visibilityTimeout;
     private string $topic;
 
     /** @var LiteBackend File-based queue backend */
@@ -67,20 +68,32 @@ class Queue
         // Seconds to delay a failed job's automatic re-enqueue (parity with
         // Python's retry_backoff). 0 = retry on the next pop()/consume().
         $this->retryBackoff = (int)($config['retryBackoff'] ?? 0);
+        // Reservation/visibility timeout (seconds). A popped job is reserved for
+        // this long; if the consumer dies before complete()/fail() the next
+        // pop() reclaims it (at-least-once delivery). Falls back to
+        // TINA4_QUEUE_VISIBILITY_TIMEOUT, else 300 (5 min). <= 0 disables reclaim.
+        // File + MongoDB backends only — RabbitMQ/Kafka delegate visibility to
+        // the broker.
+        $this->visibilityTimeout = $this->resolveVisibilityTimeout($config);
         $this->topic = $topic;
 
         // Always initialise the lite (file) backend
-        $this->liteBackend = new LiteBackend($this->basePath, $this->maxRetries, $this->retryBackoff);
+        $this->liteBackend = new LiteBackend($this->basePath, $this->maxRetries, $this->retryBackoff, $this->visibilityTimeout);
 
         // Initialize external backends
         if ($this->backend === 'rabbitmq') {
+            // Broker manages visibility/redelivery (unacked messages requeue on
+            // channel close) — the framework timeout is accepted but not used.
             $resolvedConfig = $this->resolveRabbitMQConfig($config);
             $this->externalBackend = new RabbitMQBackend($resolvedConfig);
         } elseif ($this->backend === 'kafka') {
+            // Consumer-group offsets manage redelivery — framework timeout N/A.
             $resolvedConfig = $this->resolveKafkaConfig($config);
             $this->externalBackend = new KafkaBackend($resolvedConfig);
         } elseif ($this->backend === 'mongodb' || $this->backend === 'mongo') {
             $resolvedConfig = $this->resolveMongoConfig($config);
+            $resolvedConfig['visibility_timeout'] = $this->visibilityTimeout;
+            $resolvedConfig['max_retries'] = $this->maxRetries;
             $this->externalBackend = new MongoBackend($resolvedConfig);
         }
     }
@@ -286,6 +299,23 @@ class Queue
             return;
         }
         $this->liteBackend->failJob($topic, $jobData, $error);
+    }
+
+    /**
+     * Acknowledge a completed job (called by Job::complete()). Clears the
+     * reservation record so a dead-consumer reclaim never re-delivers a job that
+     * was actually finished.
+     *
+     * @internal Used by Job — not a primary public Queue verb
+     */
+    public function completeJob(string $topic, string $jobId): void
+    {
+        if ($this->externalBackend !== null) {
+            // External brokers ack via their own protocol (handled by the broker).
+            $this->externalBackend->acknowledge($topic, $jobId);
+            return;
+        }
+        $this->liteBackend->acknowledge($topic, $jobId);
     }
 
     /**
@@ -539,6 +569,30 @@ class Queue
             $config['uri'] = $url;
         }
         return $config;
+    }
+
+    /**
+     * Resolve the reservation/visibility timeout (seconds): explicit config
+     * value wins, else env TINA4_QUEUE_VISIBILITY_TIMEOUT, else 300 (5 min).
+     */
+    private function resolveVisibilityTimeout(array $config): float
+    {
+        if (array_key_exists('visibilityTimeout', $config)) {
+            return (float)$config['visibilityTimeout'];
+        }
+        $env = getenv('TINA4_QUEUE_VISIBILITY_TIMEOUT');
+        if ($env !== false && $env !== '') {
+            return (float)$env;
+        }
+        return 300.0;
+    }
+
+    /**
+     * Get the resolved reservation/visibility timeout in seconds.
+     */
+    public function getVisibilityTimeout(): float
+    {
+        return $this->visibilityTimeout;
     }
 
     /**

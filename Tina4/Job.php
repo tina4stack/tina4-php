@@ -39,12 +39,14 @@ class Job
     }
 
     /**
-     * Mark this job as completed. Terminal — the job is done and gone (the
-     * file backend already removed it on pop).
+     * Mark this job as completed. Terminal — the pending file was claimed on
+     * pop and a reservation record written; complete() is terminal, so drop the
+     * reservation. The job is done.
      */
     public function complete(): void
     {
         $this->status = 'completed';
+        $this->queue->completeJob($this->topic, $this->id);
     }
 
     /**
