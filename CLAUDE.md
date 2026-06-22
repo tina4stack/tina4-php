@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.37 — Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.40 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -1059,6 +1059,35 @@ $result = SqlTranslation::remember(
     fn() => $db->fetch("SELECT * FROM stats")
 );
 ```
+
+### Swagger / OpenAPI
+
+`Tina4\Swagger::generate()` produces an OpenAPI 3.0.3 spec from the route table;
+`Swagger::register()` serves the UI at `/swagger` and the spec at
+`/swagger/openapi.json`. ORM models registered via `AutoCrud` become reusable
+`components.schemas` referenced by `$ref`, and secured routes (write routes,
+`->secure()`, or `@secured`) emit a `bearerAuth` security requirement; a
+`->noAuth()` write route is documented as public.
+
+| Env var | Purpose |
+|---|---|
+| `TINA4_SWAGGER_ENABLED` | On/off for the `/swagger` endpoints. Explicit `true`/`false` wins; unset falls back to `TINA4_DEBUG`. Set `false` to DISABLE swagger in any environment; `true` to expose it in production. |
+| `TINA4_SWAGGER_SERVERS` | Comma-separated server URLs for the OpenAPI `servers[]` block; falls back to `SWAGGER_DEV_URL`. |
+| `TINA4_SWAGGER_UI_CDN` | Base URL for the Swagger UI assets (default `https://unpkg.com/swagger-ui-dist@5`); point at a self-hosted mirror for air-gapped use. |
+| `TINA4_SWAGGER_TITLE` / `_VERSION` / `_DESCRIPTION` | `info` block title, version, description. |
+| `TINA4_SWAGGER_CONTACT_EMAIL` / `_LICENSE` | Optional `info.contact.email` and `info.license`. |
+
+### MCP (Model Context Protocol)
+
+The built-in dev MCP server (`Tina4\MCP`) is a two-layer gate: `isEnabled()` is
+the capability gate (`TINA4_MCP` explicit, else `TINA4_DEBUG`), and each request
+is authorised on the raw socket peer.
+
+| Env var | Purpose |
+|---|---|
+| `TINA4_MCP` / `TINA4_DEBUG` | Whether MCP is enabled at all (capability gate). |
+| `TINA4_MCP_REMOTE` | Set `true` to allow non-loopback MCP callers (still requires a valid token). |
+| `TINA4_MCP_TOKEN` | Bearer token authorising a remote MCP request (fallback `TINA4_API_KEY`); accepted as `Authorization: Bearer`, `X-MCP-Token`, or `X-Api-Key`. With no token configured a remote caller is always denied; loopback never needs it. |
 
 ## Key Architecture
 
