@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.40 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.41 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -1149,7 +1149,7 @@ is authorised on the raw socket peer.
 - Frond pre-compilation for 2.8x template render improvement
 - DB query caching: request-scoped auto cache **off by default — opt-in via `TINA4_AUTO_CACHING=true`** (TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes. It is OFF by default because an on-by-default request cache is a footgun: a `SELECT MAX(id)` (or generator read) right before an INSERT in the same request returns a cached pre-write value → duplicate primary keys, and any read-after-write in one request shows stale state — so turn it on only for read-heavy endpoints. Persistent cross-request cache is also opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s) routed through the unified backend set via `TINA4_DB_CACHE_BACKEND` (memory/file/redis/valkey/memcached/mongodb/database) + `TINA4_DB_CACHE_URL` so instances share one cache with global write-invalidation; `cacheStats()` reports `mode` (request/persistent/off) and `backend`, `cacheClear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
-- Queue backends: file (default), RabbitMQ, Kafka, MongoDB
+- Queue backends: file (default), RabbitMQ, Kafka, MongoDB. **Reservation/visibility timeout** (file + MongoDB): a popped job is reserved for `TINA4_QUEUE_VISIBILITY_TIMEOUT` seconds (default 300; `visibilityTimeout` constructor option; `<= 0` disables) — if the consumer dies before `acknowledge()`/`failJob()`, the next `dequeue()` reclaims it (incrementing `attempts`, dead-lettering past `maxRetries`), so a crashed/evicted consumer never strands a job. RabbitMQ/Kafka delegate redelivery to the broker.
 - Cache backends (`Tina4\Cache`): unified set across response/KV and persistent DB cache — `memory` (default), `file`, `redis`, `valkey`, `memcached`, `mongodb`, `database` — selected via `TINA4_CACHE_BACKEND` (+ `TINA4_CACHE_URL`/credentials); falls back to the file backend if a backend is unreachable
 - Session handlers: file, Redis/Valkey, MongoDB, database. `TINA4_SESSION_SAMESITE` env var controls SameSite attribute (default: Lax)
 - QueryBuilder with NoSQL/MongoDB support (`toMongo()`)
