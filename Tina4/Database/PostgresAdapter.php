@@ -284,16 +284,18 @@ class PostgresAdapter implements DatabaseAdapter
 
     public function executeMany(string $sql, array $paramsList = []): int
     {
+        // FAIL LOUD: a failing row must NOT be silently swallowed — the old
+        // catch-and-continue counted only the rows that did not throw and
+        // returned a partial count, hiding data loss. execute() raises on a bad
+        // row; let it propagate so the caller (and the facade's transactional
+        // batch path) can roll back the whole batch. Atomicity for a batch is
+        // provided by Database::insert()/executeMany() (one pinned connection +
+        // one transaction); this primitive just runs each row and never hides a
+        // failure.
         $totalAffected = 0;
         foreach ($paramsList as $params) {
-            // execute() now raises on failure; executeMany keeps its int
-            // contract by counting only the rows that ran without throwing.
-            try {
-                $this->execute($sql, $params);
-                $totalAffected++;
-            } catch (\Exception) {
-                // skip the failed row, continue the batch
-            }
+            $this->execute($sql, $params);
+            $totalAffected++;
         }
         return $totalAffected;
     }

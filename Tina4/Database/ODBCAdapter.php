@@ -186,6 +186,9 @@ class ODBCAdapter implements DatabaseAdapter
 
     public function executeMany(string $sql, array $paramsList = []): int
     {
+        // FAIL LOUD: capture the cause on error() AND raise on a driver failure —
+        // do not swallow it into a 0 return. Atomicity for a batch is provided by
+        // the facade's transactional batch path.
         $this->ensureOpen();
         $this->lastError = null;
         $totalAffected = 0;
@@ -200,7 +203,7 @@ class ODBCAdapter implements DatabaseAdapter
             return $totalAffected;
         } catch (\PDOException $e) {
             $this->lastError = $e->getMessage();
-            return 0;
+            throw new DatabaseException('ODBC executeMany() failed: ' . ($this->lastError ?: 'unknown error'));
         }
     }
 

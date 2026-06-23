@@ -24,3 +24,8 @@ if (!defined('TINA4_LOG_CRITICAL')) {
 }
 
 require __DIR__ . '/../vendor/autoload.php';
+
+// Shared test helpers (plain helpers, not mocks). Loaded here so every test
+// file can use them without a per-file require — e.g. PgTestEnv resolves the
+// live PostgreSQL host/port from TINA4_TEST_POSTGRES_URL.
+require __DIR__ . '/PgTestEnv.php';

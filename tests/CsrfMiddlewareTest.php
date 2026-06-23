@@ -5,25 +5,39 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Tests for CsrfMiddleware::beforeCsrf() — validates CSRF token
- * enforcement on state-changing requests.
+ * Behavioural tests for CsrfMiddleware::beforeCsrf() — CSRF token enforcement
+ * on state-changing requests.
+ *
+ * These tests drive the REAL before-middleware dispatcher
+ * (Middleware::runBefore), with a real Request, a real Response, real
+ * Auth::getToken tokens, and a real file-backed Session. No request/response/
+ * session/token doubles — the middleware sees exactly what it sees when serving
+ * traffic, so a regression in the real wiring (e.g. $request->handler never
+ * being populated, which made the @noauth bypass dead code) is caught here.
+ *
+ * "passed" means the middleware let the request continue to the handler — the
+ * response status is still the un-touched default (200) and no CSRF error
+ * envelope was written. "rejected" means a 403 CSRF_INVALID envelope.
  *
  * Tina4 CSRF convention:
  *   - GET/HEAD/OPTIONS are skipped (safe methods)
  *   - POST/PUT/PATCH/DELETE require a valid formToken
  *   - Token accepted in request->body["formToken"] or X-Form-Token header
  *   - Token rejected if sent in query params (security risk)
- *   - Routes marked with noAuth skip CSRF
- *   - Requests with valid Authorization: Bearer skip CSRF
- *   - Session binding: token session_id must match request session
- *   - TINA4_CSRF=false disables all checks
+ *   - Routes marked ->noAuth() / @noauth skip CSRF
+ *   - Requests with a valid Authorization: Bearer skip CSRF
+ *   - Session binding: token session_id must match the request session
+ *   - TINA4_CSRF=false (or 0/no) disables all checks
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\Auth;
+use Tina4\Middleware;
 use Tina4\Middleware\CsrfMiddleware;
 use Tina4\Request;
 use Tina4\Response;
+use Tina4\Router;
 use Tina4\Session;
 
 class CsrfMiddlewareTest extends TestCase
@@ -32,409 +46,42 @@ class CsrfMiddlewareTest extends TestCase
 
     protected function setUp(): void
     {
+        // Set the secret through every channel the middleware/Auth reads:
+        // resolveSecret() reads getenv() first, then $_ENV.
+        putenv("TINA4_SECRET={$this->secret}");
         $_ENV['TINA4_SECRET'] = $this->secret;
-        // Ensure CSRF is enabled by default
+        // CSRF enabled by default for every test (kill-switch tests flip it).
         putenv('TINA4_CSRF=true');
     }
 
     protected function tearDown(): void
     {
+        putenv('TINA4_SECRET');
         unset($_ENV['TINA4_SECRET']);
         putenv('TINA4_CSRF');
-    }
-
-    // ── Safe methods are skipped ─────────────────────────────────
-
-    public function testCsrfSkipsGetRequest(): void
-    {
-        $request = $this->makeRequest('GET', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfSkipsHeadRequest(): void
-    {
-        $request = $this->makeRequest('HEAD', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfSkipsOptionsRequest(): void
-    {
-        $request = $this->makeRequest('OPTIONS', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    // ── POST/PUT/DELETE without token is blocked ────────────────
-
-    public function testCsrfBlocksPostWithoutToken(): void
-    {
-        $request = $this->makeRequest('POST', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    public function testCsrfBlocksPutWithoutToken(): void
-    {
-        $request = $this->makeRequest('PUT', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    public function testCsrfBlocksDeleteWithoutToken(): void
-    {
-        $request = $this->makeRequest('DELETE', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    // ── Valid formToken in POST/PUT body passes ──────────────────
-
-    public function testCsrfAcceptsFormTokenInBody(): void
-    {
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfAcceptsPutWithValidBodyToken(): void
-    {
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('PUT', '/api/items', body: ['formToken' => $token]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    // ── Valid token in X-Form-Token header passes ────────────────
-
-    public function testCsrfAcceptsXFormTokenHeader(): void
-    {
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', headers: [
-            'X-Form-Token' => $token,
-        ]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfHeaderTakesPrecedenceWhenBodyEmpty(): void
-    {
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', body: [], headers: [
-            'X-Form-Token' => $token,
-        ]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    // ── Token in query params is rejected ────────────────────────
-
-    public function testCsrfRejectsFormTokenInQueryParams(): void
-    {
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', query: ['formToken' => $token]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    public function testCsrfQueryParamRejectionMessage(): void
-    {
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', query: ['formToken' => $token]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        // $response->error() returns a Response instance; check body via getBody()
-        $this->assertInstanceOf(\Tina4\Response::class, $resOut);
-        $body = json_decode($resOut->getBody(), true);
-        $this->assertStringContainsStringIgnoringCase('query string', $body['message']);
-    }
-
-    // ── Invalid / expired / wrong-secret token is rejected ───────
-
-    public function testCsrfRejectsMalformedToken(): void
-    {
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => 'not.a.valid.jwt']);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    public function testCsrfRejectsExpiredToken(): void
-    {
-        $expired = Auth::getToken([
-            'type' => 'form',
-            'exp' => time() - 60,
-        ], 0);
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $expired]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    public function testCsrfRejectsWrongSecretToken(): void
-    {
-        // Generate token with a different secret than what the middleware will verify with
-        $_ENV['TINA4_SECRET'] = 'wrong-secret-key';
-        $wrongToken = Auth::getToken(['type' => 'form'], 3600);
-        $_ENV['TINA4_SECRET'] = $this->secret;
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $wrongToken]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    // ── Routes with noAuth=true skip CSRF ────────────────────────
-
-    public function testCsrfSkipsNoAuthRoutes(): void
-    {
-        $request = $this->makeRequest('POST', '/api/webhook');
-        $this->setDynamicProperty($request, 'handler', ['noAuth' => true]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfHandlerWithoutNoAuthRequiresCsrf(): void
-    {
-        $request = $this->makeRequest('POST', '/api/items');
-        $this->setDynamicProperty($request, 'handler', ['noAuth' => false]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    // ── Valid Bearer auth skips CSRF ──────────────────────────────
-
-    public function testCsrfSkipsBearerAuth(): void
-    {
-        $bearerToken = Auth::getToken(['sub' => 'api-client'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', headers: [
-            'Authorization' => "Bearer $bearerToken",
-        ]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfInvalidBearerDoesNotSkip(): void
-    {
-        $request = $this->makeRequest('POST', '/api/items', headers: [
-            'Authorization' => 'Bearer invalid-token',
-        ]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        // Invalid bearer means CSRF check runs and fails (no formToken)
-        $this->assertCsrfRejected($resOut);
-    }
-
-    // ── Session binding ──────────────────────────────────────────
-
-    public function testCsrfSessionBindingInvalid(): void
-    {
-        $token = Auth::getToken([
-            'type' => 'form',
-            'session_id' => 'session-abc',
-        ], 3600);
-
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
-        $request->session = $this->createMockSession('session-xyz');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertCsrfRejected($resOut);
-    }
-
-    public function testCsrfSessionBindingValid(): void
-    {
-        $sessionId = 'session-match-123';
-        $token = Auth::getToken([
-            'type' => 'form',
-            'session_id' => $sessionId,
-        ], 3600);
-
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
-        $request->session = $this->createMockSession($sessionId);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    public function testCsrfTokenWithoutSessionIdPasses(): void
-    {
-        // Token with no session_id claim skips session binding check
-        $token = Auth::getToken(['type' => 'form'], 3600);
-        $request = $this->makeRequest('POST', '/api/items', body: ['formToken' => $token]);
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    // ── TINA4_CSRF env toggle ────────────────────────────────────
-
-    public function testCsrfDisabledViaEnvFalse(): void
-    {
-        putenv('TINA4_CSRF=false');
-        $csrfEnabled = !in_array(strtolower(getenv('TINA4_CSRF')), ['false', '0', 'no'], true);
-        $this->assertFalse($csrfEnabled);
-    }
-
-    public function testCsrfDefaultOnWithoutEnv(): void
-    {
-        putenv('TINA4_CSRF');
-        $csrfEnv = getenv('TINA4_CSRF');
-        // When not set, getenv returns false — CSRF defaults to active
-        $csrfEnabled = ($csrfEnv === false) || !in_array(strtolower($csrfEnv), ['false', '0', 'no'], true);
-        $this->assertTrue($csrfEnabled);
-    }
-
-    public function testCsrfEnabledViaEnvTrue(): void
-    {
-        putenv('TINA4_CSRF=true');
-        $csrfEnv = getenv('TINA4_CSRF');
-        $csrfEnabled = ($csrfEnv === false) || !in_array(strtolower($csrfEnv), ['false', '0', 'no'], true);
-        $this->assertTrue($csrfEnabled);
-    }
-
-    public function testCsrfDisabledViaEnvZero(): void
-    {
-        putenv('TINA4_CSRF=0');
-        $csrfEnabled = !in_array(strtolower(getenv('TINA4_CSRF')), ['false', '0', 'no'], true);
-        $this->assertFalse($csrfEnabled);
-    }
-
-    public function testCsrfDisabledViaEnvNo(): void
-    {
-        putenv('TINA4_CSRF=no');
-        $csrfEnabled = !in_array(strtolower(getenv('TINA4_CSRF')), ['false', '0', 'no'], true);
-        $this->assertFalse($csrfEnabled);
-    }
-
-    // ── CSRF disabled via env skips middleware ────────────────────
-
-    public function testCsrfDisabledEnvSkipsMiddleware(): void
-    {
-        putenv('TINA4_CSRF=false');
-        // POST without token should pass when CSRF is disabled
-        $request = $this->makeRequest('POST', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(Response::class, $resOut);
-        $this->assertEquals(200, $resOut->getStatusCode());
-    }
-
-    // ── Error response structure ─────────────────────────────────
-
-    public function testCsrf403ResponseHasErrorEnvelope(): void
-    {
-        $request = $this->makeRequest('POST', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        // $response->error() returns a Response instance
-        $this->assertInstanceOf(\Tina4\Response::class, $resOut);
-        $body = json_decode($resOut->getBody(), true);
-        $this->assertTrue($body['error']);
-        $this->assertEquals('CSRF_INVALID', $body['code']);
-        $this->assertArrayHasKey('message', $body);
-    }
-
-    public function testCsrf403ResponseHasStatusField(): void
-    {
-        $request = $this->makeRequest('POST', '/api/items');
-        $response = new Response(true);
-
-        [$reqOut, $resOut] = CsrfMiddleware::beforeCsrf($request, $response);
-
-        $this->assertInstanceOf(\Tina4\Response::class, $resOut);
-        $this->assertEquals(403, $resOut->getStatusCode());
     }
 
     // ── Helpers ──────────────────────────────────────────────────
 
     /**
-     * Build a Request object for testing the CSRF middleware.
+     * Build a real Request for the CSRF middleware.
+     *
+     * @param mixed                     $handler  Route-handler metadata exposed
+     *                                            on $request->handler, exactly as
+     *                                            Router::dispatch sets it (an array
+     *                                            carrying the `noAuth` flag).
      */
     private function makeRequest(
         string $method,
-        string $path,
+        string $path = '/api/items',
         ?array $body = null,
         ?array $headers = null,
         ?array $query = null,
+        mixed $handler = null,
+        ?Session $session = null,
     ): Request {
-        $defaultHeaders = ['content-type' => 'application/json'];
-        $mergedHeaders = array_merge($defaultHeaders, $headers ?? []);
-
-        return new Request(
+        $mergedHeaders = array_merge(['content-type' => 'application/json'], $headers ?? []);
+        $request = new Request(
             method: $method,
             path: $path,
             query: $query ?? [],
@@ -442,14 +89,92 @@ class CsrfMiddlewareTest extends TestCase
             headers: $mergedHeaders,
             ip: '127.0.0.1',
         );
+        if ($handler !== null) {
+            $request->handler = $handler;
+        }
+        if ($session !== null) {
+            $request->session = $session;
+        }
+        return $request;
     }
 
     /**
-     * Create a mock Session object with a get() method that returns
-     * the given session_id. The CsrfMiddleware checks for method_exists
-     * on 'get' and calls $session->get('session_id').
+     * Run a request through the REAL before-middleware dispatcher and return
+     * the (request, response, passed) outcome.
+     *
+     * `passed` is true when the middleware let the request continue (status
+     * untouched, < 400); false when it short-circuited with an error.
+     *
+     * @return array{0: Request, 1: Response, 2: bool}
      */
-    private function createMockSession(string $sessionId): Session
+    private function dispatchCsrf(Request $request): array
+    {
+        $response = new Response(true);
+        [$req, $res] = Middleware::runBefore([CsrfMiddleware::class], $request, $response);
+        $passed = $res->getStatusCode() < 400;
+        return [$req, $res, $passed];
+    }
+
+    /**
+     * Assert the middleware let the request through (no CSRF short-circuit):
+     * status is the untouched default and no error envelope was written.
+     */
+    private function assertPassed(Response $response): void
+    {
+        $this->assertSame(
+            200,
+            $response->getStatusCode(),
+            'Expected CSRF middleware to pass the request through (status untouched)'
+        );
+        // A pass writes nothing to the body — the handler (run later) would.
+        $this->assertSame('', $response->getBody(), 'A passed CSRF check must not write a body');
+    }
+
+    /**
+     * Assert the middleware rejected the request with the real 403 envelope.
+     */
+    private function assertRejected(Response $response): void
+    {
+        $this->assertSame(403, $response->getStatusCode(), 'Expected a 403 CSRF rejection');
+        $body = json_decode($response->getBody(), true);
+        $this->assertIsArray($body, 'Rejection must carry a JSON error envelope');
+        $this->assertTrue($body['error'] ?? false, 'envelope.error must be true');
+        $this->assertSame('CSRF_INVALID', $body['code'] ?? null);
+        $this->assertSame(403, $body['status'] ?? null);
+        $this->assertArrayHasKey('message', $body);
+    }
+
+    private function formToken(array $extraClaims = [], ?string $secret = null): string
+    {
+        return Auth::getToken(array_merge(['type' => 'form'], $extraClaims), $secret ?? $this->secret, 60);
+    }
+
+    private static function b64url(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * Forge a genuinely-signed JWT whose exp is in the past — so the HMAC
+     * verification passes but the expiry check rejects it. Mirrors the
+     * framework's HS256 signing (Auth::sign) exactly. Auth::getToken cannot
+     * emit a past exp (it only sets exp when expiresIn > 0), so we sign by hand.
+     */
+    private function forgeExpiredToken(): string
+    {
+        $now = time();
+        $header = self::b64url(json_encode(['alg' => 'HS256', 'typ' => 'JWT'], JSON_UNESCAPED_SLASHES));
+        $payload = self::b64url(json_encode([
+            'type' => 'form',
+            'iat' => $now - 7200,
+            'exp' => $now - 3600,
+        ], JSON_UNESCAPED_SLASHES));
+        $sig = self::b64url(hash_hmac('sha256', "{$header}.{$payload}", $this->secret, true));
+        return "{$header}.{$payload}.{$sig}";
+    }
+
+    /** A REAL file-backed Session started with a known id. */
+    private function startedSession(string $sessionId): Session
     {
         $session = new Session('file', [
             'path' => sys_get_temp_dir() . '/tina4-csrf-test-sessions',
@@ -458,37 +183,381 @@ class CsrfMiddlewareTest extends TestCase
         return $session;
     }
 
-    /**
-     * Set a dynamic property on an object via an anonymous wrapper.
-     * The middleware uses null coalescing ($request->handler ?? null)
-     * which safely handles undefined properties.
-     */
-    private function setDynamicProperty(object $obj, string $name, mixed $value): void
+    // ── Interface contract (rename guard) ─────────────────────────
+    // One consolidated existence guard for the middleware surface. Cheap
+    // rename guard; the real behaviour is covered by the classes below.
+
+    public function testMiddlewareExposesBeforeHook(): void
     {
-        $setter = \Closure::bind(function () use ($name, $value) {
-            $this->$name = $value;
-        }, $obj, get_class($obj));
-        $setter();
+        foreach (['beforeCsrf'] as $method) {
+            $this->assertTrue(
+                method_exists(CsrfMiddleware::class, $method),
+                "CsrfMiddleware is missing {$method}()"
+            );
+            $this->assertTrue(is_callable([CsrfMiddleware::class, $method]));
+        }
     }
 
-    /**
-     * Assert that the CSRF middleware rejected the request.
-     *
-     * The middleware calls Response::error() which is a static method
-     * returning an array with error details. On rejection the second
-     * element of the return is an array, not a Response object.
-     */
-    private function assertCsrfRejected(mixed $resOut): void
+    // ── Safe methods are skipped ──────────────────────────────────
+
+    #[DataProvider('safeMethods')]
+    public function testSafeMethodPassesWithoutToken(string $method): void
     {
-        if ($resOut instanceof Response) {
-            // If implementation uses sendError() (chainable instance method)
-            $this->assertGreaterThanOrEqual(403, $resOut->getStatusCode());
-        } else {
-            // Response::error() returns an array
-            $this->assertIsArray($resOut);
-            $this->assertTrue($resOut['error'] ?? false, 'Expected error flag in response');
-            $this->assertEquals('CSRF_INVALID', $resOut['code'] ?? '');
-            $this->assertEquals(403, $resOut['status'] ?? 0);
-        }
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest($method));
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    public static function safeMethods(): array
+    {
+        return [['GET'], ['HEAD'], ['OPTIONS']];
+    }
+
+    // ── State-changing methods without a token are blocked ────────
+
+    #[DataProvider('writeMethods')]
+    public function testWriteWithoutTokenIsRejected403(string $method): void
+    {
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest($method));
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    public static function writeMethods(): array
+    {
+        return [['POST'], ['PUT'], ['PATCH'], ['DELETE']];
+    }
+
+    // ── Valid formToken in body passes (real token, real validation) ──
+
+    #[DataProvider('writeMethods')]
+    public function testValidBodyTokenPasses(string $method): void
+    {
+        [, $res] = $this->dispatchCsrf(
+            $this->makeRequest($method, body: ['formToken' => $this->formToken()])
+        );
+        $this->assertPassed($res);
+    }
+
+    // ── Valid token in X-Form-Token header passes ─────────────────
+
+    public function testValidHeaderTokenPasses(): void
+    {
+        [, $res] = $this->dispatchCsrf(
+            $this->makeRequest('POST', headers: ['X-Form-Token' => $this->formToken()])
+        );
+        $this->assertPassed($res);
+    }
+
+    public function testHeaderTokenUsedWhenBodyHasNoToken(): void
+    {
+        // Body present but with no formToken key — the header is the fallback.
+        [, $res] = $this->dispatchCsrf(
+            $this->makeRequest('POST', body: ['name' => 'Alice'], headers: ['X-Form-Token' => $this->formToken()])
+        );
+        $this->assertPassed($res);
+    }
+
+    public function testBodyTokenTakesPrecedenceOverHeader(): void
+    {
+        // A valid body token wins even when the header carries garbage —
+        // the middleware checks the body first.
+        [, $res] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $this->formToken()],
+            headers: ['X-Form-Token' => 'not.a.token'],
+        ));
+        $this->assertPassed($res);
+    }
+
+    // ── Token rejected when sent in the query string ──────────────
+
+    public function testQueryParamTokenIsRejected403(): void
+    {
+        // A real, otherwise-valid token in the URL is STILL rejected because
+        // the URL leaks into logs/referrers/history.
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', query: ['formToken' => $this->formToken()])
+        );
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    public function testQueryParamRejectionExplainsWhy(): void
+    {
+        [, $res] = $this->dispatchCsrf(
+            $this->makeRequest('POST', query: ['formToken' => $this->formToken()])
+        );
+        $body = json_decode($res->getBody(), true);
+        $this->assertSame('CSRF_INVALID', $body['code']);
+        $this->assertStringContainsStringIgnoringCase('query string', $body['message']);
+    }
+
+    // ── Invalid / expired / forged tokens are rejected ────────────
+
+    public function testMalformedTokenIsRejected403(): void
+    {
+        [, $res] = $this->dispatchCsrf(
+            $this->makeRequest('POST', body: ['formToken' => 'not.a.valid.jwt'])
+        );
+        $this->assertRejected($res);
+    }
+
+    public function testExpiredTokenIsRejected403(): void
+    {
+        // A genuinely-signed token whose exp is in the past must fail real
+        // validation (signature OK, expiry rejected).
+        $expired = $this->forgeExpiredToken();
+        // Sanity: the token is correctly signed but expired.
+        $this->assertNull(Auth::validToken($expired, $this->secret), 'forged token must be expired-invalid');
+
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $expired]));
+        $this->assertRejected($res);
+    }
+
+    public function testTokenSignedWithWrongSecretIsRejected403(): void
+    {
+        // Genuine JWT shape, signed with a different secret — the HMAC check
+        // (against TINA4_SECRET) must fail.
+        $forged = Auth::getToken(['type' => 'form'], 'a-different-secret', 60);
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $forged]));
+        $this->assertRejected($res);
+    }
+
+    public function testTamperedTokenPayloadIsRejected403(): void
+    {
+        // Take a genuine token, mutate the payload (privilege-escalation style),
+        // keep the original signature — the HMAC check must fail.
+        $good = $this->formToken();
+        [$header, , $sig] = explode('.', $good);
+        $claims = Auth::getPayload($good);
+        $claims['admin'] = true;
+        $newPayload = rtrim(strtr(base64_encode(json_encode($claims)), '+/', '-_'), '=');
+        $tampered = "{$header}.{$newPayload}.{$sig}";
+
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $tampered]));
+        $this->assertRejected($res);
+    }
+
+    // ── ->noAuth() / @noauth routes skip CSRF (real handler metadata) ──
+    // The handler metadata is exactly what Router::dispatch sets on the
+    // request (an array with a `noAuth` key). Before $request->handler was
+    // wired in dispatch, this bypass was DEAD CODE and a @noauth POST guarded
+    // by CsrfMiddleware was wrongly blocked.
+
+    public function testNoAuthWriteRouteSkipsCsrf(): void
+    {
+        // No token at all, but the route is marked noAuth → must pass.
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', handler: ['noAuth' => true])
+        );
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    public function testNonNoAuthWriteRouteStillRequiresCsrf(): void
+    {
+        // A plain handler (noAuth=false) with no token is blocked — proving the
+        // skip is specific to noAuth, not a blanket pass for any handler.
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', handler: ['noAuth' => false])
+        );
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    // ── Valid Bearer auth skips CSRF (API clients) ────────────────
+
+    public function testValidBearerSkipsCsrf(): void
+    {
+        $bearer = Auth::getToken(['sub' => 'api-client'], $this->secret, 60);
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', headers: ['Authorization' => "Bearer {$bearer}"])
+        );
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    public function testInvalidBearerDoesNotSkipCsrf(): void
+    {
+        // A bogus bearer falls through to the form-token check, which then
+        // fails for the missing token — 403, not a silent pass.
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', headers: ['Authorization' => 'Bearer not-a-real-token'])
+        );
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    public function testBearerSignedWithWrongSecretDoesNotSkipCsrf(): void
+    {
+        $forgedBearer = Auth::getToken(['sub' => 'api-client'], 'wrong-secret', 60);
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', headers: ['Authorization' => "Bearer {$forgedBearer}"])
+        );
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    // ── Session binding (real Session, real session_id claim) ─────
+
+    public function testTokenSessionIdMismatchIsRejected403(): void
+    {
+        $token = $this->formToken(['session_id' => 'session-abc']);
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $token],
+            session: $this->startedSession('session-xyz'),
+        ));
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    public function testTokenSessionIdMatchPasses(): void
+    {
+        $token = $this->formToken(['session_id' => 'session-match-123']);
+        [, $res] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $token],
+            session: $this->startedSession('session-match-123'),
+        ));
+        $this->assertPassed($res);
+    }
+
+    public function testTokenWithoutSessionIdSkipsBindingCheck(): void
+    {
+        // No session_id claim → binding check does not run, so a mismatched
+        // request session is irrelevant and the request passes.
+        $token = $this->formToken();
+        [, $res] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $token],
+            session: $this->startedSession('some-other-session'),
+        ));
+        $this->assertPassed($res);
+    }
+
+    // ── Token rotation / refresh ───────────────────────────────────
+
+    public function testRefreshedTokenStillPassesCsrf(): void
+    {
+        $original = $this->formToken();
+        $rotated = Auth::refreshToken($original);
+        $this->assertNotNull($rotated, 'refreshToken must re-issue a valid token');
+        $this->assertNotNull(Auth::validToken($rotated, $this->secret));
+
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $rotated]));
+        $this->assertPassed($res);
+    }
+
+    public function testRefreshedTokenPreservesSessionBinding(): void
+    {
+        $original = $this->formToken(['session_id' => 'sess-1']);
+        $rotated = Auth::refreshToken($original);
+        $this->assertNotNull($rotated);
+
+        // Same session still matches.
+        [, $okRes] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $rotated],
+            session: $this->startedSession('sess-1'),
+        ));
+        $this->assertPassed($okRes);
+
+        // ...and a different session is still rejected.
+        [, $badRes, $passed] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $rotated],
+            session: $this->startedSession('sess-2'),
+        ));
+        $this->assertFalse($passed);
+        $this->assertRejected($badRes);
+    }
+
+    // ── TINA4_CSRF kill switch (real middleware behaviour) ────────
+    // TINA4_CSRF=false (or 0/no, case-insensitive) disables all CSRF
+    // enforcement; any other value (or unset) keeps it on. Driven through the
+    // real middleware, not by re-asserting the parse expression.
+
+    #[DataProvider('disabledValues')]
+    public function testDisabledValueLetsTokenlessWriteThrough(string $value): void
+    {
+        putenv("TINA4_CSRF={$value}");
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest('POST')); // no token at all
+        $this->assertTrue($passed, "TINA4_CSRF={$value} must disable enforcement");
+        $this->assertPassed($res);
+    }
+
+    public static function disabledValues(): array
+    {
+        return [['false'], ['0'], ['no'], ['FALSE'], ['No']];
+    }
+
+    #[DataProvider('enabledValues')]
+    public function testEnabledOrUnknownValueKeepsEnforcementOn(string $value): void
+    {
+        putenv("TINA4_CSRF={$value}");
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest('POST')); // no token
+        $this->assertFalse($passed, "TINA4_CSRF={$value} must keep enforcement on");
+        $this->assertRejected($res);
+    }
+
+    public static function enabledValues(): array
+    {
+        return [['true'], ['1'], ['yes'], ['anything-else']];
+    }
+
+    public function testUnsetDefaultsToEnforced(): void
+    {
+        putenv('TINA4_CSRF');
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest('POST'));
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    // ── Error response structure ──────────────────────────────────
+
+    public function test403ResponseHasFullErrorEnvelope(): void
+    {
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST'));
+        $body = json_decode($res->getBody(), true);
+        $this->assertTrue($body['error']);
+        $this->assertSame('CSRF_INVALID', $body['code']);
+        $this->assertSame(403, $body['status']);
+        $this->assertArrayHasKey('message', $body);
+        $this->assertSame(403, $res->getStatusCode());
+    }
+
+    // ── End-to-end wiring guard ───────────────────────────────────
+    // Locks in the source fix: Router::dispatch must populate
+    // $request->handler with the matched route's metadata (carrying noAuth)
+    // BEFORE per-route middleware runs, so CsrfMiddleware's noAuth bypass is
+    // live in production — not dead code. Drives the real dispatch path.
+
+    public function testDispatchPopulatesHandlerMetadataForMiddleware(): void
+    {
+        $captured = null;
+        $handler = function (Request $request, Response $response) use (&$captured) {
+            $captured = $request->handler;
+            return $response(['ok' => true]);
+        };
+        Router::post('/__csrf_e2e_noauth', $handler, [CsrfMiddleware::class])->noAuth();
+
+        // POST with NO token. The framework's write-auth gate is opted out by
+        // noAuth, and CsrfMiddleware must ALSO skip (via $request->handler), so
+        // the handler runs and returns 200 — not a 403 from a dead bypass.
+        $request = new Request(
+            method: 'POST',
+            path: '/__csrf_e2e_noauth',
+            body: [],
+            headers: ['content-type' => 'application/json'],
+            ip: '127.0.0.1',
+        );
+        $response = Router::dispatch($request, new Response(true));
+
+        $this->assertSame(200, $response->getStatusCode(), 'noAuth POST guarded by CsrfMiddleware must reach the handler');
+        $this->assertIsArray($captured, '$request->handler must be populated before middleware runs');
+        $this->assertTrue($captured['noAuth'] ?? false, 'route metadata must carry the noAuth flag');
+        $this->assertSame('{"ok":true}', $response->getBody());
     }
 }

@@ -516,15 +516,76 @@ class Database implements DatabaseAdapter
     // -------------------------------------------------------------------------
 
     /**
-     * Insert a row into a table.
+     * Insert a row, or a batch of rows, into a table.
+     *
+     * A single associative array inserts ONE row and delegates to the engine
+     * adapter (which keeps its engine-specific placeholder style + RETURNING /
+     * lastId handling). A list of associative arrays is a BATCH insert: it is
+     * run through the facade's own executeMany(), which pins ONE connection and
+     * wraps the whole batch in a SINGLE transaction.
+     *
+     * This is the parity fix for the Python master's batch-insert pass. Routing
+     * a batch straight to the adapter's per-row executeMany() was a footgun on
+     * the auto-committing engines (PostgreSQL/MySQL/MSSQL/Firebird): every row
+     * committed on its own, so the batch was NOT atomic, a failing row was
+     * silently SWALLOWED (the adapter executeMany() counts only the rows that
+     * did not throw and returns true if >0), and getLastId() was unreliable.
+     * Running the batch through the facade's executeMany() makes it atomic +
+     * fail-loud (one bad row rolls the whole batch back and RAISES) and reads a
+     * deterministic last id from the pinned connection.
      *
      * @param string $table Table name
-     * @param array<string, mixed> $data Column => value pairs
+     * @param array<string, mixed>|array<int, array<string, mixed>> $data
+     *        Column => value pairs (one row), or a list of such arrays (batch)
      * @return bool True on success
+     * @throws DatabaseException When a batch row fails (the whole batch is rolled back).
      */
     public function insert(string $table, array $data): bool
     {
+        // A list of rows (indexed array whose first element is itself an array)
+        // is a batch insert. An empty array is treated as a single (degenerate)
+        // insert by the adapter, as before.
+        if (isset($data[0]) && is_array($data[0])) {
+            return $this->insertBatch($table, $data);
+        }
+
         return $this->getNextAdapter()->insert($table, $data);
+    }
+
+    /**
+     * Atomically insert a list of associative-array rows in ONE transaction on
+     * ONE connection, then record the last inserted id.
+     *
+     * @param string $table Table name
+     * @param array<int, array<string, mixed>> $rows List of column => value rows
+     * @return bool True on success (false only for an empty list)
+     * @throws DatabaseException When any row fails — the whole batch is rolled back.
+     */
+    private function insertBatch(string $table, array $rows): bool
+    {
+        if (empty($rows)) {
+            return false;
+        }
+
+        // Columns come from the first row; every row must share the same keys.
+        $keys = array_keys($rows[0]);
+        $cols = implode(', ', $keys);
+        // Generic ? placeholders — each engine's execute() handles its own
+        // dialect (PostgreSQL's execute() rewrites ? -> $N via convertPlaceholders).
+        $placeholders = implode(', ', array_fill(0, count($keys), '?'));
+        $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+
+        $paramsList = array_map(static fn(array $row) => array_values($row), $rows);
+
+        // executeMany() pins one adapter, opens a transaction, runs every row,
+        // commits, and RE-RAISES (rolling back) on the first failed row.
+        $count = $this->executeMany($sql, $paramsList);
+
+        // After a successful batch the pin is released; getLastId() reads from
+        // the (now committed) connection's last insert id where the engine
+        // exposes it (SERIAL/AUTOINCREMENT/IDENTITY). Engines without a usable
+        // last-id concept simply report whatever lastInsertId() returns.
+        return $count > 0;
     }
 
     /**

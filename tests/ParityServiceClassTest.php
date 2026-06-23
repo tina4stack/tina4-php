@@ -35,17 +35,27 @@ class _ParityServiceFixture extends Service
  */
 final class ParityServiceClassTest extends TestCase
 {
-    public function testServiceBaseClassExists(): void
-    {
-        $this->assertTrue(class_exists(Service::class));
-    }
-
-    public function testRunMethodIsAbstract(): void
+    /**
+     * Consolidated parity-rename guard: the class-based Service surface the
+     * docs (chapter 27) teach must exist by these exact names, and `run()`
+     * must stay abstract so subclasses are forced to implement the work loop.
+     * One reflective contract test replaces the per-method existence smoke
+     * tests; real behaviour is exercised by the tests below.
+     */
+    public function testServiceContractIsAbstractWithExpectedMethods(): void
     {
         $reflection = new \ReflectionClass(Service::class);
-        $this->assertTrue($reflection->isAbstract());
-        $runMethod = $reflection->getMethod('run');
-        $this->assertTrue($runMethod->isAbstract());
+        $this->assertTrue($reflection->isAbstract(), 'Service must be abstract');
+        $this->assertTrue(
+            $reflection->getMethod('run')->isAbstract(),
+            'run() must stay abstract so subclasses implement the work loop'
+        );
+        foreach (['run', 'stop', 'shouldStop', 'asCallable'] as $method) {
+            $this->assertTrue(
+                $reflection->hasMethod($method),
+                "Service::{$method}() is part of the documented base-class contract"
+            );
+        }
     }
 
     public function testShouldStopReturnsTrueAfterStop(): void
@@ -63,11 +73,18 @@ final class ParityServiceClassTest extends TestCase
         $this->assertSame(3, $svc->iterations);
     }
 
-    public function testAsCallableReturnsRunMethodBinding(): void
+    public function testAsCallableActuallyInvokesRun(): void
     {
         $svc = new _ParityServiceFixture();
         $callable = $svc->asCallable();
         $this->assertIsCallable($callable);
+
+        // Invoking the returned callable must run the real work loop — the
+        // self-terminating fixture stops itself after 3 iterations.
+        $this->assertSame(0, $svc->iterations);
+        $callable();
+        $this->assertSame(3, $svc->iterations, 'asCallable() must invoke run()');
+        $this->assertTrue($svc->shouldStop(), 'run() reached its stop() condition');
     }
 
     public function testRegisterServiceUsesServiceInstance(): void

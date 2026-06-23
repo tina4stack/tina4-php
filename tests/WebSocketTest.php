@@ -436,6 +436,51 @@ class WebSocketTest extends TestCase
         $this->assertEmpty($server->getWebSocketClients());
     }
 
+    /**
+     * REAL behaviour: a registered WS client is actually tracked, a path-scoped
+     * broadcast lands a real frame on its wire, and removal returns the server
+     * to the empty state. Exercises Server's WS client map + broadcast path
+     * end-to-end (not just the empty-state getters).
+     */
+    public function testServerTracksAndBroadcastsToRegisteredClient(): void
+    {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            $this->markTestSkipped('stream_socket_pair not available');
+        }
+
+        $server = new Server();
+        $server->registerWebSocketClient('srv-1', $sockets[0], '/ws/chat');
+
+        // Tracked: count + client listing reflect the real registration.
+        $this->assertEquals(1, $server->getWebSocketClientCount());
+        $clients = $server->getWebSocketClients();
+        $this->assertCount(1, $clients);
+        $this->assertEquals('srv-1', $clients[0]['id']);
+        $this->assertEquals('/ws/chat', $clients[0]['path']);
+
+        // Path-scoped broadcast actually writes a frame to the client socket.
+        $server->broadcastWebSocket('hello-room', '/ws/chat');
+        $decoded = WebSocket::decodeFrame(fread($sockets[1], 65536));
+        $this->assertNotNull($decoded);
+        $this->assertEquals('hello-room', $decoded['payload']);
+
+        // A broadcast on a DIFFERENT path must not reach this client.
+        $server->broadcastWebSocket('other-path', '/ws/elsewhere');
+        stream_set_blocking($sockets[1], false);
+        $this->assertEmpty((string)fread($sockets[1], 65536), 'path filter should exclude this client');
+
+        // Removal returns the server to the empty state.
+        $server->removeWebSocketClient('srv-1');
+        $this->assertEquals(0, $server->getWebSocketClientCount());
+        $this->assertEmpty($server->getWebSocketClients());
+
+        if (is_resource($sockets[0])) {
+            fclose($sockets[0]);
+        }
+        fclose($sockets[1]);
+    }
+
     // ── Header parsing for WebSocket detection ──────────────────────
 
     public function testParseUpgradeHeaders(): void
@@ -499,52 +544,193 @@ class WebSocketTest extends TestCase
 
     // ── Parity: onMessage/onClose renamed from setOnMessage/setOnClose ──
 
-    public function testConnectionOnMessageMethodSetsCallback(): void
+    /**
+     * Consolidated interface-contract / rename guard for WebSocketConnection.
+     * Loops the expected public method set (a parity rename would break this)
+     * AND asserts the OLD setOnMessage/setOnClose names are gone — replacing the
+     * per-method existence smoke tests with one drift-catching contract test.
+     * Real behaviour for these methods is exercised by the dispatch tests below.
+     */
+    public function testWebSocketConnectionInterfaceContract(): void
     {
-        $conn = new WebSocketConnection('id1', '/ws', null, null);
-        $called = false;
-        $conn->onMessage(function ($msg) use (&$called) { $called = $msg; });
-        $this->assertIsCallable($conn->onMessage);
-        ($conn->onMessage)('hello');
-        $this->assertEquals('hello', $called);
-    }
-
-    public function testConnectionOnCloseMethodSetsCallback(): void
-    {
-        $conn = new WebSocketConnection('id2', '/ws', null, null);
-        $flag = false;
-        $conn->onClose(function () use (&$flag) { $flag = true; });
-        $this->assertIsCallable($conn->onClose);
-        ($conn->onClose)();
-        $this->assertTrue($flag);
-    }
-
-    public function testOldSetOnMessageMethodRemoved(): void
-    {
+        $expected = [
+            'send', 'sendJson', 'broadcast', 'broadcastToRoom',
+            'joinRoom', 'leaveRoom', 'getRooms', 'close',
+            'onMessage', 'onClose', 'getSocket',
+        ];
+        foreach ($expected as $method) {
+            $this->assertTrue(
+                method_exists(WebSocketConnection::class, $method),
+                "WebSocketConnection must expose {$method}()"
+            );
+        }
+        // Renamed away from the legacy set*-prefixed names (parity guard).
         $this->assertFalse(method_exists(WebSocketConnection::class, 'setOnMessage'));
         $this->assertFalse(method_exists(WebSocketConnection::class, 'setOnClose'));
     }
 
+    /**
+     * REAL behaviour: a frame driven through the route adapter must reach the
+     * handler's onMessage callback. We register a decorator-style WS route whose
+     * open handler sets onMessage to echo back over the live socket, then fire
+     * the adapter's open -> message lifecycle (exactly what Server dispatches on
+     * a decoded TEXT frame) and assert the echo is actually written to the wire.
+     */
+    public function testOnMessageCallbackHandlesDrivenFrame(): void
+    {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            $this->markTestSkipped('stream_socket_pair not available');
+        }
+
+        // Register a real route: on open, wire onMessage to echo the payload back.
+        $received = null;
+        $ws = new WebSocket();
+        $ws->route('/ws/echo', function ($conn) use (&$received) {
+            $conn->onMessage(function ($msg) use ($conn, &$received) {
+                $received = $msg;
+                $conn->send('echo:' . $msg);
+            });
+        });
+
+        $route = Router::getWebSocketRoutes()[0];
+        $adapter = $route['handler'];
+        $conn = new WebSocketConnection('drive-1', '/ws/echo', $sockets[0], null);
+
+        // Drive the lifecycle the server drives: open registers callbacks,
+        // message invokes onMessage with the decoded payload.
+        $adapter($conn, null, 'open');
+        $this->assertIsCallable($conn->onMessage, 'open handler must have wired onMessage');
+        $adapter($conn, 'ping', 'message');
+
+        // The callback ran with the real payload...
+        $this->assertSame('ping', $received);
+        // ...and its echo was actually framed + written to the live socket.
+        $wire = fread($sockets[1], 65536);
+        $decoded = WebSocket::decodeFrame($wire);
+        $this->assertNotNull($decoded);
+        $this->assertEquals(WebSocket::OP_TEXT, $decoded['opcode']);
+        $this->assertEquals('echo:ping', $decoded['payload']);
+
+        fclose($sockets[0]);
+        fclose($sockets[1]);
+    }
+
+    /**
+     * REAL behaviour: the close phase of the route adapter must invoke the
+     * handler's onClose callback. Fire open -> message -> close and assert the
+     * close callback observed the prior message state (i.e. it ran for real).
+     */
+    public function testOnCloseCallbackFiresOnDrivenClose(): void
+    {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            $this->markTestSkipped('stream_socket_pair not available');
+        }
+
+        $log = [];
+        $ws = new WebSocket();
+        $ws->route('/ws/lifecycle', function ($conn) use (&$log) {
+            $conn->onMessage(function ($msg) use (&$log) { $log[] = "msg:{$msg}"; });
+            $conn->onClose(function () use (&$log) { $log[] = 'closed'; });
+        });
+
+        $route = Router::getWebSocketRoutes()[0];
+        $adapter = $route['handler'];
+        $conn = new WebSocketConnection('drive-2', '/ws/lifecycle', $sockets[0], null);
+
+        $adapter($conn, null, 'open');
+        $this->assertIsCallable($conn->onClose, 'open handler must have wired onClose');
+        $adapter($conn, 'hi', 'message');
+        $adapter($conn, null, 'close');
+
+        // Both callbacks ran in order through the real adapter dispatch.
+        $this->assertSame(['msg:hi', 'closed'], $log);
+
+        fclose($sockets[0]);
+        fclose($sockets[1]);
+    }
+
     // ── Parity: WebSocket::route accepts optional handler ──
 
-    public function testRouteReturnsClosureWhenHandlerOmitted(): void
+    /**
+     * REAL behaviour: route() with no handler returns a decorator; applying the
+     * decorator must register a WS route whose handler actually dispatches a
+     * driven message to the wired onMessage callback (not just register a path).
+     */
+    public function testRouteDecoratorRegistersWorkingHandler(): void
     {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            $this->markTestSkipped('stream_socket_pair not available');
+        }
+
         $ws = new WebSocket();
         $decorator = $ws->route('/ws/a');
         $this->assertIsCallable($decorator);
-        $decorator(function ($conn) {});
-        $routes = Router::getWebSocketRoutes();
-        $this->assertNotEmpty($routes);
-        $this->assertEquals('/ws/a', $routes[0]['path']);
+
+        $seen = null;
+        $decorator(function ($conn) use (&$seen) {
+            $conn->onMessage(function ($msg) use ($conn, &$seen) {
+                $seen = $msg;
+                $conn->send('ack:' . $msg);
+            });
+        });
+
+        $route = Router::getWebSocketRoutes()[0];
+        $this->assertEquals('/ws/a', $route['path']);
+
+        $adapter = $route['handler'];
+        $conn = new WebSocketConnection('dec-1', '/ws/a', $sockets[0], null);
+        $adapter($conn, null, 'open');
+        $adapter($conn, 'hello', 'message');
+
+        $this->assertSame('hello', $seen);
+        $decoded = WebSocket::decodeFrame(fread($sockets[1], 65536));
+        $this->assertNotNull($decoded);
+        $this->assertEquals('ack:hello', $decoded['payload']);
+
+        fclose($sockets[0]);
+        fclose($sockets[1]);
     }
 
-    public function testRouteRegistersDirectlyWhenHandlerProvided(): void
+    /**
+     * REAL behaviour: route() WITH a handler registers directly and returns the
+     * WebSocket instance (fluent). Prove the directly-registered route also
+     * dispatches a driven message to its wired callback.
+     */
+    public function testRouteDirectRegistersWorkingHandler(): void
     {
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            $this->markTestSkipped('stream_socket_pair not available');
+        }
+
+        $seen = null;
         $ws = new WebSocket();
-        $result = $ws->route('/ws/b', function ($conn) {});
+        $result = $ws->route('/ws/b', function ($conn) use (&$seen) {
+            $conn->onMessage(function ($msg) use ($conn, &$seen) {
+                $seen = $msg;
+                $conn->send('got:' . $msg);
+            });
+        });
+        // Fluent return contract.
         $this->assertSame($ws, $result);
-        $routes = Router::getWebSocketRoutes();
-        $this->assertNotEmpty($routes);
-        $this->assertEquals('/ws/b', $routes[0]['path']);
+
+        $route = Router::getWebSocketRoutes()[0];
+        $this->assertEquals('/ws/b', $route['path']);
+
+        $adapter = $route['handler'];
+        $conn = new WebSocketConnection('dir-1', '/ws/b', $sockets[0], null);
+        $adapter($conn, null, 'open');
+        $adapter($conn, 'world', 'message');
+
+        $this->assertSame('world', $seen);
+        $decoded = WebSocket::decodeFrame(fread($sockets[1], 65536));
+        $this->assertNotNull($decoded);
+        $this->assertEquals('got:world', $decoded['payload']);
+
+        fclose($sockets[0]);
+        fclose($sockets[1]);
     }
 }

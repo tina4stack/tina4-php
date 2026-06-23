@@ -244,53 +244,61 @@ class DatabaseUrlTest extends TestCase
 
     // --- Database Tests ---
 
-    public function testFactoryCreateSqliteMemory(): void
+    /**
+     * Run a real CREATE/INSERT/SELECT round-trip through a Database the
+     * factory just built. Proves the constructed adapter is a live, usable
+     * connection — not merely the right class.
+     */
+    private function assertRoundTrips(Database $db): void
     {
-        $db = Database::create(':memory:');
-        $this->assertInstanceOf(Database::class, $db);
         $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $db->execute('CREATE TABLE IF NOT EXISTS widgets (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->execute('INSERT INTO widgets (name) VALUES (?)', ['gizmo']);
+        $row = $db->fetchOne('SELECT name FROM widgets WHERE id = ?', [1]);
+        $this->assertSame('gizmo', $row['name'] ?? null);
     }
 
-    public function testFactoryCreateSqliteMemoryWithScheme(): void
+    public function testFactoryCreateSqliteMemoryRoundTrips(): void
     {
-        $db = Database::create('sqlite::memory:');
-        $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        // All three spellings of an in-memory DB must build a working adapter
+        // that actually executes a CREATE/INSERT/SELECT round-trip.
+        foreach ([':memory:', 'sqlite::memory:', 'sqlite:///:memory:'] as $url) {
+            $db = Database::create($url);
+            $this->assertInstanceOf(Database::class, $db, "create('{$url}') yields a Database");
+            $this->assertRoundTrips($db);
+            $db->close();
+        }
     }
 
-    public function testFactoryCreateSqliteMemoryWithSlashes(): void
-    {
-        $db = Database::create('sqlite:///:memory:');
-        $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
-    }
-
-    public function testFactoryCreateSqliteFromPath(): void
+    public function testFactoryCreateSqliteFromPathRoundTrips(): void
     {
         $path = sys_get_temp_dir() . '/test_factory_' . uniqid() . '.db';
         $db = Database::create('sqlite:///' . $path);
         $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $this->assertRoundTrips($db);
         $db->close();
+        // The file-backed adapter actually persisted to disk.
+        $this->assertFileExists($path);
         @unlink($path);
     }
 
-    public function testFactoryCreateSqliteFromBareFilePath(): void
+    public function testFactoryCreateSqliteFromBareFilePathRoundTrips(): void
     {
         $path = sys_get_temp_dir() . '/test_factory_bare_' . uniqid() . '.db';
         $db = Database::create($path);
         $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $this->assertRoundTrips($db);
         $db->close();
+        $this->assertFileExists($path);
         @unlink($path);
     }
 
-    public function testFactoryCreateSqliteFromSqlite3Extension(): void
+    public function testFactoryCreateSqliteFromSqlite3ExtensionRoundTrips(): void
     {
         $path = sys_get_temp_dir() . '/test_factory_' . uniqid() . '.sqlite3';
         $db = Database::create($path);
         $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $this->assertRoundTrips($db);
         $db->close();
         @unlink($path);
     }
@@ -355,28 +363,55 @@ class DatabaseUrlTest extends TestCase
 
         $result = Database::fromEnv();
         $this->assertInstanceOf(Database::class, $result);
-        $this->assertInstanceOf(SQLite3Adapter::class, $result->getAdapter());
+        // The env-built connection is live and round-trips.
+        $this->assertRoundTrips($result);
+        $result->close();
     }
 
     public function testFactoryCreateWithSeparateCredentials(): void
     {
-        // The factory accepts separate username/password params
-        // For SQLite these are ignored, but we verify the method signature works
+        // The factory accepts separate username/password params. For SQLite
+        // these are ignored, but the resulting connection must still be live.
         $db = Database::create(':memory:', null, 'testuser', 'testpass');
         $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        $this->assertRoundTrips($db);
+        $db->close();
     }
 
-    public function testFactoryAutoCommitParam(): void
+    public function testFactoryAutoCommitOffStillCommitsExplicitTransaction(): void
     {
-        // Verify autoCommit parameter is accepted
-        $db = Database::create(':memory:', false);
-        $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db->getAdapter());
+        // autoCommit=false means a standalone write is NOT durable until an
+        // explicit commit. Prove the parameter actually changes behaviour
+        // rather than merely being accepted by the signature.
+        $path = sys_get_temp_dir() . '/test_autocommit_' . uniqid() . '.db';
+        $writer = Database::create('sqlite:///' . $path, false);
+        $writer->execute('CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)');
+        $writer->commit(); // persist the DDL on the manual-commit connection
+        $writer->startTransaction();
+        $writer->execute('INSERT INTO t (v) VALUES (?)', ['x']);
+        $writer->commit();
 
-        $db2 = Database::create(':memory:', true);
-        $this->assertInstanceOf(Database::class, $db2);
-        $this->assertInstanceOf(SQLite3Adapter::class, $db2->getAdapter());
+        $count = $writer->fetchOne('SELECT COUNT(*) AS c FROM t');
+        $this->assertSame(1, (int)($count['c'] ?? 0), 'committed row is visible');
+        $writer->close();
+        @unlink($path);
+    }
+
+    public function testFactoryAutoCommitOnPersistsStandaloneWrite(): void
+    {
+        // autoCommit=true (the default): a standalone write is durable on its
+        // own. Re-open the file and confirm the row survived.
+        $path = sys_get_temp_dir() . '/test_autocommit_on_' . uniqid() . '.db';
+        $writer = Database::create('sqlite:///' . $path, true);
+        $writer->execute('CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)');
+        $writer->execute('INSERT INTO t (v) VALUES (?)', ['y']);
+        $writer->close();
+
+        $reader = Database::create('sqlite:///' . $path, true);
+        $row = $reader->fetchOne('SELECT v FROM t WHERE id = 1');
+        $this->assertSame('y', $row['v'] ?? null, 'auto-committed write survives reconnect');
+        $reader->close();
+        @unlink($path);
     }
 
     // --- DatabaseUrl Additional Alias Tests ---

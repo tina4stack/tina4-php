@@ -38,29 +38,20 @@ class BooleanParamBindingTest extends TestCase
     }
 
     // ── PostgreSQL (native BOOLEAN), skip-if-no-PG ──────────────────────
-    private const PG_HOST = 'localhost';
-    private const PG_PORT = 5432;
-
-    private static function pgReachable(): bool
-    {
-        $fp = @fsockopen(self::PG_HOST, self::PG_PORT, $e, $s, 1.0);
-        if ($fp) { fclose($fp); return true; }
-        return false;
-    }
-
     public function testPostgresBoundBooleanRoundTrips(): void
     {
         if (!function_exists('pg_connect')) {
             $this->markTestSkipped('PostgresAdapter requires ext-pgsql.');
         }
-        if (!self::pgReachable()) {
+        $pg = \PgTestEnv::resolve();
+        if (!$pg->reachable()) {
             $this->markTestSkipped('PostgreSQL not reachable — skip');
         }
 
         $db = Database::create(
-            sprintf('postgres://%s:%d/tina4_php', self::PG_HOST, self::PG_PORT),
-            username: 'tina4',
-            password: 'tina4',
+            $pg->url('tina4_php'),
+            username: $pg->user,
+            password: $pg->pass,
             autoCommit: true
         );
         $db->execute('DROP TABLE IF EXISTS xb');

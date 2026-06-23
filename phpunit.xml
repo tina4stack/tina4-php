@@ -4,6 +4,17 @@
          bootstrap="tests/bootstrap.php"
          colors="true"
          stopOnFailure="false">
+    <!--
+      Real-service test gate (parity with the Python master's conftest.py hook).
+      When TINA4_REQUIRE_SERVICES is truthy (CI sets it to '1'), a test that
+      SKIPS because a PROVISIONED service (PostgreSQL/Redis/Valkey/Memcached/
+      MongoDB/RabbitMQ/Kafka) or its client library is missing is turned into a
+      hard FAILURE. MySQL/MSSQL/SQL Server/Firebird are NOT provisioned, so their
+      skips stay green. With the flag unset (local default), skips are unchanged.
+    -->
+    <extensions>
+        <bootstrap class="Tina4\Testing\RequireServicesExtension"/>
+    </extensions>
     <testsuites>
         <testsuite name="Tina4 Frond Tests">
             <file>tests/FrondTest.php</file>
@@ -29,6 +40,7 @@
             <file>tests/DualPortReloadTest.php</file>
             <file>tests/SQLite3AdapterTest.php</file>
             <file>tests/DatabaseDriversTest.php</file>
+            <file>tests/BatchInsertTest.php</file>
             <file>tests/ORMV3Test.php</file>
             <file>tests/AutoCrudV3Test.php</file>
             <file>tests/MigrationV3Test.php</file>
@@ -47,7 +59,9 @@
             <file>tests/CacheBackendsTest.php</file>
             <file>tests/ContainerTest.php</file>
             <file>tests/QueueBackendTest.php</file>
+            <file>tests/MongoQueueDeadLetterLiveTest.php</file>
             <file>tests/RabbitMQIntegrationTest.php</file>
+            <file>tests/KafkaIntegrationTest.php</file>
             <file>tests/SessionHandlerTest.php</file>
             <file>tests/AITest.php</file>
             <file>tests/ErrorOverlayTest.php</file>
@@ -82,6 +96,7 @@
             <file>tests/LandingPageTest.php</file>
             <file>tests/PostgresUuidPkTest.php</file>
             <file>tests/CreateTablePostgresTest.php</file>
+            <file>tests/OrmQueryBuilderBugsPostgresTest.php</file>
             <file>tests/ExecuteFailurePostgresTest.php</file>
             <file>tests/ExecuteRaisesTest.php</file>
             <file>tests/BooleanParamBindingTest.php</file>

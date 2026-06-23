@@ -23,31 +23,20 @@ use Tina4\Database\DatabaseException;
 
 class ExecuteFailurePostgresTest extends TestCase
 {
-    private const PG_HOST = 'localhost';
-    private const PG_PORT = 5432;
-    private const PG_USER = 'tina4';
-    private const PG_PASS = 'tina4';
-    private const PG_DB   = 'tina4_php';
+    private const PG_DB = 'tina4_php';
 
     private ?Database $db = null;
-
-    private static function pgReachable(): bool
-    {
-        $fp = @fsockopen(self::PG_HOST, self::PG_PORT, $errno, $errstr, 1.0);
-        if ($fp) { fclose($fp); return true; }
-        return false;
-    }
 
     protected function setUp(): void
     {
         if (!function_exists('pg_connect')) {
             $this->markTestSkipped('PostgresAdapter requires ext-pgsql.');
         }
-        if (!self::pgReachable()) {
-            $this->markTestSkipped(sprintf('PostgreSQL not reachable at %s:%d — skip', self::PG_HOST, self::PG_PORT));
+        $pg = \PgTestEnv::resolve();
+        if (!$pg->reachable()) {
+            $this->markTestSkipped(sprintf('PostgreSQL not reachable at %s:%d — skip', $pg->host, $pg->port));
         }
-        $url = sprintf('postgres://%s:%d/%s', self::PG_HOST, self::PG_PORT, self::PG_DB);
-        $this->db = Database::create($url, username: self::PG_USER, password: self::PG_PASS);
+        $this->db = Database::create($pg->url(self::PG_DB), username: $pg->user, password: $pg->pass);
         $this->db->execute('DROP TABLE IF EXISTS t4_exec_fail');
     }
 

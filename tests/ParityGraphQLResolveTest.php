@@ -34,9 +34,20 @@ final class ParityGraphQLResolveTest extends TestCase
         parent::tearDown();
     }
 
-    public function testResolveStaticMethodExists(): void
+    /**
+     * Consolidated parity-rename guard: the decorator-style static surface
+     * the docs teach must exist by these exact names. One existence loop
+     * replaces the per-method method_exists smoke tests; the real behaviour
+     * of each is exercised by the executing tests below.
+     */
+    public function testDecoratorSurfaceContract(): void
     {
-        $this->assertTrue(method_exists(GraphQL::class, 'resolve'));
+        foreach (['resolve', 'setDefault', '_clearClassResolvers'] as $method) {
+            $this->assertTrue(
+                method_exists(GraphQL::class, $method),
+                "GraphQL::{$method}() is part of the documented decorator API"
+            );
+        }
     }
 
     public function testRegisterQueryBeforeInstantiation(): void
@@ -47,25 +58,24 @@ final class ParityGraphQLResolveTest extends TestCase
         $gql = new GraphQL();
         $result = $gql->execute('{ hello }');
         $this->assertSame("world", $result['data']['hello'] ?? null);
+        $this->assertArrayNotHasKey('errors', $result);
     }
 
-    public function testRegisterMutation(): void
+    public function testRegisterMutationActuallyExecutes(): void
     {
         GraphQL::resolve("Mutation", "createWidget", function ($root, $args) {
             return ['id' => 1, 'name' => $args['name'] ?? 'unknown'];
         });
 
         $gql = new GraphQL();
-        // The executor needs the type to be declared too; provide a stub
         $gql->addType('Widget', ['id' => 'Int', 'name' => 'String']);
-        // We don't fully execute here — just verify registration landed
-        // by inspecting via reflection.
-        $reflection = new \ReflectionClass($gql);
-        $mutationsProp = $reflection->getProperty('mutations');
-        $mutationsProp->setAccessible(true);
-        $mutations = $mutationsProp->getValue($gql);
-        $this->assertArrayHasKey('createWidget', $mutations);
-        $this->assertIsCallable($mutations['createWidget']['resolve']);
+
+        // Run the mutation for real and assert the resolved payload, not the
+        // presence of a callable in a private property.
+        $result = $gql->execute('mutation { createWidget(name: "Gizmo") { id name } }');
+        $this->assertArrayNotHasKey('errors', $result);
+        $this->assertSame(1, $result['data']['createWidget']['id'] ?? null);
+        $this->assertSame('Gizmo', $result['data']['createWidget']['name'] ?? null);
     }
 
     public function testFieldResolverOnObjectType(): void
@@ -81,38 +91,38 @@ final class ParityGraphQLResolveTest extends TestCase
         $this->assertSame(5, $result[0]['rating']);
     }
 
-    public function testPostInstantiationRegistrationViaDefault(): void
+    public function testPostInstantiationRegistrationViaDefaultExecutes(): void
     {
         $gql = new GraphQL();
         GraphQL::setDefault($gql);
 
-        // Register AFTER instantiation — should land in $gql immediately
+        // Register AFTER instantiation — should land in $gql immediately and
+        // be queryable without re-instantiating.
         GraphQL::resolve("Query", "lateBound", fn($root, $args) => "registered after init");
 
-        $reflection = new \ReflectionClass($gql);
-        $queriesProp = $reflection->getProperty('queries');
-        $queriesProp->setAccessible(true);
-        $queries = $queriesProp->getValue($gql);
-        $this->assertArrayHasKey('lateBound', $queries);
+        $result = $gql->execute('{ lateBound }');
+        $this->assertSame('registered after init', $result['data']['lateBound'] ?? null);
+        $this->assertArrayNotHasKey('errors', $result);
     }
 
-    public function testMultipleResolversAccumulate(): void
+    public function testMultipleResolversAccumulateAndResolve(): void
     {
         GraphQL::resolve("Query", "first", fn() => "a");
         GraphQL::resolve("Query", "second", fn() => "b");
         GraphQL::resolve("Mutation", "third", fn() => "c");
 
         $gql = new GraphQL();
-        $reflection = new \ReflectionClass($gql);
-        $queriesProp = $reflection->getProperty('queries');
-        $queriesProp->setAccessible(true);
-        $queries = $queriesProp->getValue($gql);
-        $this->assertArrayHasKey('first', $queries);
-        $this->assertArrayHasKey('second', $queries);
 
-        $mutationsProp = $reflection->getProperty('mutations');
-        $mutationsProp->setAccessible(true);
-        $mutations = $mutationsProp->getValue($gql);
-        $this->assertArrayHasKey('third', $mutations);
+        // Both queries resolve in one document — proves accumulation lands in
+        // the live schema, not just a private registry.
+        $q = $gql->execute('{ first second }');
+        $this->assertArrayNotHasKey('errors', $q);
+        $this->assertSame('a', $q['data']['first'] ?? null);
+        $this->assertSame('b', $q['data']['second'] ?? null);
+
+        // The mutation resolves too.
+        $m = $gql->execute('mutation { third }');
+        $this->assertArrayNotHasKey('errors', $m);
+        $this->assertSame('c', $m['data']['third'] ?? null);
     }
 }

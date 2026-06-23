@@ -237,34 +237,38 @@ class SQLite3Adapter implements DatabaseAdapter
 
     public function executeMany(string $sql, array $paramsList = []): int
     {
+        // FAIL LOUD: capture the cause on error() AND raise on a prepare/execute
+        // failure — do not swallow it into a 0 return (which a caller reads as
+        // "nothing happened" while the real cause is hidden). Atomicity for a
+        // batch is provided by the facade's transactional batch path.
         $this->ensureOpen();
         $this->lastError = null;
         $totalAffected = 0;
 
-        try {
-            $stmt = $this->db->prepare($sql);
-            if ($stmt === false) {
-                $this->lastError = $this->db->lastErrorMsg();
-                return 0;
-            }
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            $this->lastError = $this->db->lastErrorMsg();
+            throw new DatabaseException('SQLite3 executeMany() failed: ' . ($this->lastError ?: 'prepare failed'));
+        }
 
+        try {
             foreach ($paramsList as $params) {
                 $stmt->reset();
                 $stmt->clear();
                 $this->bindParams($stmt, $params);
                 $result = $stmt->execute();
-                if ($result !== false) {
-                    $totalAffected += $this->db->changes();
-                    $result->finalize();
+                if ($result === false) {
+                    $this->lastError = $this->db->lastErrorMsg();
+                    throw new DatabaseException('SQLite3 executeMany() failed: ' . ($this->lastError ?: 'unknown error'));
                 }
+                $totalAffected += $this->db->changes();
+                $result->finalize();
             }
-
+        } finally {
             $stmt->close();
-            return $totalAffected;
-        } catch (\Exception $e) {
-            $this->lastError = $e->getMessage();
-            return 0;
         }
+
+        return $totalAffected;
     }
 
     public function fetchOne(string $sql, array $params = []): ?array

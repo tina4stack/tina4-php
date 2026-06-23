@@ -14,104 +14,79 @@ use Tina4\Queue\MongoBackend;
 
 class QueueBackendTest extends TestCase
 {
-    // -- Interface exists and has correct methods ----------------------------
+    // -- Interface contract (ONE consolidated rename guard) ------------------
+    //
+    // The Queue facade calls a fixed method set on whatever backend is active;
+    // if a connector drops or renames one this must fail loudly HERE (cheap,
+    // infra-free) rather than at runtime against a live broker. This single
+    // loop replaces the ~26 per-method existence / parameter-count / return-type
+    // smoke tests that used to live here — the real BEHAVIOUR of these methods
+    // is proven by the live RabbitMQ / Kafka / Mongo tests further down. Mirrors
+    // tina4_python TestQueueBackendContract.
 
-    public function testQueueBackendInterfaceExists(): void
+    /** Every backend must implement the QueueBackend interface contract. */
+    private const BACKEND_CLASSES = [
+        'rabbitmq' => RabbitMQBackend::class,
+        'kafka' => KafkaBackend::class,
+        'mongodb' => MongoBackend::class,
+    ];
+
+    /** Methods the Queue facade calls on every active backend. */
+    private const REQUIRED_METHODS = [
+        'enqueue', 'dequeue', 'acknowledge', 'requeue',
+        'deadLetter', 'size', 'close',
+    ];
+
+    public function testQueueBackendInterfaceContract(): void
     {
         $this->assertTrue(interface_exists(QueueBackend::class));
-    }
 
-    public function testQueueBackendHasEnqueueMethod(): void
-    {
+        // The interface itself declares every required method with the exact
+        // arity the facade relies on (enqueue/acknowledge/requeue/deadLetter take
+        // 2, dequeue/size take 1, close takes 0) and the return-type contract
+        // (enqueue->string, dequeue nullable, size->int, close->void).
         $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('enqueue'));
-        $method = $ref->getMethod('enqueue');
-        $this->assertEquals(2, $method->getNumberOfParameters());
-    }
+        $expected = [
+            'enqueue' => ['params' => 2, 'return' => 'string', 'nullable' => false],
+            'dequeue' => ['params' => 1, 'return' => 'array', 'nullable' => true],
+            'acknowledge' => ['params' => 2, 'return' => 'void', 'nullable' => false],
+            'requeue' => ['params' => 2, 'return' => 'void', 'nullable' => false],
+            'deadLetter' => ['params' => 2, 'return' => 'void', 'nullable' => false],
+            'size' => ['params' => 1, 'return' => 'int', 'nullable' => false],
+            'close' => ['params' => 0, 'return' => 'void', 'nullable' => false],
+        ];
+        foreach ($expected as $name => $spec) {
+            $this->assertTrue($ref->hasMethod($name), "interface missing {$name}()");
+            $method = $ref->getMethod($name);
+            $this->assertSame($spec['params'], $method->getNumberOfParameters(), "{$name}() arity drifted");
+            $rt = $method->getReturnType();
+            $this->assertNotNull($rt, "{$name}() has no return type");
+            $this->assertSame($spec['return'], $rt->getName(), "{$name}() return type drifted");
+            $this->assertSame($spec['nullable'], $rt->allowsNull(), "{$name}() nullability drifted");
+        }
+        // enqueue's parameters are named (topic, message) — the facade binds by order.
+        $enqueue = $ref->getMethod('enqueue')->getParameters();
+        $this->assertSame('topic', $enqueue[0]->getName());
+        $this->assertSame('message', $enqueue[1]->getName());
 
-    public function testQueueBackendHasDequeueMethod(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('dequeue'));
-    }
-
-    public function testQueueBackendHasAcknowledgeMethod(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('acknowledge'));
-    }
-
-    public function testQueueBackendHasRequeueMethod(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('requeue'));
-    }
-
-    public function testQueueBackendHasDeadLetterMethod(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('deadLetter'));
-    }
-
-    public function testQueueBackendHasSizeMethod(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('size'));
-    }
-
-    public function testQueueBackendHasCloseMethod(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $this->assertTrue($ref->hasMethod('close'));
-    }
-
-    // -- RabbitMQBackend implements QueueBackend -----------------------------
-
-    public function testRabbitMQBackendImplementsQueueBackend(): void
-    {
-        $ref = new \ReflectionClass(RabbitMQBackend::class);
-        $this->assertTrue($ref->implementsInterface(QueueBackend::class));
-    }
-
-    public function testRabbitMQBackendConstructorAcceptsConfigArray(): void
-    {
-        $backend = new RabbitMQBackend([
-            'host' => '10.0.0.1',
-            'port' => 5673,
-            'username' => 'admin',
-            'password' => 'secret',
-            'vhost' => '/test',
-        ]);
-        $this->assertInstanceOf(RabbitMQBackend::class, $backend);
-    }
-
-    public function testRabbitMQBackendConstructorEmptyConfig(): void
-    {
-        $backend = new RabbitMQBackend();
-        $this->assertInstanceOf(RabbitMQBackend::class, $backend);
-    }
-
-    // -- KafkaBackend implements QueueBackend --------------------------------
-
-    public function testKafkaBackendImplementsQueueBackend(): void
-    {
-        $ref = new \ReflectionClass(KafkaBackend::class);
-        $this->assertTrue($ref->implementsInterface(QueueBackend::class));
-    }
-
-    public function testKafkaBackendConstructorAcceptsConfigArray(): void
-    {
-        $backend = new KafkaBackend([
-            'brokers' => 'broker1:9092,broker2:9092',
-            'group_id' => 'my_group',
-        ]);
-        $this->assertInstanceOf(KafkaBackend::class, $backend);
-    }
-
-    public function testKafkaBackendConstructorEmptyConfig(): void
-    {
-        $backend = new KafkaBackend();
-        $this->assertInstanceOf(KafkaBackend::class, $backend);
+        // Every concrete backend implements the interface AND exposes connect().
+        foreach (self::BACKEND_CLASSES as $name => $class) {
+            $cref = new \ReflectionClass($class);
+            $this->assertTrue(
+                $cref->implementsInterface(QueueBackend::class),
+                "{$name} backend ({$class}) does not implement QueueBackend"
+            );
+            foreach (self::REQUIRED_METHODS as $method) {
+                $this->assertTrue(
+                    $cref->hasMethod($method),
+                    "{$name} backend is missing {$method}()"
+                );
+            }
+            $this->assertTrue(
+                method_exists($class, 'connect'),
+                "{$name} backend is missing connect()"
+            );
+        }
     }
 
     // -- Env var detection ---------------------------------------------------
@@ -177,24 +152,8 @@ class QueueBackendTest extends TestCase
         putenv('TINA4_RABBITMQ_HOST');
     }
 
-    // -- MongoBackend implements QueueBackend ---------------------------------
-
-    public function testMongoBackendImplementsInterface(): void
-    {
-        $ref = new \ReflectionClass(MongoBackend::class);
-        $this->assertTrue($ref->implementsInterface(QueueBackend::class));
-    }
-
-    public function testMongoBackendHasRequiredMethods(): void
-    {
-        $this->assertTrue(method_exists(MongoBackend::class, 'enqueue'));
-        $this->assertTrue(method_exists(MongoBackend::class, 'dequeue'));
-        $this->assertTrue(method_exists(MongoBackend::class, 'acknowledge'));
-        $this->assertTrue(method_exists(MongoBackend::class, 'requeue'));
-        $this->assertTrue(method_exists(MongoBackend::class, 'deadLetter'));
-        $this->assertTrue(method_exists(MongoBackend::class, 'size'));
-        $this->assertTrue(method_exists(MongoBackend::class, 'close'));
-    }
+    // (MongoBackend interface conformance is covered by the consolidated
+    //  testQueueBackendInterfaceContract loop above.)
 
     // -- RabbitMQ default config -------------------------------------------
 
@@ -248,16 +207,17 @@ class QueueBackendTest extends TestCase
         $this->assertEquals('/test', $vhostProp->getValue($backend));
     }
 
-    public function testRabbitMQBackendHasConnectMethod(): void
+    public function testRabbitMQBackendCloseBeforeConnectLeavesNoSocket(): void
     {
-        $this->assertTrue(method_exists(RabbitMQBackend::class, 'connect'));
-    }
-
-    public function testRabbitMQBackendCloseWithoutConnect(): void
-    {
+        // Real behaviour (not "assertTrue(true)"): close() before connect() is a
+        // safe no-op AND leaves the backend genuinely disconnected — the socket
+        // stays null, no broker frame is attempted. Mirrors Python's
+        // test_close_when_never_connected_leaves_no_connection.
         $backend = new RabbitMQBackend();
-        $backend->close(); // Should not throw
-        $this->assertTrue(true);
+        $sock = new \ReflectionProperty($backend, 'socket');
+        $this->assertNull($sock->getValue($backend), 'a fresh backend must have no socket');
+        $backend->close();
+        $this->assertNull($sock->getValue($backend), 'close() before connect() must leave the socket null');
     }
 
     // -- Kafka default config ------------------------------------------------
@@ -291,16 +251,47 @@ class QueueBackendTest extends TestCase
         $this->assertEquals('my-app', $groupProp->getValue($backend));
     }
 
-    public function testKafkaBackendHasConnectMethod(): void
+    public function testKafkaBackendCloseBeforeConnectLeavesNoSocket(): void
     {
-        $this->assertTrue(method_exists(KafkaBackend::class, 'connect'));
+        // Real behaviour: close() before connect() is a safe no-op AND leaves the
+        // backend disconnected (socket stays null). Mirrors Python's
+        // test_close_when_never_connected_leaves_no_connection.
+        $backend = new KafkaBackend();
+        $sock = new \ReflectionProperty($backend, 'socket');
+        $this->assertNull($sock->getValue($backend), 'a fresh backend must have no socket');
+        $backend->close();
+        $this->assertNull($sock->getValue($backend), 'close() before connect() must leave the socket null');
     }
 
-    public function testKafkaBackendCloseWithoutConnect(): void
+    public function testKafkaSizeIsAlwaysZero(): void
     {
+        // Kafka has no queue-size concept; size() is documented to ALWAYS return
+        // 0 regardless of topic or how much was produced. Assert the real
+        // contract value (a constant, not a smoke check). Mirrors Python's
+        // test_size_is_always_zero.
         $backend = new KafkaBackend();
-        $backend->close(); // Should not throw
-        $this->assertTrue(true);
+        $this->assertSame(0, $backend->size('anything'));
+        $this->assertSame(0, $backend->size(''));
+    }
+
+    public function testKafkaDeadLetterRoutesToDeadLetterTopic(): void
+    {
+        // dead_letter() routes to "<topic>.dead_letter". Prove the real routing
+        // by capturing the topic enqueue() receives — no broker, no producer
+        // double: we subclass and intercept the backend's OWN enqueue (the real
+        // method under test is deadLetter, and the routing is its observable
+        // behaviour). Mirrors Python's test_dead_letter_topic_naming.
+        $backend = new class extends KafkaBackend {
+            public array $seen = [];
+            public function enqueue(string $topic, array $message): string
+            {
+                $this->seen = ['topic' => $topic, 'message' => $message];
+                return 'captured-id';
+            }
+        };
+        $backend->deadLetter('orders', ['id' => 'msg-1', 'error' => 'timeout']);
+        $this->assertSame('orders.dead_letter', $backend->seen['topic']);
+        $this->assertSame('timeout', $backend->seen['message']['error']);
     }
 
     // -- Env var tests -------------------------------------------------------
@@ -346,107 +337,10 @@ class QueueBackendTest extends TestCase
         $this->assertEquals('tina4-php', $clientProp->getValue($backend));
     }
 
-    // -- Interface parameter counts -----------------------------------------
+    // (Interface parameter counts + return types are asserted by the
+    //  consolidated testQueueBackendInterfaceContract loop above.)
 
-    public function testQueueBackendEnqueueParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('enqueue');
-        $this->assertEquals(2, $method->getNumberOfParameters());
-        $params = $method->getParameters();
-        $this->assertEquals('topic', $params[0]->getName());
-        $this->assertEquals('message', $params[1]->getName());
-    }
-
-    public function testQueueBackendDequeueParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('dequeue');
-        $this->assertEquals(1, $method->getNumberOfParameters());
-        $this->assertEquals('topic', $method->getParameters()[0]->getName());
-    }
-
-    public function testQueueBackendAcknowledgeParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('acknowledge');
-        $this->assertEquals(2, $method->getNumberOfParameters());
-    }
-
-    public function testQueueBackendRequeueParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('requeue');
-        $this->assertEquals(2, $method->getNumberOfParameters());
-    }
-
-    public function testQueueBackendDeadLetterParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('deadLetter');
-        $this->assertEquals(2, $method->getNumberOfParameters());
-    }
-
-    public function testQueueBackendSizeParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('size');
-        $this->assertEquals(1, $method->getNumberOfParameters());
-    }
-
-    public function testQueueBackendCloseParameterCount(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('close');
-        $this->assertEquals(0, $method->getNumberOfParameters());
-    }
-
-    // -- Return types -------------------------------------------------------
-
-    public function testQueueBackendEnqueueReturnsString(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('enqueue');
-        $returnType = $method->getReturnType();
-        $this->assertNotNull($returnType);
-        $this->assertEquals('string', $returnType->getName());
-    }
-
-    public function testQueueBackendDequeueReturnsNullableArray(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('dequeue');
-        $returnType = $method->getReturnType();
-        $this->assertNotNull($returnType);
-        $this->assertTrue($returnType->allowsNull());
-    }
-
-    public function testQueueBackendSizeReturnsInt(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('size');
-        $returnType = $method->getReturnType();
-        $this->assertNotNull($returnType);
-        $this->assertEquals('int', $returnType->getName());
-    }
-
-    public function testQueueBackendCloseReturnsVoid(): void
-    {
-        $ref = new \ReflectionClass(QueueBackend::class);
-        $method = $ref->getMethod('close');
-        $returnType = $method->getReturnType();
-        $this->assertNotNull($returnType);
-        $this->assertEquals('void', $returnType->getName());
-    }
-
-    // -- MongoBackend config -------------------------------------------------
-
-    public function testMongoBackendHasConnectMethod(): void
-    {
-        $this->assertTrue(method_exists(MongoBackend::class, 'connect') || method_exists(MongoBackend::class, 'enqueue'));
-        // MongoBackend connects lazily; verify enqueue exists
-        $this->assertTrue(method_exists(MongoBackend::class, 'enqueue'));
-    }
+    // -- MongoBackend extension guard ----------------------------------------
 
     public function testMongoBackendRequiresMongodbExtension(): void
     {
@@ -587,6 +481,10 @@ class QueueBackendTest extends TestCase
     protected function tearDown(): void
     {
         $this->cleanKafkaSecurityEnv();
+        // Drop the throwaway live-Mongo db so re-runs are idempotent. setUp for
+        // each live test also drops it up front; doing both ends keeps the
+        // namespace clean whether a test ran, skipped, or aborted.
+        $this->dropLiveMongoTestDb();
     }
 
     public function testKafkaSecurityConfigNoEnvIsEmpty(): void
@@ -675,37 +573,18 @@ class QueueBackendTest extends TestCase
         $this->assertArrayHasKey('group.id', $consumer);
     }
 
-    // -- MongoBackend visibility timeout / reservation reclaim ---------------
+    // -- MongoBackend visibility timeout (config resolution only) ------------
     //
-    // Regression lock for the production bug where a consumer that dies before
-    // acknowledging left the message 'processing' forever — never re-delivered,
-    // never dead-lettered. dequeue() now advances available_at = now +
-    // visibility_timeout and stamps reserved_at; reclaimExpired() flips an
-    // expired reservation back to pending (attempts++) or dead-letters it past
-    // max_retries. ext-mongodb references real BSON/Operation classes, so the
-    // behavioural cases skip when the driver is not installed (mirroring the
-    // Python mongo mock cases, which run wherever pymongo is present).
-
-    private function requireMongoOrSkip(): void
-    {
-        if (!extension_loaded('mongodb') || !class_exists('MongoDB\\BSON\\UTCDateTime')) {
-            $this->markTestSkipped('ext-mongodb / mongodb library not installed — skipping Mongo reclaim behaviour test');
-        }
-    }
-
-    private function makeMongoBackendWithCollection(object $collection, float $visibilityTimeout = 300.0, int $maxRetries = 3, float $retryBackoff = 0.0): MongoBackend
-    {
-        $backend = new MongoBackend([
-            'visibility_timeout' => $visibilityTimeout,
-            'max_retries' => $maxRetries,
-            'retry_backoff' => $retryBackoff,
-        ]);
-        $ref = new \ReflectionClass($backend);
-        $prop = $ref->getProperty('collection');
-        $prop->setAccessible(true);
-        $prop->setValue($backend, $collection);
-        return $backend;
-    }
+    // These cases construct a real MongoBackend and assert how it resolves the
+    // visibility timeout from config/env/default. They touch NO collection (no
+    // connection, no double) so they run wherever ext-mongodb is present — they
+    // are pure config-resolution checks, not mock tests. The behavioural
+    // reservation/dead-letter/retry coverage that used to wire a fake collection
+    // double here has been rewritten against a REAL MongoDB further down (the
+    // "MongoBackend reservation/reclaim/requeue behaviour" section):
+    // each one seeds real documents into a throwaway namespaced collection,
+    // calls the real MongoBackend method, and reads the resulting state back out
+    // of Mongo — no test doubles anywhere, per the no-mock rule.
 
     public function testMongoVisibilityTimeoutFromConfig(): void
     {
@@ -740,214 +619,436 @@ class QueueBackendTest extends TestCase
         $this->assertEquals(300.0, $backend->getVisibilityTimeout());
     }
 
-    public function testMongoDequeueAdvancesAvailableAtAndRecordsReservedAt(): void
+    // -- MongoBackend reservation/reclaim/requeue behaviour (REAL Mongo) ------
+    //
+    // Regression locks for the production bugs where a Mongo-backed queue could
+    // strand a job (consumer dies mid-flight, reservation never reclaimed),
+    // retry forever (dequeue surfaced the stale push-time attempts snapshot
+    // instead of the live document attempts), or hold a fail()'d job invisible
+    // for the whole visibility window (requeue left available_at in the future).
+    //
+    // These used to wire a fake collection double onto the adapter — a test
+    // double the no-mock rule forbids, and exactly the kind of gap that let the
+    // queue bugs ship. They now run against a REAL MongoDB: each seeds real docs
+    // into a THROWAWAY, framework-namespaced collection (db tina4_test_queue_php,
+    // collection tina4_test_queue_jobs), calls the real MongoBackend method, and
+    // asserts on state read back out of Mongo. setUp()/tearDown() drop the
+    // throwaway database so re-runs are idempotent.
+    //
+    // Skip cleanly ONLY when the mongodb client library is missing or Mongo is
+    // not reachable on localhost:27017 — the skip reason contains "mongo" +
+    // "not reachable"/"not installed" so the #252 TINA4_REQUIRE_SERVICES gate
+    // (Tina4\Testing\RequireServicesExtension) fails CI when Mongo should be up.
+
+    private const MONGO_TEST_DB = 'tina4_test_queue_php';
+    private const MONGO_TEST_COLLECTION = 'tina4_test_queue_jobs';
+    private const MONGO_TEST_TOPIC = 'tina4_test_queue_emails';
+
+    private string $mongoTestUri = '';
+
+    /**
+     * Build a real MongoBackend pointed at the throwaway namespaced collection.
+     * No doubles — this returns a backend that talks to the live Mongo.
+     */
+    private function makeLiveMongoBackend(float $visibilityTimeout = 300.0, int $maxRetries = 3, float $retryBackoff = 0.0): MongoBackend
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        // dequeue's reclaim pass runs first (no expired reservations), then the
-        // claim returns this doc.
-        $collection->queueFindOneAndUpdate(null);                       // reclaim: none expired
-        $collection->queueFindOneAndUpdate(['_id' => 'msg-1', 'message' => ['payload' => ['x' => 1]], 'status' => 'processing']);
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0);
+        return new MongoBackend([
+            'uri' => $this->mongoTestUri,
+            'db' => self::MONGO_TEST_DB,
+            'collection' => self::MONGO_TEST_COLLECTION,
+            'visibility_timeout' => $visibilityTimeout,
+            'max_retries' => $maxRetries,
+            'retry_backoff' => $retryBackoff,
+        ]);
+    }
 
-        $backend->dequeue('emails');
+    /** The live \MongoDB\Collection for the throwaway db (seed + read-back). */
+    private function liveMongoCollection(): \MongoDB\Collection
+    {
+        $client = new \MongoDB\Client($this->mongoTestUri);
+        return $client->selectCollection(self::MONGO_TEST_DB, self::MONGO_TEST_COLLECTION);
+    }
 
-        // The CLAIM update (the second findOneAndUpdate call) must advance
-        // available_at and stamp reserved_at.
-        $claim = $collection->findOneAndUpdateCalls[1];
-        $set = $claim['update']['$set'];
-        $this->assertSame('processing', $set['status']);
-        $this->assertArrayHasKey('reserved_at', $set);
-        $this->assertArrayHasKey('available_at', $set);
-        // available_at is pushed into the future relative to the reservation stamp.
-        $this->assertGreaterThan(
-            $set['reserved_at']->toDateTime()->getTimestamp(),
-            $set['available_at']->toDateTime()->getTimestamp()
-        );
-        // The claim predicate gates on pending + available_at <= now.
-        $this->assertSame('pending', $claim['filter']['status']);
-        $this->assertArrayHasKey('available_at', $claim['filter']);
+    /** True if a TCP connection to the Mongo host:port opens within ~1.5s. */
+    private function mongoReachable(string $uri): bool
+    {
+        if (!preg_match('#^mongodb(\+srv)?://([^:/?]+)(?::(\d+))?#', $uri, $m)) {
+            return false;
+        }
+        $host = $m[2] ?: 'localhost';
+        $port = isset($m[3]) && $m[3] !== '' ? (int)$m[3] : 27017;
+        $sock = @fsockopen($host, $port, $errno, $errstr, 1.5);
+        if ($sock === false) {
+            return false;
+        }
+        fclose($sock);
+        return true;
+    }
+
+    /**
+     * Gate + clean slate for the live-Mongo behaviour tests. Skips cleanly (never
+     * fakes) when the client library is missing or Mongo is unreachable; otherwise
+     * drops the throwaway database so each test starts pristine and re-runs are
+     * idempotent.
+     */
+    private function setUpLiveMongoOrSkip(): void
+    {
+        if (!extension_loaded('mongodb') || !class_exists('MongoDB\\Client')) {
+            $this->markTestSkipped('mongo client (ext-mongodb / mongodb library) not installed — skipping live Mongo queue behaviour test');
+        }
+        $this->mongoTestUri = getenv('TINA4_MONGO_URI') ?: 'mongodb://localhost:27017';
+        if (!$this->mongoReachable($this->mongoTestUri)) {
+            $this->markTestSkipped('mongo not reachable at ' . $this->mongoTestUri . ' — skipping live Mongo queue behaviour test');
+        }
+        // Pristine slate even if a prior run aborted before teardown.
+        $this->dropLiveMongoTestDb();
+    }
+
+    /** Drop the throwaway db so re-runs are idempotent (best-effort). */
+    private function dropLiveMongoTestDb(): void
+    {
+        if ($this->mongoTestUri === '') {
+            return;
+        }
+        try {
+            (new \MongoDB\Client($this->mongoTestUri))->dropDatabase(self::MONGO_TEST_DB);
+        } catch (\Throwable $e) {
+            // best-effort cleanup — never let teardown noise fail a test
+        }
+    }
+
+    /** A UTCDateTime $seconds relative to now (negative = in the past). */
+    private function mongoTime(float $seconds = 0.0): \MongoDB\BSON\UTCDateTime
+    {
+        return new \MongoDB\BSON\UTCDateTime((int) round((microtime(true) + $seconds) * 1000));
     }
 
     public function testMongoReclaimRequeuesUnderLimit(): void
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        // One expired reservation (attempts after inc = 1, below max 3), then none.
-        $collection->queueFindOneAndUpdate(['_id' => 'msg-1', 'message' => ['payload' => ['x' => 1]], 'attempts' => 1]);
-        $collection->queueFindOneAndUpdate(null);
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
+        // An expired reservation under max_retries is requeued: the real
+        // reclaimExpired() flips processing -> pending, increments attempts, and
+        // does NOT dead-letter or delete. Seed one real RESERVED doc whose
+        // visibility window already lapsed (available_at in the past, attempts=0
+        // so attempts-after-inc = 1 < max 3), then read the doc back from Mongo.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-under',
+            'topic' => $topic,
+            'status' => 'processing',
+            'message' => ['id' => 'msg-under', 'payload' => ['x' => 1]],
+            'attempts' => 0,
+            'reserved_at' => $this->mongoTime(-600),
+            'available_at' => $this->mongoTime(-60),   // visibility window lapsed
+            'created_at' => $this->mongoTime(-600),
+            'updated_at' => $this->mongoTime(-600),
+        ]);
 
-        $count = $backend->reclaimExpired('emails', 3);
-        $this->assertEquals(1, $count);
+        $backend = $this->makeLiveMongoBackend(300.0, maxRetries: 3);
+        $count = $backend->reclaimExpired($topic, 3);
 
-        // The reclaim flips processing -> pending and increments attempts.
-        $first = $collection->findOneAndUpdateCalls[0];
-        $this->assertSame('pending', $first['update']['$set']['status']);
-        $this->assertEquals(1, $first['update']['$inc']['attempts']);
-        // Under the limit: not dead-lettered, not deleted.
-        $this->assertCount(0, $collection->insertOneCalls);
-        $this->assertCount(0, $collection->deleteOneCalls);
+        $this->assertSame(1, $count);
+
+        // Read the REAL doc back: flipped to pending, attempts incremented to 1,
+        // reserved_at cleared, available_at reset to ~now (visible again).
+        $doc = $coll->findOne(['_id' => 'msg-under', 'topic' => $topic]);
+        $this->assertNotNull($doc, 'reclaimed doc must still exist (under the limit, not dead-lettered)');
+        $this->assertSame('pending', $doc['status']);
+        $this->assertSame(1, (int) $doc['attempts']);
+        $this->assertNull($doc['reserved_at']);
+        $availableMs = (int) ((string) $doc['available_at']);
+        $nowMs = (int) round(microtime(true) * 1000);
+        $this->assertLessThanOrEqual(5000, abs($availableMs - $nowMs), 'available_at should be reset to ~now');
+
+        // Under the limit: nothing dead-lettered, original not deleted.
+        $this->assertSame(0, $coll->countDocuments(['topic' => $topic . '.dead_letter']));
+        $this->assertSame(1, $coll->countDocuments(['_id' => 'msg-under', 'topic' => $topic]));
+
+        $backend->close();
     }
 
     public function testMongoReclaimDeadLettersPastMaxRetries(): void
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        // The reclaimed doc's attempts (after inc) has hit the limit -> dead-letter.
-        $collection->queueFindOneAndUpdate(['_id' => 'msg-1', 'message' => ['payload' => ['x' => 1]], 'attempts' => 3]);
-        $collection->queueFindOneAndUpdate(null);
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
+        // An expired reservation AT/OVER max_retries is dead-lettered: the real
+        // reclaimExpired() moves it to '<topic>.dead_letter' and deletes the
+        // original. Seed a real RESERVED doc whose attempts already equals max-1
+        // so attempts-after-inc = max (3) >= the limit, with an expired window.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-over',
+            'topic' => $topic,
+            'status' => 'processing',
+            'message' => ['id' => 'msg-over', 'payload' => ['x' => 1]],
+            'attempts' => 2,                            // after inc -> 3 == max
+            'reserved_at' => $this->mongoTime(-600),
+            'available_at' => $this->mongoTime(-60),
+            'created_at' => $this->mongoTime(-600),
+            'updated_at' => $this->mongoTime(-600),
+        ]);
 
-        $count = $backend->reclaimExpired('emails', 3);
-        $this->assertEquals(1, $count);
-        // Moved to the dead-letter topic and the original removed.
-        $this->assertCount(1, $collection->insertOneCalls);
-        $this->assertSame('emails.dead_letter', $collection->insertOneCalls[0]['topic']);
-        $this->assertCount(1, $collection->deleteOneCalls);
+        $backend = $this->makeLiveMongoBackend(300.0, maxRetries: 3);
+        $count = $backend->reclaimExpired($topic, 3);
+
+        $this->assertSame(1, $count);
+
+        // Read back: the original is gone, a dead-letter doc exists on the
+        // '<topic>.dead_letter' topic carrying the live attempts + the reason.
+        $this->assertSame(0, $coll->countDocuments(['_id' => 'msg-over', 'topic' => $topic]), 'original must be removed');
+        $dead = $coll->findOne(['topic' => $topic . '.dead_letter']);
+        $this->assertNotNull($dead, 'doc must be dead-lettered past the limit');
+        $this->assertSame('dead', $dead['status']);
+        $this->assertSame(3, (int) $dead['attempts']);
+        $this->assertSame('msg-over', $dead['message']['id']);
+        $this->assertNotEmpty($dead['message']['error'] ?? '');
+
+        $backend->close();
     }
 
     public function testMongoReclaimDisabledWhenTimeoutZero(): void
     {
-        if (!extension_loaded('mongodb')) {
-            $this->markTestSkipped('ext-mongodb not installed — cannot construct MongoBackend');
-        }
-        $collection = new FakeMongoCollection();
-        $backend = $this->makeMongoBackendWithCollection($collection, 0.0);
-        $this->assertEquals(0, $backend->reclaimExpired('emails', 3));
-        $this->assertCount(0, $collection->findOneAndUpdateCalls);
+        // visibility_timeout <= 0 disables reclaim entirely: an expired
+        // reservation is left untouched. Real Mongo — seed an expired reserved
+        // doc and confirm reclaimExpired() returns 0 and the doc is unchanged.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-zero',
+            'topic' => $topic,
+            'status' => 'processing',
+            'message' => ['id' => 'msg-zero', 'payload' => ['x' => 1]],
+            'attempts' => 0,
+            'reserved_at' => $this->mongoTime(-600),
+            'available_at' => $this->mongoTime(-60),
+            'created_at' => $this->mongoTime(-600),
+            'updated_at' => $this->mongoTime(-600),
+        ]);
+
+        $backend = $this->makeLiveMongoBackend(0.0, maxRetries: 3);
+        $this->assertSame(0, $backend->reclaimExpired($topic, 3));
+
+        // Untouched: still processing, attempts still 0, nothing dead-lettered.
+        $doc = $coll->findOne(['_id' => 'msg-zero', 'topic' => $topic]);
+        $this->assertNotNull($doc);
+        $this->assertSame('processing', $doc['status']);
+        $this->assertSame(0, (int) $doc['attempts']);
+        $this->assertSame(0, $coll->countDocuments(['topic' => $topic . '.dead_letter']));
+
+        $backend->close();
     }
 
-    // -- Bug B: Mongo requeue resets available_at + clears reserved_at --------
-    //
-    // dequeue() pushes available_at out to now + visibility_timeout. requeue()
-    // (the reject/requeue path) previously left available_at in the future, so a
-    // fail()'d/retried job was invisible for the whole visibility window (300s
-    // default) instead of retrying on the next pop. Now it resets available_at
-    // to now (or now + retryBackoff) and clears reserved_at.
+    public function testMongoDequeueAdvancesAvailableAtAndRecordsReservedAt(): void
+    {
+        // dequeue() claims a pending job by advancing available_at into the
+        // future (now + visibility_timeout) and stamping reserved_at, so a dead
+        // consumer's reservation can later be reclaimed. Seed a real pending doc
+        // and read the claimed doc back from Mongo.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-claim',
+            'topic' => $topic,
+            'status' => 'pending',
+            'message' => ['id' => 'msg-claim', 'payload' => ['x' => 1]],
+            'attempts' => 0,
+            'available_at' => $this->mongoTime(-1),     // available now
+            'created_at' => $this->mongoTime(-1),
+            'updated_at' => $this->mongoTime(-1),
+        ]);
+
+        $backend = $this->makeLiveMongoBackend(300.0);
+        $job = $backend->dequeue($topic);
+        $this->assertNotNull($job);
+
+        // Read the claimed doc back from Mongo: now processing, reserved_at
+        // stamped, available_at pushed into the future past reserved_at.
+        $doc = $coll->findOne(['_id' => 'msg-claim', 'topic' => $topic]);
+        $this->assertSame('processing', $doc['status']);
+        $this->assertNotNull($doc['reserved_at']);
+        $reservedMs = (int) ((string) $doc['reserved_at']);
+        $availableMs = (int) ((string) $doc['available_at']);
+        $this->assertGreaterThan($reservedMs, $availableMs, 'available_at must be pushed past reserved_at (the visibility window)');
+
+        $backend->close();
+    }
+
+    public function testMongoDequeueSurfacesLiveAttempts(): void
+    {
+        // dequeue() must return the LIVE top-level document attempts (incremented
+        // by reclaim/requeue), NOT the stale push-time snapshot stored inside
+        // 'message'. Seed a real pending doc whose top-level attempts=2 while its
+        // message snapshot still says 0, then dequeue and assert the surfaced
+        // value is the live 2 (and priority likewise).
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-live',
+            'topic' => $topic,
+            'status' => 'pending',
+            'attempts' => 2,                            // live, document-level
+            'priority' => 7,
+            'message' => ['id' => 'msg-live', 'payload' => ['x' => 1], 'attempts' => 0, 'priority' => 0],
+            'available_at' => $this->mongoTime(-1),
+            'created_at' => $this->mongoTime(-1),
+            'updated_at' => $this->mongoTime(-1),
+        ]);
+
+        $backend = $this->makeLiveMongoBackend(300.0);
+        $job = $backend->dequeue($topic);
+
+        $this->assertNotNull($job);
+        $this->assertSame(2, $job['attempts'], 'dequeue must surface the live document attempts, not the push-time 0');
+        $this->assertSame(7, $job['priority']);
+
+        $backend->close();
+    }
 
     public function testMongoRequeueResetsAvailableAtToNow(): void
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        $collection->queueUpdateOne(1); // existing doc updated back to pending
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0);
+        // requeue() with no retry_backoff resets available_at to ~now (and clears
+        // reserved_at) so a fail()'d job retries on the very next dequeue instead
+        // of waiting out the visibility window. Seed a real RESERVED doc whose
+        // available_at is far in the future (as a live dequeue would leave it),
+        // requeue it, and read available_at back from Mongo.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-requeue',
+            'topic' => $topic,
+            'status' => 'processing',
+            'message' => ['id' => 'msg-requeue', 'payload' => ['x' => 1]],
+            'attempts' => 1,
+            'reserved_at' => $this->mongoTime(-5),
+            'available_at' => $this->mongoTime(300),    // pushed out by the claim
+            'created_at' => $this->mongoTime(-10),
+            'updated_at' => $this->mongoTime(-5),
+        ]);
 
-        $backend->requeue('emails', ['id' => 'msg-1', 'payload' => ['x' => 1], 'attempts' => 1]);
+        $backend = $this->makeLiveMongoBackend(300.0);
+        $backend->requeue($topic, ['id' => 'msg-requeue', 'payload' => ['x' => 1], 'attempts' => 1]);
 
-        $this->assertCount(1, $collection->updateOneCalls);
-        $set = $collection->updateOneCalls[0]['update']['$set'];
-        $this->assertSame('pending', $set['status']);
-        $this->assertArrayHasKey('available_at', $set);
-        $this->assertNull($set['reserved_at']);
-        // retryBackoff = 0 -> available_at is "now", not the visibility-window
-        // future. Allow a small clock skew window (within ~5s of now).
-        $now = (int) round(microtime(true) * 1000);
-        $availableMs = (int) ((string) $set['available_at']);
-        $this->assertLessThanOrEqual(5000, abs($availableMs - $now), 'available_at should be ~now, not the visibility expiry');
+        $doc = $coll->findOne(['_id' => 'msg-requeue', 'topic' => $topic]);
+        $this->assertSame('pending', $doc['status']);
+        $this->assertNull($doc['reserved_at']);
+        $availableMs = (int) ((string) $doc['available_at']);
+        $nowMs = (int) round(microtime(true) * 1000);
+        $this->assertLessThanOrEqual(5000, abs($availableMs - $nowMs), 'available_at should be reset to ~now, not the visibility expiry');
+
+        $backend->close();
     }
 
     public function testMongoRequeueRespectsRetryBackoff(): void
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        $collection->queueUpdateOne(1);
-        // retryBackoff = 30s — the requeued job should be delayed by ~30s, but
-        // still far below the 300s visibility window.
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3, retryBackoff: 30.0);
-
-        $backend->requeue('emails', ['id' => 'msg-1', 'payload' => ['x' => 1], 'attempts' => 1]);
-
-        $set = $collection->updateOneCalls[0]['update']['$set'];
-        $now = (int) round(microtime(true) * 1000);
-        $availableMs = (int) ((string) $set['available_at']);
-        $deltaSeconds = ($availableMs - $now) / 1000.0;
-        // ~30s ahead (backoff), nowhere near the 300s visibility window.
-        $this->assertGreaterThan(20, $deltaSeconds);
-        $this->assertLessThan(60, $deltaSeconds);
-    }
-
-    // -- Bug C: Mongo dequeue surfaces the LIVE doc-level attempts -----------
-    //
-    // The document has a top-level attempts (incremented by reclaim/reject) AND
-    // a push-time snapshot inside the stored 'message'. dequeue() previously
-    // returned the snapshot (always 0) so fail()'s attempts >= max_retries check
-    // never tripped and a job retried forever. dequeue now surfaces the live
-    // top-level attempts (and priority).
-
-    public function testMongoDequeueSurfacesLiveAttempts(): void
-    {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        $collection->queueFindOneAndUpdate(null); // reclaim: none expired
-        // Top-level attempts=2 (live), but the snapshot inside 'message' is the
-        // stale push-time 0.
-        $collection->queueFindOneAndUpdate([
-            '_id' => 'msg-1',
-            'attempts' => 2,
-            'priority' => 7,
-            'message' => ['payload' => ['x' => 1], 'attempts' => 0, 'priority' => 0],
+        // requeue() with retry_backoff sets available_at to ~now + backoff: the
+        // requeued job is delayed by the backoff but nowhere near the 300s
+        // visibility window. Seed a real RESERVED doc, requeue with a 30s
+        // backoff, and read available_at back from Mongo.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'msg-backoff',
+            'topic' => $topic,
             'status' => 'processing',
+            'message' => ['id' => 'msg-backoff', 'payload' => ['x' => 1]],
+            'attempts' => 1,
+            'reserved_at' => $this->mongoTime(-5),
+            'available_at' => $this->mongoTime(300),
+            'created_at' => $this->mongoTime(-10),
+            'updated_at' => $this->mongoTime(-5),
         ]);
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0);
 
-        $job = $backend->dequeue('emails');
+        $backend = $this->makeLiveMongoBackend(300.0, maxRetries: 3, retryBackoff: 30.0);
+        $backend->requeue($topic, ['id' => 'msg-backoff', 'payload' => ['x' => 1], 'attempts' => 1]);
 
-        // The consumer sees the LIVE attempts/priority, not the push-time 0.
-        $this->assertSame(2, $job['attempts']);
-        $this->assertSame(7, $job['priority']);
+        $doc = $coll->findOne(['_id' => 'msg-backoff', 'topic' => $topic]);
+        $this->assertSame('pending', $doc['status']);
+        $availableMs = (int) ((string) $doc['available_at']);
+        $nowMs = (int) round(microtime(true) * 1000);
+        $deltaSeconds = ($availableMs - $nowMs) / 1000.0;
+        $this->assertGreaterThan(20, $deltaSeconds, 'available_at should be ~30s ahead (backoff)');
+        $this->assertLessThan(60, $deltaSeconds, 'available_at must be nowhere near the 300s visibility window');
+
+        $backend->close();
     }
-
-    // -- Bug D: Mongo adapter dead-letter inspection + retry contract --------
-    //
-    // The Queue passes a max_retries kwarg to deadLetters()/retryFailed(); the
-    // Mongo backend must accept it (matching the LiteBackend signature) so those
-    // calls don't blow up on MongoDB. retryFailed() also resets available_at.
 
     public function testMongoDeadLettersAcceptsMaxRetriesKwarg(): void
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        $collection->queueFind([
-            ['_id' => 'd1', 'attempts' => 3, 'message' => ['payload' => ['x' => 1], 'attempts' => 0]],
+        // deadLetters() accepts the $maxRetries kwarg the Queue passes (LiteBackend
+        // contract / Bug D) and reads dead-letter docs off '<topic>.dead_letter',
+        // surfacing the LIVE attempts. Seed a real dead-letter doc and read it back
+        // via the real backend method.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'dl-1',
+            'topic' => $topic . '.dead_letter',
+            'status' => 'dead',
+            'attempts' => 3,
+            'message' => ['id' => 'orig-1', 'payload' => ['x' => 1], 'attempts' => 0],
+            'available_at' => $this->mongoTime(),
+            'created_at' => $this->mongoTime(),
+            'updated_at' => $this->mongoTime(),
         ]);
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
 
-        // Must NOT throw a TypeError on the kwarg, and must query the
-        // dead_letter topic with the LIVE attempts surfaced.
-        $dead = $backend->deadLetters('emails', 5);
+        $backend = $this->makeLiveMongoBackend(300.0, maxRetries: 3);
+        $dead = $backend->deadLetters($topic, 5);   // must NOT TypeError on the kwarg
 
-        $this->assertSame('emails.dead_letter', $collection->findCalls[0]['filter']['topic']);
         $this->assertCount(1, $dead);
-        $this->assertSame(3, $dead[0]['attempts']); // live, not snapshot 0
+        $this->assertSame(3, $dead[0]['attempts'], 'dead-letter must surface the live attempts, not the snapshot 0');
         $this->assertSame('dead', $dead[0]['status']);
+
+        $backend->close();
     }
 
     public function testMongoRetryFailedAcceptsMaxRetriesAndResetsAvailableAt(): void
     {
-        $this->requireMongoOrSkip();
-        $collection = new FakeMongoCollection();
-        // One dead-letter under the (raised) limit -> requeued.
-        $collection->queueFind([
-            ['_id' => 'd1', 'attempts' => 2, 'message' => ['id' => 'd1', 'payload' => ['x' => 1]]],
+        // retryFailed() accepts the $maxRetries kwarg (Bug D) and re-queues a
+        // dead-letter doc under the raised limit back to pending — resetting
+        // available_at and clearing reserved_at (Bug B) — then drops the
+        // dead-letter copy. Seed a real dead-letter doc, run retryFailed, and read
+        // both topics back from Mongo.
+        $this->setUpLiveMongoOrSkip();
+        $topic = self::MONGO_TEST_TOPIC;
+        $coll = $this->liveMongoCollection();
+        $coll->insertOne([
+            '_id' => 'dl-retry',
+            'topic' => $topic . '.dead_letter',
+            'status' => 'dead',
+            'attempts' => 2,                            // under the raised limit (5)
+            'message' => ['id' => 'orig-retry', 'payload' => ['x' => 1]],
+            'available_at' => $this->mongoTime(),
+            'created_at' => $this->mongoTime(),
+            'updated_at' => $this->mongoTime(),
         ]);
-        $collection->queueUpdateOne(1); // requeue() updates the doc back to pending
-        $backend = $this->makeMongoBackendWithCollection($collection, 300.0, maxRetries: 3);
 
-        $count = $backend->retryFailed('emails', 5);
+        $backend = $this->makeLiveMongoBackend(300.0, maxRetries: 3);
+        $count = $backend->retryFailed($topic, 5);
 
         $this->assertSame(1, $count);
-        // Queried the dead_letter topic gated below the (raised) limit.
-        $this->assertSame('emails.dead_letter', $collection->findCalls[0]['filter']['topic']);
-        // requeue() ran and reset available_at + cleared reserved_at (Bug B reason).
-        $this->assertCount(1, $collection->updateOneCalls);
-        $set = $collection->updateOneCalls[0]['update']['$set'];
-        $this->assertSame('pending', $set['status']);
-        $this->assertArrayHasKey('available_at', $set);
-        $this->assertNull($set['reserved_at']);
-        // The dead-letter copy was removed.
-        $this->assertCount(1, $collection->deleteOneCalls);
-        $this->assertSame('emails.dead_letter', $collection->deleteOneCalls[0]['topic']);
+
+        // The dead-letter copy is gone and the job is back as pending on the
+        // live topic with available_at reset to ~now and no live reservation. The
+        // real lifecycle deleted the original when it was dead-lettered, so
+        // retryFailed()->requeue() re-inserts a fresh pending doc (the
+        // enqueue-fallback path) which carries no reserved_at — i.e. unreserved.
+        $this->assertSame(0, $coll->countDocuments(['topic' => $topic . '.dead_letter']));
+        $pending = $coll->findOne(['_id' => 'orig-retry', 'topic' => $topic, 'status' => 'pending']);
+        $this->assertNotNull($pending, 'the job must be re-queued onto the live topic as pending');
+        $reserved = $pending['reserved_at'] ?? null;   // absent or explicitly null = unreserved
+        $this->assertNull($reserved, 'a re-queued job must not carry a live reservation');
+        $availableMs = (int) ((string) $pending['available_at']);
+        $nowMs = (int) round(microtime(true) * 1000);
+        $this->assertLessThanOrEqual(5000, abs($availableMs - $nowMs), 'requeued job available_at should be ~now');
+
+        $backend->close();
     }
 
     public function testMongoQueueDeadLettersRetryFailedSignaturesMatchLite(): void
@@ -974,77 +1075,143 @@ class QueueBackendTest extends TestCase
         $this->assertTrue($ref->hasMethod('failed'));
         $this->assertSame(1, $ref->getMethod('failed')->getNumberOfParameters());
     }
-}
 
-/**
- * Minimal stand-in for \MongoDB\Collection that records calls and returns
- * scripted results. Returned docs are wrapped as objects so MongoBackend's
- * (array)$result cast and ['message'] access work like the real driver.
- */
-class FakeMongoCollection
-{
-    public array $findOneAndUpdateCalls = [];
-    public array $insertOneCalls = [];
-    public array $deleteOneCalls = [];
-    public array $updateOneCalls = [];
-    public array $findCalls = [];
+    // -- Live RabbitMQ behaviour (real broker over raw AMQP, no mocks) --------
+    //
+    // The PHP RabbitMQBackend speaks AMQP 0-9-1 by hand over a raw TCP socket
+    // (zero deps). These exercise the REAL broker — no doubles. They lock in the
+    // size() passive-declare parity (PARITY WATCH #3 / Python's
+    // test_size_on_fresh_queue_is_zero): size() must NOT do a passive declare
+    // that throws when the queue is absent — it does a normal (non-passive)
+    // Queue.Declare and reads the message count, so size() on a never-declared
+    // queue returns 0 instead of a 404 channel error.
+    //
+    // Each test uses a fresh, uniquely-named durable queue and producer/reader
+    // use SEPARATE connections: a queue's message_count does not reflect a
+    // message still in flight on the *publishing* channel right after publish,
+    // so a same-connection size() would race — the at-least-once contract is
+    // verified across connections, the way a real producer/worker split runs.
+    //
+    // Skips cleanly (never fakes) when the broker is unreachable, with a reason
+    // the #252 require-services gate recognises ("rabbitmq ... not reachable").
 
-    /** @var array<int, mixed> Scripted findOneAndUpdate return values (FIFO). */
-    private array $scriptedFindOneAndUpdate = [];
+    private const RABBIT_HOST = 'localhost';
+    private const RABBIT_PORT = 5672;
 
-    /** @var array<int, mixed> Scripted updateOne modifiedCount values (FIFO). */
-    private array $scriptedUpdateOne = [];
-
-    /** @var array<int, array> Scripted find() result sets (FIFO). */
-    private array $scriptedFind = [];
-
-    public function queueFindOneAndUpdate(?array $doc): void
+    private function rabbitReachableOrSkip(): void
     {
-        $this->scriptedFindOneAndUpdate[] = $doc;
+        $host = getenv('TINA4_RABBITMQ_HOST') ?: self::RABBIT_HOST;
+        $port = (int)(getenv('TINA4_RABBITMQ_PORT') ?: self::RABBIT_PORT);
+        $sock = @fsockopen($host, $port, $errno, $errstr, 1.5);
+        if ($sock === false) {
+            $this->markTestSkipped("rabbitmq not reachable at {$host}:{$port} — skipping live RabbitMQ queue behaviour test");
+        }
+        fclose($sock);
     }
 
-    public function queueUpdateOne(int $modifiedCount): void
+    private function liveRabbitBackend(): RabbitMQBackend
     {
-        $this->scriptedUpdateOne[] = $modifiedCount;
+        $backend = new RabbitMQBackend([
+            'host' => getenv('TINA4_RABBITMQ_HOST') ?: self::RABBIT_HOST,
+            'port' => (int)(getenv('TINA4_RABBITMQ_PORT') ?: self::RABBIT_PORT),
+            'username' => getenv('TINA4_RABBITMQ_USERNAME') ?: 'guest',
+            'password' => getenv('TINA4_RABBITMQ_PASSWORD') ?: 'guest',
+            'vhost' => getenv('TINA4_RABBITMQ_VHOST') ?: '/',
+        ]);
+        $backend->connect();
+        return $backend;
     }
 
-    public function queueFind(array $docs): void
+    public function testRabbitMQSizeOnFreshQueueIsZeroNotAPassiveDeclareError(): void
     {
-        $this->scriptedFind[] = $docs;
+        // PARITY WATCH #3: size() on a never-declared queue must return 0, NOT
+        // raise a channel error from a passive declare. The raw AMQP path does a
+        // normal Queue.Declare (durable, passive=false) and reads the count, so a
+        // missing queue is created-then-counted at 0 rather than throwing.
+        $this->rabbitReachableOrSkip();
+        $topic = 'tina4_test_' . bin2hex(random_bytes(8));
+        $backend = $this->liveRabbitBackend();
+        try {
+            $this->assertSame(0, $backend->size($topic), 'size() on a fresh queue must be 0, not a passive-declare error');
+        } finally {
+            // Best-effort cleanup of the throwaway durable queue.
+            try { $backend->dequeue($topic); } catch (\Throwable $e) {}
+            $backend->close();
+        }
     }
 
-    public function findOneAndUpdate(array $filter, array $update, array $options = []): ?object
+    public function testRabbitMQFullEnqueueDequeueAcknowledgeCycle(): void
     {
-        $this->findOneAndUpdateCalls[] = ['filter' => $filter, 'update' => $update, 'options' => $options];
-        $doc = array_shift($this->scriptedFindOneAndUpdate);
-        return $doc === null ? null : (object)$doc;
+        // Full lifecycle against the real broker: a fresh queue is empty (0),
+        // an enqueued message is visible to a separate reader connection (1),
+        // the dequeued payload + id round-trip, the delivery tag is captured,
+        // acknowledge() clears it, and after ack the queue is empty again (0).
+        // Mirrors Python's test_full_enqueue_dequeue_acknowledge_cycle.
+        $this->rabbitReachableOrSkip();
+        $topic = 'tina4_test_' . bin2hex(random_bytes(8));
+
+        $producer = $this->liveRabbitBackend();
+        $msgId = '';
+        try {
+            $this->assertSame(0, $producer->size($topic));
+            $msgId = $producer->enqueue($topic, ['to' => 'alice@test.com', 'value' => 7]);
+            $this->assertNotEmpty($msgId, 'enqueue() must return a message id');
+        } finally {
+            $producer->close();
+        }
+
+        $reader = $this->liveRabbitBackend();
+        try {
+            $this->assertSame(1, $reader->size($topic), 'a separate connection must see the enqueued message');
+            $msg = $reader->dequeue($topic);
+            $this->assertIsArray($msg);
+            $this->assertSame('alice@test.com', $msg['to']);
+            $this->assertSame(7, $msg['value']);
+            $this->assertSame($msgId, $msg['id'], 'the message id must round-trip through the broker');
+
+            // The delivery tag was captured by dequeue() and is cleared by ack().
+            $tag = new \ReflectionProperty($reader, 'lastDeliveryTag');
+            $this->assertNotNull($tag->getValue($reader), 'dequeue() must capture a delivery tag');
+            $reader->acknowledge($topic, $msgId);
+            $this->assertNull($tag->getValue($reader), 'acknowledge() must clear the delivery tag');
+        } finally {
+            $reader->close();
+        }
+
+        $verifier = $this->liveRabbitBackend();
+        try {
+            $this->assertSame(0, $verifier->size($topic), 'after ack the queue must be empty again');
+        } finally {
+            $verifier->close();
+        }
     }
 
-    public function updateOne(array $filter, array $update, array $options = []): object
+    public function testRabbitMQDeadLetterPublishesToDeadLetterQueue(): void
     {
-        $this->updateOneCalls[] = ['filter' => $filter, 'update' => $update, 'options' => $options];
-        $modified = array_shift($this->scriptedUpdateOne);
-        $modified = $modified ?? 1;
-        return new class($modified) {
-            public function __construct(private int $modified) {}
-            public function getModifiedCount(): int { return $this->modified; }
-        };
-    }
+        // deadLetter() routes to "<topic>.dead_letter" on the REAL broker: a
+        // separate reader sees one message there and its payload round-trips.
+        // Mirrors Python's test_dead_letter_publishes_to_dead_letter_queue.
+        $this->rabbitReachableOrSkip();
+        $topic = 'tina4_test_' . bin2hex(random_bytes(8));
+        $deadTopic = $topic . '.dead_letter';
 
-    public function find(array $filter = [], array $options = []): array
-    {
-        $this->findCalls[] = ['filter' => $filter, 'options' => $options];
-        $docs = array_shift($this->scriptedFind) ?? [];
-        return array_map(fn($d) => (object)$d, $docs);
-    }
+        $producer = $this->liveRabbitBackend();
+        try {
+            $producer->deadLetter($topic, ['id' => 'd1', 'error' => 'boom']);
+        } finally {
+            $producer->close();
+        }
 
-    public function insertOne(array $document): void
-    {
-        $this->insertOneCalls[] = $document;
-    }
-
-    public function deleteOne(array $filter): void
-    {
-        $this->deleteOneCalls[] = $filter;
+        $reader = $this->liveRabbitBackend();
+        try {
+            $this->assertSame(1, $reader->size($deadTopic), 'dead-letter queue must hold the message');
+            $dead = $reader->dequeue($deadTopic);
+            $this->assertIsArray($dead);
+            $this->assertSame('boom', $dead['error']);
+            $reader->acknowledge($deadTopic, 'd1');
+            $this->assertSame(0, $reader->size($deadTopic));
+        } finally {
+            $reader->close();
+        }
     }
 }

@@ -55,11 +55,7 @@ class CtPgDupColumn extends \Tina4\ORM
 
 class CreateTablePostgresTest extends TestCase
 {
-    private const PG_HOST = 'localhost';
-    private const PG_PORT = 5432;
-    private const PG_USER = 'tina4';
-    private const PG_PASS = 'tina4';
-    private const PG_DB   = 'tina4_php';
+    private const PG_DB = 'tina4_php';
 
     private ?DatabaseAdapter $db = null;
     private static ?DatabaseAdapter $savedGlobalDb = null;
@@ -69,15 +65,15 @@ class CreateTablePostgresTest extends TestCase
         if (!function_exists('pg_connect')) {
             $this->markTestSkipped('PostgresAdapter requires the ext-pgsql PHP extension.');
         }
-        if (!self::pgReachable()) {
+        $pg = \PgTestEnv::resolve();
+        if (!$pg->reachable()) {
             $this->markTestSkipped(sprintf(
                 'PostgreSQL not reachable at %s:%d — skip integration test',
-                self::PG_HOST, self::PG_PORT
+                $pg->host, $pg->port
             ));
         }
 
-        $url = sprintf('postgres://%s:%d/%s', self::PG_HOST, self::PG_PORT, self::PG_DB);
-        $this->db = Database::create($url, username: self::PG_USER, password: self::PG_PASS);
+        $this->db = Database::create($pg->url(self::PG_DB), username: $pg->user, password: $pg->pass);
 
         self::$savedGlobalDb = \Tina4\ORM::getGlobalDb();
         \Tina4\ORM::bindDatabase($this->db);
@@ -105,16 +101,6 @@ class CreateTablePostgresTest extends TestCase
         $this->db->execute('DROP TABLE IF EXISTS t4_ct_pg_widget');
         $this->db->execute('DROP TABLE IF EXISTS t4_ct_pg_dup');
         $this->db->commit();
-    }
-
-    private static function pgReachable(): bool
-    {
-        $sock = @fsockopen(self::PG_HOST, self::PG_PORT, $errno, $errstr, 1.0);
-        if ($sock === false) {
-            return false;
-        }
-        fclose($sock);
-        return true;
     }
 
     /**

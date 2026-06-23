@@ -17,20 +17,43 @@ class FakeDataTest extends TestCase
 
     public function testConstructorWithoutSeed(): void
     {
+        // An unseeded instance still produces real, well-formed data.
         $fake = new FakeData();
-        $this->assertInstanceOf(FakeData::class, $fake);
+        $name = $fake->name();
+        $this->assertIsString($name);
+        $this->assertStringContainsString(' ', $name, 'name() should be "First Last"');
+        $this->assertMatchesRegularExpression(
+            '/^[a-z]+\.[a-z]+@[a-z]+\.[a-z]+$/',
+            $fake->email(),
+            'email() should look like an email'
+        );
     }
 
     public function testConstructorWithSeed(): void
     {
+        // A seeded instance generates real data AND is reproducible: a second
+        // instance with the same seed yields the identical first value.
         $fake = new FakeData(42);
-        $this->assertInstanceOf(FakeData::class, $fake);
+        $name = $fake->name();
+        $this->assertNotEmpty($name);
+        $this->assertStringContainsString(' ', $name);
+
+        $again = (new FakeData(42))->name();
+        $this->assertSame($name, $again, 'same seed must reproduce the same first value');
     }
 
     public function testStaticSeedFactory(): void
     {
+        // seed() must return a working, seeded FakeData — same determinism as
+        // the constructor with the same seed.
         $fake = FakeData::seed(42);
-        $this->assertInstanceOf(FakeData::class, $fake);
+        $ctor = new FakeData(42);
+        $this->assertSame(
+            $ctor->name(),
+            $fake->name(),
+            'FakeData::seed(n) must match new FakeData(n)'
+        );
+        $this->assertNotEmpty($fake->email());
     }
 
     public function testDeterministicSeedProducesSameResults(): void
@@ -291,13 +314,25 @@ class FakeDataTest extends TestCase
 
     public function testFloatDecimalPrecision(): void
     {
-        $fake = new FakeData();
-        $value = $fake->numeric(0, 100, 3);
-        $parts = explode('.', (string)$value);
-        if (isset($parts[1])) {
-            $this->assertLessThanOrEqual(3, strlen($parts[1]));
+        // numeric() must never round to MORE than the requested number of
+        // decimals. Draw many values so we exercise real fractional parts,
+        // not a single lucky integer-valued draw.
+        $fake = new FakeData(7);
+        $sawFraction = false;
+        for ($i = 0; $i < 50; $i++) {
+            $value = $fake->numeric(0, 100, 3);
+            $this->assertEquals(
+                round($value, 3),
+                $value,
+                'numeric(...,3) must carry at most 3 decimal places'
+            );
+            $parts = explode('.', (string)$value);
+            if (isset($parts[1])) {
+                $this->assertLessThanOrEqual(3, strlen($parts[1]));
+                $sawFraction = true;
+            }
         }
-        $this->assertTrue(true); // Always passes if no decimal part
+        $this->assertTrue($sawFraction, 'expected at least one value with a fractional part');
     }
 
     public function testBooleanReturnsBool(): void
@@ -474,6 +509,32 @@ class FakeDataTest extends TestCase
         $results = $fake->seedDir('/nonexistent/path/12345');
         $this->assertIsArray($results);
         $this->assertEmpty($results);
+    }
+
+    // ── choice() ───────────────────────────────────────────────────
+
+    public function testChoiceReturnsMemberOfSet(): void
+    {
+        $fake = new FakeData(42);
+        $items = ['a', 'b', 'c'];
+        // Draw repeatedly — every result must be a member of the input set.
+        for ($i = 0; $i < 30; $i++) {
+            $this->assertContains($fake->choice($items), $items);
+        }
+    }
+
+    public function testChoiceIsDeterministicUnderSeed(): void
+    {
+        $items = [10, 20, 30, 40, 50];
+        $a = new FakeData(99);
+        $b = new FakeData(99);
+        $seqA = [];
+        $seqB = [];
+        for ($i = 0; $i < 10; $i++) {
+            $seqA[] = $a->choice($items);
+            $seqB[] = $b->choice($items);
+        }
+        $this->assertSame($seqA, $seqB, 'same seed must produce the same choice sequence');
     }
 
     // ── Consistency across methods ─────────────────────────────────

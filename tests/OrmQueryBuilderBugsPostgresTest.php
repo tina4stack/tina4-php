@@ -66,11 +66,7 @@ class QbBugPost extends \Tina4\ORM
 
 class OrmQueryBuilderBugsPostgresTest extends TestCase
 {
-    private const PG_HOST = 'localhost';
-    private const PG_PORT = 5432;
-    private const PG_USER = 'tina4';
-    private const PG_PASS = 'tina4';
-    private const PG_DB   = 'tina4_php';
+    private const PG_DB = 'tina4_php';
 
     private ?Database $db = null;
     private static ?DatabaseAdapter $savedGlobalDb = null;
@@ -80,15 +76,15 @@ class OrmQueryBuilderBugsPostgresTest extends TestCase
         if (!function_exists('pg_connect')) {
             $this->markTestSkipped('PostgresAdapter requires the ext-pgsql PHP extension.');
         }
-        if (!self::pgReachable()) {
+        $pg = \PgTestEnv::resolve();
+        if (!$pg->reachable()) {
             $this->markTestSkipped(sprintf(
                 'PostgreSQL not reachable at %s:%d — skip integration test',
-                self::PG_HOST, self::PG_PORT
+                $pg->host, $pg->port
             ));
         }
 
-        $url = sprintf('postgres://%s:%d/%s', self::PG_HOST, self::PG_PORT, self::PG_DB);
-        $this->db = Database::create($url, autoCommit: true, username: self::PG_USER, password: self::PG_PASS);
+        $this->db = Database::create($pg->url(self::PG_DB), autoCommit: true, username: $pg->user, password: $pg->pass);
 
         self::$savedGlobalDb = \Tina4\ORM::getGlobalDb();
         \Tina4\ORM::bindDatabase($this->db);
@@ -135,16 +131,6 @@ class OrmQueryBuilderBugsPostgresTest extends TestCase
         $this->db->execute("INSERT INTO qbbug_widgets (name, qty, active) VALUES ('w2', 3, TRUE)");
         $this->db->execute("INSERT INTO qbbug_widgets (name, qty, active) VALUES ('w3', 2, FALSE)");
         $this->db->commit();
-    }
-
-    private static function pgReachable(): bool
-    {
-        $sock = @fsockopen(self::PG_HOST, self::PG_PORT, $errno, $errstr, 1.0);
-        if ($sock === false) {
-            return false;
-        }
-        fclose($sock);
-        return true;
     }
 
     // ── Bug 1 — QueryBuilder first()/count() against the Database facade ─────

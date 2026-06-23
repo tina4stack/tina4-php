@@ -34,7 +34,8 @@
         "process-timeout": 0
     },
     "require-dev": {
-        "phpunit/phpunit": "^10 || ^11"
+        "phpunit/phpunit": "^10 || ^11",
+        "mongodb/mongodb": "^2.3"
     },
     "bin": [
         "bin/tina4php"
@@ -42,6 +43,9 @@
     "suggest": {
         "ext-sqlite3": "Required for SQLite3 database support",
         "ext-pdo": "Required for MySQL/PostgreSQL/MSSQL database support",
+        "ext-pgsql": "Required for PostgreSQL database support",
+        "ext-mongodb": "Required for the MongoDB queue/session/doc-store backends",
+        "mongodb/mongodb": "High-level MongoDB library used by the Mongo queue/session/doc-store backends",
         "ext-curl": "Required for external API calls",
         "ext-fileinfo": "Required for file type detection",
         "ext-zip": "Required for ZIP file handling"

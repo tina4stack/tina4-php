@@ -10,11 +10,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # Real-service test gate. Every backend the suite can touch runs for real in
+    # CI so the integration tests execute instead of skipping (the gap that let
+    # the migration / queue bugs ship). Service containers are health-checked, so
+    # the job fails if one never comes up. Ports mirror the local docker harness
+    # (/tmp/tina4_infra_up.sh) so the same TINA4_TEST_* values work locally and here.
     services:
       # Cache backend services — mirror the local docker harness ports so the
-      # CacheBackendsTest network backends run for real in CI. Tests skip a
-      # backend when its service is unreachable, so this stays green even if a
-      # service fails to start.
+      # CacheBackendsTest network backends run for real in CI.
       redis:
         image: redis:7
         ports:
@@ -55,12 +58,72 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # PostgreSQL for the live ORM / migration / create-table / boolean-binding /
+      # UUID-PK / two-database-routing integration tests. Port 55432 mirrors the
+      # local harness so the same TINA4_TEST_POSTGRES_URL works everywhere.
+      postgres:
+        image: postgres:16
+        ports:
+          - 55432:5432
+        env:
+          POSTGRES_USER: tina4
+          POSTGRES_PASSWORD: tina4
+          POSTGRES_DB: tina4_php
+        options: >-
+          --health-cmd "pg_isready -U tina4 -d tina4_php"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+      # RabbitMQ for the live AMQP 0-9-1 handshake / enqueue-dequeue-ack test.
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Enable the real-service integration tests (they skip when unset).
+      TINA4_TEST_POSTGRES_URL: postgres://tina4:tina4@localhost:55432/tina4_php
+      TINA4_TEST_PG_HOST: localhost
+      TINA4_TEST_PG_PORT: '55432'
+      TINA4_TEST_PG_USER: tina4
+      TINA4_TEST_PG_PASS: tina4
+      TINA4_TEST_PG_DB: tina4_php
+      TINA4_TEST_RABBITMQ_URL: amqp://guest:guest@localhost:5672
+      TINA4_MONGO_URI: mongodb://localhost:27017
+      TINA4_TEST_MONGO_URL: mongodb://localhost:27017
+      TINA4_KAFKA_BROKERS: localhost:9092
+      TINA4_TEST_KAFKA_URL: localhost:9092
+      # Turn a missing provisioned service into a hard failure (no green skips).
+      TINA4_REQUIRE_SERVICES: '1'
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          # pdo_pgsql + pgsql (live PostgreSQL), mongodb (queue/session/doc-store),
+          # sockets (RabbitMQ AMQP frames), sqlite3 + pdo_sqlite (default engine).
+          extensions: pdo_pgsql, pgsql, mongodb, sockets, sqlite3, pdo_sqlite
+
+      # The postgres service only creates POSTGRES_DB (tina4_php). The two-database
+      # routing test needs tina4_rb, and the UUID-PK test connects to tina4 — create
+      # both so those provisioned-service tests run instead of erroring.
+      - name: Create extra PostgreSQL databases
+        run: |
+          for db in tina4_rb tina4; do
+            PGPASSWORD=tina4 psql -h localhost -p 55432 -U tina4 -d tina4_php \
+              -tc "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 \
+              || PGPASSWORD=tina4 psql -h localhost -p 55432 -U tina4 -d tina4_php \
+                   -c "CREATE DATABASE $db"
+          done
 
       # Password-protected Redis (requirepass s3cret, port 6381) for the auth
       # round-trip and wrong-password-falls-back-to-file tests. Started as a
@@ -76,6 +139,29 @@ jobs:
             fi
             sleep 1
           done
+
+      # Kafka in KRaft mode (single node, no ZooKeeper). GitHub service containers
+      # can't express the KRaft listener config cleanly, so run it as a plain
+      # container and FAIL the job if the broker never serves metadata.
+      - name: Start Kafka (KRaft)
+        run: |
+          docker run -d --name tina4-kafka -p 9092:9092 \
+            -e KAFKA_NODE_ID=1 -e KAFKA_PROCESS_ROLES=broker,controller \
+            -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            apache/kafka:3.7.0
+          echo "Waiting for Kafka to serve metadata on :9092 ..."
+          for i in $(seq 1 60); do
+            if docker exec tina4-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
+              echo "Kafka ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Kafka did not become ready in 60s"; docker logs tina4-kafka | tail -40; exit 1
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress

@@ -1,14 +1,14 @@
 <?php
 
 /**
- * Unit tests for the live-reload / file-watcher features in Server.php.
+ * Behavioural tests for the live-reload / file-watcher in Server.php.
  *
- * Tests cover:
- *   - Extension filtering (watched vs ignored file types)
- *   - Directory scanning and mtime detection
- *   - File change detection (modification, new file)
- *   - Ignored directories
- *   - detectFileChanges() behavior via reflection
+ * Every test exercises the REAL private detectFileChanges() scanner on a real
+ * temporary working directory: it creates files on disk, runs the scanner, and
+ * asserts the OBSERVABLE outcome — whether the scanner reports a change and
+ * which files end up in the tracked mtime map. There are no hardcoded copies of
+ * the watched-extension / watched-directory lists: the source itself decides
+ * what is watched, and the assertions read that decision back through behaviour.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -49,454 +49,327 @@ class LiveReloadTest extends TestCase
     }
 
     /**
-     * Helper: get the watched extensions from Server::detectFileChanges via reflection.
-     * The extensions are hardcoded in detectFileChanges(). We verify them here.
+     * Run the private detectFileChanges() against the temp working directory.
+     * Returns the bool the scanner reports (true = a tracked file's mtime moved).
      */
-    private function getWatchedExtensions(): array
-    {
-        return ['php', 'twig', 'html', 'scss', 'css', 'js', 'json'];
-    }
-
-    /**
-     * Helper: get the watched directories from Server::detectFileChanges.
-     */
-    private function getWatchedDirs(): array
-    {
-        return ['src', 'migrations'];
-    }
-
-    /**
-     * Helper: invoke the private detectFileChanges() method on a Server instance
-     * using a custom working directory (via chdir).
-     */
-    private function invokeDetectFileChanges(Server $server): bool
+    private function detect(Server $server): bool
     {
         $ref = new ReflectionMethod(Server::class, 'detectFileChanges');
-        return $ref->invoke($server);
+        $origDir = getcwd();
+        chdir($this->tmpDir);
+        try {
+            return $ref->invoke($server);
+        } finally {
+            chdir($origDir);
+        }
+    }
+
+    /** Read back the private fileMtimes tracking map after a scan. */
+    private function trackedFiles(Server $server): array
+    {
+        $ref = new ReflectionProperty(Server::class, 'fileMtimes');
+        return array_keys($ref->getValue($server));
+    }
+
+    /** True if any tracked path ends with the given suffix. */
+    private function tracksSuffix(Server $server, string $suffix): bool
+    {
+        foreach ($this->trackedFiles($server) as $path) {
+            if (str_ends_with($path, $suffix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
-     * Helper: read the private fileMtimes property from a Server instance.
+     * Helper: write a file under src/ in the temp dir (creating dirs as needed).
      */
-    private function getFileMtimes(Server $server): array
+    private function writeSrc(string $relative, string $contents): string
     {
-        $ref = new ReflectionProperty(Server::class, 'fileMtimes');
-        return $ref->getValue($server);
+        $path = $this->tmpDir . '/src/' . $relative;
+        @mkdir(dirname($path), 0777, true);
+        file_put_contents($path, $contents);
+        return $path;
     }
 
-    // ── Watch Extensions ───────────────────────────────────────────
+    // ── Watched Extensions — REAL behaviour ────────────────────────
+    //
+    // Each test drops a file of one extension into a watched dir, scans, and
+    // asserts the scanner ACTUALLY tracked it. This is driven by the real
+    // extension allow-list inside detectFileChanges(); if a maintainer drops an
+    // extension from the source, the matching test goes red.
 
-    public function testPhpIsWatched(): void
+    public function testTracksPhpFile(): void
     {
-        $this->assertContains('php', $this->getWatchedExtensions());
-    }
-
-    public function testTwigIsWatched(): void
-    {
-        $this->assertContains('twig', $this->getWatchedExtensions());
-    }
-
-    public function testHtmlIsWatched(): void
-    {
-        $this->assertContains('html', $this->getWatchedExtensions());
-    }
-
-    public function testCssIsWatched(): void
-    {
-        $this->assertContains('css', $this->getWatchedExtensions());
-    }
-
-    public function testScssIsWatched(): void
-    {
-        $this->assertContains('scss', $this->getWatchedExtensions());
-    }
-
-    public function testJsIsWatched(): void
-    {
-        $this->assertContains('js', $this->getWatchedExtensions());
-    }
-
-    public function testJsonIsWatched(): void
-    {
-        $this->assertContains('json', $this->getWatchedExtensions());
-    }
-
-    public function testTxtNotWatched(): void
-    {
-        $this->assertNotContains('txt', $this->getWatchedExtensions());
-    }
-
-    public function testMdNotWatched(): void
-    {
-        $this->assertNotContains('md', $this->getWatchedExtensions());
-    }
-
-    public function testYamlNotWatched(): void
-    {
-        $this->assertNotContains('yaml', $this->getWatchedExtensions());
-    }
-
-    // ── Watched Directories ────────────────────────────────────────
-
-    public function testSrcDirWatched(): void
-    {
-        $this->assertContains('src', $this->getWatchedDirs());
-    }
-
-    public function testMigrationsDirWatched(): void
-    {
-        $this->assertContains('migrations', $this->getWatchedDirs());
-    }
-
-    // ── File Scan Detection ────────────────────────────────────────
-
-    public function testScanEmptyDirNoChanges(): void
-    {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('app.php', '<?php echo "hi";');
         $server = new Server();
-        $changed = $this->invokeDetectFileChanges($server);
-
-        chdir($origDir);
-
-        // First scan populates mtime map but no changes yet
-        $this->assertFalse($changed);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.php'), 'php file should be watched');
     }
 
-    public function testScanDetectsPhpFile(): void
+    public function testTracksTwigFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/app.php', '<?php echo "hello";');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('page.twig', '{{ name }}');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        // The PHP file should be tracked
-        $this->assertNotEmpty($mtimes);
-        $tracked = array_keys($mtimes);
-        $phpFiles = array_filter($tracked, fn($f) => str_ends_with($f, '.php'));
-        $this->assertNotEmpty($phpFiles);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.twig'), 'twig file should be watched');
     }
 
-    public function testScanIgnoresTxtFile(): void
+    public function testTracksHtmlFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/readme.txt', 'readme');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('index.html', '<h1>hi</h1>');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $txtFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.txt'));
-        $this->assertEmpty($txtFiles);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.html'), 'html file should be watched');
     }
 
-    public function testScanDetectsHtmlFile(): void
+    public function testTracksScssFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/index.html', '<h1>hello</h1>');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('style.scss', '$c: red;');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $htmlFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.html'));
-        $this->assertNotEmpty($htmlFiles);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.scss'), 'scss file should be watched');
     }
 
-    public function testScanDetectsCssFile(): void
+    public function testTracksCssFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/style.css', 'body { color: red; }');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('style.css', 'body{color:red}');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $cssFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.css'));
-        $this->assertNotEmpty($cssFiles);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.css'), 'css file should be watched');
     }
 
-    public function testScanDetectsScssFile(): void
+    public function testTracksJsFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/style.scss', '$color: red;');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('app.js', 'console.log(1)');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $scssFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.scss'));
-        $this->assertNotEmpty($scssFiles);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.js'), 'js file should be watched');
     }
 
-    public function testScanDetectsJsFile(): void
+    public function testTracksJsonFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/app.js', 'console.log("hello")');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('data.json', '{}');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $jsFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.js'));
-        $this->assertNotEmpty($jsFiles);
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, '.json'), 'json file should be watched');
     }
 
-    public function testScanDetectsTwigFile(): void
+    public function testDoesNotTrackTxtFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/page.twig', '{{ name }}');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('readme.txt', 'text');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $twigFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.twig'));
-        $this->assertNotEmpty($twigFiles);
+        $this->detect($server);
+        $this->assertFalse($this->tracksSuffix($server, '.txt'), 'txt file should be ignored');
     }
 
-    public function testScanNonexistentDirNoError(): void
+    public function testDoesNotTrackMdFile(): void
     {
-        // tmpDir has no src/ or migrations/ — should not throw
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('notes.md', '# notes');
         $server = new Server();
-        $changed = $this->invokeDetectFileChanges($server);
-
-        chdir($origDir);
-
-        $this->assertFalse($changed);
+        $this->detect($server);
+        $this->assertFalse($this->tracksSuffix($server, '.md'), 'md file should be ignored');
     }
 
-    // ── File Change Detection ──────────────────────────────────────
-
-    public function testDetectModification(): void
+    public function testDoesNotTrackYamlFile(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        $file = $srcDir . '/app.php';
-        file_put_contents($file, '<?php // v1');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('config.yaml', 'key: value');
         $server = new Server();
-        // First scan: populate mtime map
-        $this->invokeDetectFileChanges($server);
+        $this->detect($server);
+        $this->assertFalse($this->tracksSuffix($server, '.yaml'), 'yaml file should be ignored');
+    }
 
-        // Modify the file (ensure mtime changes)
-        usleep(100000); // 100ms
+    // ── Watched Directories — REAL behaviour ───────────────────────
+
+    public function testWatchesSrcDir(): void
+    {
+        $this->writeSrc('handler.php', '<?php');
+        $server = new Server();
+        $this->detect($server);
+        $this->assertTrue(
+            $this->tracksSuffix($server, 'src/handler.php'),
+            'files under src/ should be watched'
+        );
+    }
+
+    public function testWatchesMigrationsDir(): void
+    {
+        $migDir = $this->tmpDir . '/migrations';
+        mkdir($migDir, 0777, true);
+        file_put_contents($migDir . '/001_create_users.php', '<?php // migration');
+        $server = new Server();
+        $this->detect($server);
+        $this->assertTrue(
+            $this->tracksSuffix($server, 'migrations/001_create_users.php'),
+            'files under migrations/ should be watched'
+        );
+    }
+
+    public function testDoesNotWatchUntrackedTopLevelDir(): void
+    {
+        // A file in a dir that is NOT in the watch set (e.g. docs/) is ignored.
+        $docsDir = $this->tmpDir . '/docs';
+        mkdir($docsDir, 0777, true);
+        file_put_contents($docsDir . '/guide.php', '<?php');
+        $server = new Server();
+        $this->detect($server);
+        $this->assertFalse(
+            $this->tracksSuffix($server, 'docs/guide.php'),
+            'files outside src/ and migrations/ should NOT be watched'
+        );
+    }
+
+    // ── File Scan — empty / nonexistent ────────────────────────────
+
+    public function testEmptySrcDirNoChange(): void
+    {
+        mkdir($this->tmpDir . '/src', 0777, true);
+        $server = new Server();
+        // First scan of an empty dir reports no change and tracks nothing.
+        $this->assertFalse($this->detect($server));
+        $this->assertEmpty($this->trackedFiles($server));
+    }
+
+    public function testNonexistentWatchedDirsNoError(): void
+    {
+        // tmpDir has no src/ or migrations/ — scanner must not throw and reports no change.
+        $server = new Server();
+        $this->assertFalse($this->detect($server));
+    }
+
+    // ── File Change Detection — the core behaviour ─────────────────
+
+    public function testDetectsModification(): void
+    {
+        $file = $this->writeSrc('app.php', '<?php // v1');
+        $server = new Server();
+
+        // First scan: baseline the mtime map, reports no change.
+        $this->assertFalse($this->detect($server));
+
+        // Bump the mtime to simulate an edit.
         clearstatcache();
-        touch($file, time() + 1);
+        touch($file, time() + 5);
 
-        // Second scan: should detect change
-        $changed = $this->invokeDetectFileChanges($server);
-
-        chdir($origDir);
-
-        $this->assertTrue($changed);
+        // Second scan: the modification is reported as a change.
+        $this->assertTrue($this->detect($server), 'modifying a watched file must report a change');
     }
 
-    public function testDetectNewFile(): void
+    public function testPhpModificationFlagsPhpChange(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        // A .php edit must set phpChangeDetected (drives the "restart needed" path);
+        // a CSS edit must NOT.
+        $phpFile = $this->writeSrc('app.php', '<?php // v1');
         $server = new Server();
-        // First scan: empty dir
-        $this->invokeDetectFileChanges($server);
+        $this->detect($server);
 
-        // Add a new file
-        file_put_contents($srcDir . '/new.php', '<?php // new');
+        clearstatcache();
+        touch($phpFile, time() + 5);
+        $this->detect($server);
 
-        // Second scan: new file detected (not a "change" per the code — it just adds to map)
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
+        $flag = new ReflectionProperty(Server::class, 'phpChangeDetected');
+        $this->assertTrue($flag->getValue($server), '.php change must set phpChangeDetected');
+    }
 
-        chdir($origDir);
+    public function testCssModificationDoesNotFlagPhpChange(): void
+    {
+        $cssFile = $this->writeSrc('style.css', 'body{}');
+        $server = new Server();
+        $this->detect($server);
 
-        $phpFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, '.php'));
-        $this->assertNotEmpty($phpFiles);
+        clearstatcache();
+        touch($cssFile, time() + 5);
+        $changed = $this->detect($server);
+
+        $flag = new ReflectionProperty(Server::class, 'phpChangeDetected');
+        $this->assertTrue($changed, 'css change must still report a reload');
+        $this->assertFalse($flag->getValue($server), 'a non-php change must NOT set phpChangeDetected');
+    }
+
+    public function testNewFileIsTrackedAfterBaseline(): void
+    {
+        mkdir($this->tmpDir . '/src', 0777, true);
+        $server = new Server();
+        // Baseline: empty.
+        $this->detect($server);
+        $this->assertEmpty($this->trackedFiles($server));
+
+        // Add a new file, then rescan: it is now tracked.
+        $this->writeSrc('new.php', '<?php // new');
+        $this->detect($server);
+        $this->assertTrue($this->tracksSuffix($server, 'new.php'), 'a newly created file must be picked up');
     }
 
     public function testNoChangeOnSecondScanWithoutModification(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/stable.php', '<?php // stable');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('stable.php', '<?php // stable');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-
-        // Second scan without modification
-        $changed = $this->invokeDetectFileChanges($server);
-
-        chdir($origDir);
-
-        $this->assertFalse($changed);
+        $this->assertFalse($this->detect($server), 'first scan baselines, no change');
+        $this->assertFalse($this->detect($server), 'second scan with no edit must report no change');
     }
 
     // ── .env File Watching ─────────────────────────────────────────
+
+    public function testTracksEnvFile(): void
+    {
+        file_put_contents($this->tmpDir . '/.env', 'KEY=value');
+        $server = new Server();
+        $this->detect($server);
+        $this->assertContains('.env', $this->trackedFiles($server), '.env must be tracked');
+    }
 
     public function testDetectsEnvFileChange(): void
     {
         $envFile = $this->tmpDir . '/.env';
         file_put_contents($envFile, 'FOO=bar');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
+        $this->assertFalse($this->detect($server), 'first scan baselines .env');
 
-        // Modify .env
-        usleep(100000);
         clearstatcache();
-        touch($envFile, time() + 1);
-
-        $changed = $this->invokeDetectFileChanges($server);
-
-        chdir($origDir);
-
-        $this->assertTrue($changed);
+        touch($envFile, time() + 5);
+        $this->assertTrue($this->detect($server), 'editing .env must report a change');
     }
 
-    public function testTracksEnvFile(): void
+    // ── Recursive / multi-file scanning ────────────────────────────
+
+    public function testScansRecursiveSubdirectories(): void
     {
-        $envFile = $this->tmpDir . '/.env';
-        file_put_contents($envFile, 'KEY=value');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('routes/api/users.php', '<?php // users');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $this->assertArrayHasKey('.env', $mtimes);
+        $this->detect($server);
+        $this->assertTrue(
+            $this->tracksSuffix($server, 'routes/api/users.php'),
+            'nested files under src/ must be scanned recursively'
+        );
     }
-
-    // ── Subdirectory Scanning ──────────────────────────────────────
-
-    public function testScanRecursiveSubdirectories(): void
-    {
-        $subDir = $this->tmpDir . '/src/routes/api';
-        mkdir($subDir, 0777, true);
-        file_put_contents($subDir . '/users.php', '<?php // users');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
-        $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $phpFiles = array_filter(array_keys($mtimes), fn($f) => str_ends_with($f, 'users.php'));
-        $this->assertNotEmpty($phpFiles);
-    }
-
-    public function testScanMigrationsDir(): void
-    {
-        $migDir = $this->tmpDir . '/migrations';
-        mkdir($migDir, 0777, true);
-        file_put_contents($migDir . '/001_create_users.php', '<?php // migration');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
-        $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $migFiles = array_filter(array_keys($mtimes), fn($f) => str_contains($f, 'migrations'));
-        $this->assertNotEmpty($migFiles);
-    }
-
-    // ── Multiple Files ─────────────────────────────────────────────
 
     public function testTracksMultipleFiles(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/a.php', '<?php // a');
-        file_put_contents($srcDir . '/b.html', '<p>b</p>');
-        file_put_contents($srcDir . '/c.css', 'body {}');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
+        $this->writeSrc('a.php', '<?php // a');
+        $this->writeSrc('b.html', '<p>b</p>');
+        $this->writeSrc('c.css', 'body {}');
         $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        // Should have at least 3 tracked files
-        $this->assertGreaterThanOrEqual(3, count($mtimes));
+        $this->detect($server);
+        $this->assertGreaterThanOrEqual(3, count($this->trackedFiles($server)));
     }
 
-    // ── Server Shape ───────────────────────────────────────────────
+    public function testMixedExtensionsTracksOnlyWatched(): void
+    {
+        $this->writeSrc('app.php', '<?php');
+        $this->writeSrc('readme.txt', 'text');
+        $this->writeSrc('notes.md', '# notes');
+        $this->writeSrc('style.css', 'body{}');
+        $server = new Server();
+        $this->detect($server);
+
+        $this->assertTrue($this->tracksSuffix($server, '.php'));
+        $this->assertTrue($this->tracksSuffix($server, '.css'));
+        $this->assertFalse($this->tracksSuffix($server, '.txt'));
+        $this->assertFalse($this->tracksSuffix($server, '.md'));
+    }
+
+    // ── Server shape — real construction state ─────────────────────
 
     public function testServerConstructorDefaults(): void
     {
@@ -518,53 +391,38 @@ class LiveReloadTest extends TestCase
         $this->assertFalse($server->isRunning());
     }
 
-    public function testServerHasDetectFileChangesMethod(): void
+    public function testFileCheckIntervalDefaultIsOneSecond(): void
     {
-        $this->assertTrue(method_exists(Server::class, 'detectFileChanges'));
-    }
-
-    public function testServerHasBroadcastReloadMethod(): void
-    {
-        $this->assertTrue(method_exists(Server::class, 'broadcastReload'));
-    }
-
-    public function testFileCheckIntervalIsPositive(): void
-    {
+        // Assert the ACTUAL default value, not merely that it is positive.
         $server = new Server();
         $ref = new ReflectionProperty(Server::class, 'fileCheckInterval');
-        $interval = $ref->getValue($server);
-        $this->assertGreaterThan(0, $interval);
+        $this->assertSame(1.0, $ref->getValue($server));
     }
 
-    // ── Mixed Extensions in Same Directory ─────────────────────────
+    // ── Interface-contract guard (parity rename guard) ─────────────
+    //
+    // Consolidated single contract test replacing the per-method method_exists
+    // smoke tests: the hot-reload surface must keep these method names so a rename
+    // on one framework can't silently drift from the others. Real behaviour for
+    // detectFileChanges() is proven by the scan/modification tests above.
 
-    public function testMixedExtensionsTracksOnlyWatched(): void
+    public function testServerExposesHotReloadContract(): void
     {
-        $srcDir = $this->tmpDir . '/src';
-        mkdir($srcDir, 0777, true);
-        file_put_contents($srcDir . '/app.php', '<?php');
-        file_put_contents($srcDir . '/readme.txt', 'text');
-        file_put_contents($srcDir . '/notes.md', '# notes');
-        file_put_contents($srcDir . '/style.css', 'body{}');
-
-        $origDir = getcwd();
-        chdir($this->tmpDir);
-
-        $server = new Server();
-        $this->invokeDetectFileChanges($server);
-        $mtimes = $this->getFileMtimes($server);
-
-        chdir($origDir);
-
-        $tracked = array_keys($mtimes);
-        $txtFiles = array_filter($tracked, fn($f) => str_ends_with($f, '.txt'));
-        $mdFiles = array_filter($tracked, fn($f) => str_ends_with($f, '.md'));
-        $phpFiles = array_filter($tracked, fn($f) => str_ends_with($f, '.php'));
-        $cssFiles = array_filter($tracked, fn($f) => str_ends_with($f, '.css'));
-
-        $this->assertEmpty($txtFiles);
-        $this->assertEmpty($mdFiles);
-        $this->assertNotEmpty($phpFiles);
-        $this->assertNotEmpty($cssFiles);
+        $expected = [
+            'detectFileChanges',
+            'broadcastReload',
+            'onFilesChanged',
+            'addReloadSubscriber',
+            'removeReloadSubscriber',
+            'getHost',
+            'getPort',
+            'isRunning',
+        ];
+        foreach ($expected as $method) {
+            $this->assertTrue(
+                method_exists(Server::class, $method),
+                "Server::{$method}() is part of the hot-reload contract and must not be renamed without parity"
+            );
+        }
     }
 }

@@ -149,7 +149,12 @@ class ServiceRunner
     public static function start(?string $name = null): void
     {
         self::$shutdown = false;
-        $sleepTime = (int)(getenv('TINA4_SERVICE_SLEEP') ?: 5);
+        // NOTE: do NOT use `getenv(...) ?: 5` here — PHP treats the string "0"
+        // as falsy, so TINA4_SERVICE_SLEEP=0 (a legitimate "no sleep" value for
+        // tight loops / tests) would silently fall back to 5 seconds. Read the
+        // value explicitly and only default when it is genuinely unset/empty.
+        $sleepEnv = getenv('TINA4_SERVICE_SLEEP');
+        $sleepTime = ($sleepEnv === false || $sleepEnv === '') ? 5 : (int)$sleepEnv;
 
         $names = $name !== null ? [$name] : array_keys(self::$services);
 

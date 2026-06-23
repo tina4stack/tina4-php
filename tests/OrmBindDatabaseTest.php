@@ -51,11 +51,6 @@ class BindDbMissingWidget extends \Tina4\ORM
  */
 class OrmBindDatabaseTest extends TestCase
 {
-    private const PG_HOST = 'localhost';
-    private const PG_PORT = 5432;
-    private const PG_USER = 'tina4';
-    private const PG_PASS = 'tina4';
-
     private static ?DatabaseAdapter $savedGlobalDb = null;
 
     protected function setUp(): void
@@ -148,20 +143,21 @@ class OrmBindDatabaseTest extends TestCase
         if (!function_exists('pg_connect')) {
             $this->markTestSkipped('PostgresAdapter requires the ext-pgsql PHP extension.');
         }
-        if (!self::pgReachable()) {
+        $pg = \PgTestEnv::resolve();
+        if (!$pg->reachable()) {
             $this->markTestSkipped(sprintf(
                 'PostgreSQL not reachable at %s:%d — skip integration test',
-                self::PG_HOST, self::PG_PORT
+                $pg->host, $pg->port
             ));
         }
 
         $mainDb = Database::create(
-            sprintf('postgres://%s:%d/%s', self::PG_HOST, self::PG_PORT, 'tina4_php'),
-            username: self::PG_USER, password: self::PG_PASS
+            $pg->url('tina4_php'),
+            username: $pg->user, password: $pg->pass
         );
         $analyticsDb = Database::create(
-            sprintf('postgres://%s:%d/%s', self::PG_HOST, self::PG_PORT, 'tina4_rb'),
-            username: self::PG_USER, password: self::PG_PASS
+            $pg->url('tina4_rb'),
+            username: $pg->user, password: $pg->pass
         );
 
         \Tina4\ORM::bindDatabase($mainDb);                          // default
@@ -215,12 +211,7 @@ class OrmBindDatabaseTest extends TestCase
 
     private static function pgReachable(): bool
     {
-        $sock = @fsockopen(self::PG_HOST, self::PG_PORT, $errno, $errstr, 1.0);
-        if ($sock === false) {
-            return false;
-        }
-        fclose($sock);
-        return true;
+        return \PgTestEnv::resolve()->reachable();
     }
 
     /** Invoke the protected ORM::resolveDbFor() resolver under test. */

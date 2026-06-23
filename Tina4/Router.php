@@ -782,6 +782,15 @@ class Router
         $route = $result['route'];
         $request->params = $result['params'];
 
+        // Expose the matched route's metadata on the request BEFORE any
+        // middleware runs, so a middleware can read handler-level flags such
+        // as `noAuth`. CsrfMiddleware skips a route marked ->noAuth() / @noauth
+        // by reading `$request->handler['noAuth']`; without this assignment
+        // `$request->handler` stayed null and that bypass was DEAD CODE on a
+        // real dispatch — a @noauth POST guarded by CsrfMiddleware would be
+        // wrongly blocked with 403 (tina4-python parity: request._handler).
+        $request->handler = $route;
+
         // ── Auth enforcement ──────────────────────────────────────
         // Dev admin routes (/__dev/) are always public — no auth required.
         // Write routes (POST/PUT/PATCH/DELETE) are secure by default.

@@ -43,8 +43,18 @@ class ErrorOverlayTest extends TestCase
 
     public function testRenderContainsSourceCode(): void
     {
+        // The overlay reads the throwing file and renders a numbered source
+        // window around the failing line. makeException() constructs the
+        // exception on a line whose literal source contains this exact
+        // expression, so the rendered (HTML-escaped) source must include it.
         $html = ErrorOverlay::renderErrorOverlay($this->makeException());
-        $this->assertStringContainsString('RuntimeException', $html);
+        $this->assertStringContainsString(
+            "new \\RuntimeException(&#039;something broke&#039;)",
+            $html,
+            'overlay must render the actual source line that threw'
+        );
+        // And the error line itself must carry the arrow marker.
+        $this->assertStringContainsString('&#x25b6;', $html);
     }
 
     public function testRenderContainsErrorLineMarker(): void
@@ -112,8 +122,23 @@ class ErrorOverlayTest extends TestCase
     public function testRenderProductionReturnsHtml(): void
     {
         $html = ErrorOverlay::renderProductionError();
-        $this->assertIsString($html);
         $this->assertStringStartsWith('<!DOCTYPE html>', $html);
+        // A real production page: generic safe copy + a "Go Home" link, and
+        // crucially NO internal detail leaked.
+        $this->assertStringContainsString('Something went wrong', $html);
+        $this->assertStringContainsString('Go Home', $html);
+        $this->assertStringNotContainsString('Stack Trace', $html);
+    }
+
+    public function testRenderProductionEscapesAndShowsPath(): void
+    {
+        // A caller-supplied path is rendered but HTML-escaped — a hostile
+        // path can never inject live markup into the safe production page.
+        $html = ErrorOverlay::renderProductionError(403, 'Forbidden', '/admin/<script>x</script>');
+        $this->assertStringContainsString('403', $html);
+        $this->assertStringContainsString('Forbidden', $html);
+        $this->assertStringNotContainsString('<script>x</script>', $html);
+        $this->assertStringContainsString('&lt;script&gt;', $html);
     }
 
     public function testRenderProductionContainsStatusCode(): void

@@ -11,6 +11,26 @@ use Tina4\Container;
 
 class ContainerTest extends TestCase
 {
+    // -- interface contract (cross-framework rename guard) -------------------
+
+    /**
+     * ONE consolidated contract test: the public DI surface must stay stable.
+     *
+     * Cheap guard against a silent rename drifting Container out of parity with
+     * the Python / Ruby / Node containers. The BEHAVIOUR of each method is
+     * asserted by the dedicated tests below; this only locks the method *set*.
+     */
+    public function testPublicMethodSet(): void
+    {
+        $container = new Container();
+        foreach (['register', 'singleton', 'get', 'has', 'reset'] as $method) {
+            $this->assertTrue(
+                is_callable([$container, $method]),
+                "Container::{$method} missing or not callable"
+            );
+        }
+    }
+
     // -- register + get (transient) ------------------------------------------
 
     public function testRegisterAndGetReturnsNewInstanceEachTime(): void
@@ -211,9 +231,20 @@ class ContainerTest extends TestCase
     public function testRegisterWithClassFactory(): void
     {
         $container = new Container();
-        $container->register('svc', fn() => new \stdClass());
-        $result = $container->get('svc');
-        $this->assertInstanceOf(\stdClass::class, $result);
+
+        // A factory that constructs a real object with init state — the test
+        // proves the factory actually RAN (not just "an instance came back").
+        $container->register('svc', fn() => new class {
+            public string $value = 'ready';
+        });
+
+        $first = $container->get('svc');
+        $second = $container->get('svc');
+
+        // The factory really ran: the constructed object carries its init state.
+        $this->assertSame('ready', $first->value);
+        // Transient: a class factory yields a brand-new instance each get().
+        $this->assertNotSame($first, $second);
     }
 
     // -- factory called with zero args ----------------------------------------
@@ -229,6 +260,27 @@ class ContainerTest extends TestCase
         $container->get('check');
         $this->assertCount(1, $receivedArgs);
         $this->assertSame([], $receivedArgs[0]);
+    }
+
+    // -- non-callable factory is rejected (type contract) ---------------------
+
+    public function testRegisterRejectsNonCallable(): void
+    {
+        $container = new Container();
+        // register() is typed `callable $factory`; a non-callable is a hard
+        // contract violation — the engine raises a TypeError, mirroring
+        // Python's explicit "must be callable" guard. Assert the real refusal.
+        $this->expectException(\TypeError::class);
+        // @phpstan-ignore-next-line — intentionally passing the wrong type.
+        $container->register('bad', 'not a callable');
+    }
+
+    public function testSingletonRejectsNonCallable(): void
+    {
+        $container = new Container();
+        $this->expectException(\TypeError::class);
+        // @phpstan-ignore-next-line — intentionally passing the wrong type.
+        $container->singleton('bad', 42);
     }
 
     // -- multiple independent containers --------------------------------------
@@ -288,8 +340,11 @@ class ContainerTest extends TestCase
         for ($i = 0; $i < 20; $i++) {
             $container->register("svc-{$i}", fn() => $i);
         }
+        // Every key must be present AND resolve to its own bound value — no
+        // cross-talk between the 20 closures sharing one container.
         for ($i = 0; $i < 20; $i++) {
             $this->assertTrue($container->has("svc-{$i}"));
+            $this->assertSame($i, $container->get("svc-{$i}"));
         }
     }
 }

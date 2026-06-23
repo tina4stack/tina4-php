@@ -54,10 +54,6 @@ class T4Issue256SerialModel extends ORM
 
 class PostgresUuidPkTest extends TestCase
 {
-    private const PG_HOST = 'localhost';
-    private const PG_PORT = 55432;
-    private const PG_USER = 'tina4';
-    private const PG_PASS = 'tina4';
     private const PG_DB = 'tina4';
 
     private ?DatabaseAdapter $db = null;
@@ -67,18 +63,15 @@ class PostgresUuidPkTest extends TestCase
         if (!function_exists('pg_connect')) {
             $this->markTestSkipped('PostgresAdapter requires the ext-pgsql PHP extension.');
         }
-        if (!self::pgReachable()) {
+        $pg = \PgTestEnv::resolve();
+        if (!$pg->reachable()) {
             $this->markTestSkipped(
                 sprintf('PostgreSQL not reachable at %s:%d — skip integration test',
-                    self::PG_HOST, self::PG_PORT)
+                    $pg->host, $pg->port)
             );
         }
 
-        $url = sprintf(
-            'postgres://%s:%d/%s',
-            self::PG_HOST, self::PG_PORT, self::PG_DB
-        );
-        $this->db = Database::create($url, username: self::PG_USER, password: self::PG_PASS);
+        $this->db = Database::create($pg->url(self::PG_DB), username: $pg->user, password: $pg->pass);
 
         $this->db->execute('DROP TABLE IF EXISTS t4_issue38_uuid');
         $this->db->execute(
@@ -125,16 +118,6 @@ class PostgresUuidPkTest extends TestCase
     }
 
     private const UUID_RE = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
-
-    private static function pgReachable(): bool
-    {
-        $sock = @fsockopen(self::PG_HOST, self::PG_PORT, $errno, $errstr, 1.0);
-        if ($sock === false) {
-            return false;
-        }
-        fclose($sock);
-        return true;
-    }
 
     public function testInsertThenSelectDoesNotRaise(): void
     {

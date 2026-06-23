@@ -99,14 +99,25 @@ class FakeData
 
     private ?int $seed;
 
+    /**
+     * Per-instance PRNG. Using \Random\Randomizer with a per-instance Mt19937
+     * engine (rather than the process-global mt_srand()/mt_rand()) means two
+     * FakeData instances created with the same seed are INDEPENDENTLY
+     * reproducible — interleaving their calls, or any other code touching the
+     * global RNG between calls, can no longer change the output. This mirrors
+     * Python's `self._rng = random.Random(seed)`.
+     */
+    private \Random\Randomizer $rng;
+
     // ── Constructor ───────────────────────────────────────────────
 
     public function __construct(?int $seed = null)
     {
         $this->seed = $seed;
-        if ($seed !== null) {
-            mt_srand($seed);
-        }
+        // A seeded engine is deterministic; an unseeded engine is randomly
+        // seeded by the platform (Mt19937 with no seed argument).
+        $engine = $seed !== null ? new \Random\Engine\Mt19937($seed) : new \Random\Engine\Mt19937();
+        $this->rng = new \Random\Randomizer($engine);
     }
 
     /**
@@ -123,11 +134,12 @@ class FakeData
     // ── Internal helpers ──────────────────────────────────────────
 
     /**
-     * Generate a random integer in the given range using the seedable MT engine.
+     * Generate a random integer in the given range using the per-instance
+     * seedable MT engine.
      */
     private function rand(int $min, int $max): int
     {
-        return mt_rand($min, $max);
+        return $this->rng->getInt($min, $max);
     }
 
     /**
@@ -346,7 +358,9 @@ class FakeData
      */
     public function numeric(float $min = 0.0, float $max = 1000.0, int $decimals = 2): float
     {
-        $rand = $min + mt_rand() / mt_getrandmax() * ($max - $min);
+        // Draw a fraction from the per-instance engine so numeric() is
+        // reproducible under a seed (mt_getrandmax() is the Mt19937 max).
+        $rand = $min + $this->rand(0, mt_getrandmax()) / mt_getrandmax() * ($max - $min);
         return round($rand, $decimals);
     }
 

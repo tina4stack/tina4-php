@@ -266,13 +266,23 @@ class MongoBackend implements QueueBackend
                 ? $this->futureDate($this->retryBackoff)
                 : new \MongoDB\BSON\UTCDateTime();
 
-            // Try to update existing document back to pending
+            // Try to update existing document back to pending. Advance the
+            // LIVE top-level attempts to the failing consumer's count (carried
+            // on the message by Queue::failJob/retryJob). dequeue()/docToJob()
+            // surface the top-level attempts, not the snapshot inside 'message'
+            // (Bug C); without setting it here the surfaced attempts stayed at
+            // the original 0 across every requeue, so fail()'s attempts >=
+            // maxRetries check never tripped and a job retried forever instead
+            // of dead-lettering. (A FakeMongoCollection masked this by scripting
+            // canned attempts; the live Mongo dead-letter test catches it.)
+            $attempts = (int)($message['attempts'] ?? 0);
             $result = $this->collection->updateOne(
                 ['_id' => $id, 'topic' => $topic],
                 [
                     '$set' => [
                         'status' => 'pending',
                         'message' => $message,
+                        'attempts' => $attempts,
                         'available_at' => $available,
                         'reserved_at' => null,
                         'updated_at' => new \MongoDB\BSON\UTCDateTime(),
@@ -292,7 +302,28 @@ class MongoBackend implements QueueBackend
     /** {@inheritDoc} */
     public function deadLetter(string $topic, array $message): void
     {
-        $this->enqueue($topic . '.dead_letter', $message);
+        $this->ensureConnected();
+
+        // A dead-letter is a SEPARATE record on the '<topic>.dead_letter' topic.
+        // It must NOT reuse the failing job's id as its _id: the live original
+        // (same id, original topic) is still present when the lifecycle moves a
+        // job here (failJob/reclaimExpired insert the dead letter THEN delete the
+        // original), so reusing the id raised a duplicate-key BulkWriteException
+        // and the job never reached the dead-letter store. Give the dead-letter
+        // doc a fresh _id but keep the original job id inside 'message' so
+        // deadLetters()/retryFailed() still report and requeue by the real id.
+        $now = new \MongoDB\BSON\UTCDateTime();
+        $dlTopic = $topic . '.dead_letter';
+        $this->collection->insertOne([
+            '_id' => bin2hex(random_bytes(8)) . '-dl-' . ($message['id'] ?? bin2hex(random_bytes(4))),
+            'topic' => $dlTopic,
+            'status' => 'dead',
+            'message' => $message,
+            'attempts' => (int)($message['attempts'] ?? 0),
+            'available_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 
     /** {@inheritDoc} */

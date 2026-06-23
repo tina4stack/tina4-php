@@ -4,158 +4,322 @@
  * Tina4 — The Intelligent Native Application 4ramework
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
+ *
+ * Real behavioural tests for the session handlers. Every handler is exercised
+ * against the REAL backend it talks to — no mocks, no fakes:
+ *   - MongoSessionHandler  -> live MongoDB (TINA4_MONGO_URI, default localhost:27017)
+ *   - ValkeySessionHandler -> live Valkey  (default localhost:6380)
+ *   - RedisSessionHandler  -> live Redis   (default localhost:6379)
+ *   - DatabaseSessionHandler -> real SQLite + live PostgreSQL
+ *
+ * Each backend test does a write -> read-back -> assert -> destroy -> assert-gone
+ * round-trip. A single consolidated interface-contract test per class loops the
+ * expected method set, acting as a parity / rename guard across the 4 frameworks
+ * (replacing the dozens of per-method `hasMethod` smoke tests).
+ *
+ * Backends that cannot be reached are skipped (markTestSkipped) rather than
+ * failing — the round-trip itself is the assertion when the service is up.
  */
 
 use PHPUnit\Framework\TestCase;
+use Tina4\Database\Database;
+use Tina4\Database\SQLite3Adapter;
 use Tina4\Session\MongoSessionHandler;
 use Tina4\Session\ValkeySessionHandler;
+use Tina4\Session\RedisSessionHandler;
 use Tina4\Session\DatabaseSessionHandler;
 
 class SessionHandlerTest extends TestCase
 {
-    // -- MongoSessionHandler -------------------------------------------------
+    private const MONGO_PORT = 27017;
+    private const VALKEY_PORT = 6380;
+    private const REDIS_PORT = 6379;
+    private const PG_PORT = 55432;
 
-    public function testMongoSessionHandlerClassExists(): void
+    /** Return a unique session id so concurrent / repeated runs never collide. */
+    private function sid(string $prefix): string
     {
-        $this->assertTrue(class_exists(MongoSessionHandler::class));
+        return $prefix . '-' . bin2hex(random_bytes(8));
     }
 
-    public function testMongoSessionHandlerCanBeInstantiated(): void
+    /** Skip the current test when a TCP service is not reachable. */
+    private function requireService(string $host, int $port, string $name): void
     {
-        $handler = new MongoSessionHandler([
-            'url' => 'mongodb://localhost:27017',
-            'database' => 'testdb',
-            'collection' => 'test_sessions',
-            'ttl' => 1800,
+        $sock = @fsockopen($host, $port, $errno, $errstr, 2);
+        if (!$sock) {
+            $this->markTestSkipped("{$name} not reachable at {$host}:{$port} ({$errstr})");
+        }
+        fclose($sock);
+    }
+
+    private function mongoHost(): string
+    {
+        $uri = getenv('TINA4_MONGO_URI') ?: 'mongodb://localhost:27017';
+        return parse_url($uri, PHP_URL_HOST) ?: 'localhost';
+    }
+
+    // =====================================================================
+    //  Interface-contract guards (one per class — replaces the per-method
+    //  existence smoke tests). These lock the public method set so a rename
+    //  in one framework can't silently drift the others out of parity.
+    // =====================================================================
+
+    public function testMongoSessionHandlerContract(): void
+    {
+        $expected = ['read', 'write', 'destroy', 'close'];
+        $ref = new \ReflectionClass(MongoSessionHandler::class);
+        foreach ($expected as $method) {
+            $this->assertTrue($ref->hasMethod($method), "MongoSessionHandler is missing {$method}()");
+        }
+        // read(sessionId) signature is part of the cross-framework contract.
+        $read = $ref->getMethod('read');
+        $this->assertSame(1, $read->getNumberOfParameters());
+        $this->assertSame('sessionId', $read->getParameters()[0]->getName());
+        $this->assertSame(2, $ref->getMethod('write')->getNumberOfParameters());
+    }
+
+    public function testValkeySessionHandlerContract(): void
+    {
+        $expected = ['read', 'write', 'destroy', 'close', 'exists', 'touch'];
+        $ref = new \ReflectionClass(ValkeySessionHandler::class);
+        foreach ($expected as $method) {
+            $this->assertTrue($ref->hasMethod($method), "ValkeySessionHandler is missing {$method}()");
+        }
+        $read = $ref->getMethod('read');
+        $this->assertSame('sessionId', $read->getParameters()[0]->getName());
+    }
+
+    public function testRedisSessionHandlerContract(): void
+    {
+        $expected = ['read', 'write', 'destroy', 'close', 'exists', 'touch'];
+        $ref = new \ReflectionClass(RedisSessionHandler::class);
+        foreach ($expected as $method) {
+            $this->assertTrue($ref->hasMethod($method), "RedisSessionHandler is missing {$method}()");
+        }
+    }
+
+    public function testDatabaseSessionHandlerContract(): void
+    {
+        $expected = ['read', 'write', 'destroy', 'delete', 'gc', 'close'];
+        $ref = new \ReflectionClass(DatabaseSessionHandler::class);
+        foreach ($expected as $method) {
+            $this->assertTrue($ref->hasMethod($method), "DatabaseSessionHandler is missing {$method}()");
+        }
+        $read = $ref->getMethod('read');
+        $this->assertSame('sessionId', $read->getParameters()[0]->getName());
+        $write = $ref->getMethod('write');
+        $this->assertSame(2, $write->getNumberOfParameters());
+        $this->assertSame('data', $write->getParameters()[1]->getName());
+    }
+
+    // =====================================================================
+    //  MongoSessionHandler — real MongoDB round-trips
+    // =====================================================================
+
+    private function mongoHandler(int $ttl = 1800, string $collection = 'php_test_sessions'): MongoSessionHandler
+    {
+        return new MongoSessionHandler([
+            'url' => getenv('TINA4_MONGO_URI') ?: 'mongodb://localhost:27017',
+            'database' => 'tina4_session_test',
+            'collection' => $collection,
+            'ttl' => $ttl,
         ]);
-        $this->assertInstanceOf(MongoSessionHandler::class, $handler);
     }
 
-    public function testMongoSessionHandlerDefaultConfig(): void
+    public function testMongoWriteReadDestroyCycle(): void
     {
-        $handler = new MongoSessionHandler();
-        $this->assertInstanceOf(MongoSessionHandler::class, $handler);
+        $this->requireService($this->mongoHost(), self::MONGO_PORT, 'MongoDB');
+
+        $handler = $this->mongoHandler();
+        $id = $this->sid('mongo-cycle');
+
+        $handler->write($id, ['user_id' => 42, 'role' => 'admin']);
+
+        $read = $handler->read($id);
+        $this->assertSame(['user_id' => 42, 'role' => 'admin'], $read);
+
+        $handler->destroy($id);
+        $this->assertSame([], $handler->read($id), 'session must be gone after destroy()');
+
+        $handler->close();
     }
 
-    public function testMongoSessionHandlerHasReadMethod(): void
+    public function testMongoReadMissingSessionReturnsEmpty(): void
     {
-        $ref = new \ReflectionClass(MongoSessionHandler::class);
-        $this->assertTrue($ref->hasMethod('read'));
-        $method = $ref->getMethod('read');
-        $this->assertEquals(1, $method->getNumberOfParameters());
-        $this->assertEquals('sessionId', $method->getParameters()[0]->getName());
+        $this->requireService($this->mongoHost(), self::MONGO_PORT, 'MongoDB');
+
+        $handler = $this->mongoHandler();
+        $this->assertSame([], $handler->read($this->sid('mongo-missing')));
+        $handler->close();
     }
 
-    public function testMongoSessionHandlerHasWriteMethod(): void
+    public function testMongoWriteOverwritesExistingSession(): void
     {
-        $ref = new \ReflectionClass(MongoSessionHandler::class);
-        $this->assertTrue($ref->hasMethod('write'));
-        $method = $ref->getMethod('write');
-        $this->assertEquals(2, $method->getNumberOfParameters());
+        $this->requireService($this->mongoHost(), self::MONGO_PORT, 'MongoDB');
+
+        $handler = $this->mongoHandler();
+        $id = $this->sid('mongo-overwrite');
+
+        $handler->write($id, ['count' => 1]);
+        $handler->write($id, ['count' => 2, 'extra' => 'added']);
+
+        $this->assertSame(['count' => 2, 'extra' => 'added'], $handler->read($id));
+
+        $handler->destroy($id);
+        $handler->close();
     }
 
-    public function testMongoSessionHandlerHasDestroyMethod(): void
+    public function testMongoRoundTripsNestedDataAndScalars(): void
     {
-        $ref = new \ReflectionClass(MongoSessionHandler::class);
-        $this->assertTrue($ref->hasMethod('destroy'));
+        $this->requireService($this->mongoHost(), self::MONGO_PORT, 'MongoDB');
+
+        $handler = $this->mongoHandler(1800, 'php_test_sessions_nested');
+        $id = $this->sid('mongo-nested');
+
+        $data = [
+            'user' => ['id' => 7, 'name' => 'Bob', 'tags' => ['a', 'b', 'c']],
+            'count' => 3,
+            'active' => true,
+            'ratio' => 1.5,
+        ];
+        $handler->write($id, $data);
+
+        // The handler ships a zero-dependency BSON codec; this asserts ints,
+        // bools, floats, lists and nested documents all survive the round-trip.
+        $this->assertEquals($data, $handler->read($id));
+
+        $handler->destroy($id);
+        $handler->close();
     }
 
-    public function testMongoSessionHandlerHasCloseMethod(): void
+    public function testMongoExpiredSessionIsPurgedOnRead(): void
     {
-        $ref = new \ReflectionClass(MongoSessionHandler::class);
-        $this->assertTrue($ref->hasMethod('close'));
+        $this->requireService($this->mongoHost(), self::MONGO_PORT, 'MongoDB');
+
+        // ttl=1s: write, wait past expiry, read must return empty AND remove the row.
+        $writer = $this->mongoHandler(1, 'php_test_sessions_ttl');
+        $id = $this->sid('mongo-expire');
+        $writer->write($id, ['x' => 1]);
+        $this->assertSame(['x' => 1], $writer->read($id), 'fresh session must read back');
+
+        sleep(2);
+        $this->assertSame([], $writer->read($id), 'expired session must read empty');
+        $writer->close();
+
+        // A fresh long-ttl handler proves the expiring read also destroyed the doc.
+        $reader = $this->mongoHandler(9999, 'php_test_sessions_ttl');
+        $this->assertSame([], $reader->read($id), 'expired session must have been purged');
+        $reader->close();
     }
 
-    public function testMongoSessionHandlerParsesConfig(): void
+    /** Config parsing is real constructor behaviour — assert the parsed values. */
+    public function testMongoParsesUrlIntoHostPortDbCollectionTtl(): void
     {
         $handler = new MongoSessionHandler([
-            'url' => 'mongodb://myhost:28017',
+            'url' => 'mongodb://user:pass@db.host.com:27020/mydb',
             'database' => 'mydb',
             'collection' => 'mysessions',
             'ttl' => 7200,
         ]);
 
         $ref = new \ReflectionClass($handler);
-
-        $dbProp = $ref->getProperty('database');
-        $this->assertEquals('mydb', $dbProp->getValue($handler));
-
-        $collProp = $ref->getProperty('collection');
-        $this->assertEquals('mysessions', $collProp->getValue($handler));
-
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(7200, $ttlProp->getValue($handler));
-
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('myhost', $hostProp->getValue($handler));
-
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(28017, $portProp->getValue($handler));
+        $this->assertSame('db.host.com', $ref->getProperty('host')->getValue($handler));
+        $this->assertSame(27020, $ref->getProperty('port')->getValue($handler));
+        $this->assertSame('mydb', $ref->getProperty('database')->getValue($handler));
+        $this->assertSame('mysessions', $ref->getProperty('collection')->getValue($handler));
+        $this->assertSame(7200, $ref->getProperty('ttl')->getValue($handler));
     }
 
-    // -- ValkeySessionHandler ------------------------------------------------
-
-    public function testValkeySessionHandlerClassExists(): void
+    public function testMongoDefaultsAndTtlEnvVar(): void
     {
-        $this->assertTrue(class_exists(ValkeySessionHandler::class));
+        putenv('TINA4_SESSION_TTL=4321');
+        try {
+            $handler = new MongoSessionHandler();
+            $ref = new \ReflectionClass($handler);
+            $this->assertSame('localhost', $ref->getProperty('host')->getValue($handler));
+            $this->assertSame(27017, $ref->getProperty('port')->getValue($handler));
+            $this->assertSame('tina4', $ref->getProperty('database')->getValue($handler));
+            $this->assertSame('sessions', $ref->getProperty('collection')->getValue($handler));
+            $this->assertSame(4321, $ref->getProperty('ttl')->getValue($handler));
+        } finally {
+            putenv('TINA4_SESSION_TTL');
+        }
     }
 
-    public function testValkeySessionHandlerCanBeInstantiated(): void
+    // =====================================================================
+    //  ValkeySessionHandler — real Valkey round-trips
+    // =====================================================================
+
+    private function valkeyHandler(int $ttl = 60, string $prefix = 'tina4test:valkey:'): ValkeySessionHandler
     {
-        $handler = new ValkeySessionHandler([
+        return new ValkeySessionHandler([
             'host' => 'localhost',
-            'port' => 6379,
-            'password' => 'secret',
-            'db' => 1,
-            'ttl' => 3600,
-            'keyPrefix' => 'test:session:',
+            'port' => self::VALKEY_PORT,
+            'ttl' => $ttl,
+            'keyPrefix' => $prefix,
         ]);
-        $this->assertInstanceOf(ValkeySessionHandler::class, $handler);
     }
 
-    public function testValkeySessionHandlerDefaultConfig(): void
+    public function testValkeyWriteReadDestroyCycle(): void
     {
-        $handler = new ValkeySessionHandler();
-        $this->assertInstanceOf(ValkeySessionHandler::class, $handler);
+        $this->requireService('localhost', self::VALKEY_PORT, 'Valkey');
+
+        $handler = $this->valkeyHandler();
+        $id = $this->sid('valkey-cycle');
+
+        $handler->write($id, ['theme' => 'dark', 'lang' => 'en']);
+        $this->assertSame(['theme' => 'dark', 'lang' => 'en'], $handler->read($id));
+        $this->assertTrue($handler->exists($id));
+
+        $handler->destroy($id);
+        $this->assertSame([], $handler->read($id));
+        $this->assertFalse($handler->exists($id), 'exists() must be false after destroy()');
+
+        $handler->close();
     }
 
-    public function testValkeySessionHandlerHasReadMethod(): void
+    public function testValkeyReadMissingSessionReturnsEmpty(): void
     {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('read'));
+        $this->requireService('localhost', self::VALKEY_PORT, 'Valkey');
+
+        $handler = $this->valkeyHandler();
+        $id = $this->sid('valkey-missing');
+        $this->assertSame([], $handler->read($id));
+        $this->assertFalse($handler->exists($id));
+        $handler->close();
     }
 
-    public function testValkeySessionHandlerHasWriteMethod(): void
+    public function testValkeyTouchKeepsSessionAlive(): void
     {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('write'));
+        $this->requireService('localhost', self::VALKEY_PORT, 'Valkey');
+
+        $handler = $this->valkeyHandler(ttl: 1000);
+        $id = $this->sid('valkey-touch');
+        $handler->write($id, ['a' => 1]);
+
+        $handler->touch($id); // refresh TTL — must not raise and key must remain
+        $this->assertTrue($handler->exists($id));
+        $this->assertSame(['a' => 1], $handler->read($id));
+
+        $handler->destroy($id);
+        $handler->close();
     }
 
-    public function testValkeySessionHandlerHasDestroyMethod(): void
+    public function testValkeyWriteOverwritesExistingSession(): void
     {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('destroy'));
+        $this->requireService('localhost', self::VALKEY_PORT, 'Valkey');
+
+        $handler = $this->valkeyHandler();
+        $id = $this->sid('valkey-overwrite');
+        $handler->write($id, ['v' => 1]);
+        $handler->write($id, ['v' => 2, 'b' => 3]);
+        $this->assertSame(['v' => 2, 'b' => 3], $handler->read($id));
+        $handler->destroy($id);
+        $handler->close();
     }
 
-    public function testValkeySessionHandlerHasCloseMethod(): void
-    {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('close'));
-    }
-
-    public function testValkeySessionHandlerHasExistsMethod(): void
-    {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('exists'));
-    }
-
-    public function testValkeySessionHandlerHasTouchMethod(): void
-    {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('touch'));
-    }
-
-    public function testValkeySessionHandlerConfigParsing(): void
+    /** Config parsing is real constructor behaviour — assert parsed values. */
+    public function testValkeyConfigParsing(): void
     {
         $handler = new ValkeySessionHandler([
             'host' => 'valkey.local',
@@ -165,229 +329,112 @@ class SessionHandlerTest extends TestCase
             'ttl' => 7200,
             'keyPrefix' => 'app:sess:',
         ]);
-
         $ref = new \ReflectionClass($handler);
-
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('valkey.local', $hostProp->getValue($handler));
-
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(6380, $portProp->getValue($handler));
-
-        $passProp = $ref->getProperty('password');
-        $this->assertEquals('mypass', $passProp->getValue($handler));
-
-        $dbProp = $ref->getProperty('db');
-        $this->assertEquals(3, $dbProp->getValue($handler));
-
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(7200, $ttlProp->getValue($handler));
-
-        $prefixProp = $ref->getProperty('keyPrefix');
-        $this->assertEquals('app:sess:', $prefixProp->getValue($handler));
+        $this->assertSame('valkey.local', $ref->getProperty('host')->getValue($handler));
+        $this->assertSame(6380, $ref->getProperty('port')->getValue($handler));
+        $this->assertSame('mypass', $ref->getProperty('password')->getValue($handler));
+        $this->assertSame(3, $ref->getProperty('db')->getValue($handler));
+        $this->assertSame(7200, $ref->getProperty('ttl')->getValue($handler));
+        $this->assertSame('app:sess:', $ref->getProperty('keyPrefix')->getValue($handler));
     }
 
-    public function testValkeySessionHandlerEnvVarHost(): void
+    public function testValkeyDefaultsAndEnvOverrides(): void
     {
+        // Defaults
+        $default = new ValkeySessionHandler();
+        $ref = new \ReflectionClass($default);
+        $this->assertSame('tina4:session:', $ref->getProperty('keyPrefix')->getValue($default));
+        $this->assertNull($ref->getProperty('password')->getValue($default), 'no password by default');
+        $this->assertSame(3600, $ref->getProperty('ttl')->getValue($default));
+
+        // Env vars feed the constructor; explicit config must still win.
         putenv('TINA4_SESSION_VALKEY_HOST=envhost');
         putenv('TINA4_SESSION_VALKEY_PORT=6381');
-
-        $handler = new ValkeySessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('envhost', $hostProp->getValue($handler));
-
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(6381, $portProp->getValue($handler));
-
-        putenv('TINA4_SESSION_VALKEY_HOST');
-        putenv('TINA4_SESSION_VALKEY_PORT');
-    }
-
-    public function testValkeySessionHandlerEnvVarPassword(): void
-    {
         putenv('TINA4_SESSION_VALKEY_PASSWORD=envpassword');
-
-        $handler = new ValkeySessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $passProp = $ref->getProperty('password');
-        $this->assertEquals('envpassword', $passProp->getValue($handler));
-
-        putenv('TINA4_SESSION_VALKEY_PASSWORD');
-    }
-
-    public function testValkeySessionHandlerEnvVarDb(): void
-    {
         putenv('TINA4_SESSION_VALKEY_DB=5');
+        putenv('TINA4_SESSION_TTL=900');
+        try {
+            $fromEnv = new ValkeySessionHandler();
+            $r = new \ReflectionClass($fromEnv);
+            $this->assertSame('envhost', $r->getProperty('host')->getValue($fromEnv));
+            $this->assertSame(6381, $r->getProperty('port')->getValue($fromEnv));
+            $this->assertSame('envpassword', $r->getProperty('password')->getValue($fromEnv));
+            $this->assertSame(5, $r->getProperty('db')->getValue($fromEnv));
+            $this->assertSame(900, $r->getProperty('ttl')->getValue($fromEnv));
 
-        $handler = new ValkeySessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $dbProp = $ref->getProperty('db');
-        $this->assertEquals(5, $dbProp->getValue($handler));
-
-        putenv('TINA4_SESSION_VALKEY_DB');
-    }
-
-    public function testValkeySessionHandlerDefaultKeyPrefix(): void
-    {
-        $handler = new ValkeySessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $prefixProp = $ref->getProperty('keyPrefix');
-        $this->assertEquals('tina4:session:', $prefixProp->getValue($handler));
-    }
-
-    public function testValkeySessionHandlerNoPasswordByDefault(): void
-    {
-        $handler = new ValkeySessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $passProp = $ref->getProperty('password');
-        $this->assertNull($passProp->getValue($handler));
-    }
-
-    // -- DatabaseSessionHandler ----------------------------------------------
-
-    public function testDatabaseSessionHandlerExists(): void
-    {
-        $this->assertTrue(class_exists(DatabaseSessionHandler::class));
-    }
-
-    public function testDatabaseSessionHandlerHasRequiredMethods(): void
-    {
-        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'read'));
-        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'write'));
-        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'destroy'));
-        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'close'));
-    }
-
-    public function testDatabaseSessionHandlerHasGcMethod(): void
-    {
-        $this->assertTrue(method_exists(DatabaseSessionHandler::class, 'gc'));
-    }
-
-    public function testDatabaseSessionHandlerTtlFromEnv(): void
-    {
-        putenv('TINA4_SESSION_TTL=7200');
-
-        $ref = new \ReflectionClass(DatabaseSessionHandler::class);
-        $constructor = $ref->getConstructor();
-        // Verify ttl config is respected by creating with a mock adapter
-        $adapter = $this->createMock(\Tina4\Database\DatabaseAdapter::class);
-        $handler = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 7200]);
-
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(7200, $ttlProp->getValue($handler));
-
-        putenv('TINA4_SESSION_TTL');
-    }
-
-    public function testDatabaseSessionHandlerCloseIsNoop(): void
-    {
-        $adapter = $this->createMock(\Tina4\Database\DatabaseAdapter::class);
-        $handler = new DatabaseSessionHandler(['db' => $adapter]);
-        $handler->close(); // Should not raise
-        $this->assertTrue(true);
-    }
-
-    public function testDatabaseSessionHandlerThrowsWithoutDb(): void
-    {
-        // Make sure TINA4_DATABASE_URL is not set
-        $prev = getenv('TINA4_DATABASE_URL');
-        putenv('TINA4_DATABASE_URL');
-
-        $this->expectException(\RuntimeException::class);
-        new DatabaseSessionHandler();
-
-        if ($prev !== false) {
-            putenv("TINA4_DATABASE_URL={$prev}");
+            $override = new ValkeySessionHandler(['host' => 'confighost']);
+            $this->assertSame(
+                'confighost',
+                (new \ReflectionClass($override))->getProperty('host')->getValue($override),
+                'explicit config must override env var'
+            );
+        } finally {
+            putenv('TINA4_SESSION_VALKEY_HOST');
+            putenv('TINA4_SESSION_VALKEY_PORT');
+            putenv('TINA4_SESSION_VALKEY_PASSWORD');
+            putenv('TINA4_SESSION_VALKEY_DB');
+            putenv('TINA4_SESSION_TTL');
         }
     }
 
-    public function testDatabaseSessionHandlerAcceptsAdapter(): void
+    // =====================================================================
+    //  RedisSessionHandler — real Redis round-trips
+    // =====================================================================
+
+    private function redisHandler(int $ttl = 60, string $prefix = 'tina4test:redis:'): RedisSessionHandler
     {
-        $adapter = $this->createMock(\Tina4\Database\DatabaseAdapter::class);
-        $handler = new DatabaseSessionHandler(['db' => $adapter]);
-        $this->assertInstanceOf(DatabaseSessionHandler::class, $handler);
-    }
-
-    public function testDatabaseSessionHandlerAcceptsDatabase(): void
-    {
-        $db = \Tina4\Database\Database::create('sqlite::memory:');
-        $handler = new DatabaseSessionHandler(['db' => $db]);
-        $this->assertInstanceOf(DatabaseSessionHandler::class, $handler);
-        $db->close();
-    }
-
-    public function testDatabaseSessionHandlerDefaultTtl(): void
-    {
-        $adapter = $this->createMock(\Tina4\Database\DatabaseAdapter::class);
-        $handler = new DatabaseSessionHandler(['db' => $adapter]);
-
-        $ref = new \ReflectionClass($handler);
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(3600, $ttlProp->getValue($handler));
-    }
-
-    public function testDatabaseSessionHandlerCustomTtl(): void
-    {
-        $adapter = $this->createMock(\Tina4\Database\DatabaseAdapter::class);
-        $handler = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 900]);
-
-        $ref = new \ReflectionClass($handler);
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(900, $ttlProp->getValue($handler));
-    }
-
-    // -- RedisSessionHandler -------------------------------------------------
-
-    public function testRedisSessionHandlerClassExists(): void
-    {
-        $this->assertTrue(class_exists(\Tina4\Session\RedisSessionHandler::class));
-    }
-
-    public function testRedisSessionHandlerCanBeInstantiated(): void
-    {
-        $handler = new \Tina4\Session\RedisSessionHandler([
+        return new RedisSessionHandler([
             'host' => 'localhost',
-            'port' => 6379,
-            'password' => 'secret',
-            'db' => 1,
-            'ttl' => 3600,
-            'keyPrefix' => 'test:session:',
+            'port' => self::REDIS_PORT,
+            'ttl' => $ttl,
+            'keyPrefix' => $prefix,
         ]);
-        $this->assertInstanceOf(\Tina4\Session\RedisSessionHandler::class, $handler);
     }
 
-    public function testRedisSessionHandlerDefaultConfig(): void
+    public function testRedisWriteReadDestroyCycle(): void
     {
-        $handler = new \Tina4\Session\RedisSessionHandler();
+        $this->requireService('localhost', self::REDIS_PORT, 'Redis');
 
-        $ref = new \ReflectionClass($handler);
+        $handler = $this->redisHandler();
+        $id = $this->sid('redis-cycle');
 
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('localhost', $hostProp->getValue($handler));
+        $handler->write($id, ['lang' => 'en', 'user_id' => 99]);
+        $this->assertSame(['lang' => 'en', 'user_id' => 99], $handler->read($id));
+        $this->assertTrue($handler->exists($id));
 
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(6379, $portProp->getValue($handler));
+        $handler->destroy($id);
+        $this->assertSame([], $handler->read($id));
+        $this->assertFalse($handler->exists($id));
 
-        $dbProp = $ref->getProperty('db');
-        $this->assertEquals(0, $dbProp->getValue($handler));
-
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(3600, $ttlProp->getValue($handler));
-
-        $prefixProp = $ref->getProperty('keyPrefix');
-        $this->assertEquals('tina4:session:', $prefixProp->getValue($handler));
+        $handler->close();
     }
 
-    public function testRedisSessionHandlerCustomConfig(): void
+    public function testRedisReadMissingSessionReturnsEmpty(): void
     {
-        $handler = new \Tina4\Session\RedisSessionHandler([
+        $this->requireService('localhost', self::REDIS_PORT, 'Redis');
+
+        $handler = $this->redisHandler();
+        $this->assertSame([], $handler->read($this->sid('redis-missing')));
+        $handler->close();
+    }
+
+    public function testRedisTouchKeepsSessionAlive(): void
+    {
+        $this->requireService('localhost', self::REDIS_PORT, 'Redis');
+
+        $handler = $this->redisHandler(ttl: 1000);
+        $id = $this->sid('redis-touch');
+        $handler->write($id, ['k' => 'v']);
+        $handler->touch($id);
+        $this->assertTrue($handler->exists($id));
+        $this->assertSame(['k' => 'v'], $handler->read($id));
+        $handler->destroy($id);
+        $handler->close();
+    }
+
+    public function testRedisConfigParsing(): void
+    {
+        $handler = new RedisSessionHandler([
             'host' => 'redis.example.com',
             'port' => 6380,
             'password' => 'pass123',
@@ -395,232 +442,211 @@ class SessionHandlerTest extends TestCase
             'ttl' => 7200,
             'keyPrefix' => 'myapp:sess:',
         ]);
-
         $ref = new \ReflectionClass($handler);
-
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('redis.example.com', $hostProp->getValue($handler));
-
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(6380, $portProp->getValue($handler));
-
-        $passProp = $ref->getProperty('password');
-        $this->assertEquals('pass123', $passProp->getValue($handler));
-
-        $dbProp = $ref->getProperty('db');
-        $this->assertEquals(2, $dbProp->getValue($handler));
-
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(7200, $ttlProp->getValue($handler));
-
-        $prefixProp = $ref->getProperty('keyPrefix');
-        $this->assertEquals('myapp:sess:', $prefixProp->getValue($handler));
+        $this->assertSame('redis.example.com', $ref->getProperty('host')->getValue($handler));
+        $this->assertSame(6380, $ref->getProperty('port')->getValue($handler));
+        $this->assertSame('pass123', $ref->getProperty('password')->getValue($handler));
+        $this->assertSame(2, $ref->getProperty('db')->getValue($handler));
+        $this->assertSame(7200, $ref->getProperty('ttl')->getValue($handler));
+        $this->assertSame('myapp:sess:', $ref->getProperty('keyPrefix')->getValue($handler));
     }
 
-    public function testRedisSessionHandlerHasReadMethod(): void
+    public function testRedisDefaultsAndEnvOverrides(): void
     {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'read'));
-    }
+        $default = new RedisSessionHandler();
+        $ref = new \ReflectionClass($default);
+        $this->assertSame('localhost', $ref->getProperty('host')->getValue($default));
+        $this->assertSame(6379, $ref->getProperty('port')->getValue($default));
+        $this->assertSame(0, $ref->getProperty('db')->getValue($default));
+        $this->assertSame(3600, $ref->getProperty('ttl')->getValue($default));
+        $this->assertSame('tina4:session:', $ref->getProperty('keyPrefix')->getValue($default));
+        $this->assertNull($ref->getProperty('password')->getValue($default));
 
-    public function testRedisSessionHandlerHasWriteMethod(): void
-    {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'write'));
-    }
-
-    public function testRedisSessionHandlerHasDestroyMethod(): void
-    {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'destroy'));
-    }
-
-    public function testRedisSessionHandlerHasCloseMethod(): void
-    {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'close'));
-    }
-
-    public function testRedisSessionHandlerHasExistsMethod(): void
-    {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'exists'));
-    }
-
-    public function testRedisSessionHandlerHasTouchMethod(): void
-    {
-        $this->assertTrue(method_exists(\Tina4\Session\RedisSessionHandler::class, 'touch'));
-    }
-
-    public function testRedisSessionHandlerEnvVarHost(): void
-    {
         putenv('TINA4_SESSION_REDIS_HOST=envhost');
         putenv('TINA4_SESSION_REDIS_PORT=6381');
-
-        $handler = new \Tina4\Session\RedisSessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('envhost', $hostProp->getValue($handler));
-
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(6381, $portProp->getValue($handler));
-
-        putenv('TINA4_SESSION_REDIS_HOST');
-        putenv('TINA4_SESSION_REDIS_PORT');
-    }
-
-    public function testRedisSessionHandlerEnvVarPassword(): void
-    {
         putenv('TINA4_SESSION_REDIS_PASSWORD=envpassword');
-
-        $handler = new \Tina4\Session\RedisSessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $passProp = $ref->getProperty('password');
-        $this->assertEquals('envpassword', $passProp->getValue($handler));
-
-        putenv('TINA4_SESSION_REDIS_PASSWORD');
-    }
-
-    public function testRedisSessionHandlerEnvVarDb(): void
-    {
         putenv('TINA4_SESSION_REDIS_DB=5');
-
-        $handler = new \Tina4\Session\RedisSessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $dbProp = $ref->getProperty('db');
-        $this->assertEquals(5, $dbProp->getValue($handler));
-
-        putenv('TINA4_SESSION_REDIS_DB');
-    }
-
-    public function testRedisSessionHandlerNoPasswordByDefault(): void
-    {
-        $handler = new \Tina4\Session\RedisSessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $passProp = $ref->getProperty('password');
-        $this->assertNull($passProp->getValue($handler));
-    }
-
-    public function testRedisSessionHandlerConfigOverridesEnv(): void
-    {
-        putenv('TINA4_SESSION_REDIS_HOST=envhost');
-
-        $handler = new \Tina4\Session\RedisSessionHandler(['host' => 'confighost']);
-
-        $ref = new \ReflectionClass($handler);
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('confighost', $hostProp->getValue($handler));
-
-        putenv('TINA4_SESSION_REDIS_HOST');
-    }
-
-    public function testRedisSessionHandlerEnvVarTtl(): void
-    {
         putenv('TINA4_SESSION_TTL=900');
+        try {
+            $fromEnv = new RedisSessionHandler();
+            $r = new \ReflectionClass($fromEnv);
+            $this->assertSame('envhost', $r->getProperty('host')->getValue($fromEnv));
+            $this->assertSame(6381, $r->getProperty('port')->getValue($fromEnv));
+            $this->assertSame('envpassword', $r->getProperty('password')->getValue($fromEnv));
+            $this->assertSame(5, $r->getProperty('db')->getValue($fromEnv));
+            $this->assertSame(900, $r->getProperty('ttl')->getValue($fromEnv));
 
-        $handler = new \Tina4\Session\RedisSessionHandler();
-
-        $ref = new \ReflectionClass($handler);
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(900, $ttlProp->getValue($handler));
-
-        putenv('TINA4_SESSION_TTL');
+            $override = new RedisSessionHandler(['host' => 'confighost']);
+            $this->assertSame(
+                'confighost',
+                (new \ReflectionClass($override))->getProperty('host')->getValue($override)
+            );
+        } finally {
+            putenv('TINA4_SESSION_REDIS_HOST');
+            putenv('TINA4_SESSION_REDIS_PORT');
+            putenv('TINA4_SESSION_REDIS_PASSWORD');
+            putenv('TINA4_SESSION_REDIS_DB');
+            putenv('TINA4_SESSION_TTL');
+        }
     }
 
-    // -- MongoSessionHandler env var tests ------------------------------------
+    // =====================================================================
+    //  DatabaseSessionHandler — real SQLite + live PostgreSQL round-trips
+    //  (no mock adapter; the dedicated SQLite behaviour suite lives in
+    //   DatabaseSessionHandlerTest.php — here we add a PostgreSQL round-trip
+    //   and a TTL-config assertion against a real adapter.)
+    // =====================================================================
 
-    public function testMongoSessionHandlerEnvVarHost(): void
+    public function testDatabaseWriteReadDestroyCycleSqlite(): void
     {
-        putenv('TINA4_SESSION_MONGO_HOST=mongo-env');
-        putenv('TINA4_SESSION_MONGO_PORT=27018');
+        $adapter = new SQLite3Adapter(':memory:');
+        $handler = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 1800]);
+        $id = $this->sid('db-sqlite');
 
-        $handler = new MongoSessionHandler([
-            'url' => 'mongodb://mongo-env:27018',
-        ]);
+        $handler->write($id, ['user_id' => 1, 'name' => 'Alice']);
+        $this->assertSame(['user_id' => 1, 'name' => 'Alice'], $handler->read($id));
 
-        $ref = new \ReflectionClass($handler);
+        $handler->destroy($id);
+        $this->assertNull($handler->read($id), 'session must be gone after destroy()');
 
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('mongo-env', $hostProp->getValue($handler));
-
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(27018, $portProp->getValue($handler));
-
-        putenv('TINA4_SESSION_MONGO_HOST');
-        putenv('TINA4_SESSION_MONGO_PORT');
+        $adapter->close();
     }
 
-    public function testMongoSessionHandlerUrlParsing(): void
+    public function testDatabaseExpiredSessionIsPurgedOnRead(): void
     {
-        $handler = new MongoSessionHandler([
-            'url' => 'mongodb://user:pass@db.host.com:27020/mydb',
-        ]);
+        $adapter = new SQLite3Adapter(':memory:');
+        $handler = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 1]);
+        $id = $this->sid('db-expire');
 
-        $ref = new \ReflectionClass($handler);
+        $handler->write($id, ['x' => 1]);
+        $this->assertSame(['x' => 1], $handler->read($id));
 
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('db.host.com', $hostProp->getValue($handler));
+        sleep(2);
+        $this->assertNull($handler->read($id), 'expired session must read null and be purged');
 
-        $portProp = $ref->getProperty('port');
-        $this->assertEquals(27020, $portProp->getValue($handler));
+        $adapter->close();
     }
 
-    public function testMongoSessionHandlerHasCloseMethodReflection(): void
+    public function testDatabaseGcRemovesExpiredKeepsValid(): void
     {
-        $ref = new \ReflectionClass(MongoSessionHandler::class);
-        $this->assertTrue($ref->hasMethod('close'));
+        $adapter = new SQLite3Adapter(':memory:');
+        // Short default TTL so the two we write now are already expired after sleep.
+        $expiring = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 1]);
+        $expiring->write($this->sid('gc-old'), ['a' => 1]);
+        $oldId = $this->sid('gc-old2');
+        $expiring->write($oldId, ['b' => 2]);
+
+        $longLived = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 3600]);
+        $validId = $this->sid('gc-valid');
+        $longLived->write($validId, ['c' => 3]);
+
+        sleep(2);
+        $longLived->gc(0);
+
+        $this->assertSame(['c' => 3], $longLived->read($validId), 'valid session must survive gc()');
+        $this->assertNull($longLived->read($oldId), 'expired session must be gc-removed');
+
+        $adapter->close();
     }
 
-    // -- ValkeySessionHandler additional tests --------------------------------
-
-    public function testValkeySessionHandlerHasExistsMethodReflection(): void
+    public function testDatabaseWriteReadDestroyCyclePostgres(): void
     {
-        $ref = new \ReflectionClass(ValkeySessionHandler::class);
-        $this->assertTrue($ref->hasMethod('exists'));
+        $this->requireService('localhost', self::PG_PORT, 'PostgreSQL');
+
+        $db = Database::create('postgres://localhost:' . self::PG_PORT . '/tina4_php', username: 'tina4', password: 'tina4');
+        $this->assertNotNull($db, 'PostgreSQL connection must be available');
+
+        $handler = new DatabaseSessionHandler(['db' => $db, 'ttl' => 1800]);
+        $id = $this->sid('db-pg');
+
+        try {
+            $handler->write($id, ['user_id' => 7, 'role' => 'editor']);
+            $this->assertSame(['user_id' => 7, 'role' => 'editor'], $handler->read($id));
+
+            // The session_id cookie value is bound as a parameter — a quote in it
+            // must never break the query (SQL-injection guard).
+            $injectId = $this->sid("db-pg-inject'\";--");
+            $handler->write($injectId, ['safe' => true]);
+            $this->assertSame(['safe' => true], $handler->read($injectId));
+            $handler->destroy($injectId);
+            $this->assertNull($handler->read($injectId));
+
+            $handler->destroy($id);
+            $this->assertNull($handler->read($id), 'session must be gone after destroy()');
+        } finally {
+            $handler->destroy($id);
+            $db->close();
+        }
     }
 
-    public function testValkeySessionHandlerConfigOverridesEnv(): void
+    public function testDatabaseReadMissingSessionReturnsNull(): void
     {
-        putenv('TINA4_SESSION_VALKEY_HOST=envhost');
-
-        $handler = new ValkeySessionHandler(['host' => 'confighost']);
-
-        $ref = new \ReflectionClass($handler);
-        $hostProp = $ref->getProperty('host');
-        $this->assertEquals('confighost', $hostProp->getValue($handler));
-
-        putenv('TINA4_SESSION_VALKEY_HOST');
+        $adapter = new SQLite3Adapter(':memory:');
+        $handler = new DatabaseSessionHandler(['db' => $adapter]);
+        $this->assertNull($handler->read($this->sid('db-missing')));
+        $adapter->close();
     }
 
-    public function testValkeySessionHandlerEnvVarTtl(): void
+    /** TTL config is real constructor behaviour — assert it against a REAL adapter. */
+    public function testDatabaseTtlConfigAndDefault(): void
     {
-        putenv('TINA4_SESSION_TTL=900');
+        $adapter = new SQLite3Adapter(':memory:');
 
-        $handler = new ValkeySessionHandler();
+        $custom = new DatabaseSessionHandler(['db' => $adapter, 'ttl' => 900]);
+        $this->assertSame(
+            900,
+            (new \ReflectionClass($custom))->getProperty('ttl')->getValue($custom)
+        );
 
-        $ref = new \ReflectionClass($handler);
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(900, $ttlProp->getValue($handler));
+        $default = new DatabaseSessionHandler(['db' => $adapter]);
+        $this->assertSame(
+            3600,
+            (new \ReflectionClass($default))->getProperty('ttl')->getValue($default)
+        );
 
-        putenv('TINA4_SESSION_TTL');
+        putenv('TINA4_SESSION_TTL=7200');
+        try {
+            $fromEnv = new DatabaseSessionHandler(['db' => $adapter]);
+            $this->assertSame(
+                7200,
+                (new \ReflectionClass($fromEnv))->getProperty('ttl')->getValue($fromEnv)
+            );
+        } finally {
+            putenv('TINA4_SESSION_TTL');
+        }
+
+        $adapter->close();
     }
 
-    public function testValkeySessionHandlerDefaultTtl(): void
+    public function testDatabaseCloseIsNoopAndDoesNotBreakAdapter(): void
     {
-        $handler = new ValkeySessionHandler();
+        $adapter = new SQLite3Adapter(':memory:');
+        $handler = new DatabaseSessionHandler(['db' => $adapter]);
 
-        $ref = new \ReflectionClass($handler);
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertIsInt($ttlProp->getValue($handler));
-        $this->assertGreaterThan(0, $ttlProp->getValue($handler));
+        $id = $this->sid('db-close');
+        $handler->write($id, ['v' => 1]);
+        $handler->close(); // no-op for DB handler — adapter owns its connection
+
+        // Adapter is still usable after the handler's close().
+        $this->assertSame(['v' => 1], $handler->read($id));
+        $adapter->close();
     }
 
-    public function testRedisSessionHandlerDefaultTtl(): void
+    public function testDatabaseThrowsWithoutDbConfiguration(): void
     {
-        $handler = new \Tina4\Session\RedisSessionHandler();
+        $prev = getenv('TINA4_DATABASE_URL');
+        putenv('TINA4_DATABASE_URL');
+        unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
+        \Tina4\DotEnv::resetEnv();
 
-        $ref = new \ReflectionClass($handler);
-        $ttlProp = $ref->getProperty('ttl');
-        $this->assertEquals(3600, $ttlProp->getValue($handler));
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('No database connection available');
+            new DatabaseSessionHandler();
+        } finally {
+            if ($prev !== false) {
+                putenv("TINA4_DATABASE_URL={$prev}");
+            }
+        }
     }
 }
