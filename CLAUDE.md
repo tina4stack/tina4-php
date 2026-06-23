@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.43 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.44 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -24,7 +24,7 @@ Version 3.13.43 - Full Tina4 PHP framework and application scaffold. See https:/
 - **Constants** — No magic strings or numbers in routes. Use class constants or a dedicated constants file
 - **Service layer pattern** — For complex business logic, create service classes in `src/services/`. Routes should be thin wrappers
 - **Parity across all frameworks** — Every new feature, fix, or optimization must be implemented with equivalent logic AND tests in all 4 Tina4 frameworks (Python, PHP, Ruby, Node.js). Never ship to one without shipping to all.
-- **Tests validate against the real thing — NO mock testing.** Any test that touches an external dependency (a DB engine, MongoDB, Redis/Valkey/Memcached, RabbitMQ/Kafka, an HTTP service) must exercise the REAL service, not a mock/stub/fake (e.g. FakeMongoCollection). "Verified"/"green" requires a real run — a passing mock test is not verification. CI provisions the services; use them (add one if missing — e.g. ext-mongodb for the Mongo queue). Pure-logic unit tests with no external dependency are exempt. (The Node MongoDB queue re-delivered every completed job for two releases because its queue tests were mock-based and never ran against a real Mongo.)
+- **NO mock testing. Mocks are not acceptable in any circumstances.** A test double (mock, stub, fake, spy, monkeypatch, or any in-test object standing in for a real collaborator, e.g. FakeMongoCollection) may never substitute for a real dependency, under any justification. There is no "supplement" exception and no "hard to reproduce" exception. Any test that touches a dependency (a DB engine, MongoDB, Redis/Valkey/Memcached, RabbitMQ/Kafka, an HTTP/SMTP service, the filesystem, a socket) must exercise the REAL service; if a failure mode is hard to trigger, reproduce it for real, never simulate it. "Verified"/"green" requires a real run; a passing mock test is not verification. CI provisions the services; use them and add any that is missing (e.g. ext-mongodb for the Mongo queue). The only tests that need no live dependency are pure functions with no dependency and no double; that is not a mock test. (The Node MongoDB queue re-delivered every completed job for two releases because its queue tests were mock-based and never ran against a real Mongo.)
 - **Routes use `$response()`** — Return via the response callable, this is the Tina4 convention
 - **Error handling in routes** — Wrap route logic in `try/catch`, log with `Log::error()` / `Log::warning()` / `Log::info()` / `Log::debug()` (or alias `Debug` if you have a backwards-compat shim), return response with appropriate status
 - **All links and references** should point to https://tina4.com

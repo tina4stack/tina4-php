@@ -710,16 +710,34 @@ class Migration
                     applied_at VARCHAR(50) DEFAULT CURRENT_TIMESTAMP
                 )
             ");
-        } else {
-            $this->db->exec("
-                CREATE TABLE " . self::MIGRATIONS_TABLE . " (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    migration VARCHAR(255) NOT NULL UNIQUE,
-                    batch INTEGER NOT NULL,
-                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ");
+            return;
         }
+
+        // Engine-aware bookkeeping table for every other adapter. Each engine
+        // spells an auto-increment integer PK differently (SQLite AUTOINCREMENT,
+        // PostgreSQL SERIAL, MySQL AUTO_INCREMENT, MSSQL IDENTITY); MSSQL also
+        // reserves TIMESTAMP for rowversion, so a real timestamp needs DATETIME.
+        // Mirrors ORM::createTable()'s engine-aware DDL.
+        $dialect = $this->detectDialect();
+
+        $idColumn = match ($dialect) {
+            'postgresql' => 'id SERIAL PRIMARY KEY',
+            'mysql'      => 'id INTEGER PRIMARY KEY AUTO_INCREMENT',
+            'mssql'      => 'id INTEGER IDENTITY(1,1) PRIMARY KEY',
+            default      => 'id INTEGER PRIMARY KEY AUTOINCREMENT', // sqlite
+        };
+        $appliedAtColumn = $dialect === 'mssql'
+            ? 'applied_at DATETIME DEFAULT CURRENT_TIMESTAMP'
+            : 'applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP';
+
+        $this->db->exec("
+            CREATE TABLE " . self::MIGRATIONS_TABLE . " (
+                {$idColumn},
+                migration VARCHAR(255) NOT NULL UNIQUE,
+                batch INTEGER NOT NULL,
+                {$appliedAtColumn}
+            )
+        ");
     }
 
     /**
@@ -1026,6 +1044,32 @@ class Migration
     private function isMSSQL(): bool
     {
         return $this->db instanceof \Tina4\Database\MSSQLAdapter;
+    }
+
+    /**
+     * Resolve the SQL dialect for engine-aware DDL (the bookkeeping table),
+     * unwrapping any Database / CachedDatabase facade to the concrete adapter.
+     * Mirrors ORM::detectDialect(). Returns postgresql | mysql | mssql |
+     * firebird | sqlite (sqlite is the safe default).
+     */
+    private function detectDialect(): string
+    {
+        $adapter = $this->db;
+        while (is_object($adapter) && method_exists($adapter, 'getAdapter')) {
+            $next = $adapter->getAdapter();
+            if ($next === $adapter || !$next instanceof \Tina4\Database\DatabaseAdapter) {
+                break;
+            }
+            $adapter = $next;
+        }
+
+        return match (true) {
+            $adapter instanceof \Tina4\Database\PostgresAdapter => 'postgresql',
+            $adapter instanceof \Tina4\Database\MySQLAdapter    => 'mysql',
+            $adapter instanceof \Tina4\Database\MSSQLAdapter    => 'mssql',
+            $adapter instanceof \Tina4\Database\FirebirdAdapter => 'firebird',
+            default => 'sqlite',
+        };
     }
 
     /**

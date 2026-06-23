@@ -25,6 +25,32 @@
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
 use Tina4\Database\DatabaseAdapter;
+use Tina4\ORM;
+
+// ── Test models for issue #256 (one typed property per column) ───────────────
+
+// UUID primary key with a DB-side DEFAULT — the caller never sets `id`, so the
+// framework must read back the value PostgreSQL generated (a 36-char UUID
+// string), not 0 / '' / a stale wrong integer.
+class T4Issue256UuidModel extends ORM
+{
+    public string $tableName = 't4_issue256_uuid';
+    public string $primaryKey = 'id';
+
+    public string $id = '';
+    public string $name = '';
+}
+
+// SERIAL integer auto-increment — the framework must keep returning the
+// incrementing integer id (the path that must NOT regress).
+class T4Issue256SerialModel extends ORM
+{
+    public string $tableName = 't4_issue256_serial';
+    public string $primaryKey = 'id';
+
+    public int $id = 0;
+    public string $name = '';
+}
 
 class PostgresUuidPkTest extends TestCase
 {
@@ -61,7 +87,26 @@ class PostgresUuidPkTest extends TestCase
             . '  name text'
             . ')'
         );
+
+        // Issue #256 tables: a DB-default UUID PK and a SERIAL integer PK.
+        $this->db->execute('DROP TABLE IF EXISTS t4_issue256_uuid');
+        $this->db->execute(
+            'CREATE TABLE t4_issue256_uuid ('
+            . '  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), '
+            . '  name text'
+            . ')'
+        );
+        $this->db->execute('DROP TABLE IF EXISTS t4_issue256_serial');
+        $this->db->execute(
+            'CREATE TABLE t4_issue256_serial ('
+            . '  id SERIAL PRIMARY KEY, '
+            . '  name text'
+            . ')'
+        );
         $this->db->commit();
+
+        // Point the #256 ORM test models at this live connection.
+        ORM::bindDatabase($this->db);
     }
 
     protected function tearDown(): void
@@ -69,6 +114,8 @@ class PostgresUuidPkTest extends TestCase
         if ($this->db !== null) {
             try {
                 $this->db->execute('DROP TABLE IF EXISTS t4_issue38_uuid');
+                $this->db->execute('DROP TABLE IF EXISTS t4_issue256_uuid');
+                $this->db->execute('DROP TABLE IF EXISTS t4_issue256_serial');
                 $this->db->commit();
             } finally {
                 $this->db->close();
@@ -76,6 +123,8 @@ class PostgresUuidPkTest extends TestCase
             $this->db = null;
         }
     }
+
+    private const UUID_RE = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
 
     private static function pgReachable(): bool
     {
@@ -164,5 +213,79 @@ class PostgresUuidPkTest extends TestCase
         // After RETURNING, lastInsertId should hold a uuid-like string
         $lastId = $this->db->lastInsertId();
         $this->assertNotEmpty($lastId);
+    }
+
+    // ── Issue #256: a DB-generated PK (UUID) must be surfaced after save() ──
+    //
+    // Before the fix, an ORM model with `id uuid PRIMARY KEY DEFAULT
+    // gen_random_uuid()` saved a row but the PK property stayed '' / 0 — the
+    // INSERT emitted no RETURNING and PostgreSQL's lastval() probe gives nothing
+    // useful for a non-SERIAL PK, so the generated UUID was never read back.
+
+    public function testModelSaveSurfacesGeneratedUuidPk(): void
+    {
+        $model = new T4Issue256UuidModel();
+        $model->name = 'gamma';
+
+        $saved = $model->save();
+
+        // save() returns the model on success, false on failure.
+        $this->assertNotFalse($saved, 'save() failed: ' . ($model->getError() ?? ''));
+
+        // The PK property must now hold the ACTUAL generated UUID — NOT 0/''.
+        $this->assertIsString($model->id);
+        $this->assertNotSame('', $model->id, 'UUID PK was not surfaced (stayed empty)');
+        $this->assertNotSame('0', (string)$model->id, 'UUID PK was a stale 0');
+        $this->assertSame(36, strlen($model->id), 'surfaced id is not a 36-char UUID');
+        $this->assertMatchesRegularExpression(self::UUID_RE, $model->id);
+
+        // And it must match the value actually written to the row.
+        $row = $this->db->fetchOne(
+            'SELECT id FROM t4_issue256_uuid WHERE name = $1',
+            ['gamma']
+        );
+        $this->assertNotNull($row, 'row was not persisted');
+        $this->assertSame($model->id, $row['id'],
+            'surfaced PK does not match the persisted row id');
+    }
+
+    public function testAdapterInsertSurfacesGeneratedUuidPk(): void
+    {
+        // The documented db->insert() / getLastId() path must also surface the
+        // generated UUID (the adapter insert() uses RETURNING *).
+        $ok = $this->db->insert('t4_issue256_uuid', ['name' => 'delta']);
+        $this->assertTrue($ok, 'adapter insert() failed: ' . ($this->db->getError() ?? ''));
+
+        $lastId = $this->db->getLastId();
+        $this->assertIsString($lastId);
+        $this->assertSame(36, strlen($lastId), "getLastId() was not a UUID: " . var_export($lastId, true));
+        $this->assertMatchesRegularExpression(self::UUID_RE, $lastId);
+
+        $row = $this->db->fetchOne('SELECT id FROM t4_issue256_uuid WHERE name = $1', ['delta']);
+        $this->assertSame($lastId, $row['id']);
+    }
+
+    public function testModelSaveStillReturnsSerialIntegerPk(): void
+    {
+        // The SERIAL integer auto-increment path MUST keep returning the
+        // incrementing integer id (must not regress to a UUID/string/0).
+        $first = new T4Issue256SerialModel();
+        $first->name = 'one';
+        $this->assertNotFalse($first->save(), 'first SERIAL save() failed: ' . ($first->getError() ?? ''));
+
+        $second = new T4Issue256SerialModel();
+        $second->name = 'two';
+        $this->assertNotFalse($second->save(), 'second SERIAL save() failed: ' . ($second->getError() ?? ''));
+
+        // Integers, surfaced, and monotonically increasing.
+        $this->assertIsInt($first->id);
+        $this->assertIsInt($second->id);
+        $this->assertGreaterThan(0, $first->id, 'first SERIAL id was not a positive integer');
+        $this->assertGreaterThan($first->id, $second->id,
+            'SERIAL id did not increment between inserts');
+
+        // And they match the persisted rows.
+        $rowOne = $this->db->fetchOne('SELECT id FROM t4_issue256_serial WHERE name = $1', ['one']);
+        $this->assertSame($first->id, (int)$rowOne['id']);
     }
 }

@@ -47,6 +47,7 @@
             <file>tests/CacheBackendsTest.php</file>
             <file>tests/ContainerTest.php</file>
             <file>tests/QueueBackendTest.php</file>
+            <file>tests/RabbitMQIntegrationTest.php</file>
             <file>tests/SessionHandlerTest.php</file>
             <file>tests/AITest.php</file>
             <file>tests/ErrorOverlayTest.php</file>

@@ -55,16 +55,22 @@ commit, merge, or release:
   against the parser, actually invoke the CLI) rather than accepting the agent's assessment.
 - **Confirm lock-in tests are real** — both positive AND negative cases present, and the negative
   test genuinely fails against the old behavior.
-- **No mock testing — validate against the real thing.** A test that touches an external dependency
-  (any DB engine — SQLite/PG/MySQL/MSSQL/Firebird, MongoDB, Redis/Valkey/Memcached, RabbitMQ/Kafka,
-  an HTTP service) MUST exercise the real service, not a mock/stub/fake/script-introspection.
-  "Verified"/"green" requires a real run — a passing mock test is not verification and must never be
-  reported as one. CI provisions Mongo/Redis/Valkey/Memcached (add the broker where missing); use
-  them. The MongoDB-queue lesson: the Node Mongo queue re-delivered every completed job (no ack path)
-  and shipped for two releases because the queue tests were mock-based and never ran pop -> complete
-  -> no-redelivery against a real Mongo. Mocks are allowed only as a fast inner-loop supplement when a
-  real-service test for the same behaviour also exists; a mock alone is never the sole proof. Pure-
-  logic unit tests (no external dependency) are exempt.
+- **No mock testing: mocks are not acceptable in any circumstances.** A test double (mock, stub,
+  fake, spy, monkeypatch, or any in-test object that stands in for a real collaborator: a
+  `FakeMongoCollection`, a script-introspection assertion, a hand-rolled in-test backend) may NEVER
+  substitute for a real dependency, under any justification. There is NO "supplement" exception and
+  NO "hard to reproduce" exception. A test that touches a dependency (any DB engine, MongoDB,
+  Redis/Valkey/Memcached, RabbitMQ/Kafka, an HTTP/SMTP service, the filesystem, a socket) MUST
+  exercise the real thing. If a failure mode is hard to trigger, reproduce it for real (inject a
+  real error, point at a real service in a failure state, use a real temp resource); never simulate
+  it with a double. "Verified"/"green" requires a real run; a passing mock test is not verification
+  and must never be reported as one. CI provisions the services (Mongo/Redis/Valkey/Memcached/
+  PostgreSQL/RabbitMQ/Kafka); use them and add any that is missing. The ONLY tests that need no live
+  dependency are pure-logic unit tests that have no dependency and use no double (a pure function
+  over its inputs); that is not a mock test. The **MongoDB-queue lesson**: the Node Mongo queue
+  re-delivered every completed job (no ack path) and shipped for two releases because the queue
+  tests were mock-based; they asserted the generated script's shape, never ran pop -> complete ->
+  no-redelivery against a real Mongo; one live run caught it in minutes.
 - **State every claim at 100% and qualify it — never assert what you haven't proven.** No "should
   work", no "probably passes", no "fixed" before you ran it. Scope each claim to *where you actually
   verified it*: "3251 tests pass **on macOS, PHP 8.5**" — not "tests pass"; "green on Linux CI,

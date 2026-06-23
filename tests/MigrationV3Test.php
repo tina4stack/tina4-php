@@ -112,6 +112,65 @@ class MigrationV3Test extends TestCase
         $this->assertTrue($this->db->tableExists('b'));
     }
 
+    /**
+     * Live PostgreSQL: the migration runner must build its own bookkeeping
+     * table (tina4_migration) with engine-correct DDL -- SERIAL, not SQLite's
+     * AUTOINCREMENT -- then run a real CREATE TABLE + INSERT migration. This is
+     * the regression guard for the bug where createV3Table() emitted
+     * SQLite-only DDL for every non-Firebird engine, so `new Migration($pg,...)`
+     * fataled with "syntax error at or near AUTOINCREMENT" and migrations were
+     * entirely unusable on Postgres. Gated on TINA4_TEST_POSTGRES_URL so CI
+     * without a live Postgres just no-ops (mirrors DatabaseDriversTest).
+     */
+    public function testMigrationRunnerWorksOnLivePostgres(): void
+    {
+        if (!extension_loaded('pdo_pgsql') && !function_exists('pg_connect')) {
+            $this->markTestSkipped('no PostgreSQL driver (pdo_pgsql / ext-pgsql) installed');
+        }
+        $url = getenv('TINA4_TEST_POSTGRES_URL');
+        if (!$url) {
+            $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL to run the live PostgreSQL migration test (e.g. postgres://tina4:tina4@localhost:55432/tina4_php)');
+        }
+
+        // Construct via the Database facade -- exactly how apps wire migrations
+        // (Database::create / fromEnv), and what the bug report reproduces with.
+        $pg = \Tina4\Database\Database::create($url);
+        // Clean slate so createV3Table() actually runs and the migration applies.
+        foreach (['mig_widget', 'tina4_migration'] as $t) {
+            try { $pg->execute("DROP TABLE IF EXISTS {$t}"); } catch (\Throwable) {}
+        }
+
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_widgets.sql',
+            "CREATE TABLE mig_widget (id SERIAL PRIMARY KEY, name VARCHAR(50));\n" .
+            "INSERT INTO mig_widget (name) VALUES ('alpha')"
+        );
+
+        // Constructing the runner builds the bookkeeping table -- the exact call
+        // that used to throw the AUTOINCREMENT syntax error on Postgres.
+        $migration = new Migration($pg, $this->migrationsDir);
+        $this->assertTrue($pg->tableExists('tina4_migration'), 'bookkeeping table created on PG');
+
+        $result = $migration->migrate();
+        $this->assertCount(1, $result['applied']);
+        $this->assertSame([], $result['errors']);
+        $this->assertTrue($pg->tableExists('mig_widget'), 'user migration ran on PG');
+
+        $rows = $pg->query("SELECT name FROM mig_widget");
+        $this->assertSame('alpha', $rows[0]['name'] ?? null);
+
+        // The bookkeeping row got a SERIAL-assigned id -- proves the PK type
+        // works, not merely that the DDL parsed.
+        $bk = $pg->query("SELECT id, migration FROM tina4_migration ORDER BY id");
+        $this->assertGreaterThanOrEqual(1, (int)($bk[0]['id'] ?? 0));
+        $this->assertSame('20240101000000_create_widgets.sql', $bk[0]['migration'] ?? null);
+
+        foreach (['mig_widget', 'tina4_migration'] as $t) {
+            try { $pg->execute("DROP TABLE IF EXISTS {$t}"); } catch (\Throwable) {}
+        }
+        $pg->close();
+    }
+
     public function testMigrateSkipsAlreadyApplied(): void
     {
         file_put_contents(

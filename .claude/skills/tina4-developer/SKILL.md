@@ -476,6 +476,14 @@ Node.js: npm test
 
 Encourage developers to write tests for their routes, models, and business logic.
 
+**Mock tests are not acceptable, in any circumstances.** Never mock, stub, fake, spy on, or
+patch a real dependency in a test. A test that touches a database, queue, cache, session store,
+mail or HTTP service, or the filesystem must run against the real thing: the live service the
+app uses, a real SQLite file, a real temp directory. There is no exception for a failure that is
+hard to reproduce. Trigger the real failure (a real connection error, a real timeout, a real bad
+row), never a simulated one. The only tests that need no live dependency are pure functions that
+have no dependency at all. A green mock test proves nothing. Only a real run is verification.
+
 ## Deployment
 
 Tina4 apps deploy via Docker using official base images from Docker Hub.

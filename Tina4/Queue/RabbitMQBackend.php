@@ -76,11 +76,13 @@ class RabbitMQBackend implements QueueBackend
         // Send Connection.StartOk with PLAIN auth
         $this->sendConnectionStartOk();
 
-        // Read Connection.Tune
-        $this->readFrame();
+        // Read Connection.Tune (the broker proposes channel-max, frame-max, heartbeat)
+        $tune = $this->readFrame();
 
-        // Send Connection.TuneOk
-        $this->sendConnectionTuneOk();
+        // Send Connection.TuneOk with NEGOTIATED values (never exceed the broker's
+        // proposal — a channel-max of 0 means "no limit", which RabbitMQ treats as
+        // greater than its proposed 2047 and aborts the handshake).
+        $this->sendConnectionTuneOk($tune);
 
         // Send Connection.Open
         $this->sendConnectionOpen();
@@ -271,10 +273,56 @@ class RabbitMQBackend implements QueueBackend
         $this->writeMethod(0, 10, 11, $args);
     }
 
-    private function sendConnectionTuneOk(): void
+    /**
+     * Send Connection.TuneOk, negotiating from the server's Connection.Tune.
+     *
+     * AMQP 0-9-1 §1.4 requires the client's TuneOk values to not exceed the
+     * server's proposal. The broker sends Connection.Tune (class 10, method 30)
+     * whose payload (after the 4-byte class+method) is channel-max:short,
+     * frame-max:long, heartbeat:short. We echo channel-max (or pick our own only
+     * if the server sent 0 = unlimited), clamp frame-max to min(desired, server)
+     * treating 0 as unlimited, and choose a heartbeat. Hardcoding channel-max=0
+     * means "no limit", which RabbitMQ treats as exceeding its proposed 2047 and
+     * aborts the connection right after Open — the root cause of the failed
+     * "Failed to read AMQP frame header" at the OpenOk read.
+     *
+     * @param array{type: int, channel: int, payload: string}|null $tune The
+     *   Connection.Tune frame from the broker.
+     */
+    private function sendConnectionTuneOk(?array $tune = null): void
     {
+        $desiredFrameMax = 131072;
+        $desiredHeartbeat = 60;
+
+        // Defaults if we somehow have no Tune frame to negotiate from.
+        $channelMax = 2047;
+        $frameMax = $desiredFrameMax;
+        $heartbeat = $desiredHeartbeat;
+
+        if ($tune !== null && strlen($tune['payload']) >= 12) {
+            // payload: class_id(2) + method_id(2) + channel-max(2) + frame-max(4) + heartbeat(2)
+            $server = unpack('nclass/nmethod/nchannelMax/NframeMax/nheartbeat', substr($tune['payload'], 0, 12));
+
+            // channel-max: never exceed the server's proposal. The server's value
+            // (e.g. 2047) is the cap; 0 from the server means unlimited, so we may
+            // pick our own (use the server cap of 0 = unlimited as-is).
+            $channelMax = (int)$server['channelMax'];
+
+            // frame-max: min(desired, server), treating 0 as unlimited on either side.
+            $serverFrameMax = (int)$server['frameMax'];
+            if ($serverFrameMax === 0) {
+                $frameMax = $desiredFrameMax;
+            } else {
+                $frameMax = min($desiredFrameMax, $serverFrameMax);
+            }
+
+            // heartbeat: our choice (clamp to the server's if it proposed a non-zero one).
+            $serverHeartbeat = (int)$server['heartbeat'];
+            $heartbeat = $serverHeartbeat === 0 ? $desiredHeartbeat : min($desiredHeartbeat, $serverHeartbeat);
+        }
+
         // Connection.TuneOk = class 10, method 31
-        $args = pack('nNn', 0, 131072, 60); // channel-max=0, frame-max=131072, heartbeat=60
+        $args = pack('nNn', $channelMax, $frameMax, $heartbeat);
         $this->writeMethod(0, 10, 31, $args);
     }
 

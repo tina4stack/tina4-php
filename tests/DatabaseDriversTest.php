@@ -267,7 +267,7 @@ class DatabaseDriversTest extends TestCase
 
         $url = getenv('TINA4_TEST_POSTGRES_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL to run live PostgreSQL tests (e.g. pgsql://user:pass@localhost/testdb)');
+            $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL to run live PostgreSQL tests (e.g. postgres://user:pass@localhost:5432/testdb)');
         }
 
         $db = new PostgresAdapter($url);
@@ -382,8 +382,11 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL for live factory test');
         }
 
+        // Database::create() returns the Database facade (v3); the concrete
+        // engine adapter is reachable via getAdapter().
         $db = Database::create($url);
-        $this->assertInstanceOf(PostgresAdapter::class, $db);
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(PostgresAdapter::class, $db->getAdapter());
         $db->close();
     }
 
@@ -399,7 +402,8 @@ class DatabaseDriversTest extends TestCase
         }
 
         $db = Database::create($url);
-        $this->assertInstanceOf(MySQLAdapter::class, $db);
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(MySQLAdapter::class, $db->getAdapter());
         $db->close();
     }
 
@@ -415,7 +419,8 @@ class DatabaseDriversTest extends TestCase
         }
 
         $db = Database::create($url);
-        $this->assertInstanceOf(MSSQLAdapter::class, $db);
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(MSSQLAdapter::class, $db->getAdapter());
         $db->close();
     }
 
@@ -431,7 +436,8 @@ class DatabaseDriversTest extends TestCase
         }
 
         $db = Database::create($url);
-        $this->assertInstanceOf(FirebirdAdapter::class, $db);
+        $this->assertInstanceOf(Database::class, $db);
+        $this->assertInstanceOf(FirebirdAdapter::class, $db->getAdapter());
         $db->close();
     }
 
