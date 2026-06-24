@@ -14,12 +14,13 @@ namespace Tina4\Testing;
  * When TINA4_REQUIRE_SERVICES is truthy, a test that SKIPPED because a
  * PROVISIONED real service (or its client library) is missing must turn into a
  * hard FAILURE — a green skip there is the exact gap that let the migration and
- * queue bugs ship. CI provisions PostgreSQL, Redis, Valkey, Memcached, MongoDB,
- * RabbitMQ and Kafka, so those integration tests MUST run.
+ * queue bugs ship. CI provisions PostgreSQL, MySQL, MSSQL, Redis, Valkey,
+ * Memcached, MongoDB, RabbitMQ and Kafka, so those integration tests MUST run.
+ * MySQL and MSSQL / SQL Server joined the provisioned set in 3.13.44 (#262), so
+ * their reachability / boolean round-trip skips now turn into failures too.
  *
- * MySQL / MSSQL / SQL Server / Firebird are deliberately NOT in the keyword set
- * — they are not provisioned, so their "set TINA4_TEST_MYSQL_URL"/"not reachable"
- * skips stay green.
+ * Firebird is deliberately NOT in the keyword set — it is not provisioned, so
+ * its "set TINA4_TEST_FIREBIRD_URL" / "not reachable" skips stay green.
  *
  * Mechanism: a PHPUnit 11 event Extension subscribes to Test\Skipped to collect
  * offending skips, then fails the whole run from Application\Finished. The skip
@@ -34,10 +35,13 @@ final class RequireServicesGate
     /**
      * Provisioned real services (and their client-library names). A skip whose
      * reason mentions one of these AND an unavailable hint is a violation.
-     * EXCLUDES mysql/mssql/sqlserver/firebird on purpose.
+     * MySQL + MSSQL/SQL Server joined the provisioned set in 3.13.44 (#262).
+     * EXCLUDES firebird on purpose (not provisioned — its skips stay green).
      */
     private const SERVICE_KEYWORDS = [
         'postgres', 'postgresql', 'psycopg2', 'pg_connect', 'ext-pgsql',
+        'mysql',          // also matches "ext-mysqli" / "pdo_mysql"
+        'mssql', 'sqlserver', 'sqlsrv', 'pdo_dblib',  // SQL Server (ext-sqlsrv or FreeTDS/pdo_dblib)
         'redis', 'valkey', 'memcached',
         'mongo',          // also matches "mongodb" / "pymongo"
         'rabbit', 'amqp',

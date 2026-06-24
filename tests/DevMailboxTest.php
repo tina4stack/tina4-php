@@ -250,6 +250,83 @@ class DevMailboxTest extends TestCase
         $this->assertNull($mailbox->read('nonexistent-id'));
     }
 
+    // ── Non-ASCII round-trip (parity lock-in) ──────────────────────
+
+    /**
+     * Capture a message whose subject AND body contain non-ASCII text
+     * (accented letters, smart quotes, em dash, euro sign), then assert the
+     * content round-trips byte-for-byte through the REAL on-disk JSON file
+     * and that read()/inbox()/count() all see it correctly. No mocks, real I/O.
+     *
+     * PARITY LOCK-IN, NOT a bug fix: PHP is genuinely NOT vulnerable to the
+     * locale-decode crash that motivated the cross-framework sweep. file I/O
+     * here is BYTE-safe (file_put_contents / file_get_contents never apply a
+     * locale text layer), and json_encode by DEFAULT escapes non-ASCII to
+     * \uXXXX — DevMailbox uses only JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
+     * so the bytes on disk are pure ASCII regardless of the active locale, and
+     * json_decode restores the original UTF-8 string. DevMailbox also performs
+     * no mb_internal_encoding manipulation. This test locks in that round-trip
+     * so a future change (e.g. someone adding JSON_UNESCAPED_UNICODE or a
+     * locale-sensitive read path) cannot silently break non-ASCII mail. Mirrors
+     * tina4-python test_dev_mailbox.py::TestDevMailbox::test_non_ascii_round_trips.
+     */
+    public function testNonAsciiRoundTrips(): void
+    {
+        $mailbox = new DevMailbox($this->mailboxDir);
+
+        $subject = "Réservation confirmée — José's café";
+        $body = "Dvořák, naïve façade, “smart quotes”, euro sign €";
+
+        $result = $mailbox->capture('rené@example.com', $subject, $body);
+        $this->assertTrue($result['success']);
+        $this->assertNotEmpty($result['id']);
+
+        // read() round-trips subject + body exactly through the on-disk JSON.
+        $msg = $mailbox->read($result['id']);
+        $this->assertNotNull($msg);
+        $this->assertSame($subject, $msg['subject']);
+        $this->assertSame($body, $msg['body']);
+        $this->assertContains('rené@example.com', $msg['to']);
+
+        // inbox() listing carries the non-ASCII subject through intact.
+        $listing = $mailbox->inbox(50, 0, 'outbox');
+        $this->assertCount(1, $listing);
+        $this->assertSame($subject, $listing[0]['subject']);
+
+        // count() sees the message.
+        $counts = $mailbox->count();
+        $this->assertEquals(1, $counts['outbox']);
+        $this->assertEquals(1, $counts['total']);
+
+        // Inspect the REAL on-disk file: it must be valid UTF-8 after decode,
+        // and (PHP-specific) the raw bytes must be ASCII-escaped (\uXXXX) since
+        // JSON_UNESCAPED_UNICODE is deliberately NOT set.
+        $file = $this->mailboxDir . '/outbox/' . $result['id'] . '.json';
+        $this->assertFileExists($file);
+        $raw = file_get_contents($file);
+
+        // Raw bytes are pure ASCII (non-ASCII escaped to backslash-uXXXX), so the
+        // file is identical regardless of the active locale (locale-proof).
+        $this->assertSame(
+            1,
+            preg_match('/^[\x00-\x7F]*$/', $raw),
+            'on-disk JSON should be pure ASCII (backslash-uXXXX escaped), not raw UTF-8'
+        );
+
+        // The non-ASCII subject appears only in its ASCII \uXXXX escaped form,
+        // never as raw UTF-8 bytes. trim(json_encode(...)) yields exactly the
+        // escaped string PHP wrote, so this is byte-exact without hardcoding
+        // any \uXXXX literal in the source.
+        $escapedSubject = trim(json_encode($subject), '"');
+        $this->assertStringContainsString($escapedSubject, $raw);
+        $this->assertStringNotContainsString($subject, $raw); // raw UTF-8 absent
+
+        // Decoding the real file restores the exact UTF-8 strings.
+        $decoded = json_decode($raw, true);
+        $this->assertSame($subject, $decoded['subject']);
+        $this->assertSame($body, $decoded['body']);
+    }
+
     // ── Unread count ───────────────────────────────────────────────
 
     public function testUnreadCountInitially(): void

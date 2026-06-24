@@ -8,87 +8,59 @@
  * Lock-in tests for the WebSocket + SSE hardening sweep (mirrors the
  * Python-master tests/test_websocket_hardening.py):
  *
- *   - Backplane relay across simulated instances (poll/onRaw + origin guard)
+ *   - Backplane relay across REAL instances (publish over a real Redis channel,
+ *     drain on poll() + origin guard)
  *   - origin-guard-no-echo invariant (we never re-deliver our own broadcast)
  *   - bytes round-trip through the JSON envelope (base64)
  *   - Broadcast resilience (one dead client never aborts delivery; it is pruned)
+ *   - Backplane publish failure (REAL socket to a closed port) never undoes the
+ *     local broadcast
  *   - SSE streaming error handling (generator raises mid-stream / disconnect)
  *   - originAllowed() allow-list semantics (empty = allow, set = reject)
  *   - Idle reaper opt-in semantics
  *   - OP_CONTINUATION fragmented-frame reassembly (RFC 6455 §5.4)
  *
- * Engine-agnostic: no real Redis/NATS/sockets-over-the-network. A tiny
- * in-memory FakeBackplane proves the relay path end to end; loopback
- * stream_socket_pair()s stand in for live WebSocket connections so we can read
- * back exactly which frames were delivered.
+ * NO mocks/fakes/doubles. The backplane tests speak the REAL RESP protocol over
+ * a real TCP socket to a real Redis/Valkey at 127.0.0.1:6379 (the zero-dependency
+ * raw path the framework ships when ext-redis is absent) — every relay crosses
+ * the live `tina4:ws` pub/sub channel. The failure-handling test triggers a REAL
+ * publish failure by pointing a real backplane at a closed port (127.0.0.1:59999).
+ * Loopback stream_socket_pair()s are real local TCP sockets standing in for live
+ * WebSocket connections so we can read back exactly which frames were delivered.
+ * The backplane tests are gated on a reachable Redis and are NOT mock-substituted
+ * when it is absent — they skip, never fake.
  */
 
 use PHPUnit\Framework\TestCase;
+use Tina4\RedisBackplane;
 use Tina4\Response;
 use Tina4\Server;
 use Tina4\WebSocket;
-use Tina4\WebSocketBackplaneInterface;
 use Tina4\WebSocketBackplaneManager;
-
-/**
- * In-memory pub/sub backplane. publish() synchronously fans the raw message
- * out to every subscribed callback — exactly what a real backplane does, minus
- * the network. Mirrors the Python FakeBackplane.
- */
-class FakeBackplane implements WebSocketBackplaneInterface
-{
-    /** @var array<string, callable[]> */
-    public array $subs = [];
-
-    public function publish(string $channel, string $message): void
-    {
-        foreach ($this->subs[$channel] ?? [] as $cb) {
-            $cb($message);
-        }
-    }
-
-    public function subscribe(string $channel, callable $callback): void
-    {
-        $this->subs[$channel][] = $callback;
-    }
-
-    public function poll(): void
-    {
-        // Synchronous fan-out happens in publish(); nothing buffered to drain.
-    }
-
-    public function getSubscriberStream()
-    {
-        return null;
-    }
-
-    public function unsubscribe(string $channel): void
-    {
-        unset($this->subs[$channel]);
-    }
-
-    public function close(): void
-    {
-        $this->subs = [];
-    }
-}
-
-/** A backplane whose publish() always throws — to prove a flaky bus never undoes a local broadcast. */
-class ExplodingBackplane extends FakeBackplane
-{
-    public function publish(string $channel, string $message): void
-    {
-        throw new \RuntimeException('bus down');
-    }
-}
 
 class WebSocketHardeningTest extends TestCase
 {
+    /** Real Redis/Valkey endpoint the backplane tests exercise. */
+    private const REDIS_HOST = '127.0.0.1';
+    private const REDIS_PORT = 6379;
+
     /** @var array<int, array{0: resource, 1: resource}> socket pairs to clean up */
     private array $pairs = [];
 
+    /** @var WebSocketBackplaneManager[] real managers to tear down (closes their Redis sockets) */
+    private array $managers = [];
+
     protected function tearDown(): void
     {
+        foreach ($this->managers as $manager) {
+            try {
+                $manager->close();
+            } catch (\Throwable $e) {
+                // best-effort
+            }
+        }
+        $this->managers = [];
+
         foreach ($this->pairs as $pair) {
             foreach ($pair as $sock) {
                 if (is_resource($sock)) {
@@ -97,6 +69,34 @@ class WebSocketHardeningTest extends TestCase
             }
         }
         $this->pairs = [];
+
+        putenv('TINA4_WS_BACKPLANE');
+        putenv('TINA4_WS_BACKPLANE_URL');
+        unset($_ENV['TINA4_WS_BACKPLANE'], $_ENV['TINA4_WS_BACKPLANE_URL']);
+    }
+
+    /**
+     * Skip (never fake) when no real Redis/Valkey is listening. A raw RESP PING
+     * over a real socket is the same handshake the backplane itself performs.
+     */
+    private function requireRedis(): void
+    {
+        $sock = @fsockopen(self::REDIS_HOST, self::REDIS_PORT, $errno, $errstr, 2);
+        if (!$sock) {
+            $this->markTestSkipped(
+                sprintf('Redis/Valkey not reachable at %s:%d (%s) — backplane test needs a real service',
+                    self::REDIS_HOST, self::REDIS_PORT, $errstr)
+            );
+        }
+        fwrite($sock, "*1\r\n\$4\r\nPING\r\n");
+        $pong = fread($sock, 64);
+        fclose($sock);
+        if ($pong === false || !str_starts_with($pong, '+PONG')) {
+            $this->markTestSkipped(
+                sprintf('Service at %s:%d did not answer PING with PONG — not a usable Redis/Valkey',
+                    self::REDIS_HOST, self::REDIS_PORT)
+            );
+        }
     }
 
     /**
@@ -133,88 +133,154 @@ class WebSocketHardeningTest extends TestCase
     }
 
     /**
-     * Wire a fresh manager to a shared fake bus the way ensureWebSocketBackplane()
-     * would in production — but inject the FakeBackplane as the manager's
-     * internal bus (via reflection) so publish() actually fans out, and mark it
-     * already-started so the server's lazy ensure() never overwrites it with a
-     * real factory lookup.
+     * Wire a fresh manager to the REAL Redis backplane the way production does:
+     * set TINA4_WS_BACKPLANE=redis + URL, build the manager with the relay sink,
+     * then ensure() — which constructs a real RedisBackplane (raw RESP over a
+     * real socket, or phpredis if present), subscribes it to the live
+     * `tina4:ws` channel, and PINGs the server on connect. No injection, no
+     * double — exactly the live wiring path.
      */
-    private function wire(Server $server, FakeBackplane $bus): WebSocketBackplaneManager
+    private function wire(Server $server): WebSocketBackplaneManager
     {
+        putenv('TINA4_WS_BACKPLANE=redis');
+        putenv('TINA4_WS_BACKPLANE_URL=tcp://' . self::REDIS_HOST . ':' . self::REDIS_PORT);
+        $_ENV['TINA4_WS_BACKPLANE'] = 'redis';
+        $_ENV['TINA4_WS_BACKPLANE_URL'] = 'tcp://' . self::REDIS_HOST . ':' . self::REDIS_PORT;
+
         $manager = new WebSocketBackplaneManager(
             function (string $kind, ?string $room, ?string $path, ?string $exclude, string $message) use ($server) {
                 // Relay to the server's LOCAL connections only (never re-publishes).
                 $rm = new \ReflectionMethod($server, 'relayWebSocketLocal');
-                $rm->setAccessible(true);
                 $rm->invoke($server, $kind, $room, $path, $exclude, $message);
             }
         );
-        $rp = new \ReflectionProperty($manager, 'backplane');
-        $rp->setAccessible(true);
-        $rp->setValue($manager, $bus);
-        $rs = new \ReflectionProperty($manager, 'started');
-        $rs->setAccessible(true);
-        $rs->setValue($manager, true);
-
-        $bus->subscribe(WebSocketBackplaneManager::CHANNEL, [$manager, 'onRaw']);
+        $manager->ensure();
+        $this->assertTrue(
+            $manager->isActive(),
+            'manager failed to wire a real Redis backplane — cannot run the relay test against a live service'
+        );
         $server->setWebSocketBackplane($manager);
+        $this->managers[] = $manager;
         return $manager;
     }
 
-    // ── Backplane relay + origin guard (Server live path) ────────
+    /**
+     * Drain the given managers' real Redis subscriber sockets repeatedly until
+     * $done() returns true or the deadline passes. Real pub/sub is asynchronous:
+     * a published message lands on the subscriber socket after a network
+     * round-trip, so the single-threaded server drains it on its idle tick —
+     * this models that tick deterministically in the test.
+     *
+     * @param WebSocketBackplaneManager[] $managers
+     */
+    private function pumpUntil(array $managers, callable $done, float $timeoutSeconds = 5.0): void
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
+        while (microtime(true) < $deadline) {
+            foreach ($managers as $manager) {
+                $manager->poll();
+            }
+            if ($done()) {
+                return;
+            }
+            usleep(20000);
+        }
+        // Final drain so an assertion right after sees the last poll's effect.
+        foreach ($managers as $manager) {
+            $manager->poll();
+        }
+    }
+
+    /**
+     * Let both managers' SUBSCRIBE land on the server before the first publish,
+     * so the publish is not lost to a not-yet-subscribed channel. Drains the
+     * subscribe confirmations off each socket.
+     *
+     * @param WebSocketBackplaneManager[] $managers
+     */
+    private function settleSubscriptions(array $managers): void
+    {
+        $deadline = microtime(true) + 1.0;
+        while (microtime(true) < $deadline) {
+            foreach ($managers as $manager) {
+                $manager->poll();
+            }
+            usleep(20000);
+        }
+    }
+
+    // ── Backplane relay + origin guard (Server live path, REAL Redis) ────────
 
     public function testRemoteBroadcastRelayedToLocalConnections(): void
     {
-        $bus = new FakeBackplane();
+        $this->requireRedis();
         $serverA = new Server('127.0.0.1', 9101);
         $serverB = new Server('127.0.0.1', 9102);
-        $this->wire($serverA, $bus);
-        $mgrB = $this->wire($serverB, $bus);
+        $mgrA = $this->wire($serverA);
+        $mgrB = $this->wire($serverB);
+        $this->settleSubscriptions([$mgrA, $mgrB]);
 
         // B has a local connection that should receive A's broadcast.
         $pair = $this->makePair();
         $serverB->registerWebSocketClient('b1', $pair[0], '/');
 
-        // A broadcasts to all — delivers locally (A has none) then publishes.
+        // A broadcasts to all — delivers locally (A has none) then publishes
+        // over the real Redis channel.
         $serverA->broadcastWebSocket('hello-cluster');
 
-        $this->assertSame('hello-cluster', $this->readFramePayload($pair[1]));
+        $received = null;
+        $this->pumpUntil([$mgrA, $mgrB], function () use ($pair, &$received) {
+            $payload = $this->readFramePayload($pair[1]);
+            if ($payload !== null) {
+                $received = $payload;
+                return true;
+            }
+            return false;
+        });
+
+        $this->assertSame('hello-cluster', $received, 'B never received A\'s broadcast over real Redis');
     }
 
     public function testOriginGuardDropsOwnEcho(): void
     {
-        $bus = new FakeBackplane();
+        $this->requireRedis();
         $server = new Server('127.0.0.1', 9103);
-        $mgr = $this->wire($server, $bus);
+        $mgr = $this->wire($server);
+        $this->settleSubscriptions([$mgr]);
 
         $pair = $this->makePair();
         $server->registerWebSocketClient('c1', $pair[0], '/');
 
-        // Hand-craft an envelope whose src == this manager's instance id.
-        $echo = json_encode([
-            'src' => $mgr->instanceId,
-            'kind' => 'all',
-            'exclude' => null,
-            'room' => null,
-            'path' => null,
-            'text' => 'echo-should-be-dropped',
-        ]);
-        $mgr->onRaw($echo);
+        // Broadcast from this very instance: it publishes to the real channel and
+        // its own subscriber will read the echo back. The origin guard (src ==
+        // our instance id) must drop that echo so the local connection is NOT
+        // double-delivered. (Local delivery already happened in broadcast()).
+        $server->broadcastWebSocket('echo-should-not-double');
 
-        // Origin guard: the connection must NOT have received the echo.
-        $this->assertNull($this->readFramePayload($pair[1]));
+        // Drain the local delivery first.
+        $this->assertSame('echo-should-not-double', $this->readFramePayload($pair[1]));
+
+        // Now pump real Redis: the echo comes back on our own subscriber but the
+        // origin guard drops it — no second frame may appear.
+        $this->pumpUntil([$mgr], fn() => false, 1.0);
+        $this->assertNull(
+            $this->readFramePayload($pair[1]),
+            'origin guard failed: our own echo was re-delivered (double-delivery)'
+        );
     }
 
     public function testRealBroadcastNoDoubleDelivery(): void
     {
-        // End-to-end: a single broadcast on A is delivered once on A (locally)
-        // and once on B (via relay) — A does not re-deliver its own echo even
-        // though the fake bus fans the publish back to A's own onRaw.
-        $bus = new FakeBackplane();
+        $this->requireRedis();
+        // End-to-end across REAL Redis: a single broadcast on A is delivered once
+        // on A (locally) and once on B (via the real channel) — A does not
+        // re-deliver its own echo even though Redis fans the publish back to A's
+        // own subscriber.
         $serverA = new Server('127.0.0.1', 9104);
         $serverB = new Server('127.0.0.1', 9105);
-        $this->wire($serverA, $bus);
-        $this->wire($serverB, $bus);
+        $mgrA = $this->wire($serverA);
+        $mgrB = $this->wire($serverB);
+        $this->settleSubscriptions([$mgrA, $mgrB]);
 
         $pairA = $this->makePair();
         $pairB = $this->makePair();
@@ -223,25 +289,34 @@ class WebSocketHardeningTest extends TestCase
 
         $serverA->broadcastWebSocket('ping');
 
-        // Exactly once each — the origin guard prevents A from re-delivering its
-        // own echo. A's peer buffer must hold exactly ONE 'ping' frame: decode
-        // it, then assert there are no trailing bytes (a second frame would mean
-        // a double-delivery).
+        $bReceived = null;
+        $this->pumpUntil([$mgrA, $mgrB], function () use ($pairB, &$bReceived) {
+            $payload = $this->readFramePayload($pairB[1]);
+            if ($payload !== null) {
+                $bReceived = $payload;
+                return true;
+            }
+            return false;
+        });
+        $this->assertSame('ping', $bReceived, 'B never received A\'s broadcast over real Redis');
+
+        // A's peer buffer must hold exactly ONE 'ping' frame (the local delivery):
+        // decode it, then assert there are no trailing bytes (a second frame would
+        // mean the origin guard failed and A re-delivered its own echo).
         $aRaw = @fread($pairA[1], 65536);
         $aFrame = WebSocket::decodeFrame($aRaw);
         $this->assertSame('ping', $aFrame['payload']);
         $this->assertSame($aFrame['length'], strlen($aRaw), 'A re-delivered its own echo (double-delivery)');
-
-        $this->assertSame('ping', $this->readFramePayload($pairB[1]));
     }
 
     public function testRoomRelayTargetsOnlyRoomMembers(): void
     {
-        $bus = new FakeBackplane();
+        $this->requireRedis();
         $serverA = new Server('127.0.0.1', 9106);
         $serverB = new Server('127.0.0.1', 9107);
-        $this->wire($serverA, $bus);
-        $this->wire($serverB, $bus);
+        $mgrA = $this->wire($serverA);
+        $mgrB = $this->wire($serverB);
+        $this->settleSubscriptions([$mgrA, $mgrB]);
 
         $inRoom = $this->makePair();
         $outRoom = $this->makePair();
@@ -251,18 +326,30 @@ class WebSocketHardeningTest extends TestCase
 
         $serverA->broadcastToRoom('lobby', 'room-msg');
 
-        $this->assertSame('room-msg', $this->readFramePayload($inRoom[1]));
-        $this->assertNull($this->readFramePayload($outRoom[1]));
+        $inReceived = null;
+        $this->pumpUntil([$mgrA, $mgrB], function () use ($inRoom, &$inReceived) {
+            $payload = $this->readFramePayload($inRoom[1]);
+            if ($payload !== null) {
+                $inReceived = $payload;
+                return true;
+            }
+            return false;
+        });
+
+        $this->assertSame('room-msg', $inReceived, 'room member never received the relayed broadcast');
+        $this->assertNull($this->readFramePayload($outRoom[1]), 'non-member received a room broadcast');
     }
 
     public function testBytesRoundTripThroughEnvelope(): void
     {
-        // Binary payloads survive the JSON envelope via base64.
-        $bus = new FakeBackplane();
+        $this->requireRedis();
+        // Binary payloads survive the JSON envelope via base64, end-to-end over
+        // real Redis.
         $serverA = new Server('127.0.0.1', 9108);
         $serverB = new Server('127.0.0.1', 9109);
-        $this->wire($serverA, $bus);
-        $this->wire($serverB, $bus);
+        $mgrA = $this->wire($serverA);
+        $mgrB = $this->wire($serverB);
+        $this->settleSubscriptions([$mgrA, $mgrB]);
 
         $pair = $this->makePair();
         $serverB->registerWebSocketClient('b1', $pair[0], '/');
@@ -270,30 +357,64 @@ class WebSocketHardeningTest extends TestCase
         $payload = "\x00\x01\x02\xfffoo"; // invalid UTF-8 → must travel as b64
         $serverA->broadcastWebSocket($payload);
 
-        $this->assertSame($payload, $this->readFramePayload($pair[1]));
+        $received = null;
+        $this->pumpUntil([$mgrA, $mgrB], function () use ($pair, &$received) {
+            $got = $this->readFramePayload($pair[1]);
+            if ($got !== null) {
+                $received = $got;
+                return true;
+            }
+            return false;
+        });
+
+        $this->assertSame($payload, $received, 'binary payload did not survive the real-Redis round-trip');
     }
 
     public function testPublishEncodesBytesAsB64AndStrAsText(): void
     {
-        $bus = new FakeBackplane();
+        $this->requireRedis();
+        // A second REAL backplane subscribes to the live `tina4:ws` channel and
+        // captures exactly what the manager publishes — proving the on-wire
+        // envelope shape over a real socket (no double).
+        $url = 'tcp://' . self::REDIS_HOST . ':' . self::REDIS_PORT;
+        $captureSub = new RedisBackplane($url);
         $captured = [];
-        $bus->subscribe(WebSocketBackplaneManager::CHANNEL, function ($raw) use (&$captured) {
-            $captured[] = json_decode($raw, true);
+        $captureSub->subscribe(WebSocketBackplaneManager::CHANNEL, function ($raw) use (&$captured) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $captured[] = $decoded;
+            }
         });
 
+        putenv('TINA4_WS_BACKPLANE=redis');
+        putenv('TINA4_WS_BACKPLANE_URL=' . $url);
+        $_ENV['TINA4_WS_BACKPLANE'] = 'redis';
+        $_ENV['TINA4_WS_BACKPLANE_URL'] = $url;
         $mgr = new WebSocketBackplaneManager(fn() => null);
-        // Inject the fake bus via reflection (bypassing factory) so publish() fans out.
-        $rp = new \ReflectionProperty($mgr, 'backplane');
-        $rp->setAccessible(true);
-        $rp->setValue($mgr, $bus);
-        $rs = new \ReflectionProperty($mgr, 'started');
-        $rs->setAccessible(true);
-        $rs->setValue($mgr, true);
+        $mgr->ensure();
+        $this->managers[] = $mgr;
+        $this->assertTrue($mgr->isActive(), 'manager failed to wire real Redis');
+
+        // Let the capture subscriber's SUBSCRIBE land on the server.
+        $deadline = microtime(true) + 1.0;
+        while (microtime(true) < $deadline) {
+            $captureSub->poll();
+            usleep(20000);
+        }
 
         $binary = "\xff\xfe\x00\x01"; // invalid UTF-8 → must travel as base64
         $mgr->publish('all', $binary);
         $mgr->publish('all', 'plain text');
 
+        // Drain the two published envelopes off the real channel.
+        $pumpDeadline = microtime(true) + 5.0;
+        while (microtime(true) < $pumpDeadline && count($captured) < 2) {
+            $captureSub->poll();
+            usleep(20000);
+        }
+        $captureSub->close();
+
+        $this->assertCount(2, $captured, 'capture subscriber did not receive both envelopes over real Redis');
         $this->assertArrayHasKey('b64', $captured[0]);
         $this->assertSame($binary, base64_decode($captured[0]['b64']));
         $this->assertSame('plain text', $captured[1]['text']);
@@ -302,31 +423,50 @@ class WebSocketHardeningTest extends TestCase
 
     public function testPublishIsNoopWithoutBackplane(): void
     {
+        // Pure-logic: no backplane wired → publish does nothing and never raises.
+        // (No dependency, no double — a genuine unit test.)
         $mgr = new WebSocketBackplaneManager(fn() => null);
-        // No backplane wired → publish does nothing and never raises.
         $mgr->publish('all', 'noop');
         $this->assertFalse($mgr->isActive());
     }
 
     public function testPublishFailureDoesNotCrashBroadcast(): void
     {
-        // A flaky message bus must never undo a local broadcast.
-        $bus = new ExplodingBackplane();
+        $this->requireRedis();
+        // A flaky message bus must never undo a local broadcast. We trigger a
+        // REAL publish failure: construct a real RedisBackplane against the live
+        // server (so it connects + PINGs successfully), then repoint it at a
+        // CLOSED port (127.0.0.1:59999). Its raw publish() opens a fresh socket
+        // to that port per publish — fsockopen to a closed port genuinely fails
+        // and publish() throws. No fake/stub: a real socket to a real dead port.
+        $bus = new RedisBackplane('tcp://' . self::REDIS_HOST . ':' . self::REDIS_PORT);
+        $rpPort = new \ReflectionProperty($bus, 'port');
+        $rpPort->setValue($bus, 59999);
+        $rpHost = new \ReflectionProperty($bus, 'host');
+        $rpHost->setValue($bus, '127.0.0.1');
+
+        // Sanity: prove publish() genuinely fails over the real closed socket.
+        $threw = false;
+        try {
+            $bus->publish('tina4:ws', 'should-fail');
+        } catch (\Throwable $e) {
+            $threw = true;
+        }
+        $this->assertTrue($threw, 'expected a REAL publish failure to the closed port 127.0.0.1:59999');
+
         $server = new Server('127.0.0.1', 9110);
         $mgr = new WebSocketBackplaneManager(fn() => null);
         $rp = new \ReflectionProperty($mgr, 'backplane');
-        $rp->setAccessible(true);
         $rp->setValue($mgr, $bus);
         $rs = new \ReflectionProperty($mgr, 'started');
-        $rs->setAccessible(true);
         $rs->setValue($mgr, true);
         $server->setWebSocketBackplane($mgr);
 
         $pair = $this->makePair();
         $server->registerWebSocketClient('c1', $pair[0], '/');
 
-        // broadcast delivers locally then publishes; publish raises but is
-        // caught — local delivery still happened.
+        // broadcast delivers locally then publishes; publish raises (real socket
+        // failure) but the manager catches it — local delivery still happened.
         $server->broadcastWebSocket('survive');
 
         $this->assertSame('survive', $this->readFramePayload($pair[1]));
@@ -510,7 +650,6 @@ class WebSocketHardeningTest extends TestCase
 
             // Backdate the stale client's lastActivity well past the timeout.
             $rp = new \ReflectionProperty($server, 'wsClients');
-            $rp->setAccessible(true);
             $clients = $rp->getValue($server);
             $clients['stale']['lastActivity'] = microtime(true) - 1000;
             $rp->setValue($server, $clients);
@@ -544,7 +683,6 @@ class WebSocketHardeningTest extends TestCase
         // Drive the private frame loop directly via reflection on a fake client.
         $pair = $this->makePair();
         $rp = new \ReflectionProperty($ws, 'clients');
-        $rp->setAccessible(true);
         $rp->setValue($ws, [
             'frag' => [
                 'socket' => $pair[0],
@@ -566,7 +704,6 @@ class WebSocketHardeningTest extends TestCase
         fwrite($pair[1], $frame1 . $frame2);
 
         $rm = new \ReflectionMethod($ws, 'handleClientData');
-        $rm->setAccessible(true);
         $rm->invoke($ws, 'frag');
 
         $this->assertSame(['HelloWorld'], $received);

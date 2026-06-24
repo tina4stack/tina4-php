@@ -9,15 +9,27 @@
 namespace Tina4\Database;
 
 /**
- * Microsoft SQL Server adapter — uses PHP's ext-sqlsrv (sqlsrv_*) functions.
- * The extension is optional; a clear error is thrown if not installed.
+ * Microsoft SQL Server adapter.
+ *
+ * Two backends, chosen automatically in the constructor:
+ *   - 'sqlsrv' (PRIMARY): PHP's ext-sqlsrv (sqlsrv_* functions) — the Microsoft
+ *     driver, the natural choice on Windows / Microsoft-driver deployments.
+ *   - 'pdo'    (FALLBACK): PDO with the dblib driver (ext-pdo_dblib / FreeTDS) —
+ *     the same FreeTDS stack tina4-python (pymssql) and tina4-ruby (tiny_tds)
+ *     use. This is what reaches MSSQL on macOS/CI where ext-sqlsrv is painful.
+ *
+ * The public API and behaviour are identical between the two backends — every
+ * method branches once on $driver. A clear error is thrown only when NEITHER
+ * backend is available.
  */
 class MSSQLAdapter implements DatabaseAdapter
 {
     use SqlNormalizerTrait;
 
-    /** @var resource|null */
+    /** @var resource|\PDO|null sqlsrv connection resource OR a PDO handle. */
     private mixed $db = null;
+    /** @var 'sqlsrv'|'pdo' Which backend this instance drives. */
+    private string $driver;
     private ?string $lastError = null;
     private bool $autoCommit;
     private int|string $lastId = 0;
@@ -39,11 +51,20 @@ class MSSQLAdapter implements DatabaseAdapter
         private readonly int $port = 1433,
         ?bool $autoCommit = null,
     ) {
-        if (!function_exists('sqlsrv_connect')) {
+        // Pick a backend: prefer the Microsoft driver (ext-sqlsrv); fall back to
+        // PDO+dblib (ext-pdo_dblib / FreeTDS) — the same stack the Python/Ruby
+        // frameworks use for MSSQL. Throw only when neither is available.
+        if (function_exists('sqlsrv_connect')) {
+            $this->driver = 'sqlsrv';
+        } elseif (in_array('dblib', \PDO::getAvailableDrivers(), true)) {
+            $this->driver = 'pdo';
+        } else {
             throw new \RuntimeException(
-                'MSSQLAdapter requires the ext-sqlsrv PHP extension. '
-                . 'Install it with: sudo pecl install sqlsrv (Linux/macOS) '
-                . 'or enable it in php.ini on Windows.'
+                'MSSQLAdapter requires either the ext-sqlsrv PHP extension '
+                . '(Microsoft driver: sudo pecl install sqlsrv on Linux/macOS, '
+                . 'or enable it in php.ini on Windows) '
+                . 'OR the ext-pdo_dblib extension (FreeTDS: pdo_dblib must list '
+                . "'dblib' in PDO::getAvailableDrivers())."
             );
         }
 
@@ -59,6 +80,25 @@ class MSSQLAdapter implements DatabaseAdapter
         }
 
         $params = $this->parseConnection($this->connectionString);
+
+        if ($this->driver === 'pdo') {
+            // dblib DSN uses host:port with a COLON (not a comma like sqlsrv).
+            // The FreeTDS TDS protocol version is taken from the environment
+            // (TDSVER / freetds.conf) — do not hard-code it here.
+            $port = ($params['port'] > 0) ? (int)$params['port'] : 1433;
+            $dsn = "dblib:host={$params['host']}:{$port};dbname={$params['database']};charset=UTF-8";
+
+            try {
+                $pdo = new \PDO($dsn, $params['username'], $params['password']);
+                $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            } catch (\PDOException $e) {
+                $this->lastError = $e->getMessage();
+                throw new \RuntimeException("MSSQLAdapter: Failed to connect: {$e->getMessage()}");
+            }
+
+            $this->db = $pdo;
+            return;
+        }
 
         $serverName = $params['host'];
         if ($params['port'] > 0 && $params['port'] !== 1433) {
@@ -92,6 +132,11 @@ class MSSQLAdapter implements DatabaseAdapter
     public function close(): void
     {
         if ($this->db !== null) {
+            if ($this->driver === 'pdo') {
+                // PDO closes the connection when the handle is released.
+                $this->db = null;
+                return;
+            }
             sqlsrv_close($this->db);
             $this->db = null;
         }
@@ -110,6 +155,13 @@ class MSSQLAdapter implements DatabaseAdapter
             // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
             // stringifies `false` to '' — same class of bug as PG).
             $values = empty($params) ? [] : self::normalizeBoolParams(array_values($params), nativeBoolean: false);
+
+            if ($this->driver === 'pdo') {
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($values);
+                return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            }
+
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
                 : @sqlsrv_query($this->db, $sql, $values);
@@ -146,8 +198,16 @@ class MSSQLAdapter implements DatabaseAdapter
         // probe is best-effort and runs on a SEPARATE statement (its own
         // sqlsrv_query inside query()), so a probe failure only defaults total
         // to 0 and can never mask a real main-query failure.
+        // SQL Server (error 20018) REJECTS a subquery whose inner SELECT ends in
+        // an ORDER BY without TOP/OFFSET/FETCH/FOR XML, so wrapping the raw user
+        // SQL in COUNT(*) silently fell back to total = 0 while the rows came
+        // back fine (#262). Strip a trailing ORDER BY for the COUNT probe ONLY —
+        // it is meaningless inside a COUNT. The paged query below keeps its ORDER
+        // BY intact (OFFSET/FETCH needs it). Applies to BOTH the pdo_dblib and
+        // sqlsrv backends since the probe runs through query().
         $total = 0;
-        $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        $countInner = self::stripTrailingOrderBy($sql);
+        $countSql = "SELECT COUNT(*) as total FROM ({$countInner}) AS _count_query";
         $countResult = $this->query($countSql, $params);
         if ($this->lastError === null) {
             $total = (int)($countResult[0]['total'] ?? 0);
@@ -208,6 +268,16 @@ class MSSQLAdapter implements DatabaseAdapter
             // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
             // stringifies `false` to '' — same class of bug as PG).
             $values = empty($params) ? [] : self::normalizeBoolParams(array_values($params), nativeBoolean: false);
+
+            if ($this->driver === 'pdo') {
+                // PDO is in ERRMODE_EXCEPTION — a bad statement raises a
+                // PDOException, caught below and re-raised as DatabaseException
+                // (FAIL LOUD parity with the sqlsrv branch).
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($values);
+                return true;
+            }
+
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
                 : @sqlsrv_query($this->db, $sql, $values);
@@ -223,6 +293,10 @@ class MSSQLAdapter implements DatabaseAdapter
             return true;
         } catch (DatabaseException $e) {
             throw $e;
+        } catch (\PDOException $e) {
+            // FAIL LOUD: capture the cause on error() AND raise.
+            $this->lastError = $e->getMessage();
+            throw new DatabaseException('MSSQL execute() failed: ' . $e->getMessage());
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
             throw $e;
@@ -257,10 +331,31 @@ class MSSQLAdapter implements DatabaseAdapter
 
         $cols = implode(', ', array_keys($data));
         $placeholders = implode(', ', array_fill(0, count($data), '?'));
+        $values = array_values($data);
+
+        if ($this->driver === 'pdo') {
+            // OUTPUT INSERTED.* is unreliable on dblib (FreeTDS), so do a plain
+            // INSERT then read SCOPE_IDENTITY() for the new identity value.
+            $insertSql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+            try {
+                $stmt = $this->db->prepare($insertSql);
+                $stmt->execute(self::normalizeBoolParams($values, nativeBoolean: false));
+            } catch (\PDOException $e) {
+                $this->lastError = $e->getMessage();
+                return false;
+            }
+
+            // SCOPE_IDENTITY() is per-scope/connection — safe for the row we
+            // just inserted (null when the table has no identity column).
+            $idRows = $this->query("SELECT SCOPE_IDENTITY() AS id");
+            if (!empty($idRows) && $idRows[0]['id'] !== null) {
+                $this->lastId = $idRows[0]['id'];
+            }
+            return true;
+        }
 
         // Use OUTPUT INSERTED to get the new ID (MSSQL equivalent of RETURNING)
         $sql = "INSERT INTO {$table} ({$cols}) OUTPUT INSERTED.* VALUES ({$placeholders})";
-        $values = array_values($data);
 
         $stmt = @sqlsrv_query($this->db, $sql, $values);
         if ($stmt === false) {
@@ -410,12 +505,27 @@ class MSSQLAdapter implements DatabaseAdapter
     public function startTransaction(): void
     {
         $this->ensureOpen();
+        if ($this->driver === 'pdo') {
+            $this->db->beginTransaction();
+            return;
+        }
         sqlsrv_begin_transaction($this->db);
     }
 
     public function commit(): void
     {
         $this->ensureOpen();
+        if ($this->driver === 'pdo') {
+            // pdo_dblib runs in autocommit mode, so a standalone write has
+            // already committed and there is no open transaction. PDO::commit()
+            // throws "There is no active transaction" in that case — guard it so
+            // a stray commit (e.g. the facade's autocommit after a standalone
+            // write) is a harmless no-op, matching the tolerant sqlsrv_commit.
+            if ($this->db->inTransaction()) {
+                $this->db->commit();
+            }
+            return;
+        }
         sqlsrv_commit($this->db);
     }
 
@@ -423,6 +533,15 @@ class MSSQLAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         try {
+            if ($this->driver === 'pdo') {
+                // Only roll back an actually-open transaction (autocommit means
+                // a standalone write left none) — PDO::rollBack() otherwise
+                // throws "There is no active transaction".
+                if ($this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+                return;
+            }
             sqlsrv_rollback($this->db);
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
@@ -435,11 +554,21 @@ class MSSQLAdapter implements DatabaseAdapter
     }
 
     /**
-     * Get the underlying sqlsrv connection resource.
+     * Get the underlying connection: a sqlsrv resource ($driver === 'sqlsrv')
+     * or a PDO handle ($driver === 'pdo' / dblib).
      */
     public function getConnection(): mixed
     {
         return $this->db;
+    }
+
+    /**
+     * Which backend this instance drives: 'sqlsrv' (Microsoft driver) or
+     * 'pdo' (PDO+dblib / FreeTDS fallback).
+     */
+    public function getDriver(): string
+    {
+        return $this->driver;
     }
 
     /**

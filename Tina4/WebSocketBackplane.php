@@ -73,128 +73,331 @@ interface WebSocketBackplaneInterface
 }
 
 /**
- * Redis pub/sub backplane.
+ * Redis / Valkey pub/sub backplane.
  *
- * Requires the phpredis extension or a userland Redis client. The class
- * checks for the \Redis class at instantiation time so the rest of Tina4
- * works fine without it — an exception is thrown only when this class is
- * actually constructed without the extension available.
+ * Uses the phpredis extension when it is loaded, otherwise falls back to the
+ * raw RESP protocol over a TCP socket (zero-dependency) — the same dual-path
+ * approach as {@see \Tina4\Cache\RedisBackend}. The backplane therefore works
+ * out of the box against a real Redis/Valkey server with or without ext-redis
+ * installed (parity with the Python master, which uses a real redis client).
+ *
+ * Construction performs a real connection (and, on the raw path, a real PING
+ * handshake) so an unreachable server raises here — the manager catches that
+ * and degrades to local-only, never crashing a broadcast.
  */
 class RedisBackplane implements WebSocketBackplaneInterface
 {
-    private \Redis $redis;
-    private \Redis $subscriber;
-    private string $url;
+    /** phpredis publisher connection (ext-redis path only). */
+    private ?\Redis $redis = null;
+    /** phpredis subscriber connection (ext-redis path only). */
+    private ?\Redis $subscriber = null;
+
+    private string $host = '127.0.0.1';
+    private int $port = 6379;
+
+    /** True when running the zero-dependency raw RESP path. */
+    private bool $useRaw = false;
+
+    /** Persistent raw subscriber socket (raw path only). @var resource|null */
+    private $rawSocket = null;
+    /** Read buffer for partial RESP frames on the raw subscriber socket. */
+    private string $rawBuffer = '';
+
+    /** @var array<string, callable> channel => callback */
     private array $subscriptions = [];
 
     public function __construct(?string $url = null)
     {
-        if (!class_exists('\Redis')) {
-            throw new \RuntimeException(
-                "The phpredis extension is required for RedisBackplane. "
-                . "Install it with: pecl install redis"
-            );
-        }
-
-        $this->url = $url ?? ($_ENV['TINA4_WS_BACKPLANE_URL']
+        $url = $url ?? ($_ENV['TINA4_WS_BACKPLANE_URL']
             ?? getenv('TINA4_WS_BACKPLANE_URL')
             ?: 'tcp://127.0.0.1:6379');
 
-        $parsed = parse_url($this->url);
-        $host = $parsed['host'] ?? '127.0.0.1';
-        $port = $parsed['port'] ?? 6379;
+        // parse_url needs a scheme; accept bare "host:port" too.
+        $parsed = parse_url(str_contains($url, '://') ? $url : 'tcp://' . $url);
+        $this->host = $parsed['host'] ?? '127.0.0.1';
+        $this->port = (int)($parsed['port'] ?? 6379);
 
-        $this->redis = new \Redis();
-        $this->redis->connect($host, $port);
+        // Prefer ext-redis when present (parity with the cache backend), else
+        // speak raw RESP over a real socket so the backplane is never dead.
+        if (extension_loaded('redis')) {
+            $this->redis = new \Redis();
+            $this->redis->connect($this->host, $this->port);
+            $this->subscriber = new \Redis();
+            $this->subscriber->connect($this->host, $this->port);
+            return;
+        }
 
-        // Separate connection for subscriptions (Redis requirement)
-        $this->subscriber = new \Redis();
-        $this->subscriber->connect($host, $port);
+        $this->useRaw = true;
+        $this->openRawSubscriber();
+    }
+
+    /**
+     * Open the persistent subscriber socket and verify the server answers a
+     * PING. Raises on failure so the manager degrades to local-only.
+     */
+    private function openRawSubscriber(): void
+    {
+        $sock = @fsockopen($this->host, $this->port, $errno, $errstr, 5);
+        if (!$sock) {
+            throw new \RuntimeException(
+                "RedisBackplane could not connect to {$this->host}:{$this->port}: {$errstr}"
+            );
+        }
+        // Real handshake — a non-PONG means this is not a usable Redis/Valkey.
+        fwrite($sock, "*1\r\n\$4\r\nPING\r\n");
+        $pong = fread($sock, 64);
+        if ($pong === false || !str_starts_with($pong, '+PONG')) {
+            fclose($sock);
+            throw new \RuntimeException(
+                "RedisBackplane PING to {$this->host}:{$this->port} failed"
+            );
+        }
+        // Non-blocking so poll() never stalls the single-threaded event loop.
+        stream_set_blocking($sock, false);
+        $this->rawSocket = $sock;
+    }
+
+    /** Encode a RESP array command (e.g. PUBLISH chan msg). */
+    private static function respEncode(string ...$args): string
+    {
+        $cmd = '*' . count($args) . "\r\n";
+        foreach ($args as $arg) {
+            $cmd .= '$' . strlen($arg) . "\r\n" . $arg . "\r\n";
+        }
+        return $cmd;
     }
 
     public function publish(string $channel, string $message): void
     {
-        $this->redis->publish($channel, $message);
+        if (!$this->useRaw) {
+            $this->redis->publish($channel, $message);
+            return;
+        }
+        // Raw path: a short-lived publisher socket per publish keeps publishing
+        // independent of the (non-blocking) subscriber socket's pub/sub mode.
+        $sock = @fsockopen($this->host, $this->port, $errno, $errstr, 5);
+        if (!$sock) {
+            throw new \RuntimeException(
+                "RedisBackplane publish could not connect to {$this->host}:{$this->port}: {$errstr}"
+            );
+        }
+        stream_set_timeout($sock, 5);
+        $written = @fwrite($sock, self::respEncode('PUBLISH', $channel, $message));
+        // Consume the integer reply (number of subscribers that received it).
+        @fread($sock, 64);
+        @fclose($sock);
+        if ($written === false) {
+            throw new \RuntimeException('RedisBackplane publish write failed');
+        }
     }
 
     /**
      * Register the callback and put the subscriber connection into pub/sub mode
      * without blocking.
      *
-     * phpredis' blocking ->subscribe() would freeze Tina4's single-threaded
-     * event loop, so instead we send the raw SUBSCRIBE command on the
-     * subscriber socket and let poll() drain replies non-blockingly each tick.
-     * Falls back to a plain registration (poll()-driven) when the low-level
-     * socket isn't reachable.
+     * A blocking subscribe would freeze Tina4's single-threaded event loop, so
+     * instead we issue SUBSCRIBE and drain replies non-blockingly in poll().
      */
     public function subscribe(string $channel, callable $callback): void
     {
         $this->subscriptions[$channel] = $callback;
-        try {
-            // Non-blocking SUBSCRIBE: write the RESP command, keep the socket
-            // in pub/sub mode, and read replies in poll().
-            $this->subscriber->setOption(\Redis::OPT_READ_TIMEOUT, 0.0);
-            $this->subscriber->rawCommand('SUBSCRIBE', $channel);
-        } catch (\Throwable $e) {
-            // Some phpredis builds don't expose rawCommand on a fresh socket;
-            // poll() will still attempt to consume. Never let wiring crash.
-            \Tina4\Log::warning('RedisBackplane subscribe degraded: ' . $e->getMessage());
+        if (!$this->useRaw) {
+            try {
+                $this->subscriber->setOption(\Redis::OPT_READ_TIMEOUT, 0.0);
+                $this->subscriber->rawCommand('SUBSCRIBE', $channel);
+            } catch (\Throwable $e) {
+                \Tina4\Log::warning('RedisBackplane subscribe degraded: ' . $e->getMessage());
+            }
+            return;
+        }
+        if (is_resource($this->rawSocket)) {
+            @fwrite($this->rawSocket, self::respEncode('SUBSCRIBE', $channel));
         }
     }
 
     /**
      * Drain any pub/sub messages buffered on the subscriber socket and
-     * dispatch each to its registered callback. Non-blocking: returns as soon
-     * as no more complete messages are pending.
+     * dispatch each to its registered callback. Non-blocking.
      */
     public function poll(): void
     {
         if (empty($this->subscriptions)) {
             return;
         }
-        // Cap the per-tick drain so a flood can't starve the HTTP loop.
+        if (!$this->useRaw) {
+            // Cap the per-tick drain so a flood can't starve the HTTP loop.
+            for ($i = 0; $i < 100; $i++) {
+                try {
+                    $reply = $this->subscriber->rawCommand('PING');
+                } catch (\Throwable $e) {
+                    return;
+                }
+                if (!is_array($reply) || ($reply[0] ?? null) !== 'message') {
+                    return;
+                }
+                $chan = $reply[1] ?? null;
+                $msg = $reply[2] ?? null;
+                if ($chan !== null && isset($this->subscriptions[$chan]) && $msg !== null) {
+                    ($this->subscriptions[$chan])($msg);
+                }
+            }
+            return;
+        }
+        $this->pollRaw();
+    }
+
+    /**
+     * Raw RESP path: append whatever is readable on the subscriber socket to
+     * the buffer, then parse out every complete pub/sub reply array. A pub/sub
+     * "message" reply is a 3-element array: ["message", channel, payload].
+     */
+    private function pollRaw(): void
+    {
+        if (!is_resource($this->rawSocket)) {
+            return;
+        }
+        // Cap reads per tick so a flood can't starve the HTTP loop.
         for ($i = 0; $i < 100; $i++) {
-            try {
-                $reply = $this->subscriber->rawCommand('PING'); // keepalive + reply pump
-            } catch (\Throwable $e) {
-                return;
+            $chunk = @fread($this->rawSocket, 65536);
+            if ($chunk === false || $chunk === '') {
+                break;
             }
-            // phpredis surfaces buffered pub/sub replies through the read
-            // socket; when nothing is pending we stop. Implementations that
-            // can't poll this way simply no-op (handled by the catch above).
-            if (!is_array($reply) || ($reply[0] ?? null) !== 'message') {
-                return;
+            $this->rawBuffer .= $chunk;
+            if (strlen($chunk) < 65536) {
+                break;
             }
-            $chan = $reply[1] ?? null;
-            $msg = $reply[2] ?? null;
-            if ($chan !== null && isset($this->subscriptions[$chan]) && $msg !== null) {
-                ($this->subscriptions[$chan])($msg);
+        }
+
+        while (true) {
+            $offset = 0;
+            $reply = $this->parseResp($this->rawBuffer, $offset);
+            if ($reply === self::INCOMPLETE) {
+                break; // wait for more bytes next tick
             }
+            // Consume the parsed bytes.
+            $this->rawBuffer = substr($this->rawBuffer, $offset);
+
+            if (is_array($reply)
+                && count($reply) === 3
+                && strtolower((string)($reply[0] ?? '')) === 'message'
+            ) {
+                $chan = $reply[1];
+                $msg = $reply[2];
+                if (isset($this->subscriptions[$chan]) && $msg !== null) {
+                    ($this->subscriptions[$chan])($msg);
+                }
+            }
+            // Other replies (subscribe confirmations, pongs) are ignored.
+            if ($this->rawBuffer === '') {
+                break;
+            }
+        }
+    }
+
+    /** Sentinel meaning "not enough bytes in the buffer to parse a full reply". */
+    private const INCOMPLETE = "\0__tina4_resp_incomplete__\0";
+
+    /**
+     * Minimal RESP parser. Returns the decoded value and advances $offset past
+     * the consumed bytes, or self::INCOMPLETE when the buffer holds a partial
+     * frame. Supports the reply types pub/sub uses: arrays, bulk strings,
+     * simple strings, integers, errors, and nulls.
+     *
+     * @return mixed|string self::INCOMPLETE when more bytes are needed
+     */
+    private function parseResp(string $buf, int &$offset)
+    {
+        if ($offset >= strlen($buf)) {
+            return self::INCOMPLETE;
+        }
+        $type = $buf[$offset];
+        $lineEnd = strpos($buf, "\r\n", $offset);
+        if ($lineEnd === false) {
+            return self::INCOMPLETE;
+        }
+        $line = substr($buf, $offset + 1, $lineEnd - ($offset + 1));
+        $after = $lineEnd + 2;
+
+        switch ($type) {
+            case '+': // simple string
+            case '-': // error
+                $offset = $after;
+                return $line;
+            case ':': // integer
+                $offset = $after;
+                return (int)$line;
+            case '$': // bulk string
+                $len = (int)$line;
+                if ($len < 0) {
+                    $offset = $after;
+                    return null;
+                }
+                if (strlen($buf) < $after + $len + 2) {
+                    return self::INCOMPLETE;
+                }
+                $value = substr($buf, $after, $len);
+                $offset = $after + $len + 2; // skip payload + trailing CRLF
+                return $value;
+            case '*': // array
+                $count = (int)$line;
+                if ($count < 0) {
+                    $offset = $after;
+                    return null;
+                }
+                $items = [];
+                $cursor = $after;
+                for ($i = 0; $i < $count; $i++) {
+                    $element = $this->parseResp($buf, $cursor);
+                    if ($element === self::INCOMPLETE) {
+                        return self::INCOMPLETE;
+                    }
+                    $items[] = $element;
+                }
+                $offset = $cursor;
+                return $items;
+            default:
+                // Unknown byte — skip the line to stay in sync.
+                $offset = $after;
+                return $line;
         }
     }
 
     public function getSubscriberStream()
     {
-        // phpredis does not expose the underlying socket resource, so the
-        // server time-slices poll() on idle ticks instead of select()ing it.
-        return null;
+        // The raw path owns a real socket the server can add to its
+        // stream_select() read set. The phpredis path does not expose one.
+        return $this->useRaw ? $this->rawSocket : null;
     }
 
     public function unsubscribe(string $channel): void
     {
         unset($this->subscriptions[$channel]);
-        try {
-            $this->subscriber->rawCommand('UNSUBSCRIBE', $channel);
-        } catch (\Throwable $e) {
-            // best-effort
+        if (!$this->useRaw) {
+            try {
+                $this->subscriber->rawCommand('UNSUBSCRIBE', $channel);
+            } catch (\Throwable $e) {
+                // best-effort
+            }
+            return;
+        }
+        if (is_resource($this->rawSocket)) {
+            @fwrite($this->rawSocket, self::respEncode('UNSUBSCRIBE', $channel));
         }
     }
 
     public function close(): void
     {
         $this->subscriptions = [];
-        $this->subscriber->close();
-        $this->redis->close();
+        if ($this->useRaw) {
+            if (is_resource($this->rawSocket)) {
+                @fclose($this->rawSocket);
+            }
+            $this->rawSocket = null;
+            $this->rawBuffer = '';
+            return;
+        }
+        $this->subscriber?->close();
+        $this->redis?->close();
     }
 }
 

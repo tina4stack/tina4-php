@@ -19,6 +19,7 @@ class MySQLAdapter implements DatabaseAdapter
     private ?\mysqli $db = null;
     private ?string $lastError = null;
     private bool $autoCommit;
+    private int|string $lastId = 0;
 
     /**
      * @param string $connectionString URL: "mysql://user:pass@host:port/dbname"
@@ -225,6 +226,12 @@ class MySQLAdapter implements DatabaseAdapter
 
                 $this->bindParams($stmt, $params);
                 $success = $stmt->execute();
+                // CAPTURE the auto-increment id from THIS statement, before close()
+                // — mysqli_stmt::$insert_id reflects the row this prepared INSERT
+                // just created. (See note in lastInsertId().)
+                if ($success !== false && $stmt->insert_id > 0) {
+                    $this->lastId = $stmt->insert_id;
+                }
                 $stmt->close();
             }
 
@@ -232,6 +239,18 @@ class MySQLAdapter implements DatabaseAdapter
                 // FAIL LOUD: capture the cause on error() AND raise.
                 $this->lastError = $this->db->error;
                 throw new DatabaseException('MySQL execute() failed: ' . ($this->lastError ?: 'unknown error'));
+            }
+
+            // CAPTURE the auto-increment id at WRITE time (mirrors MSSQLAdapter's
+            // $this->lastId and Python mysql.py's cursor.lastrowid). mysqli's
+            // connection-level insert_id is reset to 0 by a subsequent SELECT, so
+            // a later getLastId()/lastInsertId() after an intervening fetch() would
+            // otherwise read 0 and LOSE the id (#262). Reading it here, right after
+            // a successful INSERT, pins it. The connection-level read above only
+            // applies to the non-prepared (no-params) path; insert_id is 0 for any
+            // non-INSERT statement, so this never clobbers a real id with a stale 0.
+            if (empty($params) && $this->db->insert_id > 0) {
+                $this->lastId = $this->db->insert_id;
             }
 
             return true;
@@ -357,6 +376,17 @@ class MySQLAdapter implements DatabaseAdapter
 
     public function lastInsertId(): int|string
     {
+        // Return the id CAPTURED at INSERT time (execute()), not a fresh read of
+        // mysqli's connection-level insert_id — that property is reset to 0 by any
+        // intervening SELECT, so reading it lazily here loses the id after an
+        // insert+fetch (#262). The stored value mirrors MSSQLAdapter::$lastId and
+        // Python mysql.py's cursor.lastrowid (both captured at write time).
+        if ($this->lastId !== 0 && $this->lastId !== '0') {
+            return $this->lastId;
+        }
+
+        // Fallback: nothing captured (e.g. a raw query() INSERT that bypassed
+        // execute()) — best-effort read of the connection-level id.
         $this->ensureOpen();
         return $this->db->insert_id;
     }

@@ -251,4 +251,65 @@ class SqlNormalizerTest extends TestCase
             unlink($tmpFile);
         }
     }
+
+    // ── #262: stripTrailingOrderBy — pure (engine-agnostic) unit coverage ──
+    //
+    // SQL Server (error 20018) rejects ``SELECT COUNT(*) FROM (<inner> ORDER BY
+    // x) t`` when the inner SELECT ends in an ORDER BY without TOP/OFFSET/FETCH,
+    // so the MSSQL count probe silently returned 0. This helper strips a
+    // trailing top-level ORDER BY before the COUNT wrap. The regex logic runs
+    // everywhere (no DB needed); the live behaviour is locked in separately by
+    // MySQLMSSQLLiveTest::testMSSQLCountWithTrailingOrderBy.
+
+    /** Reflection helper for the protected static stripTrailingOrderBy(). */
+    private function stripOrderBy(string $sql): string
+    {
+        $ref = new ReflectionClass(\Tina4\Database\MSSQLAdapter::class);
+        $method = $ref->getMethod('stripTrailingOrderBy');
+        $method->setAccessible(true);
+        return $method->invoke(null, $sql);
+    }
+
+    public function testStripTrailingOrderBySimple(): void
+    {
+        $this->assertSame('SELECT id FROM t', $this->stripOrderBy('SELECT id FROM t ORDER BY id'));
+        $this->assertSame('SELECT id FROM t', $this->stripOrderBy('SELECT id FROM t ORDER BY id DESC'));
+        $this->assertSame('SELECT a,b FROM t', $this->stripOrderBy('SELECT a,b FROM t ORDER BY a, b'));
+    }
+
+    public function testStripTrailingOrderByNoOrderByUnchanged(): void
+    {
+        $this->assertSame('SELECT id FROM t', $this->stripOrderBy('SELECT id FROM t'));
+        $this->assertSame('SELECT id FROM t WHERE x=1', $this->stripOrderBy('SELECT id FROM t WHERE x=1'));
+    }
+
+    public function testStripTrailingOrderByKeepsLegalisedOffsetFetch(): void
+    {
+        // OFFSET/FETCH makes the ORDER BY valid inside a subquery on SQL Server —
+        // leave it so the COUNT wrap stays correct.
+        $sql = 'SELECT id FROM t ORDER BY id OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY';
+        $this->assertSame($sql, $this->stripOrderBy($sql));
+    }
+
+    public function testStripTrailingOrderByLeavesSubqueryOrderBy(): void
+    {
+        // ORDER BY lives inside a derived table (legalised by its own OFFSET);
+        // the OUTER query has none — must not strip the inner one.
+        $sql = 'SELECT * FROM (SELECT id FROM t ORDER BY id OFFSET 0 ROWS) z';
+        $this->assertSame($sql, $this->stripOrderBy($sql));
+
+        // SELECT TOP inside a subquery legalises its ORDER BY too; no outer order.
+        $top = 'SELECT * FROM (SELECT TOP 5 id FROM t ORDER BY id) z';
+        $this->assertSame($top, $this->stripOrderBy($top));
+    }
+
+    public function testStripTrailingOrderByStripsOnlyOuter(): void
+    {
+        // A subquery keeps its (legalised) ORDER BY; only the trailing outer
+        // ORDER BY is removed.
+        $this->assertSame(
+            'SELECT * FROM (SELECT id FROM t ORDER BY id OFFSET 0 ROWS) z',
+            $this->stripOrderBy('SELECT * FROM (SELECT id FROM t ORDER BY id OFFSET 0 ROWS) z ORDER BY z.id')
+        );
+    }
 }

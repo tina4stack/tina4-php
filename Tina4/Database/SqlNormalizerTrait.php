@@ -75,6 +75,82 @@ trait SqlNormalizerTrait
     }
 
     /**
+     * Strip a trailing ORDER BY clause from a SELECT so it can be safely wrapped
+     * in a COUNT(*) subquery on SQL Server.
+     *
+     * SQL Server rejects ``SELECT COUNT(*) FROM (<inner> ORDER BY x) t`` with
+     * error 20018 — "The ORDER BY clause is invalid in views, inline functions,
+     * derived tables, subqueries, and common table expressions, unless TOP,
+     * OFFSET or FOR XML is also specified." So the MSSQL count probe in fetch()
+     * silently fell back to 0 (its own try/catch) whenever the user SQL ended in
+     * an ORDER BY, even though the rows came back fine (#262). The ORDER BY is
+     * meaningless inside a COUNT anyway — strip it before wrapping.
+     *
+     * Only a TRAILING ORDER BY is removed, and only when it is NOT already
+     * legalised by a following TOP / OFFSET / FETCH / FOR clause (those make the
+     * ORDER BY valid in a subquery, so leave them intact). A nested ORDER BY
+     * inside a derived table / parenthesised subquery is left alone — the regex
+     * is anchored to the end of the statement and stops at the first unbalanced
+     * close-paren so it never reaches into a subquery's own ORDER BY.
+     *
+     * @param string $sql User-supplied SQL (semicolons already stripped).
+     * @return string SQL safe to wrap in COUNT(*) on SQL Server.
+     */
+    protected static function stripTrailingOrderBy(string $sql): string
+    {
+        if (!preg_match('/\bORDER\s+BY\b/i', $sql)) {
+            return $sql;
+        }
+
+        // Find the LAST TOP-LEVEL ORDER BY — one that is not nested inside a
+        // derived table / parenthesised subquery (its preceding text is
+        // paren-balanced) AND whose tail to end-of-string stays paren-balanced
+        // (so a following ``) z`` proves it actually belonged to a subquery).
+        $offset = 0;
+        $lastTopLevel = -1;
+        while (preg_match('/\bORDER\s+BY\b/i', $sql, $m, PREG_OFFSET_CAPTURE, $offset)) {
+            $pos = $m[0][1];
+            $before = substr($sql, 0, $pos);
+            $balancedBefore = substr_count($before, '(') === substr_count($before, ')');
+
+            $after = substr($sql, $pos);
+            $depth = 0;
+            $balancedAfter = true;
+            for ($i = 0, $len = strlen($after); $i < $len; $i++) {
+                if ($after[$i] === '(') {
+                    $depth++;
+                } elseif ($after[$i] === ')') {
+                    if (--$depth < 0) {
+                        $balancedAfter = false;
+                        break;
+                    }
+                }
+            }
+
+            if ($balancedBefore && $balancedAfter) {
+                $lastTopLevel = $pos;
+            }
+            $offset = $pos + strlen($m[0][0]);
+        }
+
+        if ($lastTopLevel === -1) {
+            // Every ORDER BY is inside a subquery — none terminates the outer
+            // statement, so wrapping in COUNT(*) is already valid. Leave intact.
+            return $sql;
+        }
+
+        // The trailing ORDER BY is already legalised by a following
+        // OFFSET / FETCH / FOR (XML/JSON) — those make it valid in a subquery on
+        // SQL Server, so leave it; wrapping in COUNT(*) is fine.
+        $tail = substr($sql, $lastTopLevel);
+        if (preg_match('/\b(?:OFFSET|FETCH|FOR)\b/i', $tail)) {
+            return $sql;
+        }
+
+        return rtrim(substr($sql, 0, $lastTopLevel));
+    }
+
+    /**
      * Split a possibly-qualified table name into [schema, table].
      *
      * v3.13.14 (#48): a model whose table name is qualified — PostgreSQL

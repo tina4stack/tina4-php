@@ -20,6 +20,87 @@ use Tina4\Database\SQLite3Adapter;
 
 class DatabaseDriversTest extends TestCase
 {
+    // ── Live-service connection helpers (#262) ───────────────────────
+    //
+    // MySQL + MSSQL are provisioned in CI since 3.13.44, so the live tests
+    // must RUN there (not skip). A URL is resolved from the legacy
+    // TINA4_TEST_MYSQL_URL / TINA4_TEST_MSSQL_URL OR the canonical
+    // TINA4_TEST_MYSQL_* / TINA4_TEST_MSSQL_* env, gated by a TCP reachability
+    // probe. When nothing is listening the skip reason names the engine +
+    // "not reachable" so the RequireServicesGate turns it into a failure under
+    // TINA4_REQUIRE_SERVICES. (These plumb the same connection the live
+    // round-trips in MySQLMSSQLLiveTest use.)
+
+    private static function testHost(string $var, string $default = 'localhost'): string
+    {
+        $v = getenv($var);
+        return ($v !== false && $v !== '') ? $v : $default;
+    }
+
+    private static function testPort(string $var, int $default): int
+    {
+        $v = getenv($var);
+        return ($v !== false && $v !== '') ? (int) $v : $default;
+    }
+
+    private static function tcpReachable(string $host, int $port, float $timeout = 1.0): bool
+    {
+        $fp = @fsockopen($host, $port, $errno, $errstr, $timeout);
+        if ($fp === false) {
+            return false;
+        }
+        fclose($fp);
+
+        return true;
+    }
+
+    /** MSSQL works through ext-sqlsrv OR the ext-pdo_dblib (FreeTDS) fallback. */
+    private static function mssqlClientAvailable(): bool
+    {
+        return function_exists('sqlsrv_connect')
+            || in_array('dblib', \PDO::getAvailableDrivers(), true);
+    }
+
+    /** A reachable MySQL connection URL, or null when nothing is listening. */
+    private static function resolveMysqlUrl(): ?string
+    {
+        $url = getenv('TINA4_TEST_MYSQL_URL');
+        if ($url !== false && $url !== '') {
+            return $url;
+        }
+
+        $host = self::testHost('TINA4_TEST_MYSQL_HOST');
+        $port = self::testPort('TINA4_TEST_MYSQL_PORT', 3306);
+        if (!self::tcpReachable($host, $port)) {
+            return null;
+        }
+        $user = self::testHost('TINA4_TEST_MYSQL_USER', 'tina4');
+        $pass = self::testHost('TINA4_TEST_MYSQL_PASS', 'tina4');
+        $db = self::testHost('TINA4_TEST_MYSQL_DB', 'tina4_test');
+
+        return sprintf('mysql://%s:%s@%s:%d/%s', $user, $pass, $host, $port, $db);
+    }
+
+    /** A reachable MSSQL connection URL, or null when nothing is listening. */
+    private static function resolveMssqlUrl(): ?string
+    {
+        $url = getenv('TINA4_TEST_MSSQL_URL');
+        if ($url !== false && $url !== '') {
+            return $url;
+        }
+
+        $host = self::testHost('TINA4_TEST_MSSQL_HOST');
+        $port = self::testPort('TINA4_TEST_MSSQL_PORT', 1433);
+        if (!self::tcpReachable($host, $port)) {
+            return null;
+        }
+        $user = self::testHost('TINA4_TEST_MSSQL_USER', 'sa');
+        $pass = self::testHost('TINA4_TEST_MSSQL_PASS', 'TinaSQL123!Secure');
+        $db = self::testHost('TINA4_TEST_MSSQL_DB', 'tina4_test');
+
+        return sprintf('mssql://%s:%s@%s:%d/%s', rawurlencode($user), rawurlencode($pass), $host, $port, $db);
+    }
+
     // ── Extension Detection ──────────────────────────────────────────
 
     public function testPostgresThrowsWithoutExtension(): void
@@ -44,15 +125,66 @@ class DatabaseDriversTest extends TestCase
         new MySQLAdapter('mysql://localhost/test');
     }
 
-    public function testMSSQLThrowsWithoutExtension(): void
+    /**
+     * The MSSQLAdapter constructor now picks a backend automatically: it prefers
+     * ext-sqlsrv (the Microsoft driver) and falls back to ext-pdo_dblib (FreeTDS,
+     * the 'dblib' PDO driver — the same stack tina4-python/tina4-ruby use). It
+     * only throws when NEITHER backend is available.
+     *
+     * So this is now two assertions in one (driven by what the host actually
+     * provides):
+     *   - neither sqlsrv NOR pdo_dblib  → constructor STILL throws (clear error
+     *     naming both ext-sqlsrv and ext-pdo_dblib).
+     *   - pdo_dblib IS available (no sqlsrv) → constructor SUCCEEDS and the
+     *     instance reports the 'pdo' driver (it must not throw just because the
+     *     Microsoft driver is missing).
+     *
+     * The constructor connects in open(), so on a host with dblib but no live
+     * server we tolerate the "failed to connect" RuntimeException — what we are
+     * asserting is that it did NOT throw the missing-extension error and that
+     * the backend selection landed on 'pdo'. The live round-trip lives in
+     * MySQLMSSQLLiveTest.
+     */
+    public function testMSSQLBackendSelection(): void
     {
-        if (function_exists('sqlsrv_connect')) {
-            $this->markTestSkipped('ext-sqlsrv is installed — cannot test missing extension error');
+        $hasSqlsrv = function_exists('sqlsrv_connect');
+        $hasDblib = in_array('dblib', \PDO::getAvailableDrivers(), true);
+
+        if (!$hasSqlsrv && !$hasDblib) {
+            // Neither backend present — must throw the missing-extension error
+            // naming both options.
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('ext-sqlsrv');
+            new MSSQLAdapter('mssql://localhost/test');
+            return;
         }
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('ext-sqlsrv');
-        new MSSQLAdapter('mssql://localhost/test');
+        if ($hasSqlsrv) {
+            $this->markTestSkipped(
+                'ext-sqlsrv is installed — this host exercises the primary '
+                . 'driver, not the pdo_dblib fallback selection path.'
+            );
+        }
+
+        // pdo_dblib present, sqlsrv absent: the constructor must NOT throw a
+        // missing-extension error — it must select the 'pdo' backend. It may
+        // still raise a "failed to connect" RuntimeException if nothing is
+        // listening; that is fine — only the missing-extension error is wrong.
+        try {
+            $adapter = new MSSQLAdapter('mssql://localhost/test');
+            $this->assertSame('pdo', $adapter->getDriver(),
+                'with only pdo_dblib available the adapter must use the pdo backend');
+            $adapter->close();
+        } catch (\RuntimeException $e) {
+            $this->assertStringNotContainsString('ext-sqlsrv', $e->getMessage(),
+                'a missing-extension error is wrong when pdo_dblib is available — '
+                . 'the adapter must fall back to pdo, not refuse to construct'
+            );
+            $this->assertStringContainsString('Failed to connect', $e->getMessage(),
+                'the only acceptable RuntimeException here is a connection failure, '
+                . 'not a backend-availability error'
+            );
+        }
     }
 
     public function testFirebirdThrowsWithoutExtension(): void
@@ -297,9 +429,13 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('ext-mysqli not installed');
         }
 
-        $url = getenv('TINA4_TEST_MYSQL_URL');
-        if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_MYSQL_URL to run live MySQL tests (e.g. mysql://user:pass@localhost/testdb)');
+        $url = self::resolveMysqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MySQL not reachable at %s:%d — skip live MySQL test',
+                self::testHost('TINA4_TEST_MYSQL_HOST'),
+                self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
+            ));
         }
 
         $db = new MySQLAdapter($url);
@@ -324,13 +460,19 @@ class DatabaseDriversTest extends TestCase
 
     public function testMSSQLLiveConnection(): void
     {
-        if (!function_exists('sqlsrv_connect')) {
-            $this->markTestSkipped('ext-sqlsrv not installed');
+        if (!self::mssqlClientAvailable()) {
+            $this->markTestSkipped(
+                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+            );
         }
 
-        $url = getenv('TINA4_TEST_MSSQL_URL');
-        if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_MSSQL_URL to run live MSSQL tests (e.g. mssql://user:pass@localhost/testdb)');
+        $url = self::resolveMssqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MSSQL not reachable at %s:%d — skip live MSSQL test',
+                self::testHost('TINA4_TEST_MSSQL_HOST'),
+                self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
+            ));
         }
 
         $db = new MSSQLAdapter($url);
@@ -396,9 +538,13 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('ext-mysqli not installed');
         }
 
-        $url = getenv('TINA4_TEST_MYSQL_URL');
-        if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_MYSQL_URL for live factory test');
+        $url = self::resolveMysqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MySQL not reachable at %s:%d — skip live factory test',
+                self::testHost('TINA4_TEST_MYSQL_HOST'),
+                self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
+            ));
         }
 
         $db = Database::create($url);
@@ -409,13 +555,19 @@ class DatabaseDriversTest extends TestCase
 
     public function testFactoryCreatesMSSQLAdapter(): void
     {
-        if (!function_exists('sqlsrv_connect')) {
-            $this->markTestSkipped('ext-sqlsrv not installed');
+        if (!self::mssqlClientAvailable()) {
+            $this->markTestSkipped(
+                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+            );
         }
 
-        $url = getenv('TINA4_TEST_MSSQL_URL');
-        if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_MSSQL_URL for live factory test');
+        $url = self::resolveMssqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MSSQL not reachable at %s:%d — skip live factory test',
+                self::testHost('TINA4_TEST_MSSQL_HOST'),
+                self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
+            ));
         }
 
         $db = Database::create($url);

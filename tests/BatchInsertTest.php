@@ -20,9 +20,10 @@
  *       (b) a failing row is never silently dropped.
  *
  * These talk to the REAL database engines — no mocks. SQLite runs always
- * (in-memory). PostgreSQL runs when ext-pgsql is present and the server is
- * reachable (skip reason names "postgres"/"not reachable"). MySQL and MSSQL
- * are not provisioned, so they gated-skip.
+ * (in-memory). PostgreSQL, MySQL and MSSQL run when their client extension is
+ * present and the server is reachable (skip reason names the engine +
+ * "not reachable"). MySQL + MSSQL are provisioned in CI since 3.13.44 (#262),
+ * so under TINA4_REQUIRE_SERVICES a skip there becomes a hard failure.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -163,13 +164,25 @@ class BatchInsertTest extends TestCase
         }
     }
 
-    // ── MySQL / MSSQL — not provisioned, gated-skip ─────────────────────────
+    // ── MySQL / MSSQL — provisioned live (#262) ─────────────────────────────
+    //
+    // MySQL + MSSQL are provisioned in CI since 3.13.44, so these run for real.
+    // The skip reasons name the engine + "not reachable"/"not installed" so the
+    // RequireServicesGate turns a skip into a hard failure under
+    // TINA4_REQUIRE_SERVICES.
 
-    public function testMysqlBatchInsertSkippedWhenNotProvisioned(): void
+    public function testMysqlBatchInsertsAllThreeRowsAndReportsLastId(): void
     {
-        $url = getenv('TINA4_TEST_MYSQL_URL');
-        if (!extension_loaded('mysqli') || !$url) {
-            $this->markTestSkipped('MySQL not provisioned (set TINA4_TEST_MYSQL_URL + ext-mysqli to run).');
+        if (!extension_loaded('mysqli')) {
+            $this->markTestSkipped('MySQL client not installed — ext-mysqli is missing.');
+        }
+        $url = self::resolveMysqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MySQL not reachable at %s:%d — skip batch-insert integration test',
+                self::testHost('TINA4_TEST_MYSQL_HOST'),
+                self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
+            ));
         }
 
         $db = Database::create($url, autoCommit: true);
@@ -187,19 +200,38 @@ class BatchInsertTest extends TestCase
             ]);
             $this->assertTrue($ok);
             $rows = $db->fetch("SELECT * FROM {$table} ORDER BY id", [], 100);
+            // All 3 rows must land (the core batch-atomicity invariant). Assert
+            // on the materialised records — the engine-agnostic source of truth.
+            $this->assertCount(3, $rows->records, 'All 3 batch rows must be inserted');
             $this->assertSame(3, $rows->count);
-            $this->assertSame(3, (int) $db->getLastId());
+            $this->assertSame(['r1', 'r2', 'r3'], array_map(fn($r) => $r['name'], $rows->records));
+            // Regression (#262): getLastId() survives the intervening SELECT in
+            // fetch() above. The MySQL adapter now captures the auto-increment id
+            // at INSERT time (mysqli_stmt::insert_id) instead of re-reading the
+            // connection's insert_id lazily (which a later SELECT resets to 0) --
+            // parity with PostgreSQL's lastval() and the Python master.
+            $this->assertSame(3, (int) $db->getLastId(), 'Last id must be the 3rd row even after a fetch');
         } finally {
             try { $db->execute("DROP TABLE IF EXISTS {$table}"); } catch (\Throwable $e) {}
             $db->close();
         }
     }
 
-    public function testMssqlBatchInsertSkippedWhenNotProvisioned(): void
+    public function testMssqlBatchInsertsAllThreeRows(): void
     {
-        $url = getenv('TINA4_TEST_MSSQL_URL');
-        if (!function_exists('sqlsrv_connect') || !$url) {
-            $this->markTestSkipped('MSSQL not provisioned (set TINA4_TEST_MSSQL_URL + ext-sqlsrv to run).');
+        if (!function_exists('sqlsrv_connect')
+            && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped(
+                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available.'
+            );
+        }
+        $url = self::resolveMssqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MSSQL not reachable at %s:%d — skip batch-insert integration test',
+                self::testHost('TINA4_TEST_MSSQL_HOST'),
+                self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
+            ));
         }
 
         $db = Database::create($url, autoCommit: true);
@@ -217,7 +249,17 @@ class BatchInsertTest extends TestCase
             ]);
             $this->assertTrue($ok);
             $rows = $db->fetch("SELECT * FROM {$table} ORDER BY id", [], 100);
-            $this->assertSame(3, $rows->count);
+            // All 3 rows must land. Assert on the materialised records — the
+            // engine-agnostic source of truth.
+            $this->assertCount(3, $rows->records, 'All 3 batch rows must be inserted');
+            $this->assertSame(['r1', 'r2', 'r3'], array_map(fn($r) => $r['name'], $rows->records));
+            // Regression (#262): $rows->count is correct for a query ending in
+            // ORDER BY. The MSSQL count probe wraps the query as
+            // `SELECT COUNT(*) FROM (<sql>) AS _count_query`, which SQL Server
+            // rejects when <sql> carries a trailing ORDER BY (illegal in a
+            // subquery without TOP/OFFSET). The adapter now strips a trailing
+            // top-level ORDER BY for the probe only, so the count is accurate.
+            $this->assertSame(3, $rows->count, 'count probe must survive a trailing ORDER BY');
         } finally {
             try { $db->execute("IF OBJECT_ID('{$table}', 'U') IS NOT NULL DROP TABLE {$table}"); } catch (\Throwable $e) {}
             $db->close();
@@ -225,6 +267,67 @@ class BatchInsertTest extends TestCase
     }
 
     // ── Helpers (plain test helpers, not mocks) ─────────────────────────────
+
+    private static function testHost(string $var, string $default = 'localhost'): string
+    {
+        $v = getenv($var);
+        return ($v !== false && $v !== '') ? $v : $default;
+    }
+
+    private static function testPort(string $var, int $default): int
+    {
+        $v = getenv($var);
+        return ($v !== false && $v !== '') ? (int) $v : $default;
+    }
+
+    private static function tcpReachable(string $host, int $port, float $timeout = 1.0): bool
+    {
+        $fp = @fsockopen($host, $port, $errno, $errstr, $timeout);
+        if ($fp === false) {
+            return false;
+        }
+        fclose($fp);
+
+        return true;
+    }
+
+    /** A reachable MySQL connection URL, or null when nothing is listening. */
+    private static function resolveMysqlUrl(): ?string
+    {
+        $url = getenv('TINA4_TEST_MYSQL_URL');
+        if ($url !== false && $url !== '') {
+            return $url;
+        }
+        $host = self::testHost('TINA4_TEST_MYSQL_HOST');
+        $port = self::testPort('TINA4_TEST_MYSQL_PORT', 3306);
+        if (!self::tcpReachable($host, $port)) {
+            return null;
+        }
+        $user = self::testHost('TINA4_TEST_MYSQL_USER', 'tina4');
+        $pass = self::testHost('TINA4_TEST_MYSQL_PASS', 'tina4');
+        $db = self::testHost('TINA4_TEST_MYSQL_DB', 'tina4_test');
+
+        return sprintf('mysql://%s:%s@%s:%d/%s', $user, $pass, $host, $port, $db);
+    }
+
+    /** A reachable MSSQL connection URL, or null when nothing is listening. */
+    private static function resolveMssqlUrl(): ?string
+    {
+        $url = getenv('TINA4_TEST_MSSQL_URL');
+        if ($url !== false && $url !== '') {
+            return $url;
+        }
+        $host = self::testHost('TINA4_TEST_MSSQL_HOST');
+        $port = self::testPort('TINA4_TEST_MSSQL_PORT', 1433);
+        if (!self::tcpReachable($host, $port)) {
+            return null;
+        }
+        $user = self::testHost('TINA4_TEST_MSSQL_USER', 'sa');
+        $pass = self::testHost('TINA4_TEST_MSSQL_PASS', 'TinaSQL123!Secure');
+        $db = self::testHost('TINA4_TEST_MSSQL_DB', 'tina4_test');
+
+        return sprintf('mssql://%s:%s@%s:%d/%s', rawurlencode($user), rawurlencode($pass), $host, $port, $db);
+    }
 
     private function postgresOrSkip(): Database
     {
