@@ -266,7 +266,151 @@ class BatchInsertTest extends TestCase
         }
     }
 
+    public function testMysqlSingleRowInsertStillWorks(): void
+    {
+        $db = $this->mysqlOrSkip();
+        $table = '_t4_batch_mysql_single';
+        try {
+            $db->execute("DROP TABLE IF EXISTS {$table}");
+            $db->execute(
+                "CREATE TABLE {$table} (id INT AUTO_INCREMENT PRIMARY KEY, "
+                . "name VARCHAR(50) NOT NULL, price DOUBLE)"
+            );
+            // A single-object insert is unaffected by the batch path.
+            $this->assertTrue($db->insert($table, ['name' => 'solo', 'price' => 9.0]));
+            $this->assertSame(1, (int) $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c']);
+        } finally {
+            try { $db->execute("DROP TABLE IF EXISTS {$table}"); } catch (\Throwable $e) {}
+            $db->close();
+        }
+    }
+
+    public function testMysqlBatchIsAtomicAndFailsLoudOnBadRow(): void
+    {
+        $db = $this->mysqlOrSkip();
+        $table = '_t4_batch_mysql_fail';
+        try {
+            $db->execute("DROP TABLE IF EXISTS {$table}");
+            // InnoDB (mysql:8 default) gives the batch a real transactional rollback.
+            $db->execute(
+                "CREATE TABLE {$table} (id INT AUTO_INCREMENT PRIMARY KEY, "
+                . "name VARCHAR(50) NOT NULL, price DOUBLE) ENGINE=InnoDB"
+            );
+            $db->insert($table, ['name' => 'seed', 'price' => 0.0]);
+            $before = $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c'];
+
+            $threw = false;
+            try {
+                $db->insert($table, [
+                    ['name' => 'good1', 'price' => 1.0],
+                    ['name' => null,    'price' => 2.0],   // violates NOT NULL
+                    ['name' => 'good3', 'price' => 3.0],
+                ]);
+            } catch (\Throwable $e) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, 'A MySQL batch with a bad row must RAISE (fail loud)');
+
+            $after = $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c'];
+            $this->assertSame((int) $before, (int) $after, 'A failed batch must roll back entirely on MySQL');
+        } finally {
+            try { $db->execute("DROP TABLE IF EXISTS {$table}"); } catch (\Throwable $e) {}
+            $db->close();
+        }
+    }
+
+    public function testMssqlSingleRowInsertStillWorks(): void
+    {
+        $db = $this->mssqlOrSkip();
+        $table = '_t4_batch_mssql_single';
+        try {
+            $db->execute("IF OBJECT_ID('{$table}', 'U') IS NOT NULL DROP TABLE {$table}");
+            $db->execute(
+                "CREATE TABLE {$table} (id INT IDENTITY(1,1) PRIMARY KEY, "
+                . "name VARCHAR(50) NOT NULL, price FLOAT)"
+            );
+            // A single-object insert is unaffected by the batch path.
+            $this->assertTrue($db->insert($table, ['name' => 'solo', 'price' => 9.0]));
+            $this->assertSame(1, (int) $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c']);
+        } finally {
+            try { $db->execute("IF OBJECT_ID('{$table}', 'U') IS NOT NULL DROP TABLE {$table}"); } catch (\Throwable $e) {}
+            $db->close();
+        }
+    }
+
+    public function testMssqlBatchIsAtomicAndFailsLoudOnBadRow(): void
+    {
+        $db = $this->mssqlOrSkip();
+        $table = '_t4_batch_mssql_fail';
+        try {
+            $db->execute("IF OBJECT_ID('{$table}', 'U') IS NOT NULL DROP TABLE {$table}");
+            $db->execute(
+                "CREATE TABLE {$table} (id INT IDENTITY(1,1) PRIMARY KEY, "
+                . "name VARCHAR(50) NOT NULL, price FLOAT)"
+            );
+            $db->insert($table, ['name' => 'seed', 'price' => 0.0]);
+            $before = $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c'];
+
+            $threw = false;
+            try {
+                $db->insert($table, [
+                    ['name' => 'good1', 'price' => 1.0],
+                    ['name' => null,    'price' => 2.0],   // violates NOT NULL
+                    ['name' => 'good3', 'price' => 3.0],
+                ]);
+            } catch (\Throwable $e) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, 'An MSSQL batch with a bad row must RAISE (fail loud)');
+
+            $after = $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c'];
+            $this->assertSame((int) $before, (int) $after, 'A failed batch must roll back entirely on MSSQL');
+        } finally {
+            try { $db->execute("IF OBJECT_ID('{$table}', 'U') IS NOT NULL DROP TABLE {$table}"); } catch (\Throwable $e) {}
+            $db->close();
+        }
+    }
+
     // ── Helpers (plain test helpers, not mocks) ─────────────────────────────
+
+    /** A live MySQL connection, or skip (engine-named reason) when unavailable. */
+    private function mysqlOrSkip(): Database
+    {
+        if (!extension_loaded('mysqli')) {
+            $this->markTestSkipped('MySQL client not installed — ext-mysqli is missing.');
+        }
+        $url = self::resolveMysqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MySQL not reachable at %s:%d — skip batch-insert integration test',
+                self::testHost('TINA4_TEST_MYSQL_HOST'),
+                self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
+            ));
+        }
+
+        return Database::create($url, autoCommit: true);
+    }
+
+    /** A live MSSQL connection, or skip (engine-named reason) when unavailable. */
+    private function mssqlOrSkip(): Database
+    {
+        if (!function_exists('sqlsrv_connect')
+            && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped(
+                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available.'
+            );
+        }
+        $url = self::resolveMssqlUrl();
+        if ($url === null) {
+            $this->markTestSkipped(sprintf(
+                'MSSQL not reachable at %s:%d — skip batch-insert integration test',
+                self::testHost('TINA4_TEST_MSSQL_HOST'),
+                self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
+            ));
+        }
+
+        return Database::create($url, autoCommit: true);
+    }
 
     private static function testHost(string $var, string $default = 'localhost'): string
     {
