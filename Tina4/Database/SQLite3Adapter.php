@@ -426,8 +426,15 @@ class SQLite3Adapter implements DatabaseAdapter
         if ($this->db->querySingle('SELECT 1') !== null) {
             try {
                 $this->db->exec('COMMIT');
-            } catch (\SQLite3Exception $e) {
-                // No transaction active — safe to ignore
+            } catch (\Throwable $e) {
+                // Under autocommit-on (default) a write has already committed via
+                // SQLite's own autocommit, so an explicit COMMIT finds no active
+                // transaction. That is harmless — the data persisted — so swallow
+                // it. Catch \Throwable, not \SQLite3Exception: when SQLite raises
+                // this as an E_WARNING the test harness (PHPUnit) converts it into
+                // a non-SQLite3Exception throwable that a narrow catch would miss
+                // (the macOS libsqlite3 stayed silent; the CI one warns). Any OTHER
+                // commit error still surfaces loudly.
                 if (!str_contains($e->getMessage(), 'no transaction is active')) {
                     throw $e;
                 }
@@ -440,8 +447,10 @@ class SQLite3Adapter implements DatabaseAdapter
         $this->ensureOpen();
         try {
             $this->db->exec('ROLLBACK');
-        } catch (\Exception $e) {
-            // Rollback may fail if no transaction is active
+        } catch (\Throwable $e) {
+            // Rollback may fail if no transaction is active — record it, never
+            // raise (same \Throwable reasoning as commit(): the PHPUnit-converted
+            // warning is not a \SQLite3Exception).
             $this->lastError = $e->getMessage();
         }
     }

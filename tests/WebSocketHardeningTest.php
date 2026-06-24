@@ -435,15 +435,30 @@ class WebSocketHardeningTest extends TestCase
         $this->requireRedis();
         // A flaky message bus must never undo a local broadcast. We trigger a
         // REAL publish failure: construct a real RedisBackplane against the live
-        // server (so it connects + PINGs successfully), then repoint it at a
-        // CLOSED port (127.0.0.1:59999). Its raw publish() opens a fresh socket
-        // to that port per publish — fsockopen to a closed port genuinely fails
-        // and publish() throws. No fake/stub: a real socket to a real dead port.
+        // server (so it connects + PINGs successfully), then break its transport
+        // for real. No fake/stub — the break differs by which client the build
+        // uses, so handle BOTH:
+        //   * raw RESP path (no ext-redis): each publish opens a fresh socket to
+        //     host:port, so repointing at a CLOSED port (127.0.0.1:59999) makes
+        //     fsockopen genuinely refuse and publish() throw.
+        //   * ext-redis path (phpredis present, e.g. the CI runner image): the
+        //     connection is already open, so moving host/port fields would not
+        //     move it. Instead CLOSE the live phpredis handle — a real "server
+        //     went away" — so the next publish() fails against a dead connection.
         $bus = new RedisBackplane('tcp://' . self::REDIS_HOST . ':' . self::REDIS_PORT);
         $rpPort = new \ReflectionProperty($bus, 'port');
         $rpPort->setValue($bus, 59999);
         $rpHost = new \ReflectionProperty($bus, 'host');
         $rpHost->setValue($bus, '127.0.0.1');
+
+        $useRaw = (new \ReflectionProperty($bus, 'useRaw'))->getValue($bus);
+        if (!$useRaw) {
+            // Close the real, non-persistent phpredis handle. A non-persistent
+            // connection does NOT auto-reconnect, so the next publish() throws
+            // RedisException ("Redis server went away") against the dead handle.
+            $redis = (new \ReflectionProperty($bus, 'redis'))->getValue($bus);
+            $redis->close();
+        }
 
         // Sanity: prove publish() genuinely fails over the real closed socket.
         $threw = false;
