@@ -160,10 +160,13 @@ jobs:
         with:
           php-version: '8.2'
           # pdo_pgsql + pgsql (live PostgreSQL), mysqli + pdo_mysql (live MySQL),
-          # pdo_dblib (live MSSQL via FreeTDS — ext-sqlsrv is not used here),
-          # mongodb (queue/session/doc-store), sockets (RabbitMQ AMQP frames),
-          # sqlite3 + pdo_sqlite (default engine).
-          extensions: pdo_pgsql, pgsql, mysqli, pdo_mysql, pdo_dblib, mongodb, sockets, sqlite3, pdo_sqlite
+          # pdo_dblib (live MSSQL via FreeTDS), mongodb (queue/session/doc-store),
+          # sockets (RabbitMQ AMQP frames), sqlite3 + pdo_sqlite (default engine).
+          # The shivammathur runner image PRE-BUNDLES sqlsrv/pdo_sqlsrv, so the
+          # MSSQL adapter would pick the sqlsrv backend and fail on the absent
+          # Microsoft ODBC driver. Disable them (:ext) so the adapter uses the
+          # pdo_dblib (FreeTDS) backend the live MSSQL tests rely on.
+          extensions: pdo_pgsql, pgsql, mysqli, pdo_mysql, pdo_dblib, mongodb, sockets, sqlite3, pdo_sqlite, :sqlsrv, :pdo_sqlsrv
 
       # The postgres service only creates POSTGRES_DB (tina4_php). The two-database
       # routing test needs tina4_rb, and the UUID-PK test connects to tina4 — create
