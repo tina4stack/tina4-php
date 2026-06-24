@@ -434,31 +434,20 @@ class WebSocketHardeningTest extends TestCase
     {
         $this->requireRedis();
         // A flaky message bus must never undo a local broadcast. We trigger a
-        // REAL publish failure: construct a real RedisBackplane against the live
-        // server (so it connects + PINGs successfully), then break its transport
-        // for real. No fake/stub — the break differs by which client the build
-        // uses, so handle BOTH:
-        //   * raw RESP path (no ext-redis): each publish opens a fresh socket to
-        //     host:port, so repointing at a CLOSED port (127.0.0.1:59999) makes
-        //     fsockopen genuinely refuse and publish() throw.
-        //   * ext-redis path (phpredis present, e.g. the CI runner image): the
-        //     connection is already open, so moving host/port fields would not
-        //     move it. Instead CLOSE the live phpredis handle — a real "server
-        //     went away" — so the next publish() fails against a dead connection.
+        // REAL publish failure deterministically on any build: construct a real
+        // RedisBackplane against the live server (so it connects + PINGs), then
+        // repoint it at a CLOSED port (127.0.0.1:59999) and select the raw-RESP
+        // transport. The raw publish() opens a FRESH TCP socket per publish, so
+        // fsockopen to the dead port genuinely refuses and publish() throws. No
+        // fake/stub — a real socket to a real dead port. We force the raw path
+        // (not ext-redis) because phpredis keeps an already-open connection that
+        // a port repoint cannot move and lazily reconnects to its original host,
+        // so the ext-redis transport would publish to the LIVE server and never
+        // fail; the raw transport honours the repointed host:port every time.
         $bus = new RedisBackplane('tcp://' . self::REDIS_HOST . ':' . self::REDIS_PORT);
-        $rpPort = new \ReflectionProperty($bus, 'port');
-        $rpPort->setValue($bus, 59999);
-        $rpHost = new \ReflectionProperty($bus, 'host');
-        $rpHost->setValue($bus, '127.0.0.1');
-
-        $useRaw = (new \ReflectionProperty($bus, 'useRaw'))->getValue($bus);
-        if (!$useRaw) {
-            // Close the real, non-persistent phpredis handle. A non-persistent
-            // connection does NOT auto-reconnect, so the next publish() throws
-            // RedisException ("Redis server went away") against the dead handle.
-            $redis = (new \ReflectionProperty($bus, 'redis'))->getValue($bus);
-            $redis->close();
-        }
+        (new \ReflectionProperty($bus, 'host'))->setValue($bus, '127.0.0.1');
+        (new \ReflectionProperty($bus, 'port'))->setValue($bus, 59999);
+        (new \ReflectionProperty($bus, 'useRaw'))->setValue($bus, true);
 
         // Sanity: prove publish() genuinely fails over the real closed socket.
         $threw = false;
