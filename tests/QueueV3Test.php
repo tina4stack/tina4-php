@@ -8,10 +8,18 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Queue;
+use Tina4\Job;
 
 class QueueV3Test extends TestCase
 {
     private string $testPath;
+
+    /** Throwaway, framework-namespaced Mongo database for the live lifecycle test. */
+    private const LIFECYCLE_DB = 'tina4_test_queue_lifecycle_php';
+    private const LIFECYCLE_COLLECTION = 'tina4_test_queue_lifecycle_jobs';
+
+    /** Mongo URI for the live lifecycle test (set in the live test, dropped on tearDown). */
+    private string $lifecycleMongoUri = '';
 
     protected function setUp(): void
     {
@@ -22,6 +30,33 @@ class QueueV3Test extends TestCase
     protected function tearDown(): void
     {
         $this->removeDir($this->testPath);
+
+        // Drop the throwaway Mongo database used by the live lifecycle test.
+        if ($this->lifecycleMongoUri !== '' && class_exists('MongoDB\\Client')) {
+            try {
+                (new \MongoDB\Client($this->lifecycleMongoUri))->dropDatabase(self::LIFECYCLE_DB);
+            } catch (\Throwable $e) {
+                // best-effort cleanup — never fail the test on a teardown hiccup
+            }
+        }
+        putenv('TINA4_QUEUE_BACKEND');
+        unset($_ENV['TINA4_QUEUE_BACKEND'], $_SERVER['TINA4_QUEUE_BACKEND']);
+    }
+
+    /**
+     * Skip cleanly (never fake) when a required broker is unreachable. The skip
+     * reason carries the service name + "not reachable" so the #252 service gate
+     * (TINA4_REQUIRE_SERVICES) treats an unavailable broker as a FAILURE in CI
+     * rather than a silent pass. Mirrors the reachability gate used by the
+     * RabbitMQ/Kafka/Mongo live integration tests.
+     */
+    private function requireService(string $host, int $port, string $name): void
+    {
+        $sock = @fsockopen($host, $port, $errno, $errstr, 1.5);
+        if ($sock === false) {
+            $this->markTestSkipped("{$name} not reachable at {$host}:{$port} — skipping live queue lifecycle test.");
+        }
+        fclose($sock);
     }
 
     private function removeDir(string $dir): void
@@ -890,49 +925,138 @@ class QueueV3Test extends TestCase
 
     /**
      * Unified lifecycle (3.13.43): when an external backend is active, the Queue
-     * routes the FULL lifecycle (complete/fail/failed/deadLetters/retryFailed) to
-     * it - not the lite backend. Previously failJob/retryJob returned early for
-     * external backends and the inspection verbs read lite, so a Mongo job's
-     * fail/dead-letter/inspection silently hit the wrong store. Engine-agnostic:
-     * injects an in-memory stub backend via reflection (no Mongo driver needed).
+     * routes the FULL lifecycle (enqueue/dequeue/complete/fail/dead-letter and
+     * the inspection verbs failed/deadLetters/retryFailed) to it - not the lite
+     * backend. Previously failJob/retryJob returned early for external backends
+     * and the inspection verbs read lite, so a Mongo job's fail/dead-letter/
+     * inspection silently hit the wrong store.
+     *
+     * No-mock rule: this points the Queue at a REAL MongoDB broker (the
+     * reservation-based external backend whose requeue/deadLetter/inspection
+     * verbs are observable, unlike the broker-owned RabbitMQ/Kafka backends) and
+     * asserts every lifecycle transition against the live collection. It uses a
+     * THROWAWAY, framework-namespaced database (tina4_test_queue_lifecycle_php)
+     * dropped on tearDown, so it never touches application data.
+     *
+     * Selects the backend exactly as the docs describe — TINA4_QUEUE_BACKEND=
+     * mongodb — so the Queue constructor's env-driven backend resolution is what
+     * builds the real MongoBackend.
+     *
+     * Gated on a reachable Mongo (localhost:27017) + the mongodb/mongodb library;
+     * the skip reason contains the service name + "not reachable"/"not installed"
+     * so the #252 service gate treats an unavailable Mongo as a CI failure under
+     * TINA4_REQUIRE_SERVICES.
      */
     public function testQueueRoutesFullLifecycleToExternalBackend(): void
     {
-        $stub = new class implements \Tina4\Queue\QueueBackend {
-            public array $calls = [];
-            public function enqueue(string $t, array $m): string { $this->calls[] = ['enqueue', $m]; return (string)($m['id'] ?? 'x'); }
-            public function dequeue(string $t): ?array { return null; }
-            public function acknowledge(string $t, string $id): void { $this->calls[] = ['acknowledge', $id]; }
-            public function requeue(string $t, array $m): void { $this->calls[] = ['requeue', $m]; }
-            public function deadLetter(string $t, array $m): void { $this->calls[] = ['deadLetter', $m]; }
-            public function size(string $t): int { return 0; }
-            public function close(): void {}
-            public function failed(string $t): array { $this->calls[] = ['failed']; return ['F']; }
-            public function deadLetters(string $t, ?int $mr = null): array { $this->calls[] = ['deadLetters']; return ['D']; }
-            public function retryFailed(string $t, ?int $mr = null): int { $this->calls[] = ['retryFailed']; return 7; }
-        };
+        if (!extension_loaded('mongodb') || !class_exists('MongoDB\\Client')) {
+            $this->markTestSkipped('mongo client (ext-mongodb / mongodb library) not installed — skipping live Mongo queue lifecycle test.');
+        }
 
-        $q = new Queue('file', ['maxRetries' => 3], 'jobs');
-        $ref = new \ReflectionProperty(Queue::class, 'externalBackend');
-        $ref->setAccessible(true);
-        $ref->setValue($q, $stub);
+        $this->lifecycleMongoUri = getenv('TINA4_MONGO_URI') ?: 'mongodb://localhost:27017';
+        $host = '127.0.0.1';
+        $port = 27017;
+        if (preg_match('#^mongodb(?:\+srv)?://(?:[^@/]+@)?([^:/?]+)(?::(\d+))?#', $this->lifecycleMongoUri, $m)) {
+            $host = $m[1] ?: '127.0.0.1';
+            $port = isset($m[2]) && $m[2] !== '' ? (int)$m[2] : 27017;
+        }
+        $this->requireService($host, $port, 'MongoDB');
 
-        $q->completeJob('jobs', 'j1');                                  // -> acknowledge
-        $q->failJob('jobs', ['id' => 'j2', 'attempts' => 0], 'boom');  // under max -> requeue
-        $q->failJob('jobs', ['id' => 'j3', 'attempts' => 2], 'boom');  // attempts 3 >= 3 -> deadLetter + ack
-        $this->assertSame(['F'], $q->failed());
-        $this->assertSame(['D'], $q->deadLetters());
-        $this->assertSame(7, $q->retryFailed());
+        // Drive backend selection via the documented env var (TINA4_QUEUE_BACKEND
+        // = mongodb) so the Queue constructor itself builds the real MongoBackend.
+        putenv('TINA4_QUEUE_BACKEND=mongodb');
+        $_ENV['TINA4_QUEUE_BACKEND'] = 'mongodb';
 
-        $names = array_map(fn ($c) => $c[0], $stub->calls);
-        $this->assertContains('acknowledge', $names, 'complete() must ack the external backend');
-        $this->assertContains('requeue', $names, 'fail() under maxRetries must requeue on the external backend');
-        $this->assertContains('deadLetter', $names, 'fail() at maxRetries must dead-letter on the external backend');
-        $this->assertContains('failed', $names);
-        $this->assertContains('deadLetters', $names);
-        $this->assertContains('retryFailed', $names);
-        $dl = array_values(array_filter($stub->calls, fn ($c) => $c[0] === 'deadLetter'))[0][1];
-        $this->assertSame('j3', $dl['id']);
-        $this->assertSame(3, $dl['attempts']);
+        // One topic per scenario so reservation/visibility ordering across jobs
+        // never interleaves — each transition is asserted against real Mongo in
+        // isolation. A unique run suffix keeps parallel/re-runs from colliding.
+        $run = bin2hex(random_bytes(4));
+        $tComplete = "jobs_complete_{$run}";
+        $tRequeue  = "jobs_requeue_{$run}";
+        $tDead     = "jobs_dead_{$run}";
+
+        $make = fn (string $topic): Queue => new Queue('file', [   // 'file' overridden by the env var
+            'uri'        => $this->lifecycleMongoUri,
+            'db'         => self::LIFECYCLE_DB,
+            'collection' => self::LIFECYCLE_COLLECTION,
+            'maxRetries' => 3,
+        ], $topic);
+
+        $qComplete = $make($tComplete);
+
+        // The active backend really is Mongo (env-driven selection), not lite.
+        $external = (new \ReflectionProperty(Queue::class, 'externalBackend'))->getValue($qComplete);
+        $this->assertInstanceOf(\Tina4\Queue\MongoBackend::class, $external, 'TINA4_QUEUE_BACKEND=mongodb must build a real MongoBackend.');
+
+        // Pristine slate against the real collection (drop any prior run's docs).
+        $coll = (new \MongoDB\Client($this->lifecycleMongoUri))
+            ->selectCollection(self::LIFECYCLE_DB, self::LIFECYCLE_COLLECTION);
+        foreach ([$tComplete, $tRequeue, $tDead] as $t) {
+            $coll->deleteMany(['topic' => $t]);
+            $coll->deleteMany(['topic' => $t . '.dead_letter']);
+        }
+
+        // -- enqueue / dequeue / complete -------------------------------------
+        $this->assertSame(0, $qComplete->size(), 'A fresh topic must be empty on the real broker.');
+        $completeId = $qComplete->push(['stage' => 'complete-me']);
+        $this->assertNotEmpty($completeId, 'push() must return a real Mongo job id.');
+        $this->assertSame(1, $qComplete->size(), 'enqueue must land one pending job in real Mongo.');
+
+        $job1 = $qComplete->pop();                            // dequeue from real Mongo
+        $this->assertNotNull($job1, 'dequeue() must return the enqueued job from Mongo.');
+        $this->assertSame($completeId, $job1['id'] ?? null, 'The job id round-trips through the real broker.');
+        $this->assertSame('complete-me', $job1['payload']['stage'] ?? null, 'The payload round-trips through the real broker.');
+        (new Job($job1, $qComplete, $tComplete))->complete(); // -> acknowledge on Mongo
+        $this->assertSame(0, $coll->countDocuments(['_id' => $completeId]), 'complete() must remove the acknowledged job from the real collection.');
+        $this->assertSame(0, $qComplete->size(), 'The topic is empty after the job is completed.');
+
+        // -- fail UNDER maxRetries: requeue keeps the job available -----------
+        $qRequeue = $make($tRequeue);
+        $requeueId = $qRequeue->push(['stage' => 'fail-once']);
+        $job2 = $qRequeue->pop();
+        $this->assertNotNull($job2);
+        $this->assertSame($requeueId, $job2['id'] ?? null);
+        (new Job($job2, $qRequeue, $tRequeue))->fail('transient'); // attempts 1 < 3 -> requeue
+        $relanded = $coll->findOne(['_id' => $requeueId]);
+        $this->assertNotNull($relanded, 'A requeued job must still exist in Mongo.');
+        $this->assertSame('pending', $relanded['status'], 'fail() under maxRetries must requeue to pending on the real broker.');
+        $this->assertSame(1, (int)$relanded['attempts'], 'fail() increments the live attempt counter in Mongo.');
+        $this->assertEmpty($qRequeue->deadLetters(), 'A job under maxRetries must NOT be dead-lettered.');
+        $this->assertSame(1, $qRequeue->size(), 'The requeued job is pending again on the real topic.');
+
+        // -- fail AT maxRetries: dead-letter + acknowledge --------------------
+        $qDead = $make($tDead);
+        $deadId = $qDead->push(['stage' => 'fail-to-death']);
+        // pop+fail until attempts reach maxRetries (3): the failed job auto-retries
+        // (requeues, visible again) each cycle, then dead-letters at the limit.
+        for ($i = 0; $i < 6; $i++) {
+            $job = $qDead->pop();
+            if ($job === null) {
+                break;
+            }
+            (new Job($job, $qDead, $tDead))->fail('fatal');
+            if (!empty($qDead->deadLetters())) {
+                break;
+            }
+        }
+        $dead = $qDead->deadLetters();                        // reads Mongo's <topic>.dead_letter
+        $this->assertCount(1, $dead, 'fail() at maxRetries must dead-letter on the real broker.');
+        $deadEntry = $dead[0];
+        $this->assertSame($deadId, $deadEntry['id'] ?? ($deadEntry['message']['id'] ?? null), 'The dead-lettered job id round-trips.');
+        $this->assertSame('fatal', $deadEntry['error'] ?? null, 'The terminal failure reason lands in the DLQ.');
+        $this->assertSame(0, $coll->countDocuments(['_id' => $deadId, 'topic' => $tDead]), 'A dead-lettered job is acknowledged off the pending topic.');
+        $this->assertSame(0, $qDead->size(), 'The dead-lettered job is no longer pending.');
+
+        // -- retryFailed(raised limit): re-queues the dead letter to pending --
+        // The dead letter sits at attempts == maxRetries (3); retryFailed() only
+        // revives jobs UNDER the limit, so a plain retryFailed() leaves a
+        // ceiling-hit job dead (asserted), and only a RAISED limit revives it.
+        $this->assertSame(0, $qDead->retryFailed(), 'retryFailed() at the default limit must NOT revive a job that hit its retry ceiling.');
+        $this->assertCount(1, $qDead->deadLetters(), 'The dead letter is still present after the no-op retryFailed().');
+
+        $n = $qDead->retryFailed(10);                         // raise the threshold above attempts (3)
+        $this->assertSame(1, $n, 'retryFailed(raisedLimit) must re-queue the dead letter on the real broker.');
+        $this->assertSame(0, $coll->countDocuments(['topic' => $tDead . '.dead_letter']), 'The dead-letter copy is consumed by retryFailed().');
+        $this->assertSame(1, $qDead->size(), 'The retried job is pending again on the real topic.');
     }
 }

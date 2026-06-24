@@ -388,39 +388,63 @@ class ORMV3Test extends TestCase
 
     public function testSaveWithoutDb(): void
     {
-        $this->expectException(\RuntimeException::class);
+        // Exercise the GENUINE no-binding path: a model with no instance $_db,
+        // no ORM global default, no App database, and no TINA4_DATABASE_URL.
+        // save() -> ensureDb() -> resolveDb() must then throw the real
+        // "No database configured" RuntimeException (Tina4/ORM.php resolveDb()).
+        //
+        // There is no public "unbind" (bindDatabase() is typed to require a real
+        // adapter), so we null the actual private binding holders via reflection
+        // — this removes all real bindings, it does NOT substitute a fake
+        // collaborator. The real resolution chain runs against real state.
+        // ReflectionProperty grants access to private members by default (since
+        // PHP 8.1) — no setAccessible() needed.
+        $ormGlobal = new \ReflectionProperty(\Tina4\ORM::class, '_globalDb');
+        $savedOrmGlobal = $ormGlobal->getValue();
 
-        // Temporarily clear global DB to test the no-DB error path
-        $savedDb = $this->db;
-        \Tina4\ORM::bindDatabase(new class implements \Tina4\Database\DatabaseAdapter {
-            // Dummy adapter that throws — we just need bindDatabase to accept something
-            // so we can test the "no instance db" path
-            public function open(): void {}
-            public function close(): void {}
-            public function query(string $sql, array $params = []): array { return []; }
-            public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array { return []; }
-            public function fetchOne(string $sql, array $params = []): ?array { return null; }
-            public function execute(string $sql, array $params = []): bool|\Tina4\Database\DatabaseResult { return false; }
-            public function insert(string $table, array $data): bool { return false; }
-            public function update(string $table, array $data, string $where = '', array $whereParams = []): bool { return false; }
-            public function delete(string $table, string|array $filter = '', array $whereParams = []): bool { return false; }
-            public function executeMany(string $sql, array $paramsList = []): int { return 0; }
-            public function tableExists(string $table): bool { return false; }
-            public function getColumns(string $table): array { return []; }
-            public function getTables(): array { return []; }
-            public function lastInsertId(): int|string { return 0; }
-            public function startTransaction(): void { throw new \RuntimeException('No DB'); }
-            public function commit(): void {}
-            public function rollback(): void {}
-            public function error(): ?string { return 'No DB'; }
-        });
+        $appDb = new \ReflectionProperty(\Tina4\App::class, 'database');
+        $savedAppDb = $appDb->getValue();
+
+        // DotEnv reads from its internal store first, then $_ENV, then getenv().
+        // Capture all three so we can guarantee TINA4_DATABASE_URL is genuinely
+        // unset for the duration regardless of ambient environment, then restore.
+        $dotEnvVars = new \ReflectionProperty(\Tina4\DotEnv::class, 'variables');
+        $savedDotEnvVars = $dotEnvVars->getValue();
+        $savedSuperglobal = $_ENV['TINA4_DATABASE_URL'] ?? null;
+        $savedGetenv = getenv('TINA4_DATABASE_URL');
 
         try {
+            // Clear every database source resolveDb() consults.
+            $ormGlobal->setValue(null, null);
+            $appDb->setValue(null, null);
+            $vars = $savedDotEnvVars;
+            unset($vars['TINA4_DATABASE_URL']);
+            $dotEnvVars->setValue(null, $vars);
+            unset($_ENV['TINA4_DATABASE_URL']);
+            putenv('TINA4_DATABASE_URL');
+
+            // Sanity: with everything cleared, no DB can be resolved.
+            $this->assertNull(\Tina4\ORM::getGlobalDb());
+            $this->assertNull(\Tina4\Database\Database::fromEnv());
+            $this->assertNull(\Tina4\App::getDatabase());
+
             $user = new TestUser();
             $user->name = 'Alice';
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('No database configured');
             $user->save();
         } finally {
-            \Tina4\ORM::bindDatabase($savedDb);
+            // Restore real bindings + env so tearDown() and later tests are unaffected.
+            $ormGlobal->setValue(null, $savedOrmGlobal);
+            $appDb->setValue(null, $savedAppDb);
+            $dotEnvVars->setValue(null, $savedDotEnvVars);
+            if ($savedSuperglobal !== null) {
+                $_ENV['TINA4_DATABASE_URL'] = $savedSuperglobal;
+            }
+            if ($savedGetenv !== false) {
+                putenv('TINA4_DATABASE_URL=' . $savedGetenv);
+            }
         }
     }
 

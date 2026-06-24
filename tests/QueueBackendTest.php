@@ -274,24 +274,101 @@ class QueueBackendTest extends TestCase
         $this->assertSame(0, $backend->size(''));
     }
 
-    public function testKafkaDeadLetterRoutesToDeadLetterTopic(): void
+    public function testDeadLetterTopicNaming(): void
     {
-        // dead_letter() routes to "<topic>.dead_letter". Prove the real routing
-        // by capturing the topic enqueue() receives — no broker, no producer
-        // double: we subclass and intercept the backend's OWN enqueue (the real
-        // method under test is deadLetter, and the routing is its observable
-        // behaviour). Mirrors Python's test_dead_letter_topic_naming.
-        $backend = new class extends KafkaBackend {
-            public array $seen = [];
-            public function enqueue(string $topic, array $message): string
-            {
-                $this->seen = ['topic' => $topic, 'message' => $message];
-                return 'captured-id';
+        // deadLetter() routes to "<topic>.dead_letter". Prove the routing against
+        // a REAL Kafka broker (no double): call deadLetter() on a live backend,
+        // then consume the produced record straight off the "<topic>.dead_letter"
+        // topic. If the message comes back from that exact topic name, the
+        // routing landed where it claims to. Mirrors Python's
+        // test_dead_letter_topic_naming and reuses the KafkaIntegrationTest
+        // reachability + KRaft topic-creation pattern (a KRaft broker silently
+        // drops a produce to a leaderless/not-yet-created topic).
+        //
+        // Gated on a reachable Kafka (localhost:9092, or TINA4_TEST_KAFKA_URL).
+        // The skip reason carries "kafka" + "not reachable"/"not set" so the
+        // #252 service gate fails CI when Kafka should be up but is not.
+        $url = getenv('TINA4_TEST_KAFKA_URL') ?: 'localhost:9092';
+        $broker = self::firstKafkaBroker($url);
+        if (!self::kafkaReachable($broker['host'], $broker['port'])) {
+            $this->markTestSkipped("kafka broker not reachable at {$broker['host']}:{$broker['port']} — skipping live dead-letter topic-naming test.");
+        }
+
+        $base = 'tina4_test_dlq_' . bin2hex(random_bytes(6));
+        $deadTopic = $base . '.dead_letter';      // the exact name deadLetter() must target
+        $container = getenv('TINA4_TEST_KAFKA_CONTAINER') ?: 'tina4-kafka';
+
+        // Create the .dead_letter topic WITH a leader before producing.
+        $out = [];
+        $rc = 0;
+        exec(sprintf(
+            'docker exec %s /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic %s --partitions 1 --replication-factor 1 --if-not-exists 2>&1',
+            escapeshellarg($container),
+            escapeshellarg($deadTopic)
+        ), $out, $rc);
+        if ($rc !== 0) {
+            $this->markTestSkipped('could not create kafka topic via "docker exec ' . $container . '" (set TINA4_TEST_KAFKA_CONTAINER): ' . implode(' ', $out));
+        }
+
+        try {
+            $backend = new KafkaBackend(['brokers' => $url]);
+            $backend->connect();
+
+            // The real method under test: deadLetter('<base>', ...) must produce
+            // to '<base>.dead_letter' on the live broker.
+            $nonce = bin2hex(random_bytes(4));
+            $backend->deadLetter($base, ['id' => 'msg-1', 'error' => 'timeout', 'nonce' => $nonce]);
+
+            // Consume back from the EXACT dead-letter topic name. If routing went
+            // anywhere else, nothing surfaces here and the assertions fail.
+            $msg = null;
+            for ($i = 0; $i < 12; $i++) {
+                $msg = $backend->dequeue($deadTopic);
+                if ($msg !== null) {
+                    break;
+                }
+                usleep(400000);
             }
-        };
-        $backend->deadLetter('orders', ['id' => 'msg-1', 'error' => 'timeout']);
-        $this->assertSame('orders.dead_letter', $backend->seen['topic']);
-        $this->assertSame('timeout', $backend->seen['message']['error']);
+
+            $this->assertIsArray($msg, "deadLetter('{$base}', ...) must produce to '{$deadTopic}' on the real broker.");
+            $this->assertSame('timeout', $msg['error'] ?? null, 'The dead-letter payload round-trips through real Kafka.');
+            $this->assertSame($nonce, $msg['nonce'] ?? null, 'The unique nonce round-trips, proving this record came from the .dead_letter topic.');
+        } finally {
+            if (isset($backend)) {
+                $backend->close();
+            }
+            @exec(sprintf(
+                'docker exec %s /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic %s 2>&1',
+                escapeshellarg($container),
+                escapeshellarg($deadTopic)
+            ));
+        }
+    }
+
+    /** @return array{host:string,port:int} first broker from a comma list. */
+    private static function firstKafkaBroker(string $url): array
+    {
+        $first = explode(',', $url)[0];
+        $first = preg_replace('#^kafka://#', '', $first);
+        $host = $first;
+        $port = 9092;
+        $colon = strrpos($first, ':');
+        if ($colon !== false) {
+            $host = substr($first, 0, $colon);
+            $port = (int)substr($first, $colon + 1);
+        }
+        return ['host' => $host ?: 'localhost', 'port' => $port ?: 9092];
+    }
+
+    /** True if a TCP connection to the Kafka host:port opens within ~1.5s. */
+    private static function kafkaReachable(string $host, int $port): bool
+    {
+        $fp = @fsockopen($host, $port, $errno, $errstr, 1.5);
+        if ($fp) {
+            fclose($fp);
+            return true;
+        }
+        return false;
     }
 
     // -- Env var tests -------------------------------------------------------
