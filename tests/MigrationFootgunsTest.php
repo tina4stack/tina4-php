@@ -248,4 +248,84 @@ class MigrationFootgunsTest extends TestCase
         $reason = $this->invoke($m, 'shouldSkipCreateTable', ['INSERT INTO users VALUES (1)']);
         $this->assertNull($reason);
     }
+
+    // ── [#54] a ';' inside a comment or string literal must NOT split a statement ──
+
+    public function testSemicolonInLineCommentDoesNotFragment(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        // The exact issue #54 repro: a ';' inside a '-- …' line comment used to
+        // fragment this ONE CREATE TABLE into broken pieces.
+        $sql = "CREATE TABLE users (\n"
+            . "    id INTEGER PRIMARY KEY,   -- drop then re-add; old way\n"
+            . "    name TEXT NOT NULL\n"
+            . ");";
+
+        $stmts = $this->invoke($m, 'splitStatements', [$sql]);
+
+        $this->assertCount(1, $stmts, "';' inside a -- comment fragmented the statement");
+        $this->assertStringContainsString('id INTEGER PRIMARY KEY', $stmts[0]);
+        $this->assertStringContainsString('name TEXT NOT NULL', $stmts[0]);
+        $this->assertStringNotContainsString('old way', $stmts[0], 'line comment text was not stripped');
+    }
+
+    public function testSemicolonInBlockCommentDoesNotFragment(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $stmts = $this->invoke($m, 'splitStatements', ['CREATE TABLE t (id INTEGER /* a; b; c */, name TEXT);']);
+        $this->assertCount(1, $stmts);
+        $this->assertStringNotContainsString('a; b; c', $stmts[0], 'block comment text was not stripped');
+    }
+
+    public function testSemicolonInStringLiteralDoesNotSplit(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $stmts = $this->invoke($m, 'splitStatements', ["INSERT INTO t (v) VALUES ('a;b;c'); INSERT INTO t (v) VALUES ('d');"]);
+        $this->assertCount(2, $stmts, "';' inside a string literal split the statement");
+        $this->assertStringContainsString("'a;b;c'", $stmts[0]);
+    }
+
+    public function testDoubleDashInStringLiteralIsNotComment(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $stmts = $this->invoke($m, 'splitStatements', ["INSERT INTO t (v) VALUES ('a--b'); INSERT INTO t (v) VALUES ('c');"]);
+        $this->assertCount(2, $stmts);
+        $this->assertStringContainsString("'a--b'", $stmts[0], "'--' inside a string literal was wrongly stripped as a comment");
+    }
+
+    public function testDoubledQuoteEscapeKeepsSemicolonInsideLiteral(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $stmts = $this->invoke($m, 'splitStatements', ["INSERT INTO t (v) VALUES ('O''Brien; Jr'); SELECT 1;"]);
+        $this->assertCount(2, $stmts, 'doubled-quote escape mishandled, split wrongly');
+        $this->assertStringContainsString("'O''Brien; Jr'", $stmts[0]);
+    }
+
+    public function testMigrateAppliesStatementWithSemicolonInComment(): void
+    {
+        // End-to-end against a REAL SQLite DB (no mocks): the issue #54 repro
+        // migration must apply cleanly and create the table.
+        file_put_contents(
+            $this->migrationsDir . '/000001_create_users.sql',
+            "CREATE TABLE users (\n"
+            . "    id INTEGER PRIMARY KEY,   -- drop then re-add; old way\n"
+            . "    name TEXT NOT NULL\n"
+            . ");"
+        );
+        $db = new SQLite3Adapter(':memory:');
+        $m = $this->newMigration($db);
+
+        $result = $m->migrate();
+
+        $this->assertContains('000001_create_users.sql', $result['applied'], 'repro migration did not apply');
+        $this->assertSame([], $result['errors'], 'repro migration reported errors');
+        $this->assertTrue($db->tableExists('users'), 'repro migration did not create the table');
+        // The table is real and usable: exec() is fail-loud, so a broken/missing
+        // column from a fragmented statement would raise here. Reaching the
+        // assertion (no throw) proves the comment-bearing CREATE applied whole.
+        $this->assertNotFalse(
+            $db->exec("INSERT INTO users (name) VALUES ('Alice')"),
+            'INSERT into the migrated table failed'
+        );
+    }
 }
