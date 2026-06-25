@@ -178,6 +178,9 @@ class ScssCompiler
         // 4. Resolve @include
         $scss = $this->resolveIncludes($scss, $mixins);
 
+        // 4.5. Resolve #{ ... } interpolation (before $var substitution + nesting).
+        $scss = $this->resolveInterpolation($scss, $variables);
+
         // 5. Substitute variables
         $scss = $this->substituteVariables($scss, $variables);
 
@@ -263,6 +266,30 @@ class ScssCompiler
             $scss = str_replace('$' . $name, $variables[$name], $scss);
         }
         return $scss;
+    }
+
+    /**
+     * Resolve SCSS #{ ... } interpolation. Each #{ expr } is replaced by its
+     * resolved inner text: a $variable inside the braces resolves to its value,
+     * anything else is inlined verbatim (trimmed). This lets a value carry a
+     * variable inside a string context plain $var substitution can't reach -
+     * e.g. calc(100% - #{$gap}) -> calc(100% - 20px) - and lets a variable
+     * appear in a selector (.icon-#{$name} -> .icon-home). Run BEFORE nested
+     * rule flattening so the literal braces never confuse the block matcher.
+     */
+    private function resolveInterpolation(string $scss, array $variables): string
+    {
+        $names = array_keys($variables);
+        usort($names, function ($a, $b) {
+            return strlen($b) - strlen($a);
+        });
+        return preg_replace_callback('/#\{([^{}]*)\}/', function ($m) use ($variables, $names) {
+            $inner = trim($m[1]);
+            foreach ($names as $name) {
+                $inner = str_replace('$' . $name, $variables[$name], $inner);
+            }
+            return $inner;
+        }, $scss);
     }
 
     // ── Mixin extraction ────────────────────────────────────────

@@ -919,30 +919,20 @@ class Migration
                 continue;
             }
 
-            // Block comment: /* ... */
+            // Block comment: /* ... */ — stripped (a ';' inside it is not a
+            // delimiter; the comment text is dropped from the executed SQL).
             if ($i + 1 < $len && $sql[$i] === '/' && $sql[$i + 1] === '*') {
                 $endPos = strpos($sql, '*/', $i + 2);
-                if ($endPos !== false) {
-                    $current .= substr($sql, $i, ($endPos + 2) - $i);
-                    $i = $endPos + 2;
-                } else {
-                    // Unterminated block comment — consume rest
-                    $current .= substr($sql, $i);
-                    $i = $len;
-                }
+                $i = ($endPos !== false) ? $endPos + 2 : $len;
                 continue;
             }
 
-            // Line comment: -- ...
+            // Line comment: -- ... — stripped to end of line. The newline is left
+            // for the next iteration so line structure (and NEXT-line statement
+            // boundaries) survive, and a ';' inside the comment never splits.
             if ($i + 1 < $len && $sql[$i] === '-' && $sql[$i + 1] === '-') {
                 $endPos = strpos($sql, "\n", $i + 2);
-                if ($endPos !== false) {
-                    $current .= substr($sql, $i, ($endPos + 1) - $i);
-                    $i = $endPos + 1;
-                } else {
-                    $current .= substr($sql, $i);
-                    $i = $len;
-                }
+                $i = ($endPos !== false) ? $endPos : $len;
                 continue;
             }
 

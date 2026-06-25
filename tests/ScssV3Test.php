@@ -342,4 +342,35 @@ class ScssV3Test extends TestCase
         $css = $compiler->compileScss('/nonexistent/path');
         $this->assertSame('', $css);
     }
+
+    // ── #{ } interpolation (issue #116) ──────────────────────────
+
+    public function testInterpolationVariableInsideCalc(): void
+    {
+        $css = $this->compiler->compile("\$gap: 20px;\n.box { width: calc(100% - #{\$gap}); }");
+        $this->assertStringContainsString('calc(100% - 20px)', $css);
+        $this->assertStringNotContainsString('#{', $css);
+        $this->assertStringNotContainsString('$gap', $css);
+    }
+
+    public function testInterpolationInSelector(): void
+    {
+        $css = $this->compiler->compile("\$name: home;\n.icon-#{\$name} { color: red; }");
+        $this->assertStringContainsString('.icon-home', $css);
+        $this->assertStringNotContainsString('#{', $css);
+    }
+
+    public function testInterpolationLiteralInlinesVerbatim(): void
+    {
+        $css = $this->compiler->compile('.x { margin: #{10px}; }');
+        $this->assertStringContainsString('margin: 10px', $css);
+        $this->assertStringNotContainsString('#{', $css);
+    }
+
+    public function testMixedUnitCalcStillPreserved(): void
+    {
+        // Regression guard for the already-fixed half: mixed-unit calc preserved.
+        $css = $this->compiler->compile('.z { height: calc(100vh - 170px); }');
+        $this->assertStringContainsString('calc(100vh - 170px)', $css);
+    }
 }
