@@ -411,6 +411,13 @@ Read the bundled reference files for deep dives on specific subsystems:
 - **No dead code** — Remove unused imports, variables, functions. Don't comment out code.
   If it's in git history, it's not lost.
 - **Explicit over implicit** — Name things clearly. `get_user_by_email` beats `find`.
+- **Verbose, descriptive names — never abbreviate** — Spell every variable, method, and class
+  name out in full words. `customer_invoice_total` not `cit`/`tot`; `calculate_outstanding_balance()`
+  not `calcBal()`; `parsed_request_body` not `prb`. A name must read as exactly what it holds or
+  does, with no decoding and no mental expansion. The only short names allowed are a conventional
+  loop index (`i`/`j`) and the idiomatic one-line block/lambda argument. This is naming verbosity
+  (good) and is INDEPENDENT of code volume: write fewer lines, but give every name its full word —
+  verbose names, lean code.
 - **Error messages are DX** — When something fails, tell the developer WHAT failed, WHY,
   and ideally HOW to fix it. Include the bad value, the missing file, the expected format.
 - **Validate at boundaries only** — Trust internal code. Validate user input, HTTP requests,

@@ -98,6 +98,15 @@ only for trusted/sanitised HTML), accessibility (labels, roles, keyboard), and t
 actually make the UI reactive — a frozen `${signal.value}` where you needed `${signal}` is a bug,
 not brevity. Mark a deliberate shortcut with a `tina4:` comment that names its ceiling.
 
+## Naming — Verbose and Descriptive
+
+Spell every signal, variable, function, and component name out in full words. `cartItemCount`
+not `cic`/`cnt`; `calculateCartSubtotal()` not `calcSub()`; `parsedApiResponse` not `r`. A name
+must read as exactly what it holds or does, with no decoding. The only short names allowed are a
+conventional loop index (`i`) and the idiomatic one-line callback argument (`items.map(item => ...)`).
+This is naming verbosity (good) and is independent of code volume: keep the code lean (the Lazy
+Frontend Ladder above), but give every name its full word — verbose names, lean code.
+
 ## The Three Rules That Fix 90% of Mistakes
 
 Before writing any tina4-js code, internalize these:

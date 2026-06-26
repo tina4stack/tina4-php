@@ -251,8 +251,12 @@ When helping a developer build with Tina4, always follow these:
 1. **Convention over configuration** — Don't create config files. File location IS configuration.
    A route file in `src/routes/` is auto-discovered. A model in `src/orm/` is auto-registered.
 
-2. **Less code wins** — Tina4 is designed so developers write the minimum code possible. If
-   something feels verbose, there's probably a simpler way. Look for it.
+2. **Less code wins, but names stay verbose** — Tina4 is designed so developers write the minimum
+   code possible. If something feels verbose in VOLUME, there's probably a simpler way — look for
+   it. This is about lines of code, NOT names: spell every variable and method name out in full,
+   descriptive words (`customer_invoice_total`, `calculate_outstanding_balance()`), never cryptic
+   abbreviations (`cit`, `calcBal`). A name should read as exactly what it holds or does. Verbose
+   names, lean code.
 
 3. **The framework is smart** — It handles type conversion automatically:
    - Return an object/dict/hash → JSON response
