@@ -125,9 +125,9 @@ class User(ORM):
 
 # Soft delete
 class Article(ORM):
-    soft_delete = True  # Uses the is_deleted column (INTEGER, 0/1)
-    # article.delete() sets is_deleted = 1 instead of removing
-    # article.restore() sets is_deleted = 0
+    soft_delete = True  # Adds deleted_at column
+    # article.delete() sets deleted_at instead of removing
+    # article.restore() clears deleted_at
     # article.force_delete() actually removes
     # Article().with_trashed().fetch() includes deleted
 ```
@@ -180,8 +180,8 @@ Python, PHP, Ruby, and Node.js should use the exact same connection string forma
 
 ```
 # These work the same in ALL four frameworks
-Database("sqlite3:app.db")
-Database("pgsql://user:password@localhost:5432/mydb")
+Database("sqlite:app.db")
+Database("postgresql://user:password@localhost:5432/mydb")
 Database("mysql://user:password@localhost:3306/mydb")
 Database("mssql://user:password@localhost:1433/mydb")
 Database("firebird://user:password@localhost:3050/mydb")

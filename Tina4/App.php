@@ -767,8 +767,10 @@ class App
             return;
         }
 
-        // Create the I18n instance (it reads TINA4_LOCALE and TINA4_LOCALE_DIR internally)
-        $i18n = new I18n($localeDir);
+        // Create the I18n instance — constructor is (locale, path); pass null for
+        // locale so it resolves from TINA4_LOCALE (then 'en'), and the discovered
+        // directory as the path.
+        $i18n = new I18n(null, $localeDir);
 
         // Register t() as a callable template global
         $frond->addGlobal('t', function (string $key, array $params = [], ?string $locale = null) use ($i18n): string {

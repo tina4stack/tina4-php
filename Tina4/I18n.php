@@ -30,16 +30,27 @@ class I18n
     private array $translations = [];
 
     /**
-     * @param string $localeDir    Path to directory containing locale JSON files
-     * @param string $defaultLocale Default locale code (e.g. 'en')
+     * Constructor argument order is (locale, path) to match the Python master
+     * I18n(locale, path). Precedence per argument is explicit > env > default:
+     * an explicit constructor value wins over the TINA4_LOCALE / TINA4_LOCALE_DIR
+     * env var, which in turn wins over the built-in default.
+     *
+     * @param string|null $locale Default locale code (e.g. 'en'). Null falls back
+     *                            to TINA4_LOCALE, then 'en'.
+     * @param string|null $path   Path to directory containing locale JSON files.
+     *                            Null falls back to TINA4_LOCALE_DIR, then
+     *                            'src/locales'.
      */
-    public function __construct(string $localeDir = 'src/locales', string $defaultLocale = 'en')
+    public function __construct(?string $locale = null, ?string $path = null)
     {
         $envDir = getenv('TINA4_LOCALE_DIR');
         $envLocale = getenv('TINA4_LOCALE');
 
-        $this->localeDir = $envDir !== false && $envDir !== '' ? $envDir : $localeDir;
-        $this->defaultLocale = $envLocale !== false && $envLocale !== '' ? $envLocale : $defaultLocale;
+        // Explicit arg > env > default.
+        $this->localeDir = $path
+            ?? ($envDir !== false && $envDir !== '' ? $envDir : 'src/locales');
+        $this->defaultLocale = $locale
+            ?? ($envLocale !== false && $envLocale !== '' ? $envLocale : 'en');
         $this->currentLocale = $this->defaultLocale;
 
         $this->loadLocale($this->defaultLocale);
@@ -253,11 +264,12 @@ class I18n
             if (is_array($value)) {
                 $result = array_merge($result, $this->flatten($value, $fullKey, $leafAliases));
             } else {
-                $result[$fullKey] = (string)$value;
+                $scalar = self::coerceScalar($value);
+                $result[$fullKey] = $scalar;
                 // Store leaf key alias (first-wins)
                 $leafKey = (string)$key;
                 if ($leafKey !== $fullKey && !isset($leafAliases[$leafKey])) {
-                    $leafAliases[$leafKey] = (string)$value;
+                    $leafAliases[$leafKey] = $scalar;
                 }
             }
         }
@@ -270,5 +282,27 @@ class I18n
             }
         }
         return $result;
+    }
+
+    /**
+     * Render a non-string locale scalar JSON-natively.
+     *
+     * JSON-decoded booleans/null must render as their JSON form so a template
+     * never sees PHP's "1"/"" cast: true -> "true", false -> "false",
+     * null -> "null". Numbers and strings fall through to their plain form
+     * ("42", not "42.0").
+     */
+    private static function coerceScalar(mixed $value): string
+    {
+        if ($value === true) {
+            return 'true';
+        }
+        if ($value === false) {
+            return 'false';
+        }
+        if ($value === null) {
+            return 'null';
+        }
+        return (string)$value;
     }
 }

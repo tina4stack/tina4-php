@@ -5,7 +5,7 @@
 ### Setup
 Set your secret in `.env`:
 ```env
-SECRET=a-long-random-string-here
+TINA4_SECRET=a-long-random-string-here
 ```
 
 ### Generating Tokens (Python)

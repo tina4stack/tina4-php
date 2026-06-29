@@ -166,7 +166,7 @@ back to one of these:
 6. **Same concepts, language-idiomatic names** — Method and class names follow each language's
    conventions (see Naming Conventions below). But everything a developer or user SEES must be
    literally identical across all four frameworks:
-   - **Connection strings** — same format (`sqlite3:app.db`, `pgsql://user:pass@host:port/db`)
+   - **Connection strings** — same format (`sqlite:app.db`, `postgresql://user:pass@host:port/db`)
    - **Constants** — same names, same values (`TINA4_DEBUG`, `TINA4_SESSION_BACKEND`, etc.)
    - **Environment variables** — same `.env` keys and expected values
    - **Log output format** — same JSON structure in production, same human-readable format in dev

@@ -485,7 +485,7 @@ class SmokeTest extends TestCase
         file_put_contents($tmpDir . '/en.json', json_encode(['greeting' => 'Hello']));
         file_put_contents($tmpDir . '/fr.json', json_encode(['greeting' => 'Bonjour']));
 
-        $i18n = new I18n($tmpDir, 'en');
+        $i18n = new I18n('en', $tmpDir);
         $this->assertSame('Hello', $i18n->t('greeting'));
 
         // Switch locale

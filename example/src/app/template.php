@@ -7,7 +7,7 @@
 $GLOBALS['DISPLAY_CURRENCIES'] = ["USD", "EUR", "GBP", "ZAR"];
 
 // Session-aware I18n instance (matches Python's approach)
-$GLOBALS['_storeI18n'] = new \Tina4\I18n('src/locales', 'en');
+$GLOBALS['_storeI18n'] = new \Tina4\I18n('en', 'src/locales');
 
 \Tina4\Response::getFrond()->addFilter("currency", function ($price) {
     try {

@@ -448,19 +448,19 @@ Read these when you need detailed patterns for a specific area:
 All Tina4 apps use a `.env` file. The keys are identical across all four languages:
 
 ```env
-SECRET=your-jwt-secret-here
-TINA4_DATABASE_URL=sqlite3:data/app.db
+TINA4_SECRET=your-jwt-secret-here
+TINA4_DATABASE_URL=sqlite:data/app.db
 TINA4_DEBUG=true
-TINA4_DEBUG_LEVEL=DEBUG
+TINA4_LOG_LEVEL=DEBUG
 TINA4_LOCALE=en
 TINA4_SESSION_BACKEND=file
-SWAGGER_TITLE=My API
+TINA4_SWAGGER_TITLE=My API
 ```
 
 Database connection strings are the same format in every language:
 ```
-sqlite3:data/app.db
-pgsql://user:password@localhost:5432/mydb
+sqlite:data/app.db
+postgresql://user:password@localhost:5432/mydb
 mysql://user:password@localhost:3306/mydb
 mssql://user:password@localhost:1433/mydb
 firebird://user:password@localhost:3050/mydb

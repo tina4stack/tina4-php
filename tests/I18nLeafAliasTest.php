@@ -61,7 +61,7 @@ class I18nLeafAliasTest extends TestCase
                 'about' => 'About Us',
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         // Leaf key should resolve
         $this->assertSame('Home', $i18n->t('home'));
@@ -76,7 +76,7 @@ class I18nLeafAliasTest extends TestCase
                 'about' => 'About Us',
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         // Full dot-path must still work
         $this->assertSame('Home', $i18n->t('nav.home'));
@@ -94,7 +94,7 @@ class I18nLeafAliasTest extends TestCase
                 'not_found' => 'Not Found',
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         // Flat key
         $this->assertSame('Hello', $i18n->t('greeting'));
@@ -116,7 +116,7 @@ class I18nLeafAliasTest extends TestCase
                 'title' => 'Page Title',
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         // Both have a "title" leaf. First-wins: "nav.title" was flattened first.
         $this->assertSame('Navigation Title', $i18n->t('title'));
@@ -133,7 +133,7 @@ class I18nLeafAliasTest extends TestCase
                 'home' => 'Nested Home',
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         // The flat "home" key already exists, so the leaf alias from "nav.home" must NOT overwrite it
         $this->assertSame('Flat Home', $i18n->t('home'));
@@ -150,7 +150,7 @@ class I18nLeafAliasTest extends TestCase
                 ],
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         $this->assertSame('deep value', $i18n->t('a.b.c'));
         // Leaf alias: "c" should resolve
@@ -164,7 +164,7 @@ class I18nLeafAliasTest extends TestCase
                 'welcome' => 'Welcome, {name}!',
             ],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
 
         $this->assertSame('Welcome, Alice!', $i18n->t('welcome', ['name' => 'Alice']));
         $this->assertSame('Welcome, Alice!', $i18n->t('messages.welcome', ['name' => 'Alice']));
@@ -178,7 +178,7 @@ class I18nLeafAliasTest extends TestCase
         $this->writeLocale('fr', [
             'nav' => ['home' => 'Accueil'],
         ]);
-        $i18n = new I18n($this->tempDir, 'en');
+        $i18n = new I18n('en', $this->tempDir);
         $i18n->setLocale('fr');
 
         // Leaf alias works in active locale

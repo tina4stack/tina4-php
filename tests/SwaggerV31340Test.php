@@ -176,4 +176,25 @@ class SwaggerV31340Test extends TestCase
         $names = array_map(fn($t) => $t['name'], $spec['tags']);
         $this->assertContains('widgets', $names);
     }
+
+    /**
+     * Parity with the Python decorator-stacking regression (issue #59):
+     * combining multiple metadata fields in one ->swagger([...]) call must
+     * preserve ALL of them in the generated spec - none silently dropped.
+     */
+    public function testStackedSwaggerMetaFieldsAllSurvive(): void
+    {
+        Router::post('/api/regr', fn($req, $res) => $res)
+            ->swagger([
+                'summary'     => 'Create a user',
+                'description' => 'Creates a user account',
+                'tags'        => ['Users'],
+                'example'     => ['email' => 'a@b.c'],
+            ]);
+        $op = Swagger::generate()['paths']['/api/regr']['post'];
+        $this->assertSame('Create a user', $op['summary']);
+        $this->assertStringContainsString('Creates a user account', $op['description']);
+        $this->assertSame(['Users'], $op['tags']);
+        $this->assertArrayHasKey('requestBody', $op);
+    }
 }

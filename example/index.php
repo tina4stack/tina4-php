@@ -20,7 +20,7 @@ use Tina4\ORM;
 $container = new Container();
 $container->singleton('db', fn() => Database::create('data/store.db'));
 $container->singleton('queue', fn() => new Queue('orders'));
-$container->singleton('i18n', fn() => new I18n('src/locales', 'en'));
+$container->singleton('i18n', fn() => new I18n('en', 'src/locales'));
 
 // ── Database Setup ─────────────────────────────────────────────
 $db = $container->get('db');

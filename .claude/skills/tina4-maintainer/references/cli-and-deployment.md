@@ -85,14 +85,14 @@ Request ID auto-injected into all log entries for tracing.
 
 ### Key Variables
 ```env
-SECRET=your-jwt-secret
-TINA4_DATABASE_URL=sqlite3:data/app.db
+TINA4_SECRET=your-jwt-secret
+TINA4_DATABASE_URL=sqlite:data/app.db
 TINA4_DEBUG=true
-TINA4_DEBUG_LEVEL=DEBUG
+TINA4_LOG_LEVEL=DEBUG
 TINA4_LOCALE=en
 TINA4_SESSION_BACKEND=file
-SWAGGER_TITLE=My API
-API_KEY=optional-key
+TINA4_SWAGGER_TITLE=My API
+TINA4_API_KEY=optional-key
 ```
 
 Supports environment-specific overrides: `.env.development`, `.env.production`, `.env.testing`.
