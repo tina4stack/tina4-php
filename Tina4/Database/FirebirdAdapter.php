@@ -234,8 +234,11 @@ class FirebirdAdapter implements DatabaseAdapter
                 throw new DatabaseException('Firebird execute() failed: ' . ($this->lastError ?? 'unknown error'));
             }
 
-            // If result is a resource (e.g. RETURNING), read first row for lastId
-            if ($result !== true) {
+            // Only a real result set (SELECT / RETURNING) carries a row to read for
+            // lastId. A bound-parameter INSERT/UPDATE/DELETE returns a non-true,
+            // non-resource value from ibase_execute(); ibase_fetch_assoc() on it raises
+            // a TypeError under PHP 8.x (the @ suppresses warnings, not Errors) — see #121.
+            if (is_resource($result)) {
                 $fetchFn = $this->fn . 'fetch_assoc';
                 $row = @$fetchFn($result);
                 if ($row !== false && $row !== null) {
