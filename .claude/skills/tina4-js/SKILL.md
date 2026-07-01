@@ -254,6 +254,25 @@ html`<textarea>${() => form.value.note}</textarea>`
 ```
 (Same root cause as "never put inputs inside reactive blocks" above — always drive form elements through `.value` / `@input` / `?disabled`.)
 
+### Reactive `<select>`: mark each option with `?selected`, never `.value` on the select
+
+A `<select>` whose `<option>`s come from a `${() => ...}` block **loses its selection when those options re-render**. `.value` on the select is a separate effect that tracks only the bound signal, not the option list, so it never re-fires when the options rebuild; and setting `select.value` while the matching `<option>` is absent (options render after, or get torn down and recreated) is a silent no-op, then the browser resets the selection when the child list changes. This "worked by luck" when the option timing happened to line up and broke when it did not.
+
+```ts
+// ❌ selection drops the moment the options re-render
+html`<select .value=${currency} @change=${e => currency.value = e.target.value}>
+  ${() => currencies.value.map(c => html`<option value=${c}>${c}</option>`)}
+</select>`
+
+// ✅ each option owns its selected state — survives any re-render, in any order
+html`<select @change=${e => currency.value = e.target.value}>
+  ${() => currencies.value.map(c => html`
+    <option value=${c} ?selected=${() => c === currency.value}>${c}</option>`)}
+</select>`
+```
+
+Keep the `@change` to write the signal back (that half was never the problem). Option values are always strings, so if the bound signal holds a number, compare `String(c) === currency.value` or the match never fires and nothing shows selected.
+
 ### Hash-router links use the BARE path — the router adds the `#`
 
 ```ts
