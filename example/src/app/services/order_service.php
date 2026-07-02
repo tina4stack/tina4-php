@@ -16,14 +16,17 @@ function processOrders(\Tina4\Queue $queue): void
         return;
     }
 
+    // pop() returns the job record as an array; the pushed payload lives under
+    // the "payload" key (see Tina4\Job / QueueV3Test). Wrap it in a Job so we
+    // can acknowledge the reservation via complete()/fail().
+    $wrapped = new \Tina4\Job($job, $queue, $queue->getTopic());
+
     $db = \Tina4\App::getDatabase();
-    $data = is_array($job) ? $job : (method_exists($job, 'getData') ? $job->getData() : []);
-    $orderId = $data["order_id"] ?? null;
+    $payload = $wrapped->payload;
+    $orderId = is_array($payload) ? ($payload["order_id"] ?? null) : null;
 
     if (!$orderId) {
-        if (is_object($job) && method_exists($job, 'complete')) {
-            $job->complete();
-        }
+        $wrapped->complete();
         return;
     }
 
@@ -46,9 +49,7 @@ function processOrders(\Tina4\Queue $queue): void
         $db->execute("UPDATE orders SET status = 'failed' WHERE id = ?", [$orderId]);
         $db->commit();
         \Tina4\Events::emit("order.failed", ["order_id" => $orderId, "reason" => "insufficient stock"]);
-        if (is_object($job) && method_exists($job, 'complete')) {
-            $job->complete();
-        }
+        $wrapped->complete();
         return;
     }
 
@@ -70,7 +71,5 @@ function processOrders(\Tina4\Queue $queue): void
     $db->execute("UPDATE orders SET status = 'processing' WHERE id = ?", [$orderId]);
     $db->commit();
     \Tina4\Events::emit("order.processing", ["order_id" => $orderId]);
-    if (is_object($job) && method_exists($job, 'complete')) {
-        $job->complete();
-    }
+    $wrapped->complete();
 }

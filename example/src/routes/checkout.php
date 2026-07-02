@@ -49,7 +49,7 @@
     }
 
     // Push to queue (background task processes it)
-    $queue = new \Tina4\Queue("orders");
+    $queue = new \Tina4\Queue(topic: "orders");
     $queue->push(["order_id" => $order->id, "customer_id" => $customerId]);
 
     \Tina4\Events::emit("order.placed", [

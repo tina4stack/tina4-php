@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/tina4stack/tina4php/vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         stopOnFailure="false">
+    <testsuites>
+        <testsuite name="Tina4 Store Demo Tests">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

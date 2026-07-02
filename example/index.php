@@ -19,7 +19,7 @@ use Tina4\ORM;
 // ── Dependency Injection Container ─────────────────────────────
 $container = new Container();
 $container->singleton('db', fn() => Database::create('data/store.db'));
-$container->singleton('queue', fn() => new Queue('orders'));
+$container->singleton('queue', fn() => new Queue(topic: 'orders'));
 $container->singleton('i18n', fn() => new I18n('en', 'src/locales'));
 
 // ── Database Setup ─────────────────────────────────────────────
