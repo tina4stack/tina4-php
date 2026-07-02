@@ -47,7 +47,7 @@ of truth, derived from the actual source code.
 
 ## Modules — What Each One Is
 
-tina4-js is tree-shakeable: import only what you use. Eight modules, each with its own entry point.
+tina4-js is tree-shakeable: import only what you use. Nine modules, each with its own entry point.
 Per-module gzip sizes below were measured via `npm run test:size` (macOS, v1.2.7); the `core`
 bundle is the sub-3KB headline budget.
 
@@ -59,6 +59,7 @@ bundle is the sub-3KB headline budget.
 | **ws** | `tina4js/ws` | `ws` | 0.89 KB | Signal-driven WebSocket client with auto-reconnect; `status`/`connected` are signals you bind straight into templates. |
 | **sse** | `tina4js/sse` | `sse` | 1.30 KB | Signal-driven Server-Sent-Events / NDJSON streaming client (same reconnect + signal-status shape as `ws`). |
 | **storage** | `tina4js/storage` | `persist`, `clearPersistedKeys` | (folds into app) | Persist a signal to `localStorage` — versioned, cross-tab, migratable. **Never store secrets/tokens/PII** — `localStorage` is XSS-readable (see `STORAGE.md`). |
+| **i18n** | `tina4js/i18n` | `createI18n`, `i18n`, `t`, `setLocale`, `getLocale` | 1.2 KB | Reactive translations (the active locale is a signal, so `t()` re-renders on `setLocale()`) + browser `Intl` number/currency/date/relativeTime + RTL `dir()`. Mirrors the backend Tina4 `I18n` API. |
 | **pwa** | `tina4js/pwa` | `pwa` | 1.16 KB | Runtime service-worker + web-manifest generation — installable/offline apps, no build step. |
 | **debug** | `import 'tina4js/debug'` | side-effect (auto-enables) | dev-only | Mounts a dev overlay (Ctrl+Shift+D) that tracks signals, components, routes, and API calls. Never ship to production. |
 
@@ -776,6 +777,52 @@ back, and an attacker gains nothing from reading.
 
 Full details, examples (Date round-trip, version migration, logout wipe), and the complete
 dangers table live in `STORAGE.md` at the repo root.
+
+## Internationalization — `tina4js/i18n`
+
+Reactive translations plus browser-native `Intl` formatting. The active locale is a signal, so `t()` and every formatter re-render in place on `setLocale()`. Mirrors the backend Tina4 `I18n` API, so the same message JSON works on the server and in the browser.
+
+```ts
+import { createI18n } from 'tina4js';
+// or the default singleton + shortcuts:
+import { i18n, t, setLocale, getLocale } from 'tina4js/i18n';
+
+const i = createI18n({
+    locale: 'en-US',
+    fallbackLocale: 'en-US',
+    messages: {
+        'en-US': { greeting: 'Hello', welcome: 'Welcome, {name}!', nav: { home: 'Home' } },
+        'fr-FR': { greeting: 'Bonjour', nav: { home: 'Accueil' } },
+    },
+});
+
+i.t('greeting');                    // "Hello"
+i.t('welcome', { name: 'Alice' });  // "Welcome, Alice!"   ({placeholder} interpolation)
+i.t('nav.home'); i.t('home');       // dot-path AND leaf-key alias both resolve
+i.number(1234.5);                   // "1,234.5"
+i.currency(19.99, 'USD');           // "$19.99"
+i.date(new Date(), { dateStyle: 'medium' });
+i.relativeTime(-1, 'day');          // "yesterday"
+i.dir();                            // "ltr" | "rtl"   (RTL-aware)
+await i.loadMessages('es-ES', '/i18n/es-ES.json');  // fetch a bundle at runtime
+i.setLocale('fr-FR');               // every t()/formatter re-renders
+```
+
+### The reactivity rule — use the function form in templates
+
+The locale is a signal, so `t()` and the formatters must be read inside a `${() => ...}` reactive block (Rule 1). A bare `${i.t('greeting')}` evaluates once and freezes at the first locale; it will not update when `setLocale()` runs.
+
+```ts
+// RIGHT — re-renders when the locale changes
+html`<h1>${() => i.t('greeting')}</h1>`
+html`<span>${() => i.currency(cart.value.total, 'USD')}</span>`
+html`<div dir=${() => i.dir()}>...</div>`
+
+// WRONG — frozen at the first locale, never updates on setLocale()
+html`<h1>${i.t('greeting')}</h1>`
+```
+
+Fallback order is current locale -> `fallbackLocale` -> the key itself, so `t()` never throws on a missing key. Formatting delegates to the browser's `Intl` APIs, so no locale data ships in the bundle. Full guide: https://tina4.com/js/17-i18n
 
 ## Cloudflare Workers
 
