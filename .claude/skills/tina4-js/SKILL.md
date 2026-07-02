@@ -822,7 +822,7 @@ html`<div dir=${() => i.dir()}>...</div>`
 html`<h1>${i.t('greeting')}</h1>`
 ```
 
-Fallback order is current locale -> `fallbackLocale` -> the key itself, so `t()` never throws on a missing key. Formatting delegates to the browser's `Intl` APIs, so no locale data ships in the bundle. Full guide: https://tina4.com/js/17-i18n
+Fallback order is current locale -> `fallbackLocale` -> the key itself, so `t()` never throws on a missing key. Formatting delegates to the browser's `Intl` APIs, so no locale data ships in the bundle. Full guide: https://tina4.com/js/09-i18n
 
 ## Cloudflare Workers
 
