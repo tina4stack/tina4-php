@@ -733,7 +733,7 @@ abstract class ORM
 
         $this->_db->startTransaction();
         try {
-            $result = $this->_db->exec($sql, [':id' => $pkValue]);
+            $result = $this->_db->execute($sql, [':id' => $pkValue]);
             if ($result === false) {
                 // A bound raw adapter's exec() returns false on a bad statement
                 // (the facade RAISES — caught below). Roll back the started
@@ -1238,7 +1238,7 @@ abstract class ORM
         // ambient/implicit transaction happened to be open (or nothing at all).
         $this->_db->startTransaction();
         try {
-            $result = $this->_db->exec($sql, [':id' => $pkValue]);
+            $result = $this->_db->execute($sql, [':id' => $pkValue]);
             if ($result === false) {
                 $this->_db->rollback();
                 return false;
@@ -1278,7 +1278,7 @@ abstract class ORM
         // ambient/implicit transaction happened to be open (or nothing at all).
         $this->_db->startTransaction();
         try {
-            $result = $this->_db->exec($sql, [':id' => $pkValue]);
+            $result = $this->_db->execute($sql, [':id' => $pkValue]);
             if ($result === false) {
                 $this->_db->rollback();
                 return false;

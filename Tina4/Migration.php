@@ -115,7 +115,7 @@ class Migration
                     // back and records the failure. A raw-adapter binding may
                     // still return false instead of throwing, so keep the
                     // explicit guard for that path.
-                    if ($this->db->exec($statement) === false) {
+                    if ($this->db->execute($statement) === false) {
                         $error = $this->db->error() ?? 'Unknown error';
                         throw new \RuntimeException("Migration failed: {$error}");
                     }
@@ -224,7 +224,7 @@ class Migration
                                 // back and records the failure. A raw-adapter
                                 // binding may still return false, so keep the
                                 // explicit guard for that path.
-                                if ($this->db->exec($statement) === false) {
+                                if ($this->db->execute($statement) === false) {
                                     $error = $this->db->error() ?? 'Unknown error';
                                     throw new \RuntimeException("Rollback SQL failed: {$error}");
                                 }
@@ -238,7 +238,7 @@ class Migration
                 }
 
                 // Remove the migration record
-                $this->db->exec(
+                $this->db->execute(
                     "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration = :name",
                     [':name' => $fileName]
                 );
@@ -456,11 +456,11 @@ class Migration
                 . "{\n"
                 . "    public function up(\$db): void\n"
                 . "    {\n"
-                . "        // \$db->exec(\"CREATE TABLE ...\");\n"
+                . "        // \$db->execute(\"CREATE TABLE ...\");\n"
                 . "    }\n\n"
                 . "    public function down(\$db): void\n"
                 . "    {\n"
-                . "        // \$db->exec(\"DROP TABLE IF EXISTS ...\");\n"
+                . "        // \$db->execute(\"DROP TABLE IF EXISTS ...\");\n"
                 . "    }\n"
                 . "}\n";
 
@@ -626,7 +626,7 @@ class Migration
 
         foreach ($alters as $sql) {
             try {
-                $this->db->exec($sql);
+                $this->db->execute($sql);
             } catch (\Throwable $e) {
                 // Column may already exist from a prior partial upgrade.
                 Log::debug("v2→v3 upgrade: ALTER skipped — {$e->getMessage()}");
@@ -667,7 +667,7 @@ class Migration
             $migration = $fileMap[$prefix] ?? ($prefix . '.sql');
 
             try {
-                $this->db->exec(
+                $this->db->execute(
                     "UPDATE " . self::MIGRATIONS_TABLE
                     . " SET migration = :m, batch = 1 WHERE migration_id = :p",
                     [':m' => $migration, ':p' => $prefix]
@@ -697,12 +697,12 @@ class Migration
         if ($this->isFirebird()) {
             // Firebird: no AUTOINCREMENT, no TEXT type, use generator for IDs
             try {
-                $this->db->exec("CREATE GENERATOR GEN_TINA4_MIGRATION_ID");
-                $this->db->exec("COMMIT");
+                $this->db->execute("CREATE GENERATOR GEN_TINA4_MIGRATION_ID");
+                $this->db->execute("COMMIT");
             } catch (\Throwable) {
                 // Generator may already exist
             }
-            $this->db->exec("
+            $this->db->execute("
                 CREATE TABLE " . self::MIGRATIONS_TABLE . " (
                     id INTEGER NOT NULL PRIMARY KEY,
                     migration VARCHAR(500) NOT NULL UNIQUE,
@@ -730,7 +730,7 @@ class Migration
             ? 'applied_at DATETIME DEFAULT CURRENT_TIMESTAMP'
             : 'applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP';
 
-        $this->db->exec("
+        $this->db->execute("
             CREATE TABLE " . self::MIGRATIONS_TABLE . " (
                 {$idColumn},
                 migration VARCHAR(255) NOT NULL UNIQUE,
@@ -755,12 +755,12 @@ class Migration
                 "SELECT GEN_ID(GEN_TINA4_MIGRATION_ID, 1) AS NEXT_ID FROM RDB\$DATABASE"
             );
             $nextId = (int)($rows[0]['NEXT_ID'] ?? 1);
-            $this->db->exec(
+            $this->db->execute(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
                 [':id' => $nextId, ':name' => $name, ':batch' => $batch]
             );
         } else {
-            $this->db->exec(
+            $this->db->execute(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (migration, batch) VALUES (:name, :batch)",
                 [':name' => $name, ':batch' => $batch]
             );
@@ -774,7 +774,7 @@ class Migration
      */
     public function removeMigrationRecord(string $name): void
     {
-        $this->db->exec(
+        $this->db->execute(
             "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration = :name",
             [':name' => $name]
         );

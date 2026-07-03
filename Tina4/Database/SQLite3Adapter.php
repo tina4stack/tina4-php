@@ -188,6 +188,11 @@ class SQLite3Adapter implements DatabaseAdapter
         ];
     }
 
+    /**
+     * @deprecated Use execute() instead. exec() is kept for backward
+     *   compatibility and will be removed in a future major version. execute()
+     *   is the single canonical write method across all four Tina4 frameworks.
+     */
     public function exec(string $sql, array $params = []): bool
     {
         $this->ensureOpen();

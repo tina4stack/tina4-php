@@ -24,12 +24,12 @@ namespace Tina4;
  *   {
  *       public function up($db): void
  *       {
- *           $db->exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
+ *           $db->execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
  *       }
  *
  *       public function down($db): void
  *       {
- *           $db->exec("DROP TABLE IF EXISTS users");
+ *           $db->execute("DROP TABLE IF EXISTS users");
  *       }
  *   }
  */

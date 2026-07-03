@@ -501,6 +501,10 @@ class Database implements DatabaseAdapter
      * @param array<mixed> $params Bound parameters
      * @return bool True on success
      * @throws DatabaseException When the statement fails (cause on getError()).
+     *
+     * @deprecated Use execute() instead. exec() is a thin backward-compat alias
+     *   and will be removed in a future major version. execute() is the single
+     *   canonical write method across all four Tina4 frameworks.
      */
     public function exec(string $sql, array $params = []): bool
     {
