@@ -624,6 +624,14 @@ class FirebirdAdapter implements DatabaseAdapter
             // ibase/fbird only speaks ? — translate :named from the ORM/QueryBuilder.
             [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
 
+            // ibase_execute()/fbird_execute() cannot reliably bind a PHP null — it
+            // fails building the XSQLDA ("Incorrect values within SQLDA structure —
+            // empty pointer to data at SQLVAR index N"), position/count dependent.
+            // Rewrite each null parameter to a literal NULL in the SQL and drop it
+            // from the bound set so no null is ever bound. Preserves true SQL NULL
+            // semantics and never touches a ? inside a string literal/comment. #123
+            [$sql, $params] = self::rewriteNullParamsToLiterals($sql, $params);
+
             $prepareFn = $this->fn . 'prepare';
             $executeFn = $this->fn . 'execute';
 
@@ -654,6 +662,48 @@ class FirebirdAdapter implements DatabaseAdapter
         }
 
         return $result;
+    }
+
+    /**
+     * Rewrite each NULL bound parameter to a literal `NULL` in the SQL and drop
+     * it from the positional value list. Works around the ibase/fbird driver
+     * mis-binding a PHP null (XSQLDA "empty pointer to data at SQLVAR index N").
+     *
+     * String literals ('' -escaped, Firebird style) and `--` line comments are
+     * skipped so a `?` inside them is never miscounted. NULL semantics are
+     * preserved — the column is still written as SQL NULL, just via a literal
+     * instead of a bound parameter.
+     *
+     * @param array<int, mixed> $params  positional params (post named-to-positional)
+     * @return array{0: string, 1: array<int, mixed>}
+     */
+    private static function rewriteNullParamsToLiterals(string $sql, array $params): array
+    {
+        if (!in_array(null, $params, true)) {
+            return [$sql, $params];
+        }
+
+        $index = 0;
+        $kept = [];
+        $rewritten = preg_replace_callback(
+            "/'(?:[^']|'')*'|--[^\n]*|\?/s",
+            static function (array $m) use (&$index, &$kept, $params): string {
+                if ($m[0] !== '?') {
+                    return $m[0]; // string literal / comment — preserved verbatim
+                }
+                $value = array_key_exists($index, $params) ? $params[$index] : null;
+                $index++;
+                if ($value === null) {
+                    return 'NULL';
+                }
+                $kept[] = $value;
+                return '?';
+            },
+            $sql
+        );
+
+        // Fail safe: if the PCRE engine bailed, leave the statement untouched.
+        return $rewritten === null ? [$sql, $params] : [$rewritten, $kept];
     }
 
     /**
