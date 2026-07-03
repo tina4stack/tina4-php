@@ -565,8 +565,18 @@ DOCKERFILE;
             if (empty($result['applied']) && empty($result['errors'])) {
                 echo "No pending migrations.\n";
             }
+            // Migration failures must exit non-zero so CI/CD pipelines
+            // (Jenkins, GitHub Actions, etc.) actually fail when a
+            // migration breaks — otherwise the printed "Errors:" header
+            // sails past the deploy script and the build goes green.
+            // The exit happens AFTER the per-file summary so operators
+            // still see exactly which migration failed.
+            if (!empty($result['errors'])) {
+                exit(1);
+            }
         } else {
             echo "Migration class not available.\n";
+            exit(1);
         }
         break;
 
