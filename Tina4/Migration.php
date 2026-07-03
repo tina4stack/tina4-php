@@ -30,6 +30,9 @@ class Migration
     /** @var string Name of the migrations tracking table */
     private const MIGRATIONS_TABLE = 'tina4_migration';
 
+    /** Cached probe: does the tracking table still carry the legacy v2 `migration_id` column? */
+    private ?bool $legacyMigrationIdColumn = null;
+
     public function __construct(
         private readonly DatabaseAdapter $db,
         private readonly string $migrationsDir = 'src/migrations',
@@ -759,12 +762,62 @@ class Migration
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
                 [':id' => $nextId, ':name' => $name, ':batch' => $batch]
             );
+        } elseif ($this->hasLegacyMigrationIdColumn()) {
+            // A table upgraded in-place from the v2 schema still carries the
+            // original `migration_id VARCHAR(14) NOT NULL PRIMARY KEY` column
+            // (upgradeV2ToV3 adds the v3 columns beside it, never drops it).
+            // The plain v3 insert lists only (migration, batch), so on such a
+            // table the NOT NULL migration_id is rejected — we must supply it.
+            // Use the 14-char timestamp prefix that WAS the v2 id for the file.
+            $this->db->execute(
+                "INSERT INTO " . self::MIGRATIONS_TABLE
+                . " (migration_id, migration, batch) VALUES (:mid, :name, :batch)",
+                [':mid' => $this->legacyMigrationId($name), ':name' => $name, ':batch' => $batch]
+            );
         } else {
             $this->db->execute(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (migration, batch) VALUES (:name, :batch)",
                 [':name' => $name, ':batch' => $batch]
             );
         }
+    }
+
+    /**
+     * True when the tracking table still carries the legacy v2 `migration_id`
+     * column. An in-place upgrade (upgradeV2ToV3) leaves it in place as a
+     * NOT NULL PRIMARY KEY, so a v3 insert must keep populating it. Probed once
+     * per Migration instance — the tracking-table shape is fixed after
+     * ensureMigrationsTable() and before any record is written.
+     */
+    private function hasLegacyMigrationIdColumn(): bool
+    {
+        if ($this->legacyMigrationIdColumn !== null) {
+            return $this->legacyMigrationIdColumn;
+        }
+        try {
+            $cols = $this->db->getColumns(self::MIGRATIONS_TABLE);
+        } catch (\Throwable) {
+            return $this->legacyMigrationIdColumn = false;
+        }
+        $names = array_map(
+            fn($c) => strtolower((string)($c['name'] ?? '')),
+            $cols
+        );
+        return $this->legacyMigrationIdColumn = in_array('migration_id', $names, true);
+    }
+
+    /**
+     * The v2 `migration_id` for a file: its leading timestamp digits
+     * (`20260101000000_create_orders.sql` -> `20260101000000`), capped at the
+     * VARCHAR(14) column width. Falls back to the first 14 characters of the
+     * name when it carries no numeric prefix.
+     */
+    private function legacyMigrationId(string $name): string
+    {
+        if (preg_match('/^(\d{1,14})/', $name, $m)) {
+            return $m[1];
+        }
+        return substr($name, 0, 14);
     }
 
     /**

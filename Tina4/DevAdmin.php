@@ -2137,46 +2137,76 @@ class DevAdmin
         // never exposes them. Mirrors the tina4-python fix that added the
         // JSON-RPC handlers next to the REST shim in _handle_dev_admin.
         //
-        // POST /__dev/mcp and POST /__dev/mcp/message both feed the same
-        // handler — the bare path is what `.tina4/mcp.json` advertises and
-        // the /message suffix is the SSE-advertised endpoint. Notifications
-        // (no id) get a 204; everything else returns the JSON-RPC response.
-        $mcpMessageHandler = function (Request $request, Response $response) {
+        // /__dev/mcp is the Streamable HTTP endpoint (current transport) that
+        // real MCP clients (Claude Code / Desktop) speak. It is FULLY synchronous
+        // (POST a JSON-RPC message, get the response inline), so it needs no
+        // long-lived connection or stream_select loop and works under any SAPI:
+        //   POST   — a JSON-RPC message; initialize issues an Mcp-Session-Id
+        //            header, an unknown session id is 404 (client re-inits), a
+        //            notification is 202, else 200 application/json.
+        //   DELETE — terminate the session named by Mcp-Session-Id.
+        //   GET    — 405 (this server initiates no messages; use /sse for the
+        //            legacy handshake).
+        // /message + /sse are the legacy HTTP+SSE handshake, kept for older
+        // SSE-only clients.
+        $mcpNormalize = static function (Request $request) {
+            $body = $request->body;
+            if (is_array($body) && !empty($body)) {
+                return $body;
+            }
+            if (is_string($body) && $body !== '') {
+                return $body;
+            }
+            if (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
+                return $request->rawBody;
+            }
+            return is_array($body) ? $body : (string) $body;
+        };
+        $mcpApply = static function (Response $response, array $outcome) {
+            foreach ($outcome['headers'] as $name => $value) {
+                $response->header($name, $value);
+            }
+            if ($outcome['body'] === '') {
+                return $response('', $outcome['status']);
+            }
+            return $response->json(json_decode($outcome['body'], true), $outcome['status']);
+        };
+
+        (Router::post('/__dev/mcp', function (Request $request, Response $response) use ($mcpNormalize, $mcpApply) {
             if (!self::mcpRequestAllowed($request)) {
                 return $response->json(['error' => 'MCP forbidden'], 404);
             }
-            $server = McpServer::getDefaultServer();
-            // Prefer the framework-parsed body (array). Fall back to the raw
-            // string so a hand-rolled client posting text/plain still works.
-            $body = $request->body;
-            if (is_array($body) && !empty($body)) {
-                $raw = $body;
-            } elseif (is_string($body) && $body !== '') {
-                $raw = $body;
-            } elseif (isset($request->rawBody) && is_string($request->rawBody) && $request->rawBody !== '') {
-                $raw = $request->rawBody;
-            } else {
-                $raw = is_array($body) ? $body : (string) $body;
-            }
-            $result = $server->handleMessage($raw);
-            if ($result === '') {
-                // Notification / no-id request — no body, just acknowledge.
-                return $response('', 204);
-            }
-            return $response->json(json_decode($result, true));
-        };
-        (Router::post('/__dev/mcp', $mcpMessageHandler))->noAuth();
-        (Router::post('/__dev/mcp/message', $mcpMessageHandler))->noAuth();
+            $sid = (string) ($request->headers['mcp-session-id'] ?? '');
+            return $mcpApply($response, McpServer::getDefaultServer()->dispatchHttp($mcpNormalize($request), $sid));
+        }))->noAuth();
 
-        // GET /__dev/mcp/sse — SSE handshake. MCP clients open this stream
-        // first; the server replies with a single `endpoint` event telling
-        // the client where to POST JSON-RPC messages. We point it at the
-        // sibling /__dev/mcp/message route registered above. This is one
-        // fixed frame, not a long-lived stream, so we set it as a normal
-        // response body carrying the text/event-stream content-type — the
-        // built-in server writes $response->getBody() to the socket itself,
-        // whereas Response::stream() does direct SAPI output the socket
-        // server cannot carry (and FPM would chunk-truncate a one-shot).
+        (Router::delete('/__dev/mcp', function (Request $request, Response $response) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['error' => 'MCP forbidden'], 404);
+            }
+            McpServer::getDefaultServer()->closeSession((string) ($request->headers['mcp-session-id'] ?? ''));
+            return $response('', 204);
+        }))->noAuth();
+
+        (Router::get('/__dev/mcp', function (Request $request, Response $response) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['error' => 'MCP forbidden'], 404);
+            }
+            return $response->header('Allow', 'POST, DELETE')->json(['error' => 'method not allowed'], 405);
+        }))->noAuth();
+
+        // Legacy HTTP+SSE message sink — answers JSON-RPC inline (session-lenient;
+        // the current transport is POST /__dev/mcp above).
+        (Router::post('/__dev/mcp/message', function (Request $request, Response $response) use ($mcpNormalize, $mcpApply) {
+            if (!self::mcpRequestAllowed($request)) {
+                return $response->json(['error' => 'MCP forbidden'], 404);
+            }
+            return $mcpApply($response, McpServer::getDefaultServer()->dispatchHttp($mcpNormalize($request), ''));
+        }))->noAuth();
+
+        // GET /__dev/mcp/sse — legacy HTTP+SSE handshake: one `endpoint` event
+        // announcing the message endpoint. One fixed frame (not a long-lived
+        // stream), so it works under any SAPI.
         (Router::get('/__dev/mcp/sse', function (Request $request, Response $response) {
             if (!self::mcpRequestAllowed($request)) {
                 return $response->json(['error' => 'MCP forbidden'], 404);
@@ -2405,12 +2435,13 @@ class DevAdmin
             ?: (getenv('TINA4_PORT')
             ?: (getenv('PORT')
             ?: '7145'));
-        $url = "http://localhost:{$port}/__dev/api/mcp";
+        $url = "http://localhost:{$port}/__dev/mcp";
         $expected = [
             'mcpServers' => [
                 'tina4-live-docs' => [
+                    'type' => 'http',
                     'url' => $url,
-                    'description' => 'Live API docs for this Tina4 project (framework + user code)',
+                    'description' => 'Live API docs + dev tools for this Tina4 project (framework + user code)',
                 ],
             ],
         ];

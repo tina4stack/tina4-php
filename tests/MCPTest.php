@@ -553,9 +553,10 @@ class MCPTest extends TestCase
             $this->assertArrayHasKey('mcpServers', $config);
             $this->assertArrayHasKey('my-mcp-server', $config['mcpServers']);
             $this->assertSame(
-                'http://localhost:8080/my-mcp/sse',
+                'http://localhost:8080/my-mcp',
                 $config['mcpServers']['my-mcp-server']['url']
             );
+            $this->assertSame('http', $config['mcpServers']['my-mcp-server']['type']);
         } finally {
             chdir($oldCwd);
             // Cleanup

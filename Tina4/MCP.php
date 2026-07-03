@@ -338,6 +338,16 @@ class McpServer
     private array $resources = [];
     private bool $initialized = false;
 
+    /** Streamable HTTP session ids issued at initialize time -> creation ts. */
+    private array $sessions = [];
+
+    /**
+     * MCP protocol versions this server speaks, newest first. The 2025-* versions
+     * are the Streamable HTTP era; 2024-11-05 is the legacy HTTP+SSE transport.
+     */
+    public const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+    public const LATEST_PROTOCOL_VERSION = '2025-06-18';
+
     public function __construct(string $path, string $name = 'Tina4 MCP', string $version = '1.0.0')
     {
         $this->path = rtrim($path, '/');
@@ -467,14 +477,95 @@ class McpServer
         }
     }
 
+    // ── Session lifecycle + protocol negotiation ──────────────────
+
+    /** Mint a new session id and remember it. Called on `initialize`. */
+    public function openSession(): string
+    {
+        $sid = bin2hex(random_bytes(16));
+        $this->sessions[$sid] = time();
+        return $sid;
+    }
+
+    /** True when `$sessionId` was issued by this server and is still open. */
+    public function isValidSession(string $sessionId): bool
+    {
+        return $sessionId !== '' && isset($this->sessions[$sessionId]);
+    }
+
+    /** Forget a session (client DELETE). Returns true when one was removed. */
+    public function closeSession(string $sessionId): bool
+    {
+        if ($sessionId !== '' && isset($this->sessions[$sessionId])) {
+            unset($this->sessions[$sessionId]);
+            return true;
+        }
+        return false;
+    }
+
     /**
-     * Handle initialize request - return server capabilities.
+     * Pick the protocol version to run on. Echo the client's requested version
+     * when we support it (proper negotiation), else the newest we speak so an
+     * unversioned/old client still connects.
+     */
+    public function negotiateProtocolVersion(?string $requested): string
+    {
+        return ($requested !== null && in_array($requested, self::SUPPORTED_PROTOCOL_VERSIONS, true))
+            ? $requested
+            : self::LATEST_PROTOCOL_VERSION;
+    }
+
+    /** Read the JSON-RPC `method` from a raw request without dispatching. */
+    private function peekMethod(string|array $rawData): ?string
+    {
+        $obj = is_array($rawData) ? $rawData : json_decode((string)$rawData, true);
+        return is_array($obj) && isset($obj['method']) ? (string)$obj['method'] : null;
+    }
+
+    /**
+     * Streamable HTTP POST handler (the current transport) — fully synchronous,
+     * so it needs no long-lived connection or stream_select loop and works under
+     * any PHP SAPI. `initialize` mints a session id (returned in the
+     * Mcp-Session-Id response header); a non-initialize request bearing an
+     * unknown session id is a 404 (the client re-initializes, per the MCP spec);
+     * a notification is 202; else 200 with the JSON-RPC response as
+     * application/json (which the spec permits for a POST resolving to a single
+     * response).
+     *
+     * @return array{status:int, headers:array<string,string>, body:string}
+     */
+    public function dispatchHttp(string|array $rawData, string $sessionId = ''): array
+    {
+        $isInit = $this->peekMethod($rawData) === 'initialize';
+        if (!$isInit && $sessionId !== '' && !$this->isValidSession($sessionId)) {
+            return [
+                'status' => 404,
+                'headers' => [],
+                'body' => McpProtocol::encodeError(null, McpProtocol::INVALID_REQUEST, 'session not found'),
+            ];
+        }
+        $body = $this->handleMessage($rawData);
+        $headers = [];
+        if ($isInit) {
+            $headers['Mcp-Session-Id'] = $this->openSession();
+        }
+        if ($body === '') {
+            return ['status' => 202, 'headers' => $headers, 'body' => ''];
+        }
+        return ['status' => 200, 'headers' => $headers, 'body' => $body];
+    }
+
+    /**
+     * Handle initialize request - negotiate the protocol version and return
+     * server capabilities. Echoes the client's requested version when supported,
+     * else offers our newest, so a current Streamable HTTP client and a legacy
+     * 2024-11-05 client both connect.
      */
     private function handleInitialize(array $params): array
     {
         $this->initialized = true;
         return [
-            'protocolVersion' => '2024-11-05',
+            'protocolVersion' => $this->negotiateProtocolVersion($params['protocolVersion'] ?? null),
             'capabilities' => [
                 'tools' => ['listChanged' => false],
                 'resources' => ['subscribe' => false, 'listChanged' => false],
@@ -612,35 +703,38 @@ class McpServer
     public function registerRoutes($router = null): void
     {
         $server = $this;
-        $msgPath = $this->path . '/message';
-        $ssePath = $this->path . '/sse';
 
-        Router::post($msgPath, function (Request $request, Response $response) use ($server) {
-            $body = $request->body;
-            if (is_string($body)) {
-                $raw = $body;
-            } elseif (is_array($body)) {
-                $raw = $body;
-            } else {
-                $raw = (string)$body;
+        $normalize = static fn ($body) => (is_string($body) || is_array($body)) ? $body : (string)$body;
+        $session = static fn (Request $request): string => (string)(($request->headers['mcp-session-id'] ?? ''));
+        $apply = static function (Response $response, array $outcome) {
+            foreach ($outcome['headers'] as $name => $value) {
+                $response->header($name, $value);
             }
-            $result = $server->handleMessage($raw);
-            if ($result === '') {
-                return $response('', 204);
+            if ($outcome['body'] === '') {
+                return $response('', $outcome['status']);
             }
-            return $response(json_decode($result, true));
+            return $response(json_decode($outcome['body'], true), $outcome['status']);
+        };
+
+        // Streamable HTTP endpoint (current transport) — plain synchronous
+        // request/response, no long-lived connection or stream_select needed.
+        Router::post($this->path, function (Request $request, Response $response) use ($server, $normalize, $session, $apply) {
+            return $apply($response, $server->dispatchHttp($normalize($request->body), $session($request)));
         })->noAuth();
 
-        Router::get($ssePath, function (Request $request, Response $response) use ($server) {
-            $baseUrl = rtrim($request->url ?? '', '/');
-            // Strip /sse from end to get base path
-            $basePath = preg_replace('#/sse$#', '', $baseUrl);
-            $endpointUrl = $basePath . '/message';
-            $sseData = "event: endpoint\ndata: $endpointUrl\n\n";
+        // Legacy HTTP+SSE message sink — answers JSON-RPC inline (session-lenient;
+        // the current transport is POST {path} above). No cross-request push.
+        Router::post($this->path . '/message', function (Request $request, Response $response) use ($server, $normalize, $apply) {
+            return $apply($response, $server->dispatchHttp($normalize($request->body), ''));
+        })->noAuth();
 
+        // Legacy HTTP+SSE handshake — announces the message endpoint. One-shot
+        // (no held-open stream), so it works under any SAPI.
+        Router::get($this->path . '/sse', function (Request $request, Response $response) use ($server) {
+            $basePath = preg_replace('#/sse$#', '', rtrim($request->url ?? ($server->getPath() . '/sse'), '/'));
+            $sseData = "event: endpoint\ndata: {$basePath}/message\n\n";
             header('Content-Type: text/event-stream');
             header('Cache-Control: no-cache');
-            header('Connection: keep-alive');
             echo $sseData;
             flush();
             return null;
@@ -673,7 +767,8 @@ class McpServer
 
         $serverKey = strtolower(str_replace(' ', '-', $this->name));
         $config['mcpServers'][$serverKey] = [
-            'url' => "http://localhost:{$port}{$this->path}/sse",
+            'type' => 'http',
+            'url' => "http://localhost:{$port}{$this->path}",
         ];
 
         file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
