@@ -36,6 +36,25 @@ site, or a CLAUDE.md example — and run `docs_search` to catch prose that now d
 returns nothing for a name you expected, the name does not exist in this version: fix the code or the
 doc, do not paper over it.
 
+## Tina4 Coder MCP - Generate Idiomatic Tina4 Code
+
+Tina4 hosts a coding model fine-tuned on the framework, exposed as MCP tools on the
+`tina4-coder` server (`https://mcp.tina4.com/mcp`, Bearer-token auth). When these tools are
+connected, use them for **application-style** Tina4 code instead of writing it by hand:
+
+- **`tina4_code(instruction, image_url="")`** - generates idiomatic Tina4 code: routes, ORM
+  models, migrations, Frond templates, and queue producers/consumers. Describe what you want;
+  pass `image_url` to build from a screenshot. Reach for it when you write example apps, the
+  gallery, scaffold templates, parity demos, or doc samples: the app-level code a user writes.
+- **`tina4_review(code, focus="")`** - reviews existing Tina4 code and returns a corrected,
+  idiomatic version. Run it over app-style snippets before they land in docs or examples.
+
+**Scope.** This model writes app-level Tina4 code, not framework internals. Keep writing the
+engine, adapters, and the rest of the framework source yourself; the tool is tuned for how you
+*use* Tina4, not how you *build* it. Always review what it returns against the live API
+(`api_method` above), and fall back to writing inline only if `tina4_code` errors or is not
+connected. It costs no Claude output tokens, so it is the cheaper path for the code it fits.
+
 ## Independent Verification & Honest Claims — Prove It, Then Qualify It
 
 When work is produced by a subagent, a parallel agent, or a workflow — or even by a prior step in
