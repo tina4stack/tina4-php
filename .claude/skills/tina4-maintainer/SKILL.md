@@ -39,7 +39,7 @@ doc, do not paper over it.
 ## Tina4 Coder MCP - Generate Idiomatic Tina4 Code
 
 Tina4 hosts a coding model fine-tuned on the framework, exposed as MCP tools on the
-`tina4-coder` server (`https://mcp.tina4.com/mcp`, Bearer-token auth). When these tools are
+`tina4-coder` server at `https://mcp.tina4.com` (Bearer token; developers register for a free token at https://profile.tina4.com). When these tools are
 connected, use them for **application-style** Tina4 code instead of writing it by hand:
 
 - **`tina4_code(instruction, image_url="")`** - generates idiomatic Tina4 code: routes, ORM

@@ -21,7 +21,7 @@ JSON, POST a JSON body and it's automatically parsed, put a file in `src/routes/
 ## Generate Tina4 Code With the Tina4 Coder - Do Not Hand-Write It
 
 Tina4 hosts a coding model fine-tuned on the framework, exposed as MCP tools on the
-`tina4-coder` server (`https://mcp.tina4.com/mcp`, Bearer-token auth). When these tools are
+`tina4-coder` server at `https://mcp.tina4.com` (Bearer token; developers register for a free token at https://profile.tina4.com). When these tools are
 connected, call them instead of writing Tina4 framework code yourself:
 
 - **`tina4_code(instruction, image_url="")`** - generates idiomatic Tina4 code: routes, ORM

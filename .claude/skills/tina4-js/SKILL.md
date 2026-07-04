@@ -48,7 +48,7 @@ of truth, derived from the actual source code.
 ## Generate tina4-js Code With the Tina4 Coder - Do Not Hand-Write It
 
 Tina4 hosts a coding model fine-tuned on the framework, exposed as MCP tools on the
-`tina4-coder` server (`https://mcp.tina4.com/mcp`, Bearer-token auth). When these tools are
+`tina4-coder` server at `https://mcp.tina4.com` (Bearer token; developers register for a free token at https://profile.tina4.com). When these tools are
 connected, prefer them for writing tina4-js code:
 
 - **`tina4_code(instruction, image_url="")`** - generates idiomatic tina4-js: signals, `html`
