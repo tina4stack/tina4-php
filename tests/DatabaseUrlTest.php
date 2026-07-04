@@ -101,6 +101,17 @@ class DatabaseUrlTest extends TestCase
         $this->assertEquals('DataPostgresql', $db->driver);
     }
 
+    public function testParsePgsqlScheme(): void
+    {
+        // pgsql:// is the PDO / Laravel / Doctrine scheme name (issue #58)
+        $db = new DatabaseUrl('pgsql://user:pass@localhost:5432/mydb');
+
+        $this->assertEquals('pgsql', $db->scheme);
+        $this->assertEquals('DataPostgresql', $db->driver);
+        $this->assertEquals(5432, $db->port);
+        $this->assertEquals('mydb', $db->database);
+    }
+
     public function testParseMysql(): void
     {
         $db = new DatabaseUrl('mysql://root:password@localhost:3306/shop');

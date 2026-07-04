@@ -27,6 +27,7 @@ class DatabaseUrl
         'sqlite' => 'DataSQLite3',
         'postgres' => 'DataPostgresql',
         'postgresql' => 'DataPostgresql',
+        'pgsql' => 'DataPostgresql',
         'mysql' => 'DataMySQL',
         'mssql' => 'DataMSSQL',
         'sqlserver' => 'DataMSSQL',
