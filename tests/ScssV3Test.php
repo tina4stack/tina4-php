@@ -150,6 +150,45 @@ class ScssV3Test extends TestCase
         $this->assertStringContainsString('calc(50% + 10px)', $css);
     }
 
+    // ── Color functions (issue #124) ────────────────────────────
+
+    public function testRgbaHexBecomesValidCss(): void
+    {
+        // rgba(<hex>, a) is invalid CSS; must become rgba(r, g, b, a).
+        $css = $this->compiler->compile('$c: #0f3460; .box { box-shadow: 0 0 4px rgba($c, 0.12); }');
+        $this->assertStringContainsString('rgba(15, 52, 96, 0.12)', $css);
+        $this->assertStringNotContainsString('rgba(#', $css);
+    }
+
+    public function testRgbaNumericFormUntouched(): void
+    {
+        $css = $this->compiler->compile('.box { color: rgba(10, 20, 30, 0.4); }');
+        $this->assertStringContainsString('rgba(10, 20, 30, 0.4)', $css);
+    }
+
+    public function testRgbHexBecomesValidCss(): void
+    {
+        $css = $this->compiler->compile('.box { color: rgb(#ffffff); }');
+        $this->assertStringContainsString('rgb(255, 255, 255)', $css);
+    }
+
+    public function testMix(): void
+    {
+        $css = $this->compiler->compile('.box { background: mix(#ffffff, #000000, 50%); }');
+        $this->assertStringContainsString('#808080', $css);
+        $this->assertStringNotContainsString('mix(', $css);
+    }
+
+    public function testLightenDarkenEvaluated(): void
+    {
+        $css = $this->compiler->compile('.box { color: lighten(#0f3460, 20%); border-color: darken(#336699, 10%); }');
+        $this->assertStringNotContainsString('lighten(', $css);
+        $this->assertStringNotContainsString('darken(', $css);
+        // Byte-parity with the Python master.
+        $this->assertStringContainsString('#1c63b8', $css);
+        $this->assertStringContainsString('#264c72', $css);
+    }
+
     public function testSameUnitStillFolds(): void
     {
         // Regression guard — the fix must NOT break valid arithmetic.

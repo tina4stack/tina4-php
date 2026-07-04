@@ -187,6 +187,10 @@ class ScssCompiler
         // 6. Evaluate math expressions
         $scss = $this->evalMath($scss);
 
+        // 6.5. Resolve color functions (lighten/darken/rgba/rgb/mix) — after
+        // variable substitution so a $colour arg is already a hex literal.
+        $scss = $this->resolveColorFunctions($scss);
+
         // 7. Flatten nesting
         $css = $this->flattenNesting($scss);
 
@@ -439,6 +443,126 @@ class ScssCompiler
             },
             $folded
         );
+    }
+
+    // ── Color functions ─────────────────────────────────────────
+
+    /**
+     * Resolve lighten(), darken(), rgba()/rgb(), and mix() color functions.
+     *
+     * rgba(<hex>, <alpha>) is the damaging case (issue #124): the functional
+     * rgba() notation cannot take a hex, so rgba(#0f3460, 0.12) is invalid CSS
+     * and browsers drop the whole declaration. Convert the hex to its r,g,b
+     * components. Runs after variable substitution so a $colour arg is a hex.
+     */
+    private function resolveColorFunctions(string $scss): string
+    {
+        $scss = preg_replace_callback('#lighten\(\s*([^,]+)\s*,\s*([^)]+)\s*\)#', function ($m) {
+            return $this->adjustLightness(trim($m[1]), (float)rtrim(trim($m[2]), '%') / 100);
+        }, $scss);
+        $scss = preg_replace_callback('#darken\(\s*([^,]+)\s*,\s*([^)]+)\s*\)#', function ($m) {
+            return $this->adjustLightness(trim($m[1]), -((float)rtrim(trim($m[2]), '%') / 100));
+        }, $scss);
+        // rgba(<hex>, <alpha>) — only the two-arg hex form; leave rgba(r,g,b,a) alone.
+        // (~ delimiter: the pattern body contains a literal # for the hex arg.)
+        $scss = preg_replace_callback('~rgba\(\s*(#[0-9a-fA-F]{3,8})\s*,\s*([\d.]+)\s*\)~', function ($m) {
+            $rgb = $this->hexToRgb($m[1]);
+            return $rgb === null ? $m[0] : "rgba({$rgb[0]}, {$rgb[1]}, {$rgb[2]}, " . trim($m[2]) . ")";
+        }, $scss);
+        $scss = preg_replace_callback('~rgb\(\s*(#[0-9a-fA-F]{3,8})\s*\)~', function ($m) {
+            $rgb = $this->hexToRgb($m[1]);
+            return $rgb === null ? $m[0] : "rgb({$rgb[0]}, {$rgb[1]}, {$rgb[2]})";
+        }, $scss);
+        // mix(<c1>, <c2>[, <weight>]) — Sass weight is c1's proportion (default 50%).
+        $scss = preg_replace_callback(
+            '~mix\(\s*(#[0-9a-fA-F]{3,8})\s*,\s*(#[0-9a-fA-F]{3,8})\s*(?:,\s*([\d.]+%?)\s*)?\)~',
+            function ($m) {
+                $c1 = $this->hexToRgb($m[1]);
+                $c2 = $this->hexToRgb($m[2]);
+                if ($c1 === null || $c2 === null) {
+                    return $m[0];
+                }
+                $w = isset($m[3]) && $m[3] !== '' ? (float)rtrim($m[3], '%') / 100 : 0.5;
+                $mixed = [];
+                for ($i = 0; $i < 3; $i++) {
+                    $mixed[$i] = (int)round($c1[$i] * $w + $c2[$i] * (1 - $w));
+                }
+                return sprintf("#%02x%02x%02x", $mixed[0], $mixed[1], $mixed[2]);
+            },
+            $scss
+        );
+        return $scss;
+    }
+
+    /** Parse a #rgb / #rrggbb hex string into an [r, g, b] int array, or null. */
+    private function hexToRgb(string $color): ?array
+    {
+        $color = ltrim(trim($color), '#');
+        if (strlen($color) === 3) {
+            $color = $color[0] . $color[0] . $color[1] . $color[1] . $color[2] . $color[2];
+        }
+        if (strlen($color) !== 6 || !ctype_xdigit($color)) {
+            return null;
+        }
+        return [hexdec(substr($color, 0, 2)), hexdec(substr($color, 2, 2)), hexdec(substr($color, 4, 2))];
+    }
+
+    /** Adjust the HSL lightness of a hex color by `amount` (-1..1) and return hex. */
+    private function adjustLightness(string $color, float $amount): string
+    {
+        $rgb = $this->hexToRgb($color);
+        if ($rgb === null) {
+            return $color;
+        }
+        [$r, $g, $b] = [$rgb[0] / 255, $rgb[1] / 255, $rgb[2] / 255];
+        $max = max($r, $g, $b);
+        $min = min($r, $g, $b);
+        $l = ($max + $min) / 2;
+        $d = $max - $min;
+        $h = 0.0;
+        $s = 0.0;
+        if ($d != 0.0) {
+            $s = $l > 0.5 ? $d / (2 - $max - $min) : $d / ($max + $min);
+            if ($max == $r) {
+                $h = (($g - $b) / $d) + ($g < $b ? 6 : 0);
+            } elseif ($max == $g) {
+                $h = (($b - $r) / $d) + 2;
+            } else {
+                $h = (($r - $g) / $d) + 4;
+            }
+            $h /= 6;
+        }
+        $l = max(0.0, min(1.0, $l + $amount));
+        // HSL -> RGB
+        if ($s == 0.0) {
+            $r = $g = $b = $l;
+        } else {
+            $q = $l < 0.5 ? $l * (1 + $s) : $l + $s - $l * $s;
+            $p = 2 * $l - $q;
+            $hue2rgb = function ($p, $q, $t) {
+                if ($t < 0) {
+                    $t += 1;
+                }
+                if ($t > 1) {
+                    $t -= 1;
+                }
+                if ($t < 1 / 6) {
+                    return $p + ($q - $p) * 6 * $t;
+                }
+                if ($t < 1 / 2) {
+                    return $q;
+                }
+                if ($t < 2 / 3) {
+                    return $p + ($q - $p) * (2 / 3 - $t) * 6;
+                }
+                return $p;
+            };
+            $r = $hue2rgb($p, $q, $h + 1 / 3);
+            $g = $hue2rgb($p, $q, $h);
+            $b = $hue2rgb($p, $q, $h - 1 / 3);
+        }
+        // Truncate (not round) to match the Python master's int(x*255) exactly.
+        return sprintf("#%02x%02x%02x", (int)($r * 255), (int)($g * 255), (int)($b * 255));
     }
 
     // ── Nesting flattener ───────────────────────────────────────
