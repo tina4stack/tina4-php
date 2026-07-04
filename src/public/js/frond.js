@@ -558,6 +558,132 @@ var _frondModule = (() => {
       }
     });
   }
+  function _liveKey(el) {
+    const d = el.dataset;
+    return d && d.key ? d.key : null;
+  }
+  function _liveSyncAttrs(oldNode, newNode) {
+    const na = newNode.attributes;
+    for (let i = 0; i < na.length; i++) {
+      const a = na[i];
+      if (oldNode.getAttribute(a.name) !== a.value) oldNode.setAttribute(a.name, a.value);
+    }
+    const oa = Array.prototype.slice.call(oldNode.attributes);
+    oa.forEach(function(a) {
+      if (!newNode.hasAttribute(a.name)) oldNode.removeAttribute(a.name);
+    });
+  }
+  function _liveMorphNode(oldNode, newNode) {
+    const tag = newNode.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    _liveSyncAttrs(oldNode, newNode);
+    if (oldNode.children.length || newNode.children.length) {
+      _liveReconcile(oldNode, newNode);
+    } else if (oldNode.innerHTML !== newNode.innerHTML) {
+      oldNode.innerHTML = newNode.innerHTML;
+    }
+  }
+  function _liveReconcile(parent, next) {
+    const oldKids = Array.prototype.slice.call(parent.children);
+    const newKids = Array.prototype.slice.call(next.children);
+    const oldByKey = {};
+    oldKids.forEach(function(c) {
+      const k = _liveKey(c);
+      if (k) oldByKey[k] = c;
+    });
+    const order = [];
+    for (let i = 0; i < newKids.length; i++) {
+      const nk = newKids[i];
+      const k = _liveKey(nk);
+      let match = null;
+      if (k && oldByKey[k]) {
+        match = oldByKey[k];
+      } else if (!k && oldKids[i] && !_liveKey(oldKids[i]) && oldKids[i].tagName === nk.tagName) {
+        match = oldKids[i];
+      }
+      if (match && match.tagName === nk.tagName) {
+        _liveMorphNode(match, nk);
+        reused.push(match);
+        order.push(match);
+      } else {
+        order.push(nk);
+      }
+    }
+    let cursor = parent.firstElementChild;
+    for (let i = 0; i < order.length; i++) {
+      const node = order[i];
+      if (node === cursor) {
+        cursor = cursor.nextElementSibling;
+      } else {
+        parent.insertBefore(node, cursor);
+      }
+    }
+    oldKids.forEach(function(c) {
+      if (order.indexOf(c) === -1 && c.parentNode === parent) parent.removeChild(c);
+    });
+    void reused;
+  }
+  function _liveSwap(container, html) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    if (!tmp.children.length || !container.children.length) {
+      container.innerHTML = html;
+      return;
+    }
+    _liveReconcile(container, tmp);
+  }
+  function _liveWsUrl(path) {
+    if (/^wss?:\/\//.test(path)) return path;
+    const proto = typeof location !== "undefined" && location.protocol === "https:" ? "wss" : "ws";
+    return proto + "://" + location.host + path;
+  }
+  function _liveExtract(msg, name) {
+    if (msg && typeof msg === "object") {
+      if (msg.type === "live") {
+        if (name && msg.name && msg.name !== name) return null;
+        return msg.html != null ? String(msg.html) : null;
+      }
+      return null;
+    }
+    return typeof msg === "string" ? msg : null;
+  }
+  function liveInit(root) {
+    if (typeof document === "undefined") return;
+    const scope = root || document;
+    const blocks = scope.querySelectorAll("[data-frond-live]");
+    Array.prototype.slice.call(blocks).forEach(function(el) {
+      if (el.__frondLive) return;
+      el.__frondLive = true;
+      const mode = el.getAttribute("data-mode");
+      const name = el.getAttribute("data-frond-live");
+      if (mode === "poll") {
+        const src = el.getAttribute("data-src");
+        const interval = (parseInt(el.getAttribute("data-interval"), 10) || 5) * 1e3;
+        const timer = setInterval(function() {
+          if (typeof document !== "undefined" && document.hidden) return;
+          request(src, { method: "GET", onSuccess: function(data) {
+            _liveSwap(el, typeof data === "string" ? data : String(data));
+          } });
+        }, interval);
+        el.__frondLiveStop = function() {
+          clearInterval(timer);
+        };
+      } else if (mode === "ws") {
+        const sock = wsConnect(_liveWsUrl(el.getAttribute("data-ws")));
+        sock.on("message", function(msg) {
+          const h = _liveExtract(msg, name);
+          if (h !== null) _liveSwap(el, h);
+        });
+        el.__frondLiveStop = function() {
+          sock.close();
+        };
+      } else if (mode === "sse") {
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn("[frond.live] sse transport is not wired yet (v1 supports poll and ws); block '" + name + "' shows first paint only. Use poll or ws.");
+        }
+      }
+    });
+  }
   var frond = {
     /** Core HTTP request. */
     request,
@@ -573,6 +699,8 @@ var _frondModule = (() => {
     ws: wsConnect,
     /** Server-Sent Events with auto-reconnect. */
     sse: sseConnect,
+    /** Wire {% live %} blocks (poll/ws) with keyed morph. Auto-runs on DOMContentLoaded. */
+    live: liveInit,
     /** Cookie helpers: get, set, remove. */
     cookie,
     /** Display alert message in #message element. */
@@ -593,8 +721,17 @@ var _frondModule = (() => {
   };
   if (typeof window !== "undefined") {
     window.frond = frond;
+    if (typeof document !== "undefined") {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function() {
+          liveInit();
+        });
+      } else {
+        liveInit();
+      }
+    }
   }
   return __toCommonJS(frond_exports);
 })();
-/* Frond v2.1.3 — tina4.com */
+/* Frond v2.2.0 - tina4.com */
 //# sourceMappingURL=frond.js.map

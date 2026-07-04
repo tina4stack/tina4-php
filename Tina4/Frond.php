@@ -39,6 +39,15 @@ class Frond
 
     /** @var array<string, callable> Class-level registry for tests (see $classFilters). */
     private static array $classTests = [];
+
+    /** @var array<string, array> Live blocks: name -> parsed body AST (re-executed by renderLive). */
+    private static array $liveFragments = [];
+    /** @var array<string, callable> Live block name -> data provider (registered via liveSource()). */
+    private static array $liveSources = [];
+    /** @var array<string, string> Live block name -> declared ws path (data-ws). */
+    private static array $liveWsPaths = [];
+    /** Guards against nested {% live %} during parse. */
+    private bool $parsingLive = false;
     private ?array $sandboxFilters = null;
     private ?array $sandboxTags = null;
     private ?array $sandboxVars = null;
@@ -231,6 +240,9 @@ class Frond
         self::$classFilters = [];
         self::$classGlobals = [];
         self::$classTests = [];
+        self::$liveFragments = [];
+        self::$liveSources = [];
+        self::$liveWsPaths = [];
     }
 
     /**
@@ -533,6 +545,8 @@ class Frond
                 return $this->parseFromImport($rest);
             case 'cache':
                 return $this->handleCache($rest, $tokens, $pos);
+            case 'live':
+                return $this->handleLive($rest, $tokens, $pos);
             case 'spaceless':
                 return $this->parseSpaceless($tokens, $pos);
             case 'autoescape':
@@ -712,6 +726,65 @@ class Frond
         return ['type' => 'cache', 'key' => $key, 'ttl' => $ttl, 'body' => $body];
     }
 
+    /**
+     * Parse {% live "name" poll N | sse | ws "path" [src "url"] %}...{% endlive %}.
+     * Mirrors Python's _handle_live (parse half). Guards: unknown transport,
+     * poll-without-seconds, cross-origin src, nested live.
+     */
+    private function handleLive(string $params, array &$tokens, int &$pos): array
+    {
+        if ($this->parsingLive) {
+            throw new \RuntimeException('live: nested live blocks are not supported');
+        }
+        if (!preg_match('/^["\']([^"\']+)["\']\s*(.*)$/s', trim($params), $m)) {
+            throw new \RuntimeException('live: expected {% live "name" poll N | sse | ws "path" %}');
+        }
+        $name = $m[1];
+        $rest = trim($m[2]);
+
+        $src = null;
+        if (preg_match('/\bsrc\s+["\']([^"\']+)["\']/', $rest, $sm)) {
+            $src = $sm[1];
+        }
+        if ($src !== null && preg_match('#^(?:https?:)?//#', $src)) {
+            throw new \RuntimeException('live: src must be a same-origin path, not an absolute URL');
+        }
+
+        $parts = preg_split(self::RE_WHITESPACE_SPLIT, $rest);
+        $mode = $parts[0] ?? '';
+        $interval = null;
+        $wsPath = null;
+        if ($mode === 'poll') {
+            if (!isset($parts[1]) || !ctype_digit($parts[1])) {
+                throw new \RuntimeException('live: poll requires seconds, e.g. {% live "x" poll 5 %}');
+            }
+            $interval = (int)$parts[1];
+        } elseif ($mode === 'sse') {
+            // no extra params
+        } elseif ($mode === 'ws') {
+            if (!preg_match('/\bws\s+["\']([^"\']+)["\']/', $rest, $wm)) {
+                throw new \RuntimeException('live: ws requires a path, e.g. {% live "x" ws "/ws/x" %}');
+            }
+            $wsPath = $wm[1];
+        } else {
+            throw new \RuntimeException('live: unknown transport "' . $mode . '" (use poll N, sse, or ws "path")');
+        }
+
+        $pos++;
+        $this->parsingLive = true;
+        try {
+            $body = $this->parse($tokens, $pos, 'endlive');
+        } finally {
+            $this->parsingLive = false;
+        }
+        $pos++;
+
+        return [
+            'type' => 'live', 'name' => $name, 'mode' => $mode,
+            'interval' => $interval, 'wsPath' => $wsPath, 'src' => $src, 'body' => $body,
+        ];
+    }
+
     private function parseSpaceless(array &$tokens, int &$pos): array
     {
         $pos++;
@@ -877,6 +950,9 @@ class Frond
 
             case 'cache':
                 return $this->renderCache($node, $data);
+
+            case 'live':
+                return $this->renderLiveNode($node, $data);
 
             case 'spaceless':
                 return $this->executeSpaceless($node, $data);
@@ -1072,6 +1148,140 @@ class Frond
             'ttl' => $node['ttl'],
         ];
         return $content;
+    }
+
+    /**
+     * Render a {% live %} node: register its body for re-render, render the
+     * first paint, wrap in the data-frond-live marker frond.js wires up.
+     * Mirrors Python's _handle_live (render half).
+     */
+    private function renderLiveNode(array $node, array &$data): string
+    {
+        $name = $node['name'];
+        self::$liveFragments[$name] = $node['body'];
+        if ($node['mode'] === 'ws' && $node['wsPath'] !== null) {
+            self::$liveWsPaths[$name] = $node['wsPath'];
+        }
+        $endpoint = $node['src'] ?? ('/__frond/live/' . $name);
+        $attrs = [
+            'data-frond-live="' . $this->liveAttr($name) . '"',
+            'id="live-' . $this->liveAttr($name) . '"',
+        ];
+        if ($node['mode'] === 'poll') {
+            $attrs[] = 'data-mode="poll"';
+            $attrs[] = 'data-interval="' . (int)$node['interval'] . '"';
+            $attrs[] = 'data-src="' . $this->liveAttr($endpoint) . '"';
+        } elseif ($node['mode'] === 'sse') {
+            $attrs[] = 'data-mode="sse"';
+            $attrs[] = 'data-src="' . $this->liveAttr($endpoint) . '"';
+        } else {
+            $attrs[] = 'data-mode="ws"';
+            $attrs[] = 'data-ws="' . $this->liveAttr($node['wsPath']) . '"';
+        }
+        $firstPaint = $this->execute($node['body'], $data);
+        return '<div ' . implode(' ', $attrs) . '>' . $firstPaint . '</div>';
+    }
+
+    private function liveAttr($value): string
+    {
+        return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Re-render a registered {% live %} fragment by name with fresh data.
+     * Returns the HTML fragment, or null if no fragment is registered under
+     * that name yet (its page has not rendered). The /__frond/live/{name}
+     * endpoint calls this after resolving the provider. Mirrors Frond.render_live.
+     */
+    public static function renderLive(string $name, array $data = []): ?string
+    {
+        if (!isset(self::$liveFragments[$name])) {
+            return null;
+        }
+        $frond = new self();
+        $body = self::$liveFragments[$name];
+        return $frond->execute($body, $data);
+    }
+
+    /** Register a data provider for a {% live %} block. Mirrors Python's @live_source. */
+    public static function liveSource(string $name, callable $fn): void
+    {
+        self::$liveSources[$name] = $fn;
+    }
+
+    /**
+     * Handle GET /__frond/live/{name}: resolve the provider, run it with the
+     * live request (auth re-applies), re-render the fragment, return via the
+     * response callable. 404 for unknown name / unrendered fragment. Mirrors
+     * Python's live_endpoint. ($request/$response are the Tina4 objects.)
+     */
+    public static function respondLive($request, $response, string $name)
+    {
+        $provider = self::$liveSources[$name] ?? null;
+        if (!isset(self::$liveFragments[$name]) && $provider === null) {
+            return $response('live block not found: ' . $name, 404);
+        }
+        $context = [];
+        if ($provider !== null) {
+            $result = $provider($request);
+            $context = is_array($result) ? $result : [];
+        }
+        $html = self::renderLive($name, $context);
+        if ($html === null) {
+            return $response('live fragment not registered yet: ' . $name, 404);
+        }
+        return $response($html);
+    }
+
+    /** @return callable|null The provider registered for a live block, or null. */
+    public static function getLiveSource(string $name): ?callable
+    {
+        return self::$liveSources[$name] ?? null;
+    }
+
+    /** @return bool Whether a live fragment has been registered (its page rendered). */
+    public static function hasLiveFragment(string $name): bool
+    {
+        return isset(self::$liveFragments[$name]);
+    }
+
+    /** @return string|null The ws path a live block declared (data-ws), or null. */
+    public static function getLiveWsPath(string $name): ?string
+    {
+        return self::$liveWsPaths[$name] ?? null;
+    }
+
+    /**
+     * Re-render the '<name>' live fragment and push it to connected clients.
+     * Broadcasts a {type,name,html} envelope over WebSocket to the block's
+     * declared data-ws path (else a room named <name>). Returns the rendered
+     * HTML, or null if the fragment is not registered. Mirrors Python push_live.
+     */
+    public static function pushLive(string $name, array $data = []): ?string
+    {
+        $html = self::renderLive($name, $data);
+        if ($html === null) {
+            return null;
+        }
+        $envelope = json_encode(['type' => 'live', 'name' => $name, 'html' => $html]);
+        if (class_exists('\\Tina4\\Server')) {
+            $server = \Tina4\Server::getInstance();
+            if ($server !== null) {
+                try {
+                    $wsPath = self::getLiveWsPath($name);
+                    if ($wsPath !== null) {
+                        $server->broadcastWebSocket($envelope, $wsPath);
+                    } else {
+                        $server->broadcastToRoom($name, $envelope);
+                    }
+                } catch (\Throwable $e) {
+                    if (class_exists('\\Tina4\\Log')) {
+                        \Tina4\Log::error('pushLive(' . $name . ') broadcast failed: ' . $e->getMessage());
+                    }
+                }
+            }
+        }
+        return $html;
     }
 
     private function executeSpaceless(array $node, array &$data): string

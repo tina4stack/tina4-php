@@ -307,6 +307,9 @@ class App
         // Register health check
         $this->registerHealthCheck();
 
+        // Register the Frond live-block re-render endpoint (always on)
+        $this->registerLiveEndpoint();
+
         // Register signal handlers for graceful shutdown
         $this->registerSignalHandlers();
     }
@@ -708,6 +711,20 @@ class App
 
         Router::get($path, $handler);
         $this->routes['GET'][$path] = fn() => $this->getHealthData();
+    }
+
+    /**
+     * Register GET /__frond/live/{name} - re-renders a {% live %} fragment on
+     * demand (poll / sse pull). Always on (production too); the @live_source
+     * provider runs with the live request so auth/session re-apply every
+     * refresh. 404 for an unknown name or a fragment whose page has not
+     * rendered. Mirrors Python's live_endpoint.
+     */
+    private function registerLiveEndpoint(): void
+    {
+        Router::get('/__frond/live/{name}', function (Request $request, Response $response, $name) {
+            return \Tina4\Frond::respondLive($request, $response, $name);
+        });
     }
 
     /**
