@@ -254,16 +254,21 @@ class McpDevAdminEndpointTest extends TestCase
         $this->assertSame(McpProtocol::METHOD_NOT_FOUND, $json['error']['code']);
     }
 
-    // ── Notifications (no id) → 204 ───────────────────────────────
+    // ── Notifications (no id) → 202 Accepted ──────────────────────
+    // The MCP Streamable HTTP transport (2025-03-26 / 2025-06-18) mandates
+    // 202 Accepted with an empty body for a notification-only POST — parity
+    // with the Python master (test_notification_yields_202_empty), Node
+    // (mcpEndpoint.test.ts) and Ruby (mcp_dev_endpoint_spec.rb). 204 was the
+    // stale legacy expectation before the 3.13.51 Streamable HTTP work.
 
-    public function testNotificationReturns204(): void
+    public function testNotificationReturns202(): void
     {
         DevAdmin::register();
         $response = $this->rpc([
             'jsonrpc' => '2.0',
             'method' => 'notifications/initialized',
         ]);
-        $this->assertSame(204, $response->getStatusCode());
+        $this->assertSame(202, $response->getStatusCode());
         $this->assertSame('', $response->getBody());
     }
 
