@@ -452,10 +452,25 @@ abstract class ORM
         }
 
         $reverseMapping = array_flip($this->fieldMapping);
+        $jsonColumns = $this->jsonColumns();
 
         foreach ($data as $key => $value) {
             // Map DB column to PHP property if mapping exists
             $propName = $reverseMapping[$key] ?? $key;
+
+            // A JSON column comes back from the driver as a JSON string (SQLite
+            // TEXT, MySQL JSON, PostgreSQL JSONB via the text protocol, MSSQL
+            // NVARCHAR). Decode it to the dict/list the `array`-typed property
+            // expects (parity with Python's JSONField parse-on-read). A value
+            // that is already an array (fresh user input, e.g.
+            // new Doc(['payload' => ['x' => 1]])) is left untouched; null stays
+            // null for a nullable `?array` column.
+            if (isset($jsonColumns[$propName]) && is_string($value)) {
+                $decoded = json_decode($value, true);
+                if ($decoded !== null || trim($value) === 'null') {
+                    $value = $decoded;
+                }
+            }
 
             // Set directly on the object — declared properties get set natively,
             // undeclared ones go through __set → _dynamicProps
@@ -1517,6 +1532,19 @@ abstract class ORM
             ? 'TIMESTAMP'
             : 'DATETIME';
 
+        // Engine-aware JSON column type (parity with Python's JSONField DDL).
+        // PostgreSQL gets native JSONB (indexable, canonical); MySQL native
+        // JSON; MSSQL stores JSON as NVARCHAR(MAX) (its json1 functions read
+        // that); Firebird has no TEXT type so it uses a text BLOB; SQLite and
+        // everything else store the json text in TEXT (queryable via json1).
+        $jsonSql = match ($dialect) {
+            'postgresql' => 'JSONB',
+            'mysql'      => 'JSON',
+            'mssql'      => 'NVARCHAR(MAX)',
+            'firebird'   => 'BLOB SUB_TYPE TEXT',
+            default      => 'TEXT',
+        };
+
         $pkProperty = $this->primaryKey;
         $colDefs = [];
 
@@ -1530,6 +1558,7 @@ abstract class ORM
                 'float'    => 'REAL',
                 'bool'     => $boolSql,
                 'datetime' => $datetimeSql,
+                'json'     => $jsonSql,
                 default    => 'VARCHAR(255)',
             };
 
@@ -1733,6 +1762,31 @@ abstract class ORM
     }
 
     /**
+     * The set of property names that map to a JSON document column (an
+     * `array`-typed property — the PHP equivalent of Python's JSONField).
+     * Returned as name => true for O(1) membership checks on the save/hydrate
+     * hot paths. Cached per model class: the type map is fixed by the class's
+     * declared properties, so it is computed once and reused.
+     *
+     * @return array<string, true>
+     */
+    private function jsonColumns(): array
+    {
+        static $cache = [];
+        $class = static::class;
+        if (!isset($cache[$class])) {
+            $names = [];
+            foreach ($this->getColumnDefinitions() as $name => $def) {
+                if ($def['type'] === 'json') {
+                    $names[$name] = true;
+                }
+            }
+            $cache[$class] = $names;
+        }
+        return $cache[$class];
+    }
+
+    /**
      * Derive a logical column type from a property's declared PHP type,
      * falling back to a name heuristic for datetime columns.
      */
@@ -1749,6 +1803,11 @@ abstract class ORM
             $typeName === 'int'   => 'int',
             $typeName === 'float' => 'float',
             $typeName === 'bool'  => 'bool',
+            // An `array`-typed property is a JSON document column. This is the
+            // idiomatic PHP equivalent of Python's JSONField: the dict/list is
+            // json_encode()d on write and json_decode()d back on read. Nullable
+            // (`?array`) still reports 'array' here, so both forms map to JSON.
+            $typeName === 'array' => 'json',
             $typeName === \DateTime::class
                 || $typeName === \DateTimeImmutable::class
                 || $typeName === \DateTimeInterface::class => 'datetime',
@@ -1972,6 +2031,7 @@ abstract class ORM
     {
         $data = [];
         $props = $this->getModelProperties();
+        $jsonColumns = $this->jsonColumns();
 
         foreach ($props as $name => $value) {
             // Auto-generate fieldMapping for camelCase → snake_case
@@ -1980,6 +2040,18 @@ abstract class ORM
                 if ($snaked !== $name) {
                     $this->fieldMapping[$name] = $snaked;
                 }
+            }
+            // A JSON column serialises its dict/list to a JSON string for the
+            // driver (parity with Python's JSONField.to_db). A non-serialisable
+            // value throws \JsonException — save() catches it, rolls back, and
+            // returns false with the cause on getError() (fail loud, no silent
+            // drop). null passes through as SQL NULL; a value already a string
+            // is left as-is (a caller who pre-encoded stays in control).
+            if (isset($jsonColumns[$name]) && $value !== null && !is_string($value)) {
+                $value = json_encode(
+                    $value,
+                    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                );
             }
             $column = $this->getDbColumn($name);
             $data[$column] = $value;
