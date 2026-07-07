@@ -171,6 +171,71 @@ class MigrationV3Test extends TestCase
         $pg->close();
     }
 
+    /**
+     * Live Firebird: a table upgraded in-place from the v2 bookkeeping schema
+     * (`migration_id`-keyed, no `migration` column) must NOT re-run migrations
+     * that were already recorded. Firebird's adapter returns UPPERCASE result
+     * keys, so before the fix upgradeV2ToV3()'s backfill read $row['migration_id']
+     * (lower case) as null and getPendingMigrations()'s
+     * array_column(..., 'migration') missed the MIGRATION key — every recorded
+     * migration was re-listed as pending and re-run. Gated on
+     * TINA4_TEST_FIREBIRD_URL so CI without a live Firebird just no-ops.
+     */
+    public function testV2ToV3UpgradeRecognisesLegacyMigrationsOnLiveFirebird(): void
+    {
+        if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
+            $this->markTestSkipped('ext-interbase not installed');
+        }
+        $url = getenv('TINA4_TEST_FIREBIRD_URL');
+        if (!$url) {
+            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live Firebird v2->v3 migration test (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
+        }
+
+        $fb = \Tina4\Database\Database::create($url);
+        foreach (['tina4_migration', 'mig_legacy_v2', 'mig_new_widget'] as $t) {
+            try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
+        }
+
+        // Seed a *legacy v2* bookkeeping table exactly as tina4-php v2 (and the
+        // syncer) created it: migration_id-keyed, no `migration` column.
+        $fb->execute(
+            "CREATE TABLE tina4_migration (" .
+            "migration_id VARCHAR(14) NOT NULL PRIMARY KEY, " .
+            "description VARCHAR(1000), content BLOB SUB_TYPE 0, passed INTEGER)"
+        );
+        $fb->execute("INSERT INTO tina4_migration (migration_id, passed) VALUES ('20240101000000', 1)");
+
+        // One migration matching the recorded prefix (its CREATE TABLE must NOT
+        // run — already applied), one brand-new migration (must run).
+        file_put_contents($this->migrationsDir . '/20240101000000_create_legacy.sql', "CREATE TABLE mig_legacy_v2 (id INTEGER)");
+        file_put_contents($this->migrationsDir . '/20240102000000_create_new.sql', "CREATE TABLE mig_new_widget (id INTEGER)");
+
+        // Constructing the runner upgrades the v2 table to v3 in place.
+        $migration = new Migration($fb, $this->migrationsDir);
+
+        $pending = array_map('basename', $migration->getPendingMigrations());
+        $this->assertNotContains('20240101000000_create_legacy.sql', $pending, 'legacy migration recorded by migration_id was re-listed as pending');
+        $this->assertContains('20240102000000_create_new.sql', $pending, 'a genuinely new migration must be pending');
+
+        // getAppliedMigrations() exposes lower-case keys regardless of engine.
+        $applied = $migration->getAppliedMigrations();
+        $this->assertNotEmpty($applied);
+        $this->assertArrayHasKey('migration', $applied[0]);
+
+        // A real run applies ONLY the new migration; the legacy one never re-runs.
+        $result = $migration->migrate();
+        $this->assertContains('20240102000000_create_new.sql', $result['applied']);
+        $this->assertNotContains('20240101000000_create_legacy.sql', $result['applied']);
+        $this->assertSame([], $result['errors']);
+        $this->assertTrue($fb->tableExists('mig_new_widget'), 'new migration did not run');
+        $this->assertFalse($fb->tableExists('mig_legacy_v2'), 'legacy migration was wrongly re-run');
+
+        foreach (['tina4_migration', 'mig_legacy_v2', 'mig_new_widget'] as $t) {
+            try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
+        }
+        $fb->close();
+    }
+
     public function testMigrateSkipsAlreadyApplied(): void
     {
         file_put_contents(

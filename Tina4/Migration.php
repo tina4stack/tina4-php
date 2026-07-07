@@ -280,13 +280,38 @@ class Migration
     }
 
     /**
+     * Run a tracking-table query and return the rows with every column key
+     * lower-cased.
+     *
+     * Column names are referenced in lower case throughout this class, so keys
+     * are normalised here to read the same across adapters that report them in
+     * different cases (Firebird, for example, returns upper-case keys).
+     *
+     * @param string $sql SQL to run against the tracking table.
+     * @param array<int|string, mixed> $params Bound parameters.
+     * @return array<int, array<string, mixed>> Rows with lower-cased keys; an
+     *                                          empty array when there is no result set.
+     */
+    private function queryLower(string $sql, array $params = []): array
+    {
+        $rows = $this->db->query($sql, $params);
+        if (!is_array($rows)) {
+            return [];
+        }
+        return array_map(
+            static fn($r) => array_change_key_case((array) $r, CASE_LOWER),
+            $rows
+        );
+    }
+
+    /**
      * Get list of all applied migrations.
      *
      * @return array<int, array{migration: string, batch: int, applied_at: string}>
      */
     public function getAppliedMigrations(): array
     {
-        return $this->db->query(
+        return $this->queryLower(
             "SELECT migration, batch, applied_at FROM " . self::MIGRATIONS_TABLE . " ORDER BY migration ASC"
         );
     }
@@ -301,11 +326,31 @@ class Migration
         $allFiles = $this->getMigrationFiles();
         $appliedNames = array_column($this->getAppliedMigrations(), 'migration');
 
+        // Also honour legacy v2 rows keyed only by the 14-char timestamp prefix
+        // (`migration_id`). A table upgraded in-place from v2 — or one whose
+        // `migration` backfill did not resolve to the current filename — still
+        // records that the migration ran; matching the prefix stops it being
+        // re-applied. Keyed as prefix => true for O(1) lookup.
+        $appliedPrefixes = [];
+        if ($this->hasLegacyMigrationIdColumn()) {
+            foreach ($this->queryLower("SELECT migration_id FROM " . self::MIGRATIONS_TABLE) as $row) {
+                $prefix = trim((string) ($row['migration_id'] ?? ''));
+                if ($prefix !== '') {
+                    $appliedPrefixes[$prefix] = true;
+                }
+            }
+        }
+
         $pending = [];
         foreach ($allFiles as $file) {
-            if (!in_array(basename($file), $appliedNames, true)) {
-                $pending[] = $file;
+            $base = basename($file);
+            if (in_array($base, $appliedNames, true)) {
+                continue;
             }
+            if (preg_match('/^(\d{14})/', $base, $m) && isset($appliedPrefixes[$m[1]])) {
+                continue;
+            }
+            $pending[] = $file;
         }
 
         return $pending;
@@ -650,7 +695,7 @@ class Migration
 
         // Step 3: backfill every v2 row.
         try {
-            $v2Rows = $this->db->query(
+            $v2Rows = $this->queryLower(
                 "SELECT migration_id, passed FROM " . self::MIGRATIONS_TABLE
             );
         } catch (\Throwable $e) {
@@ -752,8 +797,21 @@ class Migration
      */
     public function recordMigration(string $name, int $batch, int $passed = 1): void
     {
-        if ($this->isFirebird()) {
-            // Firebird: generate ID from sequence
+        if ($this->hasLegacyMigrationIdColumn()) {
+            // A table upgraded in-place from the v2 schema still carries the
+            // original `migration_id VARCHAR(14) NOT NULL PRIMARY KEY` column
+            // (upgradeV2ToV3 adds the v3 columns beside it, never an `id` or a
+            // generator). Supply the 14-char timestamp prefix that WAS the v2 id.
+            // Checked BEFORE the Firebird branch: a v2-upgraded Firebird table has
+            // neither an `id` column nor the GEN_TINA4_MIGRATION_ID generator the
+            // fresh-table branch below needs.
+            $this->db->execute(
+                "INSERT INTO " . self::MIGRATIONS_TABLE
+                . " (migration_id, migration, batch) VALUES (:mid, :name, :batch)",
+                [':mid' => $this->legacyMigrationId($name), ':name' => $name, ':batch' => $batch]
+            );
+        } elseif ($this->isFirebird()) {
+            // Fresh v3 Firebird table: id from the generator (no AUTOINCREMENT).
             $rows = $this->db->query(
                 "SELECT GEN_ID(GEN_TINA4_MIGRATION_ID, 1) AS NEXT_ID FROM RDB\$DATABASE"
             );
@@ -761,18 +819,6 @@ class Migration
             $this->db->execute(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
                 [':id' => $nextId, ':name' => $name, ':batch' => $batch]
-            );
-        } elseif ($this->hasLegacyMigrationIdColumn()) {
-            // A table upgraded in-place from the v2 schema still carries the
-            // original `migration_id VARCHAR(14) NOT NULL PRIMARY KEY` column
-            // (upgradeV2ToV3 adds the v3 columns beside it, never drops it).
-            // The plain v3 insert lists only (migration, batch), so on such a
-            // table the NOT NULL migration_id is rejected — we must supply it.
-            // Use the 14-char timestamp prefix that WAS the v2 id for the file.
-            $this->db->execute(
-                "INSERT INTO " . self::MIGRATIONS_TABLE
-                . " (migration_id, migration, batch) VALUES (:mid, :name, :batch)",
-                [':mid' => $this->legacyMigrationId($name), ':name' => $name, ':batch' => $batch]
             );
         } else {
             $this->db->execute(
@@ -838,7 +884,7 @@ class Migration
      */
     private function getNextBatchNumber(): int
     {
-        $rows = $this->db->query(
+        $rows = $this->queryLower(
             "SELECT MAX(batch) as max_batch FROM " . self::MIGRATIONS_TABLE
         );
 
@@ -851,7 +897,7 @@ class Migration
      */
     private function getLastBatchNumber(): int
     {
-        $rows = $this->db->query(
+        $rows = $this->queryLower(
             "SELECT MAX(batch) as max_batch FROM " . self::MIGRATIONS_TABLE
         );
         return (int)($rows[0]['max_batch'] ?? 0);
@@ -864,7 +910,7 @@ class Migration
      */
     private function getMigrationsForBatch(int $batch): array
     {
-        return $this->db->query(
+        return $this->queryLower(
             "SELECT migration, batch FROM " . self::MIGRATIONS_TABLE . " WHERE batch = :batch ORDER BY migration ASC",
             [':batch' => $batch]
         );
@@ -1119,7 +1165,10 @@ class Migration
      */
     private function isFirebird(): bool
     {
-        return $this->db instanceof \Tina4\Database\FirebirdAdapter;
+        // Resolved via detectDialect() so it also matches when $this->db is a
+        // Database facade wrapping the concrete adapter (Database::create/fromEnv),
+        // which a bare `instanceof FirebirdAdapter` would not.
+        return $this->detectDialect() === 'firebird';
     }
 
     /**
@@ -1127,7 +1176,8 @@ class Migration
      */
     private function isMSSQL(): bool
     {
-        return $this->db instanceof \Tina4\Database\MSSQLAdapter;
+        // Resolved via detectDialect() so it unwraps the Database facade — see isFirebird().
+        return $this->detectDialect() === 'mssql';
     }
 
     /**
