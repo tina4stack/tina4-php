@@ -42,7 +42,16 @@ class FakeMSSQLAdapter extends \Tina4\Database\MSSQLAdapter
 
     public function getColumns(string $tableName): array
     {
-        return [['name' => 'migration'], ['name' => 'batch'], ['name' => 'applied_at']];
+        // Report the canonical v3 tracking-table shape so ensureMigrationsTable()
+        // treats it as already-current (no v2 / older-v3 in-place upgrade).
+        return [
+            ['name' => 'id'],
+            ['name' => 'migration_name'],
+            ['name' => 'description'],
+            ['name' => 'batch'],
+            ['name' => 'executed_at'],
+            ['name' => 'passed'],
+        ];
     }
 }
 
@@ -63,7 +72,16 @@ class FakeFirebirdAdapter extends \Tina4\Database\FirebirdAdapter
 
     public function getColumns(string $tableName): array
     {
-        return [['name' => 'migration'], ['name' => 'batch'], ['name' => 'applied_at']];
+        // Report the canonical v3 tracking-table shape so ensureMigrationsTable()
+        // treats it as already-current (no v2 / older-v3 in-place upgrade).
+        return [
+            ['name' => 'id'],
+            ['name' => 'migration_name'],
+            ['name' => 'description'],
+            ['name' => 'batch'],
+            ['name' => 'executed_at'],
+            ['name' => 'passed'],
+        ];
     }
 }
 

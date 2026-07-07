@@ -660,7 +660,7 @@ DOCKERFILE;
                 echo str_pad('  Migration', 45) . str_pad('Batch', 8) . "Applied At\n";
                 echo "  " . str_repeat('-', 58) . "\n";
                 foreach ($status['completed'] as $m) {
-                    echo '  ' . str_pad($m['migration'], 43) . str_pad((string)$m['batch'], 8) . ($m['applied_at'] ?? '') . "\n";
+                    echo '  ' . str_pad($m['migration_name'], 43) . str_pad((string)$m['batch'], 8) . ($m['executed_at'] ?? '') . "\n";
                 }
             } else {
                 echo "Completed: (none)\n";

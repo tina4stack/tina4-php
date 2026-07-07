@@ -161,9 +161,9 @@ class MigrationV3Test extends TestCase
 
         // The bookkeeping row got a SERIAL-assigned id -- proves the PK type
         // works, not merely that the DDL parsed.
-        $bk = $pg->query("SELECT id, migration FROM tina4_migration ORDER BY id");
+        $bk = $pg->query("SELECT id, migration_name FROM tina4_migration ORDER BY id");
         $this->assertGreaterThanOrEqual(1, (int)($bk[0]['id'] ?? 0));
-        $this->assertSame('20240101000000_create_widgets.sql', $bk[0]['migration'] ?? null);
+        $this->assertSame('20240101000000_create_widgets.sql', $bk[0]['migration_name'] ?? null);
 
         foreach (['mig_widget', 'tina4_migration'] as $t) {
             try { $pg->execute("DROP TABLE IF EXISTS {$t}"); } catch (\Throwable) {}
@@ -220,7 +220,7 @@ class MigrationV3Test extends TestCase
         // getAppliedMigrations() exposes lower-case keys regardless of engine.
         $applied = $migration->getAppliedMigrations();
         $this->assertNotEmpty($applied);
-        $this->assertArrayHasKey('migration', $applied[0]);
+        $this->assertArrayHasKey('migration_name', $applied[0]);
 
         // A real run applies ONLY the new migration; the legacy one never re-runs.
         $result = $migration->migrate();
@@ -402,7 +402,7 @@ class MigrationV3Test extends TestCase
         // First migration should still be applied
         $applied = $migration2->getAppliedMigrations();
         $this->assertCount(1, $applied);
-        $this->assertSame('20240101000000_a.sql', $applied[0]['migration']);
+        $this->assertSame('20240101000000_a.sql', $applied[0]['migration_name']);
     }
 
     // --- Listing ---
@@ -582,7 +582,7 @@ class MigrationV3Test extends TestCase
 
         $applied = $migration->getAppliedMigrations();
         $this->assertCount(1, $applied);
-        $this->assertArrayHasKey('migration', $applied[0]);
+        $this->assertArrayHasKey('migration_name', $applied[0]);
         $this->assertArrayHasKey('batch', $applied[0]);
     }
 
@@ -727,5 +727,169 @@ class MigrationV3Test extends TestCase
         $this->assertContains('20240102000000_b.php', $files);
         $this->assertNotContains('Helper.php', $files);
         $this->assertCount(2, $files);
+    }
+
+    // --- Canonical tina4_migration schema (3.13.55 cross-framework parity) ---
+
+    /** Column names of the tracking table, lower-cased. */
+    private function trackingColumns(): array
+    {
+        return array_map(
+            static fn($c) => strtolower((string)($c['name'] ?? '')),
+            $this->db->getColumns('tina4_migration')
+        );
+    }
+
+    public function testFreshTableHasCanonicalColumns(): void
+    {
+        new Migration($this->db, $this->migrationsDir);
+        $this->assertTrue($this->db->tableExists('tina4_migration'));
+
+        $cols = $this->trackingColumns();
+        foreach (['id', 'migration_name', 'description', 'batch', 'executed_at', 'passed'] as $expected) {
+            $this->assertContains($expected, $cols, "canonical column {$expected} missing from a fresh table");
+        }
+        // The pre-3.13.55 columns must NOT be present on a fresh table.
+        $this->assertNotContains('migration', $cols, 'legacy `migration` column should be gone');
+        $this->assertNotContains('applied_at', $cols, 'legacy `applied_at` column should be gone');
+    }
+
+    public function testRecordedMigrationReadsBackAndDoesNotRerun(): void
+    {
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_widgets.sql',
+            'CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+        $result = $migration->migrate();
+        $this->assertSame(['20240101000000_create_widgets.sql'], $result['applied']);
+
+        // Read it back through the public API.
+        $applied = $migration->getAppliedMigrations();
+        $this->assertCount(1, $applied);
+        $this->assertSame('20240101000000_create_widgets.sql', $applied[0]['migration_name']);
+        $this->assertSame('create widgets', $applied[0]['description'], 'description derived from the filename');
+        $this->assertNotEmpty($applied[0]['executed_at'], 'executed_at written as an explicit string');
+
+        // passed = 1 landed (a migration is "applied" iff passed = 1).
+        $rows = $this->db->query(
+            "SELECT passed FROM tina4_migration WHERE migration_name = :n",
+            [':n' => '20240101000000_create_widgets.sql']
+        );
+        $this->assertSame(1, (int)($rows[0]['passed'] ?? 0));
+
+        // A second migrate() (fresh runner on the same DB) must NOT re-run it.
+        $migration2 = new Migration($this->db, $this->migrationsDir);
+        $result2 = $migration2->migrate();
+        $this->assertSame([], $result2['applied']);
+        $this->assertSame([], $result2['errors']);
+    }
+
+    public function testOldV3TableUpgradedInPlaceAndNotReapplied(): void
+    {
+        // A tracking table created by an OLDER v3 (<= 3.13.54): a `migration`
+        // column + TIMESTAMP applied_at, and none of migration_name / description
+        // / passed. State was tracked purely by row existence.
+        $this->db->execute(
+            "CREATE TABLE tina4_migration (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                migration VARCHAR(255) NOT NULL UNIQUE,
+                batch INTEGER NOT NULL,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )"
+        );
+        $this->db->execute(
+            "INSERT INTO tina4_migration (migration, batch) VALUES (:m, 1)",
+            [':m' => '20240101000000_create_legacy.sql']
+        );
+
+        // The already-applied migration file — its CREATE TABLE must NOT run.
+        file_put_contents(
+            $this->migrationsDir . '/20240101000000_create_legacy.sql',
+            'CREATE TABLE legacy_should_not_exist (id INTEGER)'
+        );
+        // A brand-new migration that MUST run.
+        file_put_contents(
+            $this->migrationsDir . '/20240102000000_create_fresh.sql',
+            'CREATE TABLE fresh_widget (id INTEGER)'
+        );
+
+        // Constructing the runner performs the in-place upgrade.
+        $migration = new Migration($this->db, $this->migrationsDir);
+
+        $cols = $this->trackingColumns();
+        foreach (['migration_name', 'description', 'executed_at', 'passed'] as $expected) {
+            $this->assertContains($expected, $cols, "in-place upgrade did not add {$expected}");
+        }
+
+        // migration_name copied from the old `migration` column.
+        $applied = $migration->getAppliedMigrations();
+        $this->assertCount(1, $applied);
+        $this->assertSame('20240101000000_create_legacy.sql', $applied[0]['migration_name']);
+
+        // The already-applied migration must not be pending / re-run.
+        $pending = array_map('basename', $migration->getPendingMigrations());
+        $this->assertNotContains('20240101000000_create_legacy.sql', $pending);
+        $this->assertContains('20240102000000_create_fresh.sql', $pending);
+
+        $result = $migration->migrate();
+        $this->assertContains('20240102000000_create_fresh.sql', $result['applied']);
+        $this->assertNotContains('20240101000000_create_legacy.sql', $result['applied']);
+        $this->assertSame([], $result['errors']);
+        $this->assertTrue($this->db->tableExists('fresh_widget'), 'the genuinely new migration did not run');
+        $this->assertFalse(
+            $this->db->tableExists('legacy_should_not_exist'),
+            'an already-applied migration was wrongly re-run after the in-place upgrade'
+        );
+    }
+
+    public function testV2MigrationIdTableUpgradedOnSqlite(): void
+    {
+        // A legacy v2 tina4_migration table exactly as tina4-php v2 created it:
+        // migration_id-keyed, with description + passed, and NO migration_name.
+        $this->db->execute(
+            "CREATE TABLE tina4_migration (
+                migration_id VARCHAR(14) NOT NULL PRIMARY KEY,
+                description VARCHAR(1000),
+                content BLOB,
+                passed INTEGER
+            )"
+        );
+        $this->db->execute(
+            "INSERT INTO tina4_migration (migration_id, description, passed) VALUES ('20240101000000', 'create legacy', 1)"
+        );
+
+        // One migration matching the recorded prefix (must NOT run), one new (must run).
+        file_put_contents($this->migrationsDir . '/20240101000000_create_legacy.sql', 'CREATE TABLE v2_legacy (id INTEGER)');
+        file_put_contents($this->migrationsDir . '/20240102000000_create_new.sql', 'CREATE TABLE v2_new (id INTEGER)');
+
+        // Constructing the runner upgrades the v2 table to the canonical shape.
+        $migration = new Migration($this->db, $this->migrationsDir);
+
+        $cols = $this->trackingColumns();
+        $this->assertContains('migration_name', $cols, 'v2->v3 upgrade did not add migration_name');
+        $this->assertContains('batch', $cols);
+        $this->assertContains('executed_at', $cols);
+        // migration_id is retained (kept as the legacy PK).
+        $this->assertContains('migration_id', $cols);
+
+        $pending = array_map('basename', $migration->getPendingMigrations());
+        $this->assertNotContains('20240101000000_create_legacy.sql', $pending, 'a recorded v2 migration was re-listed as pending');
+        $this->assertContains('20240102000000_create_new.sql', $pending);
+
+        $result = $migration->migrate();
+        $this->assertContains('20240102000000_create_new.sql', $result['applied']);
+        $this->assertNotContains('20240101000000_create_legacy.sql', $result['applied']);
+        $this->assertSame([], $result['errors']);
+        $this->assertTrue($this->db->tableExists('v2_new'));
+        $this->assertFalse($this->db->tableExists('v2_legacy'), 'a recorded v2 migration was wrongly re-run');
+
+        // recordMigration kept the legacy migration_id PK populated for the new row.
+        $rows = $this->db->query(
+            "SELECT migration_id FROM tina4_migration WHERE migration_name = '20240102000000_create_new.sql'"
+        );
+        $this->assertNotEmpty($rows);
+        $this->assertSame('20240102000000', $rows[0]['migration_id']);
     }
 }
