@@ -174,6 +174,90 @@ class MigrationFootgunsTest extends TestCase
         $this->assertSame($sql, self::staticInvoke('normalizeQuotes', [$sql]));
     }
 
+    // ── SET TERM switches the delimiter so PSQL bodies survive ──────────
+    //
+    // Firebird triggers / procedures / EXECUTE BLOCK have ';'-terminated inner
+    // statements. Run under the DEFAULT ';' runner (auto-migrate) they used to be
+    // shredded on those inner ';'. A `SET TERM <new> <cur>` directive — the
+    // universal isql/FlameRobin/gfix idiom — switches the terminator so the body
+    // stays one statement.
+
+    public function testSetTermKeepsFirebirdTriggerBodyIntact(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $sql = "SET TERM ^ ;\n"
+            . "CREATE OR ALTER TRIGGER t_bi FOR t ACTIVE BEFORE INSERT AS\n"
+            . "BEGIN\n"
+            . "  IF (NEW.id IS NULL) THEN NEW.id = GEN_ID(GEN_T, 1);\n"
+            . "END^\n"
+            . "SET TERM ; ^";
+
+        $stmts = $this->invoke($m, 'splitStatements', [$sql]);
+
+        $this->assertCount(1, $stmts, 'trigger body was split on its inner ";"');
+        $this->assertStringStartsWith('CREATE OR ALTER TRIGGER', $stmts[0]);
+        $this->assertStringEndsWith('END', $stmts[0]);
+        $this->assertStringContainsString('NEW.id = GEN_ID(GEN_T, 1);', $stmts[0]);
+    }
+
+    public function testSetTermDirectivesAreConsumedNotEmitted(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $sql = "SET TERM ^ ;\nEXECUTE BLOCK AS BEGIN a; b; END^\nSET TERM ; ^";
+
+        $stmts = $this->invoke($m, 'splitStatements', [$sql]);
+
+        $this->assertCount(1, $stmts);
+        foreach ($stmts as $s) {
+            $this->assertStringNotContainsString('SET TERM', $s, 'SET TERM leaked as a SQL statement');
+        }
+    }
+
+    public function testSetTermRestoresPreviousDelimiter(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        // After `SET TERM ; ^`, plain ';' splitting resumes.
+        $sql = "CREATE TABLE a (id INT);\n"
+            . "SET TERM ^ ;\n"
+            . "CREATE TRIGGER a_bi FOR a AS BEGIN NEW.id = 1; END^\n"
+            . "SET TERM ; ^\n"
+            . "INSERT INTO a VALUES (1);\nUPDATE a SET id = 2;";
+
+        $stmts = $this->invoke($m, 'splitStatements', [$sql]);
+
+        $this->assertCount(4, $stmts, 'delimiter not restored to ";" after the block');
+        $this->assertStringStartsWith('CREATE TABLE', $stmts[0]);
+        $this->assertStringStartsWith('CREATE TRIGGER', $stmts[1]);
+        $this->assertStringStartsWith('INSERT INTO', $stmts[2]);
+        $this->assertStringStartsWith('UPDATE', $stmts[3]);
+    }
+
+    public function testSetTermSupportsMultiCharTerminator(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        $sql = "SET TERM !! ;\nCREATE TRIGGER t FOR x AS BEGIN NEW.a = 1; END!!\nSET TERM ; !!";
+
+        $stmts = $this->invoke($m, 'splitStatements', [$sql]);
+
+        $this->assertCount(1, $stmts);
+        $this->assertStringNotContainsString('!!', $stmts[0]);
+        $this->assertStringNotContainsString('SET TERM', $stmts[0]);
+    }
+
+    public function testPlainSemicolonUnaffectedBySetTermSupport(): void
+    {
+        $m = $this->newMigration(new SQLite3Adapter(':memory:'));
+        // No SET TERM → ordinary ';' splitting, behaviour unchanged.
+        $sql = "CREATE TABLE a (id INT);\nINSERT INTO a VALUES (1);\nUPDATE a SET id = 2;";
+
+        $stmts = $this->invoke($m, 'splitStatements', [$sql]);
+
+        $this->assertCount(3, $stmts);
+        foreach ($stmts as $s) {
+            $this->assertFalse(str_ends_with($s, ';'), 'statement kept its trailing ";"');
+        }
+    }
+
     // ── [8] numeric-aware discovery order ───────────────────────────────
 
     public function testGetMigrationFilesIsNumericAware(): void

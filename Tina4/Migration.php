@@ -890,16 +890,6 @@ class Migration
     }
 
     /**
-     * Split SQL content into individual statements, properly handling:
-     *   - $$ delimited stored procedure/function blocks
-     *   - // delimited blocks
-     *   - Block comments: /* ... * /
-     *   - Line comments: -- ...
-     *   - Quoted strings (don't split on ; inside quotes)
-     *
-     * @return array<string>
-     */
-    /**
      * Normalize smart/curly quotes back to straight ASCII quotes.
      *
      * Editors, word processors, docs and chat apps silently convert a straight
@@ -927,6 +917,41 @@ class Migration
         ]);
     }
 
+    /**
+     * Parse a `SET TERM <new> <current>` statement-terminator directive.
+     *
+     * `SET TERM` is a script-level directive (recognised by isql and other
+     * InterBase/Firebird tooling, not run by the engine) that changes the
+     * terminator separating statements. Recognising it lets a statement whose
+     * own body contains the default `;` terminator — a trigger, stored
+     * procedure or `EXECUTE BLOCK` — be kept intact rather than split on those
+     * inner `;`. The terminator may be more than one character (e.g. `!!`).
+     *
+     * @param string $statement A single, already-trimmed statement.
+     * @return string|null The new terminator, or null when $statement is not a
+     *                     `SET TERM` directive.
+     */
+    private static function parseSetTerm(string $statement): ?string
+    {
+        if (preg_match('/^SET\s+TERM\s+(\S+)$/i', trim($statement), $m)) {
+            return $m[1];
+        }
+        return null;
+    }
+
+    /**
+     * Split a migration script into its individual statements.
+     *
+     * Statements are separated on the active terminator (the configured
+     * delimiter, `;` by default), while dollar-quoted (`$$`) and slash-quoted
+     * (`//`) blocks, quoted strings/identifiers, and line/block comments are
+     * kept intact. A `SET TERM` directive switches the active terminator so a
+     * statement whose body contains the default terminator survives as one.
+     *
+     * @param string $sql The raw migration script.
+     * @return array<int, string> The trimmed statements, in order, with
+     *                            terminators and `SET TERM` directives removed.
+     */
     private function splitStatements(string $sql): array
     {
         // Normalize smart/curly quotes to straight ASCII first, so SQL pasted
@@ -941,6 +966,13 @@ class Migration
         $i = 0;
         $inDollarBlock = false;
         $inSlashBlock = false;
+
+        // Active statement terminator. Starts as the configured delimiter; a
+        // `SET TERM <new> <current>` directive can switch it mid-script so a
+        // statement whose own body contains the default terminator (trigger /
+        // procedure / EXECUTE BLOCK) stays intact. Multi-character terminators
+        // (e.g. `!!`) are supported.
+        $delimiter = $this->delimiter;
 
         while ($i < $len) {
             // Check for $$ delimiter (toggle in/out of dollar-quoted block)
@@ -1030,14 +1062,22 @@ class Migration
                 continue;
             }
 
-            // Statement delimiter
-            if ($sql[$i] === $this->delimiter) {
+            // Statement delimiter (multi-character aware). A `SET TERM`
+            // directive is consumed (never emitted as SQL) and switches the
+            // active terminator; every other completed statement is collected.
+            $dlen = strlen($delimiter);
+            if ($dlen > 0 && $sql[$i] === $delimiter[0] && substr($sql, $i, $dlen) === $delimiter) {
                 $trimmed = trim($current);
                 if ($trimmed !== '') {
-                    $statements[] = $trimmed;
+                    $newTerm = self::parseSetTerm($trimmed);
+                    if ($newTerm !== null) {
+                        $delimiter = $newTerm;
+                    } else {
+                        $statements[] = $trimmed;
+                    }
                 }
                 $current = '';
-                $i++;
+                $i += $dlen;
                 continue;
             }
 
@@ -1045,9 +1085,10 @@ class Migration
             $i++;
         }
 
-        // Don't forget the last statement (may not end with delimiter)
+        // Don't forget the last statement (may not end with delimiter). A
+        // trailing `SET TERM` directive is a no-op — consume it, don't emit it.
         $trimmed = trim($current);
-        if ($trimmed !== '') {
+        if ($trimmed !== '' && self::parseSetTerm($trimmed) === null) {
             $statements[] = $trimmed;
         }
 
