@@ -890,16 +890,6 @@ class Migration
     }
 
     /**
-     * Split SQL content into individual statements, properly handling:
-     *   - $$ delimited stored procedure/function blocks
-     *   - // delimited blocks
-     *   - Block comments: /* ... * /
-     *   - Line comments: -- ...
-     *   - Quoted strings (don't split on ; inside quotes)
-     *
-     * @return array<string>
-     */
-    /**
      * Normalize smart/curly quotes back to straight ASCII quotes.
      *
      * Editors, word processors, docs and chat apps silently convert a straight
