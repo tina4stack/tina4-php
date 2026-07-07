@@ -794,8 +794,21 @@ class Migration
      */
     public function recordMigration(string $name, int $batch, int $passed = 1): void
     {
-        if ($this->isFirebird()) {
-            // Firebird: generate ID from sequence
+        if ($this->hasLegacyMigrationIdColumn()) {
+            // A table upgraded in-place from the v2 schema still carries the
+            // original `migration_id VARCHAR(14) NOT NULL PRIMARY KEY` column
+            // (upgradeV2ToV3 adds the v3 columns beside it, never an `id` or a
+            // generator). Supply the 14-char timestamp prefix that WAS the v2 id.
+            // Checked BEFORE the Firebird branch: a v2-upgraded Firebird table has
+            // neither an `id` column nor the GEN_TINA4_MIGRATION_ID generator the
+            // fresh-table branch below needs.
+            $this->db->execute(
+                "INSERT INTO " . self::MIGRATIONS_TABLE
+                . " (migration_id, migration, batch) VALUES (:mid, :name, :batch)",
+                [':mid' => $this->legacyMigrationId($name), ':name' => $name, ':batch' => $batch]
+            );
+        } elseif ($this->isFirebird()) {
+            // Fresh v3 Firebird table: id from the generator (no AUTOINCREMENT).
             $rows = $this->db->query(
                 "SELECT GEN_ID(GEN_TINA4_MIGRATION_ID, 1) AS NEXT_ID FROM RDB\$DATABASE"
             );
@@ -803,18 +816,6 @@ class Migration
             $this->db->execute(
                 "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
                 [':id' => $nextId, ':name' => $name, ':batch' => $batch]
-            );
-        } elseif ($this->hasLegacyMigrationIdColumn()) {
-            // A table upgraded in-place from the v2 schema still carries the
-            // original `migration_id VARCHAR(14) NOT NULL PRIMARY KEY` column
-            // (upgradeV2ToV3 adds the v3 columns beside it, never drops it).
-            // The plain v3 insert lists only (migration, batch), so on such a
-            // table the NOT NULL migration_id is rejected — we must supply it.
-            // Use the 14-char timestamp prefix that WAS the v2 id for the file.
-            $this->db->execute(
-                "INSERT INTO " . self::MIGRATIONS_TABLE
-                . " (migration_id, migration, batch) VALUES (:mid, :name, :batch)",
-                [':mid' => $this->legacyMigrationId($name), ':name' => $name, ':batch' => $batch]
             );
         } else {
             $this->db->execute(
@@ -1120,7 +1121,12 @@ class Migration
      */
     private function isFirebird(): bool
     {
-        return $this->db instanceof \Tina4\Database\FirebirdAdapter;
+        // Via detectDialect() so this is correct when $this->db is the Database
+        // facade wrapping a FirebirdAdapter (Database::create/fromEnv) — a bare
+        // `instanceof FirebirdAdapter` is false for the facade, which silently
+        // routed every Firebird-specific path (createV3Table, the v2→v3 ALTER
+        // syntax, recordMigration) down the wrong branch.
+        return $this->detectDialect() === 'firebird';
     }
 
     /**
@@ -1128,7 +1134,8 @@ class Migration
      */
     private function isMSSQL(): bool
     {
-        return $this->db instanceof \Tina4\Database\MSSQLAdapter;
+        // Via detectDialect() so it unwraps the Database facade — see isFirebird().
+        return $this->detectDialect() === 'mssql';
     }
 
     /**
