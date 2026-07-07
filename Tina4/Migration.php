@@ -928,15 +928,18 @@ class Migration
     }
 
     /**
-     * If $statement is a Firebird-style `SET TERM <new> <current>` directive,
-     * return the <new> terminator; otherwise null.
+     * Parse a `SET TERM <new> <current>` statement-terminator directive.
      *
-     * `SET TERM` is a client-side script directive (isql / FlameRobin / gfix),
-     * NOT SQL the engine runs. Honouring it lets a migration switch the
-     * statement terminator so a PSQL body — a trigger, stored procedure or
-     * EXECUTE BLOCK, whose inner statements are themselves ';'-terminated — is
-     * kept as ONE statement instead of being split apart on those inner ';'.
-     * The terminator may be multiple characters (e.g. `SET TERM !! ;`).
+     * `SET TERM` is a script-level directive (recognised by isql and other
+     * InterBase/Firebird tooling, not run by the engine) that changes the
+     * terminator separating statements. Recognising it lets a statement whose
+     * own body contains the default `;` terminator — a trigger, stored
+     * procedure or `EXECUTE BLOCK` — be kept intact rather than split on those
+     * inner `;`. The terminator may be more than one character (e.g. `!!`).
+     *
+     * @param string $statement A single, already-trimmed statement.
+     * @return string|null The new terminator, or null when $statement is not a
+     *                     `SET TERM` directive.
      */
     private static function parseSetTerm(string $statement): ?string
     {
@@ -946,6 +949,19 @@ class Migration
         return null;
     }
 
+    /**
+     * Split a migration script into its individual statements.
+     *
+     * Statements are separated on the active terminator (the configured
+     * delimiter, `;` by default), while dollar-quoted (`$$`) and slash-quoted
+     * (`//`) blocks, quoted strings/identifiers, and line/block comments are
+     * kept intact. A `SET TERM` directive switches the active terminator so a
+     * statement whose body contains the default terminator survives as one.
+     *
+     * @param string $sql The raw migration script.
+     * @return array<int, string> The trimmed statements, in order, with
+     *                            terminators and `SET TERM` directives removed.
+     */
     private function splitStatements(string $sql): array
     {
         // Normalize smart/curly quotes to straight ASCII first, so SQL pasted
@@ -961,11 +977,11 @@ class Migration
         $inDollarBlock = false;
         $inSlashBlock = false;
 
-        // Active statement terminator. Starts as the configured delimiter, but a
-        // `SET TERM <new> <current>` directive (the Firebird PSQL idiom) can
-        // switch it mid-file so trigger / procedure / EXECUTE BLOCK bodies —
-        // whose inner statements are ';'-terminated — are not split apart.
-        // Multi-character terminators (e.g. `!!`) are supported.
+        // Active statement terminator. Starts as the configured delimiter; a
+        // `SET TERM <new> <current>` directive can switch it mid-script so a
+        // statement whose own body contains the default terminator (trigger /
+        // procedure / EXECUTE BLOCK) stays intact. Multi-character terminators
+        // (e.g. `!!`) are supported.
         $delimiter = $this->delimiter;
 
         while ($i < $len) {
