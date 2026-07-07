@@ -33,6 +33,9 @@ class Migration
     /** Cached probe: does the tracking table still carry the legacy v2 `migration_id` column? */
     private ?bool $legacyMigrationIdColumn = null;
 
+    /** Cached probe: does the tracking table still carry the older-v3 `migration` column? */
+    private ?bool $legacyMigrationColumn = null;
+
     public function __construct(
         private readonly DatabaseAdapter $db,
         private readonly string $migrationsDir = 'src/migrations',
@@ -192,7 +195,7 @@ class Migration
         $migrations = array_reverse($migrations);
 
         foreach ($migrations as $migration) {
-            $fileName = $migration['migration'];
+            $fileName = $migration['migration_name'];
 
             $this->db->startTransaction();
 
@@ -242,7 +245,7 @@ class Migration
 
                 // Remove the migration record
                 $this->db->execute(
-                    "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration = :name",
+                    "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration_name = :name",
                     [':name' => $fileName]
                 );
 
@@ -264,7 +267,7 @@ class Migration
     /**
      * Get migration status — lists completed and pending migrations.
      *
-     * @return array{completed: array<int, array{migration: string, batch: int, applied_at: string}>, pending: array<string>}
+     * @return array{completed: array<int, array{migration_name: string, description: string, batch: int, executed_at: string}>, pending: array<string>}
      */
     public function status(): array
     {
@@ -305,14 +308,16 @@ class Migration
     }
 
     /**
-     * Get list of all applied migrations.
+     * Get list of all applied migrations. A migration is "applied" iff it has a
+     * row with passed = 1.
      *
-     * @return array<int, array{migration: string, batch: int, applied_at: string}>
+     * @return array<int, array{migration_name: string, description: string, batch: int, executed_at: string}>
      */
     public function getAppliedMigrations(): array
     {
         return $this->queryLower(
-            "SELECT migration, batch, applied_at FROM " . self::MIGRATIONS_TABLE . " ORDER BY migration ASC"
+            "SELECT migration_name, description, batch, executed_at FROM " . self::MIGRATIONS_TABLE
+            . " WHERE passed = 1 ORDER BY migration_name ASC"
         );
     }
 
@@ -324,7 +329,7 @@ class Migration
     public function getPendingMigrations(): array
     {
         $allFiles = $this->getMigrationFiles();
-        $appliedNames = array_column($this->getAppliedMigrations(), 'migration');
+        $appliedNames = array_column($this->getAppliedMigrations(), 'migration_name');
 
         // Also honour legacy v2 rows keyed only by the 14-char timestamp prefix
         // (`migration_id`). A table upgraded in-place from v2 — or one whose
@@ -441,7 +446,7 @@ class Migration
     /**
      * Get list of all applied migrations (alias for getAppliedMigrations).
      *
-     * @return array<int, array{migration: string, batch: int, applied_at: string}>
+     * @return array<int, array{migration_name: string, description: string, batch: int, executed_at: string}>
      */
     public function getApplied(): array
     {
@@ -603,8 +608,9 @@ class Migration
      *   migration_id VARCHAR(14) PRIMARY KEY, description VARCHAR(1000),
      *   content BLOB, passed INTEGER
      *
-     * v3 shape:
-     *   id INTEGER PRIMARY KEY, migration VARCHAR, batch INTEGER, applied_at TIMESTAMP
+     * Canonical v3 shape (unified across all four frameworks):
+     *   id, migration_name VARCHAR(500) UNIQUE, description VARCHAR(500),
+     *   batch INTEGER, executed_at VARCHAR(50), passed INTEGER
      *
      * See tina4-php#115.
      */
@@ -617,40 +623,177 @@ class Migration
 
         if ($this->isLegacyV2Schema()) {
             $this->upgradeV2ToV3();
+            return;
+        }
+
+        // A table created by an OLDER v3 (<= 3.13.54) has a `migration` column
+        // but not `migration_name`. Bring it up to the canonical shape in place.
+        $this->upgradeLegacyV3Schema();
+    }
+
+    /**
+     * In-place, non-destructive upgrade of a table created by an OLDER v3
+     * (<= 3.13.54) to the canonical shape.
+     *
+     * That table has `migration` (+ `batch`, `applied_at`) but none of the
+     * canonical `migration_name`, `description`, `executed_at`, `passed`
+     * columns. This adds the missing columns, copies `migration` into
+     * `migration_name` and `applied_at` into `executed_at` (falling back to the
+     * literal 'legacy'), and marks every existing row `passed = 1` — those rows
+     * were only ever written when the migration was applied. The old
+     * `migration`/`applied_at` columns are left in place (ignored from now on).
+     *
+     * This MUST leave already-applied migrations recognised as applied so they
+     * are not re-run: without the `migration_name` backfill the applied-read
+     * would find nothing and every migration would re-run.
+     */
+    private function upgradeLegacyV3Schema(): void
+    {
+        $cols = $this->columnNames();
+
+        // Only act on the specific older-v3 shape: `migration` present,
+        // `migration_name` absent. A canonical table (has `migration_name`) is
+        // left untouched.
+        if (!in_array('migration', $cols, true) || in_array('migration_name', $cols, true)) {
+            return;
+        }
+
+        Log::warning(
+            "Detected older v3 tina4_migration schema — upgrading `migration` to the canonical `migration_name` shape"
+        );
+
+        $isFirebird = $this->isFirebird();
+        $textType   = $isFirebird ? 'VARCHAR(500)' : 'TEXT';
+        $stampType  = $isFirebird ? 'VARCHAR(50)'  : 'TEXT';
+        // Firebird has no ADD COLUMN keyword — bare ADD; every other engine here
+        // supports ADD COLUMN.
+        $addKeyword = $isFirebird ? 'ADD' : 'ADD COLUMN';
+
+        $adds = [
+            'migration_name' => "migration_name {$textType}",
+            'description'    => "description {$textType}",
+            'executed_at'    => "executed_at {$stampType}",
+            'passed'         => "passed INTEGER DEFAULT 1",
+        ];
+
+        foreach ($adds as $column => $definition) {
+            if (in_array($column, $cols, true)) {
+                continue;
+            }
+            try {
+                // On Firebird an ALTER TABLE ADD of an existing column raises (no
+                // IF NOT EXISTS) — reuse the RDB$RELATION_FIELDS idempotency probe.
+                if ($isFirebird && $this->firebirdColumnExists(self::MIGRATIONS_TABLE, $column)) {
+                    continue;
+                }
+                $this->db->execute(
+                    "ALTER TABLE " . self::MIGRATIONS_TABLE . " {$addKeyword} {$definition}"
+                );
+            } catch (\Throwable $e) {
+                // Column may already exist from a prior partial upgrade.
+                Log::debug("v3 in-place upgrade: ALTER skipped — {$e->getMessage()}");
+            }
+        }
+
+        // Backfill migration_name from the old `migration` column.
+        try {
+            $this->db->execute(
+                "UPDATE " . self::MIGRATIONS_TABLE
+                . " SET migration_name = migration WHERE migration_name IS NULL"
+            );
+        } catch (\Throwable $e) {
+            Log::error("v3 in-place upgrade: migration_name backfill failed — {$e->getMessage()}");
+        }
+
+        // executed_at from the old `applied_at` column when present (a
+        // TIMESTAMP/DATETIME -> VARCHAR copy can be rejected by strict engines,
+        // so fall back to the literal 'legacy'), else 'legacy' outright.
+        $backfilledStamp = false;
+        if (in_array('applied_at', $this->columnNames(), true)) {
+            try {
+                $this->db->execute(
+                    "UPDATE " . self::MIGRATIONS_TABLE
+                    . " SET executed_at = applied_at WHERE executed_at IS NULL"
+                );
+                $backfilledStamp = true;
+            } catch (\Throwable $e) {
+                Log::debug("v3 in-place upgrade: executed_at<-applied_at skipped — {$e->getMessage()}");
+            }
+        }
+        if (!$backfilledStamp) {
+            try {
+                $this->db->execute(
+                    "UPDATE " . self::MIGRATIONS_TABLE
+                    . " SET executed_at = 'legacy' WHERE executed_at IS NULL"
+                );
+            } catch (\Throwable $e) {
+                Log::debug("v3 in-place upgrade: executed_at<-'legacy' skipped — {$e->getMessage()}");
+            }
+        }
+
+        // Existing rows were only ever written when applied — mark them passed.
+        try {
+            $this->db->execute(
+                "UPDATE " . self::MIGRATIONS_TABLE . " SET passed = 1 WHERE passed IS NULL"
+            );
+        } catch (\Throwable $e) {
+            Log::debug("v3 in-place upgrade: passed backfill skipped — {$e->getMessage()}");
         }
     }
 
     /**
-     * Detect a v2-shaped tina4_migration table by column presence.
-     * v2 has `migration_id`; v3 has `migration` (without the `_id` suffix).
+     * The lower-cased set of column names on the tracking table, or an empty
+     * array if the table can't be read. Column names are compared in lower case
+     * throughout this class so they resolve the same across adapters that report
+     * them in different cases (Firebird returns upper-case names).
+     *
+     * @return array<int, string>
      */
-    private function isLegacyV2Schema(): bool
+    private function columnNames(): array
     {
         try {
             $cols = $this->db->getColumns(self::MIGRATIONS_TABLE);
         } catch (\Throwable) {
-            return false;
+            return [];
         }
-
-        $names = array_map(
+        return array_map(
             fn($c) => strtolower((string)($c['name'] ?? '')),
             $cols
         );
-
-        return in_array('migration_id', $names, true)
-            && !in_array('migration', $names, true);
     }
 
     /**
-     * In-place upgrade of a v2 tina4_migration table to the v3 shape.
+     * Detect a v2-shaped tina4_migration table by column presence.
      *
-     * 1. ALTER TABLE ADD the v3 columns (`migration`, `batch`, `applied_at`)
-     *    alongside the existing v2 columns. v2 columns are left in place so
-     *    a manual rollback is possible — they are simply ignored from now on.
-     * 2. Backfill each v2 row's `migration` value from a file-on-disk match
-     *    keyed by the 14-character timestamp prefix in `migration_id`.
-     *    Fall back to `migration_id + '.sql'` when no file matches.
-     * 3. All legacy entries get `batch = 1`.
+     * v2 has `migration_id`; the canonical v3 shape has `migration_name`. A v2
+     * table (including one only partially upgraded by an older PHP build that
+     * added a `migration` column) is detected by `migration_id` present AND
+     * `migration_name` absent — so a fresh canonical v3 table (which HAS
+     * `migration_name`) is never misread as v2.
+     */
+    private function isLegacyV2Schema(): bool
+    {
+        $names = $this->columnNames();
+
+        return in_array('migration_id', $names, true)
+            && !in_array('migration_name', $names, true);
+    }
+
+    /**
+     * In-place upgrade of a v2 tina4_migration table to the canonical v3 shape.
+     *
+     * v2 shape: `migration_id VARCHAR(14) PRIMARY KEY, description VARCHAR(1000),
+     * content BLOB, passed INTEGER` — it already carries `description` and
+     * `passed`, so only `migration_name`, `batch` and `executed_at` are added.
+     *
+     * 1. ALTER TABLE ADD the missing canonical columns (`migration_name`,
+     *    `batch`, `executed_at`) alongside the existing v2 columns. v2 columns
+     *    are left in place so a manual rollback is possible — they are simply
+     *    ignored from now on.
+     * 2. Backfill each v2 row's `migration_name` from a file-on-disk match keyed
+     *    by the 14-character timestamp prefix in `migration_id`. Fall back to
+     *    `migration_id + '.sql'` when no file matches.
+     * 3. All legacy entries get `batch = 1` (executed_at defaults to 'legacy').
      */
     private function upgradeV2ToV3(): void
     {
@@ -658,18 +801,18 @@ class Migration
             "Detected legacy v2 tina4_migration schema — performing in-place upgrade to v3"
         );
 
-        // Step 1: add the v3 columns. Each ALTER is wrapped in a try/catch
-        // because a partial previous upgrade may have already added some.
+        // Step 1: add the missing canonical columns. Each ALTER is wrapped in a
+        // try/catch because a partial previous upgrade may have already added some.
         $alters = $this->isFirebird()
             ? [
-                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD migration VARCHAR(500)",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD migration_name VARCHAR(500)",
                 "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD batch INTEGER DEFAULT 1",
-                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD applied_at VARCHAR(50) DEFAULT 'legacy'",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD executed_at VARCHAR(50) DEFAULT 'legacy'",
             ]
             : [
-                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN migration VARCHAR(500)",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN migration_name VARCHAR(500)",
                 "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN batch INTEGER DEFAULT 1",
-                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN applied_at VARCHAR(50) DEFAULT 'legacy'",
+                "ALTER TABLE " . self::MIGRATIONS_TABLE . " ADD COLUMN executed_at VARCHAR(50) DEFAULT 'legacy'",
             ];
 
         foreach ($alters as $sql) {
@@ -717,7 +860,7 @@ class Migration
             try {
                 $this->db->execute(
                     "UPDATE " . self::MIGRATIONS_TABLE
-                    . " SET migration = :m, batch = 1 WHERE migration_id = :p",
+                    . " SET migration_name = :m, batch = 1 WHERE migration_id = :p",
                     [':m' => $migration, ':p' => $prefix]
                 );
                 $backfilled++;
@@ -738,7 +881,18 @@ class Migration
     }
 
     /**
-     * Create the v3 tina4_migration table.
+     * Create the v3 tina4_migration table in the canonical shape shared across
+     * all four Tina4 frameworks:
+     *
+     *   id             engine auto-increment PK
+     *   migration_name VARCHAR(500) NOT NULL UNIQUE   (the migration filename)
+     *   description    VARCHAR(500)                    (human-readable, derived)
+     *   batch          INTEGER NOT NULL DEFAULT 1
+     *   executed_at    VARCHAR(50) NOT NULL            (ISO-8601 string, written explicitly)
+     *   passed         INTEGER NOT NULL DEFAULT 1      (a migration is "applied" iff passed = 1)
+     *
+     * `executed_at` is a written string timestamp — NOT a DB TIMESTAMP/DATETIME
+     * with a CURRENT_TIMESTAMP default — so the value is uniform across engines.
      */
     private function createV3Table(): void
     {
@@ -753,9 +907,11 @@ class Migration
             $this->db->execute("
                 CREATE TABLE " . self::MIGRATIONS_TABLE . " (
                     id INTEGER NOT NULL PRIMARY KEY,
-                    migration VARCHAR(500) NOT NULL UNIQUE,
-                    batch INTEGER NOT NULL,
-                    applied_at VARCHAR(50) DEFAULT CURRENT_TIMESTAMP
+                    migration_name VARCHAR(500) NOT NULL UNIQUE,
+                    description VARCHAR(500),
+                    batch INTEGER DEFAULT 1 NOT NULL,
+                    executed_at VARCHAR(50) NOT NULL,
+                    passed INTEGER DEFAULT 1 NOT NULL
                 )
             ");
             return;
@@ -763,9 +919,8 @@ class Migration
 
         // Engine-aware bookkeeping table for every other adapter. Each engine
         // spells an auto-increment integer PK differently (SQLite AUTOINCREMENT,
-        // PostgreSQL SERIAL, MySQL AUTO_INCREMENT, MSSQL IDENTITY); MSSQL also
-        // reserves TIMESTAMP for rowversion, so a real timestamp needs DATETIME.
-        // Mirrors ORM::createTable()'s engine-aware DDL.
+        // PostgreSQL SERIAL, MySQL AUTO_INCREMENT, MSSQL IDENTITY). Mirrors
+        // ORM::createTable()'s engine-aware DDL.
         $dialect = $this->detectDialect();
 
         $idColumn = match ($dialect) {
@@ -774,16 +929,15 @@ class Migration
             'mssql'      => 'id INTEGER IDENTITY(1,1) PRIMARY KEY',
             default      => 'id INTEGER PRIMARY KEY AUTOINCREMENT', // sqlite
         };
-        $appliedAtColumn = $dialect === 'mssql'
-            ? 'applied_at DATETIME DEFAULT CURRENT_TIMESTAMP'
-            : 'applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP';
 
         $this->db->execute("
             CREATE TABLE " . self::MIGRATIONS_TABLE . " (
                 {$idColumn},
-                migration VARCHAR(255) NOT NULL UNIQUE,
-                batch INTEGER NOT NULL,
-                {$appliedAtColumn}
+                migration_name VARCHAR(500) NOT NULL UNIQUE,
+                description VARCHAR(500),
+                batch INTEGER NOT NULL DEFAULT 1,
+                executed_at VARCHAR(50) NOT NULL,
+                passed INTEGER NOT NULL DEFAULT 1
             )
         ");
     }
@@ -797,35 +951,84 @@ class Migration
      */
     public function recordMigration(string $name, int $batch, int $passed = 1): void
     {
+        // Canonical columns written on every shape: migration_name, description,
+        // batch, executed_at, passed. `executed_at` is an explicit ISO-8601 UTC
+        // string (never a DB CURRENT_TIMESTAMP default); `description` is derived
+        // from the filename. Legacy columns retained by an in-place upgrade
+        // (`migration_id`, `migration`) are populated too so their NOT NULL /
+        // PRIMARY KEY constraints stay satisfied; the columns/values are built
+        // per table shape so a fresh canonical table inserts only the 6 columns.
+        $columns = [
+            'migration_name' => $name,
+            'description'    => $this->deriveDescription($name),
+            'batch'          => $batch,
+            'executed_at'    => gmdate('c'),
+            'passed'         => $passed,
+        ];
+
+        // A v2-upgraded table keeps `migration_id VARCHAR(14) NOT NULL PRIMARY
+        // KEY` — supply the 14-char timestamp prefix that WAS the v2 id. It has
+        // no `id` column / generator, so it drives the PK itself.
         if ($this->hasLegacyMigrationIdColumn()) {
-            // A table upgraded in-place from the v2 schema still carries the
-            // original `migration_id VARCHAR(14) NOT NULL PRIMARY KEY` column
-            // (upgradeV2ToV3 adds the v3 columns beside it, never an `id` or a
-            // generator). Supply the 14-char timestamp prefix that WAS the v2 id.
-            // Checked BEFORE the Firebird branch: a v2-upgraded Firebird table has
-            // neither an `id` column nor the GEN_TINA4_MIGRATION_ID generator the
-            // fresh-table branch below needs.
-            $this->db->execute(
-                "INSERT INTO " . self::MIGRATIONS_TABLE
-                . " (migration_id, migration, batch) VALUES (:mid, :name, :batch)",
-                [':mid' => $this->legacyMigrationId($name), ':name' => $name, ':batch' => $batch]
-            );
-        } elseif ($this->isFirebird()) {
-            // Fresh v3 Firebird table: id from the generator (no AUTOINCREMENT).
+            $columns['migration_id'] = $this->legacyMigrationId($name);
+        }
+
+        // An older-v3-upgraded table keeps `migration ... NOT NULL UNIQUE` beside
+        // the new `migration_name` — mirror the name into it so the NOT NULL
+        // constraint is satisfied (it is otherwise ignored on reads).
+        if ($this->hasLegacyMigrationColumn()) {
+            $columns['migration'] = $name;
+        }
+
+        // Firebird has no AUTOINCREMENT — supply id from the generator. Skipped
+        // for a v2-upgraded Firebird table (migration_id is its PK; it has no
+        // `id` column nor the GEN_TINA4_MIGRATION_ID generator).
+        if ($this->isFirebird() && !$this->hasLegacyMigrationIdColumn()) {
             $rows = $this->db->query(
                 "SELECT GEN_ID(GEN_TINA4_MIGRATION_ID, 1) AS NEXT_ID FROM RDB\$DATABASE"
             );
-            $nextId = (int)($rows[0]['NEXT_ID'] ?? 1);
-            $this->db->execute(
-                "INSERT INTO " . self::MIGRATIONS_TABLE . " (id, migration, batch) VALUES (:id, :name, :batch)",
-                [':id' => $nextId, ':name' => $name, ':batch' => $batch]
-            );
-        } else {
-            $this->db->execute(
-                "INSERT INTO " . self::MIGRATIONS_TABLE . " (migration, batch) VALUES (:name, :batch)",
-                [':name' => $name, ':batch' => $batch]
-            );
+            $columns['id'] = (int)($rows[0]['NEXT_ID'] ?? 1);
         }
+
+        $names        = array_keys($columns);
+        $placeholders = array_map(static fn($c) => ':' . $c, $names);
+        $params       = [];
+        foreach ($columns as $col => $value) {
+            $params[':' . $col] = $value;
+        }
+
+        $this->db->execute(
+            "INSERT INTO " . self::MIGRATIONS_TABLE
+            . " (" . implode(', ', $names) . ") VALUES (" . implode(', ', $placeholders) . ")",
+            $params
+        );
+    }
+
+    /**
+     * True when the tracking table still carries the older-v3 `migration` column
+     * (retained beside `migration_name` by upgradeLegacyV3Schema as a NOT NULL
+     * UNIQUE column). A new insert must keep populating it. Probed once — the
+     * shape is fixed after ensureMigrationsTable().
+     */
+    private function hasLegacyMigrationColumn(): bool
+    {
+        if ($this->legacyMigrationColumn !== null) {
+            return $this->legacyMigrationColumn;
+        }
+        return $this->legacyMigrationColumn = in_array('migration', $this->columnNames(), true);
+    }
+
+    /**
+     * Derive a human-readable description from a migration filename: drop the
+     * extension and the leading numeric/timestamp prefix, then turn underscores
+     * into spaces. "20240101000000_create_users.sql" -> "create users".
+     * Mirrors the Python master's description derivation.
+     */
+    private function deriveDescription(string $name): string
+    {
+        $stem = preg_replace('/\.(sql|php)$/i', '', $name);
+        $stem = preg_replace('/^\d+_/', '', $stem, 1);
+        return str_replace('_', ' ', $stem);
     }
 
     /**
@@ -840,16 +1043,7 @@ class Migration
         if ($this->legacyMigrationIdColumn !== null) {
             return $this->legacyMigrationIdColumn;
         }
-        try {
-            $cols = $this->db->getColumns(self::MIGRATIONS_TABLE);
-        } catch (\Throwable) {
-            return $this->legacyMigrationIdColumn = false;
-        }
-        $names = array_map(
-            fn($c) => strtolower((string)($c['name'] ?? '')),
-            $cols
-        );
-        return $this->legacyMigrationIdColumn = in_array('migration_id', $names, true);
+        return $this->legacyMigrationIdColumn = in_array('migration_id', $this->columnNames(), true);
     }
 
     /**
@@ -874,7 +1068,7 @@ class Migration
     public function removeMigrationRecord(string $name): void
     {
         $this->db->execute(
-            "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration = :name",
+            "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration_name = :name",
             [':name' => $name]
         );
     }
@@ -898,7 +1092,7 @@ class Migration
     private function getLastBatchNumber(): int
     {
         $rows = $this->queryLower(
-            "SELECT MAX(batch) as max_batch FROM " . self::MIGRATIONS_TABLE
+            "SELECT MAX(batch) as max_batch FROM " . self::MIGRATIONS_TABLE . " WHERE passed = 1"
         );
         return (int)($rows[0]['max_batch'] ?? 0);
     }
@@ -911,7 +1105,8 @@ class Migration
     private function getMigrationsForBatch(int $batch): array
     {
         return $this->queryLower(
-            "SELECT migration, batch FROM " . self::MIGRATIONS_TABLE . " WHERE batch = :batch ORDER BY migration ASC",
+            "SELECT migration_name, batch FROM " . self::MIGRATIONS_TABLE
+            . " WHERE batch = :batch AND passed = 1 ORDER BY migration_name ASC",
             [':batch' => $batch]
         );
     }

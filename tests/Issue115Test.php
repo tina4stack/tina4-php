@@ -14,11 +14,13 @@
  *   content      blob,
  *   passed       integer DEFAULT 0
  *
- * v3 shape:
- *   id         INTEGER PRIMARY KEY AUTOINCREMENT,
- *   migration  VARCHAR(255) NOT NULL UNIQUE,
- *   batch      INTEGER NOT NULL,
- *   applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ * Canonical v3 shape (3.13.55, unified across all four frameworks):
+ *   id             INTEGER PRIMARY KEY AUTOINCREMENT,
+ *   migration_name VARCHAR(500) NOT NULL UNIQUE,
+ *   description    VARCHAR(500),
+ *   batch          INTEGER NOT NULL DEFAULT 1,
+ *   executed_at    VARCHAR(50) NOT NULL,
+ *   passed         INTEGER NOT NULL DEFAULT 1
  *
  * The bug: v3's ensureMigrationsTable() called CREATE TABLE IF NOT EXISTS,
  * so an existing v2-shaped tina4_migration table was left untouched. Every
@@ -27,9 +29,9 @@
  * like "duplicate column name" when an ALTER TABLE ADD couldn't be repeated.
  *
  * The fix: on construction, detect a v2-shaped table and upgrade it in
- * place — ALTER TABLE ADD the v3 columns, backfill from v2 rows. Try to
- * match each v2 migration_id (timestamp prefix) to a file on disk and use
- * the file's basename as the v3 migration value. Fall back to migration_id
+ * place — ALTER TABLE ADD the canonical columns, backfill from v2 rows. Try
+ * to match each v2 migration_id (timestamp prefix) to a file on disk and use
+ * the file's basename as the migration_name value. Fall back to migration_id
  * if no matching file is found.
  */
 
@@ -110,9 +112,9 @@ class Issue115Test extends TestCase
         new Migration($this->db, $this->migrationsDir);
 
         $names = $this->columnNames();
-        $this->assertContains('migration', $names, 'v3 migration column must be added');
+        $this->assertContains('migration_name', $names, 'canonical migration_name column must be added');
         $this->assertContains('batch', $names, 'v3 batch column must be added');
-        $this->assertContains('applied_at', $names, 'v3 applied_at column must be added');
+        $this->assertContains('executed_at', $names, 'canonical executed_at column must be added');
     }
 
     // ── 2. Legacy v2 row gets its v3 migration value from a matching file ─
@@ -131,8 +133,8 @@ class Issue115Test extends TestCase
 
         new Migration($this->db, $this->migrationsDir);
 
-        $rows = $this->db->query("SELECT migration FROM tina4_migration");
-        $applied = array_column($rows, 'migration');
+        $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
+        $applied = array_column($rows, 'migration_name');
         $this->assertContains('20240301120000_completely_different_name.sql', $applied);
     }
 
@@ -145,8 +147,8 @@ class Issue115Test extends TestCase
 
         new Migration($this->db, $this->migrationsDir);
 
-        $rows = $this->db->query("SELECT migration FROM tina4_migration");
-        $applied = array_column($rows, 'migration');
+        $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
+        $applied = array_column($rows, 'migration_name');
         $this->assertNotEmpty($applied);
         $this->assertNotNull($applied[0], 'Fallback migration value must be set');
         $this->assertStringContainsString(
@@ -189,14 +191,17 @@ class Issue115Test extends TestCase
     {
         // Initialize as v3 from scratch
         new Migration($this->db, $this->migrationsDir);
-        $this->db->exec("INSERT INTO tina4_migration (migration, batch) VALUES ('x.sql', 1)");
+        $this->db->exec(
+            "INSERT INTO tina4_migration (migration_name, batch, executed_at, passed)"
+            . " VALUES ('x.sql', 1, '2026-01-01T00:00:00+00:00', 1)"
+        );
 
         // Second construction must not corrupt the existing v3 data
         new Migration($this->db, $this->migrationsDir);
-        $rows = $this->db->query("SELECT migration FROM tina4_migration");
+        $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
 
         $this->assertCount(1, $rows);
-        $this->assertSame('x.sql', $rows[0]['migration']);
+        $this->assertSame('x.sql', $rows[0]['migration_name']);
     }
 
     // ── 6. Empty v2 table still upgrades cleanly (no rows to backfill) ──
@@ -209,9 +214,9 @@ class Issue115Test extends TestCase
         new Migration($this->db, $this->migrationsDir);
 
         $names = $this->columnNames();
-        $this->assertContains('migration', $names);
+        $this->assertContains('migration_name', $names);
         $this->assertContains('batch', $names);
-        $this->assertContains('applied_at', $names);
+        $this->assertContains('executed_at', $names);
 
         $rows = $this->db->query("SELECT * FROM tina4_migration");
         $this->assertSame([], $rows);
@@ -233,13 +238,13 @@ class Issue115Test extends TestCase
         new Migration($this->db, $this->migrationsDir);
 
         $rows = $this->db->query(
-            "SELECT migration, batch FROM tina4_migration ORDER BY migration_id ASC"
+            "SELECT migration_name, batch FROM tina4_migration ORDER BY migration_id ASC"
         );
         $this->assertCount(3, $rows, 'All v2 rows must be backfilled');
 
         foreach ($rows as $row) {
             $this->assertSame(1, (int)$row['batch'], 'All legacy rows get batch=1');
-            $this->assertNotEmpty($row['migration'], 'migration column must be backfilled');
+            $this->assertNotEmpty($row['migration_name'], 'migration_name column must be backfilled');
         }
     }
 
@@ -253,16 +258,16 @@ class Issue115Test extends TestCase
 
         new Migration($this->db, $this->migrationsDir);
 
-        $rows = $this->db->query("SELECT migration FROM tina4_migration");
+        $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
         $this->assertCount(
             2,
             $rows,
             'Both passed=1 and passed=0 v2 entries must be backfilled — leaving '
-            . 'passed=0 entries without a v3 migration value would cause them to '
+            . 'passed=0 entries without a migration_name value would cause them to '
             . 're-run and cascade duplicate-column errors'
         );
         foreach ($rows as $row) {
-            $this->assertNotEmpty($row['migration']);
+            $this->assertNotEmpty($row['migration_name']);
         }
     }
 
@@ -277,7 +282,7 @@ class Issue115Test extends TestCase
         $migration = new Migration($this->db, $this->migrationsDir);
         $status = $migration->status();
 
-        $completed = array_column($status['completed'], 'migration');
+        $completed = array_column($status['completed'], 'migration_name');
         $this->assertContains(
             '20240101000000_create_users.sql',
             $completed,
