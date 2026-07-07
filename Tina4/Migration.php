@@ -280,19 +280,17 @@ class Migration
     }
 
     /**
-     * Get list of all applied migrations.
+     * Run a tracking-table query and return the rows with every column key
+     * lower-cased.
      *
-     * @return array<int, array{migration: string, batch: int, applied_at: string}>
-     */
-    /**
-     * Run a bookkeeping-table query and normalise every result row's keys to
-     * lower case. The Firebird adapter returns UPPERCASE column keys, but this
-     * class (and getAppliedMigrations()'s documented shape) reads them lower
-     * case — so a raw `$row['migration']` silently missed on Firebird and every
-     * already-applied migration was re-run. Postgres/MySQL/SQLite already return
-     * lower/exact case, so this is a no-op there.
+     * Column names are referenced in lower case throughout this class, so keys
+     * are normalised here to read the same across adapters that report them in
+     * different cases (Firebird, for example, returns upper-case keys).
      *
-     * @return array<int, array<string, mixed>>
+     * @param string $sql SQL to run against the tracking table.
+     * @param array<int|string, mixed> $params Bound parameters.
+     * @return array<int, array<string, mixed>> Rows with lower-cased keys; an
+     *                                          empty array when there is no result set.
      */
     private function queryLower(string $sql, array $params = []): array
     {
@@ -306,6 +304,11 @@ class Migration
         );
     }
 
+    /**
+     * Get list of all applied migrations.
+     *
+     * @return array<int, array{migration: string, batch: int, applied_at: string}>
+     */
     public function getAppliedMigrations(): array
     {
         return $this->queryLower(
@@ -1121,11 +1124,9 @@ class Migration
      */
     private function isFirebird(): bool
     {
-        // Via detectDialect() so this is correct when $this->db is the Database
-        // facade wrapping a FirebirdAdapter (Database::create/fromEnv) — a bare
-        // `instanceof FirebirdAdapter` is false for the facade, which silently
-        // routed every Firebird-specific path (createV3Table, the v2→v3 ALTER
-        // syntax, recordMigration) down the wrong branch.
+        // Resolved via detectDialect() so it also matches when $this->db is a
+        // Database facade wrapping the concrete adapter (Database::create/fromEnv),
+        // which a bare `instanceof FirebirdAdapter` would not.
         return $this->detectDialect() === 'firebird';
     }
 
@@ -1134,7 +1135,7 @@ class Migration
      */
     private function isMSSQL(): bool
     {
-        // Via detectDialect() so it unwraps the Database facade — see isFirebird().
+        // Resolved via detectDialect() so it unwraps the Database facade — see isFirebird().
         return $this->detectDialect() === 'mssql';
     }
 
