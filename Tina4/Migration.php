@@ -284,9 +284,31 @@ class Migration
      *
      * @return array<int, array{migration: string, batch: int, applied_at: string}>
      */
+    /**
+     * Run a bookkeeping-table query and normalise every result row's keys to
+     * lower case. The Firebird adapter returns UPPERCASE column keys, but this
+     * class (and getAppliedMigrations()'s documented shape) reads them lower
+     * case — so a raw `$row['migration']` silently missed on Firebird and every
+     * already-applied migration was re-run. Postgres/MySQL/SQLite already return
+     * lower/exact case, so this is a no-op there.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function queryLower(string $sql, array $params = []): array
+    {
+        $rows = $this->db->query($sql, $params);
+        if (!is_array($rows)) {
+            return [];
+        }
+        return array_map(
+            static fn($r) => array_change_key_case((array) $r, CASE_LOWER),
+            $rows
+        );
+    }
+
     public function getAppliedMigrations(): array
     {
-        return $this->db->query(
+        return $this->queryLower(
             "SELECT migration, batch, applied_at FROM " . self::MIGRATIONS_TABLE . " ORDER BY migration ASC"
         );
     }
@@ -301,11 +323,31 @@ class Migration
         $allFiles = $this->getMigrationFiles();
         $appliedNames = array_column($this->getAppliedMigrations(), 'migration');
 
+        // Also honour legacy v2 rows keyed only by the 14-char timestamp prefix
+        // (`migration_id`). A table upgraded in-place from v2 — or one whose
+        // `migration` backfill did not resolve to the current filename — still
+        // records that the migration ran; matching the prefix stops it being
+        // re-applied. Keyed as prefix => true for O(1) lookup.
+        $appliedPrefixes = [];
+        if ($this->hasLegacyMigrationIdColumn()) {
+            foreach ($this->queryLower("SELECT migration_id FROM " . self::MIGRATIONS_TABLE) as $row) {
+                $prefix = trim((string) ($row['migration_id'] ?? ''));
+                if ($prefix !== '') {
+                    $appliedPrefixes[$prefix] = true;
+                }
+            }
+        }
+
         $pending = [];
         foreach ($allFiles as $file) {
-            if (!in_array(basename($file), $appliedNames, true)) {
-                $pending[] = $file;
+            $base = basename($file);
+            if (in_array($base, $appliedNames, true)) {
+                continue;
             }
+            if (preg_match('/^(\d{14})/', $base, $m) && isset($appliedPrefixes[$m[1]])) {
+                continue;
+            }
+            $pending[] = $file;
         }
 
         return $pending;
@@ -650,7 +692,7 @@ class Migration
 
         // Step 3: backfill every v2 row.
         try {
-            $v2Rows = $this->db->query(
+            $v2Rows = $this->queryLower(
                 "SELECT migration_id, passed FROM " . self::MIGRATIONS_TABLE
             );
         } catch (\Throwable $e) {
@@ -838,7 +880,7 @@ class Migration
      */
     private function getNextBatchNumber(): int
     {
-        $rows = $this->db->query(
+        $rows = $this->queryLower(
             "SELECT MAX(batch) as max_batch FROM " . self::MIGRATIONS_TABLE
         );
 
@@ -851,7 +893,7 @@ class Migration
      */
     private function getLastBatchNumber(): int
     {
-        $rows = $this->db->query(
+        $rows = $this->queryLower(
             "SELECT MAX(batch) as max_batch FROM " . self::MIGRATIONS_TABLE
         );
         return (int)($rows[0]['max_batch'] ?? 0);
@@ -864,7 +906,7 @@ class Migration
      */
     private function getMigrationsForBatch(int $batch): array
     {
-        return $this->db->query(
+        return $this->queryLower(
             "SELECT migration, batch FROM " . self::MIGRATIONS_TABLE . " WHERE batch = :batch ORDER BY migration ASC",
             [':batch' => $batch]
         );
