@@ -5,8 +5,18 @@
 Routes are auto-discovered from `src/routes/`. Each language uses its idiomatic style:
 
 ### Python (async decorators)
+
+The route decorators are top-level, but the Swagger/OpenAPI metadata decorators
+(`description`, `tags`, `example`) live in `tina4_python.swagger` — import them from there,
+not from `tina4_python`.
+
+**Auth default:** GET/HEAD/OPTIONS routes are public; **POST/PUT/PATCH/DELETE are Bearer-token
+gated by default** (`auth_required = True`). A write route with no token returns 401 unless you
+mark it `@noauth()`. Use `@secured()` to gate a GET route.
+
 ```python
-from tina4_python import get, post, put, delete
+from tina4_python import get, post, put, delete, noauth
+from tina4_python.swagger import description, tags, example
 
 @get("/hello")
 async def hello(request, response):
@@ -20,6 +30,7 @@ async def get_user(request, response):
     return response.json({"id": user_id})
 
 @post("/users")
+@noauth()                      # public write route — without this it is 401 by default
 async def create_user(request, response):
     data = request.body
     return response.json(data, 201)
@@ -65,20 +76,28 @@ export const hello = get('/hello', async (request, response) => {
 
 Middleware runs before/after route handlers. Applied per-route or globally.
 
+Class-based middleware is dispatched **by method-name prefix**: every static method whose
+name starts with `before_` runs before the handler, every `after_*` runs after. This is a
+sharp footgun — **a method named exactly `before` or `after` NEVER runs** (it does not match
+the `before_` / `after_` prefix), so an auth check written as `def before(...)` is a **silent
+auth bypass**. Always name the method `before_<something>` / `after_<something>`. The methods
+are called **synchronously** (regular `def`, not `async def`) — the orchestrator does not
+await them.
+
 ### Python
 ```python
 from tina4_python import middleware
 
 class AuthCheck:
     @staticmethod
-    async def before(request, response):
+    def before_auth(request, response):       # MUST be `before_*`, not `before`
         token = request.headers.get("Authorization")
         if not token:
             return request, response.json({"error": "Unauthorized"}, 401)
         return request, response
 
     @staticmethod
-    async def after(request, response):
+    def after_headers(request, response):      # MUST be `after_*`, not `after`
         return request, response
 
 @middleware(AuthCheck)
@@ -93,7 +112,10 @@ SQL-first Active Record pattern. Models are auto-discovered from `src/orm/`.
 
 ### Python
 ```python
-from tina4_python import ORM, IntegerField, StringField, TextField, BooleanField
+from tina4_python import (
+    ORM, IntegerField, StringField, TextField, BooleanField, ForeignKeyField,
+    has_many, has_one, belongs_to,
+)
 
 class User(ORM):
     id = IntegerField(primary_key=True, auto_increment=True)
@@ -106,22 +128,31 @@ class User(ORM):
 user = User({"name": "Alice", "email": "alice@example.com"})
 user.save()
 
-users = User().select("*").where("is_active = ?", [True]).fetch()
-user = User().find(1)
+# select() and where() are CLASSMETHODS that return a plain list[ORM]. There is NO
+# chainable .fetch() — the list IS the result. where() takes a filter clause + bound
+# params; select() takes FULL SQL (or nothing → SELECT * FROM <table>).
+users = User.where("is_active = ?", [True])                     # → list[User]
+rows  = User.select("SELECT * FROM user WHERE bio != ?", [""])  # full SQL → list[User]
+user  = User.find_by_id(1)                                       # single instance or None
 user.name = "Alice Smith"
 user.save()
 user.delete()
 
-# Relationships
+# Serialise for a JSON response — to_dict() per row (ORM objects are not JSON by default):
+return response.json([u.to_dict() for u in users])
+
+# Relationships — declare with the v3 descriptors has_many / has_one / belongs_to
+# (or a ForeignKeyField). Do NOT assign a dict-list like `has_many = [{"Post": "user_id"}]`:
+# that class attribute SHADOWS the descriptor method and silently breaks the relationship.
 class Post(ORM):
     id = IntegerField(primary_key=True, auto_increment=True)
-    user_id = IntegerField()
+    user_id = IntegerField()                       # or: user_id = ForeignKeyField("User")
     title = StringField()
-    has_one = [{"User": "user_id"}]
+    user = belongs_to("User", foreign_key="user_id")
 
 class User(ORM):
     # ...fields...
-    has_many = [{"Post": "user_id"}]
+    posts = has_many("Post", foreign_key="user_id")
 
 # Soft delete
 class Article(ORM):
@@ -129,7 +160,8 @@ class Article(ORM):
     # article.delete() sets is_deleted = 1 instead of removing
     # article.restore() sets is_deleted = 0
     # article.force_delete() actually removes
-    # Article().with_trashed().fetch() includes deleted
+    # Article.with_trashed() is a CLASSMETHOD returning list[Article] incl. deleted
+    #   (no .fetch() — e.g. Article.with_trashed("id > ?", [10]))
 ```
 
 ### QueryBuilder — `from()` renamed

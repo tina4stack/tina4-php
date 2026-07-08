@@ -28,8 +28,8 @@ Queue methods use `self.topic` / `@topic` / `$this->topic` — **no queue name p
 # Python
 from tina4_python import Queue
 
-q = Queue(topic="emails", path="./data")
-job_id = q.push({"to": "alice@example.com"}, delay=0, priority=0)
+q = Queue(topic="emails")          # no path= param — storage path is the env var TINA4_QUEUE_PATH
+job_id = q.push({"to": "alice@example.com"}, priority=0, delay_seconds=0)
 job    = q.pop()                   # atomically claim next pending job
 job    = q.pop_by_id(job_id)       # claim a specific job by ID
 count  = q.size("pending")
@@ -80,18 +80,28 @@ for job in q.consume(job_id="abc123"):
 Fully native RFC 6455 implementation (~300-400 lines per language). No third-party libraries.
 
 ### Route-Based Registration (Python)
-```python
-from tina4_python import websocket
 
+`websocket` is NOT a top-level export — `from tina4_python import websocket` imports the
+`tina4_python.websocket` **module**, not the decorator. Import it from the router:
+
+```python
+from tina4_python.core.router import websocket
+
+# The handler is event-based: (connection, event, data). `event` is "open",
+# "message", or "close"; `data` is the payload (str for "message", None otherwise).
+# It is NOT a single-arg `async for message in connection:` loop.
 @websocket("/ws/chat")
-async def chat(connection):
-    async for message in connection:
-        await connection.broadcast(message.data)
+async def chat(connection, event, data):
+    if event == "message":
+        await connection.broadcast(data)
+    elif event == "open":
+        await connection.send("welcome")
 ```
 
 ### WebSocketConnection API
-`send(data)`, `send_json(obj)`, `broadcast(data)`, `broadcast_to(path, data)`,
-`close(code, reason)`, `ping()`
+`send(data)`, `send_json(obj)`, `broadcast(data, exclude_self=False)`,
+`broadcast_to(path, data)`, `broadcast_to_room(room, data)`, `join_room(name)`,
+`leave_room(name)`, `ping(data=b"")`, `close(code, reason)`.
 
 ### WebSocketManager
 Tracks all connections by ID and path. Handles upgrade handshake, frame protocol
@@ -129,13 +139,15 @@ auth re-applies).
 
 ### Python
 ```python
-from tina4_python import tina4_auth
+from tina4_python import Auth      # the class is `Auth` — there is no `tina4_auth` export
 
-token    = tina4_auth.get_token({"user_id": 42})        # HS256 signed with SECRET env var
-is_valid = tina4_auth.valid_token(token)
-payload  = tina4_auth.get_payload(token)
-hashed   = tina4_auth.hash_password("mypassword")
-matches  = tina4_auth.check_password(hashed, "mypassword")
+auth     = Auth()
+token    = auth.get_token({"user_id": 42})   # HS256, signed with the TINA4_SECRET env var
+is_valid = auth.valid_token(token)
+payload  = auth.get_payload(token)
+# hash_password / check_password are STATIC methods:
+hashed   = Auth.hash_password("mypassword")
+matches  = Auth.check_password("mypassword", hashed)   # (plaintext, hashed) — NOT (hashed, plaintext)
 ```
 
 Supports both HS256 and RS256 algorithms. Node `Auth` class wraps standalone functions:
@@ -173,11 +185,16 @@ request.session.clear()
 Zero-dependency engine. Auto-generates schema from ORM models.
 
 ```python
-from tina4_python import gql
+from tina4_python import GraphQL     # the class is `GraphQL` — there is no `gql` singleton export
 
-gql.schema.from_orm(User)
+gql = GraphQL()
+gql.schema.from_orm(User)            # or gql.auto_register(User, Post) (honours TINA4_GRAPHQL_AUTO_SCHEMA)
 gql.schema.from_orm(Post)
-gql.register_route("/graphql")  # GET = GraphiQL IDE, POST = queries
+GraphQL.set_default(gql)             # register as default so @GraphQL.resolve(...) decorators wire in
+
+# There is NO register_route(). The HTTP path is the `.endpoint` attribute
+# (default "/graphql", override via the TINA4_GRAPHQL_ENDPOINT env var).
+# Run a query with gql.execute(query_string) → {"data": ..., "errors": [...]}.
 ```
 
 ---
@@ -220,19 +237,19 @@ Translation files in `src/locales/` (JSON format). Language set via `TINA4_LOCAL
 
 ---
 
-## Email / SMTP
+## Email / SMTP (Messenger)
 
-Built-in SMTP client.
+Built-in SMTP client. The class is `Messenger` — there is no `Email` export.
 
 ```python
-from tina4_python import Email
+from tina4_python import Messenger
 
-email = Email()
-email.send(
-    to="alice@example.com",
+messenger = Messenger()
+messenger.send(
+    to="alice@example.com",           # str or list[str]
     subject="Welcome",
     body="<h1>Hello!</h1>",
-    content_type="text/html"
+    html=True,                        # html=True sends HTML — there is NO content_type= param
 )
 ```
 
@@ -259,35 +276,41 @@ CLI: `tina4 seed`, `tina4 seed:create "initial users"`
 
 ## Auto-CRUD
 
-Single-call admin interface generation.
+Auto-generates REST endpoints (GET list, GET by id, POST, PUT, DELETE) from ORM models.
+The class is `AutoCrud` — there is no `CRUD` class and no `to_crud()`.
 
 ```python
-from tina4_python import CRUD
+from tina4_python import AutoCrud, ORM
 
-@get("/api/users/crud")
-async def user_crud(request, response):
-    return CRUD.to_crud(request, {
-        "sql": "SELECT * FROM users",
-        "title": "User Management",
-        "primary_key": "id"
-    })
+# Option A — declare on the model; it auto-registers its CRUD routes on startup:
+class User(ORM):
+    auto_crud = True
+    # ...fields...
+
+# Option B — register a model explicitly (default prefix "/api"):
+AutoCrud.register(User)                    # → GET/POST /api/user, GET/PUT/DELETE /api/user/{id}
+AutoCrud.register(Product, prefix="/api/v2")
+
+# Option C — auto-discover every model in a directory:
+AutoCrud.discover("src/orm", prefix="/api")
 ```
 
 ---
 
 ## Event / Listener System
 
-Pub/sub within the application.
+Pub/sub within the application. The API is the `on` / `emit` functions (plus `once`, `off`) —
+there is no `event` object or `listener` decorator, and no `event.fire()`.
 
 ```python
-from tina4_python import event, listener
+from tina4_python import on, emit
 
-@listener("user.created")
+@on("user.created")                        # subscribe (also: once(...) for one-shot)
 async def send_welcome_email(data):
-    await Email().send(to=data["email"], subject="Welcome!")
+    Messenger().send(to=data["email"], subject="Welcome!", body="Hi!", html=True)
 
-# Elsewhere in a route:
-event.fire("user.created", {"email": user.email})
+# Elsewhere in a route — publish:
+emit("user.created", {"email": user.email})
 ```
 
 ---
@@ -298,7 +321,8 @@ event.fire("user.created", {"email": user.email})
 from tina4_python import Api
 
 api = Api("https://api.example.com", auth_header="Bearer xyz")
-result = api.send_request("/users", method="GET")
+result = api.get("/users")                 # verb methods: get / post / put / delete
+result = api.send("GET", "/users")         # generic form — send_request() no longer exists
 ```
 
 ---
@@ -362,13 +386,19 @@ Old names removed across all frameworks: `render()`, `renderProduction()`, `rend
 
 ## Swagger / OpenAPI
 
-Auto-generated at `/swagger`. Uses route decorators for metadata:
+Auto-generated at `/swagger`. Uses route decorators for metadata — import them from
+`tina4_python.swagger` (they are NOT top-level exports):
 
 ```python
+from tina4_python.swagger import description, tags, example, example_response
+
 @get("/users")
 @description("List all users")
 @tags(["Users"])
-@example(200, [{"id": 1, "name": "Alice"}])
+@example_response(200, [{"id": 1, "name": "Alice"}])   # RESPONSE example, keyed by status
 async def list_users(request, response):
     ...
+
+# example() documents the REQUEST body instead: @example({"name": "Alice"}) — no status arg
+#   signature: example(data, content_type="application/json")
 ```

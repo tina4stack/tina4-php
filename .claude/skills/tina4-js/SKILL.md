@@ -11,9 +11,10 @@ description: >
   from 'tina4js'), use this skill for all frontend tasks.
 ---
 
-# tina4-js — Reactive Frontend Framework (v1.2.7)
+# tina4-js — Reactive Frontend Framework (v1.5.0)
 
-tina4-js is a lightweight reactive frontend framework (16.4KB bundled IIFE). Zero dependencies,
+tina4-js is a lightweight reactive frontend framework (the full IIFE bundle is ~27.7KB raw,
+~10.3KB gzipped; the `core` module alone is ~1.5KB gzipped). Zero dependencies,
 no virtual DOM, no build complexity. It uses signals for reactivity, tagged template literals
 for DOM, and Web Components for encapsulation.
 
@@ -45,27 +46,37 @@ looks simple but has specific rules. Getting them wrong produces silent bugs —
 once but never update, buttons don't disable, inputs don't bind. This reference is the source
 of truth, derived from the actual source code.
 
-## Generate tina4-js Code With the Tina4 Coder - Do Not Hand-Write It
+## Before you write code — the reuse ladder
 
-Tina4 hosts a coding model fine-tuned on the framework, exposed as MCP tools on the
-`tina4-coder` server at `https://mcp.tina4.com` (Bearer token; developers register for a free token at https://profile.tina4.com). When these tools are
-connected, prefer them for writing tina4-js code:
+Climb in order; write new code only at the last rung. tina4-js is **sub-11 KB, zero dependencies** — reach for its primitives, not a framework.
 
-- **`tina4_code(instruction, image_url="")`** - generates idiomatic tina4-js: signals, `html`
-  templates, `Tina4Element` components, routing, and the api / ws / sse clients. Pass
-  `image_url` to build a component from a screenshot. Call this instead of writing it by hand.
-- **`tina4_review(code, focus="")`** - reviews existing tina4-js and returns a corrected,
-  idiomatic version. Use it to catch the reactivity mistakes this skill warns about (a static
-  `${signal.value}`, inputs inside reactive blocks, in-place array mutation).
+1. **Does it need to exist?** Re-read the request and trace the actual flow. The best change is often none.
+2. **Does tina4-js already do it?** Use the built-in primitives: reactivity → `signal`/`computed`/`effect`; DOM → `` html`` `` tagged templates + `Tina4Element`; persistence → `persist()`; HTTP → the `api` client; realtime → `ws`/`sse`/`rtc`; routing → `route`/`navigate`. **Never** reach for React/Vue/a state library/axios/a router lib.
+3. **Does the browser/stdlib do it?** (`fetch`, `URL`, `crypto`, `structuredClone`…) Use it before adding anything.
+4. **Is it already in THIS app?** Reuse the existing component/signal/store — don't duplicate.
+5. **Adding an npm dependency? Stop.** tina4-js is zero-dependency by design — find the primitive.
+6. **Can it be one signal / one `${}` hole / one component?** Prefer the smallest reactive form.
+7. **Only now**, write the minimum that works — no wrapper components, no speculative props.
 
-Fall back to writing the code inline only if `tina4_code` errors or is not connected (a free
-token is available at https://profile.tina4.com). The rules in this skill still apply - use
-them to review whatever the tool returns.
+## Ground tina4-js Code With `tina4_context` — Then Write It Yourself
+
+Tina4 exposes a `tina4_context(instruction, language)` MCP tool that returns framework-specific
+grounding (idioms, current API surface, worked examples) for the thing you are about to build.
+Call it to ground yourself before writing tina4-js, then **write the code yourself** using that
+context plus the rules in this skill.
+
+- **`tina4_context(instruction, language="tina4-js")`** — returns retrieval-grounded context for
+  the requested feature (signals, `html` templates, `Tina4Element` components, routing, and the
+  api / ws / sse / rtc clients). Use it as reference material, not as a code generator.
+
+Do **not** use `tina4_code` to generate tina4-js — you are responsible for authoring the code.
+The context tool grounds you; the reasoning, the code, and the review are yours. The rules in
+this skill are the source of truth — apply them to whatever you write.
 
 ## Modules — What Each One Is
 
-tina4-js is tree-shakeable: import only what you use. Nine modules, each with its own entry point.
-Per-module gzip sizes below were measured via `npm run test:size` (macOS, v1.2.7); the `core`
+tina4-js is tree-shakeable: import only what you use. Ten modules, each with its own entry point.
+Per-module gzip sizes below were measured via `npm run test:size` (macOS, v1.5.0); the `core`
 bundle is the sub-3KB headline budget.
 
 | Module | Import | Public exports | Gzip | What it does |
@@ -75,9 +86,10 @@ bundle is the sub-3KB headline budget.
 | **api** | `tina4js/api` | `api` | 2.27 KB | `fetch` wrapper: Bearer + formToken auth, request/response interceptors, JSON, consistent result shape — talks to Tina4 backends. |
 | **ws** | `tina4js/ws` | `ws` | 0.89 KB | Signal-driven WebSocket client with auto-reconnect; `status`/`connected` are signals you bind straight into templates. |
 | **sse** | `tina4js/sse` | `sse` | 1.30 KB | Signal-driven Server-Sent-Events / NDJSON streaming client (same reconnect + signal-status shape as `ws`). |
+| **rtc** | `tina4js/rtc` | `rtc`, `rtcConfig` | 2.75 KB | Signal-driven realtime-collaboration client for a Tina4 backend's `realtime()` mount: mesh WebRTC calls (`rtc.call`, perfect negotiation), persistent chat (`rtc.chat`), and permissioned file up/download (`rtc.upload`/`rtc.fetchBlob`). Media is peer-to-peer; the server only relays SDP/ICE. |
 | **storage** | `tina4js/storage` | `persist`, `clearPersistedKeys` | (folds into app) | Persist a signal to `localStorage` — versioned, cross-tab, migratable. **Never store secrets/tokens/PII** — `localStorage` is XSS-readable (see `STORAGE.md`). |
 | **i18n** | `tina4js/i18n` | `createI18n`, `i18n`, `t`, `setLocale`, `getLocale` | 1.2 KB | Reactive translations (the active locale is a signal, so `t()` re-renders on `setLocale()`) + browser `Intl` number/currency/date/relativeTime + RTL `dir()`. Mirrors the backend Tina4 `I18n` API. |
-| **pwa** | `tina4js/pwa` | `pwa` | 1.16 KB | Runtime service-worker + web-manifest generation — installable/offline apps, no build step. |
+| **pwa** | `tina4js/pwa` | `pwa` | 1.16 KB | Runtime web-manifest injection + service-worker registration for installable/offline apps. The manifest is generated and injected as a blob at runtime; the service worker is NOT — `register()` loads `swUrl` (or `/sw.js`), and `pwa.generateServiceWorker()` emits the SW source to write to disk. |
 | **debug** | `import 'tina4js/debug'` | side-effect (auto-enables) | dev-only | Mounts a dev overlay (Ctrl+Shift+D) that tracks signals, components, routes, and API calls. Never ship to production. |
 
 ## Backend API Lookups — Use the Live Index
@@ -246,10 +258,10 @@ These bite even when you know the Three Rules. They came out of real app work �
 
 ### ⚠ THE BIGGEST ONE: one `${...}` per attribute — never mix static text with a dynamic part
 
-An attribute value must be a **single interpolation**. Partial interpolation — static text glued to a `${...}` inside one attribute — does **not** reliably merge the parts; the dynamic piece silently fails to apply.
+An attribute value must be a **single interpolation**. Partial interpolation — static text glued to a `${...}` inside one attribute — is **not** merged: the binder replaces the entire attribute value with just the interpolated result, so the static prefix is dropped and only the dynamic value is applied.
 
 ```ts
-// ❌ WRONG — static "card " + a dynamic part in one attribute; the binding is dropped
+// ❌ WRONG — the static "card " prefix is DROPPED; class becomes just "active" (or "")
 html`<div class="card ${() => active.value ? 'active' : ''}">`
 html`<a href="/user/${id}">`               // partial — unreliable
 
@@ -693,7 +705,7 @@ its file. The IIFE bundle provides the framework globally; island scripts just u
 tina4-js uses **curly brace** syntax for route parameters — NOT Express-style colons.
 
 ```ts
-import { route, router } from 'tina4js';
+import { route, navigate, router } from 'tina4js';
 
 // Static route
 route('/', () => html`<h1>Home</h1>`);
@@ -727,13 +739,14 @@ router.on('change', ({ path, params, pattern, durationMs }) => {
   console.log(`Navigated to ${path} in ${durationMs}ms`);
 });
 
-// Navigate programmatically
-router.navigate('/users/42');
+// Navigate programmatically — navigate() is a standalone export, NOT a method on router.
+// (router only has .start() and .on().)
+navigate('/users/42');
 ```
 
 **Common mistake:** Using Express-style `:id` instead of `{id}`. The route will never match.
 
-**Navigation:** Use standard `<a href="#/path">` links (hash mode) or `<a href="/path">` (history mode). The router intercepts clicks automatically.
+**Navigation:** Use a BARE `<a href="/path">` in **both** hash and history mode — the router intercepts the click and, in hash mode, prepends the `#` for you. Do NOT write `<a href="#/path">` in hash mode: the interceptor uses the raw `href` as the path, so it becomes `##/path` → 404 (see the hash-router footgun above).
 
 ## Persistent Signal Storage (v1.2.5+)
 
