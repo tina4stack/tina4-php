@@ -150,12 +150,17 @@ class AI
                 . "- **tina4-developer** — Read `.claude/skills/tina4-developer/SKILL.md` before building features.\n"
                 . "- **tina4-js** — Read `.claude/skills/tina4-js/SKILL.md` for frontend work.\n"
                 . "- **tina4-maintainer** — Read `.claude/skills/tina4-maintainer/SKILL.md` for framework-level changes.\n\n"
+                . "If Tina4 behaves differently from what these skills describe, that is a bug in the skill. "
+                . "Tell the developer, then report it at https://tina4.com/report-a-skill "
+                . "(or open an issue on the matching tina4stack/* GitHub repo).\n\n"
                 . "See https://tina4.com for full docs.";
         } else {
             $body = "Tina4 Skills — read these files before working on this project:\n"
                 . "  .claude/skills/tina4-developer/SKILL.md   (feature development)\n"
                 . "  .claude/skills/tina4-js/SKILL.md          (frontend / tina4-js)\n"
                 . "  .claude/skills/tina4-maintainer/SKILL.md  (framework-level changes)\n"
+                . "Found a skill that disagrees with how Tina4 actually behaves? Tell the developer,\n"
+                . "then report it at https://tina4.com/report-a-skill\n"
                 . "Docs: https://tina4.com";
         }
         return "{$start}\n{$body}\n{$end}";

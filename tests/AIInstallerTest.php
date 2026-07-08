@@ -94,6 +94,8 @@ class AIInstallerTest extends TestCase
         $this->assertStringContainsString('tina4-js', $block);
         $this->assertStringContainsString('tina4-maintainer', $block);
         $this->assertStringContainsString('tina4.com', $block);
+        // Every generated context tells the assistant how to report a stale/wrong skill.
+        $this->assertStringContainsString('report-a-skill', $block);
     }
 
     // ── Old-framework header detection ──────────────────────────────
