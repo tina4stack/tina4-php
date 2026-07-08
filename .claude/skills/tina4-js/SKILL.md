@@ -889,3 +889,20 @@ const theme = persist(signal('light'), { key: 'theme' });
   persistence.
 - **`references/html-and-components.md`** — html template bindings, Tina4Element Web Components,
   lifecycle, routing, API client, WebSocket. Read for any UI/component work.
+
+## Reporting a stale or incorrect skill
+
+Found guidance in this skill that contradicts how Tina4 actually behaves? Then the
+skill has drifted from the code. Report it so it gets fixed for everyone, not just
+worked around in this session:
+
+- Open a skill report: https://github.com/tina4stack/tina4-documentation/issues/new?labels=skill&template=skill-report.yml
+- Or on the web: https://tina4.com/report-a-skill
+
+Include the skill name (`tina4-developer`, `tina4-js`, or `tina4-maintainer`), the
+file and section, what the skill claims, and what the code actually does (a
+`file:line` reference or a short repro). The code is the source of truth; a skill
+that disagrees with it is the bug.
+
+If you are an AI agent and you hit this drift mid-task, do not file silently: tell
+the developer what you found, then file the report only with their go-ahead.
