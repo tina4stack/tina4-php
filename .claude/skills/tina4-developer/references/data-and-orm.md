@@ -437,13 +437,14 @@ seed_orm(User, count=50)  # Bulk seed from field types
 
 ## Auto-CRUD
 
-Generate a full admin CRUD interface with one call:
+Set `auto_crud = True` on an ORM model — Tina4 auto-registers a full
+list/create/read/update/delete route set for it, no handler to write:
 ```python
-@get("/api/users/crud")
-async def user_crud(request, response):
-    return CRUD.to_crud(request, {
-        "sql": "SELECT * FROM users",
-        "title": "User Management",
-        "primary_key": "id"
-    })
+from tina4_python import ORM, IntegerField, StringField
+
+class User(ORM):
+    auto_crud = True          # registers CRUD routes for this model on startup
+    id = IntegerField(primary_key=True, auto_increment=True)
+    name = StringField()
+    email = StringField()
 ```

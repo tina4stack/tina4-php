@@ -10,7 +10,7 @@ TINA4_SECRET=a-long-random-string-here
 
 ### Generating Tokens (Python)
 ```python
-from tina4_python import tina4_auth
+from tina4_python import Auth
 
 # Login route
 @post("/login")
@@ -18,11 +18,12 @@ async def login(request, response):
     email = request.body["email"]
     password = request.body["password"]
 
-    user = User().fetch_one("email = ?", [email])
-    if not user or not tina4_auth.check_password(password, user.password_hash):
+    matches = User().find({"email": email})
+    user = matches[0] if matches else None
+    if not user or not Auth.check_password(password, user.password_hash):
         return response.json({"error": "Invalid credentials"}, 401)
 
-    token = tina4_auth.get_token({"user_id": user.id, "email": user.email})
+    token = Auth.get_token({"user_id": user.id, "email": user.email})
     return response.json({"token": token})
 ```
 
@@ -32,9 +33,9 @@ class AuthRequired:
     @staticmethod
     async def before(request, response):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        if not tina4_auth.valid_token(token):
+        if not Auth.valid_token(token):
             return request, response.json({"error": "Unauthorized"}, 401)
-        request.user = tina4_auth.get_payload(token)
+        request.user = Auth.get_payload(token)
         return request, response
 
 @middleware(AuthRequired)
@@ -46,8 +47,8 @@ async def get_profile(request, response):
 
 ### Password Hashing
 ```python
-hashed = tina4_auth.hash_password("mypassword")
-matches = tina4_auth.check_password("mypassword", hashed)  # True
+hashed = Auth.hash_password("mypassword")
+matches = Auth.check_password("mypassword", hashed)  # True
 ```
 
 ## Sessions
@@ -109,7 +110,7 @@ from tina4_python import Queue
 
 # Run as a background worker
 for job in Queue(topic="order-emails").consume():
-    send_order_email(job.payload)
+    send_order_email(job.data)
     job.complete()
 ```
 
