@@ -1,0 +1,269 @@
+# Authentication & Services (PHP)
+
+## JWT Authentication
+
+### Setup
+Set your secret in `.env`:
+```env
+TINA4_SECRET=a-long-random-string-here
+```
+
+### Generating Tokens
+
+Write routes are Bearer-protected by default, so the login route (the user has no token yet) opts
+out with `->noAuth()`. In a `src/routes/` file, qualify framework classes with a leading backslash.
+
+```php
+// src/routes/auth.php
+\Tina4\Router::post("/api/login", function ($request, $response) {
+    $email    = $request->body["email"];
+    $password = $request->body["password"];
+
+    $user = (new User())->where("email = ?", [$email])[0] ?? null;
+    if (!$user || !\Tina4\Auth::checkPassword($password, $user->password)) {
+        return $response(["error" => "Invalid credentials"], 401);
+    }
+
+    $token = \Tina4\Auth::getToken(["user_id" => $user->id, "email" => $user->email]);
+    return $response(["token" => $token]);
+})->noAuth();
+```
+
+`getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string` — pass just
+the payload; it's signed with `TINA4_SECRET` and expires in `$expiresIn` minutes by default.
+
+### Verifying / Protecting Routes
+
+POST/PUT/PATCH/DELETE already require a valid Bearer token — you get a 401 automatically. Inside the
+handler, read the verified payload:
+
+```php
+\Tina4\Router::get("/me", function ($request, $response) {
+    // authenticateRequest() takes a plain array — $request->headers is a CaseInsensitiveArray,
+    // so hand it ->toArray(). Returns the verified payload, or null.
+    $auth = \Tina4\Auth::authenticateRequest($request->headers->toArray());
+    if ($auth === null) {
+        return $response(["error" => "Unauthorized"], 401);
+    }
+    return $response->json(User::findById($auth["user_id"]));
+})->secure();   // ->secure() makes this GET route require a valid JWT (GET is public by default)
+```
+
+Equivalent lower-level checks:
+```php
+$token   = $request->bearerToken();                            // the raw token, or null
+$payload = $token ? \Tina4\Auth::getPayload($token) : null;    // decoded payload, or null
+$payload = \Tina4\Auth::validToken($token);                    // verify + decode, or null
+```
+
+### Auth API reference
+
+| Method | Signature |
+|--------|-----------|
+| `getToken` | `getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string` |
+| `validToken` | `validToken(string $token, ?string $secret = null): ?array` |
+| `getPayload` | `getPayload(string $token): ?array` |
+| `authenticateRequest` | `authenticateRequest(array $headers, ?string $secret = null, string $algorithm = 'HS256'): ?array` |
+| `refreshToken` | `refreshToken(string $token, int $expiresIn = 60): ?string` |
+| `hashPassword` | `hashPassword(string $password, ?string $salt = null, int $iterations = 260000): string` |
+| `checkPassword` | `checkPassword(string $password, string $hash): bool` |
+
+> `refreshToken` takes **`($token, $expiresIn = 60)`** — there is no `$secret` parameter; it re-signs
+> with `TINA4_SECRET`. `refreshToken($token, $secret, $expiresIn)` is wrong.
+
+### Password Hashing
+```php
+$hashed  = \Tina4\Auth::hashPassword("mypassword");
+$matches = \Tina4\Auth::checkPassword("mypassword", $hashed);  // true
+```
+
+## Sessions
+
+Configure in `.env`:
+```env
+TINA4_SESSION_BACKEND=file    # file, redis, valkey, mongodb, database
+```
+
+Access the session through `$request->session`:
+```php
+\Tina4\Router::post("/login", function ($request, $response) {
+    // After validating credentials...
+    $request->session->set("user_id", $user->id);
+    $request->session->set("role", "admin");
+    return $response->redirect("/dashboard");
+})->noAuth();
+
+\Tina4\Router::get("/dashboard", function ($request, $response) {
+    $userId = $request->session->get("user_id");
+    if (!$userId) {
+        return $response->redirect("/login");
+    }
+    return $response->render("dashboard.twig", ["user" => User::findById($userId)]);
+});
+
+\Tina4\Router::get("/logout", function ($request, $response) {
+    $request->session->clear();
+    return $response->redirect("/");
+});
+```
+
+Session methods: `set($key, $value)`, `get($key, $default)`, `has($key)`, `clear()`, `destroy()`,
+`all()`.
+
+## Queue System
+
+For background jobs like sending emails, processing uploads, etc. Construct a `\Tina4\Queue` with a
+topic (named argument), `produce(...)` messages, and `consume(...)` them in a worker.
+
+### Producing Messages
+```php
+\Tina4\Router::post("/orders", function ($request, $response) {
+    $order = (new Order($request->body))->save();
+
+    // Queue an email notification for background processing
+    (new \Tina4\Queue(topic: "order-emails"))->produce("order-emails", [
+        "order_id" => $order->id,
+        "email"    => $request->body["email"],
+        "type"     => "confirmation",
+    ]);
+
+    return $response($order, 201);
+});
+```
+
+### Consuming Messages
+```php
+// Run as a background worker. consume() is a generator that polls the topic.
+$queue = new \Tina4\Queue(topic: "order-emails");
+foreach ($queue->consume("order-emails") as $job) {
+    sendOrderEmail($job->payload);   // the produced data
+    $job->complete();                // ack; use $job->fail("reason") to nack/retry
+}
+```
+
+### Priority and Delayed Jobs
+```php
+$queue = new \Tina4\Queue(topic: "order-emails");
+
+// signature: produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0)
+$queue->produce("order-emails", $data, priority: 10);          // high priority
+$queue->produce("order-emails", $data, delaySeconds: 300);     // process after 5 minutes
+```
+
+## Email (Messenger)
+
+```php
+\Tina4\Router::post("/contact", function ($request, $response) {
+    (new \Tina4\Messenger())->send(
+        to: $request->body["email"],
+        subject: "Thanks for reaching out",
+        body: "<h1>We received your message</h1>",
+        html: true,
+    );
+    return $response(["status" => "sent"]);
+})->noAuth();
+```
+
+## WebSocket
+
+Register a WebSocket route with `\Tina4\Router::websocket($path, $handler)`:
+```php
+\Tina4\Router::websocket("/ws/chat", function ($connection) {
+    foreach ($connection as $message) {
+        $connection->broadcast($message->data);   // broadcast to all connected clients
+    }
+});
+```
+
+### Client (frond.js)
+```javascript
+const ws = Frond.ws("/ws/chat", {
+    onMessage: (data) => {
+        document.getElementById("messages").innerHTML += `<p>${data.text}</p>`;
+    }
+});
+document.getElementById("send").onclick = () => {
+    ws.send({ text: document.getElementById("input").value });
+};
+```
+
+## GraphQL
+
+Build a GraphQL API from your ORM models and register the endpoint:
+```php
+$gql = new \Tina4\GraphQL();
+$gql->fromOrm(new User())        // fromOrm() is chainable
+    ->fromOrm(new Post());
+$gql->register("/graphql");      // GET = GraphiQL IDE, POST = queries
+```
+
+Register a custom resolver (at bootstrap / import time):
+```php
+\Tina4\GraphQL::resolve("Query", "userByEmail", function ($root, $args, $ctx) {
+    return (new User())->where("email = ?", [$args["email"]])[0] ?? null;
+});
+```
+
+Visit `/graphql` in the browser for the GraphiQL IDE.
+
+## Events
+
+Decouple app logic with events. `\Tina4\Events::on(...)` registers a listener; `emit(...)` fires it.
+```php
+\Tina4\Events::on("user.created", function ($data) {
+    (new \Tina4\Messenger())->send(
+        to: $data["email"], subject: "Welcome!", body: "...", html: true
+    );
+});
+
+\Tina4\Events::on("user.created", function ($data) {
+    (new Settings(["user_id" => $data["id"], "theme" => "light"]))->save();
+});
+
+// Fire the event:
+\Tina4\Router::post("/register", function ($request, $response) {
+    $user = (new User($request->body))->save();
+    \Tina4\Events::emit("user.created", ["id" => $user->id, "email" => $user->email]);
+    return $response($user, 201);
+})->noAuth();
+```
+
+## i18n / Localization
+
+Translation files go in `src/locales/` as JSON:
+```json
+// src/locales/en.json
+{ "welcome": "Welcome, {name}!", "logout": "Sign out" }
+```
+```json
+// src/locales/fr.json
+{ "welcome": "Bienvenue, {name}!", "logout": "Déconnexion" }
+```
+
+Set the language in `.env`:
+```env
+TINA4_LOCALE=en
+```
+
+Translate in PHP with `\Tina4\I18n`:
+```php
+$i18n = new \Tina4\I18n();
+$i18n->translate("welcome", ["name" => $user->name]);   // "Welcome, Alice!"
+$i18n->setLocale("fr");
+$i18n->translate("logout");                              // "Déconnexion"
+```
+
+## Caching
+
+Built-in, zero-dep caching. Use `{% cache "name" ttl %}` blocks in Frond templates (see
+`templates-and-frontend.md`), or the static API in code for expensive operations:
+```php
+$key   = "report:monthly:" . $month;
+$value = \Tina4\Cache::cacheGet($key);
+if ($value === null) {
+    $value = buildExpensiveReport($month);
+    \Tina4\Cache::cacheSet($key, $value, 300);   // cache for 300 seconds
+}
+```
+Methods: `cacheGet($key)`, `cacheSet($key, $value, $ttl = null)`, `cacheDelete($key)`,
+`cacheClear()`.

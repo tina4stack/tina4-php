@@ -45,15 +45,14 @@ in each language with identical syntax. Architecture: Lexer → Parser → Compi
 {# Loop variables: loop.index, loop.index0, loop.first, loop.last,
    loop.length, loop.parent, loop.remaining, loop.depth #}
 
-{% switch status %}
-    {% case "active" %}Active{% endcase %}
-    {% case "pending" %}Pending{% endcase %}
-    {% default %}Unknown{% enddefault %}
-{% endswitch %}
-
 {% set greeting = "Hello " ~ name %}
-{% capture content %}...{% endcapture %}
 ```
+
+The engine also implements these block tags: `{% spaceless %}…{% endspaceless %}`,
+`{% autoescape false %}…{% endautoescape %}`, and `{% cache %}…{% endcache %}`.
+
+> Frond does **not** implement `{% switch %}/{% case %}/{% default %}` or `{% capture %}`.
+> Use `{% if %}/{% elseif %}` for branching and `{% set %}` for captured values.
 
 ### Template Composition
 ```twig
@@ -74,36 +73,16 @@ in each language with identical syntax. Architecture: Lexer → Parser → Compi
 {% import "forms.twig" as forms %}
 {{ forms.input("email", "", "email") }}
 
-{# Embed (include + override blocks) #}
-{% embed "card.twig" %}
-    {% block title %}Custom Title{% endblock %}
-{% endembed %}
-
-{# Fragments (for HTMX) #}
-{% fragment "user-list" %}...{% endfragment %}
-
-{# Push/Stack #}
-{% push "scripts" %}<script src="app.js"></script>{% endpush %}
-{% stack "scripts" %}
+{# Also supported: {% from "forms.twig" import input %} #}
 ```
+
+> Frond does **not** implement `{% embed %}`, `{% fragment %}`, or `{% push %}/{% stack %}`.
+> For include-with-block-override, use `{% include ... with {...} %}` plus template
+> inheritance (`{% extends %}` / `{% block %}`).
 
 ## Frond-Unique Features ("Quirks")
 
-These set Frond apart from standard Twig:
-
-### 1. Inline SQL Queries
-```twig
-{% query "SELECT * FROM users WHERE active = ?" params=[true] as users %}
-{% for user in users.data %}
-    {{ user.name }}
-{% endfor %}
-Total: {{ users.total }}
-
-{# With pagination #}
-{% query "SELECT * FROM products" page=1 limit=20 as products %}
-```
-
-### 2. Live Blocks
+### Live Blocks
 
 Server-rendered regions that keep themselves fresh. `{% live "name" TRANSPORT %}...{% endlive %}`
 renders on the server for first paint, then refreshes over the chosen transport: `poll N`
@@ -128,29 +107,18 @@ and nested live blocks are rejected. The marker element is byte-identical across
 frameworks, so the shared `frond.js` (poll + ws wired; sse client is v1.1) drives every
 backend the same way.
 
-### 3. Conditional CSS Classes
-```twig
-<div class="{{ classes('btn', active: 'btn-active', disabled: 'btn-disabled') }}">
-```
+### NOT implemented (do not use — they render empty or wrong)
 
-### 4. Inline Markdown
-```twig
-{% markdown %}
-# Hello {{ name }}
-This is **bold** with variable interpolation.
-{% endmarkdown %}
-```
+The engine does **not** implement these, despite their appearing in some older docs. Do not
+emit them; there is no fallback and no warning:
 
-### 5. Data Attributes for JS
-```twig
-{% data config as "app-config" %}
-{# Outputs: <script type="application/json" data-name="app-config">...</script> #}
-```
-
-### 6. Inline SVG Icons
-```twig
-{{ icon("chevron-right", size=24, class="icon-sm") }}
-```
+- `{% query ... as ... %}` inline SQL — run the query in the route/`@live_source` and pass
+  the result into the template as a variable instead.
+- `classes(...)` conditional-class helper — build the class string with `{% if %}` / `~`.
+- `{% markdown %}` — render Markdown in the handler and pass HTML through `|raw`.
+- `{% data ... as ... %}` JSON-script helper — write the `<script type="application/json">`
+  tag yourself with `|json_encode`.
+- `icon(...)` inline-SVG helper — `{% include %}` the SVG partial.
 
 ## Filters (~59 total)
 

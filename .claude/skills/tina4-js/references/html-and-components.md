@@ -133,10 +133,27 @@ customElements.define('my-counter', MyCounter);
 
 ### Lifecycle
 1. `constructor()` — Shadow root attached, prop signals created from `static props`
-2. `connectedCallback()` → `render()` called ONCE → `onMount()` called
+2. `connectedCallback()` → `render()` runs inside a reactive `effect()` → `onMount()` called
 3. `disconnectedCallback()` → `onUnmount()` called
 
-**render() is called ONCE.** Reactivity comes from signals in the template, not re-rendering.
+**render() runs inside a reactive effect, not literally once.** `connectedCallback` wraps the
+`render()` call in an `effect()`, so any signal whose `.value` you read *directly in the body of
+`render()`* becomes a dependency — and the WHOLE component re-renders (its DOM is torn down and
+rebuilt) whenever that signal changes. That is almost never what you want: it loses input focus
+and scroll position, and defeats the point of surgical signal binding.
+
+**The rule: keep signal reads inside the template's `${}` holes, not in the `render()` body.**
+Done that way, `render()` effectively runs once and reactivity is surgical (the `${signal}` /
+`${() => …}` bindings update in place). Read a `.value` directly in `render()` only if you
+genuinely want the entire component to re-render on that signal.
+
+```ts
+// ✅ render runs once; the ${count} binding updates the text node in place
+render() { return html`<p>Count: ${this.count}</p>`; }
+
+// ❌ reads .value in the render body → the whole component re-renders on every change
+render() { return html`<p>Count: ${this.count.value}</p>`; }
+```
 
 ### Props
 - Declared in `static props = { name: Type }` where Type is `String`, `Number`, or `Boolean`
@@ -299,13 +316,41 @@ pwa.register({
     shortName: 'App',
     display: 'standalone',
     themeColor: '#000',
+    backgroundColor: '#fff',         // manifest background_color (default '#ffffff')
     icon: '/icon-512.png',
     cacheStrategy: 'network-first',  // or 'cache-first', 'stale-while-revalidate'
-    precache: ['/index.html', '/app.js', '/style.css']
+    precache: ['/index.html', '/app.js', '/style.css'],
+    offlineRoute: '/offline.html',   // fallback served when a fetch fails
+    swUrl: '/sw.js',                 // URL of the service-worker file to register
 });
 ```
 
-Generates service worker as Blob URL at runtime — no separate SW file needed.
+**What `register()` actually does — the service worker is NOT blobbed.** Only the web manifest
+is generated and injected at runtime (as a `blob:` URL `<link rel="manifest">`), plus a
+`<meta name="theme-color">`. The service worker must be a real file the browser can fetch:
+
+- If you pass `swUrl`, it registers that URL.
+- Otherwise it tries `/sw.js` and logs an info message if nothing is there (registration is a
+  no-op — you do NOT get offline caching for free).
+
+So there IS a separate SW file. To produce one, call `pwa.generateServiceWorker(config)`, which
+returns the SW source as a string for your build to write to disk (e.g. `/sw.js`):
+
+```ts
+// build step — write the SW that register({ swUrl: '/sw.js' }) will load
+import { writeFileSync } from 'node:fs';
+writeFileSync('public/sw.js', pwa.generateServiceWorker({
+    cacheStrategy: 'network-first',
+    precache: ['/index.html', '/app.js', '/style.css'],
+    offlineRoute: '/offline.html',
+} as any));
+```
+
+`pwa.generateManifest(config)` likewise returns the manifest object if you'd rather write a
+static `manifest.json` than have it injected as a blob at runtime.
+
+**Config options:** `name` (required), `shortName`, `display`, `themeColor`, `backgroundColor`,
+`icon`, `cacheStrategy` (`'network-first'` default), `precache`, `offlineRoute`, `swUrl`.
 
 ---
 
@@ -337,7 +382,7 @@ Import only what you need. `sideEffects: false` enables tree-shaking.
 
 ### IIFE Bundle (no imports needed)
 
-When using the IIFE bundle (`dist/tina4js.min.js`, 13.6KB), all APIs are exposed globally:
+When using the IIFE bundle (`dist/tina4js.min.js`, ~27.7KB raw / ~10.3KB gzipped), all APIs are exposed globally:
 ```html
 <script src="/js/tina4js.min.js"></script>
 <script>

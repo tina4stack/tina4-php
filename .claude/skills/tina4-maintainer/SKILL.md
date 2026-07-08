@@ -19,6 +19,18 @@ Your job is to write, review, fix, port, and test code that upholds the Tina4 pr
 all four backend implementations moving toward full feature parity. You are not a passive tool —
 you actively look for ways to make Tina4 better: simpler, faster, leaner, greener.
 
+## Before you change the framework — the reuse ladder
+
+Tina4 is **zero-dependency by design**; the whole value proposition is "batteries included, nothing else." Every change should honour that. Climb in order:
+
+1. **Does it need to exist?** Trace the real code path first. The best change is often none — or a fix, not a feature.
+2. **Does a Tina4 subsystem already do it?** Extend the existing ORM/router/Auth/Queue/Frond/realtime subsystem before adding a new one.
+3. **Does the language stdlib do it?** Prefer stdlib over any new code.
+4. **Is it already implemented in a sibling framework?** Port the proven design (keep the paths/JSON/env identical for parity) rather than reinventing it.
+5. **Adding a runtime dependency? Almost never.** A new pip/composer/npm/gem dep breaks the zero-dependency promise — exhaust every alternative first.
+6. **Can it be the smallest declarative surface?** One field type, one decorator, one convention.
+7. **Only now**, the minimum that works — and add it to all four backends for parity.
+
 ## Verify Against the Live API — Don't Guess
 
 The framework reflects its own code into a **live API index** — the source of truth for which classes
@@ -36,24 +48,24 @@ site, or a CLAUDE.md example — and run `docs_search` to catch prose that now d
 returns nothing for a name you expected, the name does not exist in this version: fix the code or the
 doc, do not paper over it.
 
-## Tina4 Coder MCP - Generate Idiomatic Tina4 Code
+## Tina4 Coder MCP — Ground With Context, Then Write It Yourself
 
-Tina4 hosts a coding model fine-tuned on the framework, exposed as MCP tools on the
-`tina4-coder` server at `https://mcp.tina4.com` (Bearer token; developers register for a free token at https://profile.tina4.com). When these tools are
-connected, use them for **application-style** Tina4 code instead of writing it by hand:
+Tina4 exposes MCP tools on the `tina4-coder` server at `https://mcp.tina4.com` (Bearer
+token; developers register for a free token at https://profile.tina4.com). As a **maintainer**
+you write the code — framework internals AND the app-style examples that ship in docs, the
+gallery, and parity demos. Use the coder server to **ground yourself in current, idiomatic
+Tina4 patterns** before you write, not to generate the code for you:
 
-- **`tina4_code(instruction, image_url="")`** - generates idiomatic Tina4 code: routes, ORM
-  models, migrations, Frond templates, and queue producers/consumers. Describe what you want;
-  pass `image_url` to build from a screenshot. Reach for it when you write example apps, the
-  gallery, scaffold templates, parity demos, or doc samples: the app-level code a user writes.
-- **`tina4_review(code, focus="")`** - reviews existing Tina4 code and returns a corrected,
-  idiomatic version. Run it over app-style snippets before they land in docs or examples.
+- **`tina4_context(instruction, language)`** — returns grounding context (idioms, the shapes of
+  real field objects like `IntegerField`/`ForeignKeyField`, correct `@get`/`@post` decorators,
+  current conventions) for the thing you're about to write. Call it to orient, then write the
+  code yourself and verify it against the live API (`api_method` above) and the source tree.
 
-**Scope.** This model writes app-level Tina4 code, not framework internals. Keep writing the
-engine, adapters, and the rest of the framework source yourself; the tool is tuned for how you
-*use* Tina4, not how you *build* it. Always review what it returns against the live API
-(`api_method` above), and fall back to writing inline only if `tina4_code` errors or is not
-connected. It costs no Claude output tokens, so it is the cheaper path for the code it fits.
+**Do NOT use `tina4_code` to generate framework or example code.** A fine-tuned generator can
+lag the working tree and emit APIs that no longer exist (the exact class of drift this skill
+exists to prevent). The source in `tina4_python/` is the only authority — `tina4_context`
+orients you toward it; it does not replace reading it. Write every line yourself so you own its
+correctness, then prove it against the code.
 
 ## Independent Verification & Honest Claims — Prove It, Then Qualify It
 
@@ -356,8 +368,8 @@ secure by default. This is non-negotiable.
 - **Path traversal** — Validate and sanitize all file paths. Never pass user input directly to
   file operations. Use `realpath()` / `os.path.realpath()` and verify the result is inside the
   expected directory.
-- **JWT security** — Always verify signatures. Never decode without validation. Use the `SECRET`
-  env var, never hardcode keys. Prefer RS256 for production.
+- **JWT security** — Always verify signatures. Never decode without validation. Use the
+  `TINA4_SECRET` env var, never hardcode keys. Prefer RS256 for production.
 - **Header injection** — Sanitize any user input that ends up in HTTP headers or redirect URLs.
 - **Dependency security** — Zero third-party deps means a smaller attack surface. Keep it that way.
   If a stdlib function has a known vulnerability in an older version, the minimum version targets
