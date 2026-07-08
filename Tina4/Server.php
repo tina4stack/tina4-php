@@ -747,15 +747,12 @@ class Server
         // token extraction. Mirrors Python reading the query from _path.
         [$path, $queryString] = WebSocket::splitPathQuery($headers['_path'] ?? '/');
 
-        // Check if there is a registered WebSocket route
-        $wsRoutes = Router::getWebSocketRoutes();
-        $matchedRoute = null;
-        foreach ($wsRoutes as $wsRoute) {
-            if ($wsRoute['path'] === $path) {
-                $matchedRoute = $wsRoute;
-                break;
-            }
-        }
+        // Match the WS route, extracting {param} values (e.g. /ws/rtc/{room},
+        // /ws/chat/{channel}). Pattern matching + params mirror the HTTP router
+        // and Python's Router.match_ws — the built-in server previously matched
+        // WS routes by exact string equality only, so parameterised paths 404'd
+        // and $connection->params was always empty.
+        [$matchedRoute, $wsParams] = Router::matchWebSocket($path);
 
         if ($matchedRoute === null) {
             $this->sendHttpError($client, 404, 'No WebSocket handler registered for this path');
@@ -803,7 +800,7 @@ class Server
         // Create WebSocketConnection object and persist it for callback reuse.
         // The verified JWT payload (or null on a public route) is exposed as
         // $connection->auth — mirrors Python's connection.auth.
-        $connection = new WebSocketConnection($connectionId, $path, $client, $this, '', $headers, [], $authPayload);
+        $connection = new WebSocketConnection($connectionId, $path, $client, $this, '', $headers, $wsParams, $authPayload);
         $this->wsClients[$connectionId]['connection'] = $connection;
 
         // Fire the handler with 'open' message
@@ -1151,6 +1148,27 @@ class Server
             }
         }
         return $result;
+    }
+
+    /**
+     * Return the live WebSocketConnection objects currently in a room.
+     *
+     * Each carries its verified ->auth payload, so a handler can build a
+     * presence roster (mirrors Python's WebSocketManager.get_room_connections).
+     * Local members only — cross-instance presence rides the backplane.
+     *
+     * @return WebSocketConnection[]
+     */
+    public function getRoomConnections(string $roomName): array
+    {
+        $connections = [];
+        foreach ($this->wsRooms[$roomName] ?? [] as $clientId) {
+            $conn = $this->wsClients[$clientId]['connection'] ?? null;
+            if ($conn !== null) {
+                $connections[] = $conn;
+            }
+        }
+        return $connections;
     }
 
     /**

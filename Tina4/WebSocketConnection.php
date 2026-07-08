@@ -152,6 +152,21 @@ class WebSocketConnection
     }
 
     /**
+     * Get the live connections in a room (each carries its ->auth payload), so a
+     * handler can build a presence roster. Mirrors Python's
+     * connection._manager.get_room_connections(room).
+     *
+     * @return WebSocketConnection[]
+     */
+    public function getRoomConnections(string $roomName): array
+    {
+        if ($this->server !== null) {
+            return $this->server->getRoomConnections($roomName);
+        }
+        return [];
+    }
+
+    /**
      * Send a JSON-encoded message. Matches Python's conn.send_json().
      */
     public function sendJson(array $data): void

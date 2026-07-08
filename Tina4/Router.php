@@ -1364,6 +1364,38 @@ class Router
     }
 
     /**
+     * Match a WebSocket path against registered routes, extracting {param}
+     * values. Mirrors Python's Router.match_ws so `/ws/rtc/{room}` and
+     * `/ws/chat/{channel}` work on the built-in server (which previously matched
+     * WS routes by exact string equality and could not carry path params).
+     *
+     * @return array{0: ?array, 1: array<string,string>} [route, params]
+     */
+    public static function matchWebSocket(string $path): array
+    {
+        foreach (self::$wsRoutes as $route) {
+            // Fast path: exact match (no params) — keeps prior behaviour.
+            if ($route['path'] === $path) {
+                return [$route, []];
+            }
+            if (!str_contains($route['path'], '{') && !str_contains($route['path'], '*')) {
+                continue;
+            }
+            $compiled = self::compilePath($route['path']);
+            if (preg_match($compiled['regex'], $path, $m)) {
+                $params = [];
+                foreach ($compiled['paramNames'] as $name) {
+                    if (isset($m[$name])) {
+                        $params[$name] = $m[$name];
+                    }
+                }
+                return [$route, $params];
+            }
+        }
+        return [null, []];
+    }
+
+    /**
      * Reset all routes (for testing).
      */
     public static function clear(): void
