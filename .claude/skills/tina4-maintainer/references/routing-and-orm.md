@@ -125,9 +125,9 @@ class User(ORM):
 
 # Soft delete
 class Article(ORM):
-    soft_delete = True  # Adds deleted_at column
-    # article.delete() sets deleted_at instead of removing
-    # article.restore() clears deleted_at
+    soft_delete = True  # Uses the is_deleted column (INTEGER, 0/1)
+    # article.delete() sets is_deleted = 1 instead of removing
+    # article.restore() sets is_deleted = 0
     # article.force_delete() actually removes
     # Article().with_trashed().fetch() includes deleted
 ```

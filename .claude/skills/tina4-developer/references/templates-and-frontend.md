@@ -83,20 +83,39 @@ All filter names use **snake_case** regardless of language.
 <p>{{ products.total }} products found</p>
 ```
 
-### Live Blocks (Real-time updates)
+### Live Blocks (server-rendered, self-refreshing)
+
+A live block renders on the server for first paint, then re-fetches its own HTML and swaps it
+in place. Pick a transport: `poll N` (every N seconds), `sse`, or `ws "path"`. `frond.js`
+(already loaded) wires the marker and morphs the result, so a focused input survives the swap.
+
 ```twig
-{# Polling — refreshes every 5 seconds #}
-{% live "notifications" poll 5 %}
-    <span>{{ notifications | length }} new</span>
+{# Poll every 5 seconds #}
+{% live "cart" poll 5 %}
+    <strong>{{ count }}</strong> items
 {% endlive %}
 
-{# WebSocket — instant updates #}
-{% live "chat-messages" ws "/ws/chat" %}
-    {% for msg in messages %}
-        <div>{{ msg.user }}: {{ msg.text }}</div>
-    {% endfor %}
+{# WebSocket - the server pushes updates #}
+{% live "chat" ws "/ws/chat" %}
+    {% for msg in messages %}<div>{{ msg.user }}: {{ msg.text }}</div>{% endfor %}
 {% endlive %}
 ```
+
+Supply the data with a provider registered by name. It runs on every refresh with the live
+request, so auth re-applies each time (an unauthenticated caller never sees another user's data):
+
+```python
+from tina4_python.frond import live_source, push_live
+
+@live_source("cart")
+def cart_data(request):
+    return {"count": cart_count(request), "items": cart_items(request)}
+```
+
+The provider feeds the always-on `GET /__frond/live/{name}` endpoint - the block name is the
+route. For a `ws` block, push a fresh render the instant data changes with
+`push_live("cart", {...})`. Point at your own route with `src "/path"` (same-origin only);
+nested live blocks are rejected.
 
 ### Cache Blocks
 ```twig

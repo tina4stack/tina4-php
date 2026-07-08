@@ -103,21 +103,30 @@ Total: {{ users.total }}
 {% query "SELECT * FROM products" page=1 limit=20 as products %}
 ```
 
-### 2. Live Reload Blocks
+### 2. Live Blocks
+
+Server-rendered regions that keep themselves fresh. `{% live "name" TRANSPORT %}...{% endlive %}`
+renders on the server for first paint, then refreshes over the chosen transport: `poll N`
+(every N seconds), `sse`, or `ws "path"`.
+
 ```twig
-{# Polling-based #}
 {% live "notifications" poll 5 %}
     {{ notifications|length }} new
 {% endlive %}
 
-{# WebSocket-based #}
 {% live "chat-messages" ws "/ws/chat" %}
-    {% for msg in messages %}
-        {{ msg.text }}
-    {% endfor %}
+    {% for msg in messages %}{{ msg.text }}{% endfor %}
 {% endlive %}
 ```
-Live blocks re-render server-side and push HTML fragments to the client via frond.js.
+
+Data comes from a provider registered by name (`@live_source` / `Frond.liveSource` /
+`Frond.live_source`), which re-runs with the live request on every refresh, so auth
+re-applies. The provider feeds the always-on `GET /__frond/live/{name}` endpoint. For a `ws`
+block, `push_live(name, data)` re-renders and broadcasts the fragment the instant data
+changes. An `src "/path"` escape hatch points at a custom same-origin route; absolute URLs
+and nested live blocks are rejected. The marker element is byte-identical across all four
+frameworks, so the shared `frond.js` (poll + ws wired; sse client is v1.1) drives every
+backend the same way.
 
 ### 3. Conditional CSS Classes
 ```twig

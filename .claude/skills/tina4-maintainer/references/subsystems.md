@@ -101,8 +101,12 @@ Tracks all connections by ID and path. Handles upgrade handshake, frame protocol
 `create()` renamed to `create_backplane()` (Python/Ruby) / `createBackplane()` (PHP/Node) across all frameworks.
 
 ### Integration with Frond Live Blocks
-`{% live "name" ws "/ws/path" %}` auto-registers WebSocket endpoint, watches for data
-changes via event system, re-renders Frond blocks server-side, pushes HTML fragments to client.
+`{% live "name" ws "/ws/path" %}` declares a WebSocket transport for a live block. The block
+first-paints server-side, then `push_live(name, data)` re-renders it and broadcasts the HTML
+fragment to every client on that ws path. The developer owns the ws route; the block only
+names it. `poll` and `sse` blocks refresh through the always-on `GET /__frond/live/{name}`
+endpoint instead (fed by the `@live_source` provider, which re-runs with the live request so
+auth re-applies).
 
 ---
 
