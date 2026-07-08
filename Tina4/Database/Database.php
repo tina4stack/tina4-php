@@ -1497,12 +1497,7 @@ class Database implements DatabaseAdapter
             PostgresAdapter::class => new PostgresAdapter($url, $autoCommit, username: $username, password: $password),
             MySQLAdapter::class => new MySQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             MSSQLAdapter::class => new MSSQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
-            FirebirdAdapter::class => new FirebirdAdapter(
-                $url,
-                username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
-                password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
-                autoCommit: $autoCommit,
-            ),
+            FirebirdAdapter::class => self::createFirebirdAdapter($url, $parts, $username, $password, $autoCommit),
             MongoDBAdapter::class => new MongoDBAdapter(
                 $url,
                 username: $username,
@@ -1517,5 +1512,38 @@ class Database implements DatabaseAdapter
                 autoCommit: $autoCommit,
             ),
         };
+    }
+
+    /**
+     * Choose and construct the Firebird adapter.
+     *
+     * Prefers the modern **pdo_firebird** driver ({@see PdoFirebirdAdapter})
+     * when it is available — it reads Firebird 4+ `INT128`/`DECFLOAT` results
+     * (e.g. `SUM()` over an exact numeric) that the deprecated ext-interbase
+     * ({@see FirebirdAdapter}) cannot, crashing the process on those. Falls back
+     * to the legacy ibase adapter when pdo_firebird is not loaded.
+     *
+     * Override the choice with `TINA4_FIREBIRD_DRIVER`:
+     *   - `pdo` / `pdo_firebird` → force the PDO adapter
+     *   - `ibase` / `interbase`  → force the legacy ibase adapter
+     *   - unset / anything else  → auto (prefer PDO when the extension is loaded)
+     *
+     * @param array<string, mixed> $parts parse_url() components of $url
+     */
+    private static function createFirebirdAdapter(string $url, array $parts, string $username, string $password, ?bool $autoCommit): DatabaseAdapter
+    {
+        $user = $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA');
+        $pass = $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey');
+
+        $pref = strtolower((string) (\Tina4\DotEnv::getEnv('TINA4_FIREBIRD_DRIVER') ?? ''));
+        $usePdo = match ($pref) {
+            'pdo', 'pdo_firebird' => true,
+            'ibase', 'interbase'  => false,
+            default => extension_loaded('pdo_firebird'),
+        };
+
+        return $usePdo
+            ? new PdoFirebirdAdapter($url, username: $user, password: $pass, autoCommit: $autoCommit)
+            : new FirebirdAdapter($url, username: $user, password: $pass, autoCommit: $autoCommit);
     }
 }
