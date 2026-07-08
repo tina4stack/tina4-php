@@ -169,8 +169,9 @@ This is the simpler path. If the developer doesn't need a reactive SPA, default 
   and create a class instead.
 - **Keep routes light** — Route handlers should be thin. Extract business logic into helper
   classes in `src/app/`. The route receives the request, calls a helper, returns the response.
-- **Use CRUD generation** — For admin interfaces and data management, use `CRUD.to_crud()`
-  instead of hand-building list/create/edit/delete pages. It generates the entire interface.
+- **Use CRUD generation** — For admin interfaces and data management, set `auto_crud = True`
+  on the ORM model instead of hand-building list/create/edit/delete pages. Tina4 registers
+  the entire interface.
 - **Follow the convention:**
   - `src/app/` — Helper classes, business logic, utilities
   - `src/routes/` — Thin route handlers (auto-discovered)
@@ -215,17 +216,17 @@ and consume them:
 
 ```python
 # order-service: after saving an order
-Producer(Queue(topic="order-created")).produce({"order_id": order.id})
+Queue(topic="order-created").produce("order-created", {"order_id": order.id})
 
 # email-worker: picks it up and sends confirmation
-for message in Consumer(Queue(topic="order-created")).messages():
-    send_confirmation_email(message.data["order_id"])
-    message.ack()
+for job in Queue(topic="order-created").consume():
+    send_confirmation_email(job.data["order_id"])
+    job.complete()
 
 # payment-processor: also picks it up and charges the card
-for message in Consumer(Queue(topic="order-created")).messages():
-    process_payment(message.data["order_id"])
-    message.ack()
+for job in Queue(topic="order-created").consume():
+    process_payment(job.data["order_id"])
+    job.complete()
 ```
 
 **When to use this:**
@@ -603,7 +604,7 @@ The plan contains:
 ## Approach
 - Server-rendered (Frond templates)
 - Session stored in file backend
-- Password hashed with tina4_auth
+- Password hashed with Auth
 
 ## Status: In Progress
 ```
