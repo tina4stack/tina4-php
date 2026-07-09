@@ -55,10 +55,13 @@ class CLIScaffoldingTest extends TestCase
         $tokens = token_get_all($source);
 
         $functionNames = [
-            'tableNameFromClass', 'parseFields', 'parseFlags',
+            'tableNameFromClass', 'snakeSlug', 'parseFields', 'parseFlags',
+            'aiFill', 'extendMarker', 'everyToCron',
             'generateModel', 'generateRoute', 'generateMigration',
             'generateMiddleware', 'generateTest', 'generateForm',
             'generateView', 'generateCrud', 'generateAuth',
+            'generateService', 'generateQueue', 'generateValidator',
+            'generateSeeder', 'generateWebsocket', 'generateListener',
         ];
 
         $count = count($tokens);

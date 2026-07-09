@@ -23,14 +23,20 @@
  *
  * Generators:
  *   generate model <Name> [--fields "name:string,price:float"]
- *   generate route <name> [--model Name]
- *   generate crud <Name> [--fields "..."]   Model + migration + routes + form + view + test
+ *   generate route <name> [--model Name] [--public]   Secure by default; --public opens writes
+ *   generate crud <Name> [--fields "..."] [--public]   Model + migration + routes + form + view + test
  *   generate migration <description>
  *   generate middleware <Name>
  *   generate test <name>
  *   generate form <Name> [--fields "..."]   Form template with typed inputs
  *   generate view <Name> [--fields "..."]   List + detail templates
  *   generate auth                           Login/register routes + User model + templates
+ *   generate service <Name> [--every 5m | --cron "..."]   Scheduled ServiceRunner task
+ *   generate queue <topic>                  Producer + consumer worker
+ *   generate validator <Name>               Request-body Validator
+ *   generate seeder <Model>                 FakeData seeder
+ *   generate websocket <path>               Router::websocket handler
+ *   generate listener <event>               Events::on listener
  *
  * Field types: string, int, float, bool, text, datetime, blob
  * Table names: singular by default (Product -> product)
@@ -108,6 +114,111 @@ function tableNameFromClass(string $name): string
 }
 
 /**
+ * snake_case slug from an arbitrary label (topic / event / path fragment).
+ * "order-emails" -> "order_emails" · "user.created" -> "user_created"
+ */
+function snakeSlug(string $value): string
+{
+    $s = preg_replace('/[^0-9a-zA-Z]+/', '_', $value);
+    $s = tableNameFromClass($s);
+    return trim($s, '_') ?: 'item';
+}
+
+/**
+ * The canonical AI-FILL placeholder block for a LOGIC-shaped stub.
+ *
+ * A tight, grounded *fill-spec* — not a vague `// TODO` — so a coding agent (or
+ * dev) completes it correctly and idiomatically. The `throw` makes an unfilled
+ * scaffold fail LOUD when the handler is CALLED (requiring the file stays
+ * clean), and the greppable `AI-FILL` banner lets a human/agent jump to every
+ * gap. <= 6 comment lines; `Use:` names only REAL Tina4 PHP symbols verified in
+ * source.
+ *
+ *     {indent}// ─── AI-FILL: <fn> ───────────────────────────────
+ *     {indent}// Intent:  <what this must do>
+ *     {indent}// Given:   <inputs + shape>
+ *     {indent}// Use:     <named REAL Tina4 API — the idiomatic path>
+ *     {indent}// Return:  <exact return value>
+ *     {indent}// Ground:  tina4_context("<intent>", "php") · skill tina4-developer-php
+ *     {indent}throw new \RuntimeException("<feature>: <what>");   // remove when done
+ *     {indent}// ─────────────────────────────────────────────────
+ */
+function aiFill(
+    string $fn,
+    string $intent,
+    string $use,
+    string $raiseMsg,
+    string $given = '',
+    string $ret = '',
+    string $ground = '',
+    string $indent = '    '
+): string {
+    $bar = str_repeat('─', 60);
+    $head = "{$indent}// ─── AI-FILL: {$fn} ";
+    $head .= str_repeat('─', max(4, 66 - strlen($head)));
+    $lines = [$head, "{$indent}// Intent:  {$intent}"];
+    if ($given !== '') {
+        $lines[] = "{$indent}// Given:   {$given}";
+    }
+    $lines[] = "{$indent}// Use:     {$use}";
+    if ($ret !== '') {
+        $lines[] = "{$indent}// Return:  {$ret}";
+    }
+    if ($ground !== '') {
+        $lines[] = "{$indent}// Ground:  {$ground}";
+    }
+    $lines[] = "{$indent}throw new \\RuntimeException(\"{$raiseMsg}\");   // remove when done";
+    $lines[] = "{$indent}// {$bar}";
+    return implode("\n", $lines) . "\n";
+}
+
+/**
+ * The lighter EXTEND marker for CRUD-shaped WORKING code.
+ *
+ * Marks the natural extension point in generated code that already runs — NO
+ * `throw` (the boilerplate IS the feature); just a greppable hint at where
+ * custom validation / business rules go.
+ */
+function extendMarker(string $note, string $hint = '', string $indent = '    '): string
+{
+    $head = "{$indent}// ─── EXTEND: {$note} ";
+    $head .= str_repeat('─', max(4, 66 - strlen($head)));
+    $out = $head . "\n";
+    if ($hint !== '') {
+        $out .= "{$indent}// {$hint}\n";
+    }
+    return $out;
+}
+
+/**
+ * Translate a --every duration into a cron pattern for ServiceRunner.
+ *
+ * PHP's ServiceRunner schedules by CRON only (the 'timing' option, matched by
+ * ServiceRunner::matchCron) — there is NO seconds-granularity interval like
+ * Python's ServiceRunner.register(interval=). So '5m' -> '*\/5 * * * *',
+ * '2h' -> '0 *\/2 * * *', '1d' -> '0 0 * * *'. Sub-minute values ('30s') can't
+ * be expressed in cron and floor to '* * * * *' (every minute).
+ */
+function everyToCron(string $every): string
+{
+    $every = strtolower(trim($every));
+    if ($every === '') {
+        return '*/5 * * * *';
+    }
+    if (preg_match('/^(\d+)\s*([smhd]?)$/', $every, $m)) {
+        $n = max(1, (int)$m[1]);
+        $unit = $m[2] ?: 's';
+        return match ($unit) {
+            'd'     => '0 0 * * *',
+            'h'     => "0 */{$n} * * *",
+            'm'     => "*/{$n} * * * *",
+            default => '* * * * *', // seconds: cron floor is 1 minute
+        };
+    }
+    return '*/5 * * * *';
+}
+
+/**
  * Parse "name:string,price:float" into [['name','string'], ['price','float']].
  */
 function parseFields(string $fieldsStr): array
@@ -134,7 +245,8 @@ function parseFields(string $fieldsStr): array
 function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
-    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear', 'json'];
+    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear', 'json',
+                     'public', 'no-migration'];
 
     $flags = [];
     $positional = [];
@@ -829,7 +941,13 @@ DOCKERFILE;
         }
         foreach ($seeds as $seedFile) {
             echo "Running " . basename($seedFile) . "...\n";
-            include $seedFile;
+            // A seed file may run its work inline (legacy) OR return a callable
+            // (the `generate seeder` shape — returns a closure so it requires
+            // cleanly). Invoke the returned callable so both styles work.
+            $seedResult = include $seedFile;
+            if (is_callable($seedResult)) {
+                $seedResult();
+            }
         }
         break;
 
@@ -845,10 +963,14 @@ DOCKERFILE;
     // ────────────────────────────────────────────
     case 'generate':
         $what = $args[0] ?? null;
+        $allGenerators = 'model, route, crud, migration, middleware, test, form, view, auth, '
+            . 'service, queue, validator, seeder, websocket, listener';
         if (!$what) {
             echo "Usage: tina4php generate <what> <name> [options]\n";
-            echo "  Generators: model, route, crud, migration, middleware, test, form, view, auth\n";
+            echo "  Generators: {$allGenerators}\n";
             echo "  Options:    --fields \"name:string,price:float\"  --model ModelName\n";
+            echo "              --public                  open a route's writes (default: secure)\n";
+            echo "              --every 5m | --cron \"...\"   service schedule (cron only in PHP)\n";
             exit(1);
         }
 
@@ -890,9 +1012,27 @@ DOCKERFILE;
             case 'auth':
                 generateAuth($genName, $genFlags, $FIELD_TYPE_MAP);
                 break;
+            case 'service':
+                generateService($genName, $genFlags);
+                break;
+            case 'queue':
+                generateQueue($genName, $genFlags);
+                break;
+            case 'validator':
+                generateValidator($genName, $genFlags);
+                break;
+            case 'seeder':
+                generateSeeder($genName, $genFlags);
+                break;
+            case 'websocket':
+                generateWebsocket($genName, $genFlags);
+                break;
+            case 'listener':
+                generateListener($genName, $genFlags);
+                break;
             default:
                 echo "Unknown generator: {$what}\n";
-                echo "  Available: model, route, crud, migration, middleware, test, form, view, auth\n";
+                echo "  Available: {$allGenerators}\n";
                 exit(1);
         }
         break;
@@ -983,14 +1123,23 @@ DOCKERFILE;
         echo "  help                    Show this help\n";
         echo "\nGenerators:\n";
         echo "  generate model <Name> [--fields \"name:string,price:float\"]\n";
-        echo "  generate route <name> [--model Name]\n";
-        echo "  generate crud <Name> [--fields \"...\"]   Model + migration + routes + form + view + test\n";
+        echo "  generate route <name> [--model Name] [--public]   Writes secure by default; --public opens them\n";
+        echo "  generate crud <Name> [--fields \"...\"] [--public]   Model + migration + routes + form + view + test\n";
         echo "  generate migration <description>\n";
         echo "  generate middleware <Name>\n";
         echo "  generate test <name>\n";
         echo "  generate form <Name> [--fields \"...\"]   Form template with typed inputs\n";
         echo "  generate view <Name> [--fields \"...\"]   List + detail templates\n";
         echo "  generate auth                           Login/register routes + User model + templates\n";
+        echo "  generate service <Name> [--every 5m | --cron \"...\"]   Scheduled ServiceRunner task (src/services/)\n";
+        echo "  generate queue <topic>                  Producer + consumer worker (src/services/)\n";
+        echo "  generate validator <Name>               Request-body Validator (src/validators/)\n";
+        echo "  generate seeder <Model>                 FakeData seeder (src/seeds/)\n";
+        echo "  generate websocket <path>               Router::websocket handler (src/routes/)\n";
+        echo "  generate listener <event>               Events::on listener (src/listeners/)\n";
+        echo "\nScaffolding-first: logic-shaped generators emit wiring + an AI-FILL placeholder\n";
+        echo "(throw \\RuntimeException) where the custom logic goes; CRUD-shaped ones emit\n";
+        echo "working code. Writes are secure by default — use --public to open them.\n";
         echo "\nField types: string, int, float, bool, text, datetime, blob\n";
         echo "Table names: singular by default (Product -> product)\n";
         echo "\nhttps://tina4.com\n";
@@ -1060,10 +1209,16 @@ PHP;
 
 
 /**
- * Generate CRUD route file with Swagger docblocks.
+ * Generate a CRUD route file — SECURE BY DEFAULT.
  *
  * tina4php generate route products
  * tina4php generate route products --model Product
+ * tina4php generate route products --model Product --public   # open writes
+ *
+ * Writes (POST/PUT/DELETE) are Bearer-JWT-gated by default (Router.php:796-820
+ * gates them unless ->noAuth()). Reads (GET) are public by default, so nothing
+ * is emitted for them. --public re-adds ->noAuth() on the WRITE handlers only —
+ * mirroring AutoCrud.php:121-135 ($isPublic → $route->noAuth()).
  */
 function generateRoute(string $name, array $flags): void
 {
@@ -1074,6 +1229,15 @@ function generateRoute(string $name, array $flags): void
     }
     $model = $flags['model'] ?? '';
     $ucSingular = ucfirst($singular);
+    $public = !empty($flags['public']);
+
+    // ->noAuth() is chained onto a WRITE route only when the caller opts public.
+    // Router::post/put/delete return the fluent Router, so ...})->noAuth();
+    // marks the last-registered route (Router.php:314 noAuth()).
+    $w = $public ? '->noAuth()' : '';
+    $writeDoc = $public
+        ? 'Public (--public): no token required.'
+        : 'Secure-by-default: requires a Bearer token (use --public to open).';
 
     $dir = 'src/routes';
     @mkdir($dir, 0755, true);
@@ -1084,6 +1248,19 @@ function generateRoute(string $name, array $flags): void
     }
 
     if ($model) {
+        // WORKING code (the boilerplate IS the feature) grounded on the real ORM
+        // (ORM::all/count/load/fill/save/delete/toDict) + EXTEND markers at the
+        // natural extension points (no throw — it already runs).
+        $extCreate = extendMarker(
+            'validate / business rules before persist',
+            'e.g. reject invalid input; ground: tina4_context("validate before create", "php")',
+            '        '
+        );
+        $extUpdate = extendMarker(
+            'guard which fields / who may update',
+            'e.g. enforce ownership; ground: tina4_context("authorize update", "php")',
+            '        '
+        );
         $content = <<<PHP
 <?php
 
@@ -1091,16 +1268,22 @@ function generateRoute(string $name, array $flags): void
  * @description List all {$routePath}
  * @tags {$routePath}
  */
-Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+\\Tina4\\Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
     try {
-        \$page = (int)(\$request->params['page'] ?? 1);
-        \$perPage = (int)(\$request->params['per_page'] ?? 20);
-        \$offset = (\$page - 1) * \$perPage;
-        \$items = (new {$model}())->select("*", "", [], "", "", "", "", \$perPage, \$offset);
-        return \$response(\$items, 200);
+        \$limit = (int)(\$request->query['per_page'] ?? \$request->query['limit'] ?? 20);
+        \$page = (int)(\$request->query['page'] ?? 1);
+        \$offset = (int)(\$request->query['offset'] ?? (\$page > 1 ? (\$page - 1) * \$limit : 0));
+        \$model = new {$model}();
+        \$records = array_map(fn(\\Tina4\\ORM \$m) => \$m->toDict(), \$model->all(\$limit, \$offset));
+        return \$response->json([
+            "records" => \$records,
+            "count" => \$model->count(),
+            "page" => \$page,
+            "per_page" => \$limit,
+        ], 200);
     } catch (\\Throwable \$e) {
         \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
-        return \$response(["error" => "Failed to list {$routePath}"], 500);
+        return \$response->json(["error" => "Failed to list {$routePath}"], 500);
     }
 });
 
@@ -1108,70 +1291,134 @@ Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Resp
  * @description Get a {$singular} by ID
  * @tags {$routePath}
  */
-Router::get("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    try {
-        \$item = (new {$model}());
-        if (!\$item->load("id = ?", [\$request->params['id']])) {
-            return \$response(["error" => "Not found"], 404);
-        }
-        return \$response(\$item, 200);
-    } catch (\\Throwable \$e) {
-        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
-        return \$response(["error" => "Failed to get {$singular}"], 500);
-    }
-});
-
-/**
- * @description Create a new {$singular}
- * @tags {$routePath}
- */
-Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    try {
-        \$item = new {$model}(\$request);
-        \$item->save();
-        return \$response(\$item, 201);
-    } catch (\\Throwable \$e) {
-        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
-        return \$response(["error" => "Failed to create {$singular}"], 500);
-    }
-});
-
-/**
- * @description Update a {$singular}
- * @tags {$routePath}
- */
-Router::put("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    try {
-        \$item = new {$model}(\$request);
-        \$item->id = (int)\$request->params['id'];
-        \$item->save();
-        return \$response(\$item, 200);
-    } catch (\\Throwable \$e) {
-        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
-        return \$response(["error" => "Failed to update {$singular}"], 500);
-    }
-});
-
-/**
- * @description Delete a {$singular}
- * @tags {$routePath}
- */
-Router::delete("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+\\Tina4\\Router::get("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
     try {
         \$item = new {$model}();
         if (!\$item->load("id = ?", [\$request->params['id']])) {
-            return \$response(["error" => "Not found"], 404);
+            return \$response->json(["error" => "Not found"], 404);
         }
-        \$item->delete();
-        return \$response(null, 204);
+        return \$response->json(\$item->toDict(), 200);
     } catch (\\Throwable \$e) {
         \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
-        return \$response(["error" => "Failed to delete {$singular}"], 500);
+        return \$response->json(["error" => "Failed to get {$singular}"], 500);
     }
 });
 
+/**
+ * @description Create a new {$singular}
+ * @tags {$routePath}
+ *
+ * {$writeDoc}
+ */
+\\Tina4\\Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+{$extCreate}        \$data = is_array(\$request->body) ? \$request->body : (array)\$request->body;
+        \$item = new {$model}(\$data);
+        if (!\$item->save()) {
+            return \$response->json(["error" => "Failed to create {$singular}"], 500);
+        }
+        return \$response->json(\$item->toDict(), 201);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response->json(["error" => "Failed to create {$singular}"], 500);
+    }
+}){$w};
+
+/**
+ * @description Update a {$singular}
+ * @tags {$routePath}
+ *
+ * {$writeDoc}
+ */
+\\Tina4\\Router::put("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$item = new {$model}();
+        if (!\$item->load("id = ?", [\$request->params['id']])) {
+            return \$response->json(["error" => "Not found"], 404);
+        }
+{$extUpdate}        \$data = is_array(\$request->body) ? \$request->body : (array)\$request->body;
+        \$item->fill(\$data);
+        if (!\$item->save()) {
+            return \$response->json(["error" => "Failed to update {$singular}"], 500);
+        }
+        return \$response->json(\$item->toDict(), 200);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response->json(["error" => "Failed to update {$singular}"], 500);
+    }
+}){$w};
+
+/**
+ * @description Delete a {$singular}
+ * @tags {$routePath}
+ *
+ * {$writeDoc}
+ */
+\\Tina4\\Router::delete("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    try {
+        \$item = new {$model}();
+        if (!\$item->load("id = ?", [\$request->params['id']])) {
+            return \$response->json(["error" => "Not found"], 404);
+        }
+        \$item->delete();
+        return \$response->json(null, 204);
+    } catch (\\Throwable \$e) {
+        \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
+        return \$response->json(["error" => "Failed to delete {$singular}"], 500);
+    }
+}){$w};
+
 PHP;
     } else {
+        // CUSTOM route — no model. Every handler body is a LOGIC-shaped stub:
+        // an AI-FILL fill-spec + throw (fails loud when the handler runs). Writes
+        // stay secure-by-default; the gate runs BEFORE the handler, so an
+        // anonymous write is 401'd before the throw is ever reached.
+        $m = str_replace(' ', '', ucwords(str_replace('_', ' ', $singular)));
+        $bList = aiFill(
+            "list_{$routePath}",
+            "return the {$routePath} collection (add pagination if it grows)",
+            "(new {$m}())->all(\$limit, \$offset) then map \$m->toDict()  (declare {$m} extends \\Tina4\\ORM in src/orm/{$m}.php)",
+            "list_{$routePath}: query and return the records",
+            ret: 'return $response->json(["records" => $rows], 200);',
+            ground: 'tina4_context("list ORM records with pagination", "php")'
+        );
+        $bGet = aiFill(
+            "get_{$singular}",
+            "fetch one {$singular} by id",
+            "(new {$m}())->load(\"id = ?\", [\$request->params['id']]) -> bool",
+            "get_{$singular}: fetch by id or 404",
+            given: "\$request->params['id']",
+            ret: 'return $response->json($item->toDict(), 200);  or  404',
+            ground: 'tina4_context("find ORM record by id", "php")'
+        );
+        $bCreate = aiFill(
+            "create_{$singular}",
+            "validate the body and persist a new {$singular}",
+            "new {$m}((array)\$request->body) then \$item->save() -> bool",
+            "create_{$singular}: persist and return the new record",
+            given: '$request->body -> array of fields',
+            ret: 'return $response->json($item->toDict(), 201);',
+            ground: 'tina4_context("create ORM record and return 201", "php")'
+        );
+        $bUpdate = aiFill(
+            "update_{$singular}",
+            "load, mutate and save an existing {$singular}",
+            "(new {$m}())->load(...) then \$item->fill((array)\$request->body)->save()",
+            "update_{$singular}: apply changes and return the record",
+            given: "\$request->params['id']; \$request->body",
+            ret: 'return $response->json($item->toDict(), 200);  or  404',
+            ground: 'tina4_context("update ORM record", "php")'
+        );
+        $bDelete = aiFill(
+            "delete_{$singular}",
+            "delete a {$singular} by id",
+            "(new {$m}())->load(...) then \$item->delete() -> bool",
+            "delete_{$singular}: delete and return 204",
+            given: "\$request->params['id']",
+            ret: 'return $response->json(null, 204);  or  404',
+            ground: 'tina4_context("delete ORM record", "php")'
+        );
         $content = <<<PHP
 <?php
 
@@ -1179,41 +1426,42 @@ PHP;
  * @description List all {$routePath}
  * @tags {$routePath}
  */
-Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    return \$response(["data" => []], 200);
-});
+\\Tina4\\Router::get("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+{$bList}});
 
 /**
  * @description Get a {$singular} by ID
  * @tags {$routePath}
  */
-Router::get("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    return \$response(["data" => []], 200);
-});
+\\Tina4\\Router::get("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+{$bGet}});
 
 /**
  * @description Create a new {$singular}
  * @tags {$routePath}
+ *
+ * {$writeDoc}
  */
-Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    return \$response(["message" => "created"], 201);
-});
+\\Tina4\\Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+{$bCreate}}){$w};
 
 /**
  * @description Update a {$singular}
  * @tags {$routePath}
+ *
+ * {$writeDoc}
  */
-Router::put("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    return \$response(["message" => "updated"], 200);
-});
+\\Tina4\\Router::put("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+{$bUpdate}}){$w};
 
 /**
  * @description Delete a {$singular}
  * @tags {$routePath}
+ *
+ * {$writeDoc}
  */
-Router::delete("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
-    return \$response(null, 204);
-});
+\\Tina4\\Router::delete("/{$routePath}/{id}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+{$bDelete}}){$w};
 
 PHP;
     }
@@ -1232,14 +1480,16 @@ function generateCrud(string $name, array $flags, array $fieldTypeMap): void
 {
     $table = tableNameFromClass($name);
     $routeName = $table . 's';
+    $public = !empty($flags['public']);
 
     echo "\n  Generating CRUD for {$name}...\n\n";
 
     // 1. Model + migration
     generateModel($name, $flags, $fieldTypeMap);
 
-    // 2. Routes with model
-    generateRoute($routeName, ['model' => $name]);
+    // 2. Routes with model — secure-by-default; thread --public through so
+    //    `generate crud X --public` opens the writes (mirrors AutoCrud public=).
+    generateRoute($routeName, ['model' => $name, 'public' => $public]);
 
     // 3. Form
     generateForm($name, $flags);
@@ -1247,8 +1497,8 @@ function generateCrud(string $name, array $flags, array $fieldTypeMap): void
     // 4. View (list + detail)
     generateView($name, $flags);
 
-    // 5. Test
-    generateTest($routeName, ['model' => $name]);
+    // 5. Test — secure-by-default gate test (behavioural, real Router + Auth).
+    generateTest($routeName, ['model' => $name, 'secure_writes' => true, 'public' => $public]);
 
     echo "\n  CRUD generation complete for {$name}.\n";
     echo "  Run: tina4php migrate\n";
@@ -1425,6 +1675,106 @@ function generateTest(string $name, array $flags = []): void
     $path = "{$dir}/{$className}Test.php";
     if (file_exists($path)) {
         echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    // Secure-by-default CRUD gate test (emitted by `generate crud`): proves the
+    // gate by BEHAVIOUR — reads public, writes gated — through the real Router +
+    // Auth + an in-memory SQLite (no mocks). Grounded on AutoCrudV3Test /
+    // SecureByDefaultTest (real Router::dispatch, real JWT, real DB).
+    if ($model && !empty($flags['secure_writes'])) {
+        $public = !empty($flags['public']);
+        $posture = $public ? 'open (--public)' : 'gated';
+
+        if ($public) {
+            $writeTests = <<<PHP
+    public function testCreate{$className}IsPublic(): void
+    {
+        // --public opened the write: an anonymous POST creates -> 201.
+        \$req = \\Tina4\\Request::create(method: 'POST', path: '/{$snake}', body: ['name' => 'test'],
+            headers: ['content-type' => 'application/json']);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(201, \$res->getStatusCode());
+    }
+PHP;
+        } else {
+            $writeTests = <<<PHP
+    public function testCreate{$className}RequiresAuth(): void
+    {
+        // Secure by default: a tokenless POST is rejected with 401.
+        \$req = \\Tina4\\Request::create(method: 'POST', path: '/{$snake}', body: ['name' => 'test'],
+            headers: ['content-type' => 'application/json']);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(401, \$res->getStatusCode());
+    }
+
+    public function testCreate{$className}WithToken(): void
+    {
+        // A valid Bearer token passes the gate and creates -> 201.
+        \$token = \\Tina4\\Auth::getToken(['user_id' => 1], \$this->secret);
+        \$req = \\Tina4\\Request::create(method: 'POST', path: '/{$snake}', body: ['name' => 'test'],
+            headers: ['content-type' => 'application/json', 'authorization' => "Bearer {\$token}"]);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(201, \$res->getStatusCode());
+    }
+PHP;
+        }
+
+        $content = <<<PHP
+<?php
+
+/**
+ * Tests for {$model} CRUD — reads public, writes {$posture} (secure by default).
+ *
+ * Real end-to-end via the Router: no mocks — real Router, real auth gate, real
+ * JWT (Auth::getToken), and a real in-memory SQLite with the table created from
+ * the model so the create path is exercised for real.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+
+require_once __DIR__ . '/../src/orm/{$model}.php';
+
+class {$className}Test extends TestCase
+{
+    private \\Tina4\\Database\\SQLite3Adapter \$db;
+    private string \$secret = 'scaffold-test-secret';
+
+    protected function setUp(): void
+    {
+        \\Tina4\\Router::clear();
+        putenv("TINA4_SECRET={\$this->secret}");
+        \$_ENV['TINA4_SECRET'] = \$this->secret;
+        \$this->db = new \\Tina4\\Database\\SQLite3Adapter(':memory:');
+        \\Tina4\\ORM::bindDatabase(\$this->db);
+        (new {$model}())->createTable();
+        // Re-run the route file each test (no top-level declarations — just
+        // \\Tina4\\Router::* calls) to re-register after Router::clear().
+        require __DIR__ . '/../src/routes/{$snake}.php';
+    }
+
+    protected function tearDown(): void
+    {
+        \\Tina4\\Router::clear();
+        putenv('TINA4_SECRET');
+        unset(\$_ENV['TINA4_SECRET']);
+        \$this->db->close();
+    }
+
+    public function testList{$className}IsPublic(): void
+    {
+        // GET is public — no token needed.
+        \$req = \\Tina4\\Request::create(method: 'GET', path: '/{$snake}', headers: []);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(200, \$res->getStatusCode());
+    }
+
+{$writeTests}
+}
+
+PHP;
+        file_put_contents($path, $content);
+        echo "  Created {$path}\n";
         return;
     }
 
@@ -1714,7 +2064,7 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
  * @description Register a new user
  * @tags auth
  */
-Router::post("/api/auth/register", function (\Tina4\Request $request, \Tina4\Response $response) {
+\Tina4\Router::post("/api/auth/register", function (\Tina4\Request $request, \Tina4\Response $response) {
     try {
         $body = (array)$request->body;
         $email = $body['email'] ?? '';
@@ -1742,13 +2092,13 @@ Router::post("/api/auth/register", function (\Tina4\Request $request, \Tina4\Res
         \Tina4\Debug::message($e->getMessage(), TINA4_LOG_ERROR);
         return $response(["error" => "Registration failed"], 500);
     }
-})->noCache();
+})->noAuth()->noCache();   // public: login/register — the user has no token yet
 
 /**
  * @description Login and receive JWT token
  * @tags auth
  */
-Router::post("/api/auth/login", function (\Tina4\Request $request, \Tina4\Response $response) {
+\Tina4\Router::post("/api/auth/login", function (\Tina4\Request $request, \Tina4\Response $response) {
     try {
         $body = (array)$request->body;
         $email = $body['email'] ?? '';
@@ -1773,13 +2123,13 @@ Router::post("/api/auth/login", function (\Tina4\Request $request, \Tina4\Respon
         \Tina4\Debug::message($e->getMessage(), TINA4_LOG_ERROR);
         return $response(["error" => "Login failed"], 500);
     }
-})->noCache();
+})->noAuth()->noCache();   // public: login/register — the user has no token yet
 
 /**
  * @description Get current user profile
  * @tags auth
  */
-Router::get("/api/auth/me", function (\Tina4\Request $request, \Tina4\Response $response) {
+\Tina4\Router::get("/api/auth/me", function (\Tina4\Request $request, \Tina4\Response $response) {
     try {
         $authHeader = $request->getHeader("Authorization");
         if (empty($authHeader)) {
@@ -1879,4 +2229,390 @@ TWIG;
     echo "  POST /api/auth/register  -- create account\n";
     echo "  POST /api/auth/login     -- get JWT token\n";
     echo "  GET  /api/auth/me        -- get profile (requires token)\n";
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// Scaffolding-first generators (wiring + AI-FILL placeholder)
+//
+// Each grounds on the REAL current tina4-php API (verified in source) and drops
+// the aiFill() AI-FILL placeholder where the custom logic goes. Every file
+// LOADS/requires cleanly; the throw is inside a closure that fires only when the
+// handler is CALLED:
+//   service   -> Tina4/ServiceRunner.php   register / discover ('timing' cron)
+//   queue     -> Tina4/Queue.php           push / process (+ daemon service)
+//   validator -> Tina4/Validator.php       Validator
+//   seeder    -> Tina4/FakeData.php        FakeData + SeedSummary
+//   websocket -> Tina4/Router.php:1318     Router::websocket(conn, data, event)
+//   listener  -> Tina4/Events.php:33       Events::on(event, cb)
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate a scheduled background service (ServiceRunner).
+ *
+ * tina4php generate service Cleanup --every 5m
+ * tina4php generate service Report --cron "0 3 * * *"
+ */
+function generateService(string $name, array $flags): void
+{
+    $snake = tableNameFromClass($name);
+
+    if (!empty($flags['cron']) && $flags['cron'] !== true) {
+        $timing = $flags['cron'];
+        $note = "cron {$timing}";
+    } else {
+        $every = (!empty($flags['every']) && $flags['every'] !== true) ? (string)$flags['every'] : '';
+        $timing = everyToCron($every);
+        $note = "cron {$timing}" . ($every !== '' ? " (from --every {$every})" : '');
+    }
+    // The cron pattern may contain "*/" (e.g. "*/5 * * * *") which would close a
+    // /** */ docblock early — keep it out of the docblock, in a // line comment.
+
+    $dir = 'src/services';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$snake}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $body = aiFill(
+        "{$snake}_task",
+        "do the scheduled work for this service",
+        '$context->info(...) to log; call your ORM / app code (re-runs on schedule)',
+        "service:{$snake}: implement the scheduled task",
+        given: '$context -> ServiceContext (->debug/->info/->warning/->error)',
+        ground: 'tina4_context("background service scheduled task", "php")'
+    );
+
+    $content = <<<PHP
+<?php
+/**
+ * {$name} background service — runs on a schedule via ServiceRunner.
+ *
+ * Discovered by \\Tina4\\ServiceRunner::discover('src/services') (ServiceRunner.php:105),
+ * which register()s each file's returned ['name','handler','timing'] descriptor.
+ * PHP's ServiceRunner is CRON-scheduled (the 'timing' key, matched by
+ * ServiceRunner::matchCron, ServiceRunner.php:385) — there is NO seconds-interval
+ * like Python's register(interval=). Start with: \\Tina4\\ServiceRunner::start();
+ */
+
+// Schedule: {$note}
+\$task = function (\$context = null): void {
+{$body}};
+
+return [
+    'name'    => '{$snake}',
+    'handler' => \$task,
+    'timing'  => '{$timing}',
+];
+
+PHP;
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate a queue producer + consumer worker.
+ *
+ * tina4php generate queue order-emails
+ */
+function generateQueue(string $name, array $flags): void
+{
+    $topic = ltrim($name, '/');
+    $slug = snakeSlug($topic);
+
+    $dir = 'src/services';   // consumer runs as a daemon service (see below)
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$slug}_consumer.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $body = aiFill(
+        "handle_{$slug}",
+        "process ONE {$topic} job payload",
+        'your ORM / Messenger code; return to ack, throw to nack (Queue::process auto retry->dead-letter, Queue.php:249-255)',
+        "queue:{$topic}: process the job payload",
+        given: '$data -> array (the pushed payload)',
+        ground: 'tina4_context("process a queue job", "php")'
+    );
+
+    $content = <<<PHP
+<?php
+/**
+ * {$topic} queue — producer + consumer worker.
+ *
+ * Produce from anywhere:
+ *     \$q = require 'src/services/{$slug}_consumer.php';
+ *     \$q['publish'](['to' => 'a@b.c']);
+ * The consumer is wired as a daemon service ('daemon' => true); discovered by
+ * \\Tina4\\ServiceRunner::discover('src/services') and run by ServiceRunner::start().
+ * \\Tina4\\Queue::process (Queue.php:194) calls the handler per job; throwing nacks
+ * it (auto retry -> dead-letter).
+ */
+
+\$handle = function (array \$data): void {
+{$body}};
+
+\$publish = function (mixed \$data): string {
+    return (new \\Tina4\\Queue(topic: '{$topic}'))->push(\$data);
+};
+
+\$consume = function (\$context = null) use (\$handle): void {
+    (new \\Tina4\\Queue(topic: '{$topic}'))->process(function (array \$job) use (\$handle) {
+        \$handle(\$job['payload'] ?? \$job);   // throw to nack (retry / dead-letter)
+    });
+};
+
+return [
+    'name'    => '{$topic}-consumer',
+    'handler' => \$consume,
+    'daemon'  => true,
+    'publish' => \$publish,   // extra keys ignored by discover(); handy for producers
+    'handle'  => \$handle,    // exposed for testing / direct dispatch
+];
+
+PHP;
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate a request-body validator.
+ *
+ * tina4php generate validator CreateUser
+ */
+function generateValidator(string $name, array $flags): void
+{
+    $snake = tableNameFromClass($name);
+
+    $dir = 'src/validators';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$snake}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $body = aiFill(
+        "validate_{$snake}",
+        "declare the validation rules for a {$name} payload",
+        "\$validator->required('name')->email('email')->minLength('name', 2)->integer('age')  (Validator.php:55-222)",
+        "validator:{$snake}: add the rule set",
+        given: '$validator -> \\Tina4\\Validator (chainable)',
+        ret: 'the same validator (caller checks ->isValid() / ->errors())',
+        ground: 'tina4_context("validate request body with Validator", "php")'
+    );
+
+    $content = <<<PHP
+<?php
+/**
+ * {$name} request validator.
+ *
+ * Returns a closure so `require` loads cleanly; call it with the request body:
+ *     \$validate = require 'src/validators/{$snake}.php';
+ *     \$v = \$validate((array)\$request->body);
+ *     if (!\$v->isValid()) return \$response->json(['error' => \$v->errors()[0]], 400);
+ */
+
+return function (array \$data): \\Tina4\\Validator {
+    \$validator = new \\Tina4\\Validator(\$data);
+{$body}    return \$validator;
+};
+
+PHP;
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate a seeder for an ORM model.
+ *
+ * tina4php generate seeder Product
+ */
+function generateSeeder(string $name, array $flags): void
+{
+    $model = $name;
+    $table = tableNameFromClass($name);
+
+    $dir = 'src/seeds';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$table}_seeder.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $body = aiFill(
+        'field_overrides',
+        "map {$name} fields to fake values (only those needing a specific shape)",
+        '$fake->firstName() / $fake->email() / $fake->integer(1, 99) / $fake->company()  (FakeData.php:155-303)',
+        "seeder:{$name}: return the field=>value overrides",
+        given: '$fake -> \\Tina4\\FakeData instance',
+        ret: "['email' => \$fake->email(), 'status' => 'active']  (array)",
+        ground: 'tina4_context("seed ORM model with FakeData", "php")',
+        indent: '        '
+    );
+
+    $content = <<<PHP
+<?php
+/**
+ * Seeder for {$name} — run with: tina4php seed
+ *
+ * Returns a closure so `require` loads cleanly; `tina4php seed` invokes the
+ * returned callable (bin/tina4php seed). PHP has no seed_orm orchestrator —
+ * this builds rows directly from \\Tina4\\FakeData (FakeData.php) and the model's
+ * save(), returning a \\Tina4\\SeedSummary (SeedSummary.php).
+ */
+
+require_once __DIR__ . '/../orm/{$model}.php';
+
+return function (int \$count = 20): \\Tina4\\SeedSummary {
+    \$fake = new \\Tina4\\FakeData();
+    \$overrides = function (\\Tina4\\FakeData \$fake): array {
+{$body}    };
+
+    \$seeded = 0;
+    \$failed = 0;
+    \$errors = [];
+    for (\$i = 0; \$i < \$count; \$i++) {
+        try {
+            \$row = new {$model}(\$overrides(\$fake));
+            \$row->save() ? \$seeded++ : \$failed++;
+        } catch (\\Throwable \$e) {
+            \$failed++;
+            \$errors[] = \$e->getMessage();
+            throw \$e;   // fail loud until field_overrides is filled
+        }
+    }
+
+    \$summary = new \\Tina4\\SeedSummary(\$seeded, \$failed, \$errors);
+    echo "Seeded {\$summary['seeded']} {$model} row(s), {\$summary['failed']} failed\\n";
+    return \$summary;
+};
+
+PHP;
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate a WebSocket route.
+ *
+ * tina4php generate websocket chat
+ * tina4php generate websocket /ws/rooms/{id}
+ */
+function generateWebsocket(string $name, array $flags): void
+{
+    $raw = trim($name);
+    $wsPath = str_starts_with($raw, '/') ? $raw : '/ws/' . ltrim($raw, '/');
+    $slug = snakeSlug(trim($raw, '/'));
+    $base = str_starts_with($slug, 'ws_') ? substr($slug, 3) : $slug;
+    $base = $base ?: 'ws';
+
+    $dir = 'src/routes';   // Router::websocket auto-registers on require (src/routes discovered)
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/ws_{$base}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $body = aiFill(
+        "{$base}_ws",
+        "handle an inbound \"message\" frame on {$wsPath}",
+        '$connection->broadcast($data) or $connection->sendJson([...]) or $connection->send("...")  (WebSocketConnection.php:87-172)',
+        "websocket:{$wsPath}: handle the inbound message",
+        given: '$connection -> \\Tina4\\WebSocketConnection; $data -> string payload; $event -> open|message|close',
+        ground: 'tina4_context("websocket broadcast message", "php")'
+    );
+
+    $content = <<<PHP
+<?php
+/**
+ * {$wsPath} WebSocket route.
+ *
+ * Registered on require by \\Tina4\\Router::websocket (Router.php:1318; src/routes
+ * is auto-discovered at boot). The server invokes the handler as
+ * handler(\$connection, \$data, \$event) per frame — \$event is 'open' (connect),
+ * 'message' (inbound frame; \$data = payload), 'close' (disconnect)
+ * (Server.php:808/919/1192). NOTE the arg order differs from Python's
+ * (connection, event, data). Pass secure: true to require a JWT on the upgrade.
+ */
+
+\$handler = function (\$connection, ?string \$data, string \$event): void {
+    if (\$event === 'open') {
+        \$connection->send('{"type":"welcome"}');
+        return;
+    }
+    if (\$event === 'close') {
+        return;
+    }
+    // \$event === 'message'
+{$body}};
+
+\\Tina4\\Router::websocket('{$wsPath}', \$handler);
+
+return \$handler;
+
+PHP;
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Generate an event listener.
+ *
+ * tina4php generate listener user.created
+ */
+function generateListener(string $name, array $flags): void
+{
+    $event = trim($name);
+    $slug = snakeSlug($event);
+
+    $dir = 'src/listeners';   // required at boot to register via Events::on
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$slug}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $body = aiFill(
+        "on_{$slug}",
+        "react to the '{$event}' event",
+        'your app code — \\Tina4\\Messenger, an ORM write, or \\Tina4\\Events::emit(...) a follow-up',
+        "listener:{$event}: react to the event payload",
+        given: "\$data -> whatever Events::emit('{$event}', \$data) passed",
+        ground: 'tina4_context("event listener reaction", "php")'
+    );
+
+    $content = <<<PHP
+<?php
+/**
+ * Listener for the '{$event}' event.
+ *
+ * Registered on require via \\Tina4\\Events::on (Events.php:33). Fires when
+ * something calls \\Tina4\\Events::emit('{$event}', \$data). Listeners are isolated
+ * — a throw is caught + logged and the others still run; Events::emitStrict()
+ * re-raises instead (Events.php:125). Require this file at boot to register it.
+ */
+
+\$listener = function (\$data = null): void {
+{$body}};
+
+\\Tina4\\Events::on('{$event}', \$listener);
+
+return \$listener;
+
+PHP;
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
 }
