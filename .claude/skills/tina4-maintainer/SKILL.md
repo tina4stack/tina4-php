@@ -254,7 +254,7 @@ back to one of these:
    hides the database. Complex queries should be SQL, not method chains.
 
 5. **Zero third-party deps for core** — Frond, Queue, JWT, SCSS, WebSocket — all built from scratch.
-   The only acceptable external dep is better-sqlite3 for Node.js (no stdlib SQLite).
+   Node.js uses the stdlib `node:sqlite` (Node 22+), so core carries zero runtime dependencies in all four backends.
 
 6. **Same concepts, language-idiomatic names** — Method and class names follow each language's
    conventions (see Naming Conventions below). But everything a developer or user SEES must be

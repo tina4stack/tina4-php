@@ -314,7 +314,7 @@ $user->scope($name, $filterSql, $params): void  // Registers reusable named meth
 $user->createTable(): bool
 
 // Static methods
-User::create($data): static
+User::create($data): static|false
 User::query(): QueryBuilder
 User::active($limit, $offset): array   // Example scope (after scope('active', 'active=1'))
 ```
