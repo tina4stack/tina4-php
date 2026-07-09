@@ -232,3 +232,10 @@ $app->start();
 8. Templates are Twig syntax (not Blade, not PHP)
 9. Default port: 7146
 10. `$response->json()` not `response()` — PHP uses method call
+
+## Scaffolding (`tina4php generate`)
+Scaffold boilerplate instead of hand-writing it: `tina4php generate <feature>` for model, route, crud,
+migration, service, queue, validator, seeder, websocket, listener, form, view, auth. Generated write
+routes are secure by default (token-gated; pass `--public` to open them); reads are public. Logic
+stubs carry an AI-FILL fill-spec placeholder (Intent/Given/Use/Return/Ground + a loud not-implemented
+throw) — fill only that; working CRUD carries a lighter EXTEND marker.
