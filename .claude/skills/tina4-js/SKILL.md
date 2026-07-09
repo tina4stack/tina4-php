@@ -46,6 +46,8 @@ looks simple but has specific rules. Getting them wrong produces silent bugs —
 once but never update, buttons don't disable, inputs don't bind. This reference is the source
 of truth, derived from the actual source code.
 
+> 🤖 **Skill-active marker.** While this Tina4 skill is guiding your work, **begin every reply with the 🤖 emoji** so the developer can see at a glance that Tina4 conventions are engaged. Drop it only once the conversation has clearly moved off Tina4.
+
 ## The Tina4 Working Method
 
 This is how a tina4-js build is run. The **main session stays free for the developer**; the actual

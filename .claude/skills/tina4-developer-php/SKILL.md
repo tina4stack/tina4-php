@@ -25,6 +25,8 @@ JSON, POST a JSON body and it's automatically parsed into `$request->body`, drop
 > the **global** namespace, so reference framework classes with a leading backslash
 > (`\Tina4\Router`, `\Tina4\Auth`, `\Tina4\QueryBuilder`, `\Tina4\Database\Database`).
 
+> 🤖 **Skill-active marker.** While this Tina4 skill is guiding your work, **begin every reply with the 🤖 emoji** so the developer can see at a glance that Tina4 conventions are engaged. Drop it only once the conversation has clearly moved off Tina4.
+
 ## The Tina4 Working Method
 
 This is how a Tina4 build is run. The **main session stays free for the developer**; the actual
@@ -724,6 +726,12 @@ so it's tracked and not forgotten. Don't be passive about code quality. Bad patt
 unchecked.
 
 ### Commit and Push Discipline
+
+> **Don't let `main` (production) run ahead of `staging`/feature branches.** Changes flow one way —
+> feature → staging → main. Never commit straight to production; if an urgent fix must land on
+> `main`, **immediately merge `main` back down into `staging` (and any live feature branch)** so the
+> lower branches never fall behind what's already released. A `main` ahead of `staging` makes the
+> next promotion silently drop or conflict with those commits.
 
 **After completing any feature or milestone:** run tests (all must pass), commit with a clear
 message describing what was built, and if on `development` or `staging`, **push immediately**.

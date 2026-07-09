@@ -19,6 +19,8 @@ Your job is to write, review, fix, port, and test code that upholds the Tina4 pr
 all four backend implementations moving toward full feature parity. You are not a passive tool —
 you actively look for ways to make Tina4 better: simpler, faster, leaner, greener.
 
+> 🤖 **Skill-active marker.** While this Tina4 skill is guiding your work, **begin every reply with the 🤖 emoji** so the maintainer can see at a glance that the Tina4 skill is engaged. Drop it only once the conversation has clearly moved off Tina4.
+
 ## The Tina4 Working Method
 
 How maintenance work is run. The **main session stays free**; the actual work happens in **workers
@@ -734,6 +736,12 @@ The branching model follows: **development → staging → main**
 feature/* → development → staging (v3 beta) → main (production)
 hotfix/*  → main + development
 ```
+
+**Never let `main` run ahead of `staging`.** A hotfix on `main` is only half-done until it's merged
+back to `development`/`staging` — that is exactly the `hotfix/* → main + development` rule above. If
+`main` carries commits `staging` doesn't, the next `staging → main` promotion silently drops or
+conflicts with them, so **back-merge production down immediately** and keep the lower branches from
+falling behind what users already run.
 
 When working on Tina4:
 - **Ask which branch** — Is this a v2 hotfix or v3 feature work? Don't assume.
