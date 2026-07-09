@@ -62,34 +62,33 @@ class DatabaseUrl
             return;
         }
 
-        if (str_starts_with($url, 'sqlite:///')) {
-            // Convention (matches tina4-python and tina4-nodejs):
-            //   sqlite:///app.db              → relative: "app.db"
-            //   sqlite:///data/app.db         → relative: "data/app.db"
-            //   sqlite:////var/data/app.db    → absolute: "/var/data/app.db"
-            //   sqlite:///C:/Users/app.db     → Windows absolute: "C:/Users/app.db"
-            //
-            // Three slashes = relative to project root (cwd).
-            // Four slashes = Unix absolute. Drive letter = Windows absolute.
-            $rest = substr($url, 10); // skip "sqlite:///"
-
-            // Detect absolute forms. Four-slash Unix means $rest already starts
-            // with "/". Windows drive letter means $rest starts with e.g. "C:/".
-            $isUnixAbs = str_starts_with($rest, '/');
-            $isWindowsAbs = (
-                strlen($rest) >= 3
-                && ctype_alpha($rest[0])
-                && $rest[1] === ':'
-                && ($rest[2] === '/' || $rest[2] === '\\')
-            );
+        if (str_starts_with($url, 'sqlite:')) {
+            // Strip the sqlite scheme on the RAW string (mirrors tina4-python/ruby/nodejs).
+            // parse_url() collapses "sqlite:/x" and "sqlite:///x", losing the distinction
+            // between a one-slash ABSOLUTE path and the documented three-slash RELATIVE form —
+            // that was the "sqlite:<abspath> silently goes relative" footgun.
+            //   sqlite:///app.db        → "app.db"       (three slashes = relative to cwd)
+            //   sqlite:///data/app.db   → "data/app.db"
+            //   sqlite:////abs/app.db   → "/abs/app.db"  (four slashes = absolute)
+            //   sqlite:///C:/Users/app  → "C:/Users/app" (Windows absolute)
+            //   sqlite:/abs/app.db      → "/abs/app.db"  (one slash = a real absolute path)
+            //   sqlite://rel/app.db     → "rel/app.db"   (two-slash legacy = relative)
+            //   sqlite:app.db           → "app.db"
+            if (str_starts_with($url, 'sqlite:///')) {
+                $rest = substr($url, 10);
+            } elseif (str_starts_with($url, 'sqlite://')) {
+                $rest = substr($url, 9);
+            } else {
+                $rest = substr($url, 7); // "sqlite:"
+            }
 
             $this->scheme = 'sqlite';
             $this->driver = self::DRIVER_MAP['sqlite'];
             $this->host = '';
             $this->port = 0;
-            $this->database = $isUnixAbs || $isWindowsAbs ? $rest : $rest;
-            // Whether the path is absolute or relative is decided at connect
-            // time by the adapter — here we just preserve the raw form.
+            // Absolute vs relative is decided by the adapter at connect time
+            // (a leading "/" or a Windows drive letter → absolute).
+            $this->database = $rest;
             $this->username = '';
             $this->password = '';
             return;
