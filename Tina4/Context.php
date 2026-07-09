@@ -9,9 +9,10 @@
  *
  * Lets a Tina4 app ground its own AI assistant on its own source, offline:
  * it walks the project, chunks code on def/class/function boundaries and docs
- * as prose, and answers keyword/fuzzy queries over a SQLite FTS5 index
- * (PDO ``pdo_sqlite`` — FTS5 + ``bm25()`` are built into modern SQLite, so NO
- * new composer dependency).
+ * as prose, and answers keyword/fuzzy queries over a SQLite FTS5 index using
+ * the ``sqlite3`` extension — the SAME binding tina4's SQLite3Adapter uses, so
+ * NO new dependency and no second SQLite extension beyond what the framework
+ * already requires (FTS5 + ``bm25()`` are built into modern SQLite).
  *
  * A faithful PHP port of tina4-python's tina4_python/context (the proven slice
  * of neemee's longmem-harness retrieval). It COMPLEMENTS the ``api_*``
@@ -72,7 +73,7 @@ class Context
     public bool $available = false;
     /** Set by indexRoot; reindexFile relabels a changed file against it. */
     private ?string $root = null;
-    private ?\PDO $conn = null;
+    private ?\SQLite3 $conn = null;
 
     /**
      * @param string        $path      on-disk index file (its parent dir is created)
@@ -91,8 +92,8 @@ class Context
         if ($parent !== '' && $parent !== '.' && !is_dir($parent)) {
             @mkdir($parent, 0755, true);
         }
-        $this->conn = new \PDO('sqlite:' . $path);
-        $this->conn->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $this->conn = new \SQLite3($path);
+        $this->conn->enableExceptions(true);
         // tina4: no per-connection lock. PHP's request model is synchronous and
         // share-nothing (unlike the Python master, where a dev-MCP worker thread
         // shares one connection and needs a threading.Lock). Add one only if a
@@ -102,18 +103,24 @@ class Context
 
     // ── FTS5 availability ───────────────────────────────────────
 
-    /** Whether this PHP's PDO SQLite supports FTS5 (real probe). */
+    /** Whether this PHP's sqlite3 extension supports FTS5 (real probe). */
     public static function fts5Available(): bool
     {
         return self::probeFts5();
     }
 
-    /** True if an in-memory SQLite can create an FTS5 virtual table. */
+    /**
+     * True if an in-memory SQLite can create an FTS5 virtual table. Also returns
+     * false (not fatal) when the sqlite3 extension itself is absent — `new
+     * SQLite3` throws an Error we catch, so the Context degrades to safe no-ops.
+     */
     public static function probeFts5(): bool
     {
         try {
-            $db = new \PDO('sqlite::memory:');
+            $db = new \SQLite3(':memory:');
+            $db->enableExceptions(true);
             $db->exec('CREATE VIRTUAL TABLE _probe USING fts5(x)');
+            $db->close();
             return true;
         } catch (\Throwable $e) {
             return false;
@@ -184,20 +191,27 @@ class Context
         foreach ($this->chunksFor($stored, $text) as [$i, $chunk]) {
             $rows[] = ["{$stored}:{$i}", $stored, $chunk, ContextChunker::fold($chunk)];
         }
-        $this->conn->beginTransaction();
+        $this->conn->exec('BEGIN');
         try {
-            $this->conn->prepare('DELETE FROM chunks WHERE path = ?')->execute([$stored]);
+            $del = $this->conn->prepare('DELETE FROM chunks WHERE path = ?');
+            $del->bindValue(1, $stored, SQLITE3_TEXT);   // TEXT (never BLOB) so the DELETE matches
+            $del->execute();
             if (!empty($rows)) {
                 $insert = $this->conn->prepare(
                     'INSERT INTO chunks(cid, path, raw, body) VALUES (?, ?, ?, ?)'
                 );
                 foreach ($rows as $row) {
-                    $insert->execute($row);
+                    $insert->bindValue(1, $row[0], SQLITE3_TEXT);
+                    $insert->bindValue(2, $row[1], SQLITE3_TEXT);
+                    $insert->bindValue(3, $row[2], SQLITE3_TEXT);
+                    $insert->bindValue(4, $row[3], SQLITE3_TEXT);
+                    $insert->execute();
+                    $insert->reset();
                 }
             }
-            $this->conn->commit();
+            $this->conn->exec('COMMIT');
         } catch (\Throwable $e) {
-            $this->conn->rollBack();
+            $this->conn->exec('ROLLBACK');
             throw $e;
         }
         return count($rows);
@@ -328,7 +342,9 @@ class Context
             return -1;
         }
         if (!file_exists($abs)) {                     // deleted → drop its chunks
-            $this->conn->prepare('DELETE FROM chunks WHERE path = ?')->execute([$rel]);
+            $del = $this->conn->prepare('DELETE FROM chunks WHERE path = ?');
+            $del->bindValue(1, $rel, SQLITE3_TEXT);
+            $del->execute();
             return 0;
         }
         return $this->indexPath($abs, $rel);
@@ -411,10 +427,13 @@ class Context
             'SELECT path, raw, body, bm25(chunks) AS s FROM chunks '
             . 'WHERE chunks MATCH ? ORDER BY s LIMIT ?'
         );
-        $stmt->bindValue(1, $expr, \PDO::PARAM_STR);
-        $stmt->bindValue(2, $poolN, \PDO::PARAM_INT);
-        $stmt->execute();
-        $rows = $stmt->fetchAll(\PDO::FETCH_NUM);
+        $stmt->bindValue(1, $expr, SQLITE3_TEXT);
+        $stmt->bindValue(2, $poolN, SQLITE3_INTEGER);
+        $result = $stmt->execute();
+        $rows = [];
+        while (($row = $result->fetchArray(SQLITE3_NUM)) !== false) {
+            $rows[] = $row;
+        }
         if (empty($rows)) {
             return [];
         }
@@ -467,7 +486,7 @@ class Context
         if (!$this->available) {
             return 0;
         }
-        return (int) $this->conn->query('SELECT count(*) FROM chunks')->fetchColumn();
+        return (int) $this->conn->querySingle('SELECT count(*) FROM chunks');
     }
 
     public function isEmpty(): bool
@@ -477,7 +496,10 @@ class Context
 
     public function close(): void
     {
-        $this->conn = null;
+        if ($this->conn !== null) {
+            $this->conn->close();
+            $this->conn = null;
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────

@@ -226,7 +226,7 @@ class ContextTest extends TestCase
 
     public function testFts5AvailableOnThisBuild(): void
     {
-        // real detector — modern PDO SQLite ships FTS5, so it must report true
+        // real detector — modern SQLite (sqlite3 ext) ships FTS5, so it must report true
         $this->assertTrue(Context::fts5Available());
     }
 
@@ -236,7 +236,7 @@ class ContextTest extends TestCase
         $this->write($root, 'src/x.php', "<?php\nfunction y()\n{\n    return 1;\n}\n");
 
         // inject a predicate that reports FTS5 as ABSENT — exercises the real
-        // graceful-degradation branch (no mocking of PDO or files).
+        // graceful-degradation branch (no mocking of SQLite3 or files).
         $ctx = new Context($this->tempDir() . '/.tina4/context.db', static fn () => false);
         $this->assertFalse($ctx->available);
         $this->assertSame(0, $ctx->indexRoot($root));
