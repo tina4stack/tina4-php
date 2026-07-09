@@ -19,6 +19,64 @@ Your job is to write, review, fix, port, and test code that upholds the Tina4 pr
 all four backend implementations moving toward full feature parity. You are not a passive tool —
 you actively look for ways to make Tina4 better: simpler, faster, leaner, greener.
 
+## The Tina4 Working Method
+
+How maintenance work is run. The **main session stays free**; the actual work happens in **workers
+driven by a plan**. You **scope, delegate, and report** — the workers build, update the plan, and
+you relay completions. This section is the map; the detailed sections below own each step
+(**Plan-Driven Workflow**, **Independent Verification & Honest Claims**, **The Parity Mandate**,
+**Communication Style — Dashboard-Driven**).
+
+| Phase | What happens | Output |
+|-------|--------------|--------|
+| 1. Scope | Restate the task; which framework(s) does it land in? | a feature entry in `<repo>/plan/<task>.md` |
+| 2. Plan | Checklist `[ ]` + parity dashboard + Bugs + Commit log | the plan, approved |
+| 3. Delegate | A worker per task/framework; the main session stays free | workers running off the plan |
+| 4. Test-first | REAL tests (positive AND negative) before the code, in every target backend | failing tests that pin the behaviour |
+| 5. Build | Ground with `tina4_context` → reuse ladder → port the proven design → minimum code | tests green, parity held |
+| 6. Verify | **Re-run the full suite yourself at HEAD** (no mocks); tick the item; log the commit | `[x]` + commit hash |
+| 7. Report | A ✅/❌ dashboard per framework | the status table |
+
+### Every instruction is allocated to a plan
+No maintenance happens off-plan. A new request → **rescope it into the plan** as `[ ]` items, or
+scope a new `<repo>/plan/<task>.md`. Additional work is never a side-quest — it is new checkboxes.
+Each plan carries a Scope checklist, a parity dashboard, Tests, a Bugs section, and a Commit log:
+
+```markdown
+# Task: Port Product Search to PHP / Ruby / Node
+
+## Scope
+- [x] Read the Python reference + its tests
+- [ ] PHP adapter + tests
+- [ ] Ruby adapter + tests
+- [ ] Node adapter + tests
+
+## Parity
+| Feature | Python | PHP | Ruby | Node |
+|---------|--------|-----|------|------|
+| search  | ✅     | ❌  | ❌   | ❌   |
+
+## Tests (written first, real — no mocks, positive + negative)
+- [ ] search returns matches   (real SQLite)
+- [ ] blank query returns all, not 500
+
+## Bugs
+- [ ] (log here as [ ], tick when a real test proves it fixed)
+
+## Commits
+- (hash  description — one line per landed change, per framework)
+
+## Status: In Progress
+```
+
+### Tests first, verified independently — never trust a green you didn't run
+Write the tests before the code, in every target backend, real and with negative cases (see
+**Independent Verification & Honest Claims** — the mock-test and `.env.local` lessons). An item is
+`[x]` only after **you** re-ran the full suite at the exact HEAD you are about to ship — an agent's
+own green run has masked real bugs. Log the **commit hash + description** in the plan; report parity
+as a ✅/❌ dashboard (see **Communication Style**). Bugs live in the plan's Bugs section, ticked off
+with their commit when a real test proves them fixed.
+
 ## Before you change the framework — the reuse ladder
 
 Tina4 is **zero-dependency by design**; the whole value proposition is "batteries included, nothing else." Every change should honour that. Climb in order:

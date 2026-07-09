@@ -46,6 +46,97 @@ looks simple but has specific rules. Getting them wrong produces silent bugs —
 once but never update, buttons don't disable, inputs don't bind. This reference is the source
 of truth, derived from the actual source code.
 
+## The Tina4 Working Method
+
+This is how a tina4-js build is run. The **main session stays free for the developer**; the actual
+work happens in **workers driven by a plan**. Every instruction becomes (or joins) a plan; every
+plan is a living checklist the workers update and you report from. In the main session your job is
+to **scope, delegate, and report** — never to build inline.
+
+| Phase | What happens | Output |
+|-------|--------------|--------|
+| 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
+| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
+| 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
+| 4. Test-first | The worker pins the behaviour BEFORE building the component | a real check that fails first |
+| 5. Build | Ground with `tina4_context` → climb the Lazy Frontend Ladder → minimum reactive code | it works in the browser |
+| 6. Verify | Run the dev server, drive the real UI; tick the item; log the commit | `[x]` + commit hash in the plan |
+| 7. Report | Relay worker completions to the developer as a ✅/❌ table | the status dashboard |
+
+### 1. Keep the main session free — delegate to a worker
+When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
+spawn a separate worker to execute it**, so the main session is always free for the next input.
+The main agent scopes, dispatches, and reports; workers build and update the plan. When a worker
+finishes an item, surface it to the developer.
+
+### 2. Every instruction is allocated to a plan
+No work happens off-plan. A new request that fits an existing feature → **rescope it into that
+plan** as new `[ ]` items. A genuinely new feature → **scope it with the developer first**, then
+create `plan/<feature>.md`. Additional features are never side-quests — they are just new
+checkboxes in a plan.
+
+### 3. The feature plan format
+Every feature lives in `plan/<feature>.md` with four parts — a Scope checklist, the Tests, a Bugs
+section, and a Commit log:
+
+```markdown
+# Feature: Product List Component
+
+## Scope
+- [x] products signal + api load on mount
+- [x] <product-list> renders each product as a card
+- [ ] search box filters the list reactively
+
+## Tests (written first, real — no smoke tests)
+- [x] renders one card per product in the signal   (real DOM, seeded signal)
+- [ ] typing in the search box narrows the rendered cards
+
+## Bugs
+- [x] list didn't re-render on filter — used ${signal.value} not ${signal} (a1b2c3d)
+- [ ] card click navigated before the signal write landed
+
+## Commits
+- a1b2c3d  product-list component + reactive-render test
+- e4f5g6h  fix frozen binding on filter
+
+## Status: In Progress
+```
+
+### 4. Tests first — real behaviour, never smoke tests
+Pin the behaviour before you build the component: assert against the **real rendered DOM** (a real
+signal, a real `` html`` `` render), or run the dev server and drive the real UI — and make it fail
+before the code exists. No mocks, no "it mounted" smoke test: reactivity is the thing under test,
+and a frozen `${signal.value}` where you needed `${signal}` is exactly the bug a real render check
+catches. The passing real check is the definition of done for a checklist item.
+
+### 5. Build the minimum, grounded
+Only once the check exists: ground with `tina4_context`, climb the **Lazy Frontend Ladder** (the
+platform + tina4-js primitives cover most of it — never a React/Vue/state/router library), and
+write the minimum reactive code that passes. Nothing speculative.
+
+### 6. Verify for real, then log the commit
+An item is `[x]` only when the real check passes AND the UI actually behaves in the browser. When
+it lands, record the **commit hash + one-line description** in the plan's Commits section, so the
+plan is an honest audit trail of what actually shipped.
+
+### 7. Report as a ✅/❌ dashboard
+Report to the developer as a table, not prose:
+
+| Item                 | Status |
+|----------------------|--------|
+| products signal      | ✅     |
+| product-list render  | ✅     |
+| reactive search      | ❌     |
+| Bug: nav race        | ❌     |
+
+The developer should see status at a glance without asking. Update the table as workers complete
+items, and surface each completion in the main session.
+
+### Bugs are part of the plan
+Bugs aren't tracked elsewhere — each plan has a **Bugs** section. A bug is logged there as `[ ]`,
+fixed, proven with a **real** render check, and ticked `[x]` with its commit hash — the same
+discipline as a feature.
+
 ## Before you write code — the reuse ladder
 
 Climb in order; write new code only at the last rung. tina4-js is **sub-11 KB, zero dependencies** — reach for its primitives, not a framework.
