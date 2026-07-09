@@ -169,13 +169,16 @@ running (`tina4php serve` with `TINA4_DEBUG=true`):
 - **`api_search("render template")`** — ranked search across the framework + your own code; returns fqn, signature, file:line. Run it BEFORE assuming a method exists.
 - **`api_class("Frond")`** — every method on a class, with signatures. A bare name (`Frond`) or the full fqn (`Tina4\Frond`) both resolve.
 - **`api_method("Frond", "addTest")`** — exact signature, params, return type, file and line for one method.
+- **`code_search("where is the auth token issued?")`** — fuzzy/semantic full-text search over **THIS project's own source + docs** (the native `Context` FTS5 index — zero-dep, kept live on every file save). Ranks the file that *defines* a symbol above tests that merely mention it. The in-repo, semantic counterpart to `api_*`.
 
 ```
 api_search("queue consume")     -> finds Queue::consume and its signature
 api_class("Database")           -> every method on Database, with signatures
 api_method("Auth", "getToken")  -> getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string
+code_search("send an email")    -> the routes/services in YOUR app that already do it
 ```
 
+- **The grounding ladder — pick the tool by the question.** `api_*` = *exact structure* ("what's the signature of X?"); `code_search` = *semantic, in your own repo* ("where/how is X done in THIS app?"); `docs_search` = the prose docs; `tina4_context` = the current framework API + idioms (external corpus, for framework facts not in your project).
 - **PHP method names are camelCase** (`fromTable`, `findById`, `getToken`, `checkPassword`, `addTest`).
 - **Unsure of a name or signature? Look it up — don't recall it.** A 5-second `api_method` call beats a hallucinated method that costs 20 minutes of debugging.
 - **`api_*` is live reflection (exact code); `docs_search` searches the prose docs.** Use `api_*` for signatures, `docs_search` for "how do I X" guidance.
