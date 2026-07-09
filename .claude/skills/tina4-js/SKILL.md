@@ -66,8 +66,11 @@ to **scope, delegate, and report** — never to build inline.
 ### 1. Keep the main session free — delegate to a worker
 When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
 spawn a separate worker to execute it**, so the main session is always free for the next input.
-The main agent scopes, dispatches, and reports; workers build and update the plan. When a worker
-finishes an item, surface it to the developer.
+tina4-js **hot-reloads on save** (Vite HMR / the dev server), so as the worker edits components and
+signals the developer watches the UI update **live in the browser** — keeping the main session open
+is what lets them observe and steer while the work happens. The main agent scopes, dispatches, and
+reports; workers build and update the plan. When a worker finishes an item, surface it to the
+developer.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
@@ -75,9 +78,21 @@ plan** as new `[ ]` items. A genuinely new feature → **scope it with the devel
 create `plan/<feature>.md`. Additional features are never side-quests — they are just new
 checkboxes in a plan.
 
-### 3. The feature plan format
-Every feature lives in `plan/<feature>.md` with four parts — a Scope checklist, the Tests, a Bugs
-section, and a Commit log:
+### 3. The plan folder — a master plan over feature plans
+`plan/` holds a **master plan** (`plan/MASTER.md`) that carries the overview — every feature and its
+status at a glance — plus one detailed plan per feature. The master plan is the dashboard; each
+feature plan owns the detail:
+
+```markdown
+# Master Plan — <project>
+
+| Feature | Plan | Status |
+|--------------------|-----------------------------------------|----------------|
+| Product list       | [product-list.md](product-list.md)      | ✅ Complete    |
+| Checkout flow      | [checkout.md](checkout.md)              | 🟡 In Progress |
+```
+
+A feature plan has four parts — a Scope checklist, the Tests, a Bugs section, and a Commit log:
 
 ```markdown
 # Feature: Product List Component
