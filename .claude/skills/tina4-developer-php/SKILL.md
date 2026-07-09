@@ -570,6 +570,13 @@ firebird://user:password@localhost:3050/mydb
 
 ## Testing
 
+> **SQLite URL footgun — mind the slashes.** Bind a **relative** sqlite URL for test / temp
+> databases: `sqlite:///data/test.db` (three slashes = relative to cwd — identical on every
+> backend). Never build the URL from a raw absolute path (e.g. `"sqlite:" . $absPath`, which
+> yields a single leading slash) — python/ruby read that as *relative*, so the DB is silently
+> created somewhere else and a test's DB-reset misses it (stale rows → flaky assertions). For a
+> genuine absolute path use the four-slash form `sqlite:////abs/path.db`.
+
 Tests are written alongside the code in `tests/`, run with PHPUnit:
 
 ```bash
