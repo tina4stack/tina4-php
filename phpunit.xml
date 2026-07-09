@@ -73,6 +73,8 @@
             <file>tests/WsdlTest.php</file>
             <file>tests/MessengerTest.php</file>
             <file>tests/DevAdminTest.php</file>
+            <file>tests/ContextTest.php</file>
+            <file>tests/ContextReloadReindexTest.php</file>
             <file>tests/PortConfigTest.php</file>
             <file>tests/TemplateMethodTest.php</file>
             <file>tests/FakeDataTest.php</file>
