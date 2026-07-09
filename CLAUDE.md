@@ -584,7 +584,7 @@ $api->setBasicAuth(string $username, string $password): void
 ### Migration — Database migrations
 
 ```php
-$migration = new \Tina4\Migration(DatabaseAdapter $db, string $migrationsDir = "src/migrations", string $delimiter = ";")
+$migration = new \Tina4\Migration(DatabaseAdapter $db, string $migrationsDir = "migrations", string $delimiter = ";")
 $migration->migrate(): array
 ```
 

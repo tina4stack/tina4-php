@@ -22,7 +22,9 @@ use Tina4\Database\DatabaseAdapter;
  *   - YYYYMMDDHHMMSS_description.down.sql
  *   - 000001_description.down.sql
  *
- * Located in src/migrations/ by default.
+ * Located in migrations/ (project root) by default — the one canonical location, matching
+ * createMigration(), App auto-migrate, the CLI, and the Python reference. Legacy src/migrations/
+ * is still honoured as a fallback.
  * Tracks applied migrations in the tina4_migration table.
  */
 class Migration
@@ -36,11 +38,23 @@ class Migration
     /** Cached probe: does the tracking table still carry the older-v3 `migration` column? */
     private ?bool $legacyMigrationColumn = null;
 
+    /** @var string Resolved migrations directory — canonical migrations/ at the project root */
+    private readonly string $migrationsDir;
+
     public function __construct(
         private readonly DatabaseAdapter $db,
-        private readonly string $migrationsDir = 'src/migrations',
+        string $migrationsDir = 'migrations',
         private readonly string $delimiter = ';',
     ) {
+        // Canonical location is migrations/ (project root) — matches createMigration(), App
+        // auto-migrate, the CLI, and the Python reference. Fall back to the legacy
+        // src/migrations/ ONLY when the default was taken, migrations/ is absent, and a legacy
+        // src/migrations/ exists, so existing projects keep working (with a deprecation nudge).
+        if ($migrationsDir === 'migrations' && !is_dir('migrations') && is_dir('src/migrations')) {
+            Log::warning('Migration: using legacy src/migrations/ — move migrations to migrations/ (project root).');
+            $migrationsDir = 'src/migrations';
+        }
+        $this->migrationsDir = $migrationsDir;
         $this->ensureMigrationsTable();
     }
 
