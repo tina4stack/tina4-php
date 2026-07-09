@@ -325,6 +325,22 @@ class DevAdmin
                 Log::error('Re-discover on reload failed: ' . $e->getMessage());
             }
 
+            // Keep the code Context index LIVE on the same reload trigger:
+            // reindex just the changed file (UPSERT) so the dev-MCP code_search
+            // reflects the edit immediately. Only touches an already-built index
+            // (existingContext() never creates one); guarded so a context
+            // failure never breaks the reload. Mirrors Python's _api_reload.
+            try {
+                if (self::$reloadFile !== '') {
+                    $ctx = Context::existingContext();
+                    if ($ctx !== null) {
+                        $ctx->reindexFile(self::$reloadFile);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::error('Context reindex on reload failed: ' . $e->getMessage());
+            }
+
             // WebSocket-primary reload: push an instant {type, file, mtime}
             // message to every browser connected on /__dev_reload. The toolbar
             // client (and the dev-admin dashboard) act on it immediately — the

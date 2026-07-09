@@ -1889,6 +1889,34 @@ class McpDevTools
             return $spec ?? ['error' => "method not found: {$class}::{$name}"];
         }, 'Live method reflection — returns signature, params, return type, file, line.');
 
+        // ── Code/doc grounding (Tina4\Context) ───────────────────
+        // Sibling of api_* but the DUAL of it: api_* is exact structural
+        // reflection (class/method signatures); code_search is fuzzy/semantic
+        // FTS over the project's own SOURCE + docs. Use code_search for
+        // "where/how is X done in THIS codebase?" and api_* for "what's the
+        // signature of X?". Backed by a zero-dependency SQLite FTS5 index at
+        // .tina4/context.db, held as a PROCESS-WIDE shared Context so the dev
+        // reload hook can keep the SAME index fresh on every file save.
+        $codeRoot = static function () use ($projectRoot): string {
+            return is_dir($projectRoot . DIRECTORY_SEPARATOR . 'src')
+                ? $projectRoot . DIRECTORY_SEPARATOR . 'src'
+                : $projectRoot;
+        };
+        $server->registerTool('code_search', function (string $query, int $k = 5, bool $rebuild = false) use ($projectRoot, $codeRoot) {
+            $ctx = Context::defaultContext(
+                $codeRoot(),
+                $projectRoot . DIRECTORY_SEPARATOR . '.tina4' . DIRECTORY_SEPARATOR . 'context.db'
+            );
+            if (!$ctx->available) {
+                return ['error' => 'SQLite FTS5 is not available in this PHP build; code_search is disabled.'];
+            }
+            if ($rebuild) {
+                $ctx->reset();
+                $ctx->indexRoot($codeRoot());
+            }
+            return $ctx->search($query, $k);
+        }, "Fuzzy/semantic search over THIS project's source + docs (FTS5). Use for 'where/how is X done here?'; api_* for exact signatures.");
+
         // ── Project introspection ────────────────────────────────
 
         $server->registerTool('git_status', function () use ($projectRoot) {
