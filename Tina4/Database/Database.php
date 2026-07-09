@@ -1452,16 +1452,28 @@ class Database implements DatabaseAdapter
             return new SQLite3Adapter(':memory:', $autoCommit);
         }
 
-        if (str_starts_with($url, 'sqlite:///')) {
-            // Strip the scheme: sqlite:/// = 9 chars
-            //   Linux:   sqlite:///var/data/app.db   → /var/data/app.db
-            //   Windows: sqlite:///C:/Users/app.db   → /C:/Users/app.db
-            // On Windows the leading / before the drive letter must be removed.
-            $path = substr($url, 9);
+        if (str_starts_with($url, 'sqlite:')) {
+            // Strip the scheme on the RAW string (sqlite:/// -> sqlite:// -> sqlite:),
+            // matching DatabaseUrl and tina4-python/ruby/nodejs. This keeps the documented
+            // forms (three slashes = relative to cwd, four = absolute) AND makes a one-slash
+            // absolute path (sqlite:/abs/app.db) resolve absolute instead of being mis-read
+            // as a bare "sqlite:/abs/app.db" filename by the .db branch below (the footgun).
+            //   sqlite:///data/app.db  -> "data/app.db"   (relative)
+            //   sqlite:////abs/app.db  -> "/abs/app.db"   (absolute)
+            //   sqlite:/abs/app.db     -> "/abs/app.db"   (absolute — the fix)
+            //   sqlite:///C:/Users/app -> "C:/Users/app"  (Windows absolute)
+            if (str_starts_with($url, 'sqlite:///')) {
+                $path = substr($url, 10);   // "sqlite:///" is 10 chars
+            } elseif (str_starts_with($url, 'sqlite://')) {
+                $path = substr($url, 9);
+            } else {
+                $path = substr($url, 7);    // "sqlite:"
+            }
+            // Windows: drop the leading "/" before a drive letter (sqlite:///C:/...).
             if (preg_match('/^\/[A-Za-z]:/', $path)) {
                 $path = substr($path, 1);
             }
-            return new SQLite3Adapter($path, $autoCommit);
+            return new SQLite3Adapter($path === '' ? ':memory:' : $path, $autoCommit);
         }
 
         // For a bare file path ending in .db or .sqlite, assume SQLite
