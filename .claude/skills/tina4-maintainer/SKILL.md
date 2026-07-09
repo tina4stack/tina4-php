@@ -38,9 +38,11 @@ you relay completions. This section is the map; the detailed sections below own 
 | 7. Report | A ✅/❌ dashboard per framework | the status table |
 
 ### Every instruction is allocated to a plan
-No maintenance happens off-plan. A new request → **rescope it into the plan** as `[ ]` items, or
-scope a new `<repo>/plan/<task>.md`. Additional work is never a side-quest — it is new checkboxes.
-Each plan carries a Scope checklist, a parity dashboard, Tests, a Bugs section, and a Commit log:
+No maintenance happens off-plan. `<repo>/plan/` holds a **master plan** — the overview of every task
+and its cross-framework status — plus one detailed plan per task. A new request → **rescope it into
+a plan** as `[ ]` items, or scope a new `<repo>/plan/<task>.md`. Additional work is never a
+side-quest — it is new checkboxes. Each plan carries a Scope checklist, a parity dashboard, Tests, a
+Bugs section, and a Commit log:
 
 ```markdown
 # Task: Port Product Search to PHP / Ruby / Node
