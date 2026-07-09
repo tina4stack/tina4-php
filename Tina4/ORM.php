@@ -503,6 +503,8 @@ abstract class ORM
      *      (preferring the adapter's getError()/error(), falling back to the
      *      exception text), logged with model/table context, recorded on
      *      $lastError, and false is returned — the cause is no longer swallowed.
+     *      A "no such table" / missing-is_deleted-column cause is augmented with
+     *      an actionable fix hint (v3.13.60 — see {@see writeErrorHint()}).
      *
      * @return static|false
      */
@@ -557,7 +559,7 @@ abstract class ORM
                 $this->_db->rollback();
                 // ── Change 1: fail loud, never silent. Capture the REAL cause
                 // (adapter getError()/error()), record it, and log it. ──
-                $this->lastError = $this->dbError() ?? 'save failed';
+                $this->lastError = $this->writeErrorHint($this->dbError() ?? 'save failed');
                 Log::error(
                     static::class . "::save() failed for table '{$this->tableName}': " . $this->lastError,
                     ['table' => $this->tableName]
@@ -573,7 +575,7 @@ abstract class ORM
             // getError(), which execute()/exec() populate, falling back to the
             // exception text) on $lastError so it survives, and log it with
             // model/table context. ──
-            $this->lastError = $this->dbError() ?? $e->getMessage();
+            $this->lastError = $this->writeErrorHint($this->dbError() ?? $e->getMessage());
             Log::error(
                 static::class . "::save() failed for table '{$this->tableName}': " . $this->lastError,
                 ['table' => $this->tableName]
@@ -630,6 +632,50 @@ abstract class ORM
             }
         }
         return null;
+    }
+
+    /**
+     * DX hint (v3.13.60, parity with tina4-python's save() hint): turn a bare
+     * driver error into an actionable fix for the two commonest ORM write
+     * footguns — the model's table not existing yet, and a $softDelete model
+     * whose is_deleted column is missing. Matched case-insensitively against the
+     * cause text (SQLite: "no such table" / "has no column named is_deleted" /
+     * "no such column: is_deleted"; Postgres/MySQL: "does not exist" /
+     * "doesn't exist" / "unknown column"). Any OTHER error keeps its raw cause
+     * untouched so we never mask an unrelated failure (a NOT NULL / duplicate-PK
+     * violation reads exactly as the driver reported it).
+     */
+    private function writeErrorHint(string $cause): string
+    {
+        $low = strtolower($cause);
+
+        // Missing is_deleted column on a soft-delete model. createTable() builds
+        // the table from declared properties ONLY and does NOT inject is_deleted,
+        // so a $softDelete model that never declares it writes/queries a column
+        // the table hasn't got.
+        if ($this->softDelete && str_contains($low, 'is_deleted') && (
+            str_contains($low, 'no such column') || str_contains($low, 'has no column')
+            || str_contains($low, 'does not exist') || str_contains($low, "doesn't exist")
+            || str_contains($low, 'unknown column')
+        )) {
+            return $cause
+                . ' — $softDelete = true requires an is_deleted column; declare it'
+                . ' (public int $is_deleted = 0;) or add a migration';
+        }
+
+        // Missing table. Exclude a column-not-found (e.g. Postgres
+        // 'column "x" does not exist') so a genuine missing-column error never
+        // gets a spurious table hint.
+        if (str_contains($low, 'no such table') || (
+            (str_contains($low, 'does not exist') || str_contains($low, "doesn't exist"))
+            && !str_contains($low, 'column')
+        )) {
+            return $cause
+                . " — table '{$this->tableName}' does not exist; call"
+                . ' $model->createTable() (dev) or run a migration';
+        }
+
+        return $cause;
     }
 
     /**

@@ -77,6 +77,83 @@ $hashed  = \Tina4\Auth::hashPassword("mypassword");
 $matches = \Tina4\Auth::checkPassword("mypassword", $hashed);  // true
 ```
 
+## Auth footguns
+
+Tina4's default is **secure**: `POST`/`PUT`/`PATCH`/`DELETE` require a Bearer token;
+`GET`/`HEAD`/`OPTIONS` are public (`Router.php:812-823`). `->noAuth()` opens a write route;
+`->secure()` locks a read route. Verified against source — get these wrong and you either ship an
+unauthenticated write or fight phantom 401s.
+
+### An unexpected 401 means "authenticate the request", not "open the route"
+
+**`->noAuth()` is a LAST RESORT.** When a write route returns 401 in dev or from a client, the fix
+is almost always to **send the Bearer token** the route legitimately requires — not to strip its
+auth. The client carries it for you: frond.js sends the current `Authorization: Bearer` on every
+`saveForm` / `sendRequest`, and the `\Tina4\Api` client does too (`setBearerToken(...)`). Reserve
+`->noAuth()` for endpoints that are *genuinely* public — login, register, health-check, inbound
+webhooks (validated by signature) — or a handler that authenticates another way *inside* it.
+
+```php
+// Public login route — mints a token; the caller has no token YET, so it opts out.
+\Tina4\Router::post("/api/login", function ($request, $response) {
+    // ... verify credentials, then:
+    return $response(["token" => \Tina4\Auth::getToken(["user_id" => $user->id])]);
+})->noAuth();
+
+// Protected write route — Bearer-protected automatically; write NOTHING extra.
+\Tina4\Router::post("/api/orders", function ($request, $response) {
+    $auth = \Tina4\Auth::authenticateRequest($request->headers->toArray());   // verified payload, or null
+    $data = $request->body;
+    $data["user_id"] = $auth["user_id"];        // trust the token, not the client body
+    return $response((new Order($data))->save(), 201);
+});
+```
+
+* **Never blanket `->noAuth()` to silence 401s.** Slapping it on every write route that returns
+  401 doesn't "fix auth" — it **ships unauthenticated writes**. A 401 on `POST /orders` means the
+  request arrived without a valid token; authenticate it, don't open the route. More than 2–3
+  `->noAuth()` write routes in a whole app means the auth flow is wrong — stop and fix it.
+* **Before you type `->noAuth()`, ask:** can it modify data / cost money / be bot-abused / expose
+  private data? Yes to any → it needs auth, not `->noAuth()`. If you *must* use it (webhook,
+  protocol endpoint), the handler MUST still authenticate (signature, header scheme).
+
+### Lock a GET with `->secure()`; there is no docs-only auth annotation (differs from Python)
+
+GET is public by default — require a token on one by chaining `->secure()` (or the `@secured`
+docblock tag). Both **actually enforce**. Unlike Python — whose swagger `@security("bearerAuth")`
+*documents* auth without gating it (a real docs-vs-enforcement trap) — PHP has **no docs-only auth
+decorator**: the `@noauth` / `@secured` docblock tags set the real enforcement flag
+(`Router.php:1438-1443`), and the OpenAPI security shown at `/swagger` is *derived from* that flag
+(`Router.php:1203`). So Swagger can't claim a route is secured while it's actually open.
+
+```php
+\Tina4\Router::get("/reports", function ($request, $response) {
+    $auth = \Tina4\Auth::authenticateRequest($request->headers->toArray());
+    if ($auth === null) {
+        return $response(["error" => "Unauthorized"], 401);
+    }
+    return $response->json(buildReports());
+})->secure();   // THIS enforces auth on the GET
+```
+
+* **Breaks:** leaving a private-data `GET` public because "it only reads" — a read route that
+  returns another user's data needs `->secure()` + an in-handler ownership check.
+
+### `->noAuth()` / `->secure()` are interchangeable with their docblock tags
+
+The fluent methods and the docblock annotations are equivalent — pick one:
+
+```php
+\Tina4\Router::post("/webhook", function ($request, $response) {
+    /** @noauth */                    // same effect as ->noAuth()
+    // ... validate the webhook signature INSIDE the handler ...
+})->noAuth();
+```
+
+There is **no decorator-order footgun** (as there is in Python): the route method
+(`Router::post(...)`) and the auth modifier (`->noAuth()` / `->secure()`) are one fluent chain,
+not a stack of decorators that can be ordered wrong.
+
 ## Sessions
 
 Configure in `.env`:
