@@ -24,6 +24,8 @@ class AutoCrud
 {
     /** @var array<string, class-string<ORM>> Registered model classes indexed by table name */
     private array $models = [];
+    /** @var array<string, bool> tableName -> public-writes flag (default secure) */
+    private array $public = [];
 
     public function __construct(
         private readonly DatabaseAdapter $db,
@@ -35,9 +37,11 @@ class AutoCrud
      * Register a model class for auto-CRUD.
      *
      * @param class-string<ORM> $modelClass Fully qualified class name
+     * @param bool $public If true, write routes (POST/PUT/DELETE) are OPEN (->noAuth()).
+     *                     Default false keeps them secure-by-default (token required).
      * @return $this
      */
-    public function register(string $modelClass): self
+    public function register(string $modelClass, bool $public = false): self
     {
         $instance = new $modelClass($this->db);
         $tableName = $instance->tableName;
@@ -47,6 +51,7 @@ class AutoCrud
         }
 
         $this->models[$tableName] = $modelClass;
+        $this->public[$tableName] = $public;
         return $this;
     }
 
@@ -56,7 +61,7 @@ class AutoCrud
      * @param string $modelsDir Directory to scan (e.g., src/models)
      * @return array<string> List of discovered model class names
      */
-    public function discover(string $modelsDir): array
+    public function discover(string $modelsDir, bool $public = false): array
     {
         $discovered = [];
 
@@ -77,7 +82,7 @@ class AutoCrud
             // Check common namespaces
             foreach ([$className, "\\{$className}", "App\\{$className}"] as $fqcn) {
                 if (class_exists($fqcn) && is_subclass_of($fqcn, ORM::class)) {
-                    $this->register($fqcn);
+                    $this->register($fqcn, $public);
                     $discovered[] = $fqcn;
                     break;
                 }
@@ -100,6 +105,7 @@ class AutoCrud
             $basePath = $this->prefix . '/' . $tableName;
             $prettyName = str_replace('_', ' ', ucwords($tableName, '_'));
             $example = $this->buildExample($modelClass);
+            $isPublic = $this->public[$tableName] ?? false;
 
             // GET /api/{table} — list. 'model' tags the route so Swagger builds a
             // components.schema from the ORM fields and $refs it (modelList -> array).
@@ -112,19 +118,22 @@ class AutoCrud
                 ->swagger(['summary' => "Get {$prettyName} by ID", 'tags' => [$tableName], 'model' => $modelClass]);
             $generated[] = ['method' => 'GET', 'path' => $basePath . '/{id}', 'table' => $tableName];
 
-            // POST /api/{table} — create
-            Router::post($basePath, $this->createCreateHandler($modelClass))
-                ->swagger(['summary' => "Create {$prettyName}", 'tags' => [$tableName], 'example' => $example, 'model' => $modelClass]);
+            // POST /api/{table} — create (secure-by-default; ->noAuth() only when opted public)
+            $postRoute = Router::post($basePath, $this->createCreateHandler($modelClass));
+            if ($isPublic) { $postRoute->noAuth(); }
+            $postRoute->swagger(['summary' => "Create {$prettyName}", 'tags' => [$tableName], 'example' => $example, 'model' => $modelClass]);
             $generated[] = ['method' => 'POST', 'path' => $basePath, 'table' => $tableName];
 
             // PUT /api/{table}/{id} — update
-            Router::put($basePath . '/{id}', $this->createUpdateHandler($modelClass))
-                ->swagger(['summary' => "Update {$prettyName}", 'tags' => [$tableName], 'example' => $example, 'model' => $modelClass]);
+            $putRoute = Router::put($basePath . '/{id}', $this->createUpdateHandler($modelClass));
+            if ($isPublic) { $putRoute->noAuth(); }
+            $putRoute->swagger(['summary' => "Update {$prettyName}", 'tags' => [$tableName], 'example' => $example, 'model' => $modelClass]);
             $generated[] = ['method' => 'PUT', 'path' => $basePath . '/{id}', 'table' => $tableName];
 
             // DELETE /api/{table}/{id} — delete
-            Router::delete($basePath . '/{id}', $this->createDeleteHandler($modelClass))
-                ->swagger(['summary' => "Delete {$prettyName}", 'tags' => [$tableName]]);
+            $deleteRoute = Router::delete($basePath . '/{id}', $this->createDeleteHandler($modelClass));
+            if ($isPublic) { $deleteRoute->noAuth(); }
+            $deleteRoute->swagger(['summary' => "Delete {$prettyName}", 'tags' => [$tableName]]);
             $generated[] = ['method' => 'DELETE', 'path' => $basePath . '/{id}', 'table' => $tableName];
         }
 

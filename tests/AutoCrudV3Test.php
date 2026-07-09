@@ -76,6 +76,37 @@ class AutoCrudV3Test extends TestCase
         $this->assertContains('DELETE', $methods);
     }
 
+    // --- Secure-by-default writes (opt-in public) ---
+
+    public function testWritesAreSecureByDefault(): void
+    {
+        // default (public=false): the write routes must NOT be noAuth, so the
+        // framework's secure-by-default write gate applies. Regression guard for
+        // the 'AutoCrud silently ships public writes' footgun.
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        foreach ([['POST', '/api/items'], ['PUT', '/api/items/1'], ['DELETE', '/api/items/1']] as [$method, $path]) {
+            $match = Router::match($method, $path);
+            $this->assertNotNull($match, "$method $path should be registered");
+            $this->assertFalse($match['route']['noAuth'], "$method must be secure-by-default (no noAuth)");
+        }
+    }
+
+    public function testPublicTrueOpensWrites(): void
+    {
+        // public=true is the explicit, visible opt-in that opens the writes.
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class, true);
+        $crud->generateRoutes();
+
+        foreach ([['POST', '/api/items'], ['PUT', '/api/items/1'], ['DELETE', '/api/items/1']] as [$method, $path]) {
+            $match = Router::match($method, $path);
+            $this->assertTrue($match['route']['noAuth'], "$method must be noAuth when public=true");
+        }
+    }
+
     public function testGeneratedRoutePaths(): void
     {
         $crud = new AutoCrud($this->db);
