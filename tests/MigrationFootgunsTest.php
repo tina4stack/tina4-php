@@ -403,6 +403,56 @@ class MigrationFootgunsTest extends TestCase
         $this->assertStringContainsString("'O''Brien; Jr'", $stmts[0]);
     }
 
+    public function testMigrateAppliesABatchInNumericOrder(): void
+    {
+        // Regression for a real prod incident: several migrations pending in ONE
+        // run, all rewriting the SAME table (later supersedes earlier). If migrate()
+        // applies them in filesystem/hash order instead of numeric order, the table
+        // is left at a non-final migration's shape. End-to-end against a REAL SQLite
+        // DB (no mocks). The sort-key unit test above locks the KEY; this locks the
+        // sort actually driving apply order through migrate() (e.g. catches a
+        // pending filter regressed to an unordered diff).
+        // UNPADDED prefixes on purpose: 1..10 so a LEXICAL sort ("10" < "2")
+        // differs from numeric order. Fails under BOTH no-sort AND a lexical-only
+        // sort (a numeric-sort regression), not just total disorder. (Zero-padded
+        // names sort correctly under a plain lexical sort and would NOT catch it.)
+        file_put_contents(
+            $this->migrationsDir . '/0_init.sql',
+            "CREATE TABLE probe_final (n INTEGER);\n"
+            . "INSERT INTO probe_final (n) VALUES (0);\n"
+            . "CREATE TABLE probe_log (id INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER);"
+        );
+        // Write 1..10 in SCRAMBLED order so creation order != numeric order.
+        foreach ([7, 3, 10, 1, 5, 9, 2, 8, 4, 6] as $n) {
+            file_put_contents(
+                sprintf('%s/%d_step.sql', $this->migrationsDir, $n),
+                sprintf("UPDATE probe_final SET n = %d;\nINSERT INTO probe_log (n) VALUES (%d);", $n, $n)
+            );
+        }
+
+        $db = new SQLite3Adapter(':memory:');
+        $result = $this->newMigration($db)->migrate();
+
+        $expected = ['0_init.sql'];
+        for ($n = 1; $n <= 10; $n++) {
+            $expected[] = "{$n}_step.sql";
+        }
+        $this->assertSame([], $result['errors'], 'batch reported errors');
+        $this->assertSame($expected, $result['applied'], 'batch applied out of numeric order');
+
+        // The real apply sequence recorded in the DB is strictly numeric (a lexical
+        // sort would put 10 before 2). The raw adapter's fetch() returns ['data' => rows].
+        $log = array_map(
+            static fn (array $r): int => (int) $r['n'],
+            $db->fetch('SELECT n FROM probe_log ORDER BY id')['data']
+        );
+        $this->assertSame(range(1, 10), $log, 'migrations ran out of order');
+
+        // The last-applied migration wins — the exact contract that broke in prod.
+        $final = $db->fetch('SELECT n FROM probe_final')['data'];
+        $this->assertSame(10, (int) $final[0]['n']);
+    }
+
     public function testMigrateAppliesStatementWithSemicolonInComment(): void
     {
         // End-to-end against a REAL SQLite DB (no mocks): the issue #54 repro
