@@ -27,6 +27,164 @@ class AI
         ["name" => "codex", "description" => "OpenAI Codex", "context_file" => "AGENTS.md", "config_dir" => null],
     ];
 
+    // ── Skill files (the SKILL.md system) ───────────────────────────────
+    // `tina4 ai` installs the actual skills — not just a CLAUDE.md pointer to
+    // them — into BOTH the project (.claude/skills, so they travel with the
+    // repo) and the user's global ~/.claude/skills (so they're available in
+    // every project). A PHP project needs the php developer skill plus the two
+    // shared skills; the developer skill ships from the tina4-php release tag,
+    // the shared skills from tina4-python. Mirrors the canonical
+    // install-skills.sh.
+
+    /** The PHP developer skill (split from the old generic tina4-developer). */
+    public const DEV_SKILL = "tina4-developer-php";
+
+    /**
+     * Skills installed by `tina4 ai`: skill name → source repo + reference
+     * files under references/. The developer skill comes from tina4-php; the
+     * two shared skills (tina4-js, tina4-maintainer) come from tina4-python.
+     *
+     * @return array<string, array{repo:string, refs:string[]}>
+     */
+    private static function skills(): array
+    {
+        return [
+            self::DEV_SKILL => [
+                "repo" => "tina4-php",
+                "refs" => ["auth-and-services.md", "data-and-orm.md", "deployment.md",
+                           "routes-and-api.md", "templates-and-frontend.md", "realtime.md"],
+            ],
+            "tina4-js" => [
+                "repo" => "tina4-python",
+                "refs" => ["html-and-components.md", "signals-and-reactivity.md",
+                           "persistence.md", "rtc.md"],
+            ],
+            "tina4-maintainer" => [
+                "repo" => "tina4-python",
+                "refs" => ["cli-and-deployment.md", "frond-and-frontend.md",
+                           "routing-and-orm.md", "subsystems.md"],
+            ],
+        ];
+    }
+
+    /**
+     * Release tag to pull skills from — the installed framework version,
+     * overridable with TINA4_SKILLS_REF (e.g. to test a branch). Falls back
+     * to "main" when the version can't be resolved.
+     */
+    private static function skillsRef(): string
+    {
+        $ref = getenv('TINA4_SKILLS_REF');
+        if ($ref !== false && $ref !== '') {
+            return $ref;
+        }
+        if (App::$VERSION !== '' && App::$VERSION !== '0.0.0') {
+            return App::$VERSION;
+        }
+        return 'main';
+    }
+
+    /** The user's home directory (cross-platform), or the temp dir as a last resort. */
+    private static function homeDir(): string
+    {
+        foreach (['HOME', 'USERPROFILE'] as $var) {
+            $home = getenv($var);
+            if ($home !== false && $home !== '') {
+                return $home;
+            }
+        }
+        return sys_get_temp_dir();
+    }
+
+    /**
+     * Fetch a URL's bytes, or null on any failure. Uses curl when available
+     * (clean timeout handling), else file_get_contents. 15s timeout.
+     */
+    private static function fetchBytes(string $url): ?string
+    {
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_CONNECTTIMEOUT => 15,
+                CURLOPT_TIMEOUT => 15,
+                CURLOPT_FAILONERROR => true,
+                CURLOPT_USERAGENT => 'tina4-php-ai-installer',
+            ]);
+            $data = curl_exec($ch);
+            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            // curl_close() is a no-op since PHP 8.0 (deprecated in 8.5); the
+            // CurlHandle is freed on GC. Leaving it out keeps 8.5 quiet.
+            if ($data !== false && $code >= 200 && $code < 300) {
+                return $data;
+            }
+            return null;
+        }
+        $context = stream_context_create([
+            'http' => ['timeout' => 15, 'follow_location' => 1, 'user_agent' => 'tina4-php-ai-installer'],
+            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+        ]);
+        $data = @file_get_contents($url, false, $context);
+        return $data === false ? null : $data;
+    }
+
+    /**
+     * Install the Tina4 SKILL.md skills into the project AND the user's global
+     * ~/.claude/skills, fetched from the release tag matching this framework
+     * version. Returns the skills that installed fully. Network-dependent —
+     * on a fetch failure the affected skill is skipped gracefully.
+     *
+     * @param string        $root    Project root.
+     * @param string[]|null $targets Destination skills dirs. Defaults to
+     *                               <project>/.claude/skills and ~/.claude/skills.
+     * @return string[] Names of the skills fully installed.
+     */
+    public static function installSkills(string $root = ".", ?array $targets = null): array
+    {
+        $ref = self::skillsRef();
+        if ($targets === null) {
+            $projectRoot = realpath($root) ?: $root;
+            $targets = [
+                $projectRoot . '/.claude/skills',
+                self::homeDir() . '/.claude/skills',
+            ];
+        }
+
+        $installed = [];
+        foreach (self::skills() as $skill => $spec) {
+            $base = "https://raw.githubusercontent.com/tina4stack/{$spec['repo']}/{$ref}/.claude/skills";
+
+            // Fetch once, write to every target. A missing SKILL.md means the
+            // skill isn't available at this ref — skip it entirely.
+            $skillMd = self::fetchBytes("{$base}/{$skill}/SKILL.md");
+            if ($skillMd === null) {
+                continue;
+            }
+            $refData = [];
+            foreach ($spec['refs'] as $r) {
+                $rd = self::fetchBytes("{$base}/{$skill}/references/{$r}");
+                if ($rd !== null) {
+                    $refData[$r] = $rd;
+                }
+            }
+
+            foreach ($targets as $dest) {
+                $skillDir = $dest . '/' . $skill;
+                $refsDir = $skillDir . '/references';
+                if (!is_dir($refsDir)) {
+                    mkdir($refsDir, 0755, true);
+                }
+                file_put_contents($skillDir . '/SKILL.md', $skillMd);
+                foreach ($refData as $r => $rd) {
+                    file_put_contents($refsDir . '/' . $r, $rd);
+                }
+            }
+            $installed[] = $skill;
+        }
+        return $installed;
+    }
+
     /**
      * Check if a tool's context file already exists.
      */
@@ -147,7 +305,7 @@ class AI
         if (str_ends_with(strtolower($contextFile), '.md')) {
             $body = "## Tina4 Skills\n\n"
                 . "When working on this Tina4 project, these skills give the assistant project-aware behaviour:\n\n"
-                . "- **tina4-developer** — Read `.claude/skills/tina4-developer/SKILL.md` before building features.\n"
+                . "- **" . self::DEV_SKILL . "** — Read `.claude/skills/" . self::DEV_SKILL . "/SKILL.md` before building features.\n"
                 . "- **tina4-js** — Read `.claude/skills/tina4-js/SKILL.md` for frontend work.\n"
                 . "- **tina4-maintainer** — Read `.claude/skills/tina4-maintainer/SKILL.md` for framework-level changes.\n\n"
                 . "If Tina4 behaves differently from what these skills describe, that is a bug in the skill. "
@@ -156,7 +314,7 @@ class AI
                 . "See https://tina4.com for full docs.";
         } else {
             $body = "Tina4 Skills — read these files before working on this project:\n"
-                . "  .claude/skills/tina4-developer/SKILL.md   (feature development)\n"
+                . "  .claude/skills/" . self::DEV_SKILL . "/SKILL.md   (feature development)\n"
                 . "  .claude/skills/tina4-js/SKILL.md          (frontend / tina4-js)\n"
                 . "  .claude/skills/tina4-maintainer/SKILL.md  (framework-level changes)\n"
                 . "Found a skill that disagrees with how Tina4 actually behaves? Tell the developer,\n"
@@ -320,38 +478,24 @@ class AI
     }
 
     /**
-     * Copy Claude Code skill files from the framework's directories.
+     * Install Claude Code skill files — network-fetched from the release tag —
+     * into the project AND the user's global ~/.claude/skills.
      *
-     * @return string[] Files created (relative paths)
+     * The previous implementation copied from the framework's own
+     * .claude/skills directory, which exists only in a dev/editable checkout —
+     * it is NOT shipped in the Composer package. So installed users got zero
+     * skill files, only a CLAUDE.md pointer to skills that weren't there.
+     * installSkills() fixes that by fetching the real skills over the network.
+     *
+     * @return string[] Skills installed (relative-style labels)
      */
     private static function installClaudeSkills(string $root): array
     {
         $created = [];
-
-        // Determine the framework root (where Tina4/ lives)
-        $frameworkRoot = dirname(__DIR__);
-
-        // Copy skill directories from .claude/skills/ in the framework to the project
-        $frameworkSkillsDir = $frameworkRoot . '/.claude/skills';
-        if (is_dir($frameworkSkillsDir)) {
-            $targetSkillsDir = $root . '/.claude/skills';
-            if (!is_dir($targetSkillsDir)) {
-                mkdir($targetSkillsDir, 0755, true);
-            }
-            $dirs = array_filter(glob($frameworkSkillsDir . '/*'), 'is_dir');
-            foreach ($dirs as $skillDir) {
-                $dirName = basename($skillDir);
-                $targetDir = $targetSkillsDir . '/' . $dirName;
-                if (is_dir($targetDir)) {
-                    self::removeDirectory($targetDir);
-                }
-                self::copyDirectory($skillDir, $targetDir);
-                $relative = ltrim(str_replace($root, '', $targetDir), '/');
-                $created[] = $relative;
-                echo "  \e[32m[OK]\e[0m Updated {$relative}\n";
-            }
+        foreach (self::installSkills($root) as $skill) {
+            $created[] = ".claude/skills/{$skill}/";
+            echo "  \e[32m[OK]\e[0m Installed .claude/skills/{$skill}  (project + global)\n";
         }
-
         return $created;
     }
 
@@ -764,51 +908,5 @@ CONTEXT;
         $returnCode = 0;
         exec($check, $output, $returnCode);
         return $returnCode === 0;
-    }
-
-    /**
-     * Recursively copy a directory.
-     */
-    private static function copyDirectory(string $source, string $dest): void
-    {
-        if (!is_dir($dest)) {
-            mkdir($dest, 0755, true);
-        }
-        $items = scandir($source);
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $srcPath = $source . '/' . $item;
-            $dstPath = $dest . '/' . $item;
-            if (is_dir($srcPath)) {
-                self::copyDirectory($srcPath, $dstPath);
-            } else {
-                copy($srcPath, $dstPath);
-            }
-        }
-    }
-
-    /**
-     * Recursively remove a directory.
-     */
-    private static function removeDirectory(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $items = scandir($dir);
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $item;
-            if (is_dir($path)) {
-                self::removeDirectory($path);
-            } else {
-                unlink($path);
-            }
-        }
-        rmdir($dir);
     }
 }
