@@ -25,6 +25,96 @@ JSON, POST a JSON body and it's automatically parsed into `$request->body`, drop
 > the **global** namespace, so reference framework classes with a leading backslash
 > (`\Tina4\Router`, `\Tina4\Auth`, `\Tina4\QueryBuilder`, `\Tina4\Database\Database`).
 
+## The Tina4 Working Method
+
+This is how a Tina4 build is run. The **main session stays free for the developer**; the actual
+work happens in **workers driven by a plan**. Every instruction becomes (or joins) a plan; every
+plan is a living checklist the workers update and you report from. In the main session your job is
+to **scope, delegate, and report** — never to build inline.
+
+| Phase | What happens | Output |
+|-------|--------------|--------|
+| 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
+| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
+| 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
+| 4. Test-first | The worker writes REAL tests before any code | failing tests that pin the behaviour |
+| 5. Build | Ground with `tina4_context` → climb the reuse ladder → minimum code | tests now green |
+| 6. Verify | Run it for real; tick the item; log the commit | `[x]` + commit hash in the plan |
+| 7. Report | Relay worker completions to the developer as a ✅/❌ table | the status dashboard |
+
+### 1. Keep the main session free — delegate to a worker
+When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
+spawn a separate worker to execute it**, so the main session is always free for the next input.
+The main agent scopes, dispatches, and reports; workers build and update the plan. When a worker
+finishes an item, surface it to the developer.
+
+### 2. Every instruction is allocated to a plan
+No work happens off-plan. A new request that fits an existing feature → **rescope it into that
+plan** as new `[ ]` items. A genuinely new feature → **scope it with the developer first**, then
+create `plan/<feature>.md`. Additional features are never side-quests — they are just new
+checkboxes in a plan.
+
+### 3. The feature plan format
+Every feature lives in `plan/<feature>.md` with four parts — a Scope checklist, the Tests, a Bugs
+section, and a Commit log:
+
+```markdown
+# Feature: Product Search API
+
+## Scope
+- [x] Product model (id, name, price, created_at)
+- [x] GET /api/products?q= — search by name
+- [ ] Price-range filter (?min= &max=)
+
+## Tests (written first, real — no mocks)
+- [x] search returns matching products   (real SQLite, seeded rows)
+- [ ] price-range filter narrows results
+
+## Bugs
+- [x] q= containing % broke the LIKE — escaped the wildcards (a1b2c3d)
+- [ ] empty result returns 500 instead of []
+
+## Commits
+- a1b2c3d  product model + search route + real tests
+- e4f5g6h  escape LIKE wildcards in q=
+
+## Status: In Progress
+```
+
+### 4. Tests first — real tests, never smoke tests
+Write the tests **before** the code, and make them real: they hit the actual dependency (a real
+SQLite file, a real HTTP request, a real temp dir), assert real behaviour, and **fail before the
+code exists**. No mocks, stubs, fakes, or "it returned 200" smoke tests — a green mock proves
+nothing (see **No Code Without Tests** and **Testing** below). The passing real test is the
+definition of done for a checklist item.
+
+### 5. Build the minimum, grounded
+Only once the tests exist: ground with `tina4_context`, climb the reuse ladder (most features are
+already in the box), and write the minimum code that makes the tests pass. Nothing speculative.
+
+### 6. Verify for real, then log the commit
+An item is `[x]` only when its real tests pass against a real run. When it lands, record the
+**commit hash + one-line description** in the plan's Commits section, so the plan is an honest
+audit trail of what actually shipped.
+
+### 7. Report as a ✅/❌ dashboard
+Report to the developer as a table, not prose:
+
+| Item                 | Status |
+|----------------------|--------|
+| Product model        | ✅     |
+| Search route         | ✅     |
+| Price-range filter   | ❌     |
+| Bug: 500 on empty    | ❌     |
+
+The developer should see status at a glance without asking. Update the table as workers complete
+items, and surface each completion in the main session.
+
+### Bugs are part of the plan
+Bugs aren't tracked elsewhere — each plan has a **Bugs** section. A bug is logged there as `[ ]`,
+fixed, proven with a **real** test, and ticked `[x]` with its commit hash — the same discipline as
+a feature.
+
 ## Before you write code — the reuse ladder
 
 Climb in order; write new code only at the last rung. Tina4 ships **built-in features, zero dependencies** — most "new code" is already in the box.
@@ -520,6 +610,8 @@ The app includes a health check at `/health` that Kubernetes probes can use.
 
 ## Plan First — Always
 
+> Use the plan **format** from **The Tina4 Working Method** above — Scope / Tests / Bugs / Commits. The workflow below is how you drive it.
+
 Every feature starts with a plan. No exceptions. This isn't overhead — it's how you avoid
 building the wrong thing and how the developer tracks progress.
 
@@ -619,7 +711,7 @@ Local-only commits on shared branches are a risk — push after every milestone.
 
 This is a hard rule. Every piece of functionality gets tests BEFORE it ships:
 
-- **Write the test first or alongside the code** — never after, never "later"
+- **Write the test FIRST — before the code**, never after, never "later". Real tests only — no mocks, no "it returned 200" smoke tests
 - Route handlers get request/response tests
 - ORM models get CRUD tests
 - Business logic in `src/app/` gets unit tests
