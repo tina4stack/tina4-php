@@ -1277,16 +1277,22 @@ DOCKERFILE;
         // Initialize app
         $app = new \Tina4\App(basePath: $cwd);
 
-        // Try database
+        // Try database. Database::fromEnv() reads the canonical TINA4_DATABASE_URL
+        // AND the separate TINA4_DATABASE_USERNAME/PASSWORD (the documented Tina4
+        // convention keeps credentials out of the URL). Bind it so the $db handle
+        // and the ORM models share ONE connected instance. Previously this read the
+        // LEGACY 'DATABASE_URL' key (so $db was null when the user set the canonical
+        // TINA4_DATABASE_URL) and built the handle from the URL alone (no creds), so
+        // on every credentialed engine the REPL's $db was dead.
         $db = null;
-        $dbUrl = \Tina4\DotEnv::getEnv('DATABASE_URL');
-        if ($dbUrl) {
-            try {
-                $db = \Tina4\Database\Database::create($dbUrl);
-                echo "  Database: {$dbUrl}\n";
-            } catch (\Throwable $e) {
-                echo "  Database: failed ({$e->getMessage()})\n";
+        try {
+            $db = \Tina4\Database\Database::fromEnv();
+            if ($db !== null) {
+                \Tina4\ORM::bindDatabase($db);
+                echo "  Database: " . \Tina4\DotEnv::getEnv('TINA4_DATABASE_URL') . "\n";
             }
+        } catch (\Throwable $e) {
+            echo "  Database: failed ({$e->getMessage()})\n";
         }
 
         echo "\n  Tina4 PHP Console\n";
