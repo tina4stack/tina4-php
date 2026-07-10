@@ -20,7 +20,7 @@
  *     }, "Find invoice by number");
  *
  *     $mcp->registerResource("app://schema", function() use ($db) {
- *         return $db->getDatabase();
+ *         return $db->getTables();
  *     }, "Database schema");
  *
  * Built-in dev tools auto-register when TINA4_DEBUG=true and running on localhost.
@@ -1269,7 +1269,12 @@ class McpDevTools
             } catch (\Throwable $e) {
                 return ['error' => 'No database connection: ' . $e->getMessage()];
             }
-            return $db->getDatabase();
+            // BUGFIX (#164): getDatabase() is not defined on the base Database
+            // (only on concrete adapters, where it returns the db-name string).
+            // getTables() is the DatabaseAdapter contract that lists tables and
+            // matches Python master (db.get_tables()) / Ruby (db.tables) / Node
+            // (db.getTables()). The old call fataled on every invocation.
+            return $db->getTables();
         }, 'List all database tables');
 
         $server->registerTool('database_columns', function (string $table) {
@@ -2053,7 +2058,7 @@ function mcp_tool(string $name = '', string $description = '', ?McpServer $serve
  *
  * Usage:
  *     mcp_resource("app://schema", "Database schema")(function() use ($db) {
- *         return $db->getDatabase();
+ *         return $db->getTables();
  *     });
  *
  * @param string          $uri         Resource URI
