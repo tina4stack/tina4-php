@@ -580,13 +580,27 @@ Auth::getPayload(string $token): ?array
 ### Api — External HTTP client
 
 ```php
-$api = new \Tina4\Api(?string $baseURL = "", string $authHeader = "")
+$api = new \Tina4\Api(string $baseUrl = "", string $authHeader = "", int $timeout = 30, bool $ignoreSSL = false, ?string $bearerToken = null, ?string $username = null, ?string $password = null, ?array $headers = null, ?bool $verifySSL = null, int $maxRetries = 0, float $retryBackoff = 0.5, ?callable $transport = null, bool $cookies = false)
+$api->get(string $path = "", array $params = []): array
+$api->post(string $path = "", mixed $body = null, string $contentType = "application/json"): array
+$api->put(...); $api->patch(...); $api->delete(string $path = "", mixed $body = null): array
 $api->sendRequest(string $method = "GET", string $path = "", $body = null, string $contentType = "application/json"): array
 $api->addHeaders(array $headers): void
 $api->setBasicAuth(string $username, string $password): void
+$api->setBearerToken(string $token): void
+// Multipart upload — file on disk OR in-memory bytes (no temp file). NEVER throws.
+$api->upload(string $path = "", ?string $filePath = null, string $fieldName = "file", array $extraFields = [], array $headers = [], ?string $fileBytes = null, ?string $filename = null): array
+// Streaming download — writes the body to disk in 64KB chunks. Returns {http_code, headers, error, path}; NO body key; path null on error (no file written).
+$api->download(string $path = "", ?string $destPath = null, array $params = []): array
 ```
 
-**Retry/backoff (opt-in, default off):** the constructor accepts `maxRetries` (default `0`) and `retryBackoff` (default `0.5`s base, exponential). When `maxRetries > 0` a transport error or a retryable status (429/500/502/503/504) is retried; 4xx is never retried. A retried non-idempotent request may be re-sent — retries are opt-in for that reason. (PHP `file_get_contents` does not auto-follow redirects, so there is no cross-host Authorization-leak surface — the redirect auth-strip is Python-only.)
+**Retry/backoff (opt-in, default off):** the constructor accepts `maxRetries` (default `0`) and `retryBackoff` (default `0.5`s base, exponential). When `maxRetries > 0` a transport error or a retryable status (429/500/502/503/504) is retried; 4xx is never retried. A retried non-idempotent request may be re-sent — retries are opt-in for that reason.
+
+**Redirect safety (Security fix, 3.13.69):** the client follows redirects, but strips the `Authorization` header **and** the cookie-jar `Cookie` header on a **cross-origin hop** (different scheme/host/port) — same-origin redirects keep them. This matches the Python master. It is implemented with a manual redirect loop (`follow_location=0` on the stream context, `Location` read per hop) — NOT `file_get_contents`'s built-in follow. **Correction of a prior claim:** PHP's http stream wrapper DOES auto-follow redirects by default and, before this fix, forwarded `Authorization`/`Cookie` to the cross-origin target (empirically verified against a real two-origin localhost server) — so PHP *was* leaking a bearer token / session cookie on a cross-origin redirect. Zero new dependency (stream wrapper only; ext-curl not required).
+
+**Transport seam (`transport:`):** an injectable callable `fn(string $method, string $url, array $headers, ?string $body, int $timeout): array` returning `{http_code, body, headers, error}`. When set it fully REPLACES the network call, so *application* developers can unit-test code that calls an `Api`. Default `null` = the real network. Tina4's own suite NEVER injects a canned fake (no-mock rule) — its transport-seam test injects a transport that performs REAL socket I/O.
+
+**Cookie jar (`cookies:`):** off by default. When `true`, keeps an in-memory per-client jar — parses `Set-Cookie` (leading `name=value` only, last-write-wins) and sends the accumulated `Cookie` on later requests. Not persisted.
 
 ### Migration — Database migrations
 
