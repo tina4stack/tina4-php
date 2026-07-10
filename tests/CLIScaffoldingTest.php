@@ -62,6 +62,13 @@ class CLIScaffoldingTest extends TestCase
             'generateView', 'generateCrud', 'generateAuth',
             'generateService', 'generateQueue', 'generateValidator',
             'generateSeeder', 'generateWebsocket', 'generateListener',
+            // Co-emitted-test helpers (Phase 4): the shared writer + the per-
+            // generator content builders the generators above now call.
+            'writeTest', 'pascalCase', 'sampleLiteral',
+            'emitModelTest', 'emitRouteStubTest', 'emitMiddlewareTest',
+            'emitServiceTest', 'emitQueueTest', 'emitValidatorTest',
+            'emitSeederTest', 'emitWebsocketTest', 'emitListenerTest',
+            'emitAuthTest', 'emitMigrationTest',
         ];
 
         $count = count($tokens);
