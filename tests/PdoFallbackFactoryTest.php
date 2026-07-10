@@ -95,9 +95,52 @@ class PdoFallbackFactoryTest extends TestCase
         $adapter->close();
     }
 
-    // NOTE: the "neither native nor PDO -> combined error" factory test lives
-    // with the held Firebird work on feature/php-pdo-fallback. It relied on the
-    // Firebird path because ext-interbase is the only shared DB extension a
-    // `php -n` subprocess can unload (ext-sqlite3 / ext-pgsql are statically
-    // compiled). It returns to CI once pdo_firebird can be verified live.
+    /**
+     * When BOTH the native extension AND the PDO driver are absent for an
+     * engine, the factory raises a clear combined error naming both options.
+     * Exercised for real in a no-extension subprocess (php -n unloads the
+     * shared ext-interbase); portable — asserts only when the subprocess env
+     * genuinely has neither Firebird driver.
+     */
+    public function testFactoryRaisesCombinedErrorWhenNoFirebirdDriver(): void
+    {
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        $script = <<<'PHP'
+require %s;
+$avail = [
+    'ibase'   => function_exists('ibase_connect'),
+    'fbird'   => function_exists('fbird_connect'),
+    'pdo_fb'  => in_array('firebird', PDO::getAvailableDrivers(), true),
+];
+try {
+    \Tina4\Database\Database::create('firebird://SYSDBA:masterkey@localhost:3050/test.fdb');
+    $avail['result'] = 'no-error';
+    $avail['msg'] = '';
+} catch (\RuntimeException $e) {
+    $avail['result'] = 'runtime-exception';
+    $avail['msg'] = $e->getMessage();
+} catch (\Throwable $e) {
+    $avail['result'] = 'other:' . get_class($e);
+    $avail['msg'] = $e->getMessage();
+}
+echo json_encode($avail);
+PHP;
+        $script = sprintf($script, var_export($autoload, true));
+        $cmd = escapeshellarg(PHP_BINARY) . ' -n -r ' . escapeshellarg($script);
+        $out = shell_exec($cmd);
+        $this->assertNotNull($out, 'subprocess produced no output');
+        $data = json_decode(trim($out), true);
+        $this->assertIsArray($data, "subprocess output was not JSON: {$out}");
+
+        if ($data['ibase'] || $data['fbird'] || $data['pdo_fb']) {
+            $this->markTestSkipped(
+                'Subprocess still has a Firebird driver — cannot exercise the no-driver error path here.'
+            );
+        }
+
+        // Neither native ext-interbase nor pdo_firebird -> combined error.
+        $this->assertSame('runtime-exception', $data['result'], "unexpected result: {$out}");
+        $this->assertStringContainsString('Firebird requires', $data['msg']);
+        $this->assertStringContainsString('pdo_firebird', $data['msg']);
+    }
 }

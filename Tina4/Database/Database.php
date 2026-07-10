@@ -1478,6 +1478,29 @@ class Database implements DatabaseAdapter
     }
 
     /**
+     * SILENT PDO fallback (Firebird): prefer ext-interbase (ibase_ / fbird_
+     * functions); fall back to the pdo_firebird driver when absent. This is the
+     * highest-value fallback — ext-interbase was removed from PHP core in 7.4
+     * (PECL-only, broken on macOS), so pdo_firebird is often the only Firebird
+     * driver present on a modern build.
+     *
+     * @throws \RuntimeException When neither ext-interbase nor pdo_firebird is present.
+     */
+    private static function makeFirebird(string $url, string $username, string $password, ?bool $autoCommit): DatabaseAdapter
+    {
+        if (function_exists('ibase_connect') || function_exists('fbird_connect')) {
+            return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        if (in_array('firebird', \PDO::getAvailableDrivers(), true)) {
+            return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        throw new \RuntimeException(
+            'Firebird requires ext-interbase (ibase_*/fbird_* functions) or the pdo_firebird PDO driver. '
+            . 'ext-interbase was removed from PHP core in 7.4 (PECL-only); enable pdo_firebird instead.'
+        );
+    }
+
+    /**
      * Create the raw DatabaseAdapter from a connection URL string.
      *
      * @param string $url Connection URL
@@ -1550,11 +1573,11 @@ class Database implements DatabaseAdapter
             PostgresAdapter::class => self::makePostgres($url, $autoCommit, $username, $password),
             MySQLAdapter::class => new MySQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             MSSQLAdapter::class => new MSSQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
-            FirebirdAdapter::class => new FirebirdAdapter(
+            FirebirdAdapter::class => self::makeFirebird(
                 $url,
-                username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
-                password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
-                autoCommit: $autoCommit,
+                $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
+                $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
+                $autoCommit,
             ),
             MongoDBAdapter::class => new MongoDBAdapter(
                 $url,

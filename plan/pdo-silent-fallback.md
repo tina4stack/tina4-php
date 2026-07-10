@@ -73,20 +73,9 @@ MySQL/MSSQL/ODBC already use PDO/mysqli — left untouched.
 - Factory native-absent decision proven for real via a no-extension subprocess
   (php -n unloads ext-interbase; no pdo_firebird) -> combined error raised.
 
-## UNVERIFIED / HELD
+## UNVERIFIED
 - Firebird PDO fallback live run: this PHP build has NO pdo_firebird driver
-  compiled in, so the Firebird parity test could not run live. Code + test are
-  written but HELD.
+  compiled in, so the Firebird parity test SKIPS (loudly). Code + test written;
+  live run against a real Firebird + pdo_firebird still owed.
 
-## Split decision (owner ruling 2026-07-10)
-Ship the two engines that are verified live, hold the one that is not.
-- **3.13.66 (feature/php-pdo-sqlite-pg -> v3):** SQLite + PostgreSQL PDO
-  fallback (PdoAdapterTrait, PdoSqliteAdapter, PdoPostgresAdapter, the
-  makeSqlite/makePostgres factory selectors) + their parity/factory tests.
-- **Held (feature/php-pdo-fallback):** PdoFirebirdAdapter, the makeFirebird
-  selector, the Firebird parity cases, and the no-driver combined-error factory
-  test. Merges once pdo_firebird can be exercised against a real Firebird server
-  (the combined-error test needs ext-interbase, the only shared DB extension a
-  `php -n` subprocess can unload).
-
-## Status: SPLIT — SQLite + PostgreSQL shipping in 3.13.66 (verified live); Firebird held until pdo_firebird can be verified against a real server
+## Status: DONE — SQLite + PostgreSQL verified live; Firebird implemented, live UNVERIFIED

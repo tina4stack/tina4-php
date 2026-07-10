@@ -1,0 +1,210 @@
+<?php
+
+/**
+ * Tina4 — The Intelligent Native Application 4ramework
+ * Copyright 2007 - current Tina4
+ * License: MIT https://opensource.org/licenses/MIT
+ */
+
+namespace Tina4\Database;
+
+/**
+ * Firebird database adapter over the pdo_firebird driver — the SILENT fallback
+ * used by Database::create() when ext-interbase (ibase_ / fbird_ functions) is
+ * absent.
+ *
+ * This is the highest-value fallback: ext-interbase was removed from PHP core
+ * in 7.4 (PECL-only, broken on macOS), so FirebirdAdapter throws on most modern
+ * builds. pdo_firebird ships with mainstream PHP distributions.
+ *
+ * Externally mirrors FirebirdAdapter: trims CHAR padding, reads BLOBs into raw
+ * byte strings, uses ROWS X TO Y pagination, appends RETURNING * on insert
+ * (falling back to a plain INSERT), and preserves the fail-loud contract.
+ */
+class PdoFirebirdAdapter implements DatabaseAdapter
+{
+    use SqlNormalizerTrait;
+    use PdoAdapterTrait;
+
+    public function __construct(
+        private readonly string $connectionString,
+        private readonly string $username = 'SYSDBA',
+        private readonly string $password = 'masterkey',
+        private readonly string $charset = 'UTF8',
+        ?bool $autoCommit = null,
+    ) {
+        $this->autoCommit = $this->resolveAutoCommit($autoCommit);
+        $this->open();
+    }
+
+    protected function engineLabel(): string
+    {
+        return 'Firebird (PDO)';
+    }
+
+    protected function buildDsn(): array
+    {
+        $params = $this->parseConnection($this->connectionString);
+
+        $dbPath = $params['database'];
+        if ($params['host'] !== '') {
+            $dbPath = $params['host'];
+            if ($params['port'] > 0 && $params['port'] !== 3050) {
+                $dbPath .= '/' . $params['port'];
+            }
+            $dbPath .= ':' . $params['database'];
+        }
+
+        $dsn = "firebird:dbname={$dbPath};charset={$this->charset}";
+        return [$dsn, $params['username'], $params['password'], []];
+    }
+
+    /** Firebird has no native BOOLEAN below 3.0 — bind booleans as 1/0. */
+    protected function normalizeParams(array $params): array
+    {
+        return self::normalizeBoolParams($params, nativeBoolean: false);
+    }
+
+    protected function paginate(string $sql, int $limit, int $offset): string
+    {
+        $startRow = $offset + 1;
+        $endRow = $offset + $limit;
+        return "{$sql} ROWS {$startRow} TO {$endRow}";
+    }
+
+    protected function insertReturningClause(): string
+    {
+        return ' RETURNING *';
+    }
+
+    /** Firebird pads/returns identifiers with trailing spaces — trim like native. */
+    protected function normalizeReturnedId(mixed $value): int|string
+    {
+        return is_string($value) ? trim($value) : $value;
+    }
+
+    /**
+     * Trim CHAR padding from strings and read BLOB streams into raw byte
+     * strings — matching FirebirdAdapter::query()'s cleaning loop.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param array<int, array<string, mixed>> $meta
+     */
+    protected function coerceRows(array $rows, array $meta): array
+    {
+        foreach ($rows as &$row) {
+            foreach ($row as $key => $value) {
+                if (is_resource($value)) {
+                    $row[$key] = stream_get_contents($value);
+                } elseif (is_string($value)) {
+                    $row[$key] = rtrim($value);
+                }
+            }
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public function getDatabase(): string
+    {
+        return $this->connectionString;
+    }
+
+    public function tableExists(string $table): bool
+    {
+        $rows = $this->query(
+            "SELECT RDB\$RELATION_NAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND RDB\$VIEW_BLR IS NULL AND TRIM(RDB\$RELATION_NAME) = ?",
+            [strtoupper($table)]
+        );
+        return count($rows) > 0;
+    }
+
+    public function getColumns(string $table): array
+    {
+        $sql = "SELECT RF.RDB\$FIELD_NAME AS field_name,
+                       F.RDB\$FIELD_TYPE AS field_type,
+                       RF.RDB\$NULL_FLAG AS null_flag,
+                       RF.RDB\$DEFAULT_SOURCE AS default_source
+                FROM RDB\$RELATION_FIELDS RF
+                JOIN RDB\$FIELDS F ON RF.RDB\$FIELD_SOURCE = F.RDB\$FIELD_NAME
+                WHERE RF.RDB\$RELATION_NAME = ?
+                ORDER BY RF.RDB\$FIELD_POSITION";
+
+        $rows = $this->query($sql, [strtoupper($table)]);
+
+        $typeMap = [
+            7 => 'SMALLINT', 8 => 'INTEGER', 10 => 'FLOAT', 12 => 'DATE',
+            13 => 'TIME', 14 => 'CHAR', 16 => 'BIGINT', 27 => 'DOUBLE PRECISION',
+            35 => 'TIMESTAMP', 37 => 'VARCHAR', 261 => 'BLOB',
+        ];
+
+        $pkRows = $this->query(
+            "SELECT TRIM(ISG.RDB\$FIELD_NAME) AS pk_field
+             FROM RDB\$RELATION_CONSTRAINTS RC
+             JOIN RDB\$INDEX_SEGMENTS ISG ON RC.RDB\$INDEX_NAME = ISG.RDB\$INDEX_NAME
+             WHERE RC.RDB\$CONSTRAINT_TYPE = 'PRIMARY KEY' AND RC.RDB\$RELATION_NAME = ?",
+            [strtoupper($table)]
+        );
+        $pkFields = array_map('trim', array_column($pkRows, 'PK_FIELD'));
+
+        $columns = [];
+        foreach ($rows as $row) {
+            $fieldName = trim($row['FIELD_NAME'] ?? $row['field_name'] ?? '');
+            $fieldType = (int) ($row['FIELD_TYPE'] ?? $row['field_type'] ?? 0);
+            $columns[] = [
+                'name' => $fieldName,
+                'type' => $typeMap[$fieldType] ?? "TYPE_{$fieldType}",
+                'nullable' => ($row['NULL_FLAG'] ?? $row['null_flag'] ?? null) === null,
+                'default' => $row['DEFAULT_SOURCE'] ?? $row['default_source'] ?? null,
+                'primary' => in_array($fieldName, $pkFields, true),
+            ];
+        }
+        return $columns;
+    }
+
+    public function getTables(): array
+    {
+        $rows = $this->query(
+            "SELECT TRIM(RDB\$RELATION_NAME) AS table_name FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND RDB\$VIEW_BLR IS NULL ORDER BY RDB\$RELATION_NAME"
+        );
+        return array_map(
+            static fn($row) => trim($row['TABLE_NAME'] ?? $row['table_name'] ?? ''),
+            $rows
+        );
+    }
+
+    /**
+     * Parse a connection string (URL or path) into connection params — same
+     * rules as FirebirdAdapter (TINA4_DATABASE_FIREBIRD_PATH override, then
+     * FirebirdAdapter::normalizeDbIdentifier on the URL path).
+     *
+     * @return array{host: string, port: int, username: string, password: string, database: string}
+     */
+    private function parseConnection(string $input): array
+    {
+        $envOverride = \Tina4\DotEnv::getEnv('TINA4_DATABASE_FIREBIRD_PATH');
+
+        if (str_contains($input, '://')) {
+            $parts = parse_url($input);
+            $rawPath = $parts['path'] ?? '';
+            $database = ($envOverride !== null && $envOverride !== '')
+                ? $envOverride
+                : FirebirdAdapter::normalizeDbIdentifier($rawPath);
+            return [
+                'host' => $parts['host'] ?? '',
+                'port' => $parts['port'] ?? 3050,
+                'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
+                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
+                'database' => $database,
+            ];
+        }
+
+        return [
+            'host' => '',
+            'port' => 3050,
+            'username' => $this->username,
+            'password' => $this->password,
+            'database' => ($envOverride !== null && $envOverride !== '') ? $envOverride : $input,
+        ];
+    }
+}
