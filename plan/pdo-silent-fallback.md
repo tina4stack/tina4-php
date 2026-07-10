@@ -109,6 +109,15 @@ the fallback for real over TCP. The hold is lifted.
 - [x] Firebird parity cases: numeric-by-value compare + skip-loud on broken native
 - [x] no-driver combined-error factory test restored + 2 driver-override tests
 - [x] DatabaseDriversTest / MigrationV3Test: skip-loud on present-but-broken ext-interbase
-- [x] Verified live vs real FB5.0.2; full suite green
+- [x] Auto-fallback: makeFirebird tries native, catches a broken-connect, falls to pdo
+      ("ibase broken -> use pdo"); TINA4_FIREBIRD_DRIVER=pdo skips the native attempt
+- [x] Engine-aware DDL recognises the PDO adapters: Migration::detectDialect(),
+      ORM::detectDialect() and Database::getNextIdPinned() matched only the NATIVE
+      classes, so PdoFirebirdAdapter fell through to the SQLite default -> `new
+      Migration()` emitted `AUTOINCREMENT` (fatal on Firebird) on a fresh DB and
+      broke the v2->v3 upgrade. PdoPostgresAdapter had the same latent gap since
+      3.13.66. Fixed all three sites; getNextId uses GEN_ID on pdo_firebird too.
+      Lock-in: MigrationV3Test::testMigrationsWorkOnPdoFirebirdFallback (live FB5).
+- [x] Verified live vs real FB5.0.2; full suite green (2853 / 7072 / 0F / 0E)
 
 ## Status: COMPLETE — SQLite + PostgreSQL shipped in 3.13.66; Firebird PDO fallback verified live and rebuilt on current v3 (supersedes the held feature/php-pdo-fallback / PR #152)
