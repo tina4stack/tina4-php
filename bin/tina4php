@@ -8,7 +8,7 @@
  *   tina4php serve [host:port|port]  Start dev server (default: 0.0.0.0:7145)
  *   tina4php start [host:port|port] Alias for serve
  *   tina4php migrate                Run pending migrations
- *   tina4php migrate:create <desc>  Create a migration file
+ *   tina4php migrate:create <desc>  Create a new migration file
  *   tina4php migrate:rollback       Rollback last batch
  *   tina4php migrate:status         Show migration status
  *   tina4php seed                   Run seeders from src/seeds/
@@ -517,7 +517,7 @@ $TINA4_COMMANDS = [
     'serve'            => ['usage' => '[host:port|port]',                            'summary' => 'Start dev server (default: 0.0.0.0:7145)'],
     'start'            => [                                                          'summary' => 'Alias for serve'],
     'migrate'          => [                                                          'summary' => 'Run pending migrations'],
-    'migrate:create'   => ['usage' => '<desc>',           'args' => ['description'], 'summary' => 'Create a migration file'],
+    'migrate:create'   => ['usage' => '<desc>',           'args' => ['description'], 'summary' => 'Create a new migration file'],
     'migrate:rollback' => [                                                          'summary' => 'Rollback last batch'],
     'migrate:status'   => [                                                          'summary' => 'Show migration status'],
     'seed'             => [                                                          'summary' => 'Run seeders from src/seeds/'],
