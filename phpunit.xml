@@ -84,6 +84,8 @@
             <file>tests/MetricsTest.php</file>
             <file>tests/MetricsCliTest.php</file>
             <file>tests/CLIScaffoldingTest.php</file>
+            <file>tests/CLIScaffoldingSecureTest.php</file>
+            <file>tests/CliGenerateCoemitsTest.php</file>
             <file>tests/CommandsManifestTest.php</file>
             <file>tests/CliQueueTest.php</file>
             <file>tests/CliBuildTest.php</file>

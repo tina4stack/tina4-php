@@ -350,12 +350,18 @@ class CLIScaffoldingSecureTest extends TestCase
 
         $this->assertStringContainsString('already exists', $this->gen('validator CreateUser')); // B4
         $src = $this->src($rel);
-        $this->assertStringContainsString('AI-FILL', $src);  // S2
-        $this->assertStringContainsString('// Ground:', $src);
+        // Working-default now (Python-master parity): an EXTEND marker + a real
+        // starter rule, NOT a loud AI-FILL throw — so a valid/invalid test is
+        // green on generation.
+        $this->assertStringContainsString('EXTEND', $src);   // S2
         $this->assertStringContainsString('new \\Tina4\\Validator', $src); // S3 wiring
+        $this->assertStringContainsString("required('name')", $src);
 
-        $this->expectException(\RuntimeException::class);     // S1
-        $validate([]);
+        // W1 — working default: valid input passes, invalid fails (no throw).
+        $this->assertTrue($validate(['name' => 'Ada'])->isValid());
+        $invalid = $validate([]);
+        $this->assertFalse($invalid->isValid());
+        $this->assertNotEmpty($invalid->errors());
     }
 
     public function testSeederGenerator(): void
@@ -365,17 +371,26 @@ class CLIScaffoldingSecureTest extends TestCase
         $rel = 'src/seeds/bolt_seeder.php';
         $this->assertFileExists($this->file($rel));          // B1
         $this->assertTrue($this->lintOk($rel));              // B2
-        $seed = require $this->file($rel);                   // B3 — loads clean (resolves Bolt)
+        $seed = require $this->file($rel);                   // B3 — loads clean (resolves Bolt via require_once)
 
         $this->assertStringContainsString('already exists', $this->gen('seeder Bolt')); // B4
         $src = $this->src($rel);
-        $this->assertStringContainsString('AI-FILL', $src);  // S2
-        $this->assertStringContainsString('// Ground:', $src);
-        $this->assertStringContainsString('new \\Tina4\\FakeData', $src);    // S3 wiring
-        $this->assertStringContainsString('\\Tina4\\SeedSummary', $src);
+        // Working-default now (Python-master parity): an EXTEND marker + real
+        // FakeData::seedOrm wiring, NOT a loud throw — so it seeds real rows on
+        // generation.
+        $this->assertStringContainsString('EXTEND', $src);   // S2
+        $this->assertStringContainsString('\\Tina4\\FakeData::seedOrm', $src); // S3 wiring
 
-        $this->expectException(\RuntimeException::class);     // S1 — fails loud when run
-        $seed();
+        // W1 — working default: runs against real SQLite and seeds real rows.
+        // (Bolt was loaded via the seeder file's require_once at B3.)
+        $db = $this->bindDb();
+        (new \Bolt())->createTable();
+        ob_start();
+        $summary = $seed(5);
+        ob_end_clean();
+        $this->assertGreaterThanOrEqual(1, $summary['seeded']);
+        $this->assertGreaterThanOrEqual(1, (new \Bolt())->count());
+        $db->close();
     }
 
     public function testWebsocketGenerator(): void

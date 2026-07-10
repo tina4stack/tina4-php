@@ -1345,7 +1345,7 @@ DOCKERFILE;
  * tina4php generate model Product
  * tina4php generate model Product --fields "name:string,price:float,in_stock:bool"
  */
-function generateModel(string $name, array $flags, array $fieldTypeMap, bool $skipMigration = false): void
+function generateModel(string $name, array $flags, array $fieldTypeMap, bool $skipMigration = false, bool $emitTest = true): void
 {
     $fields = parseFields($flags['fields'] ?? '');
     $table = tableNameFromClass($name);
@@ -1389,9 +1389,17 @@ PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
 
-    // Generate matching migration (unless --no-migration or caller skipped)
+    // Generate matching migration (unless --no-migration or caller skipped).
+    // The model's own co-emitted test proves the schema through the real ORM,
+    // so the migration sub-call does NOT also co-emit a migration test.
     if (!$skipMigration && !isset($flags['no-migration'])) {
-        generateMigration("create_{$table}", $flags, $fieldTypeMap, $fields, $table);
+        generateMigration("create_{$table}", $flags, $fieldTypeMap, $fields, $table, false);
+    }
+
+    // Co-emit a real SQLite roundtrip test next to the model. Composite
+    // generators (crud/auth) pass emitTest=false and emit their own broader test.
+    if ($emitTest) {
+        emitModelTest($name, $table, $fields);
     }
 }
 
@@ -1408,7 +1416,7 @@ PHP;
  * is emitted for them. --public re-adds ->noAuth() on the WRITE handlers only —
  * mirroring AutoCrud.php:121-135 ($isPublic → $route->noAuth()).
  */
-function generateRoute(string $name, array $flags): void
+function generateRoute(string $name, array $flags, bool $emitTest = true): void
 {
     $routePath = ltrim($name, '/');
     $singular = rtrim($routePath, 's');
@@ -1656,6 +1664,17 @@ PHP;
 
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real test. A --model route is working code -> the secure-gate
+    // behavioural test (reads public, writes gated); a no-model route's handlers
+    // are loud stubs -> the Router-registration + live-stub test.
+    if ($emitTest) {
+        if ($model) {
+            generateTest($routePath, ['model' => $model, 'secure_writes' => true, 'public' => $public]);
+        } else {
+            emitRouteStubTest($routePath);
+        }
+    }
 }
 
 
@@ -1672,12 +1691,13 @@ function generateCrud(string $name, array $flags, array $fieldTypeMap): void
 
     echo "\n  Generating CRUD for {$name}...\n\n";
 
-    // 1. Model + migration
-    generateModel($name, $flags, $fieldTypeMap);
+    // 1. Model + migration (emitTest=false — crud emits its own broader gate
+    //    test at step 5, so the sub-generators stay quiet to avoid double-emit).
+    generateModel($name, $flags, $fieldTypeMap, false, false);
 
     // 2. Routes with model — secure-by-default; thread --public through so
     //    `generate crud X --public` opens the writes (mirrors AutoCrud public=).
-    generateRoute($routeName, ['model' => $name, 'public' => $public]);
+    generateRoute($routeName, ['model' => $name, 'public' => $public], false);
 
     // 3. Form
     generateForm($name, $flags);
@@ -1705,7 +1725,8 @@ function generateMigration(
     array $flags,
     array $fieldTypeMap,
     ?array $fieldsOverride = null,
-    ?string $tableOverride = null
+    ?string $tableOverride = null,
+    bool $emitTest = true
 ): void {
     $now = new DateTime();
     $timestamp = $now->format('YmdHis');
@@ -1753,23 +1774,26 @@ function generateMigration(
     }
 
     $dateStr = $now->format('Y-m-d H:i:s');
+    // Main .sql is UP-only — mirrors the Python master and \Tina4\Migration::create().
+    // \Tina4\Migration::migrate() runs EVERY statement in this file as the UP
+    // migration and uses the SEPARATE .down.sql for rollback. A `-- DOWN\nDROP
+    // TABLE ...` section here is NOT a boundary the runner honours (splitStatements
+    // only strips `--` line comments), so it would run on apply and drop the
+    // just-created table — a silent no-op migration. Keep DOWN out of the main file.
     $content = <<<SQL
 -- Migration: {$name}
 -- Created: {$dateStr}
 
--- UP
 {$upSql}
-
--- DOWN
-{$downSql}
 
 SQL;
 
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
 
-    // Also create .down.sql for the migration runner
-    $downPath = "{$dir}/{$timestamp}_{$name}.down.sql";
+    // Also create .down.sql for the migration runner (rollback path).
+    $downFilename = "{$timestamp}_{$name}.down.sql";
+    $downPath = "{$dir}/{$downFilename}";
     $downContent = <<<SQL
 -- Rollback: {$name}
 -- Created: {$dateStr}
@@ -1780,6 +1804,13 @@ SQL;
 
     file_put_contents($downPath, $downContent);
     echo "  Created {$downPath}\n";
+
+    // Co-emit a real apply-UP / rollback-DOWN test — only for CREATE migrations,
+    // whose UP SQL is real DDL to assert against (a placeholder ALTER has none).
+    // Drives the REAL \Tina4\Migration runner, not hand-rolled SQL.
+    if ($emitTest && $isCreate) {
+        emitMigrationTest($name, $table, $filename, $downFilename);
+    }
 }
 
 
@@ -1819,7 +1850,7 @@ class {$name}
      */
     public static function before{$name}(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?array
     {
-        \$auth = \$request->getHeader("Authorization");
+        \$auth = \$request->header("Authorization");
         if (empty(\$auth)) {
             return [\$request, \$response(["error" => "Unauthorized"], 401)];
         }
@@ -1839,6 +1870,10 @@ PHP;
 
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real dispatch test (drives the scaffold through the real
+    // \Tina4\Middleware::runBefore/runAfter — the same code path the server runs).
+    emitMiddlewareTest($name, $snake);
 }
 
 
@@ -2237,8 +2272,9 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
 {
     echo "\n  Generating authentication scaffolding...\n\n";
 
-    // 1. User model + migration
-    generateModel('User', ['fields' => 'email:string,password:string,role:string'], $fieldTypeMap);
+    // 1. User model + migration (emitTest=false — auth emits its own broader
+    //    register/login/me test at step 5).
+    generateModel('User', ['fields' => 'email:string,password:string,role:string'], $fieldTypeMap, false, false);
 
     // 2. Auth routes
     $dir = 'src/routes';
@@ -2301,10 +2337,12 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
             return $response(["error" => "Invalid credentials"], 401);
         }
 
-        $secret = getenv('SECRET') ?: 'change-me-in-production';
+        // Sign with the framework secret (TINA4_SECRET) — the SAME secret the
+        // secure-by-default gate on /api/auth/me validates with. Passing a
+        // different secret (e.g. getenv('SECRET')) would make the gate reject a
+        // valid token -> me always 401s. Let Auth resolve TINA4_SECRET itself.
         $token = \Tina4\Auth::getToken(
-            ["user_id" => $user->id, "email" => $user->email, "role" => $user->role],
-            $secret
+            ["user_id" => $user->id, "email" => $user->email, "role" => $user->role]
         );
         return $response(["token" => $token], 200);
     } catch (\Throwable $e) {
@@ -2319,14 +2357,15 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
  */
 \Tina4\Router::get("/api/auth/me", function (\Tina4\Request $request, \Tina4\Response $response) {
     try {
-        $authHeader = $request->getHeader("Authorization");
+        $authHeader = $request->header("Authorization");
         if (empty($authHeader)) {
             return $response(["error" => "Unauthorized"], 401);
         }
 
         $token = str_replace("Bearer ", "", $authHeader);
-        $secret = getenv('SECRET') ?: 'change-me-in-production';
-        $payload = \Tina4\Auth::validToken($token, $secret);
+        // Validate with the framework secret (TINA4_SECRET) — the same secret
+        // login signed with and the gate checks. Let Auth resolve it.
+        $payload = \Tina4\Auth::validToken($token);
 
         if ($payload === null) {
             return $response(["error" => "Invalid token"], 401);
@@ -2409,14 +2448,732 @@ TWIG;
         echo "  Created {$registerPath}\n";
     }
 
-    // 5. Auth test
-    generateTest('auth', ['model' => 'User']);
+    // 5. Auth test — real register/login/me end-to-end (real Router, real Auth
+    //    JWT + PBKDF2, real SQLite). Proves token -> 200 through the secure gate.
+    emitAuthTest();
 
     echo "\n  Authentication scaffolding complete.\n";
     echo "  Run: tina4php migrate\n";
     echo "  POST /api/auth/register  -- create account\n";
     echo "  POST /api/auth/login     -- get JWT token\n";
     echo "  GET  /api/auth/me        -- get profile (requires token)\n";
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// Co-emitted tests — one shared writer + one focused content builder per
+// generator (NOT a dozen copy-paste blobs). Each builder exercises a DIFFERENT
+// real subsystem (real SQLite / Router+dispatch / Middleware / ServiceRunner /
+// file-backed Queue / Validator / FakeData::seedOrm / Events / \Tina4\Migration)
+// with NO mocks, and is GREEN on generation (a scaffolded test that fails on
+// creation is bad DX). Mirrors the Python master's _write_test + _emit_* set.
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * The SINGLE writer for a co-emitted test: tests/{ClassName}Test.php, with the
+ * same overwrite-refusal + "Created" line every generator already prints. One
+ * shared rule instead of a dozen copy-pasted write blocks (Python's _write_test).
+ */
+function writeTest(string $className, string $content): void
+{
+    $dir = 'tests';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$className}Test.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+/**
+ * snake/kebab/dotted -> PascalCase: user_created -> UserCreated (Python's _pascal).
+ */
+function pascalCase(string $name): string
+{
+    $parts = preg_split('/[^0-9a-zA-Z]+/', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    return implode('', array_map('ucfirst', $parts));
+}
+
+/**
+ * A source-text PHP literal that is a valid value for a scaffolded field type
+ * (used to build a real create() payload in the model test). Python's _sample_literal.
+ */
+function sampleLiteral(string $type): string
+{
+    return match (strtolower($type ?: 'string')) {
+        'int', 'integer'            => '1',
+        'float', 'numeric', 'decimal' => '1.5',
+        'bool', 'boolean'           => 'true',
+        'datetime'                  => "'2020-01-01 00:00:00'",
+        'blob'                      => "'x'",
+        default                     => "'sample'",
+    };
+}
+
+/**
+ * model -> real SQLite roundtrip (create / read back / missing -> null).
+ */
+function emitModelTest(string $model, string $table, array $fields): void
+{
+    $fields = $fields ?: [['name', 'string']];
+    $pairs = [];
+    foreach ($fields as [$fname, $ftype]) {
+        $pairs[] = "'{$fname}' => " . sampleLiteral($ftype);
+    }
+    $payload = implode(', ', $pairs);
+
+    // Assert a STRING field round-trips (type-safe); else just the id round-trips
+    // (avoids datetime/bool/float equality pitfalls on the read-back).
+    $stringField = null;
+    foreach ($fields as [$fname, $ftype]) {
+        if (in_array(strtolower($ftype ?: 'string'), ['string', 'str', 'text'], true)) {
+            $stringField = $fname;
+            break;
+        }
+    }
+    $valueAssert = $stringField !== null
+        ? "        \$this->assertSame('sample', \$fetched->{$stringField});\n"
+        : '';
+
+    $content = <<<PHP
+<?php
+
+/**
+ * Real ORM roundtrip test for {$model} — no mocks, real SQLite.
+ *
+ * Generated with src/orm/{$model}.php by `tina4php generate model {$model}`. The
+ * model scaffold is working code, so this passes on generation: it binds a real
+ * in-memory SQLite database, creates the table, saves a row and reads it back.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+
+require_once __DIR__ . '/../src/orm/{$model}.php';
+
+class {$model}ModelTest extends TestCase
+{
+    private \\Tina4\\Database\\SQLite3Adapter \$db;
+
+    protected function setUp(): void
+    {
+        \$this->db = new \\Tina4\\Database\\SQLite3Adapter(':memory:');
+        \\Tina4\\ORM::bindDatabase(\$this->db);
+        (new {$model}())->createTable();
+    }
+
+    protected function tearDown(): void
+    {
+        \$this->db->close();
+    }
+
+    public function testCreateAndReadBack(): void
+    {
+        \$row = new {$model}([{$payload}]);
+        \$this->assertNotFalse(\$row->save(), 'save() should persist and return the row');
+        \$this->assertNotNull(\$row->id);
+        \$fetched = {$model}::findById(\$row->id);
+        \$this->assertNotNull(\$fetched);
+        \$this->assertSame(\$row->id, \$fetched->id);
+{$valueAssert}    }
+
+    public function testFindMissingReturnsNull(): void
+    {
+        \$this->assertNull({$model}::findById(999999));
+    }
+}
+
+PHP;
+    writeTest("{$model}Model", $content);
+}
+
+/**
+ * route (no --model) -> real Router registration + the handler is a live loud
+ * stub. (route --model reuses the secure-gate generateTest instead.)
+ */
+function emitRouteStubTest(string $route): void
+{
+    $class = pascalCase($route);
+    $content = <<<PHP
+<?php
+
+/**
+ * Routing test for {$route} — no mocks, real Router.
+ *
+ * Generated with src/routes/{$route}.php by `tina4php generate route {$route}`
+ * (no --model). The handlers are AI-FILL stubs that throw until you implement
+ * them, so this tests what IS live on generation: all five routes register on
+ * the REAL Router, and the list handler fails loud until filled.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\Request;
+use Tina4\\Response;
+use Tina4\\Router;
+
+class {$class}Test extends TestCase
+{
+    protected function setUp(): void
+    {
+        Router::clear();
+        require __DIR__ . '/../src/routes/{$route}.php';
+    }
+
+    protected function tearDown(): void
+    {
+        Router::clear();
+    }
+
+    public function testAllFiveRoutesRegistered(): void
+    {
+        \$paths = array_map(fn(\$r) => \$r['method'] . ' ' . \$r['path'], Router::getRoutes());
+        \$this->assertContains('GET /{$route}', \$paths);
+        \$this->assertContains('GET /{$route}/{id}', \$paths);
+        \$this->assertContains('POST /{$route}', \$paths);
+        \$this->assertContains('PUT /{$route}/{id}', \$paths);
+        \$this->assertContains('DELETE /{$route}/{id}', \$paths);
+    }
+
+    public function testListHandlerIsALiveStub(): void
+    {
+        // The scaffolded handler throws until filled (fails loud, good DX).
+        \$list = null;
+        foreach (Router::getRoutes() as \$r) {
+            if (\$r['method'] === 'GET' && \$r['path'] === '/{$route}') {
+                \$list = \$r;
+            }
+        }
+        \$this->assertNotNull(\$list);
+        \$this->expectException(\\RuntimeException::class);
+        (\$list['callback'])(Request::create(method: 'GET', path: '/{$route}', headers: []), new Response(true));
+    }
+}
+
+PHP;
+    writeTest($class, $content);
+}
+
+/**
+ * middleware -> a request routed THROUGH the real \Tina4\Middleware dispatch.
+ */
+function emitMiddlewareTest(string $name, string $snake): void
+{
+    $content = <<<PHP
+<?php
+
+/**
+ * Real dispatch test for the {$name} middleware — no mocks.
+ *
+ * Generated with src/middleware/{$name}.php by `tina4php generate middleware
+ * {$name}`. Drives the middleware through the REAL \\Tina4\\Middleware::runBefore /
+ * runAfter with a real Request + Response — the same code path the live server
+ * runs. The scaffold's before hook blocks a request with no Authorization header.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\Middleware;
+use Tina4\\Request;
+use Tina4\\Response;
+
+require_once __DIR__ . '/../src/middleware/{$name}.php';
+
+class {$name}MiddlewareTest extends TestCase
+{
+    private function request(array \$headers = []): Request
+    {
+        return Request::create(method: 'GET', path: '/', headers: \$headers);
+    }
+
+    public function testBlocksWhenUnauthenticated(): void
+    {
+        [, \$response] = Middleware::runBefore(['{$name}'], \$this->request(), new Response(true));
+        \$this->assertGreaterThanOrEqual(400, \$response->getStatusCode());
+    }
+
+    public function testPassesWhenAuthenticated(): void
+    {
+        [, \$response] = Middleware::runBefore(
+            ['{$name}'], \$this->request(['authorization' => 'Bearer test-token']), new Response(true)
+        );
+        \$this->assertLessThan(400, \$response->getStatusCode());
+    }
+
+    public function testAfterReturnsThePair(): void
+    {
+        [\$request, \$response] = Middleware::runAfter(['{$name}'], \$this->request(), new Response(true));
+        \$this->assertNotNull(\$request);
+        \$this->assertNotNull(\$response);
+    }
+}
+
+PHP;
+    writeTest("{$name}Middleware", $content);
+}
+
+/**
+ * service -> registrable / discoverable on a REAL ServiceRunner + loud stub.
+ */
+function emitServiceTest(string $name, string $snake): void
+{
+    $class = pascalCase($snake);
+    $content = <<<PHP
+<?php
+
+/**
+ * Real ServiceRunner test for the {$name} service — no mocks.
+ *
+ * Generated with src/services/{$snake}.php by `tina4php generate service {$name}`.
+ * Registers the scaffold on a REAL ServiceRunner and confirms the descriptor; the
+ * task body is an AI-FILL stub that throws until filled.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\ServiceRunner;
+
+class {$class}ServiceTest extends TestCase
+{
+    protected function tearDown(): void
+    {
+        ServiceRunner::clear();
+    }
+
+    public function testDescriptorShape(): void
+    {
+        \$desc = require __DIR__ . '/../src/services/{$snake}.php';
+        \$this->assertSame('{$snake}', \$desc['name']);
+        \$this->assertNotEmpty(\$desc['timing']);
+        \$this->assertTrue(is_callable(\$desc['handler']));
+    }
+
+    public function testDiscoverableOnRealRunner(): void
+    {
+        ServiceRunner::clear();
+        \$discovered = ServiceRunner::discover(__DIR__ . '/../src/services');
+        \$this->assertContains('{$snake}', \$discovered);
+        \$this->assertArrayHasKey('{$snake}', ServiceRunner::list());
+    }
+
+    public function testTaskIsALiveStub(): void
+    {
+        \$desc = require __DIR__ . '/../src/services/{$snake}.php';
+        \$this->expectException(\\RuntimeException::class);
+        (\$desc['handler'])(null);
+    }
+}
+
+PHP;
+    writeTest("{$class}Service", $content);
+}
+
+/**
+ * queue -> push a REAL job onto the real file-backed Queue + daemon wiring.
+ */
+function emitQueueTest(string $topic, string $slug): void
+{
+    $class = pascalCase($slug);
+    $content = <<<PHP
+<?php
+
+/**
+ * Real file-backed Queue test for the {$topic} worker — no mocks.
+ *
+ * Generated with src/services/{$slug}_consumer.php by `tina4php generate queue
+ * {$topic}`. Pushes a REAL job onto the real file-backed Queue and asserts it is
+ * enqueued, and that the consumer is wired as a daemon service. handle_{$slug} is
+ * an AI-FILL stub that throws until you fill it — then assert the side effect here.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\Queue;
+
+class {$class}QueueTest extends TestCase
+{
+    public function testPublishEnqueuesARealJob(): void
+    {
+        \$desc = require __DIR__ . '/../src/services/{$slug}_consumer.php';
+        \$before = (new Queue(topic: '{$topic}'))->size();
+        \$jobId = (\$desc['publish'])(['hello' => 'world']);
+        \$this->assertNotEmpty(\$jobId);
+        \$this->assertGreaterThanOrEqual(\$before + 1, (new Queue(topic: '{$topic}'))->size());
+    }
+
+    public function testConsumerIsADaemonService(): void
+    {
+        \$desc = require __DIR__ . '/../src/services/{$slug}_consumer.php';
+        \$this->assertTrue(\$desc['daemon']);
+        \$this->assertSame('{$topic}-consumer', \$desc['name']);
+    }
+
+    public function testHandleIsALiveStub(): void
+    {
+        \$desc = require __DIR__ . '/../src/services/{$slug}_consumer.php';
+        \$this->expectException(\\RuntimeException::class);
+        (\$desc['handle'])([]);
+    }
+}
+
+PHP;
+    writeTest("{$class}Queue", $content);
+}
+
+/**
+ * validator -> run the scaffold against valid + invalid real input.
+ */
+function emitValidatorTest(string $name, string $snake): void
+{
+    $class = pascalCase($snake);
+    $content = <<<PHP
+<?php
+
+/**
+ * Real validation test for the {$name} validator — no mocks.
+ *
+ * Generated with src/validators/{$snake}.php by `tina4php generate validator
+ * {$name}`. The scaffold ships a starter rule (required "name"), so this passes
+ * on generation — adjust the rules for your payload and update these cases.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+
+class {$class}ValidatorTest extends TestCase
+{
+    /** @var \\Closure(array): \\Tina4\\Validator */
+    private \$validate;
+
+    protected function setUp(): void
+    {
+        \$this->validate = require __DIR__ . '/../src/validators/{$snake}.php';
+    }
+
+    public function testValidInputPasses(): void
+    {
+        \$this->assertTrue((\$this->validate)(['name' => 'Ada'])->isValid());
+    }
+
+    public function testInvalidInputFails(): void
+    {
+        \$result = (\$this->validate)([]);
+        \$this->assertFalse(\$result->isValid());
+        \$this->assertNotEmpty(\$result->errors());
+    }
+}
+
+PHP;
+    writeTest("{$class}Validator", $content);
+}
+
+/**
+ * seeder -> run the scaffold against real SQLite, assert rows created.
+ */
+function emitSeederTest(string $model, string $table): void
+{
+    $content = <<<PHP
+<?php
+
+/**
+ * Real seeding test for the {$model} seeder — no mocks, real SQLite.
+ *
+ * Generated with src/seeds/{$table}_seeder.php by `tina4php generate seeder
+ * {$model}`. Binds a real SQLite DB, creates the table, runs the scaffolded
+ * seeder (auto-fills every field via \\Tina4\\FakeData::seedOrm) and asserts rows
+ * were created.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+
+require_once __DIR__ . '/../src/orm/{$model}.php';
+
+class {$model}SeederTest extends TestCase
+{
+    private \\Tina4\\Database\\SQLite3Adapter \$db;
+
+    protected function setUp(): void
+    {
+        \$this->db = new \\Tina4\\Database\\SQLite3Adapter(':memory:');
+        \\Tina4\\ORM::bindDatabase(\$this->db);
+        (new {$model}())->createTable();
+    }
+
+    protected function tearDown(): void
+    {
+        \$this->db->close();
+    }
+
+    public function testRunCreatesRows(): void
+    {
+        \$seed = require __DIR__ . '/../src/seeds/{$table}_seeder.php';
+        \$summary = \$seed(5);
+        \$this->assertGreaterThanOrEqual(1, \$summary['seeded']);
+        \$this->assertGreaterThanOrEqual(1, (new {$model}())->count());
+    }
+}
+
+PHP;
+    writeTest("{$model}Seeder", $content);
+}
+
+/**
+ * websocket -> real Router registration + drive the real handler (the socket-free
+ * "close" event) directly (no mock socket).
+ */
+function emitWebsocketTest(string $wsPath, string $base): void
+{
+    $class = pascalCase("ws_{$base}");
+    $content = <<<PHP
+<?php
+
+/**
+ * Real handler test for the {$wsPath} WebSocket route — no mocks.
+ *
+ * Generated with src/routes/ws_{$base}.php by `tina4php generate websocket ...`.
+ * Confirms the handler registers on the REAL Router and drives the real handler
+ * for the "close" event (no socket needed). The "message" branch is an AI-FILL
+ * stub that throws until you fill it; a full RFC6455 loopback is out of scope for
+ * a unit test, so assert its broadcast against a live server once implemented.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\Router;
+
+class {$class}Test extends TestCase
+{
+    private \$handler;
+
+    protected function setUp(): void
+    {
+        Router::clear();
+        \$this->handler = require __DIR__ . '/../src/routes/ws_{$base}.php';
+    }
+
+    protected function tearDown(): void
+    {
+        Router::clear();
+    }
+
+    public function testHandlerRegisteredOnRouter(): void
+    {
+        \$paths = array_map(fn(\$r) => \$r['path'], Router::getWebSocketRoutes());
+        \$this->assertContains('{$wsPath}', \$paths);
+    }
+
+    public function testCloseEventIsHandled(): void
+    {
+        // The "close" branch returns cleanly without a connection.
+        \$this->assertNull((\$this->handler)(null, null, 'close'));
+    }
+
+    public function testMessageBranchIsALiveStub(): void
+    {
+        \$this->expectException(\\RuntimeException::class);
+        (\$this->handler)(null, 'hi', 'message');
+    }
+}
+
+PHP;
+    writeTest($class, $content);
+}
+
+/**
+ * listener -> emit the REAL event on the real bus, assert the listener ran.
+ */
+function emitListenerTest(string $event, string $slug): void
+{
+    $class = pascalCase($slug);
+    $content = <<<PHP
+<?php
+
+/**
+ * Real event-bus test for the '{$event}' listener — no mocks.
+ *
+ * Generated with src/listeners/{$slug}.php by `tina4php generate listener
+ * {$event}`. Confirms the listener binds on the REAL event bus and that emitting
+ * the event reaches it. The reaction body is an AI-FILL stub that throws, so a
+ * strict emit re-raises here (proving it ran).
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\Events;
+
+class {$class}ListenerTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        Events::clear();
+        require __DIR__ . '/../src/listeners/{$slug}.php';
+    }
+
+    protected function tearDown(): void
+    {
+        Events::clear();
+    }
+
+    public function testListenerIsRegistered(): void
+    {
+        \$this->assertGreaterThanOrEqual(1, count(Events::listeners('{$event}')));
+    }
+
+    public function testEmitReachesTheListener(): void
+    {
+        // emitStrict re-raises the stub error, proving the listener ran.
+        \$this->expectException(\\RuntimeException::class);
+        Events::emitStrict('{$event}', ['id' => 1]);
+    }
+}
+
+PHP;
+    writeTest("{$class}Listener", $content);
+}
+
+/**
+ * auth -> real register / login / me end-to-end via the real Router + Auth + SQLite.
+ *
+ * Proves the token from login authenticates the secure-by-default /api/auth/me
+ * (200) using ONLY the framework secret (TINA4_SECRET) — the regression guard for
+ * the getenv('SECRET') mismatch + the $request->header() extraction.
+ */
+function emitAuthTest(): void
+{
+    $content = <<<'PHP'
+<?php
+
+/**
+ * Real auth test — register / login / me via the real Router + Auth + SQLite.
+ *
+ * Generated with the auth scaffold by `tina4php generate auth`. No mocks: real
+ * Router, real Auth (PBKDF2 + JWT), real in-memory SQLite. register + login are
+ * public (->noAuth); the token from login authenticates the secure /api/auth/me.
+ * Sets ONLY TINA4_SECRET (the framework secret the gate + Auth use).
+ */
+
+use PHPUnit\Framework\TestCase;
+use Tina4\Database\SQLite3Adapter;
+use Tina4\ORM;
+use Tina4\Request;
+use Tina4\Response;
+use Tina4\Router;
+
+require_once __DIR__ . '/../src/orm/User.php';
+
+class AuthTest extends TestCase
+{
+    private SQLite3Adapter $db;
+    private string $secret = 'scaffold-auth-secret';
+
+    protected function setUp(): void
+    {
+        Router::clear();
+        putenv("TINA4_SECRET={$this->secret}");
+        $_ENV['TINA4_SECRET'] = $this->secret;
+        $this->db = new SQLite3Adapter(':memory:');
+        ORM::bindDatabase($this->db);
+        (new User())->createTable();
+        require __DIR__ . '/../src/routes/auth.php';
+    }
+
+    protected function tearDown(): void
+    {
+        Router::clear();
+        putenv('TINA4_SECRET');
+        unset($_ENV['TINA4_SECRET']);
+        $this->db->close();
+    }
+
+    private function dispatch(string $method, string $path, array $body = [], ?string $token = null): Response
+    {
+        $headers = ['content-type' => 'application/json'];
+        if ($token !== null) {
+            $headers['authorization'] = "Bearer {$token}";
+        }
+        return Router::dispatch(
+            Request::create(method: $method, path: $path, body: $body, headers: $headers),
+            new Response(true)
+        );
+    }
+
+    public function testRegisterThenLoginThenMe(): void
+    {
+        $registered = $this->dispatch('POST', '/api/auth/register', ['email' => 'a@b.c', 'password' => 'secret12']);
+        $this->assertSame(201, $registered->getStatusCode());
+
+        $duplicate = $this->dispatch('POST', '/api/auth/register', ['email' => 'a@b.c', 'password' => 'secret12']);
+        $this->assertSame(409, $duplicate->getStatusCode());
+
+        $login = $this->dispatch('POST', '/api/auth/login', ['email' => 'a@b.c', 'password' => 'secret12']);
+        $this->assertSame(200, $login->getStatusCode());
+        $token = $login->getJsonBody()['token'] ?? '';
+        $this->assertNotEmpty($token);
+
+        $profile = $this->dispatch('GET', '/api/auth/me', [], $token);
+        $this->assertSame(200, $profile->getStatusCode());
+        $this->assertSame('a@b.c', $profile->getJsonBody()['email'] ?? null);
+    }
+
+    public function testLoginWrongPasswordIs401(): void
+    {
+        $this->dispatch('POST', '/api/auth/register', ['email' => 'x@y.z', 'password' => 'secret12']);
+        $bad = $this->dispatch('POST', '/api/auth/login', ['email' => 'x@y.z', 'password' => 'WRONG']);
+        $this->assertSame(401, $bad->getStatusCode());
+    }
+
+    public function testMeWithoutTokenIs401(): void
+    {
+        $this->assertSame(401, $this->dispatch('GET', '/api/auth/me')->getStatusCode());
+    }
+}
+
+PHP;
+    writeTest('Auth', $content);
+}
+
+/**
+ * migration (create_*) -> apply UP then rollback DOWN via the REAL \Tina4\Migration
+ * runner against real SQLite, asserting the table appears then disappears. Only
+ * for CREATE migrations — a placeholder ALTER has no real DDL to assert yet.
+ */
+function emitMigrationTest(string $migName, string $table, string $upFile, string $downFile): void
+{
+    $class = pascalCase($table);
+    $content = <<<PHP
+<?php
+
+/**
+ * Real migration test for {$upFile} — no mocks, real SQLite.
+ *
+ * Generated with the migration by `tina4php generate migration {$migName}`. Runs
+ * the REAL \\Tina4\\Migration runner against a fresh in-memory SQLite: migrate()
+ * applies the UP and the table exists; rollback() applies the .down.sql
+ * ({$downFile}) and the table is gone — the exact contract the CLI's `migrate`
+ * and `migrate:rollback` execute.
+ */
+
+use PHPUnit\\Framework\\TestCase;
+use Tina4\\Database\\SQLite3Adapter;
+use Tina4\\Migration;
+
+class {$class}MigrationTest extends TestCase
+{
+    private function tableExists(SQLite3Adapter \$db, string \$table): bool
+    {
+        \$result = \$db->fetch("SELECT name FROM sqlite_master WHERE type='table' AND name='{\$table}'");
+        return (int)(\$result['total'] ?? 0) > 0;
+    }
+
+    public function testUpCreatesAndDownDrops(): void
+    {
+        \$db = new SQLite3Adapter(':memory:');
+        \$migration = new Migration(\$db, __DIR__ . '/../migrations');
+
+        \$migration->migrate();
+        \$this->assertTrue(\$this->tableExists(\$db, '{$table}'), 'UP migration should create the table');
+
+        \$migration->rollback();
+        \$this->assertFalse(\$this->tableExists(\$db, '{$table}'), 'DOWN rollback should drop the table');
+    }
+}
+
+PHP;
+    writeTest("{$class}Migration", $content);
 }
 
 
@@ -2498,6 +3255,10 @@ return [
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real ServiceRunner test (register/discover on a REAL runner +
+    // lock in that the task body throws until filled).
+    emitServiceTest($name, $snake);
 }
 
 
@@ -2567,6 +3328,10 @@ return [
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real file-backed Queue test (push a REAL job + daemon wiring +
+    // lock in that the per-job handler throws until filled).
+    emitQueueTest($topic, $slug);
 }
 
 
@@ -2587,15 +3352,15 @@ function generateValidator(string $name, array $flags): void
         return;
     }
 
-    $body = aiFill(
-        "validate_{$snake}",
-        "declare the validation rules for a {$name} payload",
-        "\$validator->required('name')->email('email')->minLength('name', 2)->integer('age')  (Validator.php:55-222)",
-        "validator:{$snake}: add the rule set",
-        given: '$validator -> \\Tina4\\Validator (chainable)',
-        ret: 'the same validator (caller checks ->isValid() / ->errors())',
-        ground: 'tina4_context("validate request body with Validator", "php")'
-    );
+    // Ships a WORKING starter rule (not a loud stub): a rules-less validator
+    // validates nothing, so there would be no negative case to co-emit a real
+    // valid/invalid test against. required('name') mirrors the model generator's
+    // default `name` field — edit it for your real payload. Matches Python master.
+    $body = extendMarker(
+        "add / adjust the rules for your {$name} payload",
+        'e.g. $validator->email("email")->minLength("name", 2)->integer("age") · ' .
+        'ground: tina4_context("validate request body with Validator", "php")'
+    ) . "    \$validator->required('name');\n";
 
     $content = <<<PHP
 <?php
@@ -2616,6 +3381,9 @@ return function (array \$data): \\Tina4\\Validator {
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real valid + invalid test against the starter rule.
+    emitValidatorTest($name, $snake);
 }
 
 
@@ -2637,16 +3405,16 @@ function generateSeeder(string $name, array $flags): void
         return;
     }
 
-    $body = aiFill(
-        'field_overrides',
-        "map {$name} fields to fake values (only those needing a specific shape)",
-        '$fake->firstName() / $fake->email() / $fake->integer(1, 99) / $fake->company()  (FakeData.php:155-303)',
-        "seeder:{$name}: return the field=>value overrides",
-        given: '$fake -> \\Tina4\\FakeData instance',
-        ret: "['email' => \$fake->email(), 'status' => 'active']  (array)",
-        ground: 'tina4_context("seed ORM model with FakeData", "php")',
-        indent: '        '
-    );
+    // Ships working out of the box (not a loud stub): \Tina4\FakeData::seedOrm
+    // auto-fills every field by type/name from the model's getFieldDefinitions(),
+    // so a zero-override seeder already seeds real rows. Return overrides only for
+    // fields that need a specific shape. Mirrors the Python master's seed_orm(...).
+    $body = extendMarker(
+        "override {$name} fields that need a specific shape (optional)",
+        'e.g. return ["email" => fn(\\Tina4\\FakeData $f) => $f->email(), "status" => "active"] · ' .
+        'ground: tina4_context("seed ORM model with FakeData", "php")',
+        '        '
+    ) . "        return [];\n";
 
     $content = <<<PHP
 <?php
@@ -2654,33 +3422,20 @@ function generateSeeder(string $name, array $flags): void
  * Seeder for {$name} — run with: tina4php seed
  *
  * Returns a closure so `require` loads cleanly; `tina4php seed` invokes the
- * returned callable (bin/tina4php seed). PHP has no seed_orm orchestrator —
- * this builds rows directly from \\Tina4\\FakeData (FakeData.php) and the model's
- * save(), returning a \\Tina4\\SeedSummary (SeedSummary.php).
+ * returned callable (bin/tina4php seed). \\Tina4\\FakeData::seedOrm (FakeData.php)
+ * auto-fills every model field by type/name and saves each row, returning a
+ * \\Tina4\\SeedSummary (SeedSummary.php) — the PHP analogue of Python's seed_orm.
  */
 
 require_once __DIR__ . '/../orm/{$model}.php';
 
 return function (int \$count = 20): \\Tina4\\SeedSummary {
-    \$fake = new \\Tina4\\FakeData();
-    \$overrides = function (\\Tina4\\FakeData \$fake): array {
+    // field_overrides: only fields needing a specific shape; seedOrm fills the rest.
+    \$overrides = static function (\\Tina4\\FakeData \$fake): array {
 {$body}    };
 
-    \$seeded = 0;
-    \$failed = 0;
-    \$errors = [];
-    for (\$i = 0; \$i < \$count; \$i++) {
-        try {
-            \$row = new {$model}(\$overrides(\$fake));
-            \$row->save() ? \$seeded++ : \$failed++;
-        } catch (\\Throwable \$e) {
-            \$failed++;
-            \$errors[] = \$e->getMessage();
-            throw \$e;   // fail loud until field_overrides is filled
-        }
-    }
-
-    \$summary = new \\Tina4\\SeedSummary(\$seeded, \$failed, \$errors);
+    \$fake = new \\Tina4\\FakeData();
+    \$summary = \\Tina4\\FakeData::seedOrm({$model}::class, \$count, \$overrides(\$fake));
     echo "Seeded {\$summary['seeded']} {$model} row(s), {\$summary['failed']} failed\\n";
     return \$summary;
 };
@@ -2688,6 +3443,10 @@ return function (int \$count = 20): \\Tina4\\SeedSummary {
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real seeding test (runs the seeder against real SQLite, asserts
+    // rows created).
+    emitSeederTest($model, $table);
 }
 
 
@@ -2753,6 +3512,10 @@ return \$handler;
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real handler test (Router registration + drive the handler:
+    // "close" returns cleanly, "message" throws until filled).
+    emitWebsocketTest($wsPath, $base);
 }
 
 
@@ -2804,6 +3567,9 @@ return \$listener;
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+
+    // Co-emit a real event-bus test (emit the REAL event, assert the listener ran).
+    emitListenerTest($event, $slug);
 }
 
 
