@@ -1437,6 +1437,47 @@ class Database implements DatabaseAdapter
     // -------------------------------------------------------------------------
 
     /**
+     * SILENT PDO fallback (SQLite): prefer ext-sqlite3 (the \SQLite3 class);
+     * fall back to the pdo_sqlite driver when it is absent. Externally
+     * identical — the developer gets a working DB either way.
+     *
+     * @throws \RuntimeException When neither ext-sqlite3 nor pdo_sqlite is present.
+     */
+    private static function makeSqlite(string $path, ?bool $autoCommit): DatabaseAdapter
+    {
+        if (class_exists('SQLite3')) {
+            return new SQLite3Adapter($path, $autoCommit);
+        }
+        if (in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
+            return new PdoSqliteAdapter($path, $autoCommit);
+        }
+        throw new \RuntimeException(
+            'SQLite requires ext-sqlite3 (the SQLite3 class) or the pdo_sqlite PDO driver. '
+            . 'Install one with: brew install php (macOS), or apt-get install php-sqlite3 (Debian/Ubuntu).'
+        );
+    }
+
+    /**
+     * SILENT PDO fallback (PostgreSQL): prefer ext-pgsql (pg_connect); fall back
+     * to the pdo_pgsql driver when it is absent.
+     *
+     * @throws \RuntimeException When neither ext-pgsql nor pdo_pgsql is present.
+     */
+    private static function makePostgres(string $url, ?bool $autoCommit, string $username, string $password): DatabaseAdapter
+    {
+        if (function_exists('pg_connect')) {
+            return new PostgresAdapter($url, $autoCommit, username: $username, password: $password);
+        }
+        if (in_array('pgsql', \PDO::getAvailableDrivers(), true)) {
+            return new PdoPostgresAdapter($url, $autoCommit, username: $username, password: $password);
+        }
+        throw new \RuntimeException(
+            'PostgreSQL requires ext-pgsql (pg_connect) or the pdo_pgsql PDO driver. '
+            . 'Install one with: apt-get install php-pgsql (Debian/Ubuntu) or brew install php (macOS).'
+        );
+    }
+
+    /**
      * Create the raw DatabaseAdapter from a connection URL string.
      *
      * @param string $url Connection URL
@@ -1449,7 +1490,7 @@ class Database implements DatabaseAdapter
     {
         // Handle SQLite special cases
         if ($url === ':memory:' || $url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
-            return new SQLite3Adapter(':memory:', $autoCommit);
+            return self::makeSqlite(':memory:', $autoCommit);
         }
 
         if (str_starts_with($url, 'sqlite:')) {
@@ -1473,12 +1514,12 @@ class Database implements DatabaseAdapter
             if (preg_match('/^\/[A-Za-z]:/', $path)) {
                 $path = substr($path, 1);
             }
-            return new SQLite3Adapter($path === '' ? ':memory:' : $path, $autoCommit);
+            return self::makeSqlite($path === '' ? ':memory:' : $path, $autoCommit);
         }
 
         // For a bare file path ending in .db or .sqlite, assume SQLite
         if (!str_contains($url, '://') && preg_match('/\.(db|sqlite|sqlite3)$/i', $url)) {
-            return new SQLite3Adapter($url, $autoCommit);
+            return self::makeSqlite($url, $autoCommit);
         }
 
         // Parse standard URL
@@ -1502,11 +1543,11 @@ class Database implements DatabaseAdapter
         $adapterClass = self::ADAPTER_MAP[$scheme];
 
         return match ($adapterClass) {
-            SQLite3Adapter::class => new SQLite3Adapter(
+            SQLite3Adapter::class => self::makeSqlite(
                 ltrim($parts['path'] ?? ':memory:', '/'),
                 $autoCommit,
             ),
-            PostgresAdapter::class => new PostgresAdapter($url, $autoCommit, username: $username, password: $password),
+            PostgresAdapter::class => self::makePostgres($url, $autoCommit, $username, $password),
             MySQLAdapter::class => new MySQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             MSSQLAdapter::class => new MSSQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             FirebirdAdapter::class => new FirebirdAdapter(
