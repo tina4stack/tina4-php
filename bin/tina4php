@@ -343,9 +343,206 @@ function resolveHostPort(?string $cliArg = null): array
     return [$host, $port];
 }
 
+// ── Command surface — single source of truth ──────────────────────────────
+//
+// ONE registry per surface drives the human help (tina4RenderHelp), the machine
+// manifest (`commands --json` / tina4CommandsManifest), the `generate` sub-list,
+// AND gates dispatch below (an unknown command is one absent from $TINA4_COMMANDS).
+// Add a command in ONE place and it shows up in help, discovery, and dispatch —
+// there is no second list to keep in sync. Mirrors the Python master's
+// COMMANDS / GENERATORS registries (tina4_python/cli/__init__.py).
+//
+//   $TINA4_GENERATORS[name] = ['usage' => str, 'summary' => str]
+//   $TINA4_COMMANDS[name]   = ['summary' => str,
+//                              'usage'?       => str,    // human-help arg hint only
+//                              'args'?        => [str],  // positional args -> manifest ("x?" = optional)
+//                              'subcommands'? => [str]]   // sub-names -> manifest (generate)
+
+/**
+ * Resolve the framework version WITHOUT booting the app or loading heavy classes.
+ *
+ * tina4: deliberately mirrors \Tina4\App::resolveVersion() (composer.json ->
+ * installed.json) rather than calling it, so `commands` stays boot-free — the
+ * tina4 Rust client calls it on every `tina4 --help`, in any directory. Both read
+ * the same package metadata, so the reported version matches the running app's.
+ */
+function tina4FrameworkVersion(string $frameworkRoot): string
+{
+    $composer = $frameworkRoot . '/composer.json';
+    if (is_file($composer)) {
+        $data = json_decode((string)file_get_contents($composer), true);
+        if (!empty($data['version'])) {
+            return (string)$data['version'];
+        }
+    }
+    // Packagist/git installs carry the version in composer's installed.json instead.
+    foreach ([$frameworkRoot . '/../../composer/installed.json',
+              $frameworkRoot . '/vendor/composer/installed.json'] as $installed) {
+        if (is_file($installed)) {
+            $data = json_decode((string)file_get_contents($installed), true);
+            foreach ((array)($data['packages'] ?? $data) as $pkg) {
+                if (($pkg['name'] ?? '') === 'tina4stack/tina4php') {
+                    return (string)($pkg['version'] ?? '0.0.0');
+                }
+            }
+        }
+    }
+    return '0.0.0';
+}
+
+/**
+ * Build the machine-readable manifest of the CLI's command surface.
+ *
+ * Pure data: reads only the $TINA4_COMMANDS registry + the resolved version — no
+ * bootstrap, no DB, no app imports. This is exactly what `commands --json`
+ * serialises and what the tina4 Rust client consumes to discover this framework's
+ * commands. Shape (identical to the Python master):
+ *
+ *   {framework:"php", version:"<x.y.z>",
+ *    commands:[{name, summary, args?, subcommands?}, ...]}
+ */
+function tina4CommandsManifest(array $commands, string $version): array
+{
+    $list = [];
+    foreach ($commands as $name => $spec) {
+        $entry = ['name' => $name, 'summary' => $spec['summary']];
+        if (!empty($spec['args'])) {
+            $entry['args'] = array_values($spec['args']);
+        }
+        if (!empty($spec['subcommands'])) {
+            $entry['subcommands'] = array_values($spec['subcommands']);
+        }
+        $list[] = $entry;
+    }
+    return ['framework' => 'php', 'version' => $version, 'commands' => $list];
+}
+
+/**
+ * Render the human-readable help — generated from the SAME registries that drive
+ * dispatch and the manifest, so the help can never drift from what the CLI does.
+ */
+function tina4RenderHelp(array $commands, array $generators): string
+{
+    $commandRows = [];
+    foreach ($commands as $name => $spec) {
+        $commandRows[] = [trim($name . ' ' . ($spec['usage'] ?? '')), $spec['summary']];
+    }
+    $generatorRows = [];
+    foreach ($generators as $name => $spec) {
+        $generatorRows[] = [trim('generate ' . $name . ' ' . ($spec['usage'] ?? '')), $spec['summary']];
+    }
+    // Align summaries in a column; a left cell longer than the cap overflows
+    // cleanly (2-space gap) rather than pushing every other summary out.
+    $pad = 0;
+    foreach (array_merge($commandRows, $generatorRows) as [$left,]) {
+        $pad = max($pad, strlen($left));
+    }
+    $pad = min(46, $pad);
+    $row = static function (string $left, string $summary) use ($pad): string {
+        $gap = strlen($left) <= $pad ? $pad : strlen($left);
+        return '  ' . str_pad($left, $gap) . '  ' . $summary;
+    };
+
+    $lines = ['', 'Tina4 PHP CLI v3', '', 'Usage: tina4php <command> [options]', '', 'Commands:'];
+    foreach ($commandRows as [$left, $summary]) {
+        $lines[] = $row($left, $summary);
+    }
+    $lines[] = '';
+    $lines[] = 'Generators:';
+    foreach ($generatorRows as [$left, $summary]) {
+        $lines[] = $row($left, $summary);
+    }
+    $lines = array_merge($lines, [
+        '',
+        'Scaffolding-first: logic-shaped generators emit wiring + an AI-FILL placeholder',
+        '(throw \\RuntimeException) where the custom logic goes; CRUD-shaped ones emit',
+        'working code. Writes are secure by default — use --public to open them.',
+        '',
+        'Field types: string, int, float, bool, text, datetime, blob',
+        'Table names: singular by default (Product -> product)',
+        '',
+        'https://tina4.com',
+        '',
+    ]);
+    return implode("\n", $lines) . "\n";
+}
+
+/**
+ * Render the default (non-JSON) `commands` output — a readable command list.
+ * Reads the already-built manifest, so it can never disagree with `--json`.
+ */
+function tina4RenderCommands(array $manifest): string
+{
+    $width = 0;
+    foreach ($manifest['commands'] as $command) {
+        $width = max($width, strlen($command['name']));
+    }
+    $lines = ['', "Tina4 {$manifest['framework']} — {$manifest['version']}", ''];
+    foreach ($manifest['commands'] as $command) {
+        $lines[] = '  ' . str_pad($command['name'], $width) . '  ' . $command['summary'];
+        if (!empty($command['subcommands'])) {
+            $lines[] = '  ' . str_repeat(' ', $width) . '    ' . implode(', ', $command['subcommands']);
+        }
+    }
+    $lines[] = '';
+    return implode("\n", $lines) . "\n";
+}
+
+$TINA4_GENERATORS = [
+    'model'      => ['usage' => '<Name> [--fields "name:string,price:float"]', 'summary' => 'ORM model + matching migration'],
+    'route'      => ['usage' => '<name> [--model Name] [--public]',            'summary' => 'CRUD route file, secure by default (--public opens writes)'],
+    'crud'       => ['usage' => '<Name> [--fields "..."] [--public]',           'summary' => 'Model + migration + routes + form + view + test'],
+    'migration'  => ['usage' => '<description>',                                'summary' => 'Timestamped migration file'],
+    'middleware' => ['usage' => '<Name>',                                       'summary' => 'Middleware with before/after hooks'],
+    'test'       => ['usage' => '<name> [--model Name]',                        'summary' => 'PHPUnit test file'],
+    'form'       => ['usage' => '<Name> [--fields "..."]',                      'summary' => 'Form template with typed inputs'],
+    'view'       => ['usage' => '<Name> [--fields "..."]',                      'summary' => 'List + detail view templates'],
+    'auth'       => ['usage' => '',                                            'summary' => 'Login/register routes + User model + templates'],
+    'service'    => ['usage' => '<Name> [--every 5m | --cron "..."]',           'summary' => 'Scheduled ServiceRunner task (src/services/)'],
+    'queue'      => ['usage' => '<topic>',                                      'summary' => 'Producer + consumer worker (src/services/)'],
+    'validator'  => ['usage' => '<Name>',                                       'summary' => 'Request-body Validator (src/validators/)'],
+    'seeder'     => ['usage' => '<Model>',                                      'summary' => 'FakeData seeder (src/seeds/)'],
+    'websocket'  => ['usage' => '<path>',                                       'summary' => 'Router::websocket handler (src/routes/)'],
+    'listener'   => ['usage' => '<event>',                                      'summary' => 'Events::on listener (src/listeners/)'],
+];
+
+$TINA4_COMMANDS = [
+    'init'             => ['usage' => '[dir]',            'args' => ['dir?'],        'summary' => 'Scaffold a new project'],
+    'serve'            => ['usage' => '[host:port|port]',                            'summary' => 'Start dev server (default: 0.0.0.0:7145)'],
+    'start'            => [                                                          'summary' => 'Alias for serve'],
+    'migrate'          => [                                                          'summary' => 'Run pending migrations'],
+    'migrate:create'   => ['usage' => '<desc>',           'args' => ['description'], 'summary' => 'Create a migration file'],
+    'migrate:rollback' => [                                                          'summary' => 'Rollback last batch'],
+    'migrate:status'   => [                                                          'summary' => 'Show migration status'],
+    'seed'             => [                                                          'summary' => 'Run seeders from src/seeds/'],
+    'routes'           => [                                                          'summary' => 'List all registered routes'],
+    'metrics'          => ['usage' => '[--top N] [--json] [--fail-on warn|error] [--path DIR]', 'summary' => 'Rank top code-quality offenders'],
+    'test'             => [                                                          'summary' => 'Run test suite'],
+    'build'            => [                                                          'summary' => 'Build distributable package'],
+    'generate'         => ['usage' => '<what> <name> [options]', 'subcommands' => array_keys($TINA4_GENERATORS), 'summary' => 'Generate scaffolding (see Generators below)'],
+    'ai'               => ['usage' => '[--all]',                                     'summary' => 'Detect AI tools and install context'],
+    'console'          => [                                                          'summary' => 'Interactive PHP REPL with Tina4 loaded'],
+    'commands'         => ['usage' => '[--json]',                                    'summary' => 'List available commands (add --json for machine form)'],
+    'help'             => [                                                          'summary' => 'Show this help'],
+];
+
 // ── Parse command ──
 $command = $argv[1] ?? 'help';
 $args = array_slice($argv, 2);
+
+// Flag-style help aliases normalise to the 'help' command.
+if ($command === '--help' || $command === '-h') {
+    $command = 'help';
+}
+
+// The registry is the single source of truth for the command surface: a command
+// it does not declare is unknown. Mirrors the Python master's main(), which
+// prints "Unknown command" then falls back to help.
+if (!isset($TINA4_COMMANDS[$command])) {
+    echo "Unknown command: {$command}\n";
+    echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS);
+    exit(0);
+}
 
 switch ($command) {
 
@@ -963,8 +1160,9 @@ DOCKERFILE;
     // ────────────────────────────────────────────
     case 'generate':
         $what = $args[0] ?? null;
-        $allGenerators = 'model, route, crud, migration, middleware, test, form, view, auth, '
-            . 'service, queue, validator, seeder, websocket, listener';
+        // Single source: the $TINA4_GENERATORS registry drives this list, the
+        // help text, and the manifest's generate.subcommands (no separate copy).
+        $allGenerators = implode(', ', array_keys($TINA4_GENERATORS));
         if (!$what) {
             echo "Usage: tina4php generate <what> <name> [options]\n";
             echo "  Generators: {$allGenerators}\n";
@@ -1096,53 +1294,27 @@ DOCKERFILE;
         break;
 
     // ────────────────────────────────────────────
-    // HELP
+    // COMMANDS — Self-describing command surface (for the tina4 client)
+    // ────────────────────────────────────────────
+    // CHEAP + side-effect-free by contract: prints only the static registry + the
+    // resolved version. It never bootstraps the app, opens a DB, runs migrations,
+    // or autoloads framework/app classes — the tina4 Rust client calls it on every
+    // `tina4 --help`, in any directory, so it stays instant and safe to run anywhere.
+    case 'commands':
+        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion((string)$frameworkRoot));
+        if (in_array('--json', $args, true)) {
+            echo json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+        } else {
+            echo tina4RenderCommands($manifest);
+        }
+        break;
+
+    // ────────────────────────────────────────────
+    // HELP  (rendered from the $TINA4_COMMANDS / $TINA4_GENERATORS registries)
     // ────────────────────────────────────────────
     case 'help':
-    case '--help':
-    case '-h':
     default:
-        echo "Tina4 PHP CLI v3\n\n";
-        echo "Usage: tina4php <command> [options]\n\n";
-        echo "Commands:\n";
-        echo "  init [dir]              Scaffold a new project\n";
-        echo "  serve [host:port|port]   Start dev server (default: 0.0.0.0:7145)\n";
-        echo "  start [host:port|port]   Alias for serve\n";
-        echo "  migrate                 Run pending migrations\n";
-        echo "  migrate:create <desc>   Create a migration file\n";
-        echo "  migrate:rollback        Rollback last batch\n";
-        echo "  migrate:status          Show migration status\n";
-        echo "  seed                    Run seeders from src/seeds/\n";
-        echo "  routes                  List all registered routes\n";
-        echo "  metrics [--top N] [--json] [--fail-on warn|error] [--path DIR]  Rank top code-quality offenders\n";
-        echo "  test                    Run test suite\n";
-        echo "  build                   Build distributable package\n";
-        echo "  generate <what> <name>  Generate scaffolding\n";
-        echo "  ai [--all]              Detect AI tools and install context\n";
-        echo "  console                 Interactive PHP REPL with Tina4 loaded\n";
-        echo "  help                    Show this help\n";
-        echo "\nGenerators:\n";
-        echo "  generate model <Name> [--fields \"name:string,price:float\"]\n";
-        echo "  generate route <name> [--model Name] [--public]   Writes secure by default; --public opens them\n";
-        echo "  generate crud <Name> [--fields \"...\"] [--public]   Model + migration + routes + form + view + test\n";
-        echo "  generate migration <description>\n";
-        echo "  generate middleware <Name>\n";
-        echo "  generate test <name>\n";
-        echo "  generate form <Name> [--fields \"...\"]   Form template with typed inputs\n";
-        echo "  generate view <Name> [--fields \"...\"]   List + detail templates\n";
-        echo "  generate auth                           Login/register routes + User model + templates\n";
-        echo "  generate service <Name> [--every 5m | --cron \"...\"]   Scheduled ServiceRunner task (src/services/)\n";
-        echo "  generate queue <topic>                  Producer + consumer worker (src/services/)\n";
-        echo "  generate validator <Name>               Request-body Validator (src/validators/)\n";
-        echo "  generate seeder <Model>                 FakeData seeder (src/seeds/)\n";
-        echo "  generate websocket <path>               Router::websocket handler (src/routes/)\n";
-        echo "  generate listener <event>               Events::on listener (src/listeners/)\n";
-        echo "\nScaffolding-first: logic-shaped generators emit wiring + an AI-FILL placeholder\n";
-        echo "(throw \\RuntimeException) where the custom logic goes; CRUD-shaped ones emit\n";
-        echo "working code. Writes are secure by default — use --public to open them.\n";
-        echo "\nField types: string, int, float, bool, text, datetime, blob\n";
-        echo "Table names: singular by default (Product -> product)\n";
-        echo "\nhttps://tina4.com\n";
+        echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS);
         break;
 }
 
