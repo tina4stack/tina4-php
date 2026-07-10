@@ -30,6 +30,7 @@ class CommandsManifestTest extends TestCase
     /** The command set the tina4 client must be able to discover truthfully. */
     private const KNOWN_COMMANDS = [
         'migrate', 'migrate:create', 'seed', 'test', 'routes', 'generate', 'commands',
+        'queue', 'build',
     ];
 
     private static string $bin;
@@ -154,22 +155,45 @@ class CommandsManifestTest extends TestCase
         $this->assertSame(['description'], $entry['args'] ?? null);
     }
 
-    public function testNoInventedTopLevelQueueCommand(): void
+    public function testQueueIsATopLevelCommandAndAGenerator(): void
     {
-        // `queue` exists only as a `generate` subcommand today — it must NOT
-        // masquerade as a top-level command (parity with the Python master).
+        // Phase 3: `queue` is now BOTH a top-level command (run workers / manage
+        // jobs) with work/stats/retry/clear subcommands, AND a `generate`
+        // subcommand (scaffold a consumer). The two are distinct surfaces —
+        // parity with the Python master.
         $manifest = $this->manifest();
         $names = array_column($manifest['commands'], 'name');
-        $this->assertNotContains('queue', $names);
+        $this->assertContains('queue', $names, 'top-level queue command missing from manifest');
 
+        $queue = null;
         $generate = null;
         foreach ($manifest['commands'] as $c) {
+            if ($c['name'] === 'queue') {
+                $queue = $c;
+            }
             if ($c['name'] === 'generate') {
                 $generate = $c;
+            }
+        }
+        $this->assertNotNull($queue);
+        $this->assertSame(['work', 'stats', 'retry', 'clear'], $queue['subcommands'] ?? null);
+
+        // Still a scaffolding generator too (unchanged).
+        $this->assertContains('queue', $generate['subcommands'] ?? []);
+    }
+
+    public function testBuildDeclaresDeployOrientedSummary(): void
+    {
+        // `build` produces the deployable Docker image, not a library package.
+        $entry = null;
+        foreach ($this->manifest()['commands'] as $c) {
+            if ($c['name'] === 'build') {
+                $entry = $c;
                 break;
             }
         }
-        $this->assertContains('queue', $generate['subcommands'] ?? []);
+        $this->assertNotNull($entry, 'no build command in manifest');
+        $this->assertStringContainsString('Docker', $entry['summary']);
     }
 
     // ── Anti-drift lock-in ───────────────────────────────────────────────

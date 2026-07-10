@@ -15,7 +15,8 @@
  *   tina4php routes                 List all registered routes
  *   tina4php metrics [opts]         Rank top code-quality offenders (--top N, --json, --fail-on, --path)
  *   tina4php test                   Run test suite
- *   tina4php build                  Build distributable package
+ *   tina4php queue <work|stats|retry|clear> [topic]  Run queue workers and manage jobs
+ *   tina4php build [--tag N] [--file P]  Build the deployable Docker image
  *   tina4php generate <what> <name>  Generate scaffolding
  *   tina4php ai [--all]             Detect AI tools and install context
  *   tina4php console                Drop into an interactive PHP REPL with Tina4 loaded
@@ -246,7 +247,7 @@ function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
     $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear', 'json',
-                     'public', 'no-migration'];
+                     'public', 'no-migration', 'once'];
 
     $flags = [];
     $positional = [];
@@ -488,6 +489,11 @@ function tina4RenderCommands(array $manifest): string
     return implode("\n", $lines) . "\n";
 }
 
+// Sub-dispatch table for the top-level `queue` command — the single source for
+// its subcommands (drives tina4Queue() dispatch AND the manifest's
+// queue.subcommands). Mirrors the Python master's _QUEUE_SUBCOMMANDS.
+$TINA4_QUEUE_SUBCOMMANDS = ['work', 'stats', 'retry', 'clear'];
+
 $TINA4_GENERATORS = [
     'model'      => ['usage' => '<Name> [--fields "name:string,price:float"]', 'summary' => 'ORM model + matching migration'],
     'route'      => ['usage' => '<name> [--model Name] [--public]',            'summary' => 'CRUD route file, secure by default (--public opens writes)'],
@@ -518,7 +524,8 @@ $TINA4_COMMANDS = [
     'routes'           => [                                                          'summary' => 'List all registered routes'],
     'metrics'          => ['usage' => '[--top N] [--json] [--fail-on warn|error] [--path DIR]', 'summary' => 'Rank top code-quality offenders'],
     'test'             => [                                                          'summary' => 'Run test suite'],
-    'build'            => [                                                          'summary' => 'Build distributable package'],
+    'queue'            => ['usage' => '<work|stats|retry|clear> [topic]', 'subcommands' => $TINA4_QUEUE_SUBCOMMANDS, 'summary' => 'Run queue workers and manage jobs'],
+    'build'            => ['usage' => '[--tag NAME] [--file PATH]',                   'summary' => 'Build the deployable Docker image'],
     'generate'         => ['usage' => '<what> <name> [options]', 'subcommands' => array_keys($TINA4_GENERATORS), 'summary' => 'Generate scaffolding (see Generators below)'],
     'ai'               => ['usage' => '[--all]',                                     'summary' => 'Detect AI tools and install context'],
     'console'          => [                                                          'summary' => 'Interactive PHP REPL with Tina4 loaded'],
@@ -1149,10 +1156,19 @@ DOCKERFILE;
         break;
 
     // ────────────────────────────────────────────
-    // BUILD — Build distributable
+    // QUEUE — Run workers and manage jobs (top-level; distinct from `generate
+    // queue`, which SCAFFOLDS a consumer). Wires straight to the real
+    // \Tina4\Queue — no app/DB boot needed.
+    // ────────────────────────────────────────────
+    case 'queue':
+        tina4Queue($args, $TINA4_QUEUE_SUBCOMMANDS);
+        break;
+
+    // ────────────────────────────────────────────
+    // BUILD — Build the deployable Docker image
     // ────────────────────────────────────────────
     case 'build':
-        echo "Build not yet implemented in v3.\n";
+        tina4Build($args);
         break;
 
     // ────────────────────────────────────────────
@@ -2541,10 +2557,11 @@ function generateQueue(string $name, array $flags): void
 
 return [
     'name'    => '{$topic}-consumer',
+    'topic'   => '{$topic}',  // lets `tina4php queue work {$topic}` drive this consumer
     'handler' => \$consume,
     'daemon'  => true,
     'publish' => \$publish,   // extra keys ignored by discover(); handy for producers
-    'handle'  => \$handle,    // exposed for testing / direct dispatch
+    'handle'  => \$handle,    // per-job handler `queue work` calls (own poll loop / --once)
 ];
 
 PHP;
@@ -2787,4 +2804,357 @@ return \$listener;
 PHP;
     file_put_contents($path, $content);
     echo "  Created {$path}\n";
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// Queue command (top-level) — run workers and manage jobs
+// ════════════════════════════════════════════════════════════════════════
+//
+// Wires straight to the real \Tina4\Queue (file backend by default; RabbitMQ /
+// Kafka / MongoDB via TINA4_QUEUE_BACKEND). `stats`, `retry` and `clear` operate
+// on the queue without booting the app or a database; `work` runs the app's
+// consumer for a topic. Distinct from `generate queue`, which SCAFFOLDS a
+// consumer file. Mirrors the Python master's _queue* handlers (external
+// behaviour: subcommand names, flags, output shape, exit codes).
+
+/**
+ * Break out of a long-running `queue work` poll loop on Ctrl-C. Thrown from the
+ * SIGINT handler (async signals) so it interrupts the poll sleep immediately —
+ * the parity analogue of Python's KeyboardInterrupt propagating out of consume().
+ */
+final class Tina4QueueWorkerInterrupt extends \RuntimeException
+{
+}
+
+/**
+ * Locate an executable on PATH — a stdlib-only `which`, mirroring Python's
+ * shutil.which(). Honours the process PATH env, so a caller with an emptied PATH
+ * genuinely finds nothing. Returns the full path, or null when absent.
+ */
+function tina4Which(string $name): ?string
+{
+    $path = getenv('PATH');
+    if ($path === false || $path === '') {
+        return null;
+    }
+    $exts = [''];
+    if (PHP_OS_FAMILY === 'Windows') {
+        $pathext = getenv('PATHEXT') ?: '.EXE;.CMD;.BAT;.COM';
+        $exts = array_merge([''], explode(';', $pathext));
+    }
+    foreach (explode(PATH_SEPARATOR, $path) as $dir) {
+        if ($dir === '') {
+            continue;
+        }
+        foreach ($exts as $ext) {
+            $candidate = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $name . $ext;
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Return the per-job handler a consumer module declares for $topic.
+ *
+ * A consumer file (e.g. the one `generate queue <topic>` scaffolds) `return`s an
+ * array exposing a 'topic' and a per-job 'handle' callable. When its topic
+ * matches, `queue work` drives that consumer through the handle — so the worker
+ * owns the poll loop (honouring --poll and the bounded --once drain) instead of
+ * the consumer's own endless loop. Returns the callable, or null when no
+ * consumer in $servicesDir targets this topic. Mirrors Python's
+ * _resolve_queue_handler.
+ */
+function tina4ResolveQueueHandler(string $servicesDir, string $topic): ?callable
+{
+    if (!is_dir($servicesDir)) {
+        return null;
+    }
+    $files = glob(rtrim($servicesDir, '/\\') . '/*.php') ?: [];
+    sort($files);
+    foreach ($files as $file) {
+        if (str_starts_with(basename($file), '_')) {
+            continue;
+        }
+        try {
+            // require (not _once) so a re-scan re-reads the returned array; a
+            // broken sibling must not sink the worker.
+            $config = require $file;
+        } catch (\Throwable) {
+            continue;
+        }
+        if (is_array($config)
+            && ($config['topic'] ?? null) === $topic
+            && isset($config['handle']) && is_callable($config['handle'])) {
+            return $config['handle'];
+        }
+    }
+    return null;
+}
+
+/**
+ * queue work — run a consumer loop that pops and processes jobs on a topic.
+ *
+ *   tina4php queue work [topic] [--once] [--poll N] [--services DIR]
+ *
+ * Long-running by default (polls every --poll seconds, 1.0 default; Ctrl-C to
+ * stop). --once does a single-pass drain — processes every currently available
+ * job then exits (poll interval 0). The per-job handler is resolved from the
+ * app's consumer for this topic; with no handler it drains and acks with a
+ * warning rather than inventing behaviour.
+ */
+function tina4QueueWork(array $args): void
+{
+    [$flags, $positional] = parseFlags($args);
+    $topic = $positional[0] ?? 'default';
+    $once = !empty($flags['once']);
+
+    $pollValue = $flags['poll'] ?? null;
+    $poll = is_numeric($pollValue) ? (float)$pollValue : ($once ? 0.0 : 1.0);
+    if ($once) {
+        $poll = 0.0; // single-pass: consume() returns as soon as the topic is empty
+    }
+
+    $servicesDir = $flags['services'] ?? (getenv('TINA4_SERVICE_DIR') ?: 'src/services');
+    if ($servicesDir === true) {
+        $servicesDir = 'src/services';
+    }
+
+    $handler = tina4ResolveQueueHandler((string)$servicesDir, $topic);
+    $queue = new \Tina4\Queue(topic: $topic);
+
+    if ($handler === null) {
+        echo "  ⚠ No consumer handler found for topic '{$topic}' in {$servicesDir}.\n";
+        echo "    Scaffold one with: tina4php generate queue {$topic}\n";
+        echo "    Draining (consume + ack) without processing.\n";
+    }
+
+    $mode = $once ? 'single-pass drain' : ('polling every ' . sprintf('%g', $poll) . 's (Ctrl-C to stop)');
+    echo "  Queue worker on '{$topic}' — {$mode}...\n";
+
+    // Ctrl-C parity with Python's KeyboardInterrupt: with pcntl available the
+    // SIGINT handler throws, breaking out of the poll sleep at once. Without
+    // pcntl the default signal terminates the process (only the tidy
+    // "Interrupted" line is missed) — never needed for the bounded --once drain.
+    if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+        pcntl_async_signals(true);
+        pcntl_signal(SIGINT, static function (): void {
+            throw new Tina4QueueWorkerInterrupt();
+        });
+    }
+
+    $processed = 0;
+    $failed = 0;
+    try {
+        foreach ($queue->consume($topic, null, $poll) as $job) {
+            try {
+                if ($handler !== null) {
+                    $handler($job->payload);
+                }
+                $job->complete();          // ack — job done, remove from the queue
+                $processed++;
+            } catch (Tina4QueueWorkerInterrupt $interrupt) {
+                throw $interrupt;          // Ctrl-C mid-job — let the worker stop
+            } catch (\Throwable $error) {
+                $job->fail($error->getMessage()); // nack — retry / dead-letter
+                $failed++;
+            }
+        }
+    } catch (Tina4QueueWorkerInterrupt) {
+        echo "\n  Interrupted — stopping worker.\n";
+    }
+
+    echo "  Processed {$processed} job(s), {$failed} failed on '{$topic}'.\n";
+}
+
+/**
+ * queue stats — print pending / in-flight / failed / dead-letter / completed
+ * counts for a topic.
+ *
+ *   tina4php queue stats [topic] [--json]
+ */
+function tina4QueueStats(array $args): void
+{
+    [$flags, $positional] = parseFlags($args);
+    $topic = $positional[0] ?? 'default';
+
+    $queue = new \Tina4\Queue(topic: $topic);
+    $stats = [
+        'topic'     => $topic,
+        'pending'   => $queue->size('pending'),   // waiting to run
+        'reserved'  => $queue->size('reserved'),  // popped, not yet acked (in-flight)
+        'failed'    => count($queue->failed()),   // failed once, still retrying
+        'dead'      => $queue->size('dead'),      // exhausted retries (dead-letter)
+        'completed' => $queue->size('completed'), // terminal-completed (0 on file backend)
+    ];
+
+    if (!empty($flags['json'])) {
+        echo json_encode($stats, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+        return;
+    }
+
+    echo "\n  Queue '{$topic}'\n";
+    echo "    pending    {$stats['pending']}\n";
+    echo "    reserved   {$stats['reserved']}    (in-flight)\n";
+    echo "    failed     {$stats['failed']}    (retrying)\n";
+    echo "    dead       {$stats['dead']}    (dead-letter)\n";
+    echo "    completed  {$stats['completed']}\n";
+    echo "\n";
+}
+
+/**
+ * queue retry — re-queue failed and dead-letter jobs so they run again.
+ *
+ *   tina4php queue retry [topic]
+ *
+ * Revives every dead-letter job (manual override, regardless of attempt count)
+ * and re-queues any failed-but-still-eligible jobs.
+ */
+function tina4QueueRetry(array $args): void
+{
+    [, $positional] = parseFlags($args);
+    $topic = $positional[0] ?? 'default';
+
+    $queue = new \Tina4\Queue(topic: $topic);
+
+    // maxRetries=0 => every job in the dead-letter store, whatever its attempt
+    // count (matches what stats/size('dead') reports), not only attempts>=N.
+    $dead = $queue->deadLetters(0);
+    $revived = 0;
+    foreach ($dead as $job) {
+        if ($queue->retry((string)($job['id'] ?? ''))) {
+            $revived++;
+        }
+    }
+    // Any failed-but-retryable jobs still under the limit.
+    $requeued = $queue->retryFailed();
+
+    $total = $revived + $requeued;
+    echo "  Re-queued {$total} job(s) on '{$topic}' ({$revived} dead-letter, {$requeued} failed).\n";
+}
+
+/**
+ * queue clear — purge jobs of a given status (default: completed).
+ *
+ *   tina4php queue clear [status] [topic]
+ *
+ * status is one of pending / reserved / completed / failed / dead. The default
+ * 'completed' clears finished jobs; pass e.g. `queue clear pending` or
+ * `queue clear dead orders` to purge another status / topic.
+ */
+function tina4QueueClear(array $args): void
+{
+    [, $positional] = parseFlags($args);
+    $status = $positional[0] ?? 'completed';
+    $topic = $positional[1] ?? 'default';
+
+    $queue = new \Tina4\Queue(topic: $topic);
+    $removed = $queue->purge($status);
+    echo "  Cleared {$removed} '{$status}' job(s) from '{$topic}'.\n";
+}
+
+/**
+ * Top-level `queue` dispatch: run workers and manage jobs.
+ *
+ *   tina4php queue work  [topic] [--once] [--poll N] [--services DIR]
+ *   tina4php queue stats [topic] [--json]
+ *   tina4php queue retry [topic]
+ *   tina4php queue clear [status] [topic]
+ */
+function tina4Queue(array $args, array $subcommands): void
+{
+    if (empty($args)) {
+        echo "Usage: tina4php queue <work|stats|retry|clear> [options]\n";
+        echo "  Subcommands: " . implode(', ', $subcommands) . "\n";
+        exit(1);
+    }
+    $sub = strtolower($args[0]);
+    $rest = array_slice($args, 1);
+    switch ($sub) {
+        case 'work':
+            tina4QueueWork($rest);
+            break;
+        case 'stats':
+            tina4QueueStats($rest);
+            break;
+        case 'retry':
+            tina4QueueRetry($rest);
+            break;
+        case 'clear':
+            tina4QueueClear($rest);
+            break;
+        default:
+            echo "Unknown queue subcommand: {$sub}\n";
+            echo "  Available: " . implode(', ', $subcommands) . "\n";
+            exit(1);
+    }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// Build command — build the deployable Docker image
+// ════════════════════════════════════════════════════════════════════════
+//
+// A Tina4 app deploys as a container (`tina4php init` / `tina4 deploy docker`
+// scaffold a Dockerfile), so `build` produces THAT artifact: the image. It
+// shells out to the `docker` CLI (no new dependency) and fails loud with
+// guidance when there is no Dockerfile or docker is not on PATH. Mirrors the
+// Python master's _build (the Run: hint uses the PHP dev-server port, 7145).
+
+/**
+ * build — build the deployable Docker image for this Tina4 app.
+ *
+ *   tina4php build                    # docker build -t <dir>:latest -f Dockerfile .
+ *   tina4php build --tag myapp:1.2    # explicit image tag
+ *   tina4php build --file docker/uv/Dockerfile
+ */
+function tina4Build(array $args): void
+{
+    [$flags, ] = parseFlags($args);
+
+    $tag = $flags['tag'] ?? null;
+    if (!$tag || $tag === true) {
+        // Default tag: <project-folder>:latest, lower-cased (docker repo names
+        // must be lowercase). Fall back to a sane name for an unnamed cwd.
+        $dirName = strtolower(basename(getcwd() ?: ''));
+        if ($dirName === '') {
+            $dirName = 'tina4app';
+        }
+        $tag = "{$dirName}:latest";
+    }
+
+    $dockerfile = $flags['file'] ?? 'Dockerfile';
+    if ($dockerfile === true) {
+        $dockerfile = 'Dockerfile';
+    }
+
+    if (!is_file($dockerfile)) {
+        echo "  ✗ No {$dockerfile} found.\n";
+        echo "  A Tina4 app deploys as a container. Scaffold a Dockerfile first:\n";
+        echo "      tina4 deploy docker        (or: tina4php init)\n";
+        exit(1);
+    }
+
+    $docker = tina4Which('docker');
+    if ($docker === null) {
+        echo "  ✗ docker was not found on PATH.\n";
+        echo "  Install Docker to build the deployable image, or build manually:\n";
+        echo "      docker build -t {$tag} -f {$dockerfile} .\n";
+        exit(1);
+    }
+
+    echo "  Building image {$tag} from {$dockerfile} ...\n";
+    $cmd = escapeshellarg($docker) . ' build -t ' . escapeshellarg($tag)
+         . ' -f ' . escapeshellarg($dockerfile) . ' ' . escapeshellarg('.');
+    $returnCode = 0;
+    passthru($cmd, $returnCode);
+    if ($returnCode !== 0) {
+        echo "  ✗ docker build failed (exit {$returnCode})\n";
+        exit($returnCode);
+    }
+    echo "  ✓ Built image {$tag}\n";
+    echo "  Run: docker run -p 7145:7145 {$tag}\n";
 }
