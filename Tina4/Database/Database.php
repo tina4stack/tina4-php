@@ -1147,8 +1147,9 @@ class Database implements DatabaseAdapter
     {
         $raw = $adapter instanceof CachedDatabase ? $adapter->getAdapter() : $adapter;
 
-        // Firebird — use generators (GEN_ID is atomic)
-        if ($raw instanceof FirebirdAdapter) {
+        // Firebird — use generators (GEN_ID is atomic). Both the native adapter
+        // and the pdo_firebird fallback speak Firebird, so match both.
+        if ($raw instanceof FirebirdAdapter || $raw instanceof PdoFirebirdAdapter) {
             $genName = $generatorName ?? 'GEN_' . strtoupper($table) . '_ID';
 
             // Auto-create the generator if it does not exist
@@ -1163,7 +1164,7 @@ class Database implements DatabaseAdapter
         }
 
         // PostgreSQL — try nextval() first, auto-create sequence if missing
-        if ($raw instanceof PostgresAdapter) {
+        if ($raw instanceof PostgresAdapter || $raw instanceof PdoPostgresAdapter) {
             $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
             try {
                 $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");

@@ -247,6 +247,66 @@ class MigrationV3Test extends TestCase
         $fb->close();
     }
 
+    /**
+     * Migrations must work through the pdo_firebird fallback too (PR #168). The
+     * Migration runner picks engine-aware DDL via detectDialect(), which used to
+     * recognise only the native FirebirdAdapter — so on the pdo fallback it fell
+     * through to the SQLite default and emitted AUTOINCREMENT (fatal on Firebird)
+     * for a fresh table, and the wrong ADD COLUMN form for the v2->v3 upgrade.
+     * Force the pdo driver and prove BOTH the fresh createV3Table() path and the
+     * legacy v2->v3 in-place upgrade run for real. NO mocks — real FB5 server.
+     */
+    public function testMigrationsWorkOnPdoFirebirdFallback(): void
+    {
+        if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('pdo_firebird driver not present — pdo migration path UNVERIFIED.');
+        }
+        $url = getenv('TINA4_TEST_FIREBIRD_URL');
+        if (!$url) {
+            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live pdo_firebird migration test.');
+        }
+        $pdoUrl = $url . (str_contains($url, '?') ? '&' : '?') . 'driver=pdo';
+        $fb = \Tina4\Database\Database::create($pdoUrl);
+        $this->assertInstanceOf(\Tina4\Database\PdoFirebirdAdapter::class, $fb->getAdapter());
+
+        foreach (['tina4_migration', 'mig_pdo_legacy', 'mig_pdo_new'] as $t) {
+            try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
+        }
+
+        // --- Fresh path: createV3Table() must emit Firebird DDL, not AUTOINCREMENT.
+        file_put_contents($this->migrationsDir . '/20240103000000_pdo_fresh.sql', 'CREATE TABLE mig_pdo_new (id INTEGER)');
+        $fresh = new Migration($fb, $this->migrationsDir);
+        $this->assertTrue($fb->tableExists('tina4_migration'), 'bookkeeping table created on pdo_firebird');
+        $cols = array_map('strtoupper', array_column($fb->getColumns('tina4_migration'), 'name'));
+        $this->assertContains('MIGRATION_NAME', $cols, 'v3 bookkeeping schema created on pdo_firebird');
+        $res = $fresh->migrate();
+        $this->assertContains('20240103000000_pdo_fresh.sql', $res['applied']);
+        $this->assertSame([], $res['errors']);
+        $this->assertTrue($fb->tableExists('mig_pdo_new'));
+
+        // --- Legacy path: rebuild a v2 table + upgrade in place through pdo.
+        foreach (['tina4_migration', 'mig_pdo_legacy'] as $t) {
+            try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
+        }
+        $fb->execute(
+            'CREATE TABLE tina4_migration (migration_id VARCHAR(14) NOT NULL PRIMARY KEY, '
+            . 'description VARCHAR(1000), content BLOB SUB_TYPE 0, passed INTEGER)'
+        );
+        $fb->execute("INSERT INTO tina4_migration (migration_id, passed) VALUES ('20240104000000', 1)");
+        file_put_contents($this->migrationsDir . '/20240104000000_pdo_legacy.sql', 'CREATE TABLE mig_pdo_legacy (id INTEGER)');
+        $legacy = new Migration($fb, $this->migrationsDir);
+        $applied = $legacy->getAppliedMigrations();
+        $this->assertNotEmpty($applied, 'v2->v3 upgrade backfilled the legacy row on pdo_firebird');
+        $this->assertArrayHasKey('migration_name', $applied[0]);
+        $pending = array_map('basename', $legacy->getPendingMigrations());
+        $this->assertNotContains('20240104000000_pdo_legacy.sql', $pending, 'legacy migration must NOT be re-listed as pending');
+
+        foreach (['tina4_migration', 'mig_pdo_legacy', 'mig_pdo_new'] as $t) {
+            try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
+        }
+        $fb->close();
+    }
+
     public function testMigrateSkipsAlreadyApplied(): void
     {
         file_put_contents(

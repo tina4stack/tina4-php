@@ -1888,12 +1888,16 @@ abstract class ORM
         }
 
         return match (true) {
-            $adapter instanceof \Tina4\Database\PostgresAdapter => 'postgresql',
+            $adapter instanceof \Tina4\Database\PostgresAdapter,
+            $adapter instanceof \Tina4\Database\PdoPostgresAdapter => 'postgresql',
             $adapter instanceof \Tina4\Database\MySQLAdapter    => 'mysql',
             $adapter instanceof \Tina4\Database\MSSQLAdapter    => 'mssql',
-            $adapter instanceof \Tina4\Database\FirebirdAdapter => 'firebird',
+            $adapter instanceof \Tina4\Database\FirebirdAdapter,
+            $adapter instanceof \Tina4\Database\PdoFirebirdAdapter => 'firebird',
             $adapter instanceof \Tina4\Database\MongoDBAdapter  => 'mongodb',
             $adapter instanceof \Tina4\Database\ODBCAdapter     => 'odbc',
+            // pdo_* fallback adapters share their native engine's dialect;
+            // PdoSqliteAdapter falls through to the sqlite default.
             default => 'sqlite',
         };
     }
