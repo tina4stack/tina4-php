@@ -174,6 +174,13 @@ $db = Database::create('mssql://localhost:1433/mydb', username: 'sa', password: 
 $db = Database::create('sqlserver://localhost:1433/mydb', username: 'sa', password: 'pass');
 $db = Database::create('firebird://localhost:3050/path/to/db.fdb', username: 'SYSDBA', password: 'masterkey');
 
+// Firebird driver selection: auto-mode prefers ext-interbase, then silently
+// falls back to pdo_firebird when the native extension is absent. Force a
+// driver when the auto-choice is wrong — e.g. ext-interbase present but broken
+// (the macOS + Firebird 5 clumplet case): set TINA4_FIREBIRD_DRIVER=pdo (or
+// =interbase) app-wide, or pin one connection with a ?driver=pdo query param.
+$db = Database::create('firebird://localhost:3050/db.fdb?driver=pdo', username: 'SYSDBA', password: 'masterkey');
+
 // Create from TINA4_DATABASE_URL env var (also reads TINA4_DATABASE_USERNAME, TINA4_DATABASE_PASSWORD)
 $db = Database::fromEnv();
 $db = Database::fromEnv('CUSTOM_DB_URL');

@@ -108,6 +108,7 @@
             <file>tests/ExecuteRaisesTest.php</file>
             <file>tests/PdoFallbackParityTest.php</file>
             <file>tests/PdoFallbackFactoryTest.php</file>
+            <file>tests/PdoFirebirdAdapterTest.php</file>
             <file>tests/BooleanParamBindingTest.php</file>
             <file>tests/FirebirdNullParamBindingTest.php</file>
             <file>tests/PlanListTest.php</file>

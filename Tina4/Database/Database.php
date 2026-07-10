@@ -1147,8 +1147,9 @@ class Database implements DatabaseAdapter
     {
         $raw = $adapter instanceof CachedDatabase ? $adapter->getAdapter() : $adapter;
 
-        // Firebird — use generators (GEN_ID is atomic)
-        if ($raw instanceof FirebirdAdapter) {
+        // Firebird — use generators (GEN_ID is atomic). Both the native adapter
+        // and the pdo_firebird fallback speak Firebird, so match both.
+        if ($raw instanceof FirebirdAdapter || $raw instanceof PdoFirebirdAdapter) {
             $genName = $generatorName ?? 'GEN_' . strtoupper($table) . '_ID';
 
             // Auto-create the generator if it does not exist
@@ -1163,7 +1164,7 @@ class Database implements DatabaseAdapter
         }
 
         // PostgreSQL — try nextval() first, auto-create sequence if missing
-        if ($raw instanceof PostgresAdapter) {
+        if ($raw instanceof PostgresAdapter || $raw instanceof PdoPostgresAdapter) {
             $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
             try {
                 $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
@@ -1478,6 +1479,108 @@ class Database implements DatabaseAdapter
     }
 
     /**
+     * SILENT PDO fallback (Firebird): prefer ext-interbase (ibase_ / fbird_
+     * functions), and fall back to the pdo_firebird driver when ext-interbase is
+     * either ABSENT or PRESENT-BUT-BROKEN. ext-interbase was removed from PHP
+     * core in 7.4 (PECL-only) and its macOS + Firebird 5 build is clumplet-broken
+     * — ibase_connect exists yet every connect fails — so auto-mode tries native
+     * first and, if that connect throws, transparently retries on pdo_firebird
+     * ("ibase is broken -> use pdo"). A native failure is only surfaced when
+     * there is no pdo_firebird to fall back to.
+     *
+     * Force a driver to skip the auto-detection: `TINA4_FIREBIRD_DRIVER=pdo`
+     * (or `=interbase`) app-wide, or a `?driver=pdo` query param per connection.
+     * Forcing pdo avoids the wasted native connect attempt on a known-broken host.
+     *
+     * @throws \RuntimeException When the requested — or the only remaining — driver is unavailable.
+     */
+    private static function makeFirebird(string $url, string $username, string $password, ?bool $autoCommit): DatabaseAdapter
+    {
+        $hasInterbase = function_exists('ibase_connect') || function_exists('fbird_connect');
+        // Guard the PDO class: it can be absent (e.g. under `php -n`, or a build
+        // without ext-pdo) — referencing \PDO unguarded would fatal instead of
+        // giving the clear combined error below.
+        $hasPdo = class_exists('PDO') && in_array('firebird', \PDO::getAvailableDrivers(), true);
+        $forced = self::firebirdDriverPreference($url);
+
+        if ($forced === 'pdo') {
+            if (!$hasPdo) {
+                throw new \RuntimeException(
+                    'Firebird driver forced to pdo (TINA4_FIREBIRD_DRIVER/?driver=pdo) but the '
+                    . 'pdo_firebird PDO driver is not installed.'
+                );
+            }
+            return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        if ($forced === 'interbase') {
+            if (!$hasInterbase) {
+                throw new \RuntimeException(
+                    'Firebird driver forced to interbase (TINA4_FIREBIRD_DRIVER/?driver=interbase) but '
+                    . 'ext-interbase (ibase_*/fbird_* functions) is not available.'
+                );
+            }
+            return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+
+        // Auto: prefer the native extension. If ext-interbase is PRESENT but
+        // cannot connect — the macOS + Firebird 5 case, where the loaded
+        // interbase build is clumplet-broken and every connect fails — fall
+        // through to pdo_firebird instead of failing. This is the whole point of
+        // a silent fallback: "ibase is broken -> use pdo". Only re-throw the
+        // native error when there is no pdo_firebird to fall back to, so a real
+        // misconfig (bad credentials, server down) still surfaces its cause.
+        if ($hasInterbase) {
+            try {
+                return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+            } catch (\Throwable $nativeError) {
+                if (!$hasPdo) {
+                    throw $nativeError;
+                }
+                \Tina4\Log::warning(
+                    'Firebird: ext-interbase is installed but failed to connect ('
+                    . $nativeError->getMessage() . '); falling back to pdo_firebird. '
+                    . 'Set TINA4_FIREBIRD_DRIVER=pdo to skip the native attempt.'
+                );
+                // fall through to the pdo_firebird path below
+            }
+        }
+        if ($hasPdo) {
+            return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        throw new \RuntimeException(
+            'Firebird requires ext-interbase (ibase_*/fbird_* functions) or the pdo_firebird PDO driver. '
+            . 'ext-interbase was removed from PHP core in 7.4 (PECL-only); enable pdo_firebird instead.'
+        );
+    }
+
+    /**
+     * Resolve an explicit Firebird driver choice: a `?driver=` URL query param
+     * (per-connection, wins) then the `TINA4_FIREBIRD_DRIVER` env var (app-wide).
+     * Returns 'pdo', 'interbase', or '' (auto). `ibase` is accepted as a synonym
+     * for 'interbase'.
+     */
+    private static function firebirdDriverPreference(string $url): string
+    {
+        $raw = '';
+        if (str_contains($url, '://')) {
+            $query = parse_url($url, PHP_URL_QUERY);
+            if (is_string($query) && $query !== '') {
+                parse_str($query, $params);
+                $raw = (string) ($params['driver'] ?? '');
+            }
+        }
+        if ($raw === '') {
+            $raw = (string) (\Tina4\DotEnv::getEnv('TINA4_FIREBIRD_DRIVER') ?? '');
+        }
+        $raw = strtolower(trim($raw));
+        return match ($raw) {
+            'pdo', 'pdo_firebird' => 'pdo',
+            'interbase', 'ibase', 'firebird' => 'interbase',
+            default => '',
+        };
+    }
+
+    /**
      * Create the raw DatabaseAdapter from a connection URL string.
      *
      * @param string $url Connection URL
@@ -1550,11 +1653,11 @@ class Database implements DatabaseAdapter
             PostgresAdapter::class => self::makePostgres($url, $autoCommit, $username, $password),
             MySQLAdapter::class => new MySQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             MSSQLAdapter::class => new MSSQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
-            FirebirdAdapter::class => new FirebirdAdapter(
+            FirebirdAdapter::class => self::makeFirebird(
                 $url,
-                username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
-                password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
-                autoCommit: $autoCommit,
+                $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
+                $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
+                $autoCommit,
             ),
             MongoDBAdapter::class => new MongoDBAdapter(
                 $url,

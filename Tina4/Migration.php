@@ -1407,10 +1407,16 @@ class Migration
         }
 
         return match (true) {
-            $adapter instanceof \Tina4\Database\PostgresAdapter => 'postgresql',
+            $adapter instanceof \Tina4\Database\PostgresAdapter,
+            $adapter instanceof \Tina4\Database\PdoPostgresAdapter => 'postgresql',
             $adapter instanceof \Tina4\Database\MySQLAdapter    => 'mysql',
             $adapter instanceof \Tina4\Database\MSSQLAdapter    => 'mssql',
-            $adapter instanceof \Tina4\Database\FirebirdAdapter => 'firebird',
+            $adapter instanceof \Tina4\Database\FirebirdAdapter,
+            $adapter instanceof \Tina4\Database\PdoFirebirdAdapter => 'firebird',
+            // PdoSqliteAdapter (and the native SQLite3Adapter) fall through to
+            // the sqlite default. The pdo_* fallback adapters MUST be matched
+            // here or engine-aware DDL (e.g. the bookkeeping table) misfires —
+            // pdo_firebird would otherwise emit SQLite AUTOINCREMENT on Firebird.
             default => 'sqlite',
         };
     }

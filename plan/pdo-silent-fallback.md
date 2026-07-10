@@ -73,20 +73,51 @@ MySQL/MSSQL/ODBC already use PDO/mysqli — left untouched.
 - Factory native-absent decision proven for real via a no-extension subprocess
   (php -n unloads ext-interbase; no pdo_firebird) -> combined error raised.
 
-## UNVERIFIED / HELD
-- Firebird PDO fallback live run: this PHP build has NO pdo_firebird driver
-  compiled in, so the Firebird parity test could not run live. Code + test are
-  written but HELD.
+## Firebird — VERIFIED LIVE (2026-07-10, macOS PHP 8.5.7 + real FB5.0.2)
+Built pdo_firebird from PHP 8.5.7 source against the Firebird 5.0.3 macOS client
+framework, stood up a real Firebird 5 container (t4-fb-test on :3052), and ran
+the fallback for real over TCP. The hold is lifted.
 
-## Split decision (owner ruling 2026-07-10)
-Ship the two engines that are verified live, hold the one that is not.
-- **3.13.66 (feature/php-pdo-sqlite-pg -> v3):** SQLite + PostgreSQL PDO
-  fallback (PdoAdapterTrait, PdoSqliteAdapter, PdoPostgresAdapter, the
-  makeSqlite/makePostgres factory selectors) + their parity/factory tests.
-- **Held (feature/php-pdo-fallback):** PdoFirebirdAdapter, the makeFirebird
-  selector, the Firebird parity cases, and the no-driver combined-error factory
-  test. Merges once pdo_firebird can be exercised against a real Firebird server
-  (the combined-error test needs ext-interbase, the only shared DB extension a
-  `php -n` subprocess can unload).
+- **Rebuilt cleanly on current v3** (the old feature/php-pdo-fallback branch was
+  28 commits behind and re-added the now-merged SQLite/PG trait+adapters — a
+  guaranteed conflict). This is a Firebird-only delta on top of 3.13.66's
+  shipped PDO infrastructure: PdoFirebirdAdapter + Database::makeFirebird +
+  the Firebird parity/factory cases + a standalone PDO-only adapter test.
+- **Driver override (the core "make it work"):** auto-mode still prefers native
+  ext-interbase, but `?driver=pdo` on the URL or `TINA4_FIREBIRD_DRIVER=pdo`
+  forces the working pdo_firebird adapter even when ext-interbase is PRESENT but
+  BROKEN — exactly the macOS + FB5 clumplet case. Without this the broken native
+  driver always won and the fallback never engaged.
+- **Type fidelity:** INTEGER arrives as int; NUMERIC/DECIMAL carry a decimal
+  scale (`precision` > 0) and are cast to float to match native. DOUBLE/FLOAT
+  report precision 0 with len 8/4 (indistinguishable from CHAR/BLOB) so they are
+  returned as exact numeric STRINGS — the one documented divergence from native,
+  called out in the adapter docblock. Full BLOB byte fidelity confirmed.
+- **Live verification:** PdoFirebirdAdapterTest (typed reads incl. numeric cast,
+  transaction commit/rollback, execute() fail-loud, introspection) + the two
+  driver-override factory tests all RAN GREEN vs the real FB5.0.2 container. The
+  native-vs-PDO parity cases skip loudly where ext-interbase is present-but-broken
+  (nothing to compare against); they run on a host with a working ext-interbase.
+- **Full suite (macOS, live FB5):** 2851 tests, 7059 assertions, 0 failures /
+  0 errors, 89 skipped (unprovisioned MySQL/MSSQL/PG/Mongo + broken-native
+  Firebird parity), 1 pre-existing risky (GalleryTest).
 
-## Status: SPLIT — SQLite + PostgreSQL shipping in 3.13.66 (verified live); Firebird held until pdo_firebird can be verified against a real server
+## Scope — Firebird (done)
+- [x] `PdoFirebirdAdapter` numeric caster (NUMERIC/DECIMAL -> float) + DOUBLE-string doc
+- [x] `Database::makeFirebird` + `firebirdDriverPreference` (env + `?driver=` override)
+- [x] `PdoFirebirdAdapterTest` — standalone PDO-only contract (no ext-interbase needed)
+- [x] Firebird parity cases: numeric-by-value compare + skip-loud on broken native
+- [x] no-driver combined-error factory test restored + 2 driver-override tests
+- [x] DatabaseDriversTest / MigrationV3Test: skip-loud on present-but-broken ext-interbase
+- [x] Auto-fallback: makeFirebird tries native, catches a broken-connect, falls to pdo
+      ("ibase broken -> use pdo"); TINA4_FIREBIRD_DRIVER=pdo skips the native attempt
+- [x] Engine-aware DDL recognises the PDO adapters: Migration::detectDialect(),
+      ORM::detectDialect() and Database::getNextIdPinned() matched only the NATIVE
+      classes, so PdoFirebirdAdapter fell through to the SQLite default -> `new
+      Migration()` emitted `AUTOINCREMENT` (fatal on Firebird) on a fresh DB and
+      broke the v2->v3 upgrade. PdoPostgresAdapter had the same latent gap since
+      3.13.66. Fixed all three sites; getNextId uses GEN_ID on pdo_firebird too.
+      Lock-in: MigrationV3Test::testMigrationsWorkOnPdoFirebirdFallback (live FB5).
+- [x] Verified live vs real FB5.0.2; full suite green (2853 / 7072 / 0F / 0E)
+
+## Status: COMPLETE — SQLite + PostgreSQL shipped in 3.13.66; Firebird PDO fallback verified live and rebuilt on current v3 (supersedes the held feature/php-pdo-fallback / PR #152)

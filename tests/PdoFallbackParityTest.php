@@ -8,11 +8,9 @@
  * SILENT PDO fallback — native-vs-PDO PARITY lock-in.
  *
  * For each engine that hard-depends on a native extension (SQLite/ext-sqlite3,
- * PostgreSQL/ext-pgsql), Database::create() silently falls back to the matching
- * PDO driver when the native extension is absent. The fallback MUST be
- * externally indistinguishable from the native adapter. (Firebird's PDO
- * fallback is held on feature/php-pdo-fallback until pdo_firebird can be
- * verified against a real server — see the note near the Firebird section.)
+ * PostgreSQL/ext-pgsql, Firebird/ext-interbase), Database::create() silently
+ * falls back to the matching PDO driver when the native extension is absent.
+ * The fallback MUST be externally indistinguishable from the native adapter.
  *
  * This test runs the SAME assertions through BOTH the native driver AND the
  * forced-PDO driver against the SAME real database and asserts IDENTICAL
@@ -37,6 +35,8 @@ use Tina4\Database\SQLite3Adapter;
 use Tina4\Database\PdoSqliteAdapter;
 use Tina4\Database\PostgresAdapter;
 use Tina4\Database\PdoPostgresAdapter;
+use Tina4\Database\FirebirdAdapter;
+use Tina4\Database\PdoFirebirdAdapter;
 
 class PdoFallbackParityTest extends TestCase
 {
@@ -272,10 +272,97 @@ class PdoFallbackParityTest extends TestCase
         $pdo->close();
     }
 
-    // NOTE: Firebird PDO fallback (PdoFirebirdAdapter + Database::makeFirebird)
-    // is held on feature/php-pdo-fallback until it can run against a real
-    // Firebird server (pdo_firebird is absent locally and in CI). SQLite +
-    // PostgreSQL ship in 3.13.66; Firebird follows once verified live.
+    // ─────────────────────────────────────────────────────────────────
+    // Firebird — ext-interbase vs pdo_firebird (real server required)
+    // ─────────────────────────────────────────────────────────────────
+
+    private function firebirdPair(): array
+    {
+        if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped(
+                'pdo_firebird driver is not available — Firebird PDO fallback is UNVERIFIED in this environment.'
+            );
+        }
+        $url = getenv('TINA4_TEST_FIREBIRD_URL');
+        if ($url === false || $url === '') {
+            $this->markTestSkipped(
+                'TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — Firebird PDO fallback UNVERIFIED.'
+            );
+        }
+        if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
+            $this->markTestSkipped('ext-interbase not available to compare against — native-vs-PDO parity UNVERIFIED (PdoFirebirdAdapterTest covers the PDO-only contract).');
+        }
+        // ext-interbase can be PRESENT-but-BROKEN (the macOS + FB5 clumplet case
+        // this whole fallback exists for). If native cannot connect there is
+        // nothing to compare against — skip loudly rather than error; the
+        // standalone PdoFirebirdAdapterTest verifies the PDO adapter on its own.
+        try {
+            $native = new FirebirdAdapter($url);
+        } catch (\Throwable $e) {
+            $this->markTestSkipped(
+                'ext-interbase present but cannot connect (' . $e->getMessage()
+                . ') — native-vs-PDO parity UNVERIFIED here; PdoFirebirdAdapterTest covers the PDO path.'
+            );
+        }
+        return [$native, new PdoFirebirdAdapter($url)];
+    }
+
+    public function testFirebirdTypedReadAndBlobParity(): void
+    {
+        [$native, $pdo] = $this->firebirdPair();
+        // Firebird uses generators, not AUTOINCREMENT; ROWS pagination; BLOB SUB_TYPE.
+        try {
+            $native->execute('DROP TABLE T4_PDO_PARITY');
+        } catch (\Throwable) {
+            // table may not exist yet — fine
+        }
+        $native->execute(
+            'CREATE TABLE T4_PDO_PARITY (ID INTEGER NOT NULL PRIMARY KEY, QTY INTEGER, '
+            . 'AMOUNT NUMERIC(15,2), PRICE DOUBLE PRECISION, NAME VARCHAR(50), DATA BLOB SUB_TYPE 0)'
+        );
+        $native->execute(
+            'INSERT INTO T4_PDO_PARITY (ID, QTY, AMOUNT, PRICE, NAME, DATA) VALUES (?, ?, ?, ?, ?, ?)',
+            [1, 42, 1234.56, 19.99, 'widget', self::BLOB]
+        );
+
+        $sql = 'SELECT QTY, AMOUNT, PRICE, NAME, DATA FROM T4_PDO_PARITY WHERE ID = 1';
+        $nativeRow = $native->fetchOne($sql);
+        $pdoRow = $pdo->fetchOne($sql);
+
+        // The numeric columns are compared by VALUE (their exact PHP type is
+        // locked separately in PdoFirebirdAdapterTest against a live server).
+        // DOUBLE PRECISION is the ONE documented divergence — pdo_firebird cannot
+        // tell it apart from CHAR/BLOB, so the PDO adapter returns it as a numeric
+        // string while native returns a float. NUMERIC/DECIMAL carry a scale and
+        // DO re-type to float, matching native.
+        $this->assertEqualsWithDelta(19.99, (float) $nativeRow['PRICE'], 0.0001);
+        $this->assertEqualsWithDelta(19.99, (float) $pdoRow['PRICE'], 0.0001);
+        $this->assertEqualsWithDelta(1234.56, (float) $nativeRow['AMOUNT'], 0.0001);
+        $this->assertEqualsWithDelta(1234.56, (float) $pdoRow['AMOUNT'], 0.0001);
+        unset($nativeRow['PRICE'], $pdoRow['PRICE'], $nativeRow['AMOUNT'], $pdoRow['AMOUNT']);
+
+        // Everything else must be byte- AND type-identical (int stays int, bytes
+        // stay bytes) — this is the core native-vs-PDO parity guarantee.
+        $this->assertSame($nativeRow, $pdoRow, 'Firebird native vs PDO row (non-DOUBLE) must be byte- and type-identical');
+        $this->assertSame(42, $pdoRow['QTY']);
+        $this->assertSame(self::BLOB, $pdoRow['DATA'] ?? $pdoRow['data'] ?? null);
+
+        try {
+            $native->execute('DROP TABLE T4_PDO_PARITY');
+        } catch (\Throwable) {
+        }
+        $native->close();
+        $pdo->close();
+    }
+
+    public function testFirebirdExecuteRaisesParity(): void
+    {
+        [$native, $pdo] = $this->firebirdPair();
+        $this->assertExecuteRaises($native, 'INSERT INTO T4_PDO_NOPE_MISSING (X) VALUES (1)');
+        $this->assertExecuteRaises($pdo, 'INSERT INTO T4_PDO_NOPE_MISSING (X) VALUES (1)');
+        $native->close();
+        $pdo->close();
+    }
 
     // ─────────────────────────────────────────────────────────────────
     // Shared exercisers (run identically against native and PDO)
