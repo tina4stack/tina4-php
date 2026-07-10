@@ -1479,23 +1479,27 @@ class Database implements DatabaseAdapter
 
     /**
      * SILENT PDO fallback (Firebird): prefer ext-interbase (ibase_ / fbird_
-     * functions); fall back to the pdo_firebird driver when absent. This is the
-     * highest-value fallback — ext-interbase was removed from PHP core in 7.4
-     * (PECL-only, broken on macOS), so pdo_firebird is often the only Firebird
-     * driver present on a modern build.
+     * functions), and fall back to the pdo_firebird driver when ext-interbase is
+     * either ABSENT or PRESENT-BUT-BROKEN. ext-interbase was removed from PHP
+     * core in 7.4 (PECL-only) and its macOS + Firebird 5 build is clumplet-broken
+     * — ibase_connect exists yet every connect fails — so auto-mode tries native
+     * first and, if that connect throws, transparently retries on pdo_firebird
+     * ("ibase is broken -> use pdo"). A native failure is only surfaced when
+     * there is no pdo_firebird to fall back to.
      *
-     * A driver can be forced when the auto-choice is wrong — for example when
-     * ext-interbase is present but broken (the classic macOS + FB5 clumplet
-     * case, where ibase_connect exists yet fails with a clumplet error). Set
-     * `TINA4_FIREBIRD_DRIVER=pdo` (or `=interbase`) for an app-wide choice, or
-     * pin one connection with a `?driver=pdo` query param on its URL.
+     * Force a driver to skip the auto-detection: `TINA4_FIREBIRD_DRIVER=pdo`
+     * (or `=interbase`) app-wide, or a `?driver=pdo` query param per connection.
+     * Forcing pdo avoids the wasted native connect attempt on a known-broken host.
      *
      * @throws \RuntimeException When the requested — or the only remaining — driver is unavailable.
      */
     private static function makeFirebird(string $url, string $username, string $password, ?bool $autoCommit): DatabaseAdapter
     {
         $hasInterbase = function_exists('ibase_connect') || function_exists('fbird_connect');
-        $hasPdo = in_array('firebird', \PDO::getAvailableDrivers(), true);
+        // Guard the PDO class: it can be absent (e.g. under `php -n`, or a build
+        // without ext-pdo) — referencing \PDO unguarded would fatal instead of
+        // giving the clear combined error below.
+        $hasPdo = class_exists('PDO') && in_array('firebird', \PDO::getAvailableDrivers(), true);
         $forced = self::firebirdDriverPreference($url);
 
         if ($forced === 'pdo') {
@@ -1517,9 +1521,27 @@ class Database implements DatabaseAdapter
             return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
         }
 
-        // Auto: prefer the native extension, fall back to pdo_firebird.
+        // Auto: prefer the native extension. If ext-interbase is PRESENT but
+        // cannot connect — the macOS + Firebird 5 case, where the loaded
+        // interbase build is clumplet-broken and every connect fails — fall
+        // through to pdo_firebird instead of failing. This is the whole point of
+        // a silent fallback: "ibase is broken -> use pdo". Only re-throw the
+        // native error when there is no pdo_firebird to fall back to, so a real
+        // misconfig (bad credentials, server down) still surfaces its cause.
         if ($hasInterbase) {
-            return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+            try {
+                return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+            } catch (\Throwable $nativeError) {
+                if (!$hasPdo) {
+                    throw $nativeError;
+                }
+                \Tina4\Log::warning(
+                    'Firebird: ext-interbase is installed but failed to connect ('
+                    . $nativeError->getMessage() . '); falling back to pdo_firebird. '
+                    . 'Set TINA4_FIREBIRD_DRIVER=pdo to skip the native attempt.'
+                );
+                // fall through to the pdo_firebird path below
+            }
         }
         if ($hasPdo) {
             return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);

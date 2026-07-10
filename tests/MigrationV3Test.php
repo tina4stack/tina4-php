@@ -191,13 +191,17 @@ class MigrationV3Test extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live Firebird v2->v3 migration test (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
         }
 
-        // ext-interbase can be present-but-broken (macOS + FB5 clumplet); auto
-        // mode still prefers native, so a connect failure there means this live
-        // test cannot run — skip loudly rather than error.
+        // This is the NATIVE ext-interbase regression test (issue #133: the
+        // native adapter returns UPPERCASE result keys). Pin the driver to
+        // interbase so auto-mode does NOT fall back to pdo_firebird — the
+        // migration-runner v2->v3 upgrade through the pdo path is a separate,
+        // tracked concern. ext-interbase can be present-but-broken (macOS + FB5
+        // clumplet); skip loudly when native cannot connect rather than error.
+        $ibaseUrl = $url . (str_contains($url, '?') ? '&' : '?') . 'driver=interbase';
         try {
-            $fb = \Tina4\Database\Database::create($url);
+            $fb = \Tina4\Database\Database::create($ibaseUrl);
         } catch (\Throwable $e) {
-            $this->markTestSkipped('Firebird connect failed (' . $e->getMessage() . ') — live v2->v3 upgrade test UNVERIFIED here.');
+            $this->markTestSkipped('native ext-interbase connect failed (' . $e->getMessage() . ') — live v2->v3 upgrade test UNVERIFIED here.');
         }
         foreach (['tina4_migration', 'mig_legacy_v2', 'mig_new_widget'] as $t) {
             try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}

@@ -594,17 +594,17 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL for live factory test');
         }
 
-        // Auto-mode prefers native ext-interbase when present; on a host where
-        // it is present-but-broken (macOS + FB5 clumplet) the connect throws.
-        // Skip loudly — the pdo-forced factory path is covered green in
-        // PdoFallbackFactoryTest.
-        try {
-            $db = Database::create($url);
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('ext-interbase present but cannot connect (' . $e->getMessage() . ') — native factory path UNVERIFIED here.');
-        }
+        // Auto-mode prefers native ext-interbase but transparently falls back to
+        // pdo_firebird when native is present-but-broken (macOS + FB5 clumplet).
+        // Either way the factory yields a working Firebird-family adapter — assert
+        // the family, not the specific driver (which one you get is host-dependent).
+        $db = Database::create($url);
         $this->assertInstanceOf(Database::class, $db);
-        $this->assertInstanceOf(FirebirdAdapter::class, $db->getAdapter());
+        $adapter = $db->getAdapter();
+        $this->assertTrue(
+            $adapter instanceof FirebirdAdapter || $adapter instanceof \Tina4\Database\PdoFirebirdAdapter,
+            'firebird:// must resolve to a Firebird adapter (native or pdo), got ' . get_class($adapter)
+        );
         $db->close();
     }
 

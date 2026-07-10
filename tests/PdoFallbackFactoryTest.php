@@ -111,7 +111,9 @@ require %s;
 $avail = [
     'ibase'   => function_exists('ibase_connect'),
     'fbird'   => function_exists('fbird_connect'),
-    'pdo_fb'  => in_array('firebird', PDO::getAvailableDrivers(), true),
+    // `php -n` unloads ext-pdo on shared-ext builds (CI Linux), so the PDO class
+    // can be absent here — guard it, exactly as Database::makeFirebird() does.
+    'pdo_fb'  => class_exists('PDO') && in_array('firebird', PDO::getAvailableDrivers(), true),
 ];
 try {
     \Tina4\Database\Database::create('firebird://SYSDBA:masterkey@localhost:3050/test.fdb');
@@ -184,6 +186,25 @@ PHP;
         } finally {
             putenv('TINA4_FIREBIRD_DRIVER');
         }
+    }
+
+    /**
+     * The silent-fallback contract, end to end: auto-mode (no override) must
+     * hand back a WORKING Firebird connection even when native ext-interbase is
+     * present-but-broken. On this macOS host the native driver clumplets on every
+     * connect, so a plain Database::create('firebird://...') proves the automatic
+     * "ibase broken -> pdo" fallback: it does not throw, and a query runs. On a
+     * host with a working native driver the same call succeeds via native — either
+     * way the guarantee is "it just connects".
+     */
+    public function testAutoModeYieldsWorkingAdapterEvenWhenNativeBroken(): void
+    {
+        [$url, $user, $pass] = $this->firebirdTarget();
+        $db = Database::create($url, username: $user, password: $pass);
+        $row = $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
+        $this->assertNotNull($row, 'auto-mode Firebird connection must return a live query result');
+        $this->assertSame(1, (int) ($row['N'] ?? $row['n'] ?? reset($row)));
+        $db->close();
     }
 
     /** Real Firebird target for the driver-override tests, or a loud skip. */
