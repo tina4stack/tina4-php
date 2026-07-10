@@ -1232,15 +1232,20 @@ abstract class ORM
      * @param array $params Bound parameters
      * @param int $limit Max results
      * @param int $offset Starting offset
+     * @param array|null $include Relationships to eager-load
+     * @param string|null $orderBy ORDER BY clause (e.g. "name ASC")
      * @return array<int, static>
      */
-    public function where(string $filterSql, array $params = [], int $limit = 20, int $offset = 0, ?array $include = null): array
+    public function where(string $filterSql, array $params = [], int $limit = 20, int $offset = 0, ?array $include = null, ?string $orderBy = null): array
     {
         $this->ensureDb();
 
         $sql = "SELECT * FROM {$this->tableName} WHERE {$filterSql}";
         if ($this->softDelete) {
             $sql = "SELECT * FROM {$this->tableName} WHERE ({$filterSql}) AND is_deleted = 0";
+        }
+        if ($orderBy !== null) {
+            $sql .= " ORDER BY {$orderBy}";
         }
 
         $result = $this->_db->fetch($sql, $params, $limit, $offset);
