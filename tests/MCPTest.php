@@ -728,6 +728,62 @@ class MCPTest extends TestCase
         }
     }
 
+    /**
+     * Regression (#164): the database_tables dev-tool must actually LIST tables.
+     * It called $db->getDatabase() — undefined on the base Database returned by
+     * fromEnv() — so every invocation fataled with "Call to undefined method".
+     * The registration-only test above never caught it because it only asserts
+     * the tool is present, never INVOKES it. This test invokes the real handler
+     * against a REAL SQLite database (no mock) and asserts a table list comes
+     * back. Locks the contract that matches Python master (db.get_tables()),
+     * Ruby (db.tables) and Node (db.getTables()).
+     */
+    public function testDatabaseTablesToolListsRealTables(): void
+    {
+        $tmpDb = sys_get_temp_dir() . '/tina4_mcp164_' . uniqid() . '.db';
+        $url = 'sqlite:///' . $tmpDb;               // abs temp path -> sqlite:////... (absolute)
+        $prevEnv = getenv('TINA4_DATABASE_URL');
+        $_ENV['TINA4_DATABASE_URL'] = $url;
+        putenv('TINA4_DATABASE_URL=' . $url);
+        \Tina4\DotEnv::resetEnv();                  // so fromEnv() picks up the override
+
+        try {
+            // Real database, real table — no mock, no stub.
+            $db = \Tina4\Database\Database::create($url);
+            $db->execute('CREATE TABLE mcp_probe_widget (id INTEGER PRIMARY KEY, name TEXT)');
+
+            $server = new McpServer('/db-tables', 'DB Tables Test');
+            McpDevTools::register($server);
+
+            $resp = json_decode($server->handleMessage([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/call',
+                'params' => ['name' => 'database_tables', 'arguments' => []],
+            ]), true);
+
+            // Not a JSON-RPC error (a fatal/exception in the handler surfaces here).
+            $this->assertArrayNotHasKey('error', $resp, 'database_tables raised a JSON-RPC error: ' . json_encode($resp));
+            $text = $resp['result']['content'][0]['text'];
+            $this->assertStringNotContainsString('getDatabase', $text, 'the #164 undefined-method fatal is back');
+
+            $decoded = json_decode($text, true);
+            $this->assertIsArray($decoded, 'database_tables must return a list of tables, got: ' . $text);
+            $this->assertArrayNotHasKey('error', $decoded, 'database_tables returned an error payload: ' . $text);
+            $this->assertContains('mcp_probe_widget', $decoded, 'the created table should be listed');
+        } finally {
+            if ($prevEnv === false) {
+                unset($_ENV['TINA4_DATABASE_URL']);
+                putenv('TINA4_DATABASE_URL');
+            } else {
+                $_ENV['TINA4_DATABASE_URL'] = $prevEnv;
+                putenv('TINA4_DATABASE_URL=' . $prevEnv);
+            }
+            \Tina4\DotEnv::resetEnv();
+            @unlink($tmpDb);
+        }
+    }
+
     public function testGetToolListShapeMatchesPython(): void
     {
         $server = new McpServer('/rest-shape', 'Test');
