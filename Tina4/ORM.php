@@ -959,7 +959,9 @@ abstract class ORM
         }
 
         $row = $this->_db->fetchOne($sql, $params);
-        return $row ? (int)$row['cnt'] : 0;
+        // Firebird folds an unquoted alias to upper case (CNT), so read the
+        // count case-insensitively instead of assuming a lower-case 'cnt' key.
+        return $row ? (int)(array_change_key_case($row)['cnt'] ?? 0) : 0;
     }
 
     /**
@@ -1997,7 +1999,9 @@ abstract class ORM
         // RETURNING <pk> so the engine returns the ACTUAL written PK (a UUID
         // string stays a string; a SERIAL integer stays an integer). The other
         // engines keep the lastval()/lastInsertId() path unchanged.
-        $usingReturning = $this->detectDialect() === 'postgresql' && $pkUnset;
+        // Firebird (2.0+) also supports INSERT ... RETURNING, and (like Postgres)
+        // exposes no usable lastInsertId, so it takes the same RETURNING path.
+        $usingReturning = in_array($this->detectDialect(), ['postgresql', 'firebird'], true) && $pkUnset;
         if ($usingReturning) {
             $sql .= " RETURNING {$pkColumn}";
             $execResult = $this->_db->execute($sql, $params);
@@ -2159,7 +2163,8 @@ abstract class ORM
         $pkColumn = $this->getDbColumn($this->primaryKey);
         $sql = "SELECT COUNT(*) as cnt FROM {$this->tableName} WHERE {$pkColumn} = :id";
         $rows = $this->_db->query($sql, [':id' => $id]);
-        return !empty($rows) && (int)$rows[0]['cnt'] > 0;
+        // Case-insensitive read: Firebird returns the alias as CNT (see count()).
+        return !empty($rows) && (int)(array_change_key_case($rows[0])['cnt'] ?? 0) > 0;
     }
 
     /**

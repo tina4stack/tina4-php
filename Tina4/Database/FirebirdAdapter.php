@@ -25,8 +25,22 @@ class FirebirdAdapter implements DatabaseAdapter
 
     /** @var resource|null */
     private mixed $db = null;
-    /** @var resource|null Active transaction handle */
+    /** @var resource|null Active EXPLICIT transaction handle (startTransaction) */
     private mixed $transaction = null;
+    /**
+     * @var resource|null Long-lived READ COMMITTED transaction used for every
+     * statement outside an explicit startTransaction() (auto-commit reads AND
+     * writes). Firebird's implicit per-link default transaction is SNAPSHOT
+     * (concurrency) isolation and, once opened, keeps a FROZEN view — a reused /
+     * long-lived connection then never sees another transaction's commits or new
+     * DDL, so reads go stale (a just-committed DELETE still "sees" the row, a
+     * freshly created table reads back "unknown"). A READ COMMITTED (rec_version)
+     * transaction re-reads the latest committed data on every statement, so the
+     * connection always sees committed state. Created lazily; fully committed and
+     * dropped after each auto-commit statement (a fresh one opens on the next), so
+     * it never holds a lock between statements. #132.
+     */
+    private mixed $defaultTx = null;
     private ?string $lastError = null;
     private bool $autoCommit;
     private int|string $lastId = 0;
@@ -98,6 +112,11 @@ class FirebirdAdapter implements DatabaseAdapter
     public function close(): void
     {
         if ($this->db !== null) {
+            if ($this->defaultTx !== null) {
+                $commitFn = $this->fn . 'commit';
+                @$commitFn($this->defaultTx);
+                $this->defaultTx = null;
+            }
             $closeFn = $this->fn . 'close';
             $closeFn($this->db);
             $this->db = null;
@@ -149,8 +168,13 @@ class FirebirdAdapter implements DatabaseAdapter
             $freeFn = $this->fn . 'free_result';
             @$freeFn($result);
 
-            // Auto-commit if enabled and this is a write query
-            if ($this->autoCommit && $this->isWriteQuery($sql) && $this->transaction === null) {
+            // Auto-commit (commit-RETAINING) after EVERY statement in the default
+            // path, reads included. A read on the long-lived READ COMMITTED
+            // transaction otherwise keeps a lock on the touched table until the
+            // next commit, which then deadlocks a later DROP/RECREATE of it
+            // ("update conflicts with concurrent update"). commit_ret releases the
+            // per-statement locks while keeping the transaction usable + fresh. #132
+            if ($this->autoCommit && $this->transaction === null) {
                 $this->commitDefault();
             }
 
@@ -618,7 +642,10 @@ class FirebirdAdapter implements DatabaseAdapter
     private function doExecute(string $sql, array $params): mixed
     {
         $errFn = $this->fn . 'errmsg';
-        $context = $this->transaction ?? $this->db;
+        // Every statement runs in a transaction: the explicit one when
+        // startTransaction() is active, otherwise the long-lived READ COMMITTED
+        // default so the connection always sees committed data / new DDL (#132).
+        $context = $this->transaction ?? $this->defaultTransaction();
 
         if (empty($params)) {
             $queryFn = $this->fn . 'query';
@@ -638,7 +665,13 @@ class FirebirdAdapter implements DatabaseAdapter
             $prepareFn = $this->fn . 'prepare';
             $executeFn = $this->fn . 'execute';
 
-            $stmt = @$prepareFn($context, $sql);
+            // ibase_prepare() takes the QUERY as its LAST arg, with the link (and
+            // optionally the transaction) as leading args. Prepare against the
+            // ACTIVE transaction ($context) via the 3-arg form ibase_prepare(
+            // $link, $trans, $sql); the 2-arg ibase_prepare($trans, $sql) mis-binds
+            // the transaction resource AS the link, so the prepared statement
+            // never joins our transaction. #132
+            $stmt = @$prepareFn($this->db, $context, $sql);
             if ($stmt === false) {
                 $msg = $errFn();
                 if (self::isDeadConnection($msg)) {
@@ -753,18 +786,48 @@ class FirebirdAdapter implements DatabaseAdapter
         }
         $this->db = null;
         $this->transaction = null;
+        $this->defaultTx = null; // the old transaction died with the old link
         $this->open();
     }
 
     /**
-     * Commit the default transaction (used for auto-commit).
+     * The long-lived READ COMMITTED (rec_version) transaction used for every
+     * statement outside an explicit startTransaction(). Created lazily on the
+     * live link. READ COMMITTED re-reads the latest committed data on each
+     * statement, so a reused/long-lived connection never serves a stale snapshot
+     * (the SNAPSHOT default did). #132
+     *
+     * @return resource
+     */
+    private function defaultTransaction(): mixed
+    {
+        if ($this->defaultTx === null) {
+            $transFn = $this->fn . 'trans';
+            $this->defaultTx = $transFn(
+                IBASE_WRITE | IBASE_COMMITTED | IBASE_REC_VERSION | IBASE_WAIT,
+                $this->db,
+            );
+        }
+        return $this->defaultTx;
+    }
+
+    /**
+     * Commit the default (auto-commit) transaction FULLY and drop it, so the next
+     * statement in the default path opens a brand-new READ COMMITTED transaction.
+     * This is true per-statement autocommit: it makes the write durable + visible
+     * AND holds no lock between statements — a retained transaction (commit_ret)
+     * would keep a lock on every table it touched and deadlock a later
+     * DROP/RECREATE of one. A fresh transaction each time still reads the latest
+     * committed state (that is the point of READ COMMITTED). #132
      */
     private function commitDefault(): void
     {
-        $commitFn = $this->fn . 'commit_ret';
-        if (function_exists($commitFn)) {
-            @$commitFn($this->db);
+        if ($this->defaultTx === null) {
+            return;
         }
+        $commitFn = $this->fn . 'commit';
+        @$commitFn($this->defaultTx);
+        $this->defaultTx = null;
     }
 
     /**
