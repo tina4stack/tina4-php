@@ -81,6 +81,12 @@ var _frondModule = (() => {
     xhr.onerror = function() {
       if (opts.onError) opts.onError(xhr.status, xhr);
     };
+    if (opts.timeout !== 0) {
+      xhr.timeout = opts.timeout || 3e4;
+      xhr.ontimeout = function() {
+        if (opts.onError) opts.onError(xhr.status, xhr);
+      };
+    }
     xhr.send(body);
   }
   function inject(html, target) {
@@ -123,7 +129,7 @@ var _frondModule = (() => {
     });
     return body.innerHTML;
   }
-  function load(url, target, callback) {
+  function load(url, target, callback, onError) {
     const targetId = target || "content";
     request(url, {
       method: "GET",
@@ -134,10 +140,11 @@ var _frondModule = (() => {
         } else {
           if (callback) callback(data);
         }
-      }
+      },
+      onError
     });
   }
-  function post(url, data, target, callback) {
+  function post(url, data, target, callback, onError) {
     const targetId = target || "content";
     request(url, {
       method: "POST",
@@ -153,7 +160,8 @@ var _frondModule = (() => {
           return;
         }
         if (callback) callback(html, responseData);
-      }
+      },
+      onError
     });
   }
   var form = {
@@ -209,10 +217,11 @@ var _frondModule = (() => {
      * @param url      - URL to POST to.
      * @param target   - DOM id to inject response into (default: "message").
      * @param callback - Optional callback.
+     * @param onError  - Optional error callback — fires on non-2xx, transport error, or timeout.
      */
-    submit: function(formId, url, target, callback) {
+    submit: function(formId, url, target, callback, onError) {
       const data = form.collect(formId);
-      post(url, data, target || "message", callback);
+      post(url, data, target || "message", callback, onError);
     },
     /**
      * Load a form via the given action and inject response HTML.
@@ -224,8 +233,9 @@ var _frondModule = (() => {
      * @param url     - URL to fetch.
      * @param target  - DOM id to inject into (default: "form").
      * @param callback - Optional callback.
+     * @param onError  - Optional error callback — fires on non-2xx, transport error, or timeout.
      */
-    show: function(action, url, target, callback) {
+    show: function(action, url, target, callback, onError) {
       let method = action.toUpperCase();
       if (action === "create" || action === "edit") method = "GET";
       if (action === "delete") method = "DELETE";
@@ -243,7 +253,8 @@ var _frondModule = (() => {
             return;
           }
           if (callback) callback(html);
-        }
+        },
+        onError
       });
     }
   };
