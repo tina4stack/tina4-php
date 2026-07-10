@@ -861,6 +861,30 @@ If the user doesn't specify, ask. If the context is obvious (e.g., porting a new
 state it explicitly: "This targets the development branch for v3." Never leave branch
 context ambiguous.
 
+### Referencing files and plans so the link resolves
+
+The harness turns a file path in your reply into a clickable link **relative to the
+session working directory** — for Tina4 work that is the multi-repo root
+(`~/IdeaProjects`), NOT the repo you happen to be editing. A bare repo-relative path
+like `plan/pdo-silent-fallback.md` or `src/orm/model.py` therefore resolves to
+`~/IdeaProjects/plan/…` and 404s when the maintainer clicks it — the exact reason
+plan links "don't open."
+
+**Always reference a plan or source file by its path FROM the working root:** prefix the
+repo (and add `:line` where it helps), or use an absolute path. Never emit a bare
+`plan/…`, `src/…`, `Tina4/…`, `lib/…`, `tina4_python/…`, or `packages/…` link.
+
+```
+BAD  (resolves to ~/IdeaProjects/plan/foo.md → 404):   [plan](plan/pdo-silent-fallback.md)
+GOOD (repo-prefixed, resolves from the root):          [plan](tina4-php/plan/pdo-silent-fallback.md)
+GOOD (with a line anchor):                             [count()](tina4-php/Tina4/ORM.php:962)
+GOOD (absolute, always resolves):                      /Users/…/IdeaProjects/plan/v3/01-FEATURE-MATRIX.md
+```
+
+The framework `plan/` dirs live at `<repo>/plan/…`; the cross-cutting v3 specs live at
+the absolute `/Users/andrevanzuydam/IdeaProjects/plan/v3/…` (see the **Plan Documents**
+section). Link them that way and every reference the maintainer clicks resolves.
+
 ## Reporting a stale or incorrect skill
 
 Found guidance in this skill that contradicts how Tina4 actually behaves? Then the
