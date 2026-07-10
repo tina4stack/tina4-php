@@ -59,9 +59,10 @@ class CliBuildTest extends TestCase
     }
 
     /**
-     * Run the REAL build command in the temp project dir. $emptyPath makes the
-     * subprocess PATH contain only the dir holding the php binary (so `docker`
-     * is genuinely absent) — no mock of `which`.
+     * Run the REAL build command in the temp project dir. $emptyPath points the
+     * subprocess PATH at a GENUINELY EMPTY directory so `docker` is truly absent
+     * (no mock of `which`). php and /bin/sh are invoked by absolute path, so
+     * neither needs to be on PATH.
      */
     private function runBuild(array $args, bool $emptyPath = false): array
     {
@@ -72,9 +73,16 @@ class CliBuildTest extends TestCase
 
         $env = getenv();
         if ($emptyPath) {
-            // Keep only the php binary's own dir on PATH: docker is truly gone,
-            // but the interpreter still launches (invoked by absolute path anyway).
-            $env['PATH'] = dirname(PHP_BINARY);
+            // Point PATH at an EMPTY dir so the CLI's docker lookup finds nothing.
+            // (The old `dirname(PHP_BINARY)` did NOT hide docker on CI, where php
+            // and docker share /usr/bin — so `build` found docker and exited 0,
+            // failing the docker-absent guard. Mirrors the Python master test's
+            // genuinely-empty PATH. php is launched by absolute path regardless.)
+            $emptyBin = $this->dir . '/emptybin';
+            if (!is_dir($emptyBin)) {
+                mkdir($emptyBin, 0777, true);
+            }
+            $env['PATH'] = $emptyBin;
         }
 
         $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
