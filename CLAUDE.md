@@ -305,7 +305,7 @@ $user->findById($id): self
 $user->find($filter, $limit, $offset, $orderBy): array
 $user->select($sql, $params, $limit, $offset): array
 $user->selectOne($sql, $params, $include): ?static
-$user->where($filterSql, $params, $limit, $offset): array
+$user->where($filterSql, $params, $limit, $offset, $include, $orderBy): array
 $user->all($limit, $offset): array
 $user->count($conditions, $params): int
 $user->findOrFail($id): static
