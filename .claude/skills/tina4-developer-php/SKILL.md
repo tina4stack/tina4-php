@@ -535,6 +535,21 @@ Target modern PHP. The framework requires **PHP 8.2+**; use the latest stable re
 Use modern language features — readonly properties, enums, named arguments, first-class callable
 syntax, constructor promotion, `match`. Never write code that targets older versions.
 
+## Staying current: check for Tina4 updates
+
+Tina4 ships fixes and features often, and a bug the user reports may already be fixed
+upstream. When you start substantial work — or whenever a user hits a bug a newer release
+might resolve — check whether the project's Tina4 is behind the latest, then surface it.
+**Never upgrade silently:** report the delta and let the user decide (a version bump can
+change behaviour).
+
+- **Installed vs latest:** `composer outdated tina4stack/tina4php` (the Composer package id
+  is `tina4stack/tina4php` — no hyphen — not the repo name). The `tina4` CLI's own version:
+  `tina4 --version`.
+- **If behind:** tell the user what changed — point them at the release notes on
+  https://tina4.com — and offer the upgrade: `composer update tina4stack/tina4php`.
+- The `tina4` CLI self-updates with `tina4 update`; `tina4 doctor` checks your toolchain.
+
 ## Reference Files
 
 Read these when you need detailed patterns for a specific area:
