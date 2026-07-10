@@ -791,6 +791,17 @@ line stays releasable and an urgent patch can be cut without waiting on unrelate
    CLI. **Merging alone never publishes; the tag does.**
 4. **Urgent patches** get their own short-lived `feature/release<patch>` off the release line —
    banked, merged, tagged independently of any larger in-flight feature branch.
+5. **Branch hygiene — merge when done, then delete.** The moment a branch's work lands (PR merged
+   or tag cut), delete it on the remote AND locally: `gh pr merge <n> --merge --delete-branch`, then
+   `git branch -D <branch>` and `git push origin --delete <branch>` for anything left behind. Never
+   leave merged branches lying around — they are a trap. Two hard rules, both from real incidents:
+   - **Cut every release/feature branch FRESH from the base** (`git checkout -B feature/release<v> origin/v3`).
+     Never resume a leftover same-named local branch — one silently carried an unshippable draft into a
+     release cut and would have published it.
+   - **Check the current branch before you commit** (`git rev-parse --abbrev-ref HEAD`). The repos do NOT
+     share a default: the four framework repos live on **`v3`**, but `tina4` (CLI), `tina4-documentation`,
+     and `tina4-book` default to **`main`**. A commit on a stale checkout lands on the wrong branch and
+     pushes as a brand-new branch instead of the one you meant.
 
 **Current reality (important):** the active release line for the v3 series is the **`v3`** branch —
 every 3.13.x release is tagged there; `main` is the stale v2-era default (480+ commits behind v3).
