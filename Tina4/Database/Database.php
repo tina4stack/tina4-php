@@ -1478,6 +1478,86 @@ class Database implements DatabaseAdapter
     }
 
     /**
+     * SILENT PDO fallback (Firebird): prefer ext-interbase (ibase_ / fbird_
+     * functions); fall back to the pdo_firebird driver when absent. This is the
+     * highest-value fallback — ext-interbase was removed from PHP core in 7.4
+     * (PECL-only, broken on macOS), so pdo_firebird is often the only Firebird
+     * driver present on a modern build.
+     *
+     * A driver can be forced when the auto-choice is wrong — for example when
+     * ext-interbase is present but broken (the classic macOS + FB5 clumplet
+     * case, where ibase_connect exists yet fails with a clumplet error). Set
+     * `TINA4_FIREBIRD_DRIVER=pdo` (or `=interbase`) for an app-wide choice, or
+     * pin one connection with a `?driver=pdo` query param on its URL.
+     *
+     * @throws \RuntimeException When the requested — or the only remaining — driver is unavailable.
+     */
+    private static function makeFirebird(string $url, string $username, string $password, ?bool $autoCommit): DatabaseAdapter
+    {
+        $hasInterbase = function_exists('ibase_connect') || function_exists('fbird_connect');
+        $hasPdo = in_array('firebird', \PDO::getAvailableDrivers(), true);
+        $forced = self::firebirdDriverPreference($url);
+
+        if ($forced === 'pdo') {
+            if (!$hasPdo) {
+                throw new \RuntimeException(
+                    'Firebird driver forced to pdo (TINA4_FIREBIRD_DRIVER/?driver=pdo) but the '
+                    . 'pdo_firebird PDO driver is not installed.'
+                );
+            }
+            return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        if ($forced === 'interbase') {
+            if (!$hasInterbase) {
+                throw new \RuntimeException(
+                    'Firebird driver forced to interbase (TINA4_FIREBIRD_DRIVER/?driver=interbase) but '
+                    . 'ext-interbase (ibase_*/fbird_* functions) is not available.'
+                );
+            }
+            return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+
+        // Auto: prefer the native extension, fall back to pdo_firebird.
+        if ($hasInterbase) {
+            return new FirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        if ($hasPdo) {
+            return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
+        }
+        throw new \RuntimeException(
+            'Firebird requires ext-interbase (ibase_*/fbird_* functions) or the pdo_firebird PDO driver. '
+            . 'ext-interbase was removed from PHP core in 7.4 (PECL-only); enable pdo_firebird instead.'
+        );
+    }
+
+    /**
+     * Resolve an explicit Firebird driver choice: a `?driver=` URL query param
+     * (per-connection, wins) then the `TINA4_FIREBIRD_DRIVER` env var (app-wide).
+     * Returns 'pdo', 'interbase', or '' (auto). `ibase` is accepted as a synonym
+     * for 'interbase'.
+     */
+    private static function firebirdDriverPreference(string $url): string
+    {
+        $raw = '';
+        if (str_contains($url, '://')) {
+            $query = parse_url($url, PHP_URL_QUERY);
+            if (is_string($query) && $query !== '') {
+                parse_str($query, $params);
+                $raw = (string) ($params['driver'] ?? '');
+            }
+        }
+        if ($raw === '') {
+            $raw = (string) (\Tina4\DotEnv::getEnv('TINA4_FIREBIRD_DRIVER') ?? '');
+        }
+        $raw = strtolower(trim($raw));
+        return match ($raw) {
+            'pdo', 'pdo_firebird' => 'pdo',
+            'interbase', 'ibase', 'firebird' => 'interbase',
+            default => '',
+        };
+    }
+
+    /**
      * Create the raw DatabaseAdapter from a connection URL string.
      *
      * @param string $url Connection URL
@@ -1550,11 +1630,11 @@ class Database implements DatabaseAdapter
             PostgresAdapter::class => self::makePostgres($url, $autoCommit, $username, $password),
             MySQLAdapter::class => new MySQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
             MSSQLAdapter::class => new MSSQLAdapter($url, username: $username, password: $password, autoCommit: $autoCommit),
-            FirebirdAdapter::class => new FirebirdAdapter(
+            FirebirdAdapter::class => self::makeFirebird(
                 $url,
-                username: $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
-                password: $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
-                autoCommit: $autoCommit,
+                $username !== '' ? $username : (isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA'),
+                $password !== '' ? $password : (isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey'),
+                $autoCommit,
             ),
             MongoDBAdapter::class => new MongoDBAdapter(
                 $url,

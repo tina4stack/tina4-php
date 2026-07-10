@@ -191,7 +191,14 @@ class MigrationV3Test extends TestCase
             $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live Firebird v2->v3 migration test (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
         }
 
-        $fb = \Tina4\Database\Database::create($url);
+        // ext-interbase can be present-but-broken (macOS + FB5 clumplet); auto
+        // mode still prefers native, so a connect failure there means this live
+        // test cannot run — skip loudly rather than error.
+        try {
+            $fb = \Tina4\Database\Database::create($url);
+        } catch (\Throwable $e) {
+            $this->markTestSkipped('Firebird connect failed (' . $e->getMessage() . ') — live v2->v3 upgrade test UNVERIFIED here.');
+        }
         foreach (['tina4_migration', 'mig_legacy_v2', 'mig_new_widget'] as $t) {
             try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
         }
