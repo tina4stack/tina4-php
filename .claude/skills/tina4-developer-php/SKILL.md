@@ -194,6 +194,40 @@ code_search("send an email")    -> the routes/services in YOUR app that already 
 - **`api_*` is live reflection (exact code); `docs_search` searches the prose docs.** Use `api_*` for signatures, `docs_search` for "how do I X" guidance.
 - If `api_search` / `api_class` returns nothing for a name you expected, it probably **does not exist** in this version — tell the developer rather than inventing it. You can also read the class directly under `Tina4/`.
 
+## The Tina4 AI Coder Rule Path
+
+One rule above all: **never ship a symbol you haven't verified is real.** *You* (a capable coder)
+follow this path in your reasoning; the automated coder pipeline enforces it in code. Either way the
+model is allowed to be imperfect on *structure* — the path guarantees nothing *invalid* ever reaches
+the app.
+
+![The Tina4 AI coder rule path](references/ai-coder-rule-path.svg)
+
+| # | Step | What you do | Gate before moving on |
+|---|------|-------------|-----------------------|
+| 1 | **Ground** | retrieve the current idiom — `tina4_context(request, "php")`, then `code_search`/`api_search` for this project | real imports + shape in hand |
+| 2 | **Scaffold** | `tina4php generate <feature>` for the boilerplate — secure-by-default | the ~80% is deterministic |
+| 3 | **Write** | the custom ~20% only, using ONLY symbols the grounding showed | — |
+| 4 | **Validate** | check every symbol against the known vocabulary (`api_search` / the real framework exports) | are they all real? |
+| 5 | **Repair** | fix the deterministic-fixable — wrong namespace, a helper/use statement used but not imported | — |
+| 6 | **Retry, grounded** | on invalid/incomplete: re-retrieve the idiom, inject it, regenerate — **never re-guess** | loop back to step 4 |
+| 7 | **Verify** | boot it and assert real behaviour — does-it-run, never "looks right" | does it pass? |
+| 8 | **Remember** | the verified result is the canonical for next time | — |
+
+**Two laws hold the path together:**
+
+- **Validate against what's real (finite), never chase what's wrong (infinite).** The framework's
+  exports are a bounded set; hallucination is unbounded. Test membership in the known vocabulary —
+  don't try to blocklist every possible mistake.
+- **Fix by grounding, not by rephrasing.** A different wording is a coin flip; re-grounding is heads.
+  Step 6 always loops back to *grounding*, never to a fresh guess. If retries are spent, serve the
+  vetted canonical rather than ship broken.
+
+The path never ends in invalid Tina4: either the model + repair is correct, or a re-grounded retry
+is, or the canonical is. That is how a small, stochastic generator produces *consistently* correct
+framework code — and it's why *you* writing it by hand should follow the same discipline: **ground,
+write, validate, verify.**
+
 ## Quick Start
 
 A Tina4 PHP app is a directory structure plus a tiny `index.php` entry point. No config files, no
