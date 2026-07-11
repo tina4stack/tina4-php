@@ -189,6 +189,25 @@ abstract class ORM
     private array $_relCache = [];
 
     /**
+     * @var array<string, true> Field/column names the caller EXPLICITLY assigned
+     * (via constructor data / fill() / __set()) — #165. save() uses this to OMIT
+     * a column from an INSERT when its value is null AND the caller never assigned
+     * it, so a NOT NULL DEFAULT column gets its DB default instead of an explicit
+     * NULL that violates the constraint. A column the caller set to null IS
+     * written as NULL. Property defaults seeded by PHP at object creation are NOT
+     * recorded here (there is no hook for them), mirroring the Python master's
+     * object.__setattr__ split. Reset per save is unnecessary — it only grows as
+     * the caller assigns, and UPDATE ignores it.
+     */
+    private array $_assignedFields = [];
+
+    /**
+     * @var array<string, true> DB columns to OMIT from the next INSERT — computed
+     * by getDbData(), consumed by insert() (#165). Keyed by DB column name.
+     */
+    private array $_insertOmitColumns = [];
+
+    /**
      * Create a fluent QueryBuilder pre-configured for this model's table and database.
      *
      * Usage:
@@ -338,6 +357,12 @@ abstract class ORM
     public function __set(string $name, mixed $value): void
     {
         $this->_dynamicProps[$name] = $value;
+        // #165: an undeclared column set dynamically counts as a caller
+        // assignment, so an explicit null is written as NULL on INSERT rather
+        // than omitted. (Declared public properties bypass __set — their
+        // assignment is recorded in fill(); a directly-assigned no-default typed
+        // property is recovered via noDefaultColumns() in getDbData().)
+        $this->_assignedFields[$name] = true;
     }
 
     /**
@@ -471,6 +496,13 @@ abstract class ORM
                     $value = $decoded;
                 }
             }
+
+            // #165: record the caller assignment BEFORE the native set — a
+            // declared public property is set natively (bypassing __set), so
+            // fill() is the only place its assignment can be tracked. This lets
+            // save() write an explicit null as NULL while omitting a column the
+            // caller never touched (so its DB DEFAULT applies).
+            $this->_assignedFields[$propName] = true;
 
             // Set directly on the object — declared properties get set natively,
             // undeclared ones go through __set → _dynamicProps
@@ -1975,8 +2007,20 @@ abstract class ORM
             unset($data[$pkColumn]);
         }
 
+        // #165: drop columns the caller never assigned whose value is null, so a
+        // NOT NULL DEFAULT column gets its DB default instead of an explicit NULL
+        // that violates the constraint. Computed by getDbData() above; the PK was
+        // already handled separately. UPDATE never consults this.
+        foreach (array_keys($this->_insertOmitColumns) as $omitColumn) {
+            unset($data[$omitColumn]);
+        }
+
         if (empty($data)) {
-            return false;
+            // #165: every insertable column was left unset — insert a row of pure
+            // DB column defaults rather than emitting explicit NULLs. `DEFAULT
+            // VALUES` is valid on SQLite / PostgreSQL / MSSQL / Firebird; MySQL
+            // spells the empty insert `() VALUES ()`. Mirrors the Python master.
+            return $this->insertAllDefaults($pkColumn);
         }
 
         $columns = implode(', ', array_keys($data));
@@ -2022,25 +2066,71 @@ abstract class ORM
             // PK. RETURNING (PG) and lastInsertId() (other engines) both surface
             // the written value; a UUID string round-trips as a string.
             if ($pkUnset) {
-                $newId = null;
-                if ($usingReturning && isset($execResult) && $execResult instanceof DatabaseResult) {
-                    $records = $execResult->records;
-                    if (!empty($records)) {
-                        $newId = $records[0][$pkColumn] ?? reset($records[0]);
-                    }
-                }
-                // Fall back to lastInsertId() (the RETURNING capture also lands
-                // there) for non-PG engines and as a safety net.
-                if ($newId === null || $newId === false) {
-                    $newId = $this->_db->lastInsertId();
-                }
-                if ($newId !== null && $newId !== false) {
-                    $this->{$this->primaryKey} = $newId;
-                }
+                $this->adoptGeneratedId($pkColumn, $execResult ?? null, $usingReturning);
             }
         }
 
         return $result;
+    }
+
+    /**
+     * #165: insert a row of pure DB column defaults when every insertable column
+     * was left unset — so a table of `NOT NULL DEFAULT` columns lands its defaults
+     * rather than exploding on an explicit NULL. `INSERT INTO t DEFAULT VALUES`
+     * works on SQLite / PostgreSQL / MSSQL / Firebird; MySQL spells it
+     * `INSERT INTO t () VALUES ()`. Adopts the engine-assigned PK exactly like the
+     * normal path (the PK is always unset here — a set PK would have kept the row
+     * non-empty). Mirrors the Python master's empty-insert branch.
+     */
+    private function insertAllDefaults(string $pkColumn): bool
+    {
+        $dialect = $this->detectDialect();
+        $sql = $dialect === 'mysql'
+            ? "INSERT INTO {$this->tableName} () VALUES ()"
+            : "INSERT INTO {$this->tableName} DEFAULT VALUES";
+
+        $usingReturning = in_array($dialect, ['postgresql', 'firebird'], true);
+        if ($usingReturning) {
+            $sql .= " RETURNING {$pkColumn}";
+            $execResult = $this->_db->execute($sql, []);
+            $result = $execResult !== false;
+        } else {
+            $result = $this->_db->exec($sql, []);
+        }
+
+        if ($result) {
+            $this->_exists = true;
+            $this->adoptGeneratedId($pkColumn, $execResult ?? null, $usingReturning);
+        }
+
+        return (bool) $result;
+    }
+
+    /**
+     * After an INSERT, adopt the engine-assigned primary key onto the model.
+     * RETURNING (PostgreSQL/Firebird) surfaces the written PK in $execResult;
+     * every other engine reads it back via lastInsertId(). Only called when the
+     * caller left the PK unset, so a caller-set natural key is never overwritten.
+     * Extracted so the normal INSERT and the all-defaults INSERT share one code
+     * path (#165).
+     */
+    private function adoptGeneratedId(string $pkColumn, mixed $execResult, bool $usingReturning): void
+    {
+        $newId = null;
+        if ($usingReturning && $execResult instanceof DatabaseResult) {
+            $records = $execResult->records;
+            if (!empty($records)) {
+                $newId = $records[0][$pkColumn] ?? reset($records[0]);
+            }
+        }
+        // Fall back to lastInsertId() (the RETURNING capture also lands there)
+        // for non-PG engines and as a safety net.
+        if ($newId === null || $newId === false) {
+            $newId = $this->_db->lastInsertId();
+        }
+        if ($newId !== null && $newId !== false) {
+            $this->{$this->primaryKey} = $newId;
+        }
     }
 
     /**
@@ -2089,8 +2179,10 @@ abstract class ORM
     private function getDbData(): array
     {
         $data = [];
+        $omit = [];
         $props = $this->getModelProperties();
         $jsonColumns = $this->jsonColumns();
+        $noDefault = $this->noDefaultColumns();
 
         foreach ($props as $name => $value) {
             // Auto-generate fieldMapping for camelCase → snake_case
@@ -2099,6 +2191,23 @@ abstract class ORM
                 if ($snaked !== $name) {
                     $this->fieldMapping[$name] = $snaked;
                 }
+            }
+            // #165: a null value the caller never assigned is an UNSET column —
+            // mark it to be omitted from the INSERT so the DB DEFAULT applies
+            // (e.g. NOT NULL DEFAULT '') instead of an explicit NULL that
+            // violates the constraint. A column the caller assigned (constructor
+            // data / fill() / __set()) is written — an explicit null becomes
+            // NULL. A declared typed property WITHOUT a default only ever reaches
+            // here once assigned (an uninitialised one is skipped by
+            // getModelProperties), so treat it as assigned too — this recovers
+            // the assignment signal PHP loses on a direct `$m->col = null` set.
+            // The omit decision reads the ORIGINAL null (the JSON-encode below
+            // never touches nulls). insert() consumes $this->_insertOmitColumns.
+            if ($value === null
+                && !isset($this->_assignedFields[$name])
+                && !isset($noDefault[$name])
+            ) {
+                $omit[$this->getDbColumn($name)] = true;
             }
             // A JSON column serialises its dict/list to a JSON string for the
             // driver (parity with Python's JSONField.to_db). A non-serialisable
@@ -2116,7 +2225,50 @@ abstract class ORM
             $data[$column] = $value;
         }
 
+        $this->_insertOmitColumns = $omit;
         return $data;
+    }
+
+    /**
+     * Declared public model columns that have NO default value in their
+     * declaration (a typed property such as `public ?int $qty;`) — #165.
+     *
+     * A null value on such a property can only mean the caller assigned it: an
+     * uninitialised no-default typed property is skipped by getModelProperties()
+     * entirely, so if it reaches getDbData() with a null value it was set (via
+     * fill() or a direct `$m->qty = null`). It must therefore be WRITTEN as NULL
+     * on INSERT, never omitted. Untyped properties (`public $x;`) and
+     * null-default typed properties (`public ?int $x = null;`) DO carry a
+     * default and are NOT listed — an untouched one is omitted so its DB DEFAULT
+     * applies. Cached per class (defaults are a per-class declaration fact).
+     * Reuses the same reflection idiom as getColumnDefinitions().
+     *
+     * @return array<string, true>
+     */
+    private function noDefaultColumns(): array
+    {
+        static $cache = [];
+        $class = static::class;
+        if (isset($cache[$class])) {
+            return $cache[$class];
+        }
+
+        $names = [];
+        $ref = new \ReflectionObject($this);
+        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+            if ($prop->isStatic()) {
+                continue;
+            }
+            // Only subclass columns — never the ORM base framework properties.
+            if ($prop->getDeclaringClass()->getName() === self::class) {
+                continue;
+            }
+            if (!$prop->hasDefaultValue()) {
+                $names[$prop->getName()] = true;
+            }
+        }
+
+        return $cache[$class] = $names;
     }
 
     /**
