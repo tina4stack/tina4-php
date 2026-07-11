@@ -659,19 +659,7 @@ class DevAdmin
                 $fake = new \Tina4\FakeData($seed);
 
                 // Build a field_map skipping auto-increment / id PKs, then delegate.
-                $fieldMap = [];
-                foreach ($columns as $col) {
-                    $name = $col['name'] ?? '';
-                    if ($name === '') {
-                        continue;
-                    }
-                    $colType = strtoupper((string) ($col['type'] ?? ''));
-                    $isPk = !empty($col['primary']);
-                    if ($isPk && (str_contains($colType, 'AUTO') || str_contains($colType, 'SERIAL') || strtolower($name) === 'id')) {
-                        continue;
-                    }
-                    $fieldMap[$name] = self::seedGeneratorForColumn($fake, $name, $colType);
-                }
+                $fieldMap = self::buildSeedFieldMapFromColumns($columns, $fake);
 
                 $summary = \Tina4\FakeData::seedTable(
                     $db,
@@ -2343,6 +2331,33 @@ class DevAdmin
     }
 
     // ── Dev-admin helpers ──────────────────────────────────────────
+
+    /**
+     * Build a FakeData field map from introspected table columns: name/type ->
+     * generator, skipping auto-increment / id primary keys. Shared by the
+     * dev-admin seed endpoint AND the MCP seed_table tool so both seed a table
+     * the exact same way. Returns an empty map when every column is skipped.
+     *
+     * @param array<int, array<string, mixed>> $columns getColumns() output
+     * @return array<string, callable>
+     */
+    public static function buildSeedFieldMapFromColumns(array $columns, \Tina4\FakeData $fake): array
+    {
+        $fieldMap = [];
+        foreach ($columns as $col) {
+            $name = $col['name'] ?? '';
+            if ($name === '') {
+                continue;
+            }
+            $colType = strtoupper((string) ($col['type'] ?? ''));
+            $isPk = !empty($col['primary']);
+            if ($isPk && (str_contains($colType, 'AUTO') || str_contains($colType, 'SERIAL') || strtolower($name) === 'id')) {
+                continue;
+            }
+            $fieldMap[$name] = self::seedGeneratorForColumn($fake, $name, $colType);
+        }
+        return $fieldMap;
+    }
 
     /**
      * Pick a FakeData generator (callable) for one column from its name + SQL

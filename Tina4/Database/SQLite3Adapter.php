@@ -20,6 +20,9 @@ class SQLite3Adapter implements DatabaseAdapter
     private ?string $lastError = null;
     private bool $autoCommit;
 
+    /** @var int Rows changed by the most recent write (SQLite3::changes()). */
+    private int $affectedRows = 0;
+
     /**
      * @param string $database Path to the SQLite database file, or ":memory:" for in-memory
      * @param bool $autoCommit Whether to auto-commit (default based on env TINA4_AUTOCOMMIT)
@@ -218,13 +221,27 @@ class SQLite3Adapter implements DatabaseAdapter
 
             if (!$success) {
                 $this->lastError = $this->db->lastErrorMsg();
+                $this->affectedRows = 0;
+            } else {
+                // changes() reports rows modified by the most recent
+                // INSERT/UPDATE/DELETE on this connection (0 for DDL).
+                $this->affectedRows = $this->db->changes();
             }
 
             return $success;
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
+            $this->affectedRows = 0;
             return false;
         }
+    }
+
+    /**
+     * Rows changed by the most recent write on this connection.
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     public function execute(string $sql, array $params = []): bool|DatabaseResult

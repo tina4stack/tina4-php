@@ -57,6 +57,9 @@ class Database implements DatabaseAdapter
     /** @var int Round-robin index for pool rotation */
     private int $poolIndex = 0;
 
+    /** @var int Rows affected by the most recent execute() (0 for DDL/SELECT). */
+    private int $affectedRows = 0;
+
     /**
      * @var DatabaseAdapter|null Adapter pinned to the current transaction.
      *
@@ -466,9 +469,14 @@ class Database implements DatabaseAdapter
             // re-thrown from the adapter). Capture the cause and re-raise —
             // fetch()/fetchOne() already behave this way; execute() was the
             // lone swallower. Python master: "set last_error; raise".
+            $this->affectedRows = 0;
             $this->lastError = $e->getMessage();
             throw $e;
         }
+        // Capture the affected-row count from the adapter that just ran the write
+        // (guarded — an adapter that does not expose it reports 0). Consumers read
+        // it via affectedRows(); the dev-MCP database_execute tool returns it.
+        $this->affectedRows = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
 
         $upper = strtoupper(trim($sql));
         if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
@@ -797,6 +805,17 @@ class Database implements DatabaseAdapter
     public function getLastId(): int|string
     {
         return $this->getNextAdapter()->lastInsertId();
+    }
+
+    /**
+     * Rows affected by the most recent execute() (INSERT/UPDATE/DELETE).
+     *
+     * Returns 0 for DDL, SELECT, or an engine whose adapter does not report a
+     * count. Mirrors the row count the Python master surfaces on execute().
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     /**

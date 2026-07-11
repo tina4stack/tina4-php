@@ -893,7 +893,7 @@ class McpServer
 // ── Built-in Dev Tools ───────────────────────────────────────────
 
 /**
- * Register all 24 built-in dev tools on an McpServer instance.
+ * Register all 49 built-in dev tools on an McpServer instance.
  *
  * Security:
  *     - Only active when TINA4_DEBUG=true AND running on localhost
@@ -1260,7 +1260,14 @@ class McpDevTools
             } catch (\Throwable $e) {
                 return ['error' => $e->getMessage()];
             }
-            return ['success' => true, 'affected_rows' => 0];
+            // Report the REAL affected-row count from the adapter (was hardcoded
+            // 0). Mirrors the Python master returning result.count. The facade
+            // exposes affectedRows() from the last write (0 for DDL / an engine
+            // whose adapter does not report a count).
+            return [
+                'success' => true,
+                'affected_rows' => method_exists($db, 'affectedRows') ? $db->affectedRows() : 0,
+            ];
         }, 'Execute arbitrary SQL (INSERT/UPDATE/DELETE/DDL)');
 
         $server->registerTool('database_tables', function () {
@@ -1323,8 +1330,37 @@ class McpDevTools
         }, 'List all registered routes');
 
         $server->registerTool('route_test', function (string $method, string $path, string $body = '', string $headers = '{}') {
-            // Simple route testing via internal dispatch
-            return ['info' => "Route test for $method $path - use the built-in test client"];
+            // Drive the route through the real in-process TestClient (the same
+            // client the framework's own tests use — it dispatches through the
+            // real Router + auth gate) and return the real response. Mirrors the
+            // Python master's route_test(method, path, body, headers) returning
+            // {status, body, content_type}. The old stub returned an info string
+            // and never dispatched.
+            try {
+                $client = new \Tina4\TestClient();
+                $decoded = json_decode($headers, true);
+                $headerDict = is_array($decoded) && $decoded !== [] ? $decoded : null;
+                $bodyArg = $body !== '' ? $body : null;
+                $method = strtoupper($method);
+                $response = match ($method) {
+                    'GET'    => $client->get($path, headers: $headerDict),
+                    'POST'   => $client->post($path, body: $bodyArg, headers: $headerDict),
+                    'PUT'    => $client->put($path, body: $bodyArg, headers: $headerDict),
+                    'PATCH'  => $client->patch($path, body: $bodyArg, headers: $headerDict),
+                    'DELETE' => $client->delete($path, headers: $headerDict),
+                    default  => null,
+                };
+                if ($response === null) {
+                    return ['error' => "Unsupported method: {$method}"];
+                }
+                return [
+                    'status' => $response->status,
+                    'body' => $response->text(),
+                    'content_type' => $response->contentType,
+                ];
+            } catch (\Throwable $e) {
+                return ['error' => $e->getMessage()];
+            }
         }, 'Call a route and return the response');
 
         $server->registerTool('swagger_spec', function () {
@@ -1546,27 +1582,54 @@ class McpDevTools
         }, 'Upload a file to src/public/');
 
         // ── Migration Tools ───────────────────────────────────
-
-        $server->registerTool('migration_status', function () {
-            try {
-                $migration = new Migration();
-                return ['info' => 'Migration system available'];
-            } catch (\Throwable $e) {
-                return ['error' => $e->getMessage()];
-            }
-        }, 'List pending and completed migrations');
+        //
+        // migration_status is registered once, near the end of register()
+        // (the real project-root scan) — the earlier duplicate stub that
+        // constructed `new Migration()` (which throws ArgumentCountError,
+        // the ctor needs a DatabaseAdapter) was dead and has been removed.
 
         $server->registerTool('migration_create', function (string $description) {
+            // The tool writes the file itself (glob + file_put_contents); it does
+            // NOT construct a Migration (its ctor needs a DatabaseAdapter and would
+            // throw). Mirrors the Python master's create_migration(description),
+            // including its duplicate-slug guard: if a migration for the same
+            // description slug already exists, point the agent at that file so it
+            // edits the existing migration instead of spawning a second one for the
+            // same schema change.
             try {
-                $migration = new Migration();
-                // Create migration file
                 $migrationPath = 'migrations';
+                $slug = trim((string) preg_replace('/[^a-z0-9]+/', '_', strtolower($description)), '_');
+                if (is_dir($migrationPath) && $slug !== '') {
+                    $existingDup = [];
+                    foreach (glob($migrationPath . '/*.sql') ?: [] as $path) {
+                        $name = basename($path);
+                        // Strip a leading numeric/timestamp prefix (NNNNNN_ or
+                        // YYYYMMDDHHMMSS_) and the .sql / .down.sql suffix, then
+                        // compare slugs (treat "x" and "x_table" as equivalent).
+                        $after = preg_replace('/^\d+_/', '', $name);
+                        $after = preg_replace('/\.(down\.)?sql$/i', '', (string) $after);
+                        $existingSlug = trim((string) preg_replace('/[^a-z0-9]+/', '_', strtolower((string) $after)), '_');
+                        if ($existingSlug === $slug
+                            || $existingSlug === $slug . '_table'
+                            || $slug === $existingSlug . '_table') {
+                            $existingDup[] = 'migrations/' . $name;
+                        }
+                    }
+                    if ($existingDup !== []) {
+                        return [
+                            'ok' => false,
+                            'error' => "Migration for '{$description}' already exists: {$existingDup[0]}. "
+                                . 'Edit it with file_patch / file_write instead of creating a duplicate.',
+                            'existing' => $existingDup,
+                        ];
+                    }
+                }
                 if (!is_dir($migrationPath)) {
                     mkdir($migrationPath, 0755, true);
                 }
-                $existing = glob($migrationPath . '/*.sql');
-                $nextId = str_pad(count($existing) + 1, 6, '0', STR_PAD_LEFT);
-                $safeName = preg_replace('/[^a-z0-9]+/', '_', strtolower($description));
+                $existing = glob($migrationPath . '/*.sql') ?: [];
+                $nextId = str_pad((string) (count($existing) + 1), 6, '0', STR_PAD_LEFT);
+                $safeName = $slug !== '' ? $slug : 'migration';
                 $filename = "{$nextId}_{$safeName}.sql";
                 file_put_contents($migrationPath . '/' . $filename, "-- $description\n");
                 return ['created' => $filename];
@@ -1576,10 +1639,21 @@ class McpDevTools
         }, 'Create a new migration file');
 
         $server->registerTool('migration_run', function () {
+            // Mirror the Python master's migration_run(): resolve the ORM/env
+            // database, guard the null case, then run the migrator. The real
+            // method is migrate() (not doMigration()), and Migration's ctor needs
+            // a DatabaseAdapter — the old `new Migration()->doMigration()` failed
+            // on BOTH counts (ArgumentCountError + undefined method).
             try {
-                $migration = new Migration();
-                $result = $migration->doMigration();
-                return ['result' => $result];
+                $db = \Tina4\Database\Database::fromEnv();
+            } catch (\Throwable $e) {
+                return ['error' => 'No database connection: ' . $e->getMessage()];
+            }
+            if ($db === null) {
+                return ['error' => 'No database connection'];
+            }
+            try {
+                return (new \Tina4\Migration($db))->migrate();
             } catch (\Throwable $e) {
                 return ['error' => $e->getMessage()];
             }
@@ -1589,7 +1663,12 @@ class McpDevTools
 
         $server->registerTool('queue_status', function (string $topic = 'default') {
             try {
-                $queue = new Queue($topic);
+                // BUGFIX: `new Queue($topic)` put the topic in the BACKEND slot
+                // (ctor is __construct(string $backend='file', array $config=[],
+                // string $topic='default')), so a non-'file' topic selected a
+                // non-existent backend and the tool always returned {error}.
+                // Name the arg. Mirrors Python master queue_status(topic).
+                $queue = new Queue(topic: $topic);
                 return [
                     'topic' => $topic,
                     'pending' => $queue->size('pending'),
@@ -1664,8 +1743,19 @@ class McpDevTools
         }, 'Read recent log entries');
 
         $server->registerTool('error_log', function (int $limit = 20) {
-            // Check for stored errors
-            return [];
+            // Read the REAL tracked errors from ErrorTracker (the same store the
+            // dev-admin error panel reads), newest-first, sliced to $limit.
+            // Mirrors the Python master's error_log(limit) reading
+            // DevAdmin.broken_tracker. The old stub returned [] unconditionally.
+            // ErrorTracker is defined in DevAdmin.php (not its own PSR-4 file), so
+            // reference DevAdmin first to make sure that file is loaded — parity
+            // with Python's explicit `from ... import DevAdmin`.
+            try {
+                class_exists(\Tina4\DevAdmin::class);
+                return array_slice(\Tina4\ErrorTracker::get(), 0, max(0, $limit));
+            } catch (\Throwable $e) {
+                return ['error' => $e->getMessage()];
+            }
         }, 'Recent errors and exceptions');
 
         $server->registerTool('env_list', function () use ($redactEnv) {
@@ -1684,11 +1774,31 @@ class McpDevTools
         // ── Data Tools ────────────────────────────────────────
 
         $server->registerTool('seed_table', function (string $table, int $count = 10) {
+            // Delegate to the REAL seeder (FakeData::seedTable) — the same code the
+            // dev-admin POST /__dev/api/seed endpoint uses. Return the actual number
+            // of rows inserted. Mirrors the Python master's seed_table(table, count)
+            // returning {table, inserted}. The old stub inserted nothing.
             try {
                 $db = \Tina4\Database\Database::fromEnv();
-                $fake = new FakeData();
-                // Basic seeding - get table columns and generate data
-                return ['table' => $table, 'info' => "Seed $count rows - use FakeData class"];
+            } catch (\Throwable $e) {
+                return ['error' => 'No database connection: ' . $e->getMessage()];
+            }
+            if ($db === null) {
+                return ['error' => 'No database connection'];
+            }
+            try {
+                // Introspect the table and build the field map the SAME way the
+                // dev-admin /__dev/api/seed endpoint does (shared helper), so both
+                // seed a table identically. FakeData::seedTable is a no-op without
+                // a field map, which is why the old stub inserted nothing.
+                $columns = $db->getColumns($table);
+                if (empty($columns)) {
+                    return ['error' => "Table '{$table}' not found or has no columns"];
+                }
+                class_exists(\Tina4\DevAdmin::class);
+                $fieldMap = \Tina4\DevAdmin::buildSeedFieldMapFromColumns($columns, new FakeData());
+                $summary = FakeData::seedTable($db, $table, $count, $fieldMap);
+                return ['table' => $table, 'inserted' => (int) $summary['seeded']];
             } catch (\Throwable $e) {
                 return ['error' => $e->getMessage()];
             }

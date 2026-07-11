@@ -25,6 +25,8 @@ class FirebirdAdapter implements DatabaseAdapter
 
     /** @var resource|null */
     private mixed $db = null;
+    /** @var int Rows affected by the most recent write (ibase_affected_rows, best-effort). */
+    private int $affectedRows = 0;
     /** @var resource|null Active EXPLICIT transaction handle (startTransaction) */
     private mixed $transaction = null;
     /**
@@ -267,7 +269,23 @@ class FirebirdAdapter implements DatabaseAdapter
             $result = $this->executeInternal($sql, $params);
             if ($result === false) {
                 // FAIL LOUD: capture the cause on error() AND raise.
+                $this->affectedRows = 0;
                 throw new DatabaseException('Firebird execute() failed: ' . ($this->lastError ?? 'unknown error'));
+            }
+
+            // Best-effort affected-row count. ibase_affected_rows() reads the
+            // count from the transaction/link that ran the statement; capture it
+            // before any auto-commit tears that transaction down. Guarded so it
+            // can never break the write path; defaults to 0 (e.g. DDL, or when the
+            // driver reports no count). NOTE: not verified against live Firebird.
+            $affectedFn = $this->fn . 'affected_rows';
+            if (function_exists($affectedFn)) {
+                try {
+                    $count = @$affectedFn($this->transaction ?? $this->db);
+                    $this->affectedRows = is_int($count) && $count > 0 ? $count : 0;
+                } catch (\Throwable) {
+                    $this->affectedRows = 0;
+                }
             }
 
             // Only a real result set (SELECT / RETURNING) carries a row to read for
@@ -454,6 +472,14 @@ class FirebirdAdapter implements DatabaseAdapter
     public function lastInsertId(): int|string
     {
         return $this->lastId;
+    }
+
+    /**
+     * Rows affected by the most recent write (best-effort ibase_affected_rows()).
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     public function startTransaction(): void

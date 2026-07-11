@@ -21,6 +21,9 @@ class MySQLAdapter implements DatabaseAdapter
     private bool $autoCommit;
     private int|string $lastId = 0;
 
+    /** @var int Rows affected by the most recent write (mysqli affected_rows). */
+    private int $affectedRows = 0;
+
     /**
      * @param string $connectionString URL: "mysql://user:pass@host:port/dbname"
      *                                  or host string with separate params
@@ -232,13 +235,23 @@ class MySQLAdapter implements DatabaseAdapter
                 if ($success !== false && $stmt->insert_id > 0) {
                     $this->lastId = $stmt->insert_id;
                 }
+                // Affected rows for the prepared write, before close() drops it.
+                if ($success !== false) {
+                    $this->affectedRows = max(0, $stmt->affected_rows);
+                }
                 $stmt->close();
             }
 
             if ($success === false) {
                 // FAIL LOUD: capture the cause on error() AND raise.
+                $this->affectedRows = 0;
                 $this->lastError = $this->db->error;
                 throw new DatabaseException('MySQL execute() failed: ' . ($this->lastError ?: 'unknown error'));
+            }
+
+            // Non-prepared path: connection-level affected_rows for the write.
+            if (empty($params)) {
+                $this->affectedRows = max(0, $this->db->affected_rows);
             }
 
             // CAPTURE the auto-increment id at WRITE time (mirrors MSSQLAdapter's
@@ -389,6 +402,14 @@ class MySQLAdapter implements DatabaseAdapter
         // execute()) — best-effort read of the connection-level id.
         $this->ensureOpen();
         return $this->db->insert_id;
+    }
+
+    /**
+     * Rows affected by the most recent write (mysqli affected_rows).
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     public function startTransaction(): void

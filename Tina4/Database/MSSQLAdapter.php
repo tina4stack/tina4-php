@@ -34,6 +34,9 @@ class MSSQLAdapter implements DatabaseAdapter
     private bool $autoCommit;
     private int|string $lastId = 0;
 
+    /** @var int Rows affected by the most recent write (sqlsrv_rows_affected / rowCount). */
+    private int $affectedRows = 0;
+
     /**
      * @param string $connectionString URL: "mssql://user:pass@host:port/dbname"
      *                                  or "host\instance" with separate params
@@ -275,6 +278,7 @@ class MSSQLAdapter implements DatabaseAdapter
                 // (FAIL LOUD parity with the sqlsrv branch).
                 $stmt = $this->db->prepare($sql);
                 $stmt->execute($values);
+                $this->affectedRows = max(0, $stmt->rowCount());
                 return true;
             }
 
@@ -284,23 +288,38 @@ class MSSQLAdapter implements DatabaseAdapter
 
             if ($stmt === false) {
                 // FAIL LOUD: capture the cause on error() AND raise.
+                $this->affectedRows = 0;
                 $errors = sqlsrv_errors();
                 $this->lastError = $errors ? $errors[0]['message'] : 'Execute failed';
                 throw new DatabaseException('MSSQL execute() failed: ' . ($this->lastError ?: 'unknown error'));
             }
 
+            // sqlsrv_rows_affected returns -1 for statements with no count (DDL);
+            // clamp to 0 so the reported count is never negative.
+            $rows = sqlsrv_rows_affected($stmt);
+            $this->affectedRows = is_int($rows) && $rows > 0 ? $rows : 0;
             sqlsrv_free_stmt($stmt);
             return true;
         } catch (DatabaseException $e) {
             throw $e;
         } catch (\PDOException $e) {
             // FAIL LOUD: capture the cause on error() AND raise.
+            $this->affectedRows = 0;
             $this->lastError = $e->getMessage();
             throw new DatabaseException('MSSQL execute() failed: ' . $e->getMessage());
         } catch (\Exception $e) {
+            $this->affectedRows = 0;
             $this->lastError = $e->getMessage();
             throw $e;
         }
+    }
+
+    /**
+     * Rows affected by the most recent write (sqlsrv_rows_affected / PDO rowCount).
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     public function executeMany(string $sql, array $paramsList = []): int

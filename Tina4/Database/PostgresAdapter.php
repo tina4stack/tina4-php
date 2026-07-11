@@ -26,6 +26,9 @@ class PostgresAdapter implements DatabaseAdapter
     private bool $autoCommit;
     private int|string $lastId = 0;
 
+    /** @var int Rows affected by the most recent write (pg_affected_rows()). */
+    private int $affectedRows = 0;
+
     /**
      * @param string $connectionString DSN: "host=... port=... dbname=... user=... password=..."
      *                                  or URL: "pgsql://user:pass@host:port/dbname"
@@ -221,9 +224,13 @@ class PostgresAdapter implements DatabaseAdapter
                 // FAIL LOUD: capture the cause on error() AND raise — execute()
                 // must never swallow a failed statement (parity with Python and
                 // with fetch()/fetchOne() here).
+                $this->affectedRows = 0;
                 $this->lastError = pg_last_error($this->db);
                 throw new DatabaseException('PostgreSQL execute() failed: ' . ($this->lastError ?: 'unknown error'));
             }
+
+            // Rows affected by this write (0 for DDL); read before freeing.
+            $this->affectedRows = (int) pg_affected_rows($result);
 
             $hasReturning = $this->isInsertReturning($sql);
 
@@ -487,6 +494,14 @@ class PostgresAdapter implements DatabaseAdapter
     public function lastInsertId(): int|string
     {
         return $this->lastId;
+    }
+
+    /**
+     * Rows affected by the most recent write (pg_affected_rows()).
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     public function startTransaction(): void

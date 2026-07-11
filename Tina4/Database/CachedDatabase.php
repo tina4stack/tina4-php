@@ -372,6 +372,15 @@ class CachedDatabase implements DatabaseAdapter
         return $this->adapter->lastInsertId();
     }
 
+    /**
+     * Rows affected by the most recent write — delegate to the wrapped adapter
+     * so the count survives when the DB cache is enabled.
+     */
+    public function affectedRows(): int
+    {
+        return method_exists($this->adapter, 'affectedRows') ? (int) $this->adapter->affectedRows() : 0;
+    }
+
     public function startTransaction(): void
     {
         $this->adapter->startTransaction();

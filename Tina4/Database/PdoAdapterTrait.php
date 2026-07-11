@@ -46,6 +46,9 @@ trait PdoAdapterTrait
     private bool $autoCommit = true;
     private int|string $lastId = 0;
 
+    /** @var int Rows affected by the most recent write (PDOStatement::rowCount()). */
+    private int $affectedRows = 0;
+
     /** Human-readable engine name for error messages (e.g. "SQLite (PDO)"). */
     abstract protected function engineLabel(): string;
 
@@ -228,6 +231,8 @@ trait PdoAdapterTrait
             $stmt = $this->pdo->prepare($execSql);
             $this->bindValues($stmt, $params);
             $stmt->execute();
+            // rowCount() is the canonical PDO affected-row count for a write.
+            $this->affectedRows = $stmt->rowCount();
 
             if ($this->hasReturning($execSql)) {
                 // RETURNING row carries the new id (PostgreSQL/Firebird).
@@ -245,6 +250,7 @@ trait PdoAdapterTrait
             return true;
         } catch (\PDOException $e) {
             // FAIL LOUD: capture the cause on error() AND raise — never swallow.
+            $this->affectedRows = 0;
             $this->lastError = $e->getMessage();
             throw new DatabaseException(
                 $this->engineLabel() . ' execute() failed: ' . ($this->lastError ?: 'unknown error'),
@@ -252,6 +258,14 @@ trait PdoAdapterTrait
                 $e
             );
         }
+    }
+
+    /**
+     * Rows affected by the most recent write (PDOStatement::rowCount()).
+     */
+    public function affectedRows(): int
+    {
+        return $this->affectedRows;
     }
 
     public function executeMany(string $sql, array $paramsList = []): int
