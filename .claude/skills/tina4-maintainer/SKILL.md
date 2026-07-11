@@ -149,9 +149,10 @@ is up it points you at the source faster; when it is not, you lose nothing - rea
 query the live API index directly. If its guidance and the code ever disagree, the code wins.
 Do not let a skill or a habit make the framework's own maintenance depend on an external service.
 
-**Do NOT use `tina4_code` to generate framework or example code.** A fine-tuned generator lags
-the working tree and emits APIs that no longer exist - the exact drift this skill prevents. Write
-every line yourself so you own its correctness, then prove it against the source and the live API.
+**Do NOT use `tina4_code` to generate framework or example code.** It is deprecated on the tools'
+own evidence: in a boot-and-verify gate `tina4_code` FAILED where Claude grounded with `tina4_context` PASSED, so the tools point to grounding + a strong model, not the self-hosted coder. It also lags the working tree and emits APIs that no
+longer exist, the exact drift this skill prevents. Write every line yourself so you own its
+correctness, then prove it against the source and the live API.
 
 ## Independent Verification & Honest Claims — Prove It, Then Qualify It
 

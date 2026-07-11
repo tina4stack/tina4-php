@@ -177,7 +177,7 @@ context plus the rules in this skill.
   the requested feature (signals, `html` templates, `Tina4Element` components, routing, and the
   api / ws / sse / rtc clients). Use it as reference material, not as a code generator.
 
-Do **not** use `tina4_code` to generate tina4-js — you are responsible for authoring the code.
+Do **not** use `tina4_code` to generate tina4-js — you are responsible for authoring the code. (It is deprecated on the tools' own evidence: in a boot-and-verify gate `tina4_code` FAILED where Claude grounded with `tina4_context` PASSED, so the tools point to grounding + a strong model, not the self-hosted coder.)
 The context tool grounds you; the reasoning, the code, and the review are yours. The rules in
 this skill are the source of truth — apply them to whatever you write.
 

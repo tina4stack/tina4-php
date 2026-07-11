@@ -163,7 +163,7 @@ do NOT ask it to author the code:
   relevant framework surface) for the task you describe. Pass `language="php"`. Read what it returns,
   then **write the PHP yourself** to match this project's conventions.
 
-Do **not** call `tina4_code` / `tina4_review` to generate or rewrite the code — you own the writing.
+Do **not** call `tina4_code` / `tina4_review` to generate or rewrite the code — you own the writing. tina4_code is deprecated on the tools' own evidence: in a boot-and-verify gate `tina4_code` FAILED where Claude grounded with `tina4_context` PASSED, so the tools point to grounding + a strong model, not the self-hosted coder.
 `tina4_context` is for grounding only; you still do the reasoning, planning, and typing, and you
 verify everything against the live framework (`api_search` / `api_class` / `api_method`, below) and
 the source under `Tina4/`. If `tina4_context` errors or is not connected, just write the code
