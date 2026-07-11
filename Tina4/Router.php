@@ -279,13 +279,22 @@ class Router
     /**
      * Attach Swagger/OpenAPI metadata to the last registered route.
      *
+     * #59: MERGE into any metadata already attached rather than replacing it, so
+     * chained calls — the PHP analog of stacking @summary/@description/@tags
+     * decorators — all survive. Each call contributes its keys; a later call may
+     * override an earlier same key (last-write-wins) but never drops a sibling
+     * key. A single swagger([...]) call with every key is unchanged. Mirrors the
+     * Python master, where each decorator annotates the handler in place so no
+     * stacked metadata is lost.
+     *
      * @param array $meta Swagger metadata (summary, tags, description, example, etc.)
      * @return $this
      */
     public function swagger(array $meta): self
     {
         if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['swagger'] = $meta;
+            $existing = self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['swagger'] ?? [];
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['swagger'] = array_merge($existing, $meta);
         }
         return $this;
     }
