@@ -1798,7 +1798,7 @@ class McpDevTools
                 class_exists(\Tina4\DevAdmin::class);
                 $fieldMap = \Tina4\DevAdmin::buildSeedFieldMapFromColumns($columns, new FakeData());
                 $summary = FakeData::seedTable($db, $table, $count, $fieldMap);
-                return ['table' => $table, 'inserted' => (int) $summary['seeded']];
+                return ['table' => $table, 'inserted' => (int) $summary['seeded'], 'failed' => (int) $summary['failed']];
             } catch (\Throwable $e) {
                 return ['error' => $e->getMessage()];
             }

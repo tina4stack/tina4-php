@@ -343,8 +343,11 @@ PHP);
         $this->assertIsArray($seed);
         $this->assertArrayNotHasKey('error', $seed, 'seed_table returned {error}: ' . json_encode($seed));
         $this->assertArrayNotHasKey('info', $seed, 'seed_table returned the old stub info-string: ' . json_encode($seed));
+        // canonical cross-framework shape {table, inserted:<int>, failed:<int>}
         $this->assertArrayHasKey('inserted', $seed);
         $this->assertGreaterThan(0, $seed['inserted'], 'seed_table inserted no rows');
+        $this->assertArrayHasKey('failed', $seed, 'seed_table missing the canonical failed count');
+        $this->assertIsInt($seed['failed']);
         $seededCount = $verifyDb->fetch('SELECT COUNT(*) AS c FROM seed_target')->records[0]['c'];
         $this->assertGreaterThan(0, (int) $seededCount, 'seed_target has no rows after seed_table');
 
