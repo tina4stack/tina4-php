@@ -45,6 +45,12 @@ class FirebirdAdapter implements DatabaseAdapter
     private bool $autoCommit;
     private int|string $lastId = 0;
 
+    /**
+     * @var string Resolved connection charset (php #160). Precedence: URL
+     * ?charset= > explicit charset arg > TINA4_DATABASE_CHARSET env > UTF8.
+     */
+    private string $charset;
+
     /** @var string The ibase/fbird function prefix */
     private string $fn;
 
@@ -53,16 +59,22 @@ class FirebirdAdapter implements DatabaseAdapter
      *                                  or path: "/path/to/database.fdb"
      * @param string $username Username (default: SYSDBA)
      * @param string $password Password (default: masterkey)
-     * @param string $charset Character set (default: UTF8)
+     * @param string|null $charset Connection charset. When null (the default),
+     *                             it is resolved from the URL ?charset= query,
+     *                             then TINA4_DATABASE_CHARSET, then UTF8 (php #160).
      * @param bool|null $autoCommit Whether to auto-commit
      */
     public function __construct(
         private readonly string $connectionString,
         private readonly string $username = 'SYSDBA',
         private readonly string $password = 'masterkey',
-        private readonly string $charset = 'UTF8',
+        ?string $charset = null,
         ?bool $autoCommit = null,
     ) {
+        // php #160: resolve the connection charset so a legacy NONE database is
+        // not force-connected as UTF8 (which double-encodes UTF-8 bytes).
+        $this->charset = self::resolveCharset($this->connectionString, $charset);
+
         // Check for either ibase or fbird functions
         if (function_exists('ibase_connect')) {
             $this->fn = 'ibase_';
@@ -572,6 +584,48 @@ class FirebirdAdapter implements DatabaseAdapter
      * Aliases are detected as the leftover case: a single token with no
      * slashes. Anything path-like is kept as a path.
      */
+    /**
+     * Resolve the Firebird connection charset (php #160).
+     *
+     * The adapter used to hardcode UTF8 with no override, which double-encodes
+     * UTF-8 bytes stored under a legacy NONE database. The charset is resolved
+     * from, in precedence order:
+     *
+     *   1. the connection URL query  firebird://host:port/path?charset=NONE
+     *   2. an explicit charset arg passed to the constructor
+     *   3. the TINA4_DATABASE_CHARSET environment variable
+     *   4. the UTF8 default (unchanged — non-breaking for existing connections)
+     *
+     * Pure config resolution over its inputs (URL string, arg, env) — opens no
+     * connection, so it is unit-testable without a live Firebird server. Shared
+     * by both the native ext-interbase adapter and PdoFirebirdAdapter.
+     */
+    public static function resolveCharset(string $connectionString, ?string $charsetArg = null): string
+    {
+        $urlCharset = null;
+        if (str_contains($connectionString, '://')) {
+            $query = parse_url($connectionString, PHP_URL_QUERY);
+            if (is_string($query) && $query !== '') {
+                parse_str($query, $params);
+                if (isset($params['charset']) && is_string($params['charset']) && $params['charset'] !== '') {
+                    $urlCharset = $params['charset'];
+                }
+            }
+        }
+
+        if ($urlCharset !== null) {
+            return $urlCharset;
+        }
+        if ($charsetArg !== null && $charsetArg !== '') {
+            return $charsetArg;
+        }
+        $env = \Tina4\DotEnv::getEnv('TINA4_DATABASE_CHARSET');
+        if (is_string($env) && $env !== '') {
+            return $env;
+        }
+        return 'UTF8';
+    }
+
     public static function normalizeDbIdentifier(string $rawPath): string
     {
         $decoded = urldecode($rawPath);

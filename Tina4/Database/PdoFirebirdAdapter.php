@@ -39,13 +39,22 @@ class PdoFirebirdAdapter implements DatabaseAdapter
     use SqlNormalizerTrait;
     use PdoAdapterTrait;
 
+    /**
+     * @var string Resolved connection charset (php #160). Precedence: URL
+     * ?charset= > explicit charset arg > TINA4_DATABASE_CHARSET env > UTF8.
+     */
+    private string $charset;
+
     public function __construct(
         private readonly string $connectionString,
         private readonly string $username = 'SYSDBA',
         private readonly string $password = 'masterkey',
-        private readonly string $charset = 'UTF8',
+        ?string $charset = null,
         ?bool $autoCommit = null,
     ) {
+        // php #160: resolve the DSN charset (shared with the native adapter) so a
+        // legacy NONE database is not force-connected as UTF8 (double-encoding).
+        $this->charset = FirebirdAdapter::resolveCharset($this->connectionString, $charset);
         $this->autoCommit = $this->resolveAutoCommit($autoCommit);
         $this->open();
     }
