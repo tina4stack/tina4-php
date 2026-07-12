@@ -2355,9 +2355,12 @@ class Frond
             $args = $this->parseFilterArgs($m[2], $data);
         }
 
-        // Sandbox check
+        // Sandbox check — a blocked filter is silently SKIPPED: the value passes
+        // through unchanged (parity with the Python master + Ruby + Node). It used
+        // to return '' (fail-closed); that diverged from the other three. Both are
+        // secure (the blocked filter's code never runs); we converge on the master.
         if ($this->sandboxed && $this->sandboxFilters !== null && !in_array($filterName, $this->sandboxFilters)) {
-            return '';
+            return $value;
         }
 
         // Inline common no-arg filters — avoid closure dispatch overhead

@@ -1064,10 +1064,70 @@ class FrondTest extends TestCase
 
     public function testSandboxBlockedFilter(): void
     {
+        // A blocked filter is SKIPPED: the value passes through unchanged
+        // (parity with the Python master + Ruby + Node). Previously PHP returned
+        // '' here (fail-closed) — that was the lone divergence; now converged.
         $this->engine->sandbox(['upper'], null, null);
         $result = $this->engine->renderString('{{ name | lower }}', ['name' => 'HELLO']);
-        $this->assertSame('', $result);
+        $this->assertSame('HELLO', $result);
         $this->engine->unsandbox();
+    }
+
+    // The sandbox filter allow-list must gate filters reached via the #171
+    // concat-pipe path ({{ x|f ~ y }}) and via a ternary condition
+    // ({{ x|f ? a : b }}), not only the top-level output chain. A blocked
+    // filter's code must never run. `spy` records each invocation so the
+    // assertion is the security property (did the code run?), true across all
+    // four frameworks regardless of the blocked-filter output convention.
+    private function spyFilter(array &$calls): callable
+    {
+        return function ($v) use (&$calls) {
+            $calls[] = $v;
+            return strtoupper((string) $v) . '!';
+        };
+    }
+
+    public function testSandboxBlocksFilterInConcatPipe(): void
+    {
+        $calls = [];
+        $this->engine->addFilter('spy', $this->spyFilter($calls));
+        $this->engine->sandbox(['upper'], null, null); // 'spy' NOT allowed
+        $out = $this->engine->renderString("{{ x|spy ~ ' end' }}", ['x' => 'hi']);
+        $this->engine->unsandbox();
+        $this->assertSame([], $calls);
+        $this->assertStringNotContainsString('HI!', $out);
+    }
+
+    public function testSandboxBlocksFilterInTernaryCondition(): void
+    {
+        $calls = [];
+        $this->engine->addFilter('spy', $this->spyFilter($calls));
+        $this->engine->sandbox(['upper'], null, null); // 'spy' NOT allowed
+        $this->engine->renderString("{{ x|spy ? 'yes' : 'no' }}", ['x' => 'hi']);
+        $this->engine->unsandbox();
+        $this->assertSame([], $calls);
+    }
+
+    public function testSandboxAllowsFilterInConcatPipe(): void
+    {
+        $calls = [];
+        $this->engine->addFilter('spy', $this->spyFilter($calls));
+        $this->engine->sandbox(['spy'], null, null); // 'spy' IS allowed
+        $out = $this->engine->renderString("{{ x|spy ~ ' end' }}", ['x' => 'hi']);
+        $this->engine->unsandbox();
+        $this->assertSame(['hi'], $calls);
+        $this->assertSame('HI! end', $out);
+    }
+
+    public function testSandboxAllowsFilterInTernaryCondition(): void
+    {
+        $calls = [];
+        $this->engine->addFilter('spy', $this->spyFilter($calls));
+        $this->engine->sandbox(['spy'], null, null); // 'spy' IS allowed
+        $out = $this->engine->renderString("{{ x|spy ? 'yes' : 'no' }}", ['x' => 'hi']);
+        $this->engine->unsandbox();
+        $this->assertSame(['hi'], $calls);
+        $this->assertSame('yes', $out);
     }
 
     public function testSandboxAllowedTag(): void
