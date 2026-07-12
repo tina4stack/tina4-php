@@ -958,6 +958,163 @@ class DevAdmin
             ]);
         });
 
+        // ── Scaffold run chips: migrate / test / seed-run ────────────
+        //
+        // The dev-admin's ▶ Migrate / ▶ Test / ▶ Seed chips are project-level
+        // operations the shared SPA calls on dedicated endpoints (distinct from
+        // the generic /tool multiplexer above and the table-seeder /seed). Each
+        // uses the framework's own machinery so behaviour matches the CLI.
+        // Same gating/auth as the sibling dev-admin writes (/tool, /seed, /query):
+        // plain Router::post — no ->noAuth() opt-out.
+
+        // API: Run pending migrations via the real \Tina4\Migration runner —
+        // the exact path the CLI `migrate` and /tool migrate use. Response shape
+        // mirrors the SPA: {applied, skipped, failed} where `failed` lists the
+        // filenames of migrations that errored (Migration::migrate() returns
+        // errors keyed by filename).
+        Router::post('/__dev/api/migrate', function (Request $request, Response $response) {
+            $root = self::devAdminProjectRoot();
+            $migrationsDir = $root . '/migrations';
+            try {
+                $db = App::getDatabase();
+                if ($db === null) {
+                    // Fall back to a URL from env/.env, matching the CLI migrate path.
+                    $dbUrl = self::devAdminReadEnvVar('TINA4_DATABASE_URL');
+                    if ($dbUrl === '') {
+                        $dbUrl = self::devAdminReadEnvVar('DATABASE_URL');
+                    }
+                    if ($dbUrl !== '') {
+                        $db = \Tina4\Database\Database::create($dbUrl);
+                        App::setDatabase($db);
+                    }
+                }
+                if ($db === null) {
+                    return $response->json([
+                        'applied' => [], 'skipped' => [], 'failed' => [],
+                        'error' => 'No database configured. Set TINA4_DATABASE_URL in .env',
+                    ], 400);
+                }
+                $migration = new Migration($db, $migrationsDir);
+                $result = $migration->migrate();
+                return $response->json([
+                    'applied' => array_values($result['applied']),
+                    'skipped' => array_values($result['skipped']),
+                    'failed'  => array_keys($result['errors']),
+                ]);
+            } catch (\Throwable $e) {
+                return $response->json([
+                    'applied' => [], 'skipped' => [], 'failed' => [],
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+        });
+
+        // API: Run the project test suite (phpunit, or `composer test` fallback)
+        // and return the combined output + exit code. Same command construction
+        // as the /tool test branch. {ok, code, output} — a failing suite is a
+        // valid reportable result (ok=false, non-zero code), NOT a 500.
+        Router::post('/__dev/api/test', function (Request $request, Response $response) {
+            $root = self::devAdminProjectRoot();
+            $phpunit = $root . '/vendor/bin/phpunit';
+            $cmd = is_file($phpunit)
+                ? 'cd ' . escapeshellarg($root) . ' && ' . escapeshellarg($phpunit) . ' tests 2>&1'
+                : 'cd ' . escapeshellarg($root) . ' && composer test 2>&1';
+            $output = [];
+            $exitCode = 0;
+            exec($cmd, $output, $exitCode);
+            return $response->json([
+                'ok' => $exitCode === 0,
+                'code' => $exitCode,
+                'output' => trim(implode("\n", $output)),
+            ]);
+        });
+
+        // API: Run the project seeder — every src/seeds/*.php file, the same
+        // include+invoke path as the CLI `seed` command. Each seed file returns
+        // a callable that yields a \Tina4\SeedSummary ({seeded, failed}); we
+        // accumulate those. Seeder echo output is buffered so it never corrupts
+        // the JSON body. Response {seeded, failed} matches the SPA.
+        Router::post('/__dev/api/seed/run', function (Request $request, Response $response) {
+            $root = self::devAdminProjectRoot();
+            $seedDir = $root . '/src/seeds';
+            if (!is_dir($seedDir)) {
+                return $response->json(['seeded' => 0, 'failed' => 0]);
+            }
+            // Seeders hit the ORM — ensure a database is bound, matching the CLI.
+            if (App::getDatabase() === null) {
+                $dbUrl = self::devAdminReadEnvVar('TINA4_DATABASE_URL');
+                if ($dbUrl === '') {
+                    $dbUrl = self::devAdminReadEnvVar('DATABASE_URL');
+                }
+                if ($dbUrl !== '') {
+                    App::setDatabase(\Tina4\Database\Database::create($dbUrl));
+                }
+            }
+            $seeded = 0;
+            $failed = 0;
+            foreach (glob($seedDir . '/*.php') ?: [] as $seedFile) {
+                try {
+                    // Buffer so a seeder's echo (e.g. "Seeded N rows") does not
+                    // leak into the JSON response body.
+                    ob_start();
+                    $seedResult = include $seedFile;
+                    if (is_callable($seedResult)) {
+                        $seedResult = $seedResult();
+                    }
+                    ob_end_clean();
+                    // A SeedSummary supports both object and array access.
+                    if (is_object($seedResult)) {
+                        $seeded += (int) ($seedResult->seeded ?? 0);
+                        $failed += (int) ($seedResult->failed ?? 0);
+                    } elseif (is_array($seedResult)) {
+                        $seeded += (int) ($seedResult['seeded'] ?? 0);
+                        $failed += (int) ($seedResult['failed'] ?? 0);
+                    }
+                } catch (\Throwable $e) {
+                    if (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    $failed++;
+                    Log::error('Seed failed: ' . basename($seedFile) . ' — ' . $e->getMessage());
+                }
+            }
+            return $response->json(['seeded' => $seeded, 'failed' => $failed]);
+        });
+
+        // ── Framework-grounding (MCP token) config ───────────────────
+        //
+        // Drives the dev-admin grounding panel. Self-contained: the token lives
+        // in the project .env (no dependency on the Rust agent, unlike the Node
+        // proxy). status reports whether TINA4_MCP_TOKEN is set + its last 4
+        // chars; token upserts it (empty clears).
+
+        // API: Grounding status — {configured, last4, url}.
+        Router::get('/__dev/api/grounding/status', function (Request $request, Response $response) {
+            $token = self::devAdminReadEnvVar('TINA4_MCP_TOKEN');
+            $url = self::devAdminReadEnvVar('TINA4_MCP_URL');
+            if ($url === '') {
+                $url = 'https://mcp.tina4.com';
+            }
+            return $response->json([
+                'configured' => $token !== '',
+                'last4' => $token !== '' ? substr($token, -4) : '',
+                'url' => $url,
+            ]);
+        });
+
+        // API: Grounding token — upsert TINA4_MCP_TOKEN into the project .env.
+        // Empty token clears it. {ok, configured, last4}.
+        Router::post('/__dev/api/grounding/token', function (Request $request, Response $response) {
+            $body = self::devAdminBody($request);
+            $token = trim((string) ($body['token'] ?? ''));
+            self::devAdminUpsertEnvVar('TINA4_MCP_TOKEN', $token);
+            return $response->json([
+                'ok' => true,
+                'configured' => $token !== '',
+                'last4' => $token !== '' ? substr($token, -4) : '',
+            ]);
+        });
+
         // API: Metrics — quick metrics
         Router::get('/__dev/api/metrics', function (Request $request, Response $response) {
             return $response->json(Metrics::quickMetrics());
@@ -2439,6 +2596,79 @@ class DevAdmin
         // have to branch on platform. Windows APIs accept forward
         // slashes interchangeably; on Unix nothing changes.
         return str_replace('\\', '/', $resolved !== false ? $resolved : ($cwd ?: '.'));
+    }
+
+    /** Absolute path to the project .env used by the grounding endpoints. */
+    private static function devAdminEnvPath(): string
+    {
+        return self::devAdminProjectRoot() . '/.env';
+    }
+
+    /**
+     * Resolve a config value the way the grounding panel needs it: the live
+     * process env wins (matches DotEnv's resolution and the spec's "env or
+     * .env"), else the value is read straight off the project .env on disk.
+     * Reading the file directly makes a just-written token visible immediately
+     * without depending on the DotEnv registry cache. Returns '' when unset.
+     */
+    private static function devAdminReadEnvVar(string $key): string
+    {
+        $fromEnv = getenv($key);
+        if (is_string($fromEnv) && $fromEnv !== '') {
+            return $fromEnv;
+        }
+        if (isset($_ENV[$key]) && is_string($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+        $envPath = self::devAdminEnvPath();
+        if (!is_file($envPath)) {
+            return '';
+        }
+        foreach (file($envPath, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                continue;
+            }
+            [$k, $v] = explode('=', $trimmed, 2);
+            if (trim($k) === $key) {
+                return trim(trim($v), "\"'");
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Upsert a single key into the project .env — replace the line in place if
+     * the key exists, else append it. Mirrors the /__dev/api/connections/save
+     * writer. Also reflects the value in the live process env so a follow-up
+     * status read in the same worker sees it without a reload.
+     */
+    private static function devAdminUpsertEnvVar(string $key, string $value): void
+    {
+        $envPath = self::devAdminEnvPath();
+        $lines = is_file($envPath) ? (file($envPath, FILE_IGNORE_NEW_LINES) ?: []) : [];
+        $newLines = [];
+        $found = false;
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                $newLines[] = $line;
+                continue;
+            }
+            if (trim(explode('=', $trimmed, 2)[0]) === $key) {
+                $newLines[] = "{$key}={$value}";
+                $found = true;
+            } else {
+                $newLines[] = $line;
+            }
+        }
+        if (!$found) {
+            $newLines[] = "{$key}={$value}";
+        }
+        file_put_contents($envPath, implode("\n", $newLines) . "\n");
+        // Keep the running process consistent with what we just wrote.
+        putenv("{$key}={$value}");
+        $_ENV[$key] = $value;
     }
 
     /**
