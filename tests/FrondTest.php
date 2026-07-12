@@ -297,6 +297,97 @@ class FrondTest extends TestCase
         $this->assertSame('1,234.56', $this->engine->renderString('{{ num | number_format(2) }}', ['num' => 1234.56]));
     }
 
+    /**
+     * #170 — number_format must honour the Twig signature
+     * number_format(decimals, decimalPoint, thousandsSep). Before the fix, args
+     * 2 and 3 were dropped and the point/thousands separators were hardcoded, so
+     * localized formats like '1.234,50' were impossible.
+     *
+     * Positive: the localized form (decimalPoint=',', thousandsSep='.').
+     */
+    public function testFilterNumberFormatLocalizedIssue170(): void
+    {
+        $this->assertSame(
+            '1.234,50',
+            $this->engine->renderString("{{ 1234.5 | number_format(2, ',', '.') }}", [])
+        );
+    }
+
+    /**
+     * #170 — negative / back-compat: the 1-arg form is unchanged (default
+     * decimalPoint='.', thousandsSep=','), so existing templates keep working.
+     */
+    public function testFilterNumberFormatBackCompatIssue170(): void
+    {
+        $this->assertSame(
+            '1,234.50',
+            $this->engine->renderString('{{ 1234.5 | number_format(2) }}', [])
+        );
+    }
+
+    /**
+     * #171 — the filter pipe `|` must bind tighter than concat `~`
+     * (Twig precedence). `amount|number_format(2) ~ ' EUR'` must group as
+     * `(amount|number_format(2)) ~ ' EUR'`. Before the fix the whole tail was
+     * fed to the filter as a bogus argument and the raw value ('1234.5') leaked.
+     */
+    public function testFilterPipeBindsTighterThanConcatIssue171(): void
+    {
+        $this->assertSame(
+            '1,234.50 EUR',
+            $this->engine->renderString("{{ amount|number_format(2) ~ ' EUR' }}", ['amount' => 1234.5])
+        );
+    }
+
+    /**
+     * #171 — the same precedence must hold inside a ternary branch. Both the
+     * truthy branch (filter+concat) and the falsy branch ('free') must render.
+     */
+    public function testFilterPipeConcatInTernaryIssue171(): void
+    {
+        $this->assertSame(
+            '1,234.50 EUR',
+            $this->engine->renderString(
+                "{{ charged ? amount|number_format(2) ~ ' EUR' : 'free' }}",
+                ['charged' => true, 'amount' => 1234.5]
+            )
+        );
+        $this->assertSame(
+            'free',
+            $this->engine->renderString(
+                "{{ charged ? amount|number_format(2) ~ ' EUR' : 'free' }}",
+                ['charged' => false, 'amount' => 1234.5]
+            )
+        );
+    }
+
+    /**
+     * #171 — the explicit parenthesized form was already correct and must stay
+     * correct after the reorder (the recursive evaluator handles it).
+     */
+    public function testFilterPipeParenthesizedConcatIssue171(): void
+    {
+        $this->assertSame(
+            '1,234.50 EUR',
+            $this->engine->renderString("{{ (amount|number_format(2)) ~ ' EUR' }}", ['amount' => 1234.5])
+        );
+    }
+
+    /**
+     * #171 — negative/regression: a concat-only expression and a filter-only
+     * expression must be unaffected by the pipe/concat reorder, and a `~` living
+     * inside a filter's argument list must NOT be treated as a top-level concat.
+     */
+    public function testConcatAndFilterOnlyUnaffectedIssue171(): void
+    {
+        // concat-only
+        $this->assertSame('Hello World', $this->engine->renderString('{{ "Hello" ~ " " ~ "World" }}', []));
+        // filter-only
+        $this->assertSame('BOB', $this->engine->renderString('{{ name | upper }}', ['name' => 'bob']));
+        // `~` inside a filter argument is not a top-level concat (paren-depth aware)
+        $this->assertSame('a-b-c', $this->engine->renderString('{{ parts|join("-") }}', ['parts' => ['a', 'b', 'c']]));
+    }
+
     public function testFilterLength(): void
     {
         $this->assertSame('3', $this->engine->renderString('{{ items | length }}', ['items' => [1, 2, 3]]));

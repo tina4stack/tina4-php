@@ -1353,12 +1353,17 @@ class Frond
         $v = $this->evaluateComparison($expr, $data);
         if ($v !== self::NOT_MATCHED) return $v;
 
-        // 7. Filter pipes
-        $v = $this->evaluateFilterPipe($expr, $data);
+        // 7. String concatenation (~) — evaluated BEFORE the filter pipe because
+        //    `~` binds looser than `|` in Twig (issue #171). Splitting on the
+        //    lower-precedence `~` at the outer level makes
+        //    `amount|number_format(2) ~ ' EUR'` group as
+        //    `(amount|number_format(2)) ~ ' EUR'`; each side is then evaluated
+        //    recursively, so the filter still resolves at its (tighter) depth.
+        $v = $this->evaluateConcat($expr, $data);
         if ($v !== self::NOT_MATCHED) return $v;
 
-        // 8. String concatenation (~)
-        $v = $this->evaluateConcat($expr, $data);
+        // 8. Filter pipes
+        $v = $this->evaluateFilterPipe($expr, $data);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 9. Arithmetic (+, -, *, /, //, %, **)
@@ -2693,7 +2698,11 @@ class Frond
         $this->filters['round'] = fn($v, $d = 0) => round((float)$v, (int)$d);
         $this->filters['int'] = fn($v) => (int)$v;
         $this->filters['float'] = fn($v) => (float)$v;
-        $this->filters['number_format'] = fn($v, $d = 0) => number_format((float)$v, (int)$d);
+        // Twig signature: number_format(decimals=0, decimalPoint='.', thousandsSep=',')
+        // Defaults keep the current output ('1,234.50'); passing the 3rd/4th args
+        // enables localized formats, e.g. number_format(2, ',', '.') -> '1.234,50'.
+        $this->filters['number_format'] = fn($v, $d = 0, $decimalPoint = '.', $thousandsSep = ',')
+            => number_format((float)$v, (int)$d, (string)$decimalPoint, (string)$thousandsSep);
 
         // Date
         $this->filters['date'] = function($v, $format = 'Y-m-d') {
