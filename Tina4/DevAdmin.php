@@ -2028,8 +2028,13 @@ class DevAdmin
             if (!preg_match('#^[a-z0-9][a-z0-9._\-]*/[a-z0-9][a-z0-9._\-]*$#', $name)) {
                 return $response->json(['ok' => false, 'error' => 'invalid package name'], 400);
             }
+            // A dev/test dependency (phpunit, etc.) goes in require-dev, not
+            // runtime require — `composer require --dev` persists it there.
+            $dev = filter_var($body['dev'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $root = self::devAdminProjectRoot();
-            $cmd = 'cd ' . escapeshellarg($root) . ' && composer require ' . escapeshellarg($name) . ' 2>&1';
+            $cmd = 'cd ' . escapeshellarg($root) . ' && composer require '
+                . ($dev ? '--dev ' : '')
+                . escapeshellarg($name) . ' 2>&1';
             $output = shell_exec($cmd) ?? '';
             $ok = str_contains($output, 'Generating autoload files')
                || str_contains($output, 'Installs:');
