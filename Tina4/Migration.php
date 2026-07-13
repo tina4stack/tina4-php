@@ -887,7 +887,7 @@ class Migration
         }
 
         $note = $failedInV2 > 0
-            ? " ({$failedInV2} were marked passed=0 in v2 — review manually)"
+            ? " ({$failedInV2} were marked passed=0 in v2 - they will re-apply on the next migrate)"
             : '';
         Log::info(
             "v2→v3 tina4_migration upgrade complete: {$backfilled} rows backfilled{$note}"
@@ -965,6 +965,18 @@ class Migration
      */
     public function recordMigration(string $name, int $batch, int $passed = 1): void
     {
+        // Delete-before-insert: supersede any existing row for this
+        // migration_name first, so a leftover passed = 0 row (a prior failure,
+        // or one carried over by the v2 -> v3 upgrade) re-applies cleanly
+        // instead of colliding on the UNIQUE migration_name when the fresh
+        // passed = 1 row is inserted. DELETE + INSERT is portable across every
+        // engine (no UPSERT dialect variance). Invariant: the bookkeeping table
+        // holds AT MOST ONE row per migration_name - latest state wins.
+        $this->db->execute(
+            "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration_name = :migration_name",
+            [':migration_name' => $name]
+        );
+
         // Canonical columns written on every shape: migration_name, description,
         // batch, executed_at, passed. `executed_at` is an explicit ISO-8601 UTC
         // string (never a DB CURRENT_TIMESTAMP default); `description` is derived

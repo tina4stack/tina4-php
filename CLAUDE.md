@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.72 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.73 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -617,12 +617,27 @@ $migration->migrate(): array
   numeric/timestamp prefix logs a `Log::warning` (its order relative to the
   numbered files is undefined). Both `NNNNNN_name.sql` and `YYYYMMDDHHMMSS_name.sql`
   patterns sort correctly.
-- State is tracked by **row existence** in the `tina4_migration` table
-  (auto-created per engine): a migration runs once — if a row for it exists, it is
-  skipped. There is **no `passed` column** in the v3 PHP schema; a failed
-  migration is **never recorded** and nothing is deleted on failure — `migrate()`
-  collects the error and **stops** (the explicit `bin/tina4php migrate` CLI then
-  exits non-zero; it does not `passed=0` or `sys.exit` from inside the runner).
+- State is tracked in the `tina4_migration` table (auto-created per engine). The
+  canonical column set is `id, migration_name VARCHAR(500) NOT NULL UNIQUE,
+  description VARCHAR(500), batch INTEGER NOT NULL DEFAULT 1, executed_at
+  VARCHAR(50) NOT NULL, passed INTEGER NOT NULL DEFAULT 1` — identical across all
+  four Tina4 frameworks. A migration is **applied** when a row exists for it with
+  `passed = 1` (the applied-read is `WHERE passed = 1`). `migrate()` writes **only
+  `passed = 1` rows**: on a failure the file's transaction is rolled back and **no
+  row is written** for it (it is NOT recorded as `passed = 0`), nothing is deleted,
+  and `migrate()` collects the error and **stops** (the explicit `bin/tina4php
+  migrate` CLI then exits non-zero). The public `recordMigration($name, $batch,
+  $passed)` API can write a `passed = 0` row; any `passed = 0` row (including one
+  carried over from a v2 table) is treated as **not applied**, so it is reported
+  pending. A leftover `passed = 0` row (a prior failure, or one carried over from
+  a v2 table) re-applies cleanly on the next `migrate()`: the success path routes
+  through `recordMigration()`, which DELETEs any existing row for the
+  `migration_name` before writing the fresh `passed = 1` row (delete-before-insert),
+  so the stale `passed = 0` row is superseded instead of colliding on the unique
+  `migration_name`. The table therefore holds **at most one row per
+  `migration_name`** (latest state wins). The v2->v3 upgrade logs a note that any
+  `passed = 0` rows will re-apply on the next migrate. Already-applied files stay
+  applied — fix the bad file and re-run.
 - **Each migration FILE is wrapped in its own transaction** (`startTransaction()`
   … `commit()`): on a failure the file rolls back, the error is logged, and the
   run halts at that file. Already-applied files stay applied — fix the bad file
@@ -1195,7 +1210,7 @@ is authorised on the raw socket peer.
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive. Hardened: the stream stops cleanly on client disconnect (`connection_aborted()`) and a generator that raises mid-stream is logged via `Log::error` and ends cleanly — the request worker never crashes
-- Tests: 3,758 executed, 0 failures (112 skipped, 3 risky)
+- Tests: 2,878 executed, 0 failures (97 skipped, 1 risky)
 
 ## Links
 
