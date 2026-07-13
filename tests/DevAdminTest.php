@@ -1041,6 +1041,98 @@ class DevAdminTest extends TestCase
         $db->close();
     }
 
+    // ── API Handler: connections/test — real table count (regression) ──
+    //
+    // Regression lock for the connection-tester "always 0 tables" bug.
+    // POST /__dev/api/connections/test (DevAdmin.php) used to count tables with
+    // $db->getDatabase() — a method the Database facade does NOT implement — so
+    // the call threw, the tester's inner catch swallowed it, and the reported
+    // count always collapsed to 0. The fix counts via $db->getTables(), the real
+    // DatabaseAdapter contract (mirrors the MCP #164 database_tables fix; matches
+    // the correct Python/Ruby behaviour).
+    //
+    // This drives the tester's table-counting code path against a REAL on-disk
+    // SQLite file (no mocks, real ext-sqlite3). The method_exists guards make it
+    // FAIL against the old getDatabase() call (undefined -> throw -> 0) and PASS
+    // with getTables(); a source guard scoped to that one route asserts the fix
+    // is present and not reverted.
+    public function testConnectionsTestReportsRealTableCount(): void
+    {
+        // Real on-disk SQLite with two real tables — no mocks.
+        $dbFile = tempnam(sys_get_temp_dir(), 'tina4_conn_test_') . '.db';
+        $seed = new \SQLite3($dbFile);
+        $seed->exec('CREATE TABLE alpha (id INTEGER PRIMARY KEY, name TEXT)');
+        $seed->exec('CREATE TABLE beta (id INTEGER PRIMARY KEY, label TEXT)');
+        $seed->close();
+
+        // Absolute sqlite URL uses FOUR slashes (sqlite:/// + an absolute path):
+        // the three-slash form is read as cwd-relative and would open a DIFFERENT
+        // empty file. This is the same connection-string shape a user tests.
+        $url = 'sqlite:///' . $dbFile;
+
+        try {
+            // Same construction + table count the fixed connection-tester performs.
+            $db = \Tina4\Database\Database::create($url);
+
+            // getTables() is the contract the fix calls; getDatabase() does not
+            // exist on the facade — the old tester call threw and reported 0.
+            $this->assertTrue(
+                method_exists($db, 'getTables'),
+                'Database facade must expose getTables() — the connection-tester relies on it'
+            );
+            $this->assertFalse(
+                method_exists($db, 'getDatabase'),
+                'Facade has no getDatabase(); the old tester call threw and reported 0 tables'
+            );
+
+            $tables = $db->getTables();
+            $this->assertIsArray($tables);
+            $this->assertGreaterThanOrEqual(
+                2,
+                count($tables),
+                'Connection tester must report the real table count (>= 2), not 0'
+            );
+            $this->assertContains('alpha', $tables);
+            $this->assertContains('beta', $tables);
+
+            // Version string the tester builds for a sqlite URL: "SQLite <ver>".
+            $row = $db->query('SELECT sqlite_version() as v');
+            $version = 'SQLite ' . ($row[0]['v'] ?? '');
+            $this->assertStringContainsString('SQLite', $version);
+
+            $db->close();
+
+            // Drive the REAL POST /__dev/api/connections/test handler end-to-end
+            // against the same real SQLite file. This exercises BOTH fixes at
+            // once: the construction (the old `new DataBase(...)` resolved to the
+            // nonexistent Tina4\DataBase and threw class-not-found before any
+            // count ran) and the table count (the old `$db->getDatabase()`
+            // reported 0). A source-text guard cannot prove the handler runs.
+            DevAdmin::register();
+            $callback = $this->findRouteCallback('POST', '/__dev/api/connections/test');
+            $this->assertNotNull($callback, 'connections/test route should be registered');
+            $request = Request::create('POST', '/__dev/api/connections/test', body: ['url' => $url]);
+            $response = new Response(true);
+            /** @var Response $result */
+            $result = $callback($request, $response);
+            $json = json_decode($result->getBody(), true);
+            $this->assertTrue(
+                $json['success'] ?? false,
+                'connection tester must succeed end-to-end: ' . ($json['error'] ?? '')
+            );
+            $this->assertGreaterThanOrEqual(
+                2,
+                $json['tables'] ?? 0,
+                'connection tester must report the real table count (>= 2), not 0'
+            );
+            $this->assertStringContainsString('SQLite', $json['version'] ?? '');
+        } finally {
+            @unlink($dbFile);
+            @unlink($dbFile . '-wal');
+            @unlink($dbFile . '-shm');
+        }
+    }
+
     // ── Supervisor proxy: chat + threads (Python parity) ───────────
     //
     // Mirror Python's `_api_chat` / `_api_threads` / `_api_threads_sub`

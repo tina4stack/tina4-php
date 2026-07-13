@@ -1789,11 +1789,20 @@ class DevAdmin
                 return $response->json(['success' => false, 'error' => 'No connection URL provided']);
             }
             try {
-                $db = new DataBase($url, $username, $password);
+                // Use the Database factory (matches the other call sites in this
+                // file). `new DataBase(...)` resolved to the nonexistent
+                // Tina4\DataBase inside this namespace and threw class-not-found
+                // before the table count ran; positional ($url,$username,$password)
+                // also mis-slotted username into the $autoCommit parameter.
+                $db = \Tina4\Database\Database::create($url, username: $username, password: $password);
                 $version = 'Connected';
                 $tableCount = 0;
                 try {
-                    $tables = $db->getDatabase();
+                    // getTables() is the DatabaseAdapter contract that lists tables;
+                    // getDatabase() does not exist on the adapters (it threw here and
+                    // the connection tester always reported 0 tables). Matches the
+                    // MCP database_tables fix (#164) and Python/Ruby which were correct.
+                    $tables = $db->getTables();
                     $tableCount = is_array($tables) ? count($tables) : 0;
                 } catch (\Throwable $e) {
                     $tableCount = 0;
