@@ -589,6 +589,7 @@ class User extends \Tina4\ORM {
 5. All schema changes via migrations — never create tables in route code
 6. Use built-in features — never install packages for things Tina4 already provides
 7. Service pattern — complex logic in src/app/, routes stay thin
+8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
 
 ## Built-in Features
 
@@ -629,6 +630,7 @@ Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$r
 5. All schema changes via migrations — never create tables in route code
 6. Use built-in features — never install packages for things Tina4 already provides
 7. Service pattern — complex logic in src/app/, routes stay thin
+8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
 
 ## Built-in Features
 
@@ -692,6 +694,7 @@ class User extends \Tina4\ORM {
 5. All schema changes via migrations — never create tables in route code
 6. Use built-in features — never install packages for things Tina4 already provides
 7. Service pattern — complex logic in src/app/, routes stay thin
+8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
 
 ## Built-in Features
 
@@ -810,6 +813,7 @@ class User extends \Tina4\ORM {
 5. All schema changes via migrations — never create tables in route code
 6. Use built-in features — never install packages for things Tina4 already provides
 7. Service pattern — complex logic in src/app/, routes stay thin
+8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
 
 ## Built-in Features
 
@@ -887,6 +891,7 @@ class User extends \Tina4\ORM {
 5. All schema changes via migrations — never create tables in route code
 6. Use built-in features — never install packages for things Tina4 already provides
 7. Service pattern — complex logic in src/app/, routes stay thin
+8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
 
 ## Built-in Features
 
