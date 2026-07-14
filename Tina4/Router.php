@@ -770,7 +770,14 @@ class Router
             }
 
             // Path is genuinely unknown — try static file before 404.
-            $staticResponse = StaticFiles::tryServe($request->path, self::$basePath);
+            // Pass the conditional-request headers so a matching validator is
+            // answered with a cheap 304 instead of re-streaming the asset.
+            $staticResponse = StaticFiles::tryServe(
+                $request->path,
+                self::$basePath,
+                $request->headers['if-none-match'] ?? null,
+                $request->headers['if-modified-since'] ?? null
+            );
             if ($staticResponse !== null) {
                 return $staticResponse;
             }

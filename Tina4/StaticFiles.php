@@ -55,10 +55,21 @@ class StaticFiles
      * Try to serve a static file from the public directory.
      * Returns a Response if a file was found, or null if not.
      *
+     * A served asset always carries `Cache-Control: no-cache, must-revalidate`
+     * plus two validators — a weak `ETag` (from mtime + size) and a
+     * `Last-Modified` — so a browser may cache it but must revalidate before
+     * use: a redeployed asset reaches the browser on the next load without a
+     * manual hard refresh. When the incoming request revalidates with a
+     * matching `If-None-Match` (weak comparison, or `*`) — or an
+     * `If-Modified-Since` at least as new as the file — a bare `304 Not
+     * Modified` (no body) is returned instead of re-streaming the bytes.
+     *
      * @param string $path The request path (e.g. "/css/style.css")
      * @param string $basePath The application base path
+     * @param string|null $ifNoneMatch Incoming `If-None-Match` request header (null when absent)
+     * @param string|null $ifModifiedSince Incoming `If-Modified-Since` request header (null when absent)
      */
-    public static function tryServe(string $path, string $basePath = '.'): ?Response
+    public static function tryServe(string $path, string $basePath = '.', ?string $ifNoneMatch = null, ?string $ifModifiedSince = null): ?Response
     {
         // Security: reject directory traversal
         if (str_contains($path, '..')) {
@@ -117,12 +128,38 @@ class StaticFiles
                 $fileExtension = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
                 $contentType = self::getMimeType($fileExtension);
                 $fileSize = filesize($realPath);
+                $modifiedTime = filemtime($realPath);
+
+                // Validators: a weak ETag from mtime + size, and an HTTP-date
+                // Last-Modified. The asset may be cached but must be revalidated
+                // before use, so a redeployed file reaches the browser on the
+                // next load without a manual hard refresh.
+                $eTag = sprintf('W/"%d-%d"', $modifiedTime, $fileSize);
+                $lastModified = gmdate('D, d M Y H:i:s', $modifiedTime) . ' GMT';
+
+                // Conditional request — a matching validator means the browser
+                // already has this exact asset, so revalidation is a cheap 304
+                // round-trip rather than a re-download.
+                if (self::isNotModified($ifNoneMatch, $ifModifiedSince, $eTag, $modifiedTime)) {
+                    $notModified = new Response();
+                    $notModified->status(304);
+                    $notModified->header('Cache-Control', 'no-cache, must-revalidate');
+                    $notModified->header('ETag', $eTag);
+                    $notModified->header('Last-Modified', $lastModified);
+                    $notModified->setBody('');
+
+                    return $notModified;
+                }
+
                 $content = file_get_contents($realPath);
 
                 $response = new Response();
                 $response->status(200);
                 $response->header('Content-Type', $contentType);
                 $response->header('Content-Length', (string) $fileSize);
+                $response->header('Cache-Control', 'no-cache, must-revalidate');
+                $response->header('ETag', $eTag);
+                $response->header('Last-Modified', $lastModified);
                 $response->setBody($content);
 
                 return $response;
@@ -130,6 +167,73 @@ class StaticFiles
         }
 
         return null;
+    }
+
+    /**
+     * Decide whether a conditional request may be answered with 304 Not Modified.
+     *
+     * `If-None-Match` takes precedence over `If-Modified-Since` (RFC 7232 §6):
+     * when it is present its result is authoritative and the date is ignored.
+     *
+     * @param string|null $ifNoneMatch Incoming `If-None-Match` header (null when absent)
+     * @param string|null $ifModifiedSince Incoming `If-Modified-Since` header (null when absent)
+     * @param string $eTag The validator this response would carry
+     * @param int $modifiedTime The file's modification time (Unix timestamp)
+     * @return bool True when the client's cached copy is still current
+     */
+    private static function isNotModified(?string $ifNoneMatch, ?string $ifModifiedSince, string $eTag, int $modifiedTime): bool
+    {
+        if ($ifNoneMatch !== null && $ifNoneMatch !== '') {
+            return self::eTagMatches($ifNoneMatch, $eTag);
+        }
+
+        if ($ifModifiedSince !== null && $ifModifiedSince !== '') {
+            $since = strtotime($ifModifiedSince);
+            // 304 when the client's copy is at least as new as the file
+            // (If-Modified-Since >= Last-Modified).
+            return $since !== false && $modifiedTime <= $since;
+        }
+
+        return false;
+    }
+
+    /**
+     * Match an `If-None-Match` header value against our ETag.
+     *
+     * Uses weak comparison (RFC 7232 §3.2): an optional `W/` prefix is ignored
+     * on both sides. Accepts a comma-separated list of candidate tags and the
+     * wildcard `*`.
+     *
+     * @param string $ifNoneMatch The raw `If-None-Match` header value
+     * @param string $eTag The validator this response would carry
+     * @return bool True when any candidate tag matches (or is `*`)
+     */
+    private static function eTagMatches(string $ifNoneMatch, string $eTag): bool
+    {
+        $ourTag = self::stripWeakPrefix($eTag);
+
+        foreach (explode(',', $ifNoneMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '*') {
+                return true;
+            }
+            if (self::stripWeakPrefix($candidate) === $ourTag) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Strip an optional leading `W/` weak-validator prefix from an ETag.
+     *
+     * @param string $eTag The ETag value (possibly weak, e.g. `W/"abc"`)
+     * @return string The ETag with any `W/` prefix removed
+     */
+    private static function stripWeakPrefix(string $eTag): string
+    {
+        return str_starts_with($eTag, 'W/') ? substr($eTag, 2) : $eTag;
     }
 
     /**
