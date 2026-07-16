@@ -592,6 +592,27 @@ class Router
             }
             $sessionName = getenv('TINA4_PHP_SESSION_NAME') ?: 'PHPSESSID';
             session_name($sessionName);
+
+            // Harden the cookie BEFORE session_start() emits it. PHP's ini
+            // defaults (session.cookie_httponly=0, cookie_samesite="",
+            // cookie_secure=0) ship a bare `PHPSESSID=...; path=/` that is
+            // readable by any XSS and sent on cross-site requests — and $_SESSION
+            // is exactly where an app keeps auth state. Mirror the attributes the
+            // tina4_session cookie already sets below; lifetime/path/domain are
+            // carried over from ini so the cookie's scope is unchanged.
+            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+            // SameSite=None requires Secure — browsers reject it otherwise.
+            $nativeSecure = strcasecmp($sameSite, 'None') === 0
+                || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            $cookieParams = session_get_cookie_params();
+            session_set_cookie_params([
+                'lifetime' => $cookieParams['lifetime'],
+                'path' => $cookieParams['path'],
+                'domain' => $cookieParams['domain'],
+                'secure' => $nativeSecure,
+                'httponly' => true,
+                'samesite' => $sameSite,
+            ]);
             @session_start();
         }
 

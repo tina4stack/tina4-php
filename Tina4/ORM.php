@@ -999,24 +999,20 @@ abstract class ORM
     /**
      * Convert the model to a dictionary (associative array).
      *
+     * This is the canonical serializer: toAssoc(), toObject(), toJson() and the
+     * Response auto-serialization all delegate here. It is NOT deprecated.
+     *
+     * Keys are snake_case by default, matching the DB columns and the Python and
+     * Ruby implementations (`to_dict`/`to_h`). Before 3.11.22 the default was
+     * camelCase; pass $case='camel' for the old key casing.
+     *
      * Optionally includes relationships via dot notation:
      *   $user->toDict(['posts', 'profile'])
      *   $user->toDict(['posts.comments'])
      *
      * @param array<string>|null $include Relationship names to include (supports dot notation for nesting)
+     * @param string             $case    Key casing: 'snake' (default, matches Python/Ruby/DB columns) or 'camel' (PHP property names)
      * @return array<string, mixed>
-     */
-    /** @return array<string, mixed> */
-    /**
-     * Convert to associative array.
-     *
-     * @param array|null $include  Relationships to eager-load
-     * @param string     $case     Key casing: 'snake' (default — matches Python/Ruby/DB columns), 'camel' (PHP property names)
-     * @return array<string, mixed>
-     *
-     * @deprecated since 3.11.22 — default $case changed from 'camel' to 'snake' to match
-     *             Python (tina4_python.orm.ORM.to_dict) and Ruby. Pass $case='camel' to keep
-     *             camelCase keys.
      */
     public function toDict(?array $include = null, string $case = 'snake'): array
     {
