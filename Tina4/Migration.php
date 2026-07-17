@@ -338,6 +338,14 @@ class Migration
     /**
      * Get the list of pending migration files.
      *
+     * A file is pending unless the bookkeeping table records it as applied.
+     * Applied means a row with `passed = 1`, keyed on `migration_name` — or, on
+     * a table still carrying the legacy `migration_id` column, on the 14-char
+     * timestamp prefix that was the v2 identifier (where a NULL `passed` also
+     * counts as applied, as the in-place upgrade reads it). A `passed = 0` row
+     * is not applied under either key, so its migration is reported pending and
+     * re-applies on the next `migrate()`.
+     *
      * @return array<string> Full file paths
      */
     public function getPendingMigrations(): array
@@ -350,9 +358,22 @@ class Migration
         // `migration` backfill did not resolve to the current filename — still
         // records that the migration ran; matching the prefix stops it being
         // re-applied. Keyed as prefix => true for O(1) lookup.
+        //
+        // Only a row that does NOT record a failure suppresses its file. Without
+        // this a `passed = 0` row is excluded from the applied set yet still
+        // matched here, leaving its migration neither applied nor pending —
+        // invisible, and held out of the run solely by a legacy column that is
+        // slated for removal (#129).
+        //
+        // A NULL `passed` counts as applied, matching how the in-place upgrade
+        // reads legacy rows ("existing rows were only ever written when
+        // applied"): the v2 shape declares `passed INTEGER` with no default, and
+        // only the older-v3 upgrade path backfills NULL -> 1, so a v2-upgraded
+        // table can still hold NULLs here. COALESCE keeps them suppressed rather
+        // than silently re-running them.
         $appliedPrefixes = [];
         if ($this->hasLegacyMigrationIdColumn()) {
-            foreach ($this->queryLower("SELECT migration_id FROM " . self::MIGRATIONS_TABLE) as $row) {
+            foreach ($this->queryLower("SELECT migration_id FROM " . self::MIGRATIONS_TABLE . " WHERE COALESCE(passed, 1) <> 0") as $row) {
                 $prefix = trim((string) ($row['migration_id'] ?? ''));
                 if ($prefix !== '') {
                     $appliedPrefixes[$prefix] = true;
