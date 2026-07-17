@@ -124,6 +124,8 @@
             <file>tests/DocStoreTest.php</file>
             <file>tests/ApiTest.php</file>
             <file>tests/ApiTransferTest.php</file>
+            <file>tests/BackgroundOverlapTest.php</file>
+            <file>tests/SessionCookieAttributesTest.php</file>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>

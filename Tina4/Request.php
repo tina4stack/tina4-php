@@ -94,6 +94,37 @@ class Request
     /**
      * Create a Request from PHP superglobals (convenience factory).
      */
+    /**
+     * Is this request HTTPS from the CLIENT's point of view?
+     *
+     * TLS is normally terminated at a proxy (nginx, HAProxy, ALB, Cloudflare,
+     * most container deploys) which then forwards plain HTTP to PHP. So
+     * $_SERVER['HTTPS'] is unset on exactly the deployments that ARE encrypted,
+     * and it cannot be the only signal: x-forwarded-proto carries the scheme
+     * the client actually used.
+     *
+     * This is the single source of truth for the URL scheme AND for the Secure
+     * flag on both session cookies. They used to decide it independently and
+     * disagreed, so $request->url said https:// while the cookies concluded
+     * plain HTTP and dropped Secure (tina4-php#175).
+     *
+     * @param string|null $forwardedProto Forwarded proto when the caller already
+     *                                    has parsed headers; pass '' for "absent".
+     *                                    Null reads $_SERVER (a real request).
+     * @return bool True when the client's scheme is https.
+     */
+    public static function isSecureScheme(?string $forwardedProto = null): bool
+    {
+        $forwarded = $forwardedProto ?? (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
+        if ($forwarded !== '') {
+            // A chain of proxies appends each hop: "https, http". The FIRST is
+            // the client-facing one, which is the scheme the browser used.
+            return strcasecmp(trim(explode(',', $forwarded)[0]), 'https') === 0;
+        }
+        $https = (string)($_SERVER['HTTPS'] ?? '');
+        return $https !== '' && strcasecmp($https, 'off') !== 0;
+    }
+
     public static function fromGlobals(): self
     {
         return new self();
@@ -180,8 +211,9 @@ class Request
         // Reconstruct the full absolute URL (scheme://host[:port]/path[?query]).
         // Honours x-forwarded-proto / x-forwarded-host so apps behind a proxy
         // still see the URL the client actually used. Matches Python/Ruby/Node parity.
-        $scheme = $this->headers['x-forwarded-proto']
-            ?? ((($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+        $scheme = self::isSecureScheme((string)($this->headers['x-forwarded-proto'] ?? ''))
+            ? 'https'
+            : 'http';
         $host = $this->headers['x-forwarded-host']
             ?? ($this->headers['host'] ?? ($_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost')));
         $url = "{$scheme}://{$host}{$this->path}";

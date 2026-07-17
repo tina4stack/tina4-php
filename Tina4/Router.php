@@ -601,9 +601,13 @@ class Router
             // tina4_session cookie already sets below; lifetime/path/domain are
             // carried over from ini so the cookie's scope is unchanged.
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-            // SameSite=None requires Secure — browsers reject it otherwise.
-            $nativeSecure = strcasecmp($sameSite, 'None') === 0
-                || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            // Secure when: explicitly asked for, forced by SameSite=None (browsers
+            // reject None without Secure), or the client is really on https.
+            // Request::isSecureScheme() honours x-forwarded-proto, so a TLS-
+            // terminating proxy no longer reads as plain HTTP (#175).
+            $nativeSecure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
+                || strcasecmp($sameSite, 'None') === 0
+                || Request::isSecureScheme();
             $cookieParams = session_get_cookie_params();
             session_set_cookie_params([
                 'lifetime' => $cookieParams['lifetime'],
@@ -641,8 +645,12 @@ class Router
         if ($sid && $sid !== $sessionCookie) {
             $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-            // SameSite=None requires the Secure flag — browsers reject it otherwise
-            $secure = strcasecmp($sameSite, 'None') === 0 || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            // Same rule as the native PHPSESSID cookie above: explicit opt-in,
+            // forced by SameSite=None, or the client is really on https (which
+            // Request::isSecureScheme() detects through a TLS proxy, #175).
+            $secure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
+                || strcasecmp($sameSite, 'None') === 0
+                || Request::isSecureScheme();
 
             if (headers_sent()) {
                 // Built-in server mode: headers are managed via the Response object,
