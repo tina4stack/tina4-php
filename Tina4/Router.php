@@ -602,8 +602,9 @@ class Router
             // carried over from ini so the cookie's scope is unchanged.
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
             // SameSite=None requires Secure — browsers reject it otherwise.
-            $nativeSecure = strcasecmp($sameSite, 'None') === 0
-                || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            // $request->isSecure() honours x-forwarded-proto, so the flag is set
+            // on a TLS-terminating proxy where $_SERVER['HTTPS'] is never set.
+            $nativeSecure = strcasecmp($sameSite, 'None') === 0 || $request->isSecure();
             $cookieParams = session_get_cookie_params();
             session_set_cookie_params([
                 'lifetime' => $cookieParams['lifetime'],
@@ -642,7 +643,7 @@ class Router
             $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
             // SameSite=None requires the Secure flag — browsers reject it otherwise
-            $secure = strcasecmp($sameSite, 'None') === 0 || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            $secure = strcasecmp($sameSite, 'None') === 0 || $request->isSecure();
 
             if (headers_sent()) {
                 // Built-in server mode: headers are managed via the Response object,

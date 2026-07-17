@@ -90,10 +90,17 @@ class SessionCookieAttributesTest extends TestCase
         throw new RuntimeException('php -S did not come up on port ' . $port);
     }
 
-    /** @return string[] Every Set-Cookie header line from a real GET /. */
-    private function fetchSetCookies(): array
+    /**
+     * @param string[] $headers Extra request header lines to send.
+     * @return string[] Every Set-Cookie header line from a real GET /.
+     */
+    private function fetchSetCookies(array $headers = []): array
     {
-        $ctx = stream_context_create(['http' => ['method' => 'GET', 'ignore_errors' => true]]);
+        $http = ['method' => 'GET', 'ignore_errors' => true];
+        if ($headers !== []) {
+            $http['header'] = implode("\r\n", $headers);
+        }
+        $ctx = stream_context_create(['http' => $http]);
         $body = @file_get_contents('http://127.0.0.1:' . self::$server[1] . '/', false, $ctx);
         $this->assertNotFalse($body, 'the clean-room app must respond');
         $cookies = [];
@@ -163,6 +170,67 @@ class SessionCookieAttributesTest extends TestCase
             '/;\s*Secure/i',
             $native,
             'Secure must not be set on plain HTTP with the default SameSite=Lax — ' . $native
+        );
+    }
+
+    /**
+     * Security regression for tina4stack/tina4-php#175.
+     *
+     * TLS terminated at a proxy means the SAPI only ever sees the plaintext hop,
+     * so $_SERVER['HTTPS'] is unset and both cookies went out without Secure on a
+     * genuinely HTTPS request — leaving them sendable over plaintext, where an
+     * active network attacker can strip TLS and capture them. Request::isSecure()
+     * reads x-forwarded-proto, which Request already trusted for $request->url.
+     *
+     * @return string[] Both Set-Cookie lines behind a simulated TLS proxy.
+     */
+    private function fetchSetCookiesBehindTlsProxy(): array
+    {
+        return $this->fetchSetCookies(['X-Forwarded-Proto: https']);
+    }
+
+    public function testCookiesAreSecureBehindTlsTerminatingProxy(): void
+    {
+        $cookies = $this->fetchSetCookiesBehindTlsProxy();
+        foreach (['PHPSESSID', 'tina4_session'] as $name) {
+            $cookie = $this->cookieNamed($cookies, $name);
+            $this->assertNotNull($cookie, "{$name} must be emitted");
+            $this->assertMatchesRegularExpression(
+                '/;\s*Secure/i',
+                $cookie,
+                "{$name} must carry Secure when x-forwarded-proto says the client used https, "
+                    . 'otherwise it can be sent over plaintext and stripped — ' . $cookie
+            );
+        }
+    }
+
+    public function testForwardedProtoHttpDoesNotForceSecure(): void
+    {
+        // A proxy that terminates plain HTTP must not produce a Secure cookie —
+        // that would make the cookie undeliverable to the client.
+        $cookies = $this->fetchSetCookies(['X-Forwarded-Proto: http']);
+        foreach (['PHPSESSID', 'tina4_session'] as $name) {
+            $cookie = $this->cookieNamed($cookies, $name);
+            $this->assertNotNull($cookie);
+            $this->assertDoesNotMatchRegularExpression(
+                '/;\s*Secure/i',
+                $cookie,
+                "{$name} must not be Secure when the client-facing scheme is http — " . $cookie
+            );
+        }
+    }
+
+    public function testForwardedProtoChainUsesClientFacingHop(): void
+    {
+        // Multi-proxy chains forward a comma-separated list; the FIRST entry is
+        // the scheme the client actually used.
+        $cookies = $this->fetchSetCookies(['X-Forwarded-Proto: https, http']);
+        $native = $this->cookieNamed($cookies, 'PHPSESSID');
+        $this->assertNotNull($native);
+        $this->assertMatchesRegularExpression(
+            '/;\s*Secure/i',
+            $native,
+            'the client-facing hop (https) decides the flag, not a later internal hop — ' . $native
         );
     }
 }

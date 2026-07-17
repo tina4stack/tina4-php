@@ -180,8 +180,7 @@ class Request
         // Reconstruct the full absolute URL (scheme://host[:port]/path[?query]).
         // Honours x-forwarded-proto / x-forwarded-host so apps behind a proxy
         // still see the URL the client actually used. Matches Python/Ruby/Node parity.
-        $scheme = $this->headers['x-forwarded-proto']
-            ?? ((($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+        $scheme = $this->isSecure() ? 'https' : 'http';
         $host = $this->headers['x-forwarded-host']
             ?? ($this->headers['host'] ?? ($_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost')));
         $url = "{$scheme}://{$host}{$this->path}";
@@ -298,6 +297,29 @@ class Request
             }
         }
         return $result;
+    }
+
+    /**
+     * Determines whether the client reached this request over HTTPS.
+     *
+     * Prefers the x-forwarded-proto header so a TLS-terminating proxy (nginx,
+     * HAProxy, an ALB, Cloudflare) reports the scheme the CLIENT used — the SAPI
+     * only sees the plaintext hop behind such a proxy, leaving $_SERVER['HTTPS']
+     * unset. Falls back to $_SERVER['HTTPS'] when no proxy header is present.
+     * A proxy chain may forward a comma-separated list; the first entry is the
+     * client-facing hop.
+     *
+     * @return bool True when the client-facing scheme is https.
+     */
+    public function isSecure(): bool
+    {
+        $forwarded = $this->headers['x-forwarded-proto'] ?? null;
+        if ($forwarded !== null && trim((string)$forwarded) !== '') {
+            $first = trim(explode(',', (string)$forwarded)[0]);
+            return strcasecmp($first, 'https') === 0;
+        }
+
+        return ($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off';
     }
 
     /**
