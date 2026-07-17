@@ -288,4 +288,151 @@ class MigrationPassedColumnTest extends TestCase
         // Its effect table is untouched (not dropped / not recreated).
         $this->assertTrue($this->db->tableExists('v2_applied_effect'));
     }
+
+    // -----------------------------------------------------------------
+    // 5. On a table that RETAINS `migration_id`, a passed = 0 row whose
+    //    file IS on disk is still reported pending and re-applies.
+    //
+    //    Test 3 pins the same contract on a fresh v3 table, which has no
+    //    `migration_id` column, so the legacy prefix lookup never engages.
+    //    Test 4 keeps its passed = 0 row's file deliberately absent. This
+    //    covers the combination both leave out — and it is the shape a real
+    //    v2 -> v3 in-place upgrade produces.
+    // -----------------------------------------------------------------
+
+    public function testPassedZeroRowOnLegacyMigrationIdTableIsPendingAndReApplies(): void
+    {
+        // The PHP v2 shape exactly as tina4-php ^2.x created it.
+        $this->db->execute(
+            "CREATE TABLE tina4_migration (
+                migration_id VARCHAR(14) NOT NULL PRIMARY KEY,
+                description VARCHAR(1000),
+                content BLOB,
+                passed INTEGER
+            )"
+        );
+
+        // A passed = 0 row whose file IS present: the migration did not complete,
+        // so its effect table does not exist and it must run again.
+        $fileName = '20240103000000_create_widgets.sql';
+        $this->db->execute(
+            "INSERT INTO tina4_migration (migration_id, description, passed) VALUES ('20240103000000', 'create widgets', 0)"
+        );
+        file_put_contents(
+            $this->migrationsDir . '/' . $fileName,
+            'CREATE TABLE widgets (id INTEGER PRIMARY KEY)'
+        );
+
+        // Constructing the runner performs the in-place v2 -> v3 upgrade.
+        $migration = new Migration($this->db, $this->migrationsDir);
+
+        // Precondition: the legacy prefix column survives the upgrade, which is
+        // what makes this shape different from a fresh v3 table.
+        $this->assertContains('migration_id', $this->trackingColumns());
+        $this->assertSame(0, $this->passedFor($fileName), 'precondition: the row is still passed = 0 after the upgrade');
+
+        // NOT applied — getAppliedMigrations reads WHERE passed = 1.
+        $appliedNames = array_column($migration->getAppliedMigrations(), 'migration_name');
+        $this->assertNotContains($fileName, $appliedNames, 'a passed = 0 row must NOT count as applied');
+
+        // IS pending. Previously the legacy prefix lookup matched this row
+        // regardless of `passed`, so the file was neither applied nor pending —
+        // held out of the run only by `migration_id`.
+        $pending = array_map('basename', $migration->getPendingMigrations());
+        $this->assertContains($fileName, $pending, 'a passed = 0 migration must be pending even when migration_id is present');
+        $this->assertFalse($this->db->tableExists('widgets'), 'precondition: the migration has not run');
+
+        // It re-applies cleanly, and the stale row is superseded rather than duplicated.
+        $result = $migration->migrate();
+        $this->assertContains($fileName, $result['applied'], 'the passed = 0 migration must re-apply');
+        $this->assertSame([], $result['errors'], 'a clean re-apply must report no errors');
+        $this->assertTrue($this->db->tableExists('widgets'), 'the re-apply must have created its DDL');
+        $this->assertSame(1, $this->passedFor($fileName), 'the surviving row must be passed = 1');
+        $this->assertNotContains($fileName, array_map('basename', $migration->getPendingMigrations()));
+    }
+
+    // -----------------------------------------------------------------
+    // 6. The prefix lookup still suppresses a passed = 1 legacy row —
+    //    narrowing it to passed = 1 must not re-run applied migrations.
+    // -----------------------------------------------------------------
+
+    public function testPassedOneLegacyRowStillSuppressesItsFileByPrefix(): void
+    {
+        $this->db->execute(
+            "CREATE TABLE tina4_migration (
+                migration_id VARCHAR(14) NOT NULL PRIMARY KEY,
+                description VARCHAR(1000),
+                content BLOB,
+                passed INTEGER
+            )"
+        );
+
+        // An applied v2 row whose file on disk is named DIFFERENTLY from the
+        // description, so only the 14-char prefix can match it. Re-running it
+        // would fail: its effect table already exists.
+        $fileName = '20240104000000_create_sprockets.sql';
+        $this->db->execute(
+            "INSERT INTO tina4_migration (migration_id, description, passed) VALUES ('20240104000000', 'legacy name', 1)"
+        );
+        $this->db->execute('CREATE TABLE sprockets (id INTEGER PRIMARY KEY)');
+        file_put_contents(
+            $this->migrationsDir . '/' . $fileName,
+            'CREATE TABLE sprockets (id INTEGER PRIMARY KEY)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+
+        $pending = array_map('basename', $migration->getPendingMigrations());
+        $this->assertNotContains($fileName, $pending, 'an applied legacy row must still suppress its file by prefix');
+
+        $result = $migration->migrate();
+        $this->assertSame([], $result['errors'], 'the applied migration must not be re-run into an error');
+        $this->assertNotContains($fileName, $result['applied']);
+    }
+
+    // -----------------------------------------------------------------
+    // 7. A legacy row with a NULL `passed` still suppresses its file.
+    //
+    //    The v2 shape declares `passed INTEGER` with no default, and only
+    //    the older-v3 upgrade path backfills NULL -> 1, so a v2-upgraded
+    //    table can still hold NULLs. The upgrade reads a legacy row as
+    //    applied ("existing rows were only ever written when applied"), so
+    //    an unknown `passed` must NOT re-run the migration.
+    // -----------------------------------------------------------------
+
+    public function testNullPassedLegacyRowStillSuppressesItsFileByPrefix(): void
+    {
+        $this->db->execute(
+            "CREATE TABLE tina4_migration (
+                migration_id VARCHAR(14) NOT NULL PRIMARY KEY,
+                description VARCHAR(1000),
+                content BLOB,
+                passed INTEGER
+            )"
+        );
+
+        // passed left NULL — the v2 column has no default.
+        $fileName = '20240105000000_create_cogs.sql';
+        $this->db->execute(
+            "INSERT INTO tina4_migration (migration_id, description, passed) VALUES ('20240105000000', 'create cogs', NULL)"
+        );
+        $this->db->execute('CREATE TABLE cogs (id INTEGER PRIMARY KEY)');
+        file_put_contents(
+            $this->migrationsDir . '/' . $fileName,
+            'CREATE TABLE cogs (id INTEGER PRIMARY KEY)'
+        );
+
+        $migration = new Migration($this->db, $this->migrationsDir);
+
+        $pending = array_map('basename', $migration->getPendingMigrations());
+        $this->assertNotContains(
+            $fileName,
+            $pending,
+            'a NULL passed legacy row must not be re-run — only passed = 0 records a failure'
+        );
+
+        $result = $migration->migrate();
+        $this->assertSame([], $result['errors']);
+        $this->assertNotContains($fileName, $result['applied']);
+    }
 }
