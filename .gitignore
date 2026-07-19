@@ -21,6 +21,10 @@ tests/tests/functional/
 /migrations/
 /.env.test
 test.php
+# The unanchored "test.php" rule matches Tina4/Test.php case-insensitively (macOS
+# git), which silently kept the shipped xUnit base class \Tina4\Test out of the
+# package since 3.13.0. Re-include it explicitly.
+!Tina4/Test.php
 /src/assets/css/default.css
 /messages.mo
 /messages.po
