@@ -20,112 +20,20 @@
             <file>tests/FrondTest.php</file>
         </testsuite>
         <testsuite name="Tina4 v3 Tests">
-            <file>tests/DotEnvTest.php</file>
-            <file>tests/EnvVarTest.php</file>
-            <file>tests/LogTest.php</file>
-            <file>tests/CorsTest.php</file>
-            <file>tests/RateLimiterTest.php</file>
-            <file>tests/HealthTest.php</file>
-            <file>tests/DatabaseUrlTest.php</file>
-            <file>tests/RequestV3Test.php</file>
-            <file>tests/ResponseV3Test.php</file>
-            <file>tests/ResponseAutoSerializeTest.php</file>
-            <file>tests/OrmConstructTest.php</file>
-            <file>tests/OrmBindDatabaseTest.php</file>
-            <file>tests/RouterV3Test.php</file>
-            <file>tests/RouterSessionStartTest.php</file>
-            <file>tests/MiddlewareTest.php</file>
-            <file>tests/RouteDiscoveryV3Test.php</file>
-            <file>tests/RouteDiscoveryReloadTest.php</file>
-            <file>tests/DualPortReloadTest.php</file>
-            <file>tests/SQLite3AdapterTest.php</file>
-            <file>tests/DatabaseDriversTest.php</file>
-            <file>tests/BatchInsertTest.php</file>
-            <file>tests/ORMV3Test.php</file>
-            <file>tests/AutoCrudV3Test.php</file>
-            <file>tests/MigrationV3Test.php</file>
-            <file>tests/AuthV3Test.php</file>
-            <file>tests/SessionV3Test.php</file>
-            <file>tests/I18nV3Test.php</file>
-            <file>tests/SeederV3Test.php</file>
-            <file>tests/ScssV3Test.php</file>
-            <file>tests/QueueV3Test.php</file>
-            <file>tests/GraphQLV3Test.php</file>
-            <file>tests/WebSocketV3Test.php</file>
-            <file>tests/WebSocketHardeningTest.php</file>
-            <file>tests/ServiceRunnerV3Test.php</file>
-            <file>tests/SqlTranslationTest.php</file>
-            <file>tests/ResponseCacheTest.php</file>
-            <file>tests/CacheBackendsTest.php</file>
-            <file>tests/ContainerTest.php</file>
-            <file>tests/QueueBackendTest.php</file>
-            <file>tests/MongoQueueDeadLetterLiveTest.php</file>
-            <file>tests/RabbitMQIntegrationTest.php</file>
-            <file>tests/KafkaIntegrationTest.php</file>
-            <file>tests/SessionHandlerTest.php</file>
-            <file>tests/AITest.php</file>
-            <file>tests/ErrorOverlayTest.php</file>
-            <file>tests/EventsTest.php</file>
-            <file>tests/FormTokenTest.php</file>
-            <file>tests/HtmlElementTest.php</file>
-            <file>tests/PostProtectionTest.php</file>
-            <file>tests/SwaggerTest.php</file>
-            <file>tests/WsdlTest.php</file>
-            <file>tests/MessengerTest.php</file>
-            <file>tests/DevAdminTest.php</file>
-            <file>tests/ContextTest.php</file>
-            <file>tests/ContextReloadReindexTest.php</file>
-            <file>tests/PortConfigTest.php</file>
-            <file>tests/TemplateMethodTest.php</file>
-            <file>tests/FakeDataTest.php</file>
-            <file>tests/CacheTest.php</file>
-            <file>tests/DevMailboxTest.php</file>
-            <file>tests/StaticFilesTest.php</file>
-            <file>tests/MetricsTest.php</file>
-            <file>tests/MetricsCliTest.php</file>
-            <file>tests/CLIScaffoldingTest.php</file>
-            <file>tests/CLIScaffoldingSecureTest.php</file>
-            <file>tests/CliGenerateCoemitsTest.php</file>
-            <file>tests/CommandsManifestTest.php</file>
-            <file>tests/CliQueueTest.php</file>
-            <file>tests/CliBuildTest.php</file>
-            <file>tests/CsrfMiddlewareTest.php</file>
-            <file>tests/GalleryTest.php</file>
-            <file>tests/LiveReloadTest.php</file>
-            <file>tests/Issue106Test.php</file>
-            <file>tests/Issue135Test.php</file>
-            <file>tests/Issue114Test.php</file>
-            <file>tests/Issue115Test.php</file>
-            <file>tests/BookIssue139Test.php</file>
-            <file>tests/SqlTranslationNamedToPositionalTest.php</file>
-            <file>tests/CorsIntegrationTest.php</file>
-            <file>tests/I18nLeafAliasTest.php</file>
-            <file>tests/LandingPageTest.php</file>
-            <file>tests/PostgresUuidPkTest.php</file>
-            <file>tests/CreateTablePostgresTest.php</file>
-            <file>tests/OrmQueryBuilderBugsPostgresTest.php</file>
-            <file>tests/ExecuteFailurePostgresTest.php</file>
-            <file>tests/ExecuteRaisesTest.php</file>
-            <file>tests/PdoFallbackParityTest.php</file>
-            <file>tests/PdoFallbackFactoryTest.php</file>
-            <file>tests/PdoFirebirdAdapterTest.php</file>
-            <file>tests/FirebirdWriteVisibilityTest.php</file>
-            <file>tests/BooleanParamBindingTest.php</file>
-            <file>tests/FirebirdNullParamBindingTest.php</file>
-            <file>tests/PlanListTest.php</file>
-            <file>tests/SqlNormalizerTest.php</file>
-            <file>tests/ServerLargeResponseTest.php</file>
-            <file>tests/RequestLoggingTest.php</file>
-            <file>tests/LegacyEnvGuardTest.php</file>
-            <file>tests/SchemaQualifiedTest.php</file>
-            <file>tests/DbQueryCacheTest.php</file>
-            <file>tests/DbContractAbcTest.php</file>
-            <file>tests/DbContractsTest.php</file>
-            <file>tests/DocStoreTest.php</file>
-            <file>tests/ApiTest.php</file>
-            <file>tests/ApiTransferTest.php</file>
-            <file>tests/BackgroundOverlapTest.php</file>
-            <file>tests/SessionCookieAttributesTest.php</file>
+            <!--
+              Directory discovery (parity with Python testpaths / Ruby rspec /
+              Node readdirSync): every tests/*Test.php is collected automatically,
+              so a new test file gates CI the moment it lands. The old hand-kept
+              <file> list silently dropped 78 of 186 classes from CI - including
+              SessionCookieAttributesTest, the #174 security regression
+              (tina4-php#178). The FrondTest and SmokeTest suites below own those
+              two files, so they are excluded here to avoid running twice.
+              ConfiguredTestFilesTest guards this so a file can never fall out of
+              CI again.
+            -->
+            <directory suffix="Test.php">tests</directory>
+            <exclude>tests/FrondTest.php</exclude>
+            <exclude>tests/SmokeTest.php</exclude>
         </testsuite>
         <testsuite name="Tina4 Smoke Test">
             <file>tests/SmokeTest.php</file>
