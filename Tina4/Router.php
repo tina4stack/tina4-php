@@ -623,7 +623,16 @@ class Router
         // Auto-start Tina4's own session — read session ID from cookie,
         // lazy-create on first use. This is independent of $_SESSION
         // above; both share nothing but coexist without conflict.
-        $sessionCookie = $_COOKIE['tina4_session'] ?? null;
+        //
+        // Read the incoming cookie by the SAME configured name the write side
+        // emits (TINA4_SESSION_NAME, default tina4_session) via
+        // Session::cookieName() — the one shared resolver. Reading a hardcoded
+        // "tina4_session" here while the write side honoured the env name meant a
+        // renamed cookie was written but never read back, so the session silently
+        // never resumed. $_COOKIE is keyed on the exact cookie name, so this is an
+        // exact-name match (a renamed "tina4_session_foo" can never collide).
+        $sessionCookieName = Session::cookieName();
+        $sessionCookie = $_COOKIE[$sessionCookieName] ?? null;
         $session = new Session();
         $session->start($sessionCookie);
         $request->session = $session;
@@ -657,14 +666,14 @@ class Router
                 // so setcookie() would trigger a fatal error. Build the Set-Cookie
                 // header manually and attach it to the Response instead.
                 $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
-                $cookie = "tina4_session={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
+                $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
                 if ($secure) {
                     $cookie .= '; Secure';
                 }
                 $result->header('Set-Cookie', $cookie);
             } else {
                 // Apache/nginx/FPM mode: use PHP's native setcookie()
-                setcookie('tina4_session', $sid, [
+                setcookie($sessionCookieName, $sid, [
                     'expires' => time() + $ttl,
                     'path' => '/',
                     'httponly' => true,

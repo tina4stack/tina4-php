@@ -259,23 +259,45 @@ class Session
     }
 
     /**
+     * Resolve the session cookie name — the single source of truth shared by the
+     * WRITE side (the Set-Cookie emitted in Router::dispatch and this class's
+     * cookieHeader) and the READ side (the incoming-cookie parse in
+     * Router::dispatch), so a cookie written under a renamed name is read back on
+     * the next request.
+     *
+     *   TINA4_SESSION_NAME   cookie name (default: "tina4_session")
+     *
+     * Keeping the name in one place means the default can never drift between the
+     * two sides: setting TINA4_SESSION_NAME renames the cookie on both the emit
+     * and the parse paths at once. A blank/unset value falls back to the default.
+     *
+     * @return string The configured session cookie name, or "tina4_session".
+     */
+    public static function cookieName(): string
+    {
+        $envName = DotEnv::getEnv('TINA4_SESSION_NAME');
+        if ($envName !== null && $envName !== '') {
+            return $envName;
+        }
+        return 'tina4_session';
+    }
+
+    /**
      * Return a Set-Cookie header value for this session.
      *
-     * Env var overrides (only consulted when the caller passes the default
-     * cookie name "tina4_session" — explicit names from callers always win):
-     *   TINA4_SESSION_NAME      — cookie name (default: "tina4_session")
+     * Env var overrides (the cookie name is only consulted when the caller keeps
+     * the default "tina4_session" — an explicit name from a caller always wins):
+     *   TINA4_SESSION_NAME      — cookie name (default: "tina4_session"), resolved by cookieName()
      *   TINA4_SESSION_HTTPONLY  — emit HttpOnly attr (default: "true")
      *   TINA4_SESSION_SECURE    — emit Secure attr (default: "false"; SameSite=None forces it on)
      *   TINA4_SESSION_SAMESITE  — SameSite attr (default: "Lax")
      */
     public function cookieHeader(string $cookieName = 'tina4_session'): string
     {
-        // Honor env-defined cookie name only if the caller didn't override.
+        // Honor env-defined cookie name only if the caller didn't override — the
+        // name resolves through the one shared resolver used by the read side too.
         if ($cookieName === 'tina4_session') {
-            $envName = DotEnv::getEnv('TINA4_SESSION_NAME');
-            if ($envName !== null && $envName !== '') {
-                $cookieName = $envName;
-            }
+            $cookieName = self::cookieName();
         }
 
         $sameSite = DotEnv::getEnv('TINA4_SESSION_SAMESITE') ?: 'Lax';
