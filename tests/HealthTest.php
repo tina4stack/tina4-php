@@ -25,7 +25,11 @@ class HealthTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->app !== null) {
-            restore_error_handler();
+            // Release the App's global error/exception handlers inside this test's
+            // boundary and neutralise its __destruct so the Router-reachable App
+            // can't restore them a second time at a later GC (which PHPUnit flags
+            // "removed error handlers other than its own").
+            AppTestSupport::releaseHandlers($this->app);
             $this->app = null;
         }
         Log::reset();

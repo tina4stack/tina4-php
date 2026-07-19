@@ -33,10 +33,14 @@ class DevReloadWsTest extends TestCase
         // The reload path lazily bootstraps App / Log, which install
         // process-wide error and exception handlers (Tina4/App.php documents
         // this as the reason PHPUnit can flag a test "risky"). Warm the exact
-        // path once here, before any per-test risk snapshot is taken, so no
-        // individual test is the one that "newly leaks" a global handler.
+        // path once here, before any per-test risk snapshot is taken.
+        // Immediately release the App's handlers and neutralise its __destruct
+        // so the warm-up App can't restore a handler at a later GC (which would
+        // pop it inside an unrelated test's boundary and flag that test risky).
         // Production behaviour is unchanged.
-        new \Tina4\App();
+        $warmupApp = new \Tina4\App();
+        AppTestSupport::releaseHandlers($warmupApp);
+        unset($warmupApp);
         DevAdmin::register();
         foreach (Router::getRoutes() as $route) {
             if ($route['pattern'] === '/__dev/api/reload' && $route['method'] === 'POST') {

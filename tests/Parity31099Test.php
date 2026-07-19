@@ -157,7 +157,11 @@ class Parity31099Test extends TestCase
         $this->assertSame($cb, $ticks[0]['callback']);
         $this->assertSame(5.0, $ticks[0]['interval']);
 
-        // Restore the previous error handler to avoid PHPUnit "risky test" warning
-        restore_error_handler();
+        // Release the App's global error handler inside this test's boundary and
+        // neutralise its __destruct so the Router-reachable App can't restore it a
+        // second time at a later GC (which PHPUnit flags "removed error handlers
+        // other than its own"). Replaces a bare restore_error_handler() that left
+        // the App alive to restore the same handler again later.
+        AppTestSupport::releaseHandlers($app);
     }
 }

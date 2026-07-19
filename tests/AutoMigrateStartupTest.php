@@ -64,10 +64,11 @@ class AutoMigrateStartupTest extends TestCase
         $app = new App(basePath: $this->tempDir);
         $method = new \ReflectionMethod(App::class, 'autoMigrateOnStartup');
         $method->invoke($app);
-        // App construction may install error handlers via Log setup — restore so
-        // PHPUnit doesn't flag the test as risky for leaking handlers.
-        @restore_error_handler();
-        @restore_exception_handler();
+        // App's constructor installs an error handler and pops it in __destruct().
+        // Release it here, inside this test's boundary, and neutralise __destruct
+        // so the Router-reachable App can't restore it a second time at a later GC
+        // (which PHPUnit flags "removed error handlers other than its own").
+        AppTestSupport::releaseHandlers($app);
     }
 
     private function writeMigration(string $name, string $sql): void

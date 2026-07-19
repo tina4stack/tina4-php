@@ -14,6 +14,19 @@
     -->
     <extensions>
         <bootstrap class="Tina4\Testing\RequireServicesExtension"/>
+        <!--
+          Handler-stack hygiene (test-infra only). ErrorTracker::register()
+          installs a process-lifetime error+exception handler pair and tracks it
+          in a private static $handlerDepth; a test that leaves $handlerDepth > 0
+          makes a LATER test's reset() pop handlers outside its own boundary,
+          which PHPUnit flags "removed error/exception handlers other than its
+          own" (surfaced across the suite once tina4-php#178 made ~78 dormant
+          test files run). This extension resets $handlerDepth to its suite
+          baseline before each test. It touches ONLY the test-scoped static
+          counter (reflection) — no OS handler and no framework runtime code —
+          so production is unaffected. See HandlerStackHygieneExtension.
+        -->
+        <bootstrap class="Tina4\Testing\HandlerStackHygieneExtension"/>
     </extensions>
     <testsuites>
         <testsuite name="Tina4 Frond Tests">

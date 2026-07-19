@@ -211,8 +211,14 @@ class I18nLeafAliasTest extends TestCase
             // Verify the function actually translates
             $this->assertSame('Hello', ($globals['t'])('greeting'));
         } finally {
-            restore_error_handler();
-            restore_exception_handler();
+            // Release the started App's error+exception handlers inside this
+            // test's boundary and neutralise its __destruct so the (Router-
+            // reachable) App can't restore them a second time at a later GC —
+            // which PHPUnit flags "removed error/exception handlers other than
+            // its own" against whatever unrelated test is running then.
+            if (isset($app)) {
+                AppTestSupport::releaseHandlers($app);
+            }
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
@@ -236,8 +242,14 @@ class I18nLeafAliasTest extends TestCase
 
             $this->assertArrayNotHasKey('t', $globals, 'No locale files means no t() global');
         } finally {
-            restore_error_handler();
-            restore_exception_handler();
+            // Release the started App's error+exception handlers inside this
+            // test's boundary and neutralise its __destruct so the (Router-
+            // reachable) App can't restore them a second time at a later GC —
+            // which PHPUnit flags "removed error/exception handlers other than
+            // its own" against whatever unrelated test is running then.
+            if (isset($app)) {
+                AppTestSupport::releaseHandlers($app);
+            }
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
@@ -262,8 +274,14 @@ class I18nLeafAliasTest extends TestCase
 
             $this->assertArrayNotHasKey('t', $globals, 'Empty locales dir means no t() global');
         } finally {
-            restore_error_handler();
-            restore_exception_handler();
+            // Release the started App's error+exception handlers inside this
+            // test's boundary and neutralise its __destruct so the (Router-
+            // reachable) App can't restore them a second time at a later GC —
+            // which PHPUnit flags "removed error/exception handlers other than
+            // its own" against whatever unrelated test is running then.
+            if (isset($app)) {
+                AppTestSupport::releaseHandlers($app);
+            }
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
@@ -293,8 +311,14 @@ class I18nLeafAliasTest extends TestCase
             $this->assertSame($userT, $globals['t'], 'User-registered t() must not be overwritten');
             $this->assertSame('USER:greeting', ($globals['t'])('greeting'));
         } finally {
-            restore_error_handler();
-            restore_exception_handler();
+            // Release the started App's error+exception handlers inside this
+            // test's boundary and neutralise its __destruct so the (Router-
+            // reachable) App can't restore them a second time at a later GC —
+            // which PHPUnit flags "removed error/exception handlers other than
+            // its own" against whatever unrelated test is running then.
+            if (isset($app)) {
+                AppTestSupport::releaseHandlers($app);
+            }
             $this->removeDir($basePath);
             $this->resetFrondSingleton();
             $this->clearRoutes();
