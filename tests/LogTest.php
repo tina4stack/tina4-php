@@ -611,7 +611,6 @@ class LogTest extends TestCase
     private function logProp(string $name): mixed
     {
         $ref = new ReflectionProperty(Log::class, $name);
-        $ref->setAccessible(true);
         return $ref->getValue();
     }
 
@@ -799,7 +798,6 @@ class LogTest extends TestCase
     private function callShouldLog(string $level): bool
     {
         $ref = new ReflectionMethod(Log::class, 'shouldLog');
-        $ref->setAccessible(true);
         return $ref->invoke(null, $level);
     }
 

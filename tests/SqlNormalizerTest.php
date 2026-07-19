@@ -23,7 +23,6 @@ class SqlNormalizerTest extends TestCase
     {
         $ref = new ReflectionClass(SQLite3Adapter::class);
         $method = $ref->getMethod('stripTrailingSemicolons');
-        $method->setAccessible(true);
         return $method->invoke(null, $sql);
     }
 
@@ -69,7 +68,6 @@ class SqlNormalizerTest extends TestCase
     {
         $ref = new ReflectionClass(SQLite3Adapter::class);
         $method = $ref->getMethod('hasTrailingLimit');
-        $method->setAccessible(true);
         return $method->invoke(null, $sql);
     }
 
@@ -266,7 +264,6 @@ class SqlNormalizerTest extends TestCase
     {
         $ref = new ReflectionClass(\Tina4\Database\MSSQLAdapter::class);
         $method = $ref->getMethod('stripTrailingOrderBy');
-        $method->setAccessible(true);
         return $method->invoke(null, $sql);
     }
 

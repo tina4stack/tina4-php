@@ -57,7 +57,6 @@ class AIInstallerTest extends TestCase
     {
         $ref = new ReflectionClass(AI::class);
         $method = $ref->getMethod('writeOrMerge');
-        $method->setAccessible(true);
         return $method->invoke(null, $contextPath, $contextFile, $frameworkGuide);
     }
 
@@ -67,7 +66,6 @@ class AIInstallerTest extends TestCase
     {
         $ref = new ReflectionClass(AI::class);
         $method = $ref->getMethod('markersFor');
-        $method->setAccessible(true);
         $markers = $method->invoke(null, 'CLAUDE.md');
         $this->assertSame('<!-- tina4-skills:start -->', $markers[0]);
         $this->assertSame('<!-- tina4-skills:end -->', $markers[1]);
@@ -77,7 +75,6 @@ class AIInstallerTest extends TestCase
     {
         $ref = new ReflectionClass(AI::class);
         $method = $ref->getMethod('markersFor');
-        $method->setAccessible(true);
         $markers = $method->invoke(null, '.cursorules');
         $this->assertSame('# tina4-skills:start', $markers[0]);
         $this->assertSame('# tina4-skills:end', $markers[1]);
@@ -87,7 +84,6 @@ class AIInstallerTest extends TestCase
     {
         $ref = new ReflectionClass(AI::class);
         $method = $ref->getMethod('skillBlock');
-        $method->setAccessible(true);
         $block = $method->invoke(null, 'CLAUDE.md');
         $this->assertStringContainsString('## Tina4 Skills', $block);
         $this->assertStringContainsString('tina4-developer', $block);
@@ -104,7 +100,6 @@ class AIInstallerTest extends TestCase
     {
         $ref = new ReflectionClass(AI::class);
         $method = $ref->getMethod('looksLikeOldFrameworkInstall');
-        $method->setAccessible(true);
         foreach (
             [
                 "# Tina4 Python — Developer Guidelines\n\nOld dump...",
@@ -121,7 +116,6 @@ class AIInstallerTest extends TestCase
     {
         $ref = new ReflectionClass(AI::class);
         $method = $ref->getMethod('looksLikeOldFrameworkInstall');
-        $method->setAccessible(true);
         $this->assertFalse($method->invoke(null, "# My Project Notes\n\nDeploy info..."));
     }
 

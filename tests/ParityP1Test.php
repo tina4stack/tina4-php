@@ -100,7 +100,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', bearerToken: 'sk-test123');
         $reflection = new \ReflectionClass($api);
         $authHeaderProp = $reflection->getProperty('authHeader');
-        $authHeaderProp->setAccessible(true);
         $this->assertSame('Bearer sk-test123', $authHeaderProp->getValue($api));
     }
 
@@ -109,7 +108,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', username: 'u', password: 'p');
         $reflection = new \ReflectionClass($api);
         $authHeaderProp = $reflection->getProperty('authHeader');
-        $authHeaderProp->setAccessible(true);
         $this->assertStringStartsWith('Basic ', $authHeaderProp->getValue($api));
     }
 
@@ -118,7 +116,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', headers: ['X-Tenant' => 'acme', 'X-Trace' => 'abc']);
         $reflection = new \ReflectionClass($api);
         $headersProp = $reflection->getProperty('headers');
-        $headersProp->setAccessible(true);
         $headers = $headersProp->getValue($api);
         $this->assertSame('acme', $headers['X-Tenant']);
         $this->assertSame('abc', $headers['X-Trace']);
@@ -129,7 +126,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', verifySSL: false);
         $reflection = new \ReflectionClass($api);
         $ignoreProp = $reflection->getProperty('ignoreSSL');
-        $ignoreProp->setAccessible(true);
         $this->assertTrue($ignoreProp->getValue($api));
     }
 
@@ -138,7 +134,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', ignoreSSL: true);
         $reflection = new \ReflectionClass($api);
         $ignoreProp = $reflection->getProperty('ignoreSSL');
-        $ignoreProp->setAccessible(true);
         $this->assertTrue($ignoreProp->getValue($api));
     }
 
@@ -147,7 +142,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', bearerToken: 'tok', username: 'u', password: 'p');
         $reflection = new \ReflectionClass($api);
         $authHeaderProp = $reflection->getProperty('authHeader');
-        $authHeaderProp->setAccessible(true);
         $this->assertStringStartsWith('Bearer ', $authHeaderProp->getValue($api));
     }
 
@@ -157,7 +151,6 @@ final class ParityP1Test extends TestCase
         $api = new Api('https://x.example', 'Bearer legacy', 30, false);
         $reflection = new \ReflectionClass($api);
         $authHeaderProp = $reflection->getProperty('authHeader');
-        $authHeaderProp->setAccessible(true);
         $this->assertSame('Bearer legacy', $authHeaderProp->getValue($api));
     }
 }

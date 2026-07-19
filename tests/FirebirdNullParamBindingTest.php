@@ -23,7 +23,6 @@ class FirebirdNullParamBindingTest extends TestCase
     private function rewrite(string $sql, array $params): array
     {
         $m = new \ReflectionMethod(FirebirdAdapter::class, 'rewriteNullParamsToLiterals');
-        $m->setAccessible(true);
         return $m->invoke(null, $sql, $params);
     }
 

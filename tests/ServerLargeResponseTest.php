@@ -27,7 +27,6 @@ class ServerLargeResponseTest extends TestCase
     private function writeFully(Server $server, $socket, string $data): int
     {
         $ref = new ReflectionMethod(Server::class, 'writeFully');
-        $ref->setAccessible(true);
         return $ref->invoke($server, $socket, $data);
     }
 

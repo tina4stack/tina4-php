@@ -150,7 +150,6 @@ class Parity31099Test extends TestCase
 
         // Verify callback is stored in the private tickCallbacks array
         $ref = new \ReflectionProperty(App::class, 'tickCallbacks');
-        $ref->setAccessible(true);
         $ticks = $ref->getValue($app);
 
         $this->assertCount(1, $ticks);

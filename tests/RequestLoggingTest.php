@@ -87,7 +87,6 @@ class RequestLoggingTest extends TestCase
     private function gateEnabled(): bool
     {
         $ref = new ReflectionMethod(Router::class, 'requestLoggingEnabled');
-        $ref->setAccessible(true);
         return $ref->invoke(null);
     }
 

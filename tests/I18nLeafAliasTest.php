@@ -332,7 +332,6 @@ class I18nLeafAliasTest extends TestCase
     {
         $ref = new \ReflectionClass(\Tina4\Router::class);
         $prop = $ref->getProperty('routes');
-        $prop->setAccessible(true);
         $prop->setValue(null, []);
     }
 
@@ -350,11 +349,9 @@ class I18nLeafAliasTest extends TestCase
     {
         $ref = new \ReflectionClass(\Tina4\Response::class);
         $prop = $ref->getProperty('frond');
-        $prop->setAccessible(true);
         $prop->setValue(null, null);
 
         $prop2 = $ref->getProperty('frameworkFrond');
-        $prop2->setAccessible(true);
         $prop2->setValue(null, null);
 
         \Tina4\Frond::clearRegistry();

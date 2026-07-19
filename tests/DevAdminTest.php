@@ -767,7 +767,6 @@ class DevAdminTest extends TestCase
         $ref = new \ReflectionClass(DevAdmin::class);
         foreach (['reloadMtime' => 0, 'reloadFile' => '', 'pendingReload' => false] as $name => $value) {
             $prop = $ref->getProperty($name);
-            $prop->setAccessible(true);
             $prop->setValue(null, $value);
         }
     }
