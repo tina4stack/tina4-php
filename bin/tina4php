@@ -1121,14 +1121,21 @@ DOCKERFILE;
     // TEST — Run tests
     // ────────────────────────────────────────────
     case 'test':
+        // Propagate the runner's exit code so `tina4php test || exit 1` CI
+        // gates actually fail on a red suite (python#96 parity). passthru's
+        // second by-ref arg captures the child process exit code — the same
+        // pattern `build` and `migrate` above use. A missing runner is itself
+        // a failure: a CI gate must exit non-zero when it cannot run tests.
+        $testExit = 0;
         if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
-            passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'));
+            passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'), $testExit);
         } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
-            passthru($cwd . '/vendor/bin/phpunit tests --verbose --color');
+            passthru($cwd . '/vendor/bin/phpunit tests --verbose --color', $testExit);
         } else {
             echo "No test runner found. Install phpunit or create tests/test_v3_smoke.php\n";
+            $testExit = 1;
         }
-        break;
+        exit($testExit);
 
     // ────────────────────────────────────────────
     // SEED — Run seeders
