@@ -51,7 +51,16 @@ class CliTestExitCodeTest extends TestCase
                 continue;
             }
             $path = $dir . '/' . $item;
-            is_dir($path) ? $this->removeDir($path) : unlink($path);
+            // A symlink to a directory reports is_dir() === true; recursing into
+            // it would delete the REAL target (e.g. the repo's vendor/ that the
+            // phpunit-branch tests symlink in). Always unlink the link itself.
+            if (is_link($path)) {
+                unlink($path);
+            } elseif (is_dir($path)) {
+                $this->removeDir($path);
+            } else {
+                unlink($path);
+            }
         }
         rmdir($dir);
     }
@@ -128,5 +137,70 @@ class CliTestExitCodeTest extends TestCase
 
         $this->assertNotSame(0, $exitCode, 'CLI must exit non-zero when no test runner is found; output was: ' . $output);
         $this->assertStringContainsString('No test runner found', $output);
+    }
+
+    /**
+     * Turn the temp project into one whose `test` command takes the PHPUnit
+     * elseif branch ($cwd/vendor/bin/phpunit), running the REAL PHPUnit (no
+     * mock): symlink this framework's vendor in, drop a minimal phpunit.xml,
+     * and write one $passing (or failing) PHPUnit test into $tmp/tests. No
+     * tests/test_v3_smoke.php exists, so the smoke branch is skipped.
+     *
+     * This guards the flag fix: with the PHPUnit-removed `--verbose` present,
+     * PHPUnit exits 2 even on a green suite, so the propagated code turned a
+     * passing run into a false failure. `--colors=always` keeps it at 0.
+     */
+    private function makePhpunitProject(bool $passing): void
+    {
+        symlink(dirname(__DIR__) . '/vendor', $this->tmpDir . '/vendor');
+
+        file_put_contents(
+            $this->tmpDir . '/phpunit.xml',
+            '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' . "\n"
+            . '         colors="true" cacheDirectory=".phpunit.cache">' . "\n"
+            . '    <testsuites>' . "\n"
+            . '        <testsuite name="temp"><directory>tests</directory></testsuite>' . "\n"
+            . '    </testsuites>' . "\n"
+            . '</phpunit>' . "\n"
+        );
+
+        $assertion = $passing ? 'assertTrue(true)' : 'assertTrue(false)';
+        file_put_contents(
+            $this->tmpDir . '/tests/SampleProjectTest.php',
+            "<?php\n"
+            . "use PHPUnit\\Framework\\TestCase;\n"
+            . "class SampleProjectTest extends TestCase {\n"
+            . "    public function testSample(): void { \$this->{$assertion}; }\n"
+            . "}\n"
+        );
+    }
+
+    /**
+     * POSITIVE (phpunit branch) — a green PHPUnit suite must exit 0. This is
+     * the case that goes RED with the old `--verbose` flag (PHPUnit exit 2),
+     * so it genuinely locks in the flag fix.
+     */
+    public function testPhpunitBranchExitsZeroWhenSuitePasses(): void
+    {
+        $this->makePhpunitProject(true);
+
+        [$exitCode, $output] = $this->runCli();
+
+        $this->assertSame(0, $exitCode, 'CLI must exit 0 when the PHPUnit suite passes; output was: ' . $output);
+        $this->assertStringContainsString('OK', $output);
+    }
+
+    /**
+     * NEGATIVE (phpunit branch) — a red PHPUnit suite must propagate non-zero.
+     */
+    public function testPhpunitBranchExitsNonZeroWhenSuiteFails(): void
+    {
+        $this->makePhpunitProject(false);
+
+        [$exitCode, $output] = $this->runCli();
+
+        $this->assertNotSame(0, $exitCode, 'CLI must exit non-zero when the PHPUnit suite fails; output was: ' . $output);
+        $this->assertStringContainsString('FAILURES', $output);
     }
 }

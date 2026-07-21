@@ -1130,7 +1130,7 @@ DOCKERFILE;
         if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
             passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'), $testExit);
         } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
-            passthru($cwd . '/vendor/bin/phpunit tests --verbose --color', $testExit);
+            passthru($cwd . '/vendor/bin/phpunit tests --colors=always', $testExit);
         } else {
             echo "No test runner found. Install phpunit or create tests/test_v3_smoke.php\n";
             $testExit = 1;
