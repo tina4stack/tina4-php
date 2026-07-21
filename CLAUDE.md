@@ -6,7 +6,7 @@ Version 3.13.80 - Full Tina4 PHP framework and application scaffold. See https:/
 
 - PHP: >=8.2
 - Install: `composer install`
-- Run tests: `composer test` or `./vendor/bin/phpunit tests --verbose --color`
+- Run tests: `composer test` or `./vendor/bin/phpunit tests --colors=always`
 - Start server: `composer start` or `composer serve` (default host `0.0.0.0`, default port `7145`)
 - CLI: `bin/tina4php`
 
