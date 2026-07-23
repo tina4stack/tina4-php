@@ -606,7 +606,7 @@ code generator — write the code yourself from what it returns. Use it as a lad
 ## Batteries included — zero third-party dependencies
 
 `composer.json` `require` is just **`php >=8.2`, `ext-openssl`, `ext-json`** — Tina4-PHP's core
-carries **no third-party Composer packages** (97 built-in features; the only optional package is
+carries **no third-party Composer packages** (98 built-in features; the only optional package is
 `mongodb/mongodb`, a `suggest`/`require-dev` for the Mongo backends). DB drivers ride on PHP
 extensions you already have (`ext-sqlite3`, `ext-pdo`/`ext-pgsql`, …), not vendored code. Before
 you `composer require` anything, check whether it's already in the box. **Need → Tina4 built-in

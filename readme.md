@@ -6,13 +6,13 @@
 <h3 align="center">The Intelligent Native Application 4ramework</h3>
 
 <p align="center">
-  97 built-in features. Zero dependencies. One require, everything works.
+  98 built-in features. Zero dependencies. One require, everything works.
 </p>
 
 <p align="center">
   <a href="https://packagist.org/packages/tina4stack/tina4php"><img src="https://img.shields.io/packagist/v/tina4stack/tina4php?color=7b1fa2&label=Packagist" alt="Packagist"></a>
   <img src="https://img.shields.io/badge/tests-2%2C073%20passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/features-97-blue" alt="Features">
+  <img src="https://img.shields.io/badge/features-98-blue" alt="Features">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero Deps">
   <a href="https://tina4.com"><img src="https://img.shields.io/badge/docs-tina4.com-7b1fa2" alt="Docs"></a>
 </p>
@@ -416,7 +416,7 @@ Benchmarked with `wrk`: 5,000 requests, 50 concurrent, median of 3 runs:
 | Slim | 5,714 | 10+ | ~6 |
 | Laravel | 445 | 50+ | ~25 |
 
-Tina4 PHP is **5× faster than Slim and 65× faster than Laravel**, with zero dependencies and 97 features built in.
+Tina4 PHP is **5× faster than Slim and 65× faster than Laravel**, with zero dependencies and 98 features built in.
 
 **Across all 4 Tina4 implementations:**
 

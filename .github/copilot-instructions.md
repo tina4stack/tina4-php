@@ -1,6 +1,6 @@
 # tina4-php Copilot Instructions
 
-Tina4 PHP v3. 97 features, zero external dependencies.
+Tina4 PHP v3. 98 features, zero external dependencies.
 
 ## Route Pattern
 

@@ -12,6 +12,13 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ## Unreleased
 
+### Added
+
+- **MQTT 3.1.1 client** (`Tina4\Mqtt` / `Tina4\MqttMessage`), zero-dependency (PHP streams +
+  `ext-openssl`), verified against a real broker with no mocks. Publish/subscribe/consume, QoS 0/1,
+  retained, Last Will, per-stream TLS, QoS 2 refused loudly. Takes the family to **98 built-in
+  features**.
+
 ### Changed
 
 - **Breaking: `\Tina4\SqlTranslation` is renamed to `\Tina4\SQLTranslator`.**
