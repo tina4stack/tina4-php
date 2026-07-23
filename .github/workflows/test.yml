@@ -136,6 +136,14 @@ jobs:
       TINA4_TEST_MONGO_URL: mongodb://localhost:27017
       TINA4_KAFKA_BROKERS: localhost:9092
       TINA4_TEST_KAFKA_URL: localhost:9092
+      # MQTT 3.1.1 brokers started by the "Start MQTT brokers" step below;
+      # TINA4_TEST_MQTT_CA_FILE is injected there once the certs are generated.
+      TINA4_TEST_MQTT_URL: mqtt://127.0.0.1:1883
+      TINA4_TEST_MQTT_AUTH_URL: mqtt://127.0.0.1:1884
+      TINA4_TEST_MQTT_TLS_URL: mqtts://127.0.0.1:8883
+      TINA4_TEST_MQTT_EMQX_URL: mqtt://127.0.0.1:1885
+      TINA4_TEST_MQTT_USERNAME: tina4
+      TINA4_TEST_MQTT_PASSWORD: testpass
       # Live MySQL (#262) — matches the mysql:8 service container above.
       TINA4_TEST_MYSQL_HOST: localhost
       TINA4_TEST_MYSQL_PORT: '3306'
@@ -234,6 +242,15 @@ jobs:
             sleep 1
           done
           echo "Kafka did not become ready in 60s"; docker logs tina4-kafka | tail -40; exit 1
+
+      # MQTT 3.1.1: Mosquitto (1883 anon / 1884 auth / 8883 TLS) + EMQX 5.8 (1885,
+      # SUBACK-0x80 refusal). The vendored script generates certs + a password
+      # file, starts the brokers, and FAILS the job if any broker does not come
+      # up - so the MQTT tests never skip green in CI.
+      - name: Start MQTT brokers (Mosquitto 1883/1884/8883 + EMQX 1885)
+        run: |
+          bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
+          echo "TINA4_TEST_MQTT_CA_FILE=$RUNNER_TEMP/tina4-mqtt-infra/certs/ca.crt" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress

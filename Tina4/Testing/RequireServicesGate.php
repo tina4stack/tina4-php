@@ -54,6 +54,7 @@ final class RequireServicesGate
         'mongo',          // also matches "mongodb" / "pymongo"
         'rabbit', 'amqp',
         'kafka',          // also matches "rdkafka" / "confluent-kafka"
+        'mqtt', 'mosquitto',  // Mosquitto (+ EMQX) for the MQTT tests
     ];
 
     /** Phrases that mean "the provisioned thing is not there right now". */
