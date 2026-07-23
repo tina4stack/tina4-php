@@ -22,11 +22,19 @@ namespace Tina4\Testing;
  * Firebird is deliberately NOT in the keyword set — it is not provisioned, so
  * its "set TINA4_TEST_FIREBIRD_URL" / "not reachable" skips stay green.
  *
- * Mechanism: a PHPUnit 11 event Extension subscribes to Test\Skipped to collect
- * offending skips, then fails the whole run from Application\Finished. The skip
- * REASON text is only available in-process (PHPUnit's JUnit XML does not carry
- * skip messages), so an event subscriber — not a post-run XML parse — is the only
- * reliable mechanism on this PHPUnit major version.
+ * Mechanism: a PHPUnit 11 event Extension subscribes to BOTH Test\Skipped and
+ * TestSuite\Skipped to collect offending skips, then fails the whole run from
+ * Application\Finished. The skip REASON text is only available in-process
+ * (PHPUnit's JUnit XML does not carry skip messages), so an event subscriber —
+ * not a post-run XML parse — is the only reliable mechanism on this PHPUnit
+ * major version.
+ *
+ * BOTH subscriptions are load-bearing. A skip inside a test method emits
+ * Test\Skipped; a skip from setUpBeforeClass() emits only ONE TestSuite\Skipped
+ * for the entire class (PHPUnit catches the SkippedTest thrown by the hook — see
+ * TestSuiteSkippedSubscriber). Listening to Test\Skipped alone meant a class-wide
+ * service gate skipped GREEN under TINA4_REQUIRE_SERVICES. Locked in by
+ * tests/RequireServicesGateTest.php.
  *
  * This is a singleton so the two subscriber objects share one violation list.
  */

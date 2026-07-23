@@ -30,6 +30,12 @@ final class RequireServicesExtension implements Extension
     ): void {
         $facade->registerSubscribers(
             new TestSkippedSubscriber(),
+            // BOTH skip events are needed: a skip inside a test method emits
+            // Test\Skipped, but a skip from setUpBeforeClass() emits only ONE
+            // TestSuite\Skipped for the whole class. Subscribing to Test\Skipped
+            // alone let a class-wide service gate skip GREEN — see
+            // TestSuiteSkippedSubscriber for the PHPUnit source and the repro.
+            new TestSuiteSkippedSubscriber(),
             new ApplicationFinishedSubscriber(),
         );
     }
