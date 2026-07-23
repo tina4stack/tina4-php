@@ -241,13 +241,61 @@ class ScssCompiler
 
     // ── Variable extraction ─────────────────────────────────────
 
+    /**
+     * Splits trailing !default / !global flags off a variable declaration value.
+     *
+     * `!default` means "assign only if this variable is not already set" - the
+     * flag that makes a variable themeable. `!global` is the scope flag. Both are
+     * compiler directives: they are consumed here and must never reach the CSS,
+     * because `padding: 1.5rem !default` is invalid CSS and browsers drop the
+     * whole declaration.
+     *
+     * Only ever called on the value of a `$name: value;` declaration, so a
+     * literal `!default` anywhere else - inside a quoted string
+     * (`content: "x !default y"`) or a function argument - is left untouched,
+     * exactly as Dart Sass leaves it. Sass flag names are case-SENSITIVE
+     * (`!DEFAULT` is an error in Dart Sass), so the match is case-sensitive.
+     *
+     * @param string $value Raw declaration value, flags included
+     * @return array{0: string, 1: bool} The value without flags, and whether it declared !default
+     */
+    private function stripVariableFlags(string $value): array
+    {
+        $declaresDefault = false;
+        while (preg_match('#\s*!(default|global)\s*$#', $value, $m, PREG_OFFSET_CAPTURE)) {
+            if ($m[1][0] === 'default') {
+                $declaresDefault = true;
+            }
+            $value = substr($value, 0, $m[0][1]);
+        }
+        return [trim($value), $declaresDefault];
+    }
+
+    /**
+     * Extracts $variable: value; declarations, honouring the !default flag.
+     *
+     * `$x: value !default;` assigns only when `$x` is not already set. That is
+     * what makes a variable themeable - a user who writes `$primary: red;` BEFORE
+     * importing a partial that declares `$primary: blue !default;` keeps red.
+     * Declarations are visited in source order, so "already set" means "set by an
+     * earlier declaration or by a preset variable". A value of `null` counts as
+     * unset, as in Sass.
+     *
+     * @param string $scss       SCSS source
+     * @param array  $variables  Variable map, seeded with presets and filled in place
+     * @return string The source with declarations removed
+     */
     private function extractVariables(string $scss, array &$variables): string
     {
         return preg_replace_callback(
             '#\$([a-zA-Z_][\w-]*)\s*:\s*([^;]+);#',
             function ($m) use (&$variables) {
                 $name = $m[1];
-                $value = trim($m[2]);
+                [$value, $declaresDefault] = $this->stripVariableFlags(trim($m[2]));
+                // !default must not overwrite a value that is already set.
+                if ($declaresDefault && ($variables[$name] ?? 'null') !== 'null') {
+                    return '';
+                }
                 // Resolve variable references in the value
                 foreach ($variables as $varName => $varVal) {
                     $value = str_replace('$' . $varName, $varVal, $value);

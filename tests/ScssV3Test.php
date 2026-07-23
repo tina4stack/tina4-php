@@ -412,4 +412,163 @@ class ScssV3Test extends TestCase
         $css = $this->compiler->compile('.z { height: calc(100vh - 170px); }');
         $this->assertStringContainsString('calc(100vh - 170px)', $css);
     }
+
+    // ── !default flag ──────────────────────────────────────────────
+    // The `!default` flag means "assign only if this variable is not already
+    // set". It is a compiler directive and must never reach the CSS: `padding:
+    // 1.5rem !default` is invalid CSS and browsers drop the declaration.
+    // Reference behaviour for every case below was measured against Dart Sass
+    // 1.101.6.
+
+    public function testDefaultFlagNeverReachesOutput(): void
+    {
+        $css = $this->compiler->compile("\$g: 1.5rem !default;\n.x { padding: \$g; }");
+        $this->assertStringContainsString('padding: 1.5rem', $css);
+        $this->assertStringNotContainsString('!default', $css);
+    }
+
+    public function testDefaultDoesNotOverwriteAnAlreadySetVariable(): void
+    {
+        // The themeing contract: a user sets $primary BEFORE the partial that
+        // declares it !default, and must keep their value.
+        $css = $this->compiler->compile(
+            "\$primary: red;\n\$primary: blue !default;\n.y { color: \$primary; }"
+        );
+        $this->assertStringContainsString('color: red', $css);
+        $this->assertStringNotContainsString('blue', $css);
+        $this->assertStringNotContainsString('!default', $css);
+    }
+
+    public function testDefaultDoesAssignAnUnsetVariable(): void
+    {
+        $css = $this->compiler->compile("\$primary: blue !default;\n.y { color: \$primary; }");
+        $this->assertStringContainsString('color: blue', $css);
+        $this->assertStringNotContainsString('!default', $css);
+    }
+
+    public function testNullCountsAsUnset(): void
+    {
+        // Sass treats a null variable as unset, so !default fills it.
+        $css = $this->compiler->compile("\$c: null;\n\$c: teal !default;\n.w { color: \$c; }");
+        $this->assertStringContainsString('color: teal', $css);
+        $this->assertStringNotContainsString('null', $css);
+    }
+
+    public function testFirstDefaultWinsOverSecondDefault(): void
+    {
+        $css = $this->compiler->compile(
+            "\$a: 1rem !default;\n\$a: 2rem !default;\n.v { margin: \$a; }"
+        );
+        $this->assertStringContainsString('margin: 1rem', $css);
+        $this->assertStringNotContainsString('2rem', $css);
+    }
+
+    public function testPlainDeclarationAfterDefaultDoesOverwrite(): void
+    {
+        // !default only guards against being overwritten; a plain assignment wins.
+        $css = $this->compiler->compile("\$a: 1rem !default;\n\$a: 2rem;\n.v { margin: \$a; }");
+        $this->assertStringContainsString('margin: 2rem', $css);
+    }
+
+    public function testGlobalFlagIsAlsoConsumed(): void
+    {
+        $css = $this->compiler->compile("\$a: 5px !default !global;\n.i { top: \$a; }");
+        $this->assertStringContainsString('top: 5px', $css);
+        $this->assertStringNotContainsString('!default', $css);
+        $this->assertStringNotContainsString('!global', $css);
+    }
+
+    public function testMultilineDefaultDeclarationIsConsumed(): void
+    {
+        // A map literal spanning lines with the flag on the closing line - the
+        // exact shape tina4-css's _variables.scss uses.
+        $scss = "\$m: (\n  \"a\": 1,\n  \"b\": 2\n) !default;\n.m { z-index: 1; }";
+        $css = $this->compiler->compile($scss);
+        $this->assertStringNotContainsString('!default', $css);
+        $this->assertStringNotContainsString('$m', $css);
+    }
+
+    public function testLiteralDefaultInAStringIsPreserved(): void
+    {
+        // NEGATIVE guard on the strip's scope: only a *variable declaration*
+        // value is stripped. Dart Sass keeps this string verbatim; so must we.
+        $css = $this->compiler->compile('.s { content: "x !default y"; }');
+        $this->assertStringContainsString('"x !default y"', $css);
+    }
+
+    public function testDefaultInAFunctionArgumentIsLeftVerbatim(): void
+    {
+        // NEGATIVE guard: `rgba(#000 !default, .1)` is a syntax error in Dart
+        // Sass and never appears in valid SCSS. We do not silently "fix" it into
+        // something Sass would never emit - it is not a variable declaration, so
+        // it is left exactly as written and stays visibly wrong.
+        $css = $this->compiler->compile('.z { color: rgba(#000 !default, 0.1); }');
+        $this->assertStringContainsString('!default', $css);
+    }
+
+    public function testHexVariableWithDefaultIsUsableInsideRgba(): void
+    {
+        // The real-world case behind the 41 broken rgba() calls: the flag rode
+        // inside the stored value and corrupted every function call using it.
+        $css = $this->compiler->compile(
+            "\$black: #000 !default;\n.z { box-shadow: 0 1px 2px rgba(\$black, 0.075); }"
+        );
+        $this->assertStringContainsString('rgba(0, 0, 0, 0.075)', $css);
+        $this->assertStringNotContainsString('!default', $css);
+    }
+
+    public function testOverrideSurvivesAnImportOfARealPartial(): void
+    {
+        // End-to-end over REAL files: set the variable, then @import a partial
+        // that declares it !default. The override must win.
+        $dir = sys_get_temp_dir() . '/tina4_scss_default_' . uniqid();
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/_theme.scss', "\$primary: navy !default;\n\$accent: gold !default;\n");
+        file_put_contents(
+            $dir . '/main.scss',
+            "\$primary: hotpink;\n@import \"theme\";\n.k { color: \$primary; border-color: \$accent; }\n"
+        );
+        try {
+            $css = (new ScssCompiler())->compileFile($dir . '/main.scss');
+            $this->assertStringContainsString('color: hotpink', $css);
+            $this->assertStringContainsString('border-color: gold', $css);
+            $this->assertStringNotContainsString('navy', $css);
+            $this->assertStringNotContainsString('!default', $css);
+        } finally {
+            @unlink($dir . '/_theme.scss');
+            @unlink($dir . '/main.scss');
+            @rmdir($dir);
+        }
+    }
+
+    public function testPresetVariableBeatsASourceDefault(): void
+    {
+        $compiler = new ScssCompiler();
+        $compiler->setVariable('primary', 'rebeccapurple');
+        $css = $compiler->compile("\$primary: navy !default;\n.p { color: \$primary; }");
+        $this->assertStringContainsString('color: rebeccapurple', $css);
+        $this->assertStringNotContainsString('navy', $css);
+    }
+
+    public function testCompileScssDirectoryStripsTheFlag(): void
+    {
+        $dir = sys_get_temp_dir() . '/tina4_scss_dir_' . uniqid();
+        mkdir($dir . '/scss', 0777, true);
+        file_put_contents($dir . '/scss/_vars.scss', "\$gap: 4px !default;\n");
+        file_put_contents($dir . '/scss/app.scss', "@import \"vars\";\n.a { margin: \$gap; }\n");
+        $out = $dir . '/css/default.css';
+        try {
+            $css = (new ScssCompiler())->compileScss($dir . '/scss', $out);
+            $this->assertStringContainsString('margin: 4px', $css);
+            $this->assertStringNotContainsString('!default', $css);
+            $this->assertStringNotContainsString('!default', (string)file_get_contents($out));
+        } finally {
+            @unlink($dir . '/scss/_vars.scss');
+            @unlink($dir . '/scss/app.scss');
+            @unlink($out);
+            @rmdir($dir . '/css');
+            @rmdir($dir . '/scss');
+            @rmdir($dir);
+        }
+    }
 }
