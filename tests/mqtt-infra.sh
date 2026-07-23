@@ -98,13 +98,22 @@ docker run -d --name tina4-mosquitto \
 # EMQX refuses at subscribe time, and its DEFAULT authorization already denies
 # "#" and "$SYS/#", so no custom ACL is needed. NOTE: there is no emqx/emqx:5
 # tag — 5.8 is the one that exists.
-docker rm -f tina4-emqx >/dev/null 2>&1 || true
-docker run -d --name tina4-emqx -p 1885:1883 emqx/emqx:5.8 >/dev/null
+# EMQX is only needed by the Ruby SUBACK-0x80 example. Callers that do not test
+# EMQX set MQTT_REQUIRE_EMQX=false to make it best-effort: it is not started, not
+# waited on, and never a reason to fail the job (it is a heavy container to boot,
+# so requiring it where nothing uses it is pure flakiness surface).
+require_emqx="${MQTT_REQUIRE_EMQX:-true}"
+if [ "$require_emqx" = "true" ]; then
+  docker rm -f tina4-emqx >/dev/null 2>&1 || true
+  docker run -d --name tina4-emqx -p 1885:1883 emqx/emqx:5.8 >/dev/null
+fi
 
 # ---------------------------------------------------------------- wait
 # /dev/tcp rather than nc, so the script needs no extra tool installed.
+ports="1883 1884 8883"
+[ "$require_emqx" = "true" ] && ports="$ports 1885"
 printf 'waiting for brokers'
-for port in 1883 1884 8883 1885; do
+for port in $ports; do
   tries=0
   while [ "$tries" -lt 60 ]; do
     if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then break; fi
@@ -116,7 +125,7 @@ done
 echo ""
 
 failed=0
-for port in 1883 1884 8883 1885; do
+for port in $ports; do
   if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
     echo "  $port UP"
   else

@@ -243,13 +243,14 @@ jobs:
           done
           echo "Kafka did not become ready in 60s"; docker logs tina4-kafka | tail -40; exit 1
 
-      # MQTT 3.1.1: Mosquitto (1883 anon / 1884 auth / 8883 TLS) + EMQX 5.8 (1885,
-      # SUBACK-0x80 refusal). The vendored script generates certs + a password
-      # file, starts the brokers, and FAILS the job if any broker does not come
-      # up - so the MQTT tests never skip green in CI.
-      - name: Start MQTT brokers (Mosquitto 1883/1884/8883 + EMQX 1885)
+      # MQTT 3.1.1: Mosquitto (1883 anon / 1884 auth / 8883 TLS). The vendored
+      # script generates certs + a password file, starts Mosquitto, and FAILS the
+      # job if it does not come up - so the MQTT tests never skip green. EMQX (the
+      # SUBACK-0x80 refusal path) is exercised only by the Ruby suite, so here it
+      # is best-effort (MQTT_REQUIRE_EMQX=false: not started, never fatal).
+      - name: Start MQTT brokers (Mosquitto 1883/1884/8883; EMQX best-effort)
         run: |
-          bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
+          MQTT_REQUIRE_EMQX=false bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
           echo "TINA4_TEST_MQTT_CA_FILE=$RUNNER_TEMP/tina4-mqtt-infra/certs/ca.crt" >> "$GITHUB_ENV"
 
       - name: Install dependencies
