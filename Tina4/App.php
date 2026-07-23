@@ -583,6 +583,20 @@ class App
             DevAdmin::register();
         }
 
+        // Auto-discover ORM models from src/orm/ — BEFORE routes, because a
+        // route doing `new Product()` needs the class to already exist. Same
+        // convention as routes/seeds/services: location IS configuration, no
+        // require_once and no composer.json edit. Mirrors the Python master,
+        // which imports every module under src/ at boot.
+        $modelsDir = $this->basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'orm';
+        if (is_dir($modelsDir)) {
+            try {
+                ModelDiscovery::scan($modelsDir);
+            } catch (\Throwable $e) {
+                Log::error("Model discovery failed: {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}");
+            }
+        }
+
         // Auto-discover routes from src/routes/
         $routesDir = $this->basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'routes';
         if (is_dir($routesDir)) {
@@ -1308,6 +1322,16 @@ HTML;
         }
 
         $response = $this();
+
+        // A streamed body (SSE) owns its own emission: status, headers and then
+        // each chunk flushed as the generator yields it. Falling through would
+        // call http_response_code() a second time after the first chunk had
+        // already gone out, which raises "headers already sent" and kills the
+        // request with an uncaught ErrorException.
+        if ($response->isStreaming()) {
+            $response->sendStream();
+            return;
+        }
 
         http_response_code($response->getStatusCode() ?? 200);
         foreach ($response->getHeaders() as $name => $value) {

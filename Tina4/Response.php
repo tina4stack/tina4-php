@@ -86,6 +86,12 @@ class Response
     /** @var bool Whether to suppress actual output (for testing) */
     private bool $testing = false;
 
+    /** @var callable|null Chunk source for a streamed body — set by stream() */
+    private $streamSource = null;
+
+    /** @var bool Whether the streamed body has already been emitted */
+    private bool $streamEmitted = false;
+
     /**
      * Create a new Response instance.
      *
@@ -357,7 +363,12 @@ class Response
             return $this;
         }
 
-        // No data — flush the response to the client
+        // No data — flush the response to the client. A streamed body has no
+        // buffered content to write; hand it to the streaming emitter instead.
+        if ($this->isStreaming()) {
+            return $this->sendStream();
+        }
+
         if ($this->sent) {
             return $this;
         }
@@ -394,7 +405,20 @@ class Response
     }
 
     /**
-     * Stream response from a generator or callable for Server-Sent Events (SSE).
+     * Stream a response from a generator callable — Server-Sent Events (SSE).
+     *
+     * Performs NO I/O of its own: it records the chunk source and sets the
+     * streaming headers on this Response, and whichever transport is serving
+     * the request drives the chunks. Tina4\Server writes them straight to the
+     * client socket, App::handle()/sendStream() echoes them under a web SAPI,
+     * and TestClient materialises them into the response body.
+     *
+     * That separation is what makes SSE work on the built-in `tina4php serve`
+     * as well as under PHP-FPM/Apache/php -S. The socket server bypasses PHP's
+     * SAPI output layer completely: header()/http_response_code() have no
+     * client to write to (and warn "headers already sent" once the CLI has
+     * printed anything), while echo lands on the SERVER's own stdout rather
+     * than on the client's connection.
      *
      * Usage:
      *   Router::get("/events", function ($request, $response) {
@@ -412,80 +436,125 @@ class Response
      */
     public function stream(callable $source, string $contentType = 'text/event-stream'): self
     {
+        $this->streamSource = $source;
+        $this->headers['Content-Type'] = $contentType;
+        $this->headers['Cache-Control'] = 'no-cache';
+        $this->headers['Connection'] = 'keep-alive';
+        $this->headers['X-Accel-Buffering'] = 'no';
+        $this->sent = true;
+
         if ($this->testing) {
-            // In testing mode, collect all chunks into body. A generator that
-            // raises mid-stream is logged and ends cleanly (whatever it yielded
-            // before the error is kept) — the handler/worker never crashes.
-            $gen = $source();
+            // Testing mode has no transport, so materialise the chunks here.
             $this->body = '';
-            try {
-                foreach ($gen as $chunk) {
-                    $this->body .= $chunk;
-                }
-            } catch (\Throwable $exc) {
-                Log::error('SSE/stream source error: ' . $exc->getMessage());
+            foreach ($this->streamChunks() as $chunk) {
+                $this->body .= $chunk;
             }
-            $this->headers['Content-Type'] = $contentType;
-            $this->sent = true;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Whether this response streams its body from a generator (see stream()).
+     *
+     * Transports check this to emit chunk-by-chunk with no Content-Length
+     * instead of writing a buffered body.
+     */
+    public function isStreaming(): bool
+    {
+        return $this->streamSource !== null;
+    }
+
+    /**
+     * Iterate the chunks of a streamed response.
+     *
+     * Shared by every transport so they all get identical failure semantics: a
+     * source that raises — when it is called or part-way through — is logged
+     * via Log::error and the stream ENDS cleanly, keeping whatever was already
+     * yielded. The request worker never crashes and the failure never leaks to
+     * the client. Yields nothing when the response is not streaming.
+     *
+     * @return \Generator<string>
+     */
+    public function streamChunks(): \Generator
+    {
+        if ($this->streamSource === null) {
+            return;
+        }
+
+        try {
+            foreach (($this->streamSource)() as $chunk) {
+                yield (string) $chunk;
+            }
+        } catch (\Throwable $exc) {
+            Log::error('SSE/stream source error: ' . $exc->getMessage());
+        }
+    }
+
+    /**
+     * Emit a streamed response under a web SAPI (PHP-FPM / Apache / php -S).
+     *
+     * Only for SAPIs where PHP's output layer IS the client connection. The
+     * built-in socket server never calls this — it writes the status line,
+     * headers and chunks to the client socket itself.
+     *
+     * Idempotent: a second call is a no-op rather than re-running the source
+     * and emitting the body twice.
+     *
+     * @return $this
+     */
+    public function sendStream(): self
+    {
+        if (!$this->isStreaming() || $this->testing || $this->streamEmitted) {
             return $this;
         }
 
+        // Pure CLI has no SAPI response channel: echo would land on the
+        // process's own stdout (the server log, or a test runner's output),
+        // never on a client. The built-in socket server runs under this SAPI
+        // and writes the stream itself. Same guard, same reason, as
+        // App::handle().
+        if (php_sapi_name() === 'cli') {
+            return $this;
+        }
+
+        $this->streamEmitted = true;
         $this->sent = true;
 
-        // Disable output buffering
+        // Nothing may sit between a yielded chunk and the client.
         while (ob_get_level() > 0) {
             ob_end_flush();
         }
-
-        // Set time limit to 0 for long-running streams
         set_time_limit(0);
 
-        // Send headers
-        http_response_code($this->statusCode);
-        header("Content-Type: {$contentType}");
-        header("Cache-Control: no-cache");
-        header("Connection: keep-alive");
-        header("X-Accel-Buffering: no");
-
-        // Send cookies
-        foreach ($this->cookies as $name => $opts) {
-            setcookie($name, $opts['value'], [
-                'expires' => $opts['expires'],
-                'path' => $opts['path'],
-                'domain' => $opts['domain'],
-                'secure' => $opts['secure'],
-                'httponly' => $opts['httponly'],
-                'samesite' => $opts['samesite'],
-            ]);
-        }
-
-        // Send any custom headers
-        foreach ($this->headers as $name => $value) {
-            header("{$name}: {$value}");
-        }
-
-        // Stream chunks from the generator. Two failure modes are handled so
-        // the worker/handler never crashes mid-stream:
-        //   1. Client disconnect — connection_aborted() ends the stream cleanly.
-        //   2. The generator/source itself raises — log it and stop cleanly.
-        $gen = $source();
-        try {
-            foreach ($gen as $chunk) {
-                echo $chunk;
-                if (ob_get_level() > 0) {
-                    ob_flush();
-                }
-                flush();
-
-                // Check if client disconnected
-                if (connection_aborted()) {
-                    break;
-                }
+        if (!headers_sent()) {
+            http_response_code($this->statusCode);
+            foreach ($this->headers as $name => $value) {
+                header("{$name}: {$value}");
             }
-        } catch (\Throwable $exc) {
-            // The generator raised mid-stream. Log and end the stream cleanly
-            // rather than letting the exception kill the request worker.
-            Log::error('SSE/stream source error: ' . $exc->getMessage());
+            foreach ($this->cookies as $name => $opts) {
+                setcookie($name, $opts['value'], [
+                    'expires' => $opts['expires'],
+                    'path' => $opts['path'],
+                    'domain' => $opts['domain'],
+                    'secure' => $opts['secure'],
+                    'httponly' => $opts['httponly'],
+                    'samesite' => $opts['samesite'],
+                ]);
+            }
+        }
+
+        foreach ($this->streamChunks() as $chunk) {
+            echo $chunk;
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
+            flush();
+
+            // Client disconnected — end the stream cleanly.
+            if (connection_aborted()) {
+                break;
+            }
         }
 
         return $this;

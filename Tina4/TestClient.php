@@ -138,8 +138,19 @@ class TestResponse
 
     public function __construct(Response $response)
     {
+        $body = $response->getBody() ?? '';
+
+        // TestClient is a transport like any other, so a streamed body (SSE)
+        // has to be driven here — otherwise a streaming route would report an
+        // empty body and every assertion against it would prove nothing.
+        if ($body === '' && $response->isStreaming()) {
+            foreach ($response->streamChunks() as $chunk) {
+                $body .= $chunk;
+            }
+        }
+
         $this->status = $response->getStatusCode() ?? 200;
-        $this->body = $response->getBody() ?? '';
+        $this->body = $body;
         $this->headers = $response->getHeaders();
         $this->contentType = $this->headers['content-type'] ?? '';
     }

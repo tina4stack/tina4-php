@@ -233,8 +233,11 @@ class RouteDiscovery
     /**
      * Write a .broken sentinel so /health and the dev dashboard surface
      * auto-discover failures instead of swallowing them into a log line.
+     *
+     * Shared by every auto-discovery pass (routes and ORM models), so a failed
+     * import surfaces the same way whatever kind of file it was.
      */
-    private static function recordBrokenImport(string $file, \Throwable $error): void
+    public static function recordBrokenImport(string $file, \Throwable $error): void
     {
         try {
             $brokenDir = getcwd() . '/data/.broken';

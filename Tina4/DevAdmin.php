@@ -313,9 +313,19 @@ class DevAdmin
                 }
             }
 
-            // Re-discover so new files in src/routes/ register without a
-            // server restart. RouteDiscovery::rescan() is idempotent —
-            // already-loaded files are skipped, only the new ones run.
+            // Re-discover so new files in src/orm/ and src/routes/ register
+            // without a server restart. Both rescans are idempotent —
+            // already-loaded files are skipped, only the new ones run. Models
+            // first: a new route may reference a new model.
+            try {
+                $newModels = ModelDiscovery::rescan();
+                if (!empty($newModels)) {
+                    Log::info('Re-discovered ' . count($newModels) . ' new model(s) on reload');
+                }
+            } catch (\Throwable $e) {
+                Log::error('Model re-discover on reload failed: ' . $e->getMessage());
+            }
+
             try {
                 $newRoutes = RouteDiscovery::rescan();
                 if (!empty($newRoutes)) {
@@ -457,13 +467,11 @@ class DevAdmin
             try {
                 $gql = new GraphQL();
 
-                // Auto-discover ORM files from src/orm/ to ensure they're loaded
-                $ormDir = getcwd() . '/src/orm';
-                if (is_dir($ormDir)) {
-                    foreach (glob($ormDir . '/*.php') as $file) {
-                        require_once $file;
-                    }
-                }
+                // Make sure src/orm/ is loaded. App::start() already did this at
+                // boot; scan() is idempotent, so this only covers a model added
+                // since. One discovery implementation, one set of rules — this
+                // used to hand-roll its own non-recursive glob+require_once.
+                ModelDiscovery::scan(getcwd() . '/src/orm');
 
                 // Register all loaded ORM subclasses
                 foreach (get_declared_classes() as $class) {

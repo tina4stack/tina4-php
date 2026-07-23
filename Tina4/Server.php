@@ -605,6 +605,15 @@ class Server
         // Restore reload suppression flag
         DevAdmin::$suppressReload = false;
 
+        // A streamed body (SSE) is written chunk-by-chunk as the generator
+        // yields, not buffered into one payload. PHP's header()/echo output
+        // layer is not connected to this socket at all, so the server has to
+        // emit the stream itself — see streamToClient().
+        if ($response->isStreaming()) {
+            $this->streamToClient($client, $response);
+            return;
+        }
+
         // Build HTTP response
         $statusCode = $response->getStatusCode();
         $statusText = $this->getStatusText($statusCode);
@@ -629,6 +638,29 @@ class Server
             $httpResponse .= "{$name}: {$value}\r\n";
         }
         // Emit cookies set via $response->cookie()
+        $httpResponse .= self::cookieHeaderLines($response);
+        $httpResponse .= "\r\n";
+        $httpResponse .= $responseBody;
+
+        // Write the full payload, tolerating a non-blocking send buffer.
+        $this->writeFully($client, $httpResponse);
+
+        if (!$keepAlive) {
+            $this->removeClient($client);
+        }
+    }
+
+    /**
+     * Render the Set-Cookie header lines for a response.
+     *
+     * setcookie() writes into the SAPI header list, which is never sent on a
+     * raw socket, so the socket server serialises $response->cookie() itself.
+     *
+     * @return string Zero or more "Set-Cookie: ...\r\n" lines.
+     */
+    private static function cookieHeaderLines(Response $response): string
+    {
+        $lines = '';
         foreach ($response->getCookies() as $name => $opts) {
             $cookie = urlencode($name) . '=' . urlencode($opts['value']);
             if (!empty($opts['expires'])) {
@@ -647,17 +679,52 @@ class Server
             if (!empty($opts['samesite'])) {
                 $cookie .= '; SameSite=' . $opts['samesite'];
             }
-            $httpResponse .= "Set-Cookie: {$cookie}\r\n";
+            $lines .= "Set-Cookie: {$cookie}\r\n";
         }
-        $httpResponse .= "\r\n";
-        $httpResponse .= $responseBody;
+        return $lines;
+    }
 
-        // Write the full payload, tolerating a non-blocking send buffer.
-        $this->writeFully($client, $httpResponse);
+    /**
+     * Write a streamed (SSE) response to a client socket, chunk by chunk.
+     *
+     * The socket server owns the wire, so it emits the status line and headers
+     * itself and then flushes every chunk the moment the generator yields it.
+     * A streamed body has no known length up front: no Content-Length and no
+     * chunked framing is sent, so the body is delimited by EOF — hence
+     * `Connection: close` and closing the socket once the source is exhausted.
+     * A client that has gone away shows up as a short write and ends the
+     * stream, the socket-level equivalent of connection_aborted().
+     *
+     * @param resource $client Client socket (non-blocking)
+     */
+    private function streamToClient($client, Response $response): void
+    {
+        $statusCode = $response->getStatusCode();
+        $headers = $response->getHeaders();
 
-        if (!$keepAlive) {
-            $this->removeClient($client);
+        // Length is unknown while streaming, and the body ends at EOF.
+        unset($headers['Content-Length']);
+        $headers['Connection'] = 'close';
+
+        $head = "HTTP/1.1 {$statusCode} {$this->getStatusText($statusCode)}\r\n";
+        foreach ($headers as $name => $value) {
+            $head .= "{$name}: {$value}\r\n";
         }
+        $head .= self::cookieHeaderLines($response);
+        $head .= "\r\n";
+
+        if ($this->writeFully($client, $head) === strlen($head)) {
+            foreach ($response->streamChunks() as $chunk) {
+                if ($chunk === '') {
+                    continue;
+                }
+                if ($this->writeFully($client, $chunk) < strlen($chunk)) {
+                    break; // client disconnected mid-stream
+                }
+            }
+        }
+
+        $this->removeClient($client);
     }
 
     /**
