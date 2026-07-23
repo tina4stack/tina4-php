@@ -109,7 +109,7 @@ class MySQLAdapter implements DatabaseAdapter
                 $result = $this->db->query($sql);
             } else {
                 // mysqli only speaks ? — translate :named from the ORM/QueryBuilder.
-                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
                 $stmt = $this->db->prepare($sql);
                 if ($stmt === false) {
                     $this->lastError = $this->db->error;
@@ -220,7 +220,7 @@ class MySQLAdapter implements DatabaseAdapter
                 $success = $this->db->query($sql);
             } else {
                 // mysqli only speaks ? — translate :named from the ORM/QueryBuilder.
-                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
                 $stmt = $this->db->prepare($sql);
                 if ($stmt === false) {
                     $this->lastError = $this->db->error;

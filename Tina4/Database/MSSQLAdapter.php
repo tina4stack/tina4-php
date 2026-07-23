@@ -153,7 +153,7 @@ class MSSQLAdapter implements DatabaseAdapter
         try {
             if (!empty($params)) {
                 // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.
-                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
             }
             // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
             // stringifies `false` to '' — same class of bug as PG).
@@ -266,7 +266,7 @@ class MSSQLAdapter implements DatabaseAdapter
         try {
             if (!empty($params)) {
                 // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.
-                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
             }
             // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
             // stringifies `false` to '' — same class of bug as PG).

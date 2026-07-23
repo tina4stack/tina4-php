@@ -732,7 +732,7 @@ class FirebirdAdapter implements DatabaseAdapter
             $result = @$queryFn($context, $sql);
         } else {
             // ibase/fbird only speaks ? — translate :named from the ORM/QueryBuilder.
-            [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+            [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
 
             // ibase_execute()/fbird_execute() cannot reliably bind a PHP null — it
             // fails building the XSQLDA ("Incorrect values within SQLDA structure —

@@ -281,9 +281,9 @@ class DatabaseDriversTest extends TestCase
 
     // ── SQL Translation per Dialect ──────────────────────────────────
 
-    public function testSqlTranslationFirebirdLimitToRows(): void
+    public function testSQLTranslatorFirebirdLimitToRows(): void
     {
-        $translated = \Tina4\SqlTranslation::translate(
+        $translated = \Tina4\SQLTranslator::translate(
             "SELECT * FROM users WHERE active = TRUE LIMIT 10 OFFSET 5",
             'firebird'
         );
@@ -293,9 +293,9 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('TRUE', $translated);
     }
 
-    public function testSqlTranslationMssqlLimitToTop(): void
+    public function testSQLTranslatorMssqlLimitToTop(): void
     {
-        $translated = \Tina4\SqlTranslation::translate(
+        $translated = \Tina4\SQLTranslator::translate(
             "SELECT * FROM users LIMIT 10",
             'mssql'
         );
@@ -304,19 +304,19 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('LIMIT', $translated);
     }
 
-    public function testSqlTranslationPostgresPassthrough(): void
+    public function testSQLTranslatorPostgresPassthrough(): void
     {
         $sql = "SELECT * FROM users WHERE active = TRUE LIMIT 10 OFFSET 5";
-        $translated = \Tina4\SqlTranslation::translate($sql, 'postgresql');
+        $translated = \Tina4\SQLTranslator::translate($sql, 'postgresql');
         // PostgreSQL supports LIMIT/OFFSET and TRUE natively
         $this->assertStringContainsString('LIMIT', $translated);
         $this->assertStringContainsString('TRUE', $translated);
     }
 
-    public function testSqlTranslationMysqlBooleanToInt(): void
+    public function testSQLTranslatorMysqlBooleanToInt(): void
     {
         // MySQL translate() does auto-increment syntax only; test booleanToInt directly
-        $translated = \Tina4\SqlTranslation::booleanToInt(
+        $translated = \Tina4\SQLTranslator::booleanToInt(
             "SELECT * FROM users WHERE active = TRUE AND deleted = FALSE"
         );
         $this->assertStringContainsString('1', $translated);
@@ -325,9 +325,9 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('FALSE', $translated);
     }
 
-    public function testSqlTranslationFirebirdIlikeToLike(): void
+    public function testSQLTranslatorFirebirdIlikeToLike(): void
     {
-        $translated = \Tina4\SqlTranslation::translate(
+        $translated = \Tina4\SQLTranslator::translate(
             "SELECT * FROM users WHERE name ILIKE '%alice%'",
             'firebird'
         );
@@ -336,20 +336,20 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('ILIKE', $translated);
     }
 
-    public function testSqlTranslationMssqlIlikeToLike(): void
+    public function testSQLTranslatorMssqlIlikeToLike(): void
     {
         // MSSQL translate() does not apply ilikeToLike; test the function directly
-        $translated = \Tina4\SqlTranslation::ilikeToLike(
+        $translated = \Tina4\SQLTranslator::ilikeToLike(
             "SELECT * FROM users WHERE name ILIKE '%alice%'"
         );
         $this->assertStringContainsString('LOWER', $translated);
         $this->assertStringNotContainsString('ILIKE', $translated);
     }
 
-    public function testSqlTranslationPlaceholderStyleNumbered(): void
+    public function testSQLTranslatorPlaceholderStyleNumbered(): void
     {
         // Convert ? to :1, :2 (numbered colon style)
-        $result = \Tina4\SqlTranslation::placeholderStyle(
+        $result = \Tina4\SQLTranslator::placeholderStyle(
             "SELECT * FROM users WHERE name = ? AND age = ?",
             ':'
         );
@@ -358,10 +358,10 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('?', $result);
     }
 
-    public function testSqlTranslationPlaceholderStyleSprintf(): void
+    public function testSQLTranslatorPlaceholderStyleSprintf(): void
     {
         // Convert ? to %s (sprintf style)
-        $result = \Tina4\SqlTranslation::placeholderStyle(
+        $result = \Tina4\SQLTranslator::placeholderStyle(
             "SELECT * FROM users WHERE name = ? AND age = ?",
             '%s'
         );
@@ -369,19 +369,19 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('?', $result);
     }
 
-    public function testSqlTranslationHasReturning(): void
+    public function testSQLTranslatorHasReturning(): void
     {
         $this->assertTrue(
-            \Tina4\SqlTranslation::hasReturning("INSERT INTO users (name) VALUES ('Alice') RETURNING id")
+            \Tina4\SQLTranslator::hasReturning("INSERT INTO users (name) VALUES ('Alice') RETURNING id")
         );
         $this->assertFalse(
-            \Tina4\SqlTranslation::hasReturning("INSERT INTO users (name) VALUES ('Alice')")
+            \Tina4\SQLTranslator::hasReturning("INSERT INTO users (name) VALUES ('Alice')")
         );
     }
 
-    public function testSqlTranslationExtractReturning(): void
+    public function testSQLTranslatorExtractReturning(): void
     {
-        $result = \Tina4\SqlTranslation::extractReturning(
+        $result = \Tina4\SQLTranslator::extractReturning(
             "INSERT INTO users (name) VALUES ('Alice') RETURNING id, name"
         );
         $this->assertArrayHasKey('sql', $result);
@@ -875,36 +875,36 @@ class DatabaseDriversTest extends TestCase
 
     // ── SQL Translation additional tests ────────────────────────────
 
-    public function testSqlTranslationConcatPipesToFunc(): void
+    public function testSQLTranslatorConcatPipesToFunc(): void
     {
-        $result = \Tina4\SqlTranslation::concatPipesToFunc(
+        $result = \Tina4\SQLTranslator::concatPipesToFunc(
             "SELECT first_name || ' ' || last_name FROM users"
         );
         $this->assertStringContainsString('CONCAT', $result);
         $this->assertStringNotContainsString('||', $result);
     }
 
-    public function testSqlTranslationAutoIncrementSQLite(): void
+    public function testSQLTranslatorAutoIncrementSQLite(): void
     {
-        $result = \Tina4\SqlTranslation::autoIncrementSyntax(
+        $result = \Tina4\SQLTranslator::autoIncrementSyntax(
             "CREATE TABLE test (id INTEGER AUTOINCREMENT, name TEXT)",
             'sqlite'
         );
         $this->assertIsString($result);
     }
 
-    public function testSqlTranslationAutoIncrementMySQL(): void
+    public function testSQLTranslatorAutoIncrementMySQL(): void
     {
-        $result = \Tina4\SqlTranslation::autoIncrementSyntax(
+        $result = \Tina4\SQLTranslator::autoIncrementSyntax(
             "CREATE TABLE test (id INTEGER AUTOINCREMENT, name TEXT)",
             'mysql'
         );
         $this->assertIsString($result);
     }
 
-    public function testSqlTranslationFirebirdBooleanAndIlike(): void
+    public function testSQLTranslatorFirebirdBooleanAndIlike(): void
     {
-        $translated = \Tina4\SqlTranslation::translate(
+        $translated = \Tina4\SQLTranslator::translate(
             "SELECT * FROM users WHERE active = TRUE AND name ILIKE '%bob%' AND deleted = FALSE",
             'firebird'
         );
@@ -916,9 +916,9 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('ILIKE', $translated);
     }
 
-    public function testSqlTranslationFirebirdLimitOnlyToRows(): void
+    public function testSQLTranslatorFirebirdLimitOnlyToRows(): void
     {
-        $translated = \Tina4\SqlTranslation::translate(
+        $translated = \Tina4\SQLTranslator::translate(
             "SELECT * FROM users LIMIT 10",
             'firebird'
         );
@@ -926,68 +926,68 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('LIMIT', $translated);
     }
 
-    public function testSqlTranslationMssqlBooleanToIntDirect(): void
+    public function testSQLTranslatorMssqlBooleanToIntDirect(): void
     {
         // MSSQL translate() doesn't apply booleanToInt; test the function directly
-        $translated = \Tina4\SqlTranslation::booleanToInt(
+        $translated = \Tina4\SQLTranslator::booleanToInt(
             "SELECT * FROM users WHERE active = TRUE AND deleted = FALSE"
         );
         $this->assertStringContainsString('1', $translated);
         $this->assertStringContainsString('0', $translated);
     }
 
-    public function testSqlTranslationQueryKey(): void
+    public function testSQLTranslatorQueryKey(): void
     {
-        $key1 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users", []);
-        $key2 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users", []);
-        $key3 = \Tina4\SqlTranslation::queryKey("SELECT * FROM products", []);
+        $key1 = \Tina4\SQLTranslator::queryKey("SELECT * FROM users", []);
+        $key2 = \Tina4\SQLTranslator::queryKey("SELECT * FROM users", []);
+        $key3 = \Tina4\SQLTranslator::queryKey("SELECT * FROM products", []);
         $this->assertEquals($key1, $key2);
         $this->assertNotEquals($key1, $key3);
     }
 
-    public function testSqlTranslationCacheSetAndGet(): void
+    public function testSQLTranslatorCacheSetAndGet(): void
     {
-        \Tina4\SqlTranslation::cacheClear();
-        \Tina4\SqlTranslation::cacheSet('test_key', ['result' => 42], 60);
-        $value = \Tina4\SqlTranslation::cacheGet('test_key');
+        \Tina4\SQLTranslator::cacheClear();
+        \Tina4\SQLTranslator::cacheSet('test_key', ['result' => 42], 60);
+        $value = \Tina4\SQLTranslator::cacheGet('test_key');
         $this->assertEquals(['result' => 42], $value);
-        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SQLTranslator::cacheClear();
     }
 
-    public function testSqlTranslationCacheSize(): void
+    public function testSQLTranslatorCacheSize(): void
     {
-        \Tina4\SqlTranslation::cacheClear();
-        $this->assertEquals(0, \Tina4\SqlTranslation::cacheSize());
-        \Tina4\SqlTranslation::cacheSet('key1', 'val1', 60);
-        $this->assertEquals(1, \Tina4\SqlTranslation::cacheSize());
-        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SQLTranslator::cacheClear();
+        $this->assertEquals(0, \Tina4\SQLTranslator::cacheSize());
+        \Tina4\SQLTranslator::cacheSet('key1', 'val1', 60);
+        $this->assertEquals(1, \Tina4\SQLTranslator::cacheSize());
+        \Tina4\SQLTranslator::cacheClear();
     }
 
-    public function testSqlTranslationCacheClear(): void
+    public function testSQLTranslatorCacheClear(): void
     {
-        \Tina4\SqlTranslation::cacheSet('key1', 'val1', 60);
-        \Tina4\SqlTranslation::cacheSet('key2', 'val2', 60);
-        \Tina4\SqlTranslation::cacheClear();
-        $this->assertEquals(0, \Tina4\SqlTranslation::cacheSize());
+        \Tina4\SQLTranslator::cacheSet('key1', 'val1', 60);
+        \Tina4\SQLTranslator::cacheSet('key2', 'val2', 60);
+        \Tina4\SQLTranslator::cacheClear();
+        $this->assertEquals(0, \Tina4\SQLTranslator::cacheSize());
     }
 
-    public function testSqlTranslationRemember(): void
+    public function testSQLTranslatorRemember(): void
     {
-        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SQLTranslator::cacheClear();
         $callCount = 0;
         $factory = function () use (&$callCount) {
             $callCount++;
             return 'expensive_result';
         };
 
-        $result1 = \Tina4\SqlTranslation::remember('remember_key', 60, $factory);
-        $result2 = \Tina4\SqlTranslation::remember('remember_key', 60, $factory);
+        $result1 = \Tina4\SQLTranslator::remember('remember_key', 60, $factory);
+        $result2 = \Tina4\SQLTranslator::remember('remember_key', 60, $factory);
 
         $this->assertEquals('expensive_result', $result1);
         $this->assertEquals('expensive_result', $result2);
         $this->assertEquals(1, $callCount); // Factory called only once
 
-        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SQLTranslator::cacheClear();
     }
 
     // ── Database.create auto-commit ─────────────────────────────────
@@ -1008,10 +1008,10 @@ class DatabaseDriversTest extends TestCase
 
     // ── Additional SQL Translation tests ────────────────────────────
 
-    public function testSqlTranslationMssqlBooleanToIntDirect2(): void
+    public function testSQLTranslatorMssqlBooleanToIntDirect2(): void
     {
         // MSSQL translate() only applies limitToTop — test booleanToInt directly
-        $translated = \Tina4\SqlTranslation::booleanToInt(
+        $translated = \Tina4\SQLTranslator::booleanToInt(
             "WHERE active = TRUE AND disabled = FALSE"
         );
         $this->assertStringNotContainsString('TRUE', $translated);
@@ -1020,18 +1020,18 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringContainsString('0', $translated);
     }
 
-    public function testSqlTranslationFirebirdAutoIncrement(): void
+    public function testSQLTranslatorFirebirdAutoIncrement(): void
     {
-        $translated = \Tina4\SqlTranslation::translate(
+        $translated = \Tina4\SQLTranslator::translate(
             "CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT)",
             'firebird'
         );
         $this->assertStringNotContainsString('AUTOINCREMENT', $translated);
     }
 
-    public function testSqlTranslationMysqlAutoIncrement(): void
+    public function testSQLTranslatorMysqlAutoIncrement(): void
     {
-        $translated = \Tina4\SqlTranslation::autoIncrementSyntax(
+        $translated = \Tina4\SQLTranslator::autoIncrementSyntax(
             "CREATE TABLE items (id INTEGER AUTOINCREMENT, name TEXT)",
             'mysql'
         );
@@ -1039,41 +1039,41 @@ class DatabaseDriversTest extends TestCase
         $this->assertStringNotContainsString('AUTOINCREMENT', $translated);
     }
 
-    public function testSqlTranslationCacheGetMissReturnsNull(): void
+    public function testSQLTranslatorCacheGetMissReturnsNull(): void
     {
-        \Tina4\SqlTranslation::cacheClear();
-        $value = \Tina4\SqlTranslation::cacheGet('nonexistent_key');
+        \Tina4\SQLTranslator::cacheClear();
+        $value = \Tina4\SQLTranslator::cacheGet('nonexistent_key');
         $this->assertNull($value);
     }
 
-    public function testSqlTranslationCacheSweep(): void
+    public function testSQLTranslatorCacheSweep(): void
     {
-        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SQLTranslator::cacheClear();
         // Set with very short TTL
-        \Tina4\SqlTranslation::setCacheTtl(0);
-        \Tina4\SqlTranslation::cacheSet('sweep_key', 'val', 0);
+        \Tina4\SQLTranslator::setCacheTtl(0);
+        \Tina4\SQLTranslator::cacheSet('sweep_key', 'val', 0);
         // Sweep should remove expired entries
-        $swept = \Tina4\SqlTranslation::cacheSweep();
+        $swept = \Tina4\SQLTranslator::cacheSweep();
         $this->assertIsInt($swept);
-        \Tina4\SqlTranslation::cacheClear();
+        \Tina4\SQLTranslator::cacheClear();
     }
 
-    public function testSqlTranslationRegisterAndApplyCustomFunction(): void
+    public function testSQLTranslatorRegisterAndApplyCustomFunction(): void
     {
-        \Tina4\SqlTranslation::clearFunctions();
-        \Tina4\SqlTranslation::registerFunction('NOW', function ($sql) {
+        \Tina4\SQLTranslator::clearFunctions();
+        \Tina4\SQLTranslator::registerFunction('NOW', function ($sql) {
             return str_ireplace('NOW()', 'CURRENT_TIMESTAMP', $sql);
         });
-        $result = \Tina4\SqlTranslation::applyFunctionMappings('SELECT NOW() FROM dual');
+        $result = \Tina4\SQLTranslator::applyFunctionMappings('SELECT NOW() FROM dual');
         $this->assertStringContainsString('CURRENT_TIMESTAMP', $result);
         $this->assertStringNotContainsString('NOW()', $result);
-        \Tina4\SqlTranslation::clearFunctions();
+        \Tina4\SQLTranslator::clearFunctions();
     }
 
-    public function testSqlTranslationQueryKeyWithParams(): void
+    public function testSQLTranslatorQueryKeyWithParams(): void
     {
-        $key1 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users WHERE id = ?", [1]);
-        $key2 = \Tina4\SqlTranslation::queryKey("SELECT * FROM users WHERE id = ?", [2]);
+        $key1 = \Tina4\SQLTranslator::queryKey("SELECT * FROM users WHERE id = ?", [1]);
+        $key2 = \Tina4\SQLTranslator::queryKey("SELECT * FROM users WHERE id = ?", [2]);
         $this->assertNotEquals($key1, $key2); // Different params = different keys
     }
 

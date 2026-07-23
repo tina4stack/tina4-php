@@ -9,7 +9,7 @@
 namespace Tina4;
 
 use Tina4\Database\DatabaseAdapter;
-use Tina4\SqlTranslation;
+use Tina4\SQLTranslator;
 
 /**
  * ORM base class — active record pattern for database models.
@@ -1580,7 +1580,7 @@ abstract class ORM
      *   else                  → DATETIME
      *
      * The primary key column gets `PRIMARY KEY AUTOINCREMENT`, which
-     * SqlTranslation::autoIncrementSyntax() rewrites per engine
+     * SQLTranslator::autoIncrementSyntax() rewrites per engine
      * (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, etc.).
      *
      * Returns false (not true) when the CREATE actually fails — the adapter
@@ -1686,7 +1686,7 @@ abstract class ORM
 
         // Translate the generic AUTOINCREMENT to the engine's syntax
         // (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, …).
-        $sql = SqlTranslation::autoIncrementSyntax($sql, $dialect);
+        $sql = SQLTranslator::autoIncrementSyntax($sql, $dialect);
 
         // execute() now RAISES on a failed CREATE (parity with the Python
         // master, whose create_table does try { execute; commit } catch (e)
@@ -1945,14 +1945,14 @@ abstract class ORM
      */
     public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 20, int $offset = 0, ?array $include = null): array
     {
-        $cacheKey = static::class . ':' . SqlTranslation::queryKey($sql, $params) . ":{$limit}:{$offset}";
-        $hit = SqlTranslation::cacheGet($cacheKey);
+        $cacheKey = static::class . ':' . SQLTranslator::queryKey($sql, $params) . ":{$limit}:{$offset}";
+        $hit = SQLTranslator::cacheGet($cacheKey);
         if ($hit !== null) {
             return $hit;
         }
 
         $result = $this->select($sql, $params, $limit, $offset, $include);
-        SqlTranslation::cacheSet($cacheKey, $result, $ttl);
+        SQLTranslator::cacheSet($cacheKey, $result, $ttl);
         return $result;
     }
 
@@ -1962,9 +1962,9 @@ abstract class ORM
      */
     public function clearCache(): void
     {
-        // SqlTranslation cache doesn't support tag-based clearing, so we clear all.
+        // SQLTranslator cache doesn't support tag-based clearing, so we clear all.
         // For per-model isolation, prefix keys are used but a full clear is the safe option.
-        SqlTranslation::cacheClear();
+        SQLTranslator::cacheClear();
     }
 
     /**

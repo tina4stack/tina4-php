@@ -11,7 +11,7 @@
 
 namespace Tina4;
 
-class SqlTranslation
+class SQLTranslator
 {
     /** @var array<string, array{value: mixed, expiresAt: float}> Query cache */
     private static array $cache = [];

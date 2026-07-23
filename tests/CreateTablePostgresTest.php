@@ -6,7 +6,7 @@
  * Mirrors the tina4-python create_table fix (v3.13.16): on PostgreSQL the
  * generated DDL must use the engine's native types, not SQLite-only syntax:
  *
- *   - auto-increment PK  → SERIAL (via SqlTranslation::autoIncrementSyntax),
+ *   - auto-increment PK  → SERIAL (via SQLTranslator::autoIncrementSyntax),
  *     not "INTEGER PRIMARY KEY AUTOINCREMENT"
  *   - bool column        → native BOOLEAN, not INTEGER (so PG can accept a
  *     real boolean on insert and `WHERE x = TRUE` works)

@@ -30,7 +30,7 @@ use Tina4\Request;
 use Tina4\Response;
 use Tina4\Router;
 use Tina4\Session;
-use Tina4\SqlTranslation;
+use Tina4\SQLTranslator;
 use Tina4\StaticFiles;
 use Tina4\Swagger;
 use Tina4\WebSocket;
@@ -648,31 +648,31 @@ class SmokeTest extends TestCase
     // 18. SQL Translation
     // ═════════════════════════════════════════════════════════════════
 
-    public function testSqlTranslation(): void
+    public function testSQLTranslator(): void
     {
-        SqlTranslation::cacheClear();
-        SqlTranslation::clearFunctions();
+        SQLTranslator::cacheClear();
+        SQLTranslator::clearFunctions();
 
         // limitToRows
         $this->assertSame(
             'SELECT * FROM t ROWS 6 TO 15',
-            SqlTranslation::limitToRows('SELECT * FROM t LIMIT 10 OFFSET 5')
+            SQLTranslator::limitToRows('SELECT * FROM t LIMIT 10 OFFSET 5')
         );
 
         // limitToTop
         $this->assertSame(
             'SELECT TOP 10 * FROM t',
-            SqlTranslation::limitToTop('SELECT * FROM t LIMIT 10')
+            SQLTranslator::limitToTop('SELECT * FROM t LIMIT 10')
         );
 
         // booleanToInt
         $this->assertSame(
             'SELECT * FROM t WHERE active = 1',
-            SqlTranslation::booleanToInt('SELECT * FROM t WHERE active = TRUE')
+            SQLTranslator::booleanToInt('SELECT * FROM t WHERE active = TRUE')
         );
 
-        SqlTranslation::cacheClear();
-        SqlTranslation::clearFunctions();
+        SQLTranslator::cacheClear();
+        SQLTranslator::clearFunctions();
     }
 
     // ═════════════════════════════════════════════════════════════════

@@ -138,7 +138,7 @@ trait PdoAdapterTrait
                 // PDO speaks ? positionally; the ORM/QueryBuilder may emit
                 // :named — translate to ? and reorder params, exactly as the
                 // native adapters do.
-                [$sql, $params] = \Tina4\SqlTranslation::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
             }
             $params = $this->normalizeParams(array_values($params));
 
@@ -224,7 +224,7 @@ trait PdoAdapterTrait
         try {
             $execSql = $sql;
             if (!empty($params)) {
-                [$execSql, $params] = \Tina4\SqlTranslation::namedToPositional($execSql, $params);
+                [$execSql, $params] = \Tina4\SQLTranslator::namedToPositional($execSql, $params);
             }
             $params = $this->normalizeParams(array_values($params));
 

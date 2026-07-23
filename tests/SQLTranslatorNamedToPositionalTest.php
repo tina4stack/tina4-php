@@ -5,7 +5,7 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Unit tests for SqlTranslation::namedToPositional().
+ * Unit tests for SQLTranslator::namedToPositional().
  *
  * Why this exists: ORM save() and QueryBuilder emit :named placeholders
  * because that is what PDO would accept. Four of the five v3 database
@@ -20,15 +20,15 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use Tina4\SqlTranslation;
+use Tina4\SQLTranslator;
 
-class SqlTranslationNamedToPositionalTest extends TestCase
+class SQLTranslatorNamedToPositionalTest extends TestCase
 {
     // ── 1. Plain translation ─────────────────────────────────────────
 
     public function testSimpleNamedPlaceholderBecomesQuestionMark(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'INSERT INTO users (name) VALUES (:name)',
             [':name' => 'Alice']
         );
@@ -38,7 +38,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testMultipleDistinctNamesPreserveOrder(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'INSERT INTO u (name, email, age) VALUES (:name, :email, :age)',
             [':age' => 30, ':name' => 'Alice', ':email' => 'a@b.test']
         );
@@ -51,7 +51,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testDuplicatePlaceholderBindsOncePerOccurrence(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'SELECT * FROM t WHERE id = :id OR parent_id = :id',
             [':id' => 7]
         );
@@ -63,11 +63,11 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testParamKeyAcceptsBothPrefixedAndUnprefixed(): void
     {
-        [$sql1, $params1] = SqlTranslation::namedToPositional(
+        [$sql1, $params1] = SQLTranslator::namedToPositional(
             'SELECT * FROM t WHERE id = :id',
             [':id' => 1]
         );
-        [$sql2, $params2] = SqlTranslation::namedToPositional(
+        [$sql2, $params2] = SQLTranslator::namedToPositional(
             'SELECT * FROM t WHERE id = :id',
             ['id' => 1]
         );
@@ -78,7 +78,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testMixedPrefixedAndUnprefixedKeys(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'INSERT INTO t (a, b) VALUES (:a, :b)',
             [':a' => 'A', 'b' => 'B']
         );
@@ -90,7 +90,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testColonInsideSingleQuotedStringIsPreserved(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             "INSERT INTO logs (msg) VALUES ('hello :world')",
             []
         );
@@ -100,7 +100,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testColonInsideDoubleQuotedStringIsPreserved(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'SELECT "col:name" FROM t WHERE id = :id',
             [':id' => 5]
         );
@@ -110,7 +110,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testEscapedQuoteInsideStringHandled(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             "SELECT * FROM t WHERE note = 'it\\'s a :trap' AND id = :id",
             [':id' => 9]
         );
@@ -122,7 +122,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testLineCommentIsPreserved(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             "SELECT id FROM t -- where :foo would be wrong\nWHERE name = :name",
             [':name' => 'Alice']
         );
@@ -135,7 +135,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testBlockCommentIsPreserved(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'SELECT id FROM t /* keep :foo here */ WHERE name = :name',
             [':name' => 'Alice']
         );
@@ -151,7 +151,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
     public function testUnknownPlaceholderLeftInPlace(): void
     {
         // The driver will surface the real error; we do not invent values.
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'SELECT * FROM t WHERE id = :id AND status = :status',
             [':id' => 1]
         );
@@ -161,7 +161,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testSqlWithoutColonPassesThrough(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'SELECT * FROM t WHERE id = ?',
             [':id' => 1, ':name' => 'Alice']
         );
@@ -174,7 +174,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
     {
         // Adapter passes us SQL with ? already; nothing should change beyond
         // dropping array keys.
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'UPDATE t SET name = ? WHERE id = ?',
             ['Alice', 1]
         );
@@ -184,7 +184,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
 
     public function testNullValueBindsAsNull(): void
     {
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'UPDATE t SET email = :email WHERE id = :id',
             [':email' => null, ':id' => 1]
         );
@@ -195,7 +195,7 @@ class SqlTranslationNamedToPositionalTest extends TestCase
     public function testZeroIntegerBindsCorrectly(): void
     {
         // Guards against truthy-checks accidentally treating 0 as missing.
-        [$sql, $params] = SqlTranslation::namedToPositional(
+        [$sql, $params] = SQLTranslator::namedToPositional(
             'UPDATE t SET active = :active WHERE id = :id',
             [':active' => 0, ':id' => 0]
         );

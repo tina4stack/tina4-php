@@ -107,7 +107,7 @@ Tina4/                   # Core framework classes (namespace Tina4\)
   ORM.php                # Active Record ORM
   Queue.php              # Job queue
   Session.php            # Session management
-  SqlTranslation.php     # SQL dialect translation layer
+  SQLTranslator.php      # SQL dialect translation layer
   Swagger.php            # OpenAPI spec generator
   Testing.php            # Inline testing framework
   WebSocket.php          # WebSocket support
@@ -1068,57 +1068,57 @@ $results = Testing::runAll();
 //   + add([null]) raises InvalidArgumentException
 ```
 
-### SqlTranslation — Cross-database SQL dialect translation
+### SQLTranslator — Cross-database SQL dialect translation
 
 Translates portable SQL into dialect-specific syntax. Supports Firebird, MSSQL, MySQL, PostgreSQL, and SQLite.
 
 ```php
 // Full dialect translation (applies all relevant rules)
-SqlTranslation::translate(string $sql, string $dialect): string
+SQLTranslator::translate(string $sql, string $dialect): string
 
 // Individual translations
-SqlTranslation::limitToRows(string $sql): string          // LIMIT/OFFSET -> ROWS X TO Y (Firebird)
-SqlTranslation::limitToTop(string $sql): string           // LIMIT -> TOP N (MSSQL)
-SqlTranslation::booleanToInt(string $sql): string         // TRUE/FALSE -> 1/0
-SqlTranslation::ilikeToLike(string $sql): string          // ILIKE -> LOWER() LIKE LOWER()
-SqlTranslation::concatPipesToFunc(string $sql): string    // || -> CONCAT()
-SqlTranslation::autoIncrementSyntax(string $sql, string $dialect): string
-SqlTranslation::placeholderStyle(string $sql, string $style): string  // ? -> :1,:2 or %s
-SqlTranslation::namedToPositional(string $sql, array $params): array  // :name -> ?, reorders params (used by MySQL/MSSQL/Firebird/Postgres adapters; skips string literals + comments; duplicate names bind once per occurrence)
-SqlTranslation::hasReturning(string $sql): bool
-SqlTranslation::extractReturning(string $sql): array      // ['sql' => ..., 'columns' => [...]]
+SQLTranslator::limitToRows(string $sql): string          // LIMIT/OFFSET -> ROWS X TO Y (Firebird)
+SQLTranslator::limitToTop(string $sql): string           // LIMIT -> TOP N (MSSQL)
+SQLTranslator::booleanToInt(string $sql): string         // TRUE/FALSE -> 1/0
+SQLTranslator::ilikeToLike(string $sql): string          // ILIKE -> LOWER() LIKE LOWER()
+SQLTranslator::concatPipesToFunc(string $sql): string    // || -> CONCAT()
+SQLTranslator::autoIncrementSyntax(string $sql, string $dialect): string
+SQLTranslator::placeholderStyle(string $sql, string $style): string  // ? -> :1,:2 or %s
+SQLTranslator::namedToPositional(string $sql, array $params): array  // :name -> ?, reorders params (used by MySQL/MSSQL/Firebird/Postgres adapters; skips string literals + comments; duplicate names bind once per occurrence)
+SQLTranslator::hasReturning(string $sql): bool
+SQLTranslator::extractReturning(string $sql): array      // ['sql' => ..., 'columns' => [...]]
 
 // Custom function mapping
-SqlTranslation::registerFunction(string $name, callable $mapper): void
-SqlTranslation::applyFunctionMappings(string $sql): string
-SqlTranslation::clearFunctions(): void
+SQLTranslator::registerFunction(string $name, callable $mapper): void
+SQLTranslator::applyFunctionMappings(string $sql): string
+SQLTranslator::clearFunctions(): void
 
 // Query result caching
-SqlTranslation::setCacheTtl(int $seconds): void
-SqlTranslation::queryKey(string $sql, array $params = []): string
-SqlTranslation::cacheGet(string $key): mixed
-SqlTranslation::cacheSet(string $key, mixed $value, int $ttl = 0): void
-SqlTranslation::remember(string $key, int $ttl, callable $factory): mixed
-SqlTranslation::cacheSweep(): int
-SqlTranslation::cacheClear(): void
-SqlTranslation::cacheSize(): int
+SQLTranslator::setCacheTtl(int $seconds): void
+SQLTranslator::queryKey(string $sql, array $params = []): string
+SQLTranslator::cacheGet(string $key): mixed
+SQLTranslator::cacheSet(string $key, mixed $value, int $ttl = 0): void
+SQLTranslator::remember(string $key, int $ttl, callable $factory): mixed
+SQLTranslator::cacheSweep(): int
+SQLTranslator::cacheClear(): void
+SQLTranslator::cacheSize(): int
 ```
 
 Example:
 ```php
 // Translate for Firebird (LIMIT->ROWS, TRUE->1, ILIKE->LOWER LIKE)
-$sql = SqlTranslation::translate(
+$sql = SQLTranslator::translate(
     "SELECT * FROM users WHERE active = TRUE AND name ILIKE '%alice%' LIMIT 10 OFFSET 5",
     'firebird'
 );
 // => SELECT * FROM users WHERE active = 1 AND LOWER(name) LIKE LOWER('%alice%') ROWS 6 TO 15
 
 // Register a custom function mapping
-SqlTranslation::registerFunction('NOW', fn($sql) => str_ireplace('NOW()', 'CURRENT_TIMESTAMP', $sql));
+SQLTranslator::registerFunction('NOW', fn($sql) => str_ireplace('NOW()', 'CURRENT_TIMESTAMP', $sql));
 
 // Cache expensive query results
-$result = SqlTranslation::remember(
-    SqlTranslation::queryKey("SELECT * FROM stats", []),
+$result = SQLTranslator::remember(
+    SQLTranslator::queryKey("SELECT * FROM stats", []),
     300,
     fn() => $db->fetch("SELECT * FROM stats")
 );
@@ -1184,7 +1184,7 @@ is authorised on the raw socket peer.
 - Dev dashboard (`DevAdmin`) with route/request/query/queue/mailbox/WebSocket inspection
 - Programmatic HTML builder (`HtmlElement`) with tag helpers
 - Inline testing (`Testing`) with assertion builders and test runner
-- SQL dialect translation (`SqlTranslation`) for cross-database portability
+- SQL dialect translation (`SQLTranslator`) for cross-database portability
 - Background tasks via `$app->background()` — cooperative periodic callbacks in the event loop (no threads)
 - AI assistant detection (`AI`) with context file scaffolding for 7 tools
 - Queue system with Kafka, RabbitMQ, and MongoDB backends
