@@ -214,23 +214,48 @@ class CommandsManifestTest extends TestCase
         // Flag-style aliases are normalised to a real command before dispatch.
         $dispatchable = array_values(array_diff($dispatchable, ['--help', '-h']));
 
-        $manifestNames = array_column($this->manifest()['commands'], 'name');
+        // The manifest also advertises the DELEGATED commands (doctor/setup/
+        // deploy), which the tina4 client implements — they are flagged
+        // "delegated": true and deliberately have NO switch case here.
+        $manifestNames = [];
+        $delegatedNames = [];
+        foreach ($this->manifest()['commands'] as $command) {
+            $manifestNames[] = $command['name'];
+            if (!empty($command['delegated'])) {
+                $delegatedNames[] = $command['name'];
+            }
+        }
+        $this->assertSame(
+            ['doctor', 'setup', 'deploy'],
+            $delegatedNames,
+            'the delegated set drifted from doctor/setup/deploy'
+        );
+        foreach ($delegatedNames as $name) {
+            $this->assertNotContains(
+                $name,
+                $dispatchable,
+                "{$name} is delegated to the tina4 client — it must not be a native switch case"
+            );
+        }
 
-        sort($dispatchable);
+        $expected = array_merge($dispatchable, $delegatedNames);
+        sort($expected);
         sort($manifestNames);
         $this->assertSame(
             $manifestNames,
-            $dispatchable,
-            'manifest command names drifted from the dispatch switch cases'
+            $expected,
+            'manifest command names drifted from the dispatch switch cases + delegated set'
         );
     }
 
     public function testUnknownCommandIsRejectedViaTheRegistry(): void
     {
-        // A command absent from the registry is unknown — proves the registry
-        // (not a parallel list) is the gate for what the CLI will dispatch.
+        // A command in NEITHER registry is unknown — proves the registries (not a
+        // parallel list) gate what the CLI will dispatch. Regression lock-in: this
+        // used to print the error and exit 0, so a typo in a script or CI step
+        // reported success.
         [$stdout, , $exit] = $this->runCli(['definitely-not-a-real-command']);
-        $this->assertSame(0, $exit);
+        $this->assertSame(1, $exit, 'an unknown command must fail loudly, not exit 0');
         $this->assertStringContainsString('Unknown command: definitely-not-a-real-command', $stdout);
     }
 

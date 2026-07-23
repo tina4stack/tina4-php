@@ -358,6 +358,116 @@ function resolveHostPort(?string $cliArg = null): array
 //                              'usage'?       => str,    // human-help arg hint only
 //                              'args'?        => [str],  // positional args -> manifest ("x?" = optional)
 //                              'subcommands'? => [str]]   // sub-names -> manifest (generate)
+//   $TINA4_DELEGATED[name]  = ['summary' => str, 'usage'?, 'args'?]   // run by the tina4 client
+
+// ── Delegation to the `tina4` client ──────────────────────────────────────
+//
+// `doctor`, `setup` and `deploy` are owned by the Rust `tina4` client, not by any
+// framework. `doctor` probes ALL FOUR runtimes plus package managers, ports and
+// global AI-skills currency; `setup` installs language runtimes (Homebrew /
+// Chocolatey, with UAC elevation on Windows) and scaffolds a project from
+// nothing; `deploy` writes deployment boilerplate baked into the client binary.
+// Cloning any of them into four languages would duplicate hundreds of lines per
+// language for zero new capability — and four copies would immediately drift.
+//
+// So the framework CLI DELEGATES: it resolves `tina4` on PATH, runs it with the
+// same argv, and exits with the client's exit code. All four frameworks reach the
+// SAME implementation, which is a stronger parity guarantee than four ports.
+//
+// Delegation is ALLOW-LISTED, never blind. The client forwards ITS unknown
+// commands to the framework CLI, so a framework that forwarded its unknowns back
+// would ping-pong an unknown command between two processes forever. The closed
+// $TINA4_DELEGATED set contains only commands the client dispatches natively, so
+// no loop is possible by construction, and a real typo still gets "Unknown
+// command". Mirrors the Python master's DELEGATED / _delegate_to_client.
+
+const TINA4_CLIENT_BINARY = 'tina4';
+
+// Internal process marker (same class as the client's own TINA4_SETUP_ELEVATED):
+// set on the child so a client that resolves back to a framework CLI is caught
+// instead of spawning forever. NOT user configuration — deliberately absent from
+// the CLI's known_vars().
+const TINA4_DELEGATION_GUARD_ENV = 'TINA4_CLI_DELEGATED';
+
+// Exit codes. 127 is the conventional "command not found" and covers both ways
+// the client can be unreachable (absent from PATH, or the loop guard tripping).
+const TINA4_EXIT_CLIENT_UNAVAILABLE = 127;
+const TINA4_EXIT_UNKNOWN_COMMAND = 1;
+
+const TINA4_CLIENT_INSTALL_HINT =
+    "  Install it:  curl -fsSL https://tina4.com/install.sh | sh\n" .
+    "  Windows:     irm https://tina4.com/install.ps1 | iex";
+
+/**
+ * Absolute path of the `tina4` client on PATH, or null if it isn't there.
+ *
+ * Scans PATH directly rather than shelling out to which/where — one less process
+ * and it behaves the same on every platform.
+ */
+function tina4FindClient(): ?string
+{
+    $isWindows = DIRECTORY_SEPARATOR === '\\';
+    $names = $isWindows
+        ? [TINA4_CLIENT_BINARY . '.exe', TINA4_CLIENT_BINARY . '.cmd', TINA4_CLIENT_BINARY . '.bat']
+        : [TINA4_CLIENT_BINARY];
+    foreach (explode(PATH_SEPARATOR, (string)getenv('PATH')) as $dir) {
+        if ($dir === '') {
+            continue;
+        }
+        foreach ($names as $name) {
+            $candidate = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $name;
+            if (is_file($candidate) && ($isWindows || is_executable($candidate))) {
+                return $candidate;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Run `tina4 <command> <args...>`, returning the client's exit code.
+ *
+ * Returns TINA4_EXIT_CLIENT_UNAVAILABLE (127) with an actionable message when the
+ * client is not on PATH, or when the re-entry guard shows the resolved `tina4`
+ * came back to a framework CLI (a delegation loop).
+ */
+function tina4DelegateToClient(string $command, array $args): int
+{
+    if (getenv(TINA4_DELEGATION_GUARD_ENV) === $command) {
+        fwrite(STDERR,
+            "  Refusing to delegate '{$command}' again — the 'tina4' on your PATH\n" .
+            "  resolved back to a framework CLI instead of the tina4 client.\n\n" .
+            "  Check which 'tina4' comes first on your PATH and put the client first.\n");
+        return TINA4_EXIT_CLIENT_UNAVAILABLE;
+    }
+
+    $client = tina4FindClient();
+    if ($client === null) {
+        fwrite(STDERR,
+            "  '{$command}' is provided by the tina4 client, which is not on your PATH.\n\n" .
+            TINA4_CLIENT_INSTALL_HINT . "\n\n" .
+            '  Then run:    ' . TINA4_CLIENT_BINARY . " {$command}\n");
+        return TINA4_EXIT_CLIENT_UNAVAILABLE;
+    }
+
+    // Array form => no shell, so no quoting/injection surface. STDIN/STDOUT/STDERR
+    // are inherited, so the client's interactive prompts (setup) and colour output
+    // work exactly as if it had been invoked directly.
+    $env = getenv();
+    $env[TINA4_DELEGATION_GUARD_ENV] = $command;
+    $process = proc_open(
+        array_merge([$client, $command], $args),
+        [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+        $pipes,
+        null,
+        $env
+    );
+    if (!is_resource($process)) {
+        fwrite(STDERR, "  Could not start the tina4 client at {$client}\n");
+        return TINA4_EXIT_CLIENT_UNAVAILABLE;
+    }
+    return proc_close($process);
+}
 
 /**
  * Resolve the framework version WITHOUT booting the app or loading heavy classes.
@@ -402,7 +512,7 @@ function tina4FrameworkVersion(string $frameworkRoot): string
  *   {framework:"php", version:"<x.y.z>",
  *    commands:[{name, summary, args?, subcommands?}, ...]}
  */
-function tina4CommandsManifest(array $commands, string $version): array
+function tina4CommandsManifest(array $commands, string $version, array $delegated = []): array
 {
     $list = [];
     foreach ($commands as $name => $spec) {
@@ -415,6 +525,17 @@ function tina4CommandsManifest(array $commands, string $version): array
         }
         $list[] = $entry;
     }
+    // Commands handed to the `tina4` client carry "delegated": true, so the
+    // manifest describes the WHOLE surface the CLI accepts while still saying who
+    // implements each one. The client needs no change: its help renderer already
+    // drops manifest names that clash with its own natives.
+    foreach ($delegated as $name => $spec) {
+        $entry = ['name' => $name, 'summary' => $spec['summary'], 'delegated' => true];
+        if (!empty($spec['args'])) {
+            $entry['args'] = array_values($spec['args']);
+        }
+        $list[] = $entry;
+    }
     return ['framework' => 'php', 'version' => $version, 'commands' => $list];
 }
 
@@ -422,11 +543,15 @@ function tina4CommandsManifest(array $commands, string $version): array
  * Render the human-readable help — generated from the SAME registries that drive
  * dispatch and the manifest, so the help can never drift from what the CLI does.
  */
-function tina4RenderHelp(array $commands, array $generators): string
+function tina4RenderHelp(array $commands, array $generators, array $delegated = []): string
 {
     $commandRows = [];
     foreach ($commands as $name => $spec) {
         $commandRows[] = [trim($name . ' ' . ($spec['usage'] ?? '')), $spec['summary']];
+    }
+    $delegatedRows = [];
+    foreach ($delegated as $name => $spec) {
+        $delegatedRows[] = [trim($name . ' ' . ($spec['usage'] ?? '')), $spec['summary']];
     }
     $generatorRows = [];
     foreach ($generators as $name => $spec) {
@@ -435,7 +560,7 @@ function tina4RenderHelp(array $commands, array $generators): string
     // Align summaries in a column; a left cell longer than the cap overflows
     // cleanly (2-space gap) rather than pushing every other summary out.
     $pad = 0;
-    foreach (array_merge($commandRows, $generatorRows) as [$left,]) {
+    foreach (array_merge($commandRows, $delegatedRows, $generatorRows) as [$left,]) {
         $pad = max($pad, strlen($left));
     }
     $pad = min(46, $pad);
@@ -447,6 +572,15 @@ function tina4RenderHelp(array $commands, array $generators): string
     $lines = ['', 'Tina4 PHP CLI v3', '', 'Usage: tina4php <command> [options]', '', 'Commands:'];
     foreach ($commandRows as [$left, $summary]) {
         $lines[] = $row($left, $summary);
+    }
+    if ($delegatedRows !== []) {
+        $lines[] = '';
+        $lines[] = 'Delegated to the ' . TINA4_CLIENT_BINARY . ' client (same behaviour in every framework):';
+        foreach ($delegatedRows as [$left, $summary]) {
+            $lines[] = $row($left, $summary);
+        }
+        $lines[] = '  (these run the ' . TINA4_CLIENT_BINARY
+            . ' client — install: curl -fsSL https://tina4.com/install.sh | sh)';
     }
     $lines[] = '';
     $lines[] = 'Generators:';
@@ -480,7 +614,8 @@ function tina4RenderCommands(array $manifest): string
     }
     $lines = ['', "Tina4 {$manifest['framework']} — {$manifest['version']}", ''];
     foreach ($manifest['commands'] as $command) {
-        $lines[] = '  ' . str_pad($command['name'], $width) . '  ' . $command['summary'];
+        $marker = !empty($command['delegated']) ? ' (' . TINA4_CLIENT_BINARY . ' client)' : '';
+        $lines[] = '  ' . str_pad($command['name'], $width) . '  ' . $command['summary'] . $marker;
         if (!empty($command['subcommands'])) {
             $lines[] = '  ' . str_repeat(' ', $width) . '    ' . implode(', ', $command['subcommands']);
         }
@@ -533,6 +668,19 @@ $TINA4_COMMANDS = [
     'help'             => [                                                          'summary' => 'Show this help'],
 ];
 
+// Commands the `tina4` client OWNS and this CLI reaches by delegation — see the
+// "Delegation to the `tina4` client" section above for why these are not ported.
+// There are no handlers here: dispatch runs `tina4 <name> <args...>` and exits
+// with its code. Keep this set closed and identical in all four frameworks — it
+// must contain ONLY commands the client dispatches natively, or delegation could
+// bounce back and loop. Summaries are the client's own wording, verbatim.
+$TINA4_DELEGATED = [
+    'doctor' => ['summary' => 'Check installed languages and tools'],
+    'setup'  => ['summary' => 'Guided, menu-driven setup: install everything + scaffold a ready-to-run project'],
+    'deploy' => ['usage' => '<docker|systemd|nginx|cpanel> [--force]', 'args' => ['target'],
+                 'summary' => 'Generate deployment scaffolding (Dockerfile, systemd unit, nginx block, cPanel)'],
+];
+
 // ── Parse command ──
 $command = $argv[1] ?? 'help';
 $args = array_slice($argv, 2);
@@ -542,13 +690,17 @@ if ($command === '--help' || $command === '-h') {
     $command = 'help';
 }
 
-// The registry is the single source of truth for the command surface: a command
-// it does not declare is unknown. Mirrors the Python master's main(), which
-// prints "Unknown command" then falls back to help.
+// The registries are the single source of truth for the command surface: a
+// command in neither is unknown. Mirrors the Python master's main().
 if (!isset($TINA4_COMMANDS[$command])) {
+    if (isset($TINA4_DELEGATED[$command])) {
+        exit(tina4DelegateToClient($command, $args));
+    }
+    // A genuinely unknown command is an ERROR: exit non-zero so a typo in a
+    // script or CI step fails loudly instead of reporting success.
     echo "Unknown command: {$command}\n";
-    echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS);
-    exit(0);
+    echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS, $TINA4_DELEGATED);
+    exit(TINA4_EXIT_UNKNOWN_COMMAND);
 }
 
 switch ($command) {
@@ -1330,7 +1482,7 @@ DOCKERFILE;
     // or autoloads framework/app classes — the tina4 Rust client calls it on every
     // `tina4 --help`, in any directory, so it stays instant and safe to run anywhere.
     case 'commands':
-        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion((string)$frameworkRoot));
+        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion((string)$frameworkRoot), $TINA4_DELEGATED);
         if (in_array('--json', $args, true)) {
             echo json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
         } else {
@@ -1343,7 +1495,7 @@ DOCKERFILE;
     // ────────────────────────────────────────────
     case 'help':
     default:
-        echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS);
+        echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS, $TINA4_DELEGATED);
         break;
 }
 
