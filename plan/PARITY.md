@@ -48,7 +48,7 @@ This checklist tracks feature parity against the Python reference implementation
 | Firebird driver | [x] | [x] | `FirebirdAdapter.php` |
 | ODBC driver | [ ] | [ ] | Not implemented — Python has it |
 | DatabaseResult (to_json, to_array, to_csv, to_paginate) | [x] | [x] | |
-| SQL translation | [x] | [x] | `SqlTranslation.php` |
+| SQL translation | [x] | [x] | `SQLTranslator.php` |
 | Query caching | [x] | [x] | `CachedDatabase.php` |
 | get_next_id (race-safe sequences) | [x] | [x] | |
 | Transactions | [x] | [x] | |

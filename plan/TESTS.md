@@ -60,7 +60,7 @@ Version: 3.10.37 | Last updated: 2026-03-31
 | 44 | SessionHandlerTest.php | 25 | Session handlers | Done |
 | 45 | SessionV3Test.php | 44 | Session management | Done |
 | 46 | SmokeTest.php | 80 | End-to-end smoke tests | Done |
-| 47 | SqlTranslationTest.php | 41 | SQL translation | Done |
+| 47 | SQLTranslatorTest.php | 41 | SQL translation | Done |
 | 48 | SwaggerTest.php | 47 | Swagger/OpenAPI generation | Done |
 | 49 | TemplateMethodTest.php | 5 | Template method calls | Done |
 | 50 | TestingTest.php | 0 | Testing class | Not started |
