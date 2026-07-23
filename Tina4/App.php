@@ -208,6 +208,9 @@ class App
     /** @var array<array{callback: callable, interval: float}> Pending tick callbacks to register on server start */
     private array $tickCallbacks = [];
 
+    /** @var Server|null The running server, once run() has started it. Lets stopBackground() reach a live tick. */
+    private ?Server $server = null;
+
     public function __construct(
         string $basePath = '',
         private readonly bool $development = false,
@@ -1153,6 +1156,62 @@ HTML;
     }
 
     /**
+     * Stop a registered background task and DEREGISTER it.
+     *
+     * Identified by the callback itself, because background() stays fluent and
+     * returns $this rather than a handle. Pass the same callable you registered
+     * (the identical Closure instance, function name, or [$object, 'method']);
+     * matching is by identity, so an equivalent-but-separate closure is not a
+     * match. Only the FIRST registration of that callable is removed, so
+     * registering one callable twice needs two calls to stop both.
+     *
+     * Works before and after the server starts: it removes the pending
+     * registration AND, once running, the live tick on the server's event loop.
+     *
+     * Idempotent — stopping an already-stopped task is a safe no-op.
+     *
+     * @param  callable $callback The exact callable passed to background()
+     * @return bool True if a task was removed, false if none matched
+     */
+    public function stopBackground(callable $callback): bool
+    {
+        $removed = false;
+
+        foreach ($this->tickCallbacks as $key => $tick) {
+            if ($tick['callback'] === $callback) {
+                // Do NOT reindex — the running server iterates a key snapshot.
+                unset($this->tickCallbacks[$key]);
+                $removed = true;
+                break;
+            }
+        }
+
+        // Once run() has started the loop, the Server owns the live copy.
+        if ($this->server !== null && $this->server->stopTick($callback)) {
+            $removed = true;
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Number of REGISTERED background tasks (stopped ones are already gone).
+     *
+     * Reports the live server's count once running, otherwise the pending
+     * registrations waiting for run().
+     *
+     * @return int Count of currently-registered background tasks
+     */
+    public function backgroundTaskCount(): int
+    {
+        if ($this->server !== null) {
+            return $this->server->tickCallbackCount();
+        }
+
+        return count($this->tickCallbacks);
+    }
+
+    /**
      * Run the application using the custom Tina4 Server.
      * Calls start() to register routes, then launches the non-blocking HTTP/WebSocket server.
      * Falls back to `php -S` if stream_socket_server fails.
@@ -1185,6 +1244,8 @@ HTML;
 
         try {
             $server = new Server($host, $port);
+            // Keep the reference so stopBackground() can reach the live loop.
+            $this->server = $server;
 
             // Register background tasks on the server's event loop
             foreach ($this->tickCallbacks as $tick) {

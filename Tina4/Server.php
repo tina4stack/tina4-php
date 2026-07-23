@@ -1715,6 +1715,45 @@ class Server
     }
 
     /**
+     * Stop a registered tick callback and DEREGISTER it.
+     *
+     * Matching is by identity on the callable, so only the FIRST registration of
+     * that exact callable is removed and no sibling task is disturbed. Safe to
+     * call from inside a tick callback — including one stopping itself.
+     *
+     * Idempotent — stopping an already-stopped callback is a safe no-op.
+     *
+     * @param  callable $callback The exact callable passed to onTick()
+     * @return bool True if a callback was removed, false if none matched
+     */
+    public function stopTick(callable $callback): bool
+    {
+        foreach ($this->tickCallbacks as $key => $tick) {
+            if ($tick['callback'] === $callback) {
+                // unset() WITHOUT reindexing. runTickCallbacks() iterates this
+                // array by reference, and PHP skips an unset element that it has
+                // not reached yet — but renumbering the array mid-sweep would
+                // shift every later entry onto a different key and run the wrong
+                // callback. Leaving a hole is what keeps a mid-sweep stop safe.
+                unset($this->tickCallbacks[$key]);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Number of REGISTERED tick callbacks (stopped ones are already removed).
+     *
+     * @return int Count of currently-registered background tasks
+     */
+    public function tickCallbackCount(): int
+    {
+        return count($this->tickCallbacks);
+    }
+
+    /**
      * Run any due tick callbacks. Called from the idle branch of the event loop.
      * Includes a safety timeout — if a callback takes longer than its interval,
      * a warning is logged to help developers identify blocking code.

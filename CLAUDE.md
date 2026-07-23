@@ -831,10 +831,25 @@ $app->run();
 | Method | Description |
 |--------|-------------|
 | `$app->background(callable $callback, float $interval = 1.0): self` | Register a periodic task. Callback takes no arguments. Interval is in seconds. Returns `$app` for chaining. |
+| `$app->stopBackground(callable $callback): bool` | Stop a registered task and DEREGISTER it. Pass the SAME callable you registered — matching is by identity, and only the FIRST registration of it is removed. Works before and after `run()` (it also stops the live tick). Idempotent; returns `false` when nothing matched. |
+| `$app->backgroundTaskCount(): int` | How many background tasks are currently REGISTERED (stopped ones are already gone). |
+
+`background()` deliberately stays fluent — the stop is a separate call, so
+existing chains keep working:
+
+```php
+$callback = static fn() => processOrders($queue);
+$app->background($callback, 2.0);   // still returns $app
+// ...later, before or during run():
+$app->stopBackground($callback);    // true — task ended and deregistered
+$app->backgroundTaskCount();        // 0
+```
 
 Server-level access (advanced):
 ```php
 $server->onTick(callable $callback, float $interval = 1.0): void
+$server->stopTick(callable $callback): bool   // stop + deregister one tick (by callable identity)
+$server->tickCallbackCount(): int             // currently-registered tick callbacks
 ```
 
 ### AI — Detect AI coding assistants and scaffold context files
