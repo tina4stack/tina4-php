@@ -360,7 +360,7 @@ class SQLTranslatorTest extends TestCase
     //
     // The dialect-translation class is named SQLTranslator in the Python
     // master (tina4_python/database/adapter.py), Ruby (lib/tina4/
-    // sql_translation.rb) and Node (packages/orm/src/sqlTranslation.ts). PHP
+    // sql_translator.rb) and Node (packages/orm/src/sqlTranslator.ts). PHP
     // was the lone outlier as `SqlTranslation`, drifting on both the acronym
     // casing and the noun. These tests pin the converged name so the drift
     // cannot silently return, and pin the deliberate absence of a

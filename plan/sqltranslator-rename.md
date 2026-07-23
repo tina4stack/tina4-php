@@ -10,8 +10,8 @@ Three of four frameworks already agree, and Python is master:
 | Framework | Class | File |
 |-----------|-------|------|
 | Python (master) | `SQLTranslator` | `tina4_python/database/adapter.py:613` |
-| Ruby | `SQLTranslator` | `lib/tina4/sql_translation.rb:18` |
-| Node | `SQLTranslator` | `packages/orm/src/sqlTranslation.ts:22` |
+| Ruby | `SQLTranslator` | `lib/tina4/sql_translator.rb:18` |
+| Node | `SQLTranslator` | `packages/orm/src/sqlTranslator.ts:22` |
 | PHP (outlier) | `SqlTranslation` | `Tina4/SqlTranslation.php:14` |
 
 PHP drifted on BOTH axes: the acronym casing (`Sql` vs `SQL`) and the noun
