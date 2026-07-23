@@ -227,7 +227,7 @@ rung that holds.
 
 1. **Does this need to exist at all?** Speculative need = skip it, and say so in one line. (YAGNI)
 2. **Does Tina4 already provide it?** Auth, ORM, Queue, Api, Cache, Events, Container, Session,
-   Frond, GraphQL, WebSocket, Messenger, Migration, SqlTranslation, HtmlElement, Testing — the
+   Frond, GraphQL, WebSocket, Messenger, Migration, SQLTranslator, HtmlElement, Testing — the
    toolkit is large. Never rebuild what the framework ships. This rung doubles as the parity
    check: if one backend already has it, port that, don't reinvent it.
 3. **Does the language / standard library do it?** Use it before reaching for a dependency.

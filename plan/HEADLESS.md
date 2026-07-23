@@ -1,6 +1,13 @@
 # Headless Mode — Lightweight API-Only Delivery
 
-## Status: Parked for later
+## Status: DECIDED 2026-07-21 (owner) - do the TINA4_HEADLESS env-var flag only.
+## The runtime flag (skip loading dev tooling: dev admin, toolbar, error overlay, SCSS,
+## static serving, Frond, dev mailbox, hot reload, metrics, browser-open, tina4-css) is
+## APPROVED as a normal release item, all 4 frameworks, one env var, no new repo.
+## PARKED: the downstream `tina4-headless` repo and the four published `-headless`
+## packages. Gate that on a real measured install-size delta first - core is already
+## zero-dependency, so the download win is unproven and 4 more registry packages is a
+## permanent maintenance liability.
 
 ## Concept
 
