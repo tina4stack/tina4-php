@@ -61,6 +61,17 @@ $spacing-dirs: (
       .#{$abbr}#{$dir}-#{$key} { #{$prop}#{$suffix}: $val !important; }
     }
   }
+  // Axis shortcuts: py-* (top+bottom), px-* (left+right)
+  @each $key, $val in $spacers {
+    .#{$abbr}y-#{$key} {
+      #{$prop}-top: $val !important;
+      #{$prop}-bottom: $val !important;
+    }
+    .#{$abbr}x-#{$key} {
+      #{$prop}-left: $val !important;
+      #{$prop}-right: $val !important;
+    }
+  }
 }
 
 .mx-auto { margin-left: auto !important; margin-right: auto !important; }

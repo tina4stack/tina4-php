@@ -1,0 +1,63 @@
+// Tina4 CSS Framework - Pagination
+// ----------------------------------
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  list-style: none;
+  gap: 0.25rem;
+}
+
+.page-item {
+  &.disabled .page-link {
+    color: $muted;
+    pointer-events: none;
+    background-color: $body-bg;
+    border-color: rgba($black, 0.1);
+  }
+
+  &.active .page-link {
+    color: $white;
+    background-color: $primary;
+    border-color: $primary;
+  }
+}
+
+.page-link {
+  display: block;
+  padding: 0.375rem 0.75rem;
+  color: $primary;
+  background-color: $body-bg;
+  border: 1px solid rgba($black, 0.15);
+  border-radius: $border-radius;
+  text-decoration: none;
+  line-height: 1.25;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+
+  &:hover {
+    color: darken($primary, 10%);
+    background-color: rgba($primary, 0.08);
+    border-color: rgba($black, 0.2);
+  }
+
+  &:focus {
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba($primary, 0.25);
+  }
+}
+
+// CRUD component image preview
+.crud-img-preview {
+  max-height: 200px;
+  max-width: 100%;
+  border-radius: $border-radius;
+  object-fit: cover;
+}
+
+.crud-img-preview-sm {
+  max-height: 180px;
+  max-width: 100%;
+  border-radius: $border-radius;
+  object-fit: cover;
+}
