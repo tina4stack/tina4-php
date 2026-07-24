@@ -29,7 +29,17 @@ use Tina4\Database\Database;
 use Tina4\Frond;
 use Tina4\Response;
 
+/**
+ * Nominal iteration count, still used for --single (the carbonah-wrapped form,
+ * which needs a fixed amount of work rather than a fixed duration).
+ */
 const ITERATIONS = 1000;
+
+/** Timed runs keep going until this much wall-clock has elapsed. */
+const MIN_SECONDS = 0.25;
+
+/** ...but never fewer than this many iterations, however fast the operation. */
+const MIN_ITERATIONS = 200;
 
 /** A throwaway sqlite file, cleaned up by the caller. */
 function benchTempDb(): string
@@ -49,64 +59,65 @@ function benchCleanup(string $dir): void
 
 // ── 1. JSON serialization - raw overhead ───────────────────────
 
-function benchJson(): void
+function benchJson(): array
 {
-    for ($i = 0; $i < ITERATIONS; $i++) {
-        $r = new Response(true);
-        $r->json(['message' => 'Hello, World!', 'status' => 'ok']);
-    }
+    $payload = ['message' => 'Hello, World!', 'status' => 'ok'];
+    return [static function () use ($payload): void {
+        (new Response(true))->json($payload);
+    }, null];
 }
 
 // ── 2. Single database query ───────────────────────────────────
 
-function benchDbSingle(): void
+function benchDbSingle(): array
 {
     $dir = benchTempDb();
-    try {
-        $db = Database::create("sqlite:///{$dir}/bench.db");
-        $db->execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)');
-        $db->execute("INSERT INTO users VALUES (1, 'Alice', 'alice@test.com')");
-        $db->commit();
-        for ($i = 0; $i < ITERATIONS; $i++) {
+    $db = Database::create("sqlite:///{$dir}/bench.db");
+    $db->execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)');
+    $db->execute("INSERT INTO users VALUES (1, 'Alice', 'alice@test.com')");
+    $db->commit();
+    return [
+        static function () use ($db): void {
             $db->fetchOne('SELECT * FROM users WHERE id = ?', [1]);
-        }
-        $db->close();
-    } finally {
-        benchCleanup($dir);
-    }
+        },
+        static function () use ($db, $dir): void {
+            $db->close();
+            benchCleanup($dir);
+        },
+    ];
 }
 
 // ── 3. Multiple database queries ───────────────────────────────
 
-function benchDbMulti(): void
+function benchDbMulti(): array
 {
     $dir = benchTempDb();
-    try {
-        $db = Database::create("sqlite:///{$dir}/bench.db");
-        $db->execute('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT, price REAL)');
-        for ($i = 0; $i < 100; $i++) {
-            $db->execute('INSERT INTO items VALUES (?, ?, ?)', [$i, "Item {$i}", $i * 1.5]);
-        }
-        $db->commit();
-        for ($i = 0; $i < ITERATIONS; $i++) {
+    $db = Database::create("sqlite:///{$dir}/bench.db");
+    $db->execute('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT, price REAL)');
+    for ($i = 0; $i < 100; $i++) {
+        $db->execute('INSERT INTO items VALUES (?, ?, ?)', [$i, "Item {$i}", $i * 1.5]);
+    }
+    $db->commit();
+    return [
+        static function () use ($db): void {
             $db->fetch('SELECT * FROM items WHERE price > ?', [50.0], 20);
             $db->fetchOne('SELECT COUNT(*) as cnt FROM items');
             $db->fetch('SELECT * FROM items ORDER BY price DESC', [], 5);
-        }
-        $db->close();
-    } finally {
-        benchCleanup($dir);
-    }
+        },
+        static function () use ($db, $dir): void {
+            $db->close();
+            benchCleanup($dir);
+        },
+    ];
 }
 
 // ── 4. Template rendering ──────────────────────────────────────
 
-function benchTemplate(): void
+function benchTemplate(): array
 {
     $dir = benchTempDb();
-    try {
-        $engine = new Frond($dir);
-        $tpl = <<<'TPL'
+    $engine = new Frond($dir);
+    $tpl = <<<'TPL'
 <!DOCTYPE html>
 <html>
 <head><title>{{ title }}</title></head>
@@ -123,28 +134,35 @@ function benchTemplate(): void
 </body>
 </html>
 TPL;
-        $items = [];
-        for ($i = 0; $i < 20; $i++) {
-            $items[] = ['name' => "Product {$i}", 'price' => $i * 9.99];
-        }
-        $data = [
-            'title' => 'Benchmark Page',
-            'heading' => 'Product List',
-            'items' => $items,
-            'show_footer' => true,
-            'footer_text' => 'This is a footer with some text that may be truncated for display purposes.',
-        ];
-        for ($i = 0; $i < ITERATIONS; $i++) {
-            $engine->renderString($tpl, $data);
-        }
-    } finally {
-        benchCleanup($dir);
+    $items = [];
+    for ($i = 0; $i < 20; $i++) {
+        $items[] = ['name' => "Product {$i}", 'price' => $i * 9.99];
     }
+    $data = [
+        'title' => 'Benchmark Page',
+        'heading' => 'Product List',
+        'items' => $items,
+        'show_footer' => true,
+        'footer_text' => 'This is a footer with some text that may be truncated for display purposes.',
+    ];
+    // render() from a FILE, not renderString(). renderString recompiles on every
+    // call (Frond has no compiled-template cache), so timing it measured
+    // compile+render while every other framework's template benchmark measures
+    // render alone. render("file.twig") is the per-request call a real app makes.
+    file_put_contents($dir . '/bench.twig', $tpl);
+    return [
+        static function () use ($engine, $data): void {
+            $engine->render('bench.twig', $data);
+        },
+        static function () use ($dir): void {
+            benchCleanup($dir);
+        },
+    ];
 }
 
 // ── 5. Large JSON payload ──────────────────────────────────────
 
-function benchJsonLarge(): void
+function benchJsonLarge(): array
 {
     $users = [];
     for ($i = 0; $i < 100; $i++) {
@@ -159,69 +177,71 @@ function benchJsonLarge(): void
         ];
     }
     $payload = ['users' => $users, 'meta' => ['total' => 100, 'page' => 1, 'per_page' => 100]];
-    for ($i = 0; $i < ITERATIONS; $i++) {
-        $r = new Response(true);
-        $r->json($payload);
-    }
+    return [static function () use ($payload): void {
+        (new Response(true))->json($payload);
+    }, null];
 }
 
 // ── 6. Plaintext response ──────────────────────────────────────
 
-function benchPlaintext(): void
+function benchPlaintext(): array
 {
-    for ($i = 0; $i < ITERATIONS; $i++) {
-        $r = new Response(true);
-        $r->html('Hello, World!');
-    }
+    return [static function (): void {
+        (new Response(true))->html('Hello, World!');
+    }, null];
 }
 
 // ── 7. Full CRUD cycle ─────────────────────────────────────────
 
-function benchCrud(): void
+function benchCrud(): array
 {
     $dir = benchTempDb();
-    try {
-        $db = Database::create("sqlite:///{$dir}/bench.db");
-        $db->execute('CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, done INTEGER DEFAULT 0)');
-        $db->commit();
-        // ITERATIONS / 10 == 100 full cycles, matching the Python suite.
-        for ($i = 0; $i < intdiv(ITERATIONS, 10); $i++) {
+    $db = Database::create("sqlite:///{$dir}/bench.db");
+    $db->execute('CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, done INTEGER DEFAULT 0)');
+    $db->commit();
+    // One measured op is ONE full create/read/update/delete cycle. The old code
+    // did ITERATIONS/10 cycles inside a single timed call, so the reported
+    // "ops/sec" counted tenths of a cycle.
+    return [
+        static function () use ($db): void {
             $db->insert('tasks', ['title' => 'Benchmark task', 'done' => 0]);
             $taskId = $db->getLastId();
             $db->fetchOne('SELECT * FROM tasks WHERE id = ?', [$taskId]);
             $db->update('tasks', ['done' => 1], 'id = ?', [$taskId]);
             $db->delete('tasks', 'id = ?', [$taskId]);
             $db->commit();
-        }
-        $db->close();
-    } finally {
-        benchCleanup($dir);
-    }
+        },
+        static function () use ($db, $dir): void {
+            $db->close();
+            benchCleanup($dir);
+        },
+    ];
 }
 
 // ── 8. Paginated query with count ──────────────────────────────
 
-function benchPaginated(): void
+function benchPaginated(): array
 {
     $dir = benchTempDb();
-    try {
-        $db = Database::create("sqlite:///{$dir}/bench.db");
-        $db->execute('CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, category TEXT, price REAL)');
-        for ($i = 0; $i < 500; $i++) {
-            $db->execute('INSERT INTO products VALUES (?, ?, ?, ?)',
-                [$i, "Product {$i}", 'Cat ' . ($i % 10), $i * 2.5]);
-        }
-        $db->commit();
-        for ($i = 0; $i < ITERATIONS; $i++) {
+    $db = Database::create("sqlite:///{$dir}/bench.db");
+    $db->execute('CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, category TEXT, price REAL)');
+    for ($i = 0; $i < 500; $i++) {
+        $db->execute('INSERT INTO products VALUES (?, ?, ?, ?)',
+            [$i, "Product {$i}", 'Cat ' . ($i % 10), $i * 2.5]);
+    }
+    $db->commit();
+    return [
+        static function () use ($db): void {
             $result = $db->fetch('SELECT * FROM products WHERE category = ?', ['Cat 3'], 20, 0);
             if ($result instanceof \Tina4\Database\DatabaseResult) {
                 $result->toArray();
             }
-        }
-        $db->close();
-    } finally {
-        benchCleanup($dir);
-    }
+        },
+        static function () use ($db, $dir): void {
+            $db->close();
+            benchCleanup($dir);
+        },
+    ];
 }
 
 // ── 9. Framework startup ───────────────────────────────────────
@@ -235,33 +255,39 @@ function benchPaginated(): void
  * while the real import cost was 79ms). `--startup` measures the real thing by
  * spawning fresh processes.
  */
-function benchStartup(): void
+function benchStartup(): array
 {
-    // Touch the surface a real app boot touches. PSR-4 is lazy, so naming these
-    // is what actually pulls them off disk.
-    class_exists(\Tina4\Router::class);
-    class_exists(\Tina4\Request::class);
-    class_exists(\Tina4\Response::class);
-    class_exists(\Tina4\Frond::class);
-    class_exists(\Tina4\Auth::class);
-    class_exists(\Tina4\Session::class);
-    class_exists(\Tina4\Swagger::class);
-    class_exists(\Tina4\Queue::class);
-    class_exists(\Tina4\Api::class);
-    class_exists(\Tina4\FakeData::class);
-    class_exists(\Tina4\I18n::class);
-    class_exists(\Tina4\GraphQL::class);
-    class_exists(\Tina4\WSDL::class);
-    class_exists(\Tina4\Messenger::class);
-    class_exists(\Tina4\HtmlElement::class);
-    class_exists(\Tina4\Middleware\CorsMiddleware::class);
-    class_exists(\Tina4\Middleware\RateLimiter::class);
-    class_exists(\Tina4\Middleware\ResponseCache::class);
+    // Returned op is the one-shot boot work; the runner special-cases "startup"
+    // and calls it exactly once (looping it would measure already-loaded
+    // class_exists lookups, which is the bug the Python suite had).
+    $op = static function (): void {
+        // Touch the surface a real app boot touches. PSR-4 is lazy, so naming these
+        // is what actually pulls them off disk.
+        class_exists(\Tina4\Router::class);
+        class_exists(\Tina4\Request::class);
+        class_exists(\Tina4\Response::class);
+        class_exists(\Tina4\Frond::class);
+        class_exists(\Tina4\Auth::class);
+        class_exists(\Tina4\Session::class);
+        class_exists(\Tina4\Swagger::class);
+        class_exists(\Tina4\Queue::class);
+        class_exists(\Tina4\Api::class);
+        class_exists(\Tina4\FakeData::class);
+        class_exists(\Tina4\I18n::class);
+        class_exists(\Tina4\GraphQL::class);
+        class_exists(\Tina4\WSDL::class);
+        class_exists(\Tina4\Messenger::class);
+        class_exists(\Tina4\HtmlElement::class);
+        class_exists(\Tina4\Middleware\CorsMiddleware::class);
+        class_exists(\Tina4\Middleware\RateLimiter::class);
+        class_exists(\Tina4\Middleware\ResponseCache::class);
 
-    new \Tina4\Middleware\CorsMiddleware();
-    new \Tina4\Auth();
-    new \Tina4\Swagger();
-    new \Tina4\GraphQL();
+        new \Tina4\Middleware\CorsMiddleware();
+        new \Tina4\Auth();
+        new \Tina4\Swagger();
+        new \Tina4\GraphQL();
+    };
+    return [$op, null];
 }
 
 // ── Runner ─────────────────────────────────────────────────────
@@ -278,18 +304,60 @@ const BENCHMARKS = [
     'startup'    => ['Framework Startup',   'benchStartup'],
 ];
 
+/**
+ * Run one benchmark: setup and teardown OUTSIDE the clock, op timed in a loop
+ * that runs until MIN_SECONDS has elapsed.
+ *
+ * The previous version timed the whole bench function, so per-benchmark setup
+ * sat inside the measurement. Measured on this machine, benchDbSingle's setup
+ * (temp dir + sqlite file + CREATE TABLE + INSERT + commit) cost 11.20ms against
+ * 4.26ms for the 1,000 reads it was supposedly measuring -- 72% of the reported
+ * time was setup, understating read throughput by 3.6x (64,683 vs a true
+ * 234,686 ops/sec). Same class of bug as the Python compare harness timing its
+ * own imports.
+ *
+ * Duration-based rather than a fixed count because the categories span five
+ * orders of magnitude: 1,000 iterations is ~4ms of noise for plaintext and ~2.4s
+ * for template rendering. A fixed wall-clock target gives every row a usable
+ * sample without hand-tuning nine separate counts.
+ */
 function runBenchmark(string $name): float
 {
     [$label, $fn] = BENCHMARKS[$name];
-    $start = microtime(true);
-    $fn();
-    $elapsed = microtime(true) - $start;
+
+    /** @var array{0: callable, 1: ?callable} $pair */
+    $pair = $fn();
+    [$op, $teardown] = $pair;
+
+    // Startup is a one-shot measurement: looping it would time already-loaded
+    // class_exists lookups instead of the boot work.
     if ($name === 'startup') {
+        $start = microtime(true);
+        $op();
+        $elapsed = microtime(true) - $start;
+        if ($teardown !== null) {
+            $teardown();
+        }
         printf("  %-25s %.3fs  (1 run, in-process)\n", $label, $elapsed);
-    } else {
-        printf("  %-25s %.3fs  (%s ops/sec)\n", $label, $elapsed,
-            number_format(ITERATIONS / max($elapsed, 1e-9)));
+        return $elapsed;
     }
+
+    $op();                                   // warm-up, untimed
+
+    $iterations = 0;
+    $start = microtime(true);
+    do {
+        $op();
+        $iterations++;
+    } while ($iterations < MIN_ITERATIONS || (microtime(true) - $start) < MIN_SECONDS);
+    $elapsed = microtime(true) - $start;
+
+    if ($teardown !== null) {
+        $teardown();
+    }
+
+    printf("  %-25s %.3fs  (%s ops/sec, n=%s)\n", $label, $elapsed,
+        number_format($iterations / max($elapsed, 1e-9)), number_format($iterations));
     return $elapsed;
 }
 
@@ -432,7 +500,19 @@ if ($singleIdx !== false) {
         fwrite(STDERR, "unknown benchmark: {$only}\n");
         exit(1);
     }
-    BENCHMARKS[$only][1]();
+    // The benchmark functions return [op, teardown]; carbonah needs a FIXED
+    // amount of work (not a fixed duration), so run the op ITERATIONS times.
+    [$op, $teardown] = BENCHMARKS[$only][1]();
+    if ($only === 'startup') {
+        $op();
+    } else {
+        for ($i = 0; $i < ITERATIONS; $i++) {
+            $op();
+        }
+    }
+    if ($teardown !== null) {
+        $teardown();
+    }
     exit(0);
 }
 
