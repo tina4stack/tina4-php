@@ -1,0 +1,14 @@
+{
+    "name": "tina4stack/tina4php-benchmarks",
+    "description": "Competitor benchmark harness for tina4-php. NOT shipped with the framework -- the competitor ORMs (Eloquent, Doctrine DBAL) live here, isolated from the zero-dependency core in ../composer.json. Run `composer install` in this directory, then `php bench_frameworks.php`.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "illuminate/database": "^11.0",
+        "doctrine/dbal": "^4.0"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
