@@ -12,11 +12,11 @@
             "Tina4\\Session\\": "Tina4/Session/"
         },
         "files": [
-            "Tina4/Constants.php",
-            "Tina4/MCP.php",
+            "Tina4/Bootstrap/Constants.php",
+            "Tina4/Bootstrap/MCP.php",
             "Tina4/Middleware/CacheFunctions.php",
-            "Tina4/WebSocketBackplane.php",
-            "Tina4/DocStore.php"
+            "Tina4/Bootstrap/WebSocketBackplane.php",
+            "Tina4/Bootstrap/DocStore.php"
         ]
     },
     "require": {
