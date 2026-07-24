@@ -81,9 +81,9 @@ interface DatabaseAdapter
      *
      * @param string $table Table name
      * @param array<string, mixed>|array<int, array<string, mixed>> $data Column => value pairs, or list of rows
-     * @return bool True on success
+     * @return bool|DatabaseResult True on success at the adapter level; the Database wrapper returns a DatabaseResult (lastId + affectedRows)
      */
-    public function insert(string $table, array $data): bool;
+    public function insert(string $table, array $data): bool|DatabaseResult;
 
     /**
      * Build and execute an UPDATE statement.
@@ -93,9 +93,9 @@ interface DatabaseAdapter
      * @param array<string, mixed> $data Column => value pairs
      * @param string $where WHERE clause (without "WHERE")
      * @param array<mixed> $whereParams Bound parameters for WHERE clause
-     * @return bool True on success
+     * @return bool|DatabaseResult True on success at the adapter level; the Database wrapper returns a DatabaseResult (affectedRows)
      */
-    public function update(string $table, array $data, string $where = '', array $whereParams = []): bool;
+    public function update(string $table, array $data, string $where = '', array $whereParams = []): bool|DatabaseResult;
 
     /**
      * Build and execute a DELETE statement.
@@ -109,9 +109,9 @@ interface DatabaseAdapter
      * @param string $table Table name
      * @param string|array $filter WHERE clause string, or assoc array, or list of assoc arrays
      * @param array<mixed> $whereParams Bound parameters (only for string filter)
-     * @return bool True on success
+     * @return bool|DatabaseResult True on success at the adapter level; the Database wrapper returns a DatabaseResult (affectedRows)
      */
-    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool;
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool|DatabaseResult;
 
     /**
      * Execute a single SQL statement with multiple parameter sets (batch).

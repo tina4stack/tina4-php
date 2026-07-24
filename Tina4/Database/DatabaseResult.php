@@ -41,6 +41,15 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
     /** @var int The offset (skip) used for this query */
     public int $offset;
 
+    /** @var int Rows affected by a write (insert/update/delete); 0 for reads or when the adapter can't report it */
+    public int $affectedRows;
+
+    /** @var int|string|null Last inserted id (insert only); null for update/delete/reads */
+    public int|string|null $lastId;
+
+    /** @var ?string Error cause captured for this operation, or null on success */
+    public ?string $error;
+
     /** @var int Iterator position */
     private int $position = 0;
 
@@ -61,6 +70,9 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
      * @param int $offset Offset
      * @param ?DatabaseAdapter $adapter Database adapter for lazy column queries
      * @param ?string $sql The SQL query that produced this result
+     * @param int $affectedRows Rows affected by a write (0 for reads)
+     * @param int|string|null $lastId Last inserted id (insert only)
+     * @param ?string $error Error cause, or null on success
      */
     public function __construct(
         array            $records = [],
@@ -70,14 +82,20 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
         int              $offset = 0,
         ?DatabaseAdapter $adapter = null,
         ?string          $sql = null,
+        int              $affectedRows = 0,
+        int|string|null  $lastId = null,
+        ?string          $error = null,
     ) {
-        $this->records = $records;
-        $this->columns = $columns;
-        $this->count   = $count;
-        $this->limit   = $limit;
-        $this->offset  = $offset;
-        $this->adapter = $adapter;
-        $this->sql     = $sql;
+        $this->records      = $records;
+        $this->columns      = $columns;
+        $this->count        = $count;
+        $this->limit        = $limit;
+        $this->offset       = $offset;
+        $this->adapter      = $adapter;
+        $this->sql          = $sql;
+        $this->affectedRows = $affectedRows;
+        $this->lastId       = $lastId;
+        $this->error        = $error;
     }
 
     // ── Column metadata ──────────────────────────────────────────────
