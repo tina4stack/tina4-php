@@ -82,6 +82,22 @@ class StaticFiles
             return null;
         }
 
+        // The framework ships the Swagger UI as STATIC assets
+        // (src/public/swagger/index.html + oauth2-redirect.html). Static files are
+        // resolved BEFORE routes, and the index resolution below turns a bare
+        // '/swagger' into 'swagger/index.html' -- so without this gate the Swagger
+        // UI was served even when Swagger::isEnabled() is false (explicit
+        // TINA4_SWAGGER_ENABLED=false, or debug off, or --production), silently
+        // bypassing the documented production on/off switch. The tell was
+        // /swagger returning 200 (static file) while /swagger/openapi.json (the
+        // gated route) correctly returned 404.
+        $normalisedPath = '/' . ltrim($path, '/');
+        if (($normalisedPath === '/swagger' || str_starts_with($normalisedPath, '/swagger/'))
+            && !Swagger::isEnabled()
+        ) {
+            return null;
+        }
+
         // Search directories in order: TINA4_PUBLIC_DIR override, app public,
         // then framework built-in public (tina4.min.js etc.)
         $searchDirs = [];

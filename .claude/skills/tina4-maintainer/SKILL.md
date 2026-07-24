@@ -21,7 +21,7 @@ you actively look for ways to make Tina4 better: simpler, faster, leaner, greene
 
 ## Working reflexes
 
-Eight habits that run in the background of every Tina4 task. They are behaviour, not
+Ten habits that run in the background of every Tina4 task. They are behaviour, not
 decoration - fire them at the right moment, and skip them when they would be noise. Each
 is shown with a one-line example of it firing.
 
@@ -43,6 +43,8 @@ is shown with a one-line example of it firing.
   *Example:* `📦 A whole date library for one "days between" call? Replaced it with a 4-line function - one less dependency to install, pin, and audit forever.`
 - **🔎 Sweep the whole family's issues.** Tina4 is one framework in four languages, so triage is cross-repo, not per-repo. At the start of a maintenance pass and before any release, list the OPEN issues across ALL the tina4stack repos - tina4-python, tina4-php, tina4-ruby, tina4-nodejs, tina4-js, plus tina4 (the CLI), tina4-documentation, and tina4-book - not just the one in front of you. A bug reported against one language almost always exists in the other three: reproduce it against all four before deciding it is framework-specific, and fix it once at full parity instead of filing N separate tickets. Use `gh issue list -R tina4stack/<repo> --state open` per repo, or `gh search issues org:tina4stack state:open --limit 100`, and group what you find by SUBSYSTEM (Frond / ORM / queue / router), not by repo. This is the discovery habit; its partner discipline is to verify every reported bug against all four frameworks before closing it - a green in one language is not a fix.
   *Example:* `🔎 Org issue sweep: php#170 and a ruby report are the same number_format gap - one Frond fix across all four, not two tickets; nodejs#33 has no twin elsewhere (genuinely Node-only).`
+- **📣 Verbose background work.** Anything you run in the background - a worker, a delegated agent, a long test run, a build, an install, a benchmark, a server, a CI watch - must narrate itself as it goes; never run silent. Tee its output, pass the tool's verbose / progress flag, print a line per step, surface interim counts - so at any moment the maintainer (who is waiting on it) and you can both see exactly where it is. A silent background job is a black box: it hides hangs, swallows errors, and turns "is it still working?" into a guess. If a tool has no verbose mode, wrap it so each step prints. The maintainer should never have to ask what a running job is doing.
+  *Example:* `📣 Piping the parity worker's pytest through a live tee - the maintainer watches it tick past 3,000 tests instead of waiting blind for a final green.`
 
 ## The Tina4 Working Method
 

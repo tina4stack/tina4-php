@@ -1,6 +1,6 @@
 # tina4-php — LLM Context
 
-Tina4 PHP v3.13.82. 98 built-in features, zero external dependencies. Web framework for PHP 8.2+.
+Tina4 PHP v3.13.83. 98 built-in features, zero external dependencies. Web framework for PHP 8.2+.
 Routes, ORM, templates, auth, queue, websocket, graphql, WSDL — all built in.
 
 Install: composer require tina4stack/tina4php

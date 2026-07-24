@@ -1,0 +1,31 @@
+# Keep the DISTRIBUTED composer package lean (issue #181).
+#
+# Everything marked export-ignore stays in the git repo but is excluded from the
+# archive GitHub builds for a tag, which is what `composer require
+# tina4stack/tina4php` downloads with --prefer-dist. Before this file existed the
+# package shipped the full test suite (2.9M), the example app, benchmarks and CI
+# config to every consuming application.
+#
+# Rule of thumb: if a running application never reads it, export-ignore it.
+# Anything under src/ (templates, public assets) and Tina4/ is runtime and stays.
+
+# Test + CI machinery
+/tests              export-ignore
+/phpunit.xml        export-ignore
+/.github            export-ignore
+
+# Demo, benchmarks, container build helpers, planning notes
+/example            export-ignore
+/benchmarks         export-ignore
+/dockers            export-ignore
+/docker-build.sh    export-ignore
+/plan               export-ignore
+
+# Maintainer / AI-assistant docs -- not needed by a consuming app
+/AGENTS.md          export-ignore
+/CLAUDE.md          export-ignore
+/CONVENTIONS.md     export-ignore
+/BENCHMARK.md       export-ignore
+
+# This file itself
+/.gitattributes     export-ignore

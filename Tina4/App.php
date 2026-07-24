@@ -1219,8 +1219,54 @@ HTML;
      * @param string|null $host Host to bind to. If null, reads TINA4_HOST (default '0.0.0.0').
      * @param int    $port Port to listen on (default: 7145)
      */
+    /**
+     * Build the startup banner's optional surface lines (issue #99).
+     *
+     * Only advertise a surface that is actually REACHABLE. In production, or with
+     * TINA4_DEBUG off, /swagger and /__dev return 404 -- printing them anyway both
+     * misleads an operator into believing a dev surface is exposed and sends a
+     * developer to a dead link.
+     *
+     * Kept as a pure function of (port, two booleans) so the contract is unit
+     * testable without booting a server and grepping stdout. Parity: Python
+     * banner_surface_lines, Ruby Tina4.banner_surface_lines, Node
+     * bannerSurfaceLines.
+     *
+     * @param int  $port            Port the server is listening on.
+     * @param bool $swaggerEnabled  Whether /swagger is actually served.
+     * @param bool $devAdminEnabled Whether /__dev is actually served.
+     * @return array{0: string, 1: string} [swaggerLine, dashboardLine] -- each
+     *         empty, or a newline plus the banner row, ready to interpolate.
+     */
+    public static function bannerSurfaceLines(int $port, bool $swaggerEnabled, bool $devAdminEnabled): array
+    {
+        return [
+            $swaggerEnabled ? "\n  Swagger:   http://localhost:{$port}/swagger" : '',
+            $devAdminEnabled ? "\n  Dashboard: http://localhost:{$port}/__dev" : '',
+        ];
+    }
+
     public function run(?string $host = null, int $port = 7145): void
     {
+        // SAPI guard (issue #180). run() is the standalone-server entry: it binds
+        // a socket and owns the event loop. Under a WEB SAPI (php-fpm,
+        // apache2handler, or `php -S` / cli-server) a server is already in front
+        // of us, so the correct behaviour is to handle THIS request and return --
+        // not to bind another socket.
+        //
+        // Without this, the shipped index.php (which calls run()) made the
+        // documented nginx + php-fpm deployment in nginx.conf.example
+        // unserviceable: every request tried findAvailablePort() + new Server()
+        // and never produced a response. Delegating here rather than asking users
+        // to edit index.php fixes every existing project as well.
+        //
+        // Delegated BEFORE start(): handle() -> __invoke() -> start(), so the
+        // boot sequence still runs exactly once.
+        if (php_sapi_name() !== 'cli') {
+            $this->handle();
+            return;
+        }
+
         $this->start();
 
         // When called from the CLI serve command, skip starting another server
@@ -1259,11 +1305,13 @@ HTML;
                 $wsInfo = $wsCount > 0 ? " (WebSocket: {$wsCount} routes)" : '';
                 echo "\n";
                 echo "  Tina4 PHP v" . self::$VERSION . "\n\n";
-                echo "  Server:    http://localhost:{$port}{$wsInfo}\n";
-                echo "  Swagger:   http://localhost:{$port}/swagger\n";
-                if ($this->isDevelopment()) {
-                    echo "  Dashboard: http://localhost:{$port}/__dev\n";
-                }
+                // Only advertise a surface that is actually reachable (issue #99).
+                [$swaggerLine, $dashboardLine] = self::bannerSurfaceLines(
+                    $port,
+                    Swagger::isEnabled(),
+                    $this->isDevelopment()
+                );
+                echo "  Server:    http://localhost:{$port}{$wsInfo}{$swaggerLine}{$dashboardLine}\n";
                 echo "  Routes:    {$routeCount}\n";
                 echo "\n  Press Ctrl+C to stop.\n\n";
             }

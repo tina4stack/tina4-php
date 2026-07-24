@@ -72,6 +72,52 @@ class MqttAuthTlsTest extends TestCase
         return false;
     }
 
+    /**
+     * Does the configured CA actually VERIFY the broker's certificate?
+     *
+     * The guard used to accept any CA file that merely EXISTS. A stale
+     * $TMPDIR/tina4-mqtt-infra/certs/ca.crt left behind by an earlier
+     * mqtt-infra.sh run therefore made these tests RUN and then fail on a
+     * certificate mismatch -- six red tests in every framework caused purely by
+     * the environment, with an error that reads like a code regression.
+     *
+     * A CA that cannot validate the broker is functionally the same as no CA,
+     * so prove it with a real handshake and skip when it does not hold. This is
+     * self-healing: regenerate the certs and the tests run again.
+     *
+     * @param string      $url MQTT TLS URL to probe.
+     * @param string|null $ca  Path to the candidate CA bundle, or null.
+     * @return bool True only when the handshake verifies against that CA.
+     */
+    private function caVerifies(string $url, ?string $ca): bool
+    {
+        if ($ca === null || !is_file($ca)) {
+            return false;
+        }
+        $p = Mqtt::parseUrl($url);
+        $context = stream_context_create([
+            'ssl' => [
+                'cafile' => $ca,
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+                'peer_name' => $p['host'],
+            ],
+        ]);
+        $socket = @stream_socket_client(
+            "ssl://{$p['host']}:{$p['port']}",
+            $errno,
+            $errstr,
+            3,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+        if ($socket === false) {
+            return false;
+        }
+        fclose($socket);
+        return true;
+    }
+
     private function requireAuthBroker(): void
     {
         if (!$this->reachable($this->authUrl)) {
@@ -81,8 +127,12 @@ class MqttAuthTlsTest extends TestCase
 
     private function requireTlsBroker(): void
     {
-        if (!$this->reachable($this->tlsUrl) || $this->ca === null) {
-            $this->markTestSkipped("TLS broker not reachable at {$this->tlsUrl} or CA not set (TINA4_TEST_MQTT_CA_FILE)");
+        if (!$this->reachable($this->tlsUrl) || !$this->caVerifies($this->tlsUrl, $this->ca)) {
+            $this->markTestSkipped(
+                "TLS broker not reachable at {$this->tlsUrl}, or no CA is configured, or the "
+                . "configured CA does not verify the broker's certificate (stale certs -- "
+                . "re-run mqtt-infra.sh, or set TINA4_TEST_MQTT_CA_FILE)"
+            );
         }
     }
 

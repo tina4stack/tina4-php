@@ -934,6 +934,15 @@ DOCKERFILE;
         $wsRoutes = \Tina4\Router::getWebSocketRoutes();
         $wsInfo = count($wsRoutes) > 0 ? ' (WebSocket: ' . count($wsRoutes) . ' routes)' : '';
 
+        // Only advertise a surface that is actually reachable (issue #99).
+        // Shared with the framework banner via App::bannerSurfaceLines so the
+        // two can never drift.
+        [$swaggerLine, $dashboardLine] = \Tina4\App::bannerSurfaceLines(
+            $port,
+            \Tina4\Swagger::isEnabled(),
+            $isDebug
+        );
+
         echo "{$color}
   ______ _             __ __
  /_  __/(_)___  ____ _/ // /
@@ -943,9 +952,7 @@ DOCKERFILE;
 {$reset}
   Tina4 PHP v" . \Tina4\App::$VERSION . " — The Intelligent Native Application 4ramework
 
-  Server:    http://{$host}:{$port} ({$serverName}){$wsInfo}
-  Swagger:   http://localhost:{$port}/swagger
-  Dashboard: http://localhost:{$port}/__dev
+  Server:    http://{$host}:{$port} ({$serverName}){$wsInfo}{$swaggerLine}{$dashboardLine}
   Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
 ";
 

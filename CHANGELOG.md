@@ -31,6 +31,35 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
   behaviour are unchanged. There is deliberately NO compatibility alias - the project rule is
   to rename the primary rather than accumulate shims.
 
+### Fixed
+
+- **Security: the bundled Swagger UI static assets now honour the swagger gate.** `/swagger`,
+  `/swagger/`, `/swagger/index.html` and `/swagger/oauth2-redirect.html` were served from the
+  framework's own public directory BEFORE route matching (with directory-index resolution turning
+  `/swagger` into `swagger/index.html`), so a production server with `TINA4_SWAGGER_ENABLED=false`
+  still served the whole UI while `/swagger/openapi.json` correctly 404'd. Static serving now checks
+  the gate before it resolves an index. Bite-verified lock-in test. (python#97)
+- **The startup banner advertises only a surface that answers.** The `Swagger:` and `Dashboard:`
+  rows printed unconditionally, so a production log claimed a dev surface was exposed and a
+  developer following the link hit a 404. Each row is now built by one pure helper of
+  (port, swagger_enabled, dev_admin_enabled), unit tested rather than inferred from stdout.
+  (python#99)
+- **MQTT TLS tests verify the CA before trusting it.** A stale CA file in the shared temp directory
+  made six TLS tests FAIL instead of skip, in all four frameworks, pointing at correct TLS code.
+  The suites now confirm the CA actually validates the broker certificate before treating the TLS
+  environment as present. (python#98)
+- **`App::run()` under a web SAPI serves the request instead of binding a second socket.** The
+  shipped `index.php` calls `run()`; under php-fpm, apache2handler or `php -S` that tried
+  `findAvailablePort()` + a new `Server()` on every request and never produced a response, so the
+  documented nginx + php-fpm deployment in `nginx.conf.example` could not work. `run()` now
+  delegates to `handle()` when `php_sapi_name() !== 'cli'`. Fixes existing projects with no
+  `index.php` edit. (php#180)
+- **The Composer archive drops from 8.8MB to 5.4MB.** A `.gitattributes` with `export-ignore` keeps
+  `tests/`, `example/`, `benchmarks/`, `dockers/`, `.github/` and the plan files out of the
+  published package, and `src/public/js/tina4-dev-admin.js` (937K, a byte-for-byte copy of the
+  `.min.js` beside it, referenced nowhere) is deleted. No runtime file was removed. (php#181)
+
+
 ## Earlier history (pre-3.x)
 
 Kept for reference only. Everything from 3.x onward is in the release notes linked above.
