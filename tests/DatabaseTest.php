@@ -157,7 +157,12 @@ class DatabaseTest extends TestCase
     {
         $result = $this->db->insert('users', ['id' => 1, 'name' => 'Alice', 'email' => 'alice@test.com']);
 
-        $this->assertTrue($result);
+        // Write methods return a DatabaseResult (parity with the Python master):
+        // a truthy object carrying affectedRows + lastId, NOT a bare bool.
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $result);
+        $this->assertTrue((bool) $result);
+        $this->assertSame(1, $result->affectedRows);
+        $this->assertSame(1, (int) $result->lastId);
 
         $row = $this->db->fetchOne("SELECT * FROM users WHERE id = 1");
         $this->assertSame('Alice', $row['name']);
@@ -171,7 +176,9 @@ class DatabaseTest extends TestCase
 
         $result = $this->db->update('users', ['email' => 'new@test.com'], 'id = ?', [1]);
 
-        $this->assertTrue($result);
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $result);
+        $this->assertSame(1, $result->affectedRows);
+        $this->assertNull($result->lastId);
 
         $row = $this->db->fetchOne("SELECT * FROM users WHERE id = 1");
         $this->assertSame('new@test.com', $row['email']);
@@ -185,10 +192,23 @@ class DatabaseTest extends TestCase
 
         $result = $this->db->delete('users', 'id = ?', [1]);
 
-        $this->assertTrue($result);
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $result);
+        $this->assertSame(1, $result->affectedRows);
 
         $row = $this->db->fetchOne("SELECT * FROM users WHERE id = 1");
         $this->assertNull($row);
+    }
+
+    // -- Write fail-loud contract (negative lock-in) ----------------------------
+
+    public function testWriteMethodsRaiseNotReturnFalseOnFailure(): void
+    {
+        // insert/update/delete are fail-loud like fetch()/execute(): a bad
+        // statement RAISES a DatabaseException rather than returning a falsy
+        // value. The success return is a truthy DatabaseResult, so a caller can
+        // never mistake a failure for a success by testing the return.
+        $this->expectException(\Tina4\Database\DatabaseException::class);
+        $this->db->insert('table_that_does_not_exist', ['x' => 1]);
     }
 
     // -- Transactions -----------------------------------------------------------

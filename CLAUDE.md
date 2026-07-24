@@ -196,6 +196,15 @@ $db = Database::create($url, autoCommit: false);
 $db->fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): DatabaseResult
 $db->execute($sql, $params)        // FAIL LOUD — RAISES on SQL error (never returns false); cause on getError(). try/catch it.
 $db->exec($sql, $params)           // alias for execute() — same raise-on-error contract
+$db->insert(string $table, array $data): DatabaseResult   // single row OR list-of-rows batch
+$db->update(string $table, array $data, string $filterSql = '', array $params = []): DatabaseResult
+$db->delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
+    // insert/update/delete return a DatabaseResult (parity with Python master + Node):
+    // a truthy object carrying ->affectedRows and ->lastId (lastId set on insert only;
+    // null for update/delete). `if ($db->insert(...))` still works (objects are truthy).
+    // FAIL LOUD like execute()/fetch(): a bad statement RAISES — never a falsy return.
+    // affectedRows is best-effort (accurate on SQLite/PG/MySQL/MSSQL/Firebird; 0 on the
+    // PDO-fallback/ODBC adapters that don't report a count).
 $db->startTransaction()
 $db->commit(): void
 $db->rollback(): void

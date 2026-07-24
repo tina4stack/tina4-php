@@ -47,7 +47,10 @@ class BatchInsertTest extends TestCase
             ['name' => 'r2', 'price' => 2.0],
             ['name' => 'r3', 'price' => 3.0],
         ]);
-        $this->assertTrue($ok, 'Batch insert should report success');
+        // Batch insert returns a DatabaseResult (parity with Python master):
+        // affectedRows == number of rows written.
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $ok);
+        $this->assertSame(3, $ok->affectedRows, 'Batch insert should report 3 rows written');
 
         $rows = $db->fetch('SELECT * FROM batch_t ORDER BY id', [], 100);
         $this->assertSame(3, $rows->count, 'All 3 batch rows must be inserted');
@@ -114,7 +117,10 @@ class BatchInsertTest extends TestCase
                 ['name' => 'r2', 'price' => 2.0],
                 ['name' => 'r3', 'price' => 3.0],
             ]);
-            $this->assertTrue($ok, 'Batch insert should report success');
+            // Batch insert returns a DatabaseResult (parity with Python master):
+        // affectedRows == number of rows written.
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $ok);
+        $this->assertSame(3, $ok->affectedRows, 'Batch insert should report 3 rows written');
 
             $rows = $db->fetch("SELECT * FROM {$table} ORDER BY id", [], 100);
             $this->assertSame(3, $rows->count, 'All 3 batch rows must be inserted');
@@ -277,7 +283,8 @@ class BatchInsertTest extends TestCase
                 . "name VARCHAR(50) NOT NULL, price DOUBLE)"
             );
             // A single-object insert is unaffected by the batch path.
-            $this->assertTrue($db->insert($table, ['name' => 'solo', 'price' => 9.0]));
+            // insert() returns a DatabaseResult (parity with Python master): affectedRows == 1.
+            $this->assertSame(1, $db->insert($table, ['name' => 'solo', 'price' => 9.0])->affectedRows);
             $this->assertSame(1, (int) $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c']);
         } finally {
             try { $db->execute("DROP TABLE IF EXISTS {$table}"); } catch (\Throwable $e) {}
@@ -330,7 +337,8 @@ class BatchInsertTest extends TestCase
                 . "name VARCHAR(50) NOT NULL, price FLOAT)"
             );
             // A single-object insert is unaffected by the batch path.
-            $this->assertTrue($db->insert($table, ['name' => 'solo', 'price' => 9.0]));
+            // insert() returns a DatabaseResult (parity with Python master): affectedRows == 1.
+            $this->assertSame(1, $db->insert($table, ['name' => 'solo', 'price' => 9.0])->affectedRows);
             $this->assertSame(1, (int) $db->fetch("SELECT count(*) c FROM {$table}", [], 1)->records[0]['c']);
         } finally {
             try { $db->execute("IF OBJECT_ID('{$table}', 'U') IS NOT NULL DROP TABLE {$table}"); } catch (\Throwable $e) {}

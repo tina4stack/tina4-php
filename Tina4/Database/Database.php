@@ -552,7 +552,7 @@ class Database implements DatabaseAdapter
      * @return bool True on success
      * @throws DatabaseException When a batch row fails (the whole batch is rolled back).
      */
-    public function insert(string $table, array $data): bool
+    public function insert(string $table, array $data): DatabaseResult
     {
         // A list of rows (indexed array whose first element is itself an array)
         // is a batch insert. An empty array is treated as a single (degenerate)
@@ -561,7 +561,47 @@ class Database implements DatabaseAdapter
             return $this->insertBatch($table, $data);
         }
 
-        return $this->getNextAdapter()->insert($table, $data);
+        $adapter = $this->getNextAdapter();
+        $result = $adapter->insert($table, $data);
+        // Fail-loud: an adapter that returns false failed — capture + raise
+        // (parity with execute()/fetch()). Adapters that already raise never
+        // reach this branch.
+        if ($result === false) {
+            $this->lastError = $adapter->error();
+            throw new DatabaseException('Database::insert() failed: ' . ($this->lastError ?? 'unknown error'));
+        }
+        return $this->writeResult($adapter, withLastId: true);
+    }
+
+    /**
+     * Build the DatabaseResult returned by insert/update/delete (parity with the
+     * Python master, whose write methods return a DatabaseResult carrying
+     * affectedRows + lastId). Reads the affected-row count from the adapter that
+     * just ran the write (guarded — 0 when the adapter can't report it), and the
+     * last insert id for inserts. The object is always truthy, so `if ($db->
+     * insert(...))` still works.
+     *
+     * @param DatabaseAdapter $adapter The adapter that ran the write (same
+     *        connection, so lastInsertId()/affectedRows() are correct under pooling)
+     * @param bool $withLastId Populate lastId (inserts only; null for update/delete)
+     * @return DatabaseResult
+     */
+    private function writeResult(DatabaseAdapter $adapter, bool $withLastId): DatabaseResult
+    {
+        $this->affectedRows = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
+        $this->lastError = null;
+        return new DatabaseResult(
+            records: [],
+            columns: [],
+            count: 0,
+            limit: 0,
+            offset: 0,
+            adapter: null,
+            sql: null,
+            affectedRows: $this->affectedRows,
+            lastId: $withLastId ? $adapter->lastInsertId() : null,
+            error: null,
+        );
     }
 
     /**
@@ -573,10 +613,11 @@ class Database implements DatabaseAdapter
      * @return bool True on success (false only for an empty list)
      * @throws DatabaseException When any row fails — the whole batch is rolled back.
      */
-    private function insertBatch(string $table, array $rows): bool
+    private function insertBatch(string $table, array $rows): DatabaseResult
     {
         if (empty($rows)) {
-            return false;
+            $this->affectedRows = 0;
+            return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: 0, lastId: null, error: null);
         }
 
         // Columns come from the first row; every row must share the same keys.
@@ -597,7 +638,8 @@ class Database implements DatabaseAdapter
         // the (now committed) connection's last insert id where the engine
         // exposes it (SERIAL/AUTOINCREMENT/IDENTITY). Engines without a usable
         // last-id concept simply report whatever lastInsertId() returns.
-        return $count > 0;
+        $this->affectedRows = $count;
+        return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: $count, lastId: $this->getLastId(), error: null);
     }
 
     /**
@@ -607,12 +649,17 @@ class Database implements DatabaseAdapter
      * @param array<string, mixed> $data Column => value pairs to set
      * @param string $filterSql WHERE clause SQL (e.g. "id = ?", "age > ? AND status = ?")
      * @param array<mixed> $params Bound parameters for the WHERE clause
-     * @return bool True on success
+     * @return DatabaseResult Truthy result carrying affectedRows (lastId null for updates)
      */
-    public function update(string $table, array $data, string $filterSql = '', array $params = []): bool
+    public function update(string $table, array $data, string $filterSql = '', array $params = []): DatabaseResult
     {
         $adapter = $this->getNextAdapter();
-        return $adapter->update($table, $data, $filterSql, $params);
+        $result = $adapter->update($table, $data, $filterSql, $params);
+        if ($result === false) {
+            $this->lastError = $adapter->error();
+            throw new DatabaseException('Database::update() failed: ' . ($this->lastError ?? 'unknown error'));
+        }
+        return $this->writeResult($adapter, withLastId: false);
     }
 
     /**
@@ -621,12 +668,17 @@ class Database implements DatabaseAdapter
      * @param string $table Table name
      * @param string $filterSql WHERE clause SQL (e.g. "id = ?")
      * @param array<mixed> $params Bound parameters for the WHERE clause
-     * @return bool True on success
+     * @return DatabaseResult Truthy result carrying affectedRows (lastId null for deletes)
      */
-    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool
+    public function delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
     {
         $adapter = $this->getNextAdapter();
-        return $adapter->delete($table, $filter, $whereParams);
+        $result = $adapter->delete($table, $filter, $whereParams);
+        if ($result === false) {
+            $this->lastError = $adapter->error();
+            throw new DatabaseException('Database::delete() failed: ' . ($this->lastError ?? 'unknown error'));
+        }
+        return $this->writeResult($adapter, withLastId: false);
     }
 
     // -------------------------------------------------------------------------
