@@ -338,26 +338,70 @@ function runBenchmark(string $name): float
         if ($teardown !== null) {
             $teardown();
         }
-        printf("  %-25s %.3fs  (1 run, in-process)\n", $label, $elapsed);
+        printf("  %-25s %13s %13s   1 run, in-process (%.3fs)\n", $label, '-', '-', $elapsed);
         return $elapsed;
     }
 
-    $op();                                   // warm-up, untimed
+    // Warm-up doubles as batch-size calibration, and it must be a LOOP: the first
+    // op runs cold, so calibrating off one call sized every batch at ~2 and
+    // defeated the amortisation below.
+    //
+    // hrtime() not microtime(): microtime() carries only microsecond resolution,
+    // so a sub-microsecond op (plaintext, JSON) samples as 0.0 and a 1/x throughput
+    // printed a fabricated 1,000,000,000/s off the divide-by-zero floor. hrtime()
+    // is integer nanoseconds.
+    // TWO passes, keep the second: one pass still pays the cold costs. A single
+    // 64-op pass read JSON Hello World at ~50us/op against a real ~375ns --
+    // inflating the estimate 130x and collapsing the batch back to 1.
+    $CALIBRATION_OPS = 64;
+    $one = 1.0;
+    for ($pass = 0; $pass < 2; $pass++) {
+        $c0 = hrtime(true);
+        for ($i = 0; $i < $CALIBRATION_OPS; $i++) {
+            $op();
+        }
+        $one = max((hrtime(true) - $c0) / $CALIBRATION_OPS, 1.0);   // ns
+    }
 
+    // Sample in BATCHES sized so a batch costs >= ~50us. Two reasons:
+    //  1. A mean alone hides a fat tail. Measured in the Python twin, the CRUD
+    //     cycle has a ~108us median but ONE op per run costs ~711ms (a SQLite
+    //     flush), dragging mean throughput from ~9,300 to ~1,350 ops/sec -- a
+    //     mean-only line understates CRUD 7x.
+    //  2. Timing every single op distorts the fastest benchmarks, where two clock
+    //     reads cost the same order as the work itself. Batching amortises them.
+    $batch = (int) min(max((int) (50000 / $one), 1), 10000);
+
+    $batches = [];
     $iterations = 0;
-    $start = microtime(true);
+    $start = hrtime(true);
     do {
-        $op();
-        $iterations++;
-    } while ($iterations < MIN_ITERATIONS || (microtime(true) - $start) < MIN_SECONDS);
-    $elapsed = microtime(true) - $start;
+        $b0 = hrtime(true);
+        for ($i = 0; $i < $batch; $i++) {
+            $op();
+        }
+        $batches[] = (hrtime(true) - $b0) / $batch;          // ns per op
+        $iterations += $batch;
+    } while ($iterations < MIN_ITERATIONS || (hrtime(true) - $start) / 1e9 < MIN_SECONDS);
+    $elapsed = (hrtime(true) - $start) / 1e9;
 
     if ($teardown !== null) {
         $teardown();
     }
 
-    printf("  %-25s %.3fs  (%s ops/sec, n=%s)\n", $label, $elapsed,
-        number_format($iterations / max($elapsed, 1e-9)), number_format($iterations));
+    // p50 leads, mean is secondary: the mean absorbs scheduler/flush stalls and
+    // swung 3x run-to-run in the Python twin while p50 held steady. A number that
+    // moves 3x between runs cannot support a comparative claim.
+    sort($batches);
+    $p50 = max($batches[intdiv(count($batches), 2)], 1.0);    // ns
+    printf(
+        "  %-25s %13s %13s   %sx%d\n",
+        $label,
+        number_format(1e9 / $p50),
+        number_format($iterations / max($elapsed, 1e-9)),
+        number_format($iterations),
+        $batch
+    );
     return $elapsed;
 }
 
@@ -523,9 +567,13 @@ if (empty($selected)) {
     $selected = array_keys(BENCHMARKS);
 }
 
-printf("\nTina4 v3 Carbon Benchmarks (PHP) - %d iterations per test\n\n", ITERATIONS);
-printf("  %-25s %-10s %s\n", 'Benchmark', 'Time', 'Throughput');
-echo '  ' . str_repeat('-', 55) . "\n";
+printf(
+    "\nTina4 v3 Carbon Benchmarks (PHP) - >=%ss / >=%d iterations per test\n\n",
+    MIN_SECONDS,
+    MIN_ITERATIONS
+);
+printf("  %-25s %13s %13s   %s\n", 'Benchmark', 'p50 ops/sec', 'mean ops/sec', 'samples');
+echo '  ' . str_repeat('-', 72) . "\n";
 
 $total = 0.0;
 foreach ($selected as $name) {
