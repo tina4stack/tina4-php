@@ -340,17 +340,17 @@ jobs:
       # job (naming the file) rather than hanging the runner for hours.
       - name: Run Firebird tests (native ext-interbase)
         run: |
-          # NATIVE ext-interbase tests only. The Pdo*Fallback / PdoFirebirdAdapter
-          # tests exercise the pdo_firebird driver, which is NOT built here
-          # (native-only job) — with native present but pdo_firebird absent they
-          # do not skip cleanly (PdoFallbackParityTest even hangs on native x86).
-          # They keep their coverage on macOS/local dev where pdo_firebird exists.
+          # Native ext-interbase tests PLUS the pdo_firebird tests. pdo_firebird is
+          # present here (the setup-php PHP 8.2 image bundles it), so both drivers
+          # are available and the native-vs-pdo parity + PDO-adapter tests run for
+          # real. (If a future runner drops pdo_firebird those tests skip cleanly.)
           files="tests/FirebirdCharsetTest.php tests/FirebirdNullParamBindingTest.php \
             tests/FirebirdOrmCountTest.php tests/FirebirdOrmWriteTest.php \
             tests/FirebirdReconnectTest.php tests/FirebirdUrlTest.php \
             tests/FirebirdWriteVisibilityTest.php tests/MigrationV3Test.php \
             tests/DatabaseDriversTest.php tests/BooleanParamBindingTest.php \
-            tests/SchemaQualifiedTest.php"
+            tests/SchemaQualifiedTest.php tests/PdoFirebirdAdapterTest.php \
+            tests/PdoFallbackFactoryTest.php tests/PdoFallbackParityTest.php"
           failed=""
           for f in $files; do
             echo "::group::$f"

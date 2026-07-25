@@ -347,12 +347,16 @@ class PdoFallbackParityTest extends TestCase
         $this->assertSame(42, $pdoRow['QTY']);
         $this->assertSame(self::BLOB, $pdoRow['DATA'] ?? $pdoRow['data'] ?? null);
 
+        // Close the PDO reader BEFORE the native DROP. pdo_firebird holds an idle
+        // read transaction after a SELECT, and Firebird DDL (DROP TABLE) needs
+        // exclusive metadata access — with the reader still open the DROP blocks
+        // forever (WAIT). Releasing the reader first lets the cleanup proceed.
+        $pdo->close();
         try {
             $native->execute('DROP TABLE T4_PDO_PARITY');
         } catch (\Throwable) {
         }
         $native->close();
-        $pdo->close();
     }
 
     public function testFirebirdExecuteRaisesParity(): void

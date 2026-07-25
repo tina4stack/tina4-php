@@ -99,6 +99,17 @@ class PdoFirebirdAdapter implements DatabaseAdapter
         return ' RETURNING *';
     }
 
+    /**
+     * pdo_firebird reports PDO::inTransaction()===true even in autocommit mode,
+     * so startTransaction() must turn autocommit OFF to establish a real
+     * transaction boundary (otherwise every statement auto-commits and
+     * rollback() cannot undo it). commit()/rollback() restore autocommit.
+     */
+    protected function transactionsNeedAutocommitToggle(): bool
+    {
+        return true;
+    }
+
     /** Firebird pads/returns identifiers with trailing spaces — trim like native. */
     protected function normalizeReturnedId(mixed $value): int|string
     {

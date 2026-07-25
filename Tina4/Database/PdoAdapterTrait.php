@@ -362,9 +362,30 @@ trait PdoAdapterTrait
         return $this->lastId;
     }
 
+    /**
+     * Whether startTransaction()/commit()/rollback() must toggle
+     * PDO::ATTR_AUTOCOMMIT around an explicit transaction.
+     *
+     * Default false — sqlite/pgsql report inTransaction() honestly, so the
+     * beginTransaction() guard below is enough. ONLY pdo_firebird needs this:
+     * it reports inTransaction()===true even in autocommit mode, so the guard
+     * would skip beginTransaction() and no real rollback boundary would ever be
+     * established (an INSERT auto-commits immediately and rollback() cannot undo
+     * it). Turning autocommit OFF clears that phantom state so a genuine
+     * transaction begins; it is restored to ON on commit()/rollback() so
+     * standalone reads/writes keep working. Overridden in PdoFirebirdAdapter.
+     */
+    protected function transactionsNeedAutocommitToggle(): bool
+    {
+        return false;
+    }
+
     public function startTransaction(): void
     {
         $this->ensureOpen();
+        if ($this->transactionsNeedAutocommitToggle()) {
+            $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, false);
+        }
         if (!$this->pdo->inTransaction()) {
             $this->pdo->beginTransaction();
         }
@@ -375,6 +396,9 @@ trait PdoAdapterTrait
         $this->ensureOpen();
         if ($this->pdo->inTransaction()) {
             $this->pdo->commit();
+        }
+        if ($this->transactionsNeedAutocommitToggle()) {
+            $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, true);
         }
     }
 
@@ -389,6 +413,10 @@ trait PdoAdapterTrait
             // Rollback may fail if no transaction is active — record, never raise
             // (parity with the native adapters).
             $this->lastError = $e->getMessage();
+        } finally {
+            if ($this->transactionsNeedAutocommitToggle()) {
+                $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, true);
+            }
         }
     }
 
