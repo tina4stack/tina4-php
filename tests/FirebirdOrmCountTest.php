@@ -65,6 +65,13 @@ class FirebirdOrmCountTest extends TestCase
     {
         if ($this->db !== null) {
             try { $this->db->execute("drop table t_orm_count_test"); } catch (\Throwable) {}
+            // Close so the next test class gets a fresh connection. ext-interbase
+            // shares one physical link across connections with identical connect
+            // args, so a connection left open here keeps a live transaction on
+            // that shared link and would deadlock a later test's RECREATE TABLE
+            // ("concurrent transaction"). Mirrors FirebirdOrmWriteTest::tearDown.
+            try { $this->db->close(); } catch (\Throwable) {}
+            $this->db = null;
         }
     }
 

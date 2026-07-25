@@ -158,6 +158,17 @@ jobs:
       TINA4_TEST_MSSQL_PASS: 'TinaSQL123!Secure'
       TINA4_TEST_MSSQL_DB: tina4_test
       TINA4_TEST_MSSQL_URL: mssql://sa:TinaSQL123%21Secure@localhost:1433/tina4_test
+      # Live Firebird (php #132 — native ext-interbase driver coverage). The
+      # server is started as a plain container and ext-interbase is BUILT FROM
+      # SOURCE in the steps below (ext-interbase was removed from PHP core in 7.4;
+      # the FirebirdSQL/php-firebird fork provides it for PHP 8). The native leg
+      # then runs against a real Firebird 5.0.2 instead of skipping. The pdo_firebird
+      # leg still skips in CI (only the native ext is built) — that skip stays green
+      # because Firebird is deliberately excluded from the REQUIRE_SERVICES keyword
+      # set (see Tina4/Testing/RequireServicesGate.php); the "Build ext-interbase"
+      # step below gives the native path teeth by failing the job if the extension
+      # does not load.
+      TINA4_TEST_FIREBIRD_URL: firebird://SYSDBA:masterkey@localhost:3050//var/lib/firebird/data/test.fdb
       # Turn a missing provisioned service into a hard failure (no green skips).
       TINA4_REQUIRE_SERVICES: '1'
 
@@ -252,6 +263,47 @@ jobs:
         run: |
           MQTT_REQUIRE_EMQX=false bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
           echo "TINA4_TEST_MQTT_CA_FILE=$RUNNER_TEMP/tina4-mqtt-infra/certs/ca.crt" >> "$GITHUB_ENV"
+
+      # Firebird 5.0.2 for the live native-driver tests (php #132). Run as a plain
+      # container (GitHub `services:` cannot wait for Firebird's first-boot DB
+      # creation cleanly) and FAIL the job if the server never accepts a query, so
+      # the coverage has teeth. Publishes 3050 to the runner host, matching
+      # TINA4_TEST_FIREBIRD_URL. FIREBIRD_DATABASE creates /var/lib/firebird/data/test.fdb.
+      - name: Start Firebird 5.0.2
+        run: |
+          docker run -d --name tina4-firebird -p 3050:3050 \
+            -e FIREBIRD_ROOT_PASSWORD=masterkey \
+            -e FIREBIRD_DATABASE=test.fdb \
+            firebirdsql/firebird:5.0.2
+          echo "Waiting for Firebird to accept connections on :3050 ..."
+          for i in $(seq 1 30); do
+            if docker exec tina4-firebird /opt/firebird/bin/isql -user SYSDBA -password masterkey \
+                 /var/lib/firebird/data/test.fdb -q -o /dev/null <<<'SELECT 1 FROM RDB$DATABASE;' 2>/dev/null; then
+              echo "Firebird ready after ${i} attempt(s)"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Firebird did not become ready in time"; docker logs tina4-firebird | tail -40; exit 1
+
+      # ext-interbase (ibase_*) was removed from PHP core in 7.4, so build the
+      # maintained FirebirdSQL/php-firebird fork from source against the apt
+      # firebird client. `php -m | grep interbase` FAILS the job if the build did
+      # not load — a broken build can never silently downgrade the native Firebird
+      # tests to a green skip.
+      - name: Build native ext-interbase from source
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libfbclient2 firebird-dev
+          git clone --depth 1 https://github.com/FirebirdSQL/php-firebird.git /tmp/php-firebird
+          cd /tmp/php-firebird
+          phpize
+          ./configure --with-firebird
+          make -j"$(nproc)"
+          sudo make install
+          ext_dir="$(php -i | awk -F' => ' '/^extension_dir/ {print $2; exit}')"
+          scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
+          echo "extension=interbase.so" | sudo tee "${scan_dir}/99-interbase.ini"
+          php -m | grep -i interbase || { echo "ext-interbase failed to load"; exit 1; }
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress

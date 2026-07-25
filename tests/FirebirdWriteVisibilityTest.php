@@ -28,12 +28,17 @@
  * count stays 3 on every connection; with the fix it is 2.
  *
  * NO mocks — every assertion talks to a REAL Firebird server over TCP, gated on
- * TINA4_TEST_FIREBIRD_URL (loud skip in CI without a live server, mirroring
- * FirebirdOrmWriteTest / PdoFirebirdAdapterTest / MigrationV3Test). Runs against
- * each Firebird driver that is actually usable on the host: pdo_firebird always
- * (a genuinely independent PDO connection per Database::create), and native
- * ext-interbase when it can actually connect (it is present-but-clumplet-broken
- * on macOS + FB5, so that leg skips there and is exercised on Linux CI).
+ * TINA4_TEST_FIREBIRD_URL (loud skip without a live server, mirroring
+ * FirebirdOrmWriteTest / PdoFirebirdAdapterTest / MigrationV3Test). Each leg runs
+ * against whichever Firebird driver is actually usable on the host, and skips
+ * (never fakes) the rest:
+ *   - Linux CI builds native ext-interbase from source (FirebirdSQL/php-firebird)
+ *     and provisions a Firebird 5.0.2 service, so the NATIVE leg runs there. The
+ *     pdo_firebird leg skips in CI (only the native ext is built).
+ *   - macOS / local dev has pdo_firebird (a genuinely independent PDO connection
+ *     per Database::create), so the PDO leg runs there; native ext-interbase is
+ *     present-but-clumplet-broken on macOS + FB5, so the native leg skips.
+ * Together the two environments cover both drivers with real servers.
  */
 
 use PHPUnit\Framework\TestCase;

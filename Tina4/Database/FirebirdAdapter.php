@@ -25,6 +25,20 @@ class FirebirdAdapter implements DatabaseAdapter
 
     /** @var resource|null */
     private mixed $db = null;
+    /**
+     * @var array<string,int> Live-holder count per shared native link.
+     *
+     * ext-interbase returns the SAME physical link resource for connections
+     * opened with identical (fn, path, user, pass, charset) arguments, and
+     * ibase_close() destroys that link for EVERY holder — so two Tina4
+     * connections to one database share a link and closing one breaks the
+     * other. We reference-count opens per connection signature and only
+     * ibase_close() when the final holder releases it (php #132 follow-up,
+     * surfaced by the native ext-interbase CI leg).
+     */
+    private static array $linkRefs = [];
+    /** @var string|null This instance's key into self::$linkRefs (null once released). */
+    private ?string $linkSig = null;
     /** @var int Rows affected by the most recent write (ibase_affected_rows, best-effort). */
     private int $affectedRows = 0;
     /** @var resource|null Active EXPLICIT transaction handle (startTransaction) */
@@ -121,6 +135,46 @@ class FirebirdAdapter implements DatabaseAdapter
         }
 
         $this->db = $conn;
+
+        // Register this instance as a holder of the (possibly shared) link.
+        $sig = implode("\x00", [
+            $this->fn,
+            $dbPath,
+            (string) $params['username'],
+            (string) $params['password'],
+            (string) $this->charset,
+        ]);
+        $this->linkSig = $sig;
+        self::$linkRefs[$sig] = (self::$linkRefs[$sig] ?? 0) + 1;
+    }
+
+    /**
+     * Release this instance's hold on the native link, closing the physical
+     * connection only when no sibling adapter still shares it.
+     *
+     * ext-interbase de-duplicates identical-argument connections to ONE link
+     * resource, and ibase_close() tears that link down for every holder — so a
+     * blind close() would break another Tina4 connection to the same database
+     * (php #132 follow-up). Decrementing the per-signature refcount and closing
+     * only at zero makes close() safe in that shared case.
+     */
+    private function releaseSharedLink(): void
+    {
+        $sig = $this->linkSig;
+        $this->linkSig = null;
+
+        if ($sig !== null && isset(self::$linkRefs[$sig])) {
+            self::$linkRefs[$sig]--;
+            if (self::$linkRefs[$sig] > 0) {
+                return; // a sibling still holds the physical link — leave it open
+            }
+            unset(self::$linkRefs[$sig]);
+        }
+
+        if ($this->db !== null) {
+            $closeFn = $this->fn . 'close';
+            @$closeFn($this->db);
+        }
     }
 
     public function close(): void
@@ -131,8 +185,7 @@ class FirebirdAdapter implements DatabaseAdapter
                 @$commitFn($this->defaultTx);
                 $this->defaultTx = null;
             }
-            $closeFn = $this->fn . 'close';
-            $closeFn($this->db);
+            $this->releaseSharedLink();
             $this->db = null;
             $this->transaction = null;
         }
@@ -858,8 +911,7 @@ class FirebirdAdapter implements DatabaseAdapter
     {
         if ($this->db !== null) {
             try {
-                $closeFn = $this->fn . 'close';
-                @$closeFn($this->db);
+                $this->releaseSharedLink();
             } catch (\Throwable) {
                 // ignored — connection already gone
             }
