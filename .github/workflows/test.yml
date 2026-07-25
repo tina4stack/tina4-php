@@ -330,20 +330,34 @@ jobs:
       # Only the Firebird-relevant files (the native ORM/write/count/visibility
       # behavioural suite + the cross-engine files' Firebird cases). Non-Firebird
       # engines skip here (no server), and pdo legs skip (native-only build).
+      #
+      # Each file runs in its OWN phpunit process on purpose. ext-interbase hands
+      # every connection with identical (path,user,pass,charset) args the SAME
+      # physical link, so running many Firebird files in one process shares one
+      # link across them; on native x86 Firebird 5.0.2 that shared link could
+      # block indefinitely at teardown. A fresh process per file gives each file
+      # its own link, so no file can wedge another. A per-file `timeout` FAILS the
+      # job (naming the file) rather than hanging the runner for hours.
       - name: Run Firebird tests (native ext-interbase)
         run: |
-          vendor/bin/phpunit --colors=never \
-            tests/FirebirdCharsetTest.php \
-            tests/FirebirdNullParamBindingTest.php \
-            tests/FirebirdOrmCountTest.php \
-            tests/FirebirdOrmWriteTest.php \
-            tests/FirebirdReconnectTest.php \
-            tests/FirebirdUrlTest.php \
-            tests/FirebirdWriteVisibilityTest.php \
-            tests/MigrationV3Test.php \
-            tests/DatabaseDriversTest.php \
-            tests/BooleanParamBindingTest.php \
-            tests/SchemaQualifiedTest.php \
-            tests/PdoFirebirdAdapterTest.php \
-            tests/PdoFallbackFactoryTest.php \
-            tests/PdoFallbackParityTest.php
+          files="tests/FirebirdCharsetTest.php tests/FirebirdNullParamBindingTest.php \
+            tests/FirebirdOrmCountTest.php tests/FirebirdOrmWriteTest.php \
+            tests/FirebirdReconnectTest.php tests/FirebirdUrlTest.php \
+            tests/FirebirdWriteVisibilityTest.php tests/MigrationV3Test.php \
+            tests/DatabaseDriversTest.php tests/BooleanParamBindingTest.php \
+            tests/SchemaQualifiedTest.php tests/PdoFirebirdAdapterTest.php \
+            tests/PdoFallbackFactoryTest.php tests/PdoFallbackParityTest.php"
+          failed=""
+          for f in $files; do
+            echo "::group::$f"
+            if timeout 120 vendor/bin/phpunit --colors=never "$f"; then
+              echo "$f OK"
+            else
+              rc=$?
+              [ "$rc" -eq 124 ] && echo "!!! $f TIMED OUT (hang)" || echo "!!! $f failed rc=$rc"
+              failed="$failed $f"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "Firebird test files failed/hung:$failed"; exit 1; fi
+          echo "All Firebird test files passed (native ext-interbase)."
