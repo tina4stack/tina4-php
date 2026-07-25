@@ -204,7 +204,9 @@ class BatchInsertTest extends TestCase
                 ['name' => 'r2', 'price' => 2.0],
                 ['name' => 'r3', 'price' => 3.0],
             ]);
-            $this->assertTrue($ok);
+            // insert() returns a DatabaseResult (parity with the Python master); a
+            // batch of 3 reports affectedRows == 3.
+            $this->assertSame(3, $ok->affectedRows);
             $rows = $db->fetch("SELECT * FROM {$table} ORDER BY id", [], 100);
             // All 3 rows must land (the core batch-atomicity invariant). Assert
             // on the materialised records — the engine-agnostic source of truth.
@@ -253,7 +255,9 @@ class BatchInsertTest extends TestCase
                 ['name' => 'r2', 'price' => 2.0],
                 ['name' => 'r3', 'price' => 3.0],
             ]);
-            $this->assertTrue($ok);
+            // insert() returns a DatabaseResult (parity with the Python master); a
+            // batch of 3 reports affectedRows == 3.
+            $this->assertSame(3, $ok->affectedRows);
             $rows = $db->fetch("SELECT * FROM {$table} ORDER BY id", [], 100);
             // All 3 rows must land. Assert on the materialised records — the
             // engine-agnostic source of truth.

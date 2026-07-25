@@ -570,7 +570,7 @@ class Database implements DatabaseAdapter
             $this->lastError = $adapter->error();
             throw new DatabaseException('Database::insert() failed: ' . ($this->lastError ?? 'unknown error'));
         }
-        return $this->writeResult($adapter, withLastId: true);
+        return $this->writeResult($adapter, withLastId: true, minAffected: 1);
     }
 
     /**
@@ -586,9 +586,17 @@ class Database implements DatabaseAdapter
      * @param bool $withLastId Populate lastId (inserts only; null for update/delete)
      * @return DatabaseResult
      */
-    private function writeResult(DatabaseAdapter $adapter, bool $withLastId): DatabaseResult
+    private function writeResult(DatabaseAdapter $adapter, bool $withLastId, int $minAffected = 0): DatabaseResult
     {
-        $this->affectedRows = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
+        // A successful single-row insert affects exactly one row, but some
+        // adapters (PDO `INSERT ... RETURNING` on Postgres, MSSQL's identity
+        // insert) do not surface a rowcount on the insert path, reporting 0.
+        // Floor the count at $minAffected (1 for a single insert) so the
+        // best-effort affectedRows matches the Python master (whose adapters
+        // read the real cursor rowcount of 1). update()/delete() pass 0 — there
+        // a 0 legitimately means "no rows matched".
+        $reported = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
+        $this->affectedRows = max($reported, $minAffected);
         $this->lastError = null;
         return new DatabaseResult(
             records: [],

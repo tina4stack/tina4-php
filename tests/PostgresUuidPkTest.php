@@ -237,7 +237,9 @@ class PostgresUuidPkTest extends TestCase
         // The documented db->insert() / getLastId() path must also surface the
         // generated UUID (the adapter insert() uses RETURNING *).
         $ok = $this->db->insert('t4_issue256_uuid', ['name' => 'delta']);
-        $this->assertTrue($ok, 'adapter insert() failed: ' . ($this->db->getError() ?? ''));
+        // insert() returns a DatabaseResult (parity with the Python master); the
+        // generated UUID PK is surfaced on ->lastId (adapter uses RETURNING *).
+        $this->assertNotEmpty($ok->lastId, 'adapter insert() did not surface a UUID: ' . ($this->db->getError() ?? ''));
 
         $lastId = $this->db->getLastId();
         $this->assertIsString($lastId);
