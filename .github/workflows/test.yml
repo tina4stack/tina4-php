@@ -158,18 +158,11 @@ jobs:
       TINA4_TEST_MSSQL_PASS: 'TinaSQL123!Secure'
       TINA4_TEST_MSSQL_DB: tina4_test
       TINA4_TEST_MSSQL_URL: mssql://sa:TinaSQL123%21Secure@localhost:1433/tina4_test
-      # Live Firebird (php #132 — native ext-interbase driver coverage). The
-      # server is started as a plain container and ext-interbase is BUILT FROM
-      # SOURCE in the steps below (ext-interbase was removed from PHP core in 7.4;
-      # the FirebirdSQL/php-firebird fork provides it for PHP 8). The native leg
-      # then runs against a real Firebird 5.0.2 instead of skipping. The pdo_firebird
-      # leg still skips in CI (only the native ext is built) — that skip stays green
-      # because Firebird is deliberately excluded from the REQUIRE_SERVICES keyword
-      # set (see Tina4/Testing/RequireServicesGate.php); the "Build ext-interbase"
-      # step below gives the native path teeth by failing the job if the extension
-      # does not load.
-      TINA4_TEST_FIREBIRD_URL: firebird://SYSDBA:masterkey@localhost:3050//var/lib/firebird/data/test.fdb
       # Turn a missing provisioned service into a hard failure (no green skips).
+      # NB: native Firebird lives in its OWN job (see `firebird:` below), NOT here —
+      # stacking a heavyweight Firebird container onto this already-8-service job
+      # destabilised the shared runner. Firebird is excluded from the
+      # REQUIRE_SERVICES keyword set, so its absence here stays a green skip.
       TINA4_REQUIRE_SERVICES: '1'
 
     steps:
@@ -264,11 +257,40 @@ jobs:
           MQTT_REQUIRE_EMQX=false bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
           echo "TINA4_TEST_MQTT_CA_FILE=$RUNNER_TEMP/tina4-mqtt-infra/certs/ca.crt" >> "$GITHUB_ENV"
 
-      # Firebird 5.0.2 for the live native-driver tests (php #132). Run as a plain
-      # container (GitHub `services:` cannot wait for Firebird's first-boot DB
-      # creation cleanly) and FAIL the job if the server never accepts a query, so
-      # the coverage has teeth. Publishes 3050 to the runner host, matching
-      # TINA4_TEST_FIREBIRD_URL. FIREBIRD_DATABASE creates /var/lib/firebird/data/test.fdb.
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+      - name: Report results
+        if: always()
+        run: echo "Test run completed with exit code $?"
+
+  # Native Firebird runs in its OWN job (php #132). ext-interbase was removed from
+  # PHP core in 7.4, so it is built from source (FirebirdSQL/php-firebird) against a
+  # dedicated Firebird 5.0.2 — the native driver that the #132 reporter uses. Kept
+  # separate from the `test` job on purpose: stacking a heavyweight Firebird
+  # container onto that already-8-service runner destabilised the shared box, so
+  # Firebird gets its own clean runner with nothing else competing for resources.
+  # Only the Firebird-relevant test files run here; every other engine's tests stay
+  # in `test`. pdo_firebird is NOT built (only the native ext), so the pdo legs skip
+  # here — they run on macOS/local dev where pdo_firebird is present.
+  firebird:
+    runs-on: ubuntu-latest
+    env:
+      TINA4_TEST_FIREBIRD_URL: firebird://SYSDBA:masterkey@localhost:3050//var/lib/firebird/data/test.fdb
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: sqlite3, pdo_sqlite
+
+      # Firebird 5.0.2 as a plain container (GitHub `services:` cannot wait for
+      # Firebird's first-boot DB creation cleanly). FAIL the job if it never
+      # accepts a query, so the coverage has teeth.
       - name: Start Firebird 5.0.2
         run: |
           docker run -d --name tina4-firebird -p 3050:3050 \
@@ -285,11 +307,9 @@ jobs:
           done
           echo "Firebird did not become ready in time"; docker logs tina4-firebird | tail -40; exit 1
 
-      # ext-interbase (ibase_*) was removed from PHP core in 7.4, so build the
-      # maintained FirebirdSQL/php-firebird fork from source against the apt
-      # firebird client. `php -m | grep interbase` FAILS the job if the build did
-      # not load — a broken build can never silently downgrade the native Firebird
-      # tests to a green skip.
+      # Build native ext-interbase (ibase_*) from the maintained FirebirdSQL fork.
+      # `php -m | grep interbase` FAILS the job if the build did not load, so a
+      # broken build can never silently downgrade the native tests to a green skip.
       - name: Build native ext-interbase from source
         run: |
           sudo apt-get update -qq
@@ -300,7 +320,6 @@ jobs:
           ./configure --with-firebird
           make -j"$(nproc)"
           sudo make install
-          ext_dir="$(php -i | awk -F' => ' '/^extension_dir/ {print $2; exit}')"
           scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
           echo "extension=interbase.so" | sudo tee "${scan_dir}/99-interbase.ini"
           php -m | grep -i interbase || { echo "ext-interbase failed to load"; exit 1; }
@@ -308,9 +327,23 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      - name: Run tests
-        run: vendor/bin/phpunit
-
-      - name: Report results
-        if: always()
-        run: echo "Test run completed with exit code $?"
+      # Only the Firebird-relevant files (the native ORM/write/count/visibility
+      # behavioural suite + the cross-engine files' Firebird cases). Non-Firebird
+      # engines skip here (no server), and pdo legs skip (native-only build).
+      - name: Run Firebird tests (native ext-interbase)
+        run: |
+          vendor/bin/phpunit --colors=never \
+            tests/FirebirdCharsetTest.php \
+            tests/FirebirdNullParamBindingTest.php \
+            tests/FirebirdOrmCountTest.php \
+            tests/FirebirdOrmWriteTest.php \
+            tests/FirebirdReconnectTest.php \
+            tests/FirebirdUrlTest.php \
+            tests/FirebirdWriteVisibilityTest.php \
+            tests/MigrationV3Test.php \
+            tests/DatabaseDriversTest.php \
+            tests/BooleanParamBindingTest.php \
+            tests/SchemaQualifiedTest.php \
+            tests/PdoFirebirdAdapterTest.php \
+            tests/PdoFallbackFactoryTest.php \
+            tests/PdoFallbackParityTest.php
