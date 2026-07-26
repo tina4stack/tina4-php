@@ -58,6 +58,20 @@ class Frond
     private array $compiledStrings = [];
 
     /**
+     * AOT-compiled render closures (ADR-0001 / ADR-0003), keyed exactly like the
+     * token caches: template name in production, 'dev:'+md5(source) in dev (so an
+     * edit recompiles), md5(source) for renderString(). The value is the compiled
+     * `function ($engine, $data): string` closure, or null when the template used
+     * a construct the compiler falls back on (cached so an unsupported template is
+     * not re-analysed every render). Never populated in sandbox mode. Produced by
+     * FrondCompiler::compile(); FrondCompiler never throws (returns null on any
+     * unsupported construct or codegen error), so a render is never broken by it.
+     *
+     * @var array<string, \Closure|null>
+     */
+    private array $compiledFn = [];
+
+    /**
      * Session ID used by formToken() for CSRF session binding.
      * Set this before rendering templates to bind tokens to the current session.
      */
@@ -150,8 +164,7 @@ class Frond
             }
             if ($cached !== null && !$stale) {
                 $data = array_merge($this->globals, $data);
-                $ast = $this->resolveInheritance($cached['ast'], $data, $template);
-                return $this->execute($ast, $data);
+                return $this->renderAst($template, $cached['ast'], $data, $template);
             }
         }
         // Dev mode: skip cache entirely — always re-read and re-tokenize
@@ -170,8 +183,12 @@ class Frond
         ];
 
         $data = array_merge($this->globals, $data);
-        $ast = $this->resolveInheritance($ast, $data, $template);
-        return $this->execute($ast, $data);
+        // Prod keys the compiled fn by template name (files are stable under a
+        // running prod worker); dev keys it by a hash of THIS source so an edit
+        // produces a new key and recompiles, keeping hot-reload visibility while
+        // still exercising the compiled path.
+        $compileKey = $debugMode ? ('dev:' . md5($source)) : $template;
+        return $this->renderAst($compileKey, $ast, $data, $template);
     }
 
     public function renderString(string $source, array $data = [], ?string $templateName = null): string
@@ -181,8 +198,7 @@ class Frond
 
         if ($cached !== null) {
             $data = array_merge($this->globals, $data);
-            $ast = $this->resolveInheritance($cached['ast'], $data, $templateName);
-            return $this->execute($ast, $data);
+            return $this->renderAst($key, $cached['ast'], $data, $templateName);
         }
 
         $data = array_merge($this->globals, $data);
@@ -190,10 +206,52 @@ class Frond
         $ast = $this->parse($tokens);
         $this->compiledStrings[$key] = ['tokens' => $tokens, 'ast' => $ast];
 
-        // Handle extends
-        $ast = $this->resolveInheritance($ast, $data, $templateName);
+        return $this->renderAst($key, $ast, $data, $templateName);
+    }
 
+    /**
+     * Render a parsed AST via the AOT-compiled closure when available, else the
+     * interpreter. The compiled fast path is used only for a non-sandboxed engine
+     * with a cache key and a template the compiler accepts (it rejects extends/
+     * block/macro/include/cache/live/etc.); everything else - including every
+     * template that uses inheritance - falls through to the interpreter, which
+     * runs `resolveInheritance()` (a no-op for non-extends ASTs) then `execute()`.
+     *
+     * @param string|null $compileKey Cache key for the compiled closure (null skips compilation).
+     * @param array<int, array<string, mixed>> $ast Parsed AST to render.
+     * @param array<string, mixed> $data Render context (by ref, so interpreter set()s persist).
+     * @param string|null $templateName Template name for inheritance resolution.
+     * @return string The rendered output.
+     */
+    private function renderAst(?string $compileKey, array $ast, array &$data, ?string $templateName): string
+    {
+        if (!$this->sandboxed && $compileKey !== null) {
+            $compiled = $this->getCompiled($compileKey, $ast);
+            if ($compiled !== null) {
+                return $compiled($this, $data);
+            }
+        }
+        $ast = $this->resolveInheritance($ast, $data, $templateName);
         return $this->execute($ast, $data);
+    }
+
+    /**
+     * Return the AOT-compiled render closure for a cache key, compiling once and
+     * memoising the result (including a null "unsupported, use the interpreter"
+     * outcome, so a template is not re-analysed every render).
+     *
+     * @param string $compileKey Cache key (template name / source hash).
+     * @param array<int, array<string, mixed>> $ast Parsed AST to compile.
+     * @return \Closure|null The compiled closure, or null to use the interpreter.
+     */
+    private function getCompiled(string $compileKey, array $ast): ?\Closure
+    {
+        if (array_key_exists($compileKey, $this->compiledFn)) {
+            return $this->compiledFn[$compileKey];
+        }
+        $fn = FrondCompiler::compile($ast);
+        $this->compiledFn[$compileKey] = $fn;
+        return $fn;
     }
 
     /**
@@ -203,6 +261,7 @@ class Frond
     {
         $this->compiled = [];
         $this->compiledStrings = [];
+        $this->compiledFn = [];
         $this->filterChainCache = [];
         $this->dottedSplitCache = [];
     }
