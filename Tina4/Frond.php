@@ -126,6 +126,24 @@ class Frond
     private const MEMO_CACHE_MAX = 1024;
 
     /**
+     * Hard cap on the TEMPLATE caches — $compiled, $compiledStrings and
+     * $compiledFn (ADR-0004).
+     *
+     * Deliberately lower than MEMO_CACHE_MAX: an entry here is a token list
+     * plus an AST plus an eval'd render closure, orders of magnitude bigger
+     * than one expression descriptor, so the same 1024 would permit a far
+     * larger resident footprint.
+     *
+     * 256 sits far above any real application's template count, so a normal
+     * app never evicts. The cap exists for the two workloads that genuinely
+     * grow without limit for the life of a worker: renderString() keys on
+     * md5(source), so dynamically-built template strings add an entry each;
+     * and in dev the compiled-fn key is 'dev:' . md5($source), so every edit
+     * to a template file adds one.
+     */
+    private const TEMPLATE_CACHE_MAX = 256;
+
+    /**
      * @var array<string, array> Structural descriptor per expression string --
      *   which top-level operator the expression splits on and where. Holds no
      *   context value; see exprScan().
@@ -190,6 +208,7 @@ class Frond
         $mtime = filemtime($file);
         $tokens = $this->tokenize($source);
         $ast = $this->parse($tokens);
+        $this->capMemoCache($this->compiled, self::TEMPLATE_CACHE_MAX);
         $this->compiled[$template] = [
             'tokens' => $tokens,
             'ast' => $ast,
@@ -219,6 +238,7 @@ class Frond
         $data = array_merge($this->globals, $data);
         $tokens = $this->tokenize($source);
         $ast = $this->parse($tokens);
+        $this->capMemoCache($this->compiledStrings, self::TEMPLATE_CACHE_MAX);
         $this->compiledStrings[$key] = ['tokens' => $tokens, 'ast' => $ast];
 
         return $this->renderAst($key, $ast, $data, $templateName);
@@ -265,6 +285,7 @@ class Frond
             return $this->compiledFn[$compileKey];
         }
         $fn = FrondCompiler::compile($ast);
+        $this->capMemoCache($this->compiledFn, self::TEMPLATE_CACHE_MAX);
         $this->compiledFn[$compileKey] = $fn;
         return $fn;
     }
@@ -282,8 +303,8 @@ class Frond
     }
 
     /**
-     * Keep a per-expression memo cache bounded to MEMO_CACHE_MAX entries
-     * (ADR-0004). Call immediately before inserting a new entry.
+     * Keep a memo cache bounded (ADR-0004). Call immediately before inserting
+     * a new entry.
      *
      * Eviction is insertion-ordered (oldest first), not true LRU: PHP arrays
      * preserve insertion order, so dropping from the front is O(1) per key,
@@ -291,14 +312,19 @@ class Frond
      * to the hottest path in a render and cost more than it saves. Half the
      * cache is dropped at once so the unset sweep amortises to O(1) per insert.
      *
+     * Evicting can never change what a render produces: every read site treats
+     * a miss as "recompute", so a swept entry is rebuilt on next use.
+     *
      * @param array<string, mixed> $cache Memo cache to bound, by reference.
+     * @param int $max Cap for this cache — MEMO_CACHE_MAX for per-expression
+     *   memos, TEMPLATE_CACHE_MAX for the heavier template caches.
      */
-    private function capMemoCache(array &$cache): void
+    private function capMemoCache(array &$cache, int $max = self::MEMO_CACHE_MAX): void
     {
-        if (count($cache) < self::MEMO_CACHE_MAX) {
+        if (count($cache) < $max) {
             return;
         }
-        $drop = intdiv(self::MEMO_CACHE_MAX, 2);
+        $drop = intdiv($max, 2);
         foreach ($cache as $key => $_) {
             unset($cache[$key]);
             if (--$drop <= 0) {
