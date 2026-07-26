@@ -370,7 +370,14 @@ class Metrics
             "total_functions" => count($allFunctions),
             "avg_complexity" => round($avgCc, 2),
             "avg_maintainability" => round($avgMi, 1),
+            // Display-only: the top-15 for the "most complex functions" report.
+            // Do NOT source offenders / --fail-on from this — capping here silently
+            // hides the 16th+ over-threshold function from the gate. offenders()
+            // reads "all_functions" (below) instead.
             "most_complex_functions" => array_slice($allFunctions, 0, 15),
+            // Full, uncapped, complexity-sorted list — offenders()/--fail-on use this
+            // so no function over the complexity threshold ever escapes the gate.
+            "all_functions" => $allFunctions,
             "file_metrics" => $fileMetrics,
             "violations" => $violations,
             "dependency_graph" => $importGraph,
@@ -417,8 +424,10 @@ class Metrics
 
         $items = [];
 
-        // Function-level: cyclomatic complexity.
-        foreach ($analysis["most_complex_functions"] ?? [] as $fn) {
+        // Function-level: cyclomatic complexity. Use the FULL function list (not the
+        // display-capped most_complex_functions[:15]) so a 16th+ over-threshold
+        // function is never silently dropped from the offenders list or --fail-on.
+        foreach ($analysis["all_functions"] ?? $analysis["most_complex_functions"] ?? [] as $fn) {
             $cc = $fn["complexity"];
             if ($cc > 10) {
                 $items[] = [
