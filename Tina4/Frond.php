@@ -58,6 +58,20 @@ class Frond
     private array $compiledStrings = [];
 
     /**
+     * AOT-compiled render closures (ADR-0001 / ADR-0003), keyed exactly like the
+     * token caches: template name in production, 'dev:'+md5(source) in dev (so an
+     * edit recompiles), md5(source) for renderString(). The value is the compiled
+     * `function ($engine, $data): string` closure, or null when the template used
+     * a construct the compiler falls back on (cached so an unsupported template is
+     * not re-analysed every render). Never populated in sandbox mode. Produced by
+     * FrondCompiler::compile(); FrondCompiler never throws (returns null on any
+     * unsupported construct or codegen error), so a render is never broken by it.
+     *
+     * @var array<string, \Closure|null>
+     */
+    private array $compiledFn = [];
+
+    /**
      * Session ID used by formToken() for CSRF session binding.
      * Set this before rendering templates to bind tokens to the current session.
      */
@@ -100,8 +114,23 @@ class Frond
     private const RE_DICT_PAIR = '/^(?:(["\'])(.+?)\1|(\w+))\s*:\s*(.+)$/s';
     private const RE_SLUG_STRIP = '/[^a-z0-9]+/';
 
-    /** @var array<string, array> Cache for parsed filter chains keyed by expression string */
-    private array $filterChainCache = [];
+    /**
+     * Hard cap on every per-expression memo cache in this engine (ADR-0004).
+     *
+     * Mirrors the Python master's `@lru_cache(maxsize=1024)` on
+     * `_expr_descriptor` / `_split_dotted`. A template that builds expression
+     * strings dynamically would otherwise grow a plain instance array without
+     * limit for the lifetime of the engine, which is a memory footgun on a
+     * long-lived worker.
+     */
+    private const MEMO_CACHE_MAX = 1024;
+
+    /**
+     * @var array<string, array> Structural descriptor per expression string --
+     *   which top-level operator the expression splits on and where. Holds no
+     *   context value; see exprScan().
+     */
+    private array $exprScanCache = [];
 
     /** @var array<string, string[]> Cache for simple dotted path splits (no brackets/parens) */
     private array $dottedSplitCache = [];
@@ -150,8 +179,7 @@ class Frond
             }
             if ($cached !== null && !$stale) {
                 $data = array_merge($this->globals, $data);
-                $ast = $this->resolveInheritance($cached['ast'], $data, $template);
-                return $this->execute($ast, $data);
+                return $this->renderAst($template, $cached['ast'], $data, $template);
             }
         }
         // Dev mode: skip cache entirely — always re-read and re-tokenize
@@ -170,8 +198,12 @@ class Frond
         ];
 
         $data = array_merge($this->globals, $data);
-        $ast = $this->resolveInheritance($ast, $data, $template);
-        return $this->execute($ast, $data);
+        // Prod keys the compiled fn by template name (files are stable under a
+        // running prod worker); dev keys it by a hash of THIS source so an edit
+        // produces a new key and recompiles, keeping hot-reload visibility while
+        // still exercising the compiled path.
+        $compileKey = $debugMode ? ('dev:' . md5($source)) : $template;
+        return $this->renderAst($compileKey, $ast, $data, $template);
     }
 
     public function renderString(string $source, array $data = [], ?string $templateName = null): string
@@ -181,8 +213,7 @@ class Frond
 
         if ($cached !== null) {
             $data = array_merge($this->globals, $data);
-            $ast = $this->resolveInheritance($cached['ast'], $data, $templateName);
-            return $this->execute($ast, $data);
+            return $this->renderAst($key, $cached['ast'], $data, $templateName);
         }
 
         $data = array_merge($this->globals, $data);
@@ -190,10 +221,52 @@ class Frond
         $ast = $this->parse($tokens);
         $this->compiledStrings[$key] = ['tokens' => $tokens, 'ast' => $ast];
 
-        // Handle extends
-        $ast = $this->resolveInheritance($ast, $data, $templateName);
+        return $this->renderAst($key, $ast, $data, $templateName);
+    }
 
+    /**
+     * Render a parsed AST via the AOT-compiled closure when available, else the
+     * interpreter. The compiled fast path is used only for a non-sandboxed engine
+     * with a cache key and a template the compiler accepts (it rejects extends/
+     * block/macro/include/cache/live/etc.); everything else - including every
+     * template that uses inheritance - falls through to the interpreter, which
+     * runs `resolveInheritance()` (a no-op for non-extends ASTs) then `execute()`.
+     *
+     * @param string|null $compileKey Cache key for the compiled closure (null skips compilation).
+     * @param array<int, array<string, mixed>> $ast Parsed AST to render.
+     * @param array<string, mixed> $data Render context (by ref, so interpreter set()s persist).
+     * @param string|null $templateName Template name for inheritance resolution.
+     * @return string The rendered output.
+     */
+    private function renderAst(?string $compileKey, array $ast, array &$data, ?string $templateName): string
+    {
+        if (!$this->sandboxed && $compileKey !== null) {
+            $compiled = $this->getCompiled($compileKey, $ast);
+            if ($compiled !== null) {
+                return $compiled($this, $data);
+            }
+        }
+        $ast = $this->resolveInheritance($ast, $data, $templateName);
         return $this->execute($ast, $data);
+    }
+
+    /**
+     * Return the AOT-compiled render closure for a cache key, compiling once and
+     * memoising the result (including a null "unsupported, use the interpreter"
+     * outcome, so a template is not re-analysed every render).
+     *
+     * @param string $compileKey Cache key (template name / source hash).
+     * @param array<int, array<string, mixed>> $ast Parsed AST to compile.
+     * @return \Closure|null The compiled closure, or null to use the interpreter.
+     */
+    private function getCompiled(string $compileKey, array $ast): ?\Closure
+    {
+        if (array_key_exists($compileKey, $this->compiledFn)) {
+            return $this->compiledFn[$compileKey];
+        }
+        $fn = FrondCompiler::compile($ast);
+        $this->compiledFn[$compileKey] = $fn;
+        return $fn;
     }
 
     /**
@@ -203,8 +276,35 @@ class Frond
     {
         $this->compiled = [];
         $this->compiledStrings = [];
-        $this->filterChainCache = [];
+        $this->compiledFn = [];
+        $this->exprScanCache = [];
         $this->dottedSplitCache = [];
+    }
+
+    /**
+     * Keep a per-expression memo cache bounded to MEMO_CACHE_MAX entries
+     * (ADR-0004). Call immediately before inserting a new entry.
+     *
+     * Eviction is insertion-ordered (oldest first), not true LRU: PHP arrays
+     * preserve insertion order, so dropping from the front is O(1) per key,
+     * whereas refreshing recency on every cache HIT would add two hash writes
+     * to the hottest path in a render and cost more than it saves. Half the
+     * cache is dropped at once so the unset sweep amortises to O(1) per insert.
+     *
+     * @param array<string, mixed> $cache Memo cache to bound, by reference.
+     */
+    private function capMemoCache(array &$cache): void
+    {
+        if (count($cache) < self::MEMO_CACHE_MAX) {
+            return;
+        }
+        $drop = intdiv(self::MEMO_CACHE_MAX, 2);
+        foreach ($cache as $key => $_) {
+            unset($cache[$key]);
+            if (--$drop <= 0) {
+                break;
+            }
+        }
     }
 
     /**
@@ -1329,28 +1429,34 @@ class Frond
         $expr = trim($expr);
         if ($expr === '') return '';
 
+        // Which top-level operator this expression splits on, and where, is a
+        // pure function of the expression STRING -- it cannot change between
+        // renders -- so it is derived once and memoised. Only the value
+        // resolution below runs on every call. The branch order here is
+        // IDENTICAL to the linear chain it replaced: same precedence, same
+        // behaviour, same rendered bytes. See exprScan().
+        $scan = $this->exprScan($expr);
+
         // 1. Literals (strings, numbers, booleans, null)
-        $v = $this->evaluateLiteral($expr);
-        if ($v !== self::NOT_MATCHED) return $v;
+        if (isset($scan['lit'])) return $scan['lit'][0];
 
         // 2. Parenthesized sub-expression
-        $v = $this->evaluateParenthesized($expr, $data);
-        if ($v !== self::NOT_MATCHED) return $v;
+        if (isset($scan['paren'])) return $this->evaluateExpression($scan['paren'], $data);
 
         // 3. Ternary (? :) and inline-if
-        $v = $this->evaluateTernary($expr, $data);
+        $v = $this->evaluateTernary($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 4. Null coalescing (??)
-        $v = $this->evaluateNullCoalesce($expr, $data);
+        $v = $this->evaluateNullCoalesce($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 5. Logical operators (or, and, not)
-        $v = $this->evaluateLogical($expr, $data);
+        $v = $this->evaluateLogical($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 6. Comparisons (==, !=, <, >, <=, >=, in, not in, is, is not)
-        $v = $this->evaluateComparison($expr, $data);
+        $v = $this->evaluateComparison($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 7. String concatenation (~) — evaluated BEFORE the filter pipe because
@@ -1359,15 +1465,15 @@ class Frond
         //    `amount|number_format(2) ~ ' EUR'` group as
         //    `(amount|number_format(2)) ~ ' EUR'`; each side is then evaluated
         //    recursively, so the filter still resolves at its (tighter) depth.
-        $v = $this->evaluateConcat($expr, $data);
+        $v = $this->evaluateConcat($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 8. Filter pipes
-        $v = $this->evaluateFilterPipe($expr, $data);
+        $v = $this->evaluateFilterPipe($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 9. Arithmetic (+, -, *, /, //, %, **)
-        $v = $this->evaluateArithmetic($expr, $data);
+        $v = $this->evaluateArithmetic($data, $scan);
         if ($v !== self::NOT_MATCHED) return $v;
 
         // 10. Collection literals ([...], {...}) and ranges
@@ -1420,17 +1526,199 @@ class Frond
         return self::NOT_MATCHED;
     }
 
-    /* ── helper: parenthesized sub-expression ── */
+    /* ── expression structure cache ── */
 
-    private function evaluateParenthesized(string $expr, array &$data): mixed
+    /**
+     * Structural descriptor for an expression, memoised per expression string.
+     *
+     * Operator detection and the operand split that follows it depend ONLY on
+     * the expression string, never on the render data -- yet the interpreter was
+     * re-deriving them on every render. For a single 20-row loop template that
+     * is roughly 1,230 full PHP character scans per render (findTernary +
+     * findLogicalOp x4 + findMathOp x7 per evaluateExpression call, none of
+     * which have the str_contains fast path findOutsideQuotes has), every one of
+     * them recomputing an answer that cannot have changed. This caches the
+     * answer, so a repeat render -- every loop iteration, every request -- is an
+     * array read instead of a rescan.
+     *
+     * The descriptor holds NO context value. That render-independence is the
+     * correctness invariant: value lookups and filter application still run on
+     * every call, and only the string scanning collapses to a lookup. This is
+     * the PHP twin of the Python master's `_expr_descriptor`.
+     *
+     * @return array<string, mixed> Descriptor keyed by branch tag; see computeExprScan().
+     */
+    private function exprScan(string $expr): array
     {
-        if (strlen($expr) < 2 || $expr[0] !== '(' || !str_ends_with($expr, ')')) {
-            return self::NOT_MATCHED;
+        if (isset($this->exprScanCache[$expr])) {
+            return $this->exprScanCache[$expr];
         }
-        if ($this->matchedParens($expr)) {
-            return $this->evaluateExpression(substr($expr, 1, -1), $data);
+        $this->capMemoCache($this->exprScanCache);
+        return $this->exprScanCache[$expr] = $this->computeExprScan($expr);
+    }
+
+    /**
+     * Derive the structural descriptor for an expression.
+     *
+     * Mirrors the branch-detection order of evaluateExpression() EXACTLY and
+     * stops at the first branch that matches, so a descriptor records only what
+     * the interpreter can actually reach -- same precedence, same operand
+     * boundaries, same rendered bytes.
+     *
+     * Two things are deliberately NOT baked in, because they are engine state or
+     * render context rather than syntax:
+     *  - an `is` test: whether the test NAME is registered can change at runtime
+     *    (addTest), so the pure regex match is recorded but derivation CONTINUES
+     *    past it -- evaluateComparison() still consults isKnownTest() live and
+     *    falls through to the comparison operators when the test is unknown.
+     *  - collection literals, function/macro calls and variable resolution
+     *    (steps 10-12): these resolve against registered macros, globals and the
+     *    render context, so they stay entirely live.
+     *
+     * @return array<string, mixed>
+     */
+    private function computeExprScan(string $expr): array
+    {
+        $scan = [];
+
+        // 1. Literals (strings, numbers, booleans, null). Wrapped in an array so
+        //    a literal `null`/`false` is still detectable with isset().
+        $literal = $this->evaluateLiteral($expr);
+        if ($literal !== self::NOT_MATCHED) {
+            return ['lit' => [$literal]];
         }
-        return self::NOT_MATCHED;
+
+        // 2. Parenthesized sub-expression
+        if (strlen($expr) >= 2 && $expr[0] === '(' && str_ends_with($expr, ')')
+            && $this->matchedParens($expr)) {
+            return ['paren' => substr($expr, 1, -1)];
+        }
+
+        // 3a. C-style ternary: condition ? trueVal : falseVal
+        $ternaryPos = $this->findTernary($expr);
+        if ($ternaryPos !== false) {
+            $rest = substr($expr, $ternaryPos + 1);
+            $colonPos = $this->findTernaryColon($rest);
+            if ($colonPos !== false) {
+                return ['ternary' => [
+                    trim(substr($expr, 0, $ternaryPos)),
+                    trim(substr($rest, 0, $colonPos)),
+                    trim(substr($rest, $colonPos + 1)),
+                ]];
+            }
+        }
+
+        // 3b. Jinja2-style inline if: value if condition else other_value.
+        //     Reached even when a `?` was found but had no matching `:`.
+        $ifPos = $this->findOutsideQuotes($expr, ' if ');
+        if ($ifPos !== false) {
+            $elsePos = $this->findOutsideQuotes($expr, ' else ');
+            if ($elsePos !== false && $elsePos > $ifPos) {
+                return ['inlineIf' => [
+                    trim(substr($expr, 0, $ifPos)),
+                    trim(substr($expr, $ifPos + 4, $elsePos - $ifPos - 4)),
+                    trim(substr($expr, $elsePos + 6)),
+                ]];
+            }
+        }
+
+        // 4. Null coalescing (??)
+        $coalescePos = $this->findOutsideQuotes($expr, '??');
+        if ($coalescePos !== false) {
+            return ['coalesce' => [
+                trim(substr($expr, 0, $coalescePos)),
+                trim(substr($expr, $coalescePos + 2)),
+            ]];
+        }
+
+        // 5. Logical operators (or, and, not)
+        $orPos = $this->findLogicalOp($expr, ' or ');
+        if ($orPos !== false) {
+            return ['or' => [trim(substr($expr, 0, $orPos)), trim(substr($expr, $orPos + 4))]];
+        }
+        $andPos = $this->findLogicalOp($expr, ' and ');
+        if ($andPos !== false) {
+            return ['and' => [trim(substr($expr, 0, $andPos)), trim(substr($expr, $andPos + 5))]];
+        }
+        if (preg_match(self::RE_NOT_PREFIX, $expr, $matches)) {
+            return ['not' => $matches[1]];
+        }
+
+        // 6. Comparisons -- "not in" / "in" / "is not" / "is" / == != <= >= < >
+        $notInPos = $this->findLogicalOp($expr, ' not in ');
+        if ($notInPos !== false) {
+            return ['notIn' => [trim(substr($expr, 0, $notInPos)), trim(substr($expr, $notInPos + 8))]];
+        }
+        $inPos = $this->findLogicalOp($expr, ' in ');
+        if ($inPos !== false) {
+            return ['in' => [trim(substr($expr, 0, $inPos)), trim(substr($expr, $inPos + 4))]];
+        }
+        if (preg_match(self::RE_IS_NOT_TEST, $expr, $matches)) {
+            return ['isNotTest' => [trim($matches[1]), trim($matches[2])]];
+        }
+        // Recorded but NOT returned on: isKnownTest() is live engine state, so
+        // the fall-through branches below must be derived too.
+        if (preg_match(self::RE_IS_TEST, $expr, $matches)) {
+            $scan['isTest'] = [trim($matches[1]), trim($matches[2])];
+        }
+        foreach (['!=', '==', '<=', '>=', '<', '>'] as $comparisonOperator) {
+            if ($this->findOutsideQuotes($expr, $comparisonOperator) === false) continue;
+            $operatorPos = $this->findComparisonOp($expr, $comparisonOperator);
+            if ($operatorPos !== false) {
+                $scan['compare'] = [
+                    $comparisonOperator,
+                    trim(substr($expr, 0, $operatorPos)),
+                    trim(substr($expr, $operatorPos + strlen($comparisonOperator))),
+                ];
+                return $scan;
+            }
+        }
+
+        // 7. String concatenation (~) -- before the filter pipe, because `~`
+        //    binds looser than `|` in Twig (issue #171).
+        if ($this->findOutsideQuotes($expr, '~') !== false) {
+            $scan['concat'] = array_map('trim', $this->splitOutsideQuotes($expr, '~'));
+            return $scan;
+        }
+
+        // 8. Filter pipes. Each segment past the first is pre-split into its
+        //    filter call and optional property-access suffix (`first.groupSummary`,
+        //    `format(2).toUpperCase`) -- that split is structural too.
+        $filterSplit = $this->splitFilters($expr);
+        if (count($filterSplit) > 1) {
+            $segments = [];
+            for ($i = 1, $count = count($filterSplit); $i < $count; $i++) {
+                $part = trim($filterSplit[$i]);
+                $dotPos = $this->findDotOutsideParens($part);
+                $segments[] = $dotPos !== false
+                    ? [trim(substr($part, 0, $dotPos)), substr($part, $dotPos + 1)]
+                    : [$part, null];
+            }
+            $scan['pipe'] = [$filterSplit[0], $segments];
+            return $scan;
+        }
+
+        // 9. Arithmetic (+, -, *, /, //, %, **) -- lowest precedence group first
+        foreach ([['+', '-'], ['*', '//', '/', '%', '**']] as $operatorGroup) {
+            foreach ($operatorGroup as $mathOperator) {
+                $operatorPos = $this->findMathOp($expr, $mathOperator);
+                if ($operatorPos === false) continue;
+                $scan['arithmetic'] = [
+                    $mathOperator,
+                    trim(substr($expr, 0, $operatorPos)),
+                    trim(substr($expr, $operatorPos + strlen($mathOperator))),
+                ];
+                return $scan;
+            }
+        }
+        // Parenthesized fallback, checked only after the operators (see
+        // evaluateArithmetic's original tail).
+        if (str_starts_with($expr, '(')
+            && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
+            $scan['arithmeticParen'] = substr($expr, 1, -1);
+        }
+
+        return $scan;
     }
 
     /**
@@ -1450,36 +1738,25 @@ class Frond
 
     /* ── helper: ternary and inline-if ── */
 
-    private function evaluateTernary(string $expr, array &$data): mixed
+    /**
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateTernary(array &$data, array $scan): mixed
     {
         // C-style ternary: condition ? trueVal : falseVal
-        $ternaryPos = $this->findTernary($expr);
-        if ($ternaryPos !== false) {
-            $condition = trim(substr($expr, 0, $ternaryPos));
-            $rest = substr($expr, $ternaryPos + 1);
-            $colonPos = $this->findTernaryColon($rest);
-            if ($colonPos !== false) {
-                $trueVal = trim(substr($rest, 0, $colonPos));
-                $falseVal = trim(substr($rest, $colonPos + 1));
-                $condResult = $this->evaluateExpression($condition, $data);
-                return $this->isTruthy($condResult)
-                    ? $this->evaluateExpression($trueVal, $data)
-                    : $this->evaluateExpression($falseVal, $data);
-            }
+        if (isset($scan['ternary'])) {
+            [$condition, $trueVal, $falseVal] = $scan['ternary'];
+            return $this->isTruthy($this->evaluateExpression($condition, $data))
+                ? $this->evaluateExpression($trueVal, $data)
+                : $this->evaluateExpression($falseVal, $data);
         }
 
         // Jinja2-style inline if: value if condition else other_value
-        $ifPos = $this->findOutsideQuotes($expr, ' if ');
-        if ($ifPos !== false) {
-            $elsePos = $this->findOutsideQuotes($expr, ' else ');
-            if ($elsePos !== false && $elsePos > $ifPos) {
-                $valuePart = trim(substr($expr, 0, $ifPos));
-                $condPart = trim(substr($expr, $ifPos + 4, $elsePos - $ifPos - 4));
-                $elsePart = trim(substr($expr, $elsePos + 6));
-                return $this->isTruthy($this->evaluateExpression($condPart, $data))
-                    ? $this->evaluateExpression($valuePart, $data)
-                    : $this->evaluateExpression($elsePart, $data);
-            }
+        if (isset($scan['inlineIf'])) {
+            [$valuePart, $condPart, $elsePart] = $scan['inlineIf'];
+            return $this->isTruthy($this->evaluateExpression($condPart, $data))
+                ? $this->evaluateExpression($valuePart, $data)
+                : $this->evaluateExpression($elsePart, $data);
         }
 
         return self::NOT_MATCHED;
@@ -1487,42 +1764,42 @@ class Frond
 
     /* ── helper: null coalescing ── */
 
-    private function evaluateNullCoalesce(string $expr, array &$data): mixed
+    /**
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateNullCoalesce(array &$data, array $scan): mixed
     {
-        $coalPos = $this->findOutsideQuotes($expr, '??');
-        if ($coalPos === false) return self::NOT_MATCHED;
+        if (!isset($scan['coalesce'])) return self::NOT_MATCHED;
 
-        $left = trim(substr($expr, 0, $coalPos));
-        $right = trim(substr($expr, $coalPos + 2));
+        [$left, $right] = $scan['coalesce'];
         $leftVal = $this->evaluateExpressionSafe($left, $data);
         return $leftVal !== null ? $leftVal : $this->evaluateExpression($right, $data);
     }
 
     /* ── helper: logical operators (or, and, not) ── */
 
-    private function evaluateLogical(string $expr, array &$data): mixed
+    /**
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateLogical(array &$data, array $scan): mixed
     {
         // or
-        $orPos = $this->findLogicalOp($expr, ' or ');
-        if ($orPos !== false) {
-            $left = trim(substr($expr, 0, $orPos));
-            $right = trim(substr($expr, $orPos + 4));
+        if (isset($scan['or'])) {
+            [$left, $right] = $scan['or'];
             return $this->isTruthy($this->evaluateExpression($left, $data))
                 || $this->isTruthy($this->evaluateExpression($right, $data));
         }
 
         // and
-        $andPos = $this->findLogicalOp($expr, ' and ');
-        if ($andPos !== false) {
-            $left = trim(substr($expr, 0, $andPos));
-            $right = trim(substr($expr, $andPos + 5));
+        if (isset($scan['and'])) {
+            [$left, $right] = $scan['and'];
             return $this->isTruthy($this->evaluateExpression($left, $data))
                 && $this->isTruthy($this->evaluateExpression($right, $data));
         }
 
         // not prefix
-        if (preg_match(self::RE_NOT_PREFIX, $expr, $m)) {
-            return !$this->isTruthy($this->evaluateExpression($m[1], $data));
+        if (isset($scan['not'])) {
+            return !$this->isTruthy($this->evaluateExpression($scan['not'], $data));
         }
 
         return self::NOT_MATCHED;
@@ -1530,13 +1807,14 @@ class Frond
 
     /* ── helper: comparisons ── */
 
-    private function evaluateComparison(string $expr, array &$data): mixed
+    /**
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateComparison(array &$data, array $scan): mixed
     {
         // "not in"
-        $notInPos = $this->findLogicalOp($expr, ' not in ');
-        if ($notInPos !== false) {
-            $left = trim(substr($expr, 0, $notInPos));
-            $right = trim(substr($expr, $notInPos + 8));
+        if (isset($scan['notIn'])) {
+            [$left, $right] = $scan['notIn'];
             return !$this->checkIn(
                 $this->evaluateExpression($left, $data),
                 $this->evaluateExpression($right, $data)
@@ -1544,10 +1822,8 @@ class Frond
         }
 
         // "in"
-        $inPos = $this->findLogicalOp($expr, ' in ');
-        if ($inPos !== false) {
-            $left = trim(substr($expr, 0, $inPos));
-            $right = trim(substr($expr, $inPos + 4));
+        if (isset($scan['in'])) {
+            [$left, $right] = $scan['in'];
             return $this->checkIn(
                 $this->evaluateExpression($left, $data),
                 $this->evaluateExpression($right, $data)
@@ -1555,34 +1831,34 @@ class Frond
         }
 
         // "is not" tests
-        if (preg_match(self::RE_IS_NOT_TEST, $expr, $m)) {
-            return !$this->evaluateTest(trim($m[1]), trim($m[2]), $data);
+        if (isset($scan['isNotTest'])) {
+            [$valueExpr, $testName] = $scan['isNotTest'];
+            return !$this->evaluateTest($valueExpr, $testName, $data);
         }
 
-        // "is" tests
-        if (preg_match(self::RE_IS_TEST, $expr, $m)) {
-            $testName = trim($m[2]);
+        // "is" tests. Whether the test NAME is registered is live engine state,
+        // so it is checked here rather than baked into the descriptor; an unknown
+        // test falls through to the comparison operators exactly as before.
+        if (isset($scan['isTest'])) {
+            [$valueExpr, $testName] = $scan['isTest'];
             if ($this->isKnownTest($testName)) {
-                return $this->evaluateTest(trim($m[1]), $testName, $data);
+                return $this->evaluateTest($valueExpr, $testName, $data);
             }
         }
 
         // Comparison operators: !=, ==, <=, >=, <, >
-        foreach (['!=', '==', '<=', '>=', '<', '>'] as $op) {
-            if ($this->findOutsideQuotes($expr, $op) === false) continue;
-            $opPos = $this->findComparisonOp($expr, $op);
-            if ($opPos !== false) {
-                $leftVal = $this->evaluateExpression(trim(substr($expr, 0, $opPos)), $data);
-                $rightVal = $this->evaluateExpression(trim(substr($expr, $opPos + strlen($op))), $data);
-                return match($op) {
-                    '==' => $leftVal == $rightVal,
-                    '!=' => $leftVal != $rightVal,
-                    '<'  => $leftVal < $rightVal,
-                    '>'  => $leftVal > $rightVal,
-                    '<=' => $leftVal <= $rightVal,
-                    '>=' => $leftVal >= $rightVal,
-                };
-            }
+        if (isset($scan['compare'])) {
+            [$op, $left, $right] = $scan['compare'];
+            $leftVal = $this->evaluateExpression($left, $data);
+            $rightVal = $this->evaluateExpression($right, $data);
+            return match($op) {
+                '==' => $leftVal == $rightVal,
+                '!=' => $leftVal != $rightVal,
+                '<'  => $leftVal < $rightVal,
+                '>'  => $leftVal > $rightVal,
+                '<=' => $leftVal <= $rightVal,
+                '>=' => $leftVal >= $rightVal,
+            };
         }
 
         return self::NOT_MATCHED;
@@ -1590,46 +1866,41 @@ class Frond
 
     /* ── helper: filter pipes ── */
 
-    private function evaluateFilterPipe(string $expr, array &$data): mixed
+    /**
+     * Apply a pre-split filter chain to its base value.
+     *
+     * The chain split itself -- where the top-level `|` boundaries are, and
+     * whether a segment carries a property-access suffix -- is structural and
+     * lives in the expression descriptor (see computeExprScan step 8). Only the
+     * value resolution and filter application happen here, on every render.
+     *
+     * A filter segment can carry a property-access suffix:
+     *   details|first.groupSummary    -> apply `first`, then `.groupSummary`
+     *   invoice|format(2).toUpperCase -> apply `format(2)`, then `.toUpperCase`
+     * The descriptor splits at the first `.` outside quotes + parens, so
+     * `date("Y.m.d")` and `number_format(1.5)` are not split. Without that
+     * split, applyFilter() was handed "first.groupSummary" as the whole filter
+     * name, found no match, and silently returned the input unchanged.
+     *
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateFilterPipe(array &$data, array $scan): mixed
     {
-        $filterSplit = $this->filterChainCache[$expr] ?? null;
-        if ($filterSplit === null) {
-            $filterSplit = $this->splitFilters($expr);
-            $this->filterChainCache[$expr] = $filterSplit;
-        }
-        if (count($filterSplit) <= 1) return self::NOT_MATCHED;
+        if (!isset($scan['pipe'])) return self::NOT_MATCHED;
 
-        $value = $this->evaluateExpression($filterSplit[0], $data);
-        for ($i = 1, $cnt = count($filterSplit); $i < $cnt; $i++) {
-            $part = trim($filterSplit[$i]);
+        [$baseExpr, $segments] = $scan['pipe'];
+        $value = $this->evaluateExpression($baseExpr, $data);
+        foreach ($segments as [$filterCall, $propPath]) {
+            $value = $this->applyFilter($filterCall, $value, $data);
+            if ($propPath === null) continue;
 
-            // A filter segment can carry a property-access suffix:
-            //   details|first.groupSummary   → apply `first`, then `.groupSummary`
-            //   invoice|format(2).toUpperCase → apply `format(2)`, then `.toUpperCase`
-            //
-            // We split at the first `.` that sits outside quotes + parens
-            // so `date("Y.m.d")` and `number_format(1.5)` don't match.
-            // Without this split, applyFilter() was being handed
-            // "first.groupSummary" as the whole filter name, finding no
-            // match, and silently returning the input unchanged — that's
-            // the Frond bug the user hit.
-            $dotPos = $this->findDotOutsideParens($part);
-            if ($dotPos !== false) {
-                $filterCall = trim(substr($part, 0, $dotPos));
-                $propPath   = substr($part, $dotPos + 1);
-                $value = $this->applyFilter($filterCall, $value, $data);
-
-                // Traverse the property path via resolveVariable by
-                // staging the filter result under a synthetic key. Reuses
-                // existing dotted + bracketed path resolution rather than
-                // writing a second traversal loop we'd have to keep in
-                // sync with resolveVariable's bugfixes.
-                $tmpKey  = '__frond_filter_chain_result';
-                $tmpData = [$tmpKey => $value];
-                $value   = $this->resolveVariable($tmpKey . '.' . $propPath, $tmpData);
-            } else {
-                $value = $this->applyFilter($part, $value, $data);
-            }
+            // Traverse the property path via resolveVariable by staging the
+            // filter result under a synthetic key. Reuses existing dotted +
+            // bracketed path resolution rather than writing a second traversal
+            // loop we'd have to keep in sync with resolveVariable's bugfixes.
+            $tmpKey  = '__frond_filter_chain_result';
+            $tmpData = [$tmpKey => $value];
+            $value   = $this->resolveVariable($tmpKey . '.' . $propPath, $tmpData);
         }
         return $value;
     }
@@ -1682,15 +1953,17 @@ class Frond
 
     /* ── helper: string concatenation (~) ── */
 
-    private function evaluateConcat(string $expr, array &$data): mixed
+    /**
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateConcat(array &$data, array $scan): mixed
     {
-        if ($this->findOutsideQuotes($expr, '~') === false) {
+        if (!isset($scan['concat'])) {
             return self::NOT_MATCHED;
         }
-        $parts = $this->splitOutsideQuotes($expr, '~');
         $result = '';
-        foreach ($parts as $part) {
-            $val = $this->evaluateExpression(trim($part), $data);
+        foreach ($scan['concat'] as $part) {
+            $val = $this->evaluateExpression($part, $data);
             $str = $this->valueToString($val);
             if (is_string($val) && str_contains($val, self::RAW_MARKER)) {
                 $str = str_replace(self::RAW_MARKER, '', $str);
@@ -1702,33 +1975,31 @@ class Frond
 
     /* ── helper: arithmetic ── */
 
-    private function evaluateArithmetic(string $expr, array &$data): mixed
+    /**
+     * @param array<string, mixed> $scan Structural descriptor from exprScan().
+     */
+    private function evaluateArithmetic(array &$data, array $scan): mixed
     {
-        foreach ([['+', '-'], ['*', '//', '/', '%', '**']] as $ops) {
-            foreach ($ops as $op) {
-                $opPos = $this->findMathOp($expr, $op);
-                if ($opPos === false) continue;
+        if (isset($scan['arithmetic'])) {
+            [$op, $left, $right] = $scan['arithmetic'];
+            $leftVal = $this->evaluateExpression($left, $data);
+            $rightVal = $this->evaluateExpression($right, $data);
 
-                $leftVal = $this->evaluateExpression(trim(substr($expr, 0, $opPos)), $data);
-                $rightVal = $this->evaluateExpression(trim(substr($expr, $opPos + strlen($op))), $data);
-
-                // Array merge for +
-                if ($op === '+' && is_array($leftVal) && is_array($rightVal)) {
-                    return array_merge($leftVal, $rightVal);
-                }
-
-                return $this->applyMathOp(
-                    $op,
-                    is_numeric($leftVal) ? $leftVal : ($leftVal ?? 0),
-                    is_numeric($rightVal) ? $rightVal : ($rightVal ?? 0)
-                );
+            // Array merge for +
+            if ($op === '+' && is_array($leftVal) && is_array($rightVal)) {
+                return array_merge($leftVal, $rightVal);
             }
+
+            return $this->applyMathOp(
+                $op,
+                is_numeric($leftVal) ? $leftVal : ($leftVal ?? 0),
+                is_numeric($rightVal) ? $rightVal : ($rightVal ?? 0)
+            );
         }
 
         // Fallback parenthesized expression (after operators)
-        if (str_starts_with($expr, '(')
-            && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
-            return $this->evaluateExpression(substr($expr, 1, -1), $data);
+        if (isset($scan['arithmeticParen'])) {
+            return $this->evaluateExpression($scan['arithmeticParen'], $data);
         }
 
         return self::NOT_MATCHED;
@@ -1915,9 +2186,8 @@ class Frond
             if (isset($this->dottedSplitCache[$expr])) {
                 return $this->dottedSplitCache[$expr];
             }
-            $segments = explode('.', $expr);
-            $this->dottedSplitCache[$expr] = $segments;
-            return $segments;
+            $this->capMemoCache($this->dottedSplitCache);
+            return $this->dottedSplitCache[$expr] = explode('.', $expr);
         }
 
         $segments = [];
