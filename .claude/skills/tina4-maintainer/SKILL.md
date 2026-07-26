@@ -201,8 +201,23 @@ commit, merge, or release:
   re-delivered every completed job (no ack path) and shipped for two releases because the queue
   tests were mock-based; they asserted the generated script's shape, never ran pop -> complete ->
   no-redelivery against a real Mongo; one live run caught it in minutes.
+- **Reap what you spawn — never leave a process running when you finish.** If you start a
+  server, a dev server, a benchmark target, a container or any background process, you own its
+  death. Stop it in the same piece of work: `trap cleanup EXIT INT TERM` in a script, an
+  explicit kill of the process GROUP (`pkill -P` / `killpg`) for a shell you launched, and free
+  the port. Prefer the committed harness (which already traps) over an ad-hoc
+  hand-started server; if you must start one by hand, kill it by hand before you report done,
+  and say so. Before finishing, sweep for your own strays (`ps`, `lsof -ti:<port>`) — an idle
+  process at 0% CPU is easy to miss and holds its port forever. The **orphan-server lesson**:
+  six hand-started competitor-benchmark servers (CodeIgniter `spark serve` + `php -S`) were
+  left running for 2.5 DAYS holding ports 7213/7215/7216/7217, from a task that had long since
+  "finished" — no committed script was at fault, the harness traps correctly; it was ad-hoc
+  process hygiene. This is the same lesson the CLI learned as a real bug (killpg on signals so
+  the `npx -> tsx -> node` tree cannot orphan): a process you spawn and forget is a leak.
 - **State every claim at 100% and qualify it — never assert what you haven't proven.** No "should
-  work", no "probably passes", no "fixed" before you ran it. Scope each claim to *where you actually
+  work", no "probably passes", no "fixed" before you ran it. And do not assert a fact about the
+  code from a single failed grep — VERIFY it (a mis-crafted pattern once "proved" a bench
+  harness had no cleanup trap when it had one on line 354). Scope each claim to *where you actually
   verified it*: "3251 tests pass **on macOS, PHP 8.5**" — not "tests pass"; "green on Linux CI,
   not yet run on Windows" when that's the truth. An unqualified claim that holds on only one
   platform/runtime/DB engine is a false claim on every other. Qualify by **OS (Windows/macOS/Linux),
