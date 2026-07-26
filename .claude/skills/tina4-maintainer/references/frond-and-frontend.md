@@ -80,6 +80,37 @@ The engine also implements these block tags: `{% spaceless %}…{% endspaceless 
 > For include-with-block-override, use `{% include ... with {...} %}` plus template
 > inheritance (`{% extends %}` / `{% block %}`).
 
+## The Cross-Framework Output Contract (3.13.87)
+
+The same expression must render the same BYTES in Python, PHP, Ruby and Node. This was an
+assumption until a 72-expression corpus was rendered through all four against one dataset:
+**11 of 72 disagreed**. Each implementation looked correct in isolation, which is exactly
+why the drift survived. The corpus is now a committed fixture — `frond_expression_corpus.txt`
++ `frond_expression_expected.txt`, IDENTICAL BYTES in all four test dirs, one shared answer
+key — so a framework that drifts turns its own suite red.
+
+Three rules that are now contract. Do not re-derive them per language:
+
+1. **A boolean renders lowercase `true` / `false`.** Not Python's `True`/`False`, not
+   Twig's `1`/`''`. A false value must never render BLANK — that was PHP's bug, and a blank
+   where a `false` belongs is invisible. Python needs BOTH output paths changed together
+   (`frond/compiler.py::_tostr` is the live compiled path, `engine.Frond._to_output` the
+   interpreted one); editing only the interpreter changes nothing AND the suite still passes.
+2. **`{{ not x }}` works standalone**, not only inside `{% if %}`. Every logical operator is
+   matched WITH surrounding spaces, so a LEADING `not` matches none of them and falls through
+   to variable lookup as a variable named `"not x"`. Route it to the same evaluator `{% if %}`
+   uses so a condition means one thing in both places.
+3. **`|json_encode` is HTML-escaped**; `|json_encode|raw` is the opt-out for `<script>`.
+
+Both macro-import forms — `{% import "f" as alias %}` and `{% from "f" import name %}` —
+work and behave identically in all four. Do not bind the alias namespace as a class instance:
+Python bound the macros as methods and silently shifted every argument by one.
+
+**The bug class to watch for: the falsy guard.** Every boolean bug here was one — `|| ""`,
+`a[k] || a[k.to_sym]`, `true ? '1' : ''`. In a template engine "absent" and "false" are
+DIFFERENT THINGS, and code that conflates them prints nothing where it should print
+something. Probe with a key-existence check, never with truthiness.
+
 ## Frond-Unique Features ("Quirks")
 
 ### Live Blocks
@@ -117,7 +148,9 @@ emit them; there is no fallback and no warning:
 - `classes(...)` conditional-class helper — build the class string with `{% if %}` / `~`.
 - `{% markdown %}` — render Markdown in the handler and pass HTML through `|raw`.
 - `{% data ... as ... %}` JSON-script helper — write the `<script type="application/json">`
-  tag yourself with `|json_encode`.
+  tag yourself with `|json_encode|raw`. The `|raw` is required: as of 3.13.87 `json_encode`
+  is HTML-escaped in ALL FOUR frameworks (PHP used to return it raw and was brought in
+  line), so inside a `<script>` block you must opt out explicitly.
 - `icon(...)` inline-SVG helper — `{% include %}` the SVG partial.
 
 ## Filters (~59 total)
