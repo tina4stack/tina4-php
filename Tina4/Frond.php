@@ -1149,8 +1149,15 @@ class Frond
     private function valueToString(mixed $value): string
     {
         if ($value === null) return '';
-        if ($value === true) return '1';
-        if ($value === false) return '';
+        // Booleans render lowercase true/false -- THE cross-framework output
+        // contract. Breaking in 3.13.87: this used to emit Twig's '1' and, worse,
+        // an EMPTY STRING for false, so a template printing a boolean silently
+        // showed nothing. The four frameworks had drifted to four different
+        // answers; all four now agree, and a 72-expression corpus locks it.
+        // Lowercase is the form usable directly in HTML/JS:
+        // data-active="{{ flag }}" -> data-active="true", testable from JS.
+        if ($value === true) return 'true';
+        if ($value === false) return 'false';
         if (is_array($value)) return json_encode($value, JSON_UNESCAPED_UNICODE);
         return (string)$value;
     }
