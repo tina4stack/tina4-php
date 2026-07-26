@@ -1,0 +1,72 @@
+str-plain|{{ name }}
+str-upper|{{ name|upper }}
+str-lower|{{ name|lower }}
+str-cap|{{ lower_name|capitalize }}
+str-title|{{ lower_name|title }}
+str-trim|{{ padded|trim }}
+str-len|{{ name|length }}
+str-reverse|{{ name|reverse }}
+str-replace|{{ name|replace("An","AN") }}
+str-slice|{{ name|slice(0,3) }}
+str-default-set|{{ name|default("X") }}
+str-default-missing|{{ nope|default("X") }}
+str-default-empty|{{ empty_str|default("X") }}
+num-int|{{ n }}
+num-float|{{ f }}
+num-fmt2|{{ f|number_format(2) }}
+num-fmt0|{{ f|number_format(0) }}
+num-round|{{ f|round }}
+num-abs|{{ neg|abs }}
+num-add|{{ n + 5 }}
+num-sub|{{ n - 5 }}
+num-mul|{{ n * 3 }}
+num-div|{{ n / 4 }}
+num-mod|{{ n % 3 }}
+num-precedence|{{ 2 + 3 * 4 }}
+num-parens|{{ (2 + 3) * 4 }}
+num-neg-lit|{{ -7 }}
+cmp-gt|{{ n > 3 }}
+cmp-lt|{{ n < 3 }}
+cmp-eq|{{ n == 5 }}
+cmp-ne|{{ n != 5 }}
+cmp-gte|{{ n >= 5 }}
+cmp-lte|{{ n <= 5 }}
+bool-and|{{ t and f_bool }}
+bool-or|{{ t or f_bool }}
+bool-not|{{ not t }}
+bool-true|{{ t }}
+bool-false|{{ f_bool }}
+tern-q|{{ t ? "yes" : "no" }}
+tern-q-false|{{ f_bool ? "yes" : "no" }}
+tern-if|{{ "yes" if t else "no" }}
+tern-if-false|{{ "yes" if f_bool else "no" }}
+tern-nested|{{ n > 3 ? (n > 4 ? "big" : "mid") : "small" }}
+coalesce-set|{{ name ?? "fallback" }}
+coalesce-missing|{{ nope ?? "fallback" }}
+concat-two|{{ "a" ~ "b" }}
+concat-var|{{ name ~ "!" }}
+concat-num|{{ "n=" ~ n }}
+concat-chain|{{ "a" ~ name ~ "z" }}
+concat-filter|{{ f|number_format(2) ~ " EUR" }}
+nil-render|{{ nil_val }}
+nil-default|{{ nil_val|default("D") }}
+missing-render|{{ nope }}
+dot-nested|{{ user.name }}
+dot-deep|{{ user.addr.city }}
+dot-missing|{{ user.absent }}
+arr-index|{{ list[0] }}
+arr-index2|{{ list[2] }}
+arr-len|{{ list|length }}
+arr-join|{{ list|join(",") }}
+arr-first|{{ list|first }}
+arr-last|{{ list|last }}
+hash-key|{{ map.a }}
+esc-html|{{ html }}
+esc-raw|{{ html|raw }}
+esc-e|{{ html|e }}
+filter-chain|{{ name|lower|upper }}
+filter-chain3|{{ padded|trim|lower|upper }}
+quote-op-in-str|{{ "a ~ b" }}
+quote-pipe-in-str|{{ "a|b" }}
+quote-q-in-str|{{ "a ? b : c" }}
+json-encode|{{ map|json_encode }}

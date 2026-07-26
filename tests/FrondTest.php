@@ -241,10 +241,51 @@ class FrondTest extends TestCase
         $this->assertSame('&lt;b&gt;hi&lt;/b&gt;', $this->engine->renderString('{{ html | escape }}', ['html' => '<b>hi</b>']));
     }
 
-    public function testFilterJsonEncode(): void
+    /**
+     * json_encode is HTML-escaped by default -- the same contract as Python,
+     * Ruby and Node. Breaking in 3.13.87: PHP alone used to return it raw
+     * (the filter prefixed RAW_MARKER), which made unescaped JSON in an HTML
+     * attribute an injection vector.
+     */
+    public function testFilterJsonEncodeEscapesByDefault(): void
     {
         $result = $this->engine->renderString('{{ data | json_encode }}', ['data' => ['a' => 1]]);
+        $this->assertSame('{&quot;a&quot;:1}', $result);
+    }
+
+    /**
+     * ...and |raw is the explicit opt-out, for a <script> block where the JSON
+     * must land verbatim. Explicit at the call site, same shape as Twig's
+     * autoescape. This is the NEGATIVE case of the test above: it proves the
+     * escaping is the default rather than the only behaviour.
+     */
+    public function testFilterJsonEncodeRawOptsOutOfEscaping(): void
+    {
+        $result = $this->engine->renderString('{{ data | json_encode | raw }}', ['data' => ['a' => 1]]);
         $this->assertSame('{"a":1}', $result);
+    }
+
+    /**
+     * A standalone {{ not x }} renders the boolean, it is not silently dropped.
+     * Every logical operator was matched WITH surrounding spaces, so a LEADING
+     * `not` (nothing to its left) matched none of them and was looked up as a
+     * variable literally named "not x" -- rendering EMPTY. Regression lock for
+     * 3.13.87; positive AND negative operand, plus the {% if %} form that
+     * always worked, so the two paths can never drift apart again.
+     */
+    public function testNotOperatorStandaloneOutputExpression(): void
+    {
+        $ctx = ['t' => true, 'f' => false];
+        $this->assertSame('false', $this->engine->renderString('{{ not t }}', $ctx));
+        $this->assertSame('true', $this->engine->renderString('{{ not f }}', $ctx));
+        $this->assertSame('true', $this->engine->renderString('{{ not missing }}', $ctx));
+        // The same operator inside a condition, and combined with `and`.
+        $this->assertSame('Y', $this->engine->renderString('{% if not f %}Y{% else %}N{% endif %}', $ctx));
+        $this->assertSame('true', $this->engine->renderString('{{ t and not f }}', $ctx));
+        // Negative: a bare identifier that merely STARTS with "not" is a
+        // variable, never the operator.
+        $this->assertSame('', $this->engine->renderString('{{ notes }}', $ctx));
+        $this->assertSame('not a var', $this->engine->renderString('{{ "not a var" }}', $ctx));
     }
 
     public function testFilterBase64Encode(): void

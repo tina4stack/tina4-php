@@ -1,0 +1,72 @@
+str-plain	Andre
+str-upper	ANDRE
+str-lower	andre
+str-cap	Andre van zuydam
+str-title	Andre Van Zuydam
+str-trim	pad
+str-len	5
+str-reverse	erdnA
+str-replace	ANdre
+str-slice	And
+str-default-set	Andre
+str-default-missing	X
+str-default-empty	X
+num-int	5
+num-float	1234.5678
+num-fmt2	1,234.57
+num-fmt0	1,235
+num-round	1235
+num-abs	42
+num-add	10
+num-sub	0
+num-mul	15
+num-div	1.25
+num-mod	2
+num-precedence	14
+num-parens	20
+num-neg-lit	-7
+cmp-gt	true
+cmp-lt	false
+cmp-eq	true
+cmp-ne	false
+cmp-gte	true
+cmp-lte	true
+bool-and	false
+bool-or	true
+bool-not	false
+bool-true	true
+bool-false	false
+tern-q	yes
+tern-q-false	no
+tern-if	yes
+tern-if-false	no
+tern-nested	big
+coalesce-set	Andre
+coalesce-missing	fallback
+concat-two	ab
+concat-var	Andre!
+concat-num	n=5
+concat-chain	aAndrez
+concat-filter	1,234.57 EUR
+nil-render	
+nil-default	D
+missing-render	
+dot-nested	Ann
+dot-deep	CPT
+dot-missing	
+arr-index	a
+arr-index2	c
+arr-len	3
+arr-join	a,b,c
+arr-first	a
+arr-last	c
+hash-key	1
+esc-html	&lt;b&gt;&amp;x&lt;/b&gt;
+esc-raw	<b>&x</b>
+esc-e	&lt;b&gt;&amp;x&lt;/b&gt;
+filter-chain	ANDRE
+filter-chain3	PAD
+quote-op-in-str	a ~ b
+quote-pipe-in-str	a|b
+quote-q-in-str	a ? b : c
+json-encode	{&quot;a&quot;:1,&quot;b&quot;:2}

@@ -3026,7 +3026,12 @@ class Frond
         $this->filters['e'] = $this->filters['escape'];
         $this->filters['raw'] = fn($v) => self::RAW_MARKER . (is_string($v) ? str_replace(self::RAW_MARKER, '', $v) : $this->valueToString($v));
         $this->filters['safe'] = $this->filters['raw'];
-        $this->filters['json_encode'] = fn($v) => self::RAW_MARKER . json_encode($v, JSON_UNESCAPED_UNICODE);
+        // NOT raw-marked: json_encode output is HTML-escaped by default, matching
+        // Python, Ruby and Node. Escaping is the secure default -- raw JSON dropped
+        // into an HTML attribute is an injection vector. For a <script> block use
+        // {{ x|json_encode|raw }}, which is explicit at the call site (same shape as
+        // Twig's autoescape). Breaking in 3.13.87: PHP alone used to return it raw.
+        $this->filters['json_encode'] = fn($v) => json_encode($v, JSON_UNESCAPED_UNICODE);
         $this->filters['json_decode'] = fn($v) => json_decode((string)$v, true);
         $this->filters['base64_encode'] = fn($v) => base64_encode(is_string($v) ? $v : (string)$v);
         $this->filters['base64encode'] = &$this->filters['base64_encode'];
