@@ -177,6 +177,14 @@ commit, merge, or release:
   against the parser, actually invoke the CLI) rather than accepting the agent's assessment.
 - **Confirm lock-in tests are real** — both positive AND negative cases present, and the negative
   test genuinely fails against the old behavior.
+- **Every reported bug becomes a permanent test — a bug is a future test.** The moment you
+  reproduce a reported bug, write the named regression test that captures it BEFORE the fix, and
+  confirm it FAILS on the current code (that red is your proof you reproduced the real bug); then
+  make it pass with the fix. The test ships WITH the fix, in ALL FOUR frameworks (a bug reported
+  against one almost always exists in the others — see the issue-sweep reflex), and it stays
+  forever so the bug can never silently return. A bug closed without a regression test is not
+  fixed, it is waiting to come back. Log it in the plan's Bugs section and tick it only when its
+  test is green on a real (no-mock) run.
 - **No mock testing: mocks are not acceptable in any circumstances.** A test double (mock, stub,
   fake, spy, monkeypatch, or any in-test object that stands in for a real collaborator: a
   `FakeMongoCollection`, a script-introspection assertion, a hand-rolled in-test backend) may NEVER
@@ -589,6 +597,68 @@ The discipline:
 5. **Verify independently.** Re-run the FULL suite yourself at each step (see *Independent
    Verification*) and re-measure. Green tests + smaller/simpler metrics + unchanged behaviour =
    done. Green tests but bigger/more-complex metrics = revert; you made it worse.
+
+### Second pass: split large modules by concern
+
+First-draft code is allowed to be monolithic — get it working, get it tested, ship the behaviour.
+But a **second pass over any large module is expected**, and file size is the trigger to open it:
+when a single source file grows past roughly **600 lines**, treat that as a *signal* to look, not a
+hard cap. The number is arbitrary — a cohesive 800-line state machine can be right, and a tangled
+300-line file can be wrong — but a big file is almost always where two things have accumulated
+unseen: **more than one concern**, and **un-taken optimisations**. The second pass hunts both,
+together:
+
+1. **Split by concern.** A module doing N jobs becomes N files, each named for its one job and
+   re-exported through the package's existing barrel / entry point so **nothing a caller imports
+   changes**. Shapes seen across the stack: a 3,000-line `dev_admin` -> dashboard HTML, API
+   endpoints, DB/query tools, connection tester, and metrics panel as separate files; a 2,900-line
+   Frond `engine` -> tokenizer / parser / node-evaluator / filters / cache behind the same
+   `render()`. This is the same one-concern-per-file rule the ORM models and route resources
+   already obey (see *feedback_one_class_per_file*), applied to the framework core.
+2. **Optimise while you are in there.** A large file is exactly where dead code, duplicated blocks,
+   needless indirection, and hot-path waste hide. Run the *Reviewing Code* checklist and the
+   *Refactoring* discipline above: delete the unused, collapse duplicates, fix the per-request hot
+   paths — measured with `tina4 metrics` + Carbonah before/after (the same profiling that found
+   Frond re-scanning invariant expression strings on every render).
+
+Rules that keep the split safe:
+- **Behaviour-preserving + API-stable.** Same public surface, same import paths, same rendered /
+  returned bytes; the FULL suite passes **unchanged** (characterise first if coverage is thin — it
+  is the safety net). A moved function is not a changed function.
+- **Parity.** These monoliths are the SAME subsystems in all four languages — dev-admin, cli /
+  server, frond, orm, mcp, database, metrics, migration, graphql, websocket, messenger, docs all
+  cross the threshold in Python, PHP, Ruby AND Node. When you split one, split its siblings to the
+  same shape so the frameworks stay navigable side by side: **Python master leads the
+  decomposition, the others mirror it** (see *The Parity Mandate*).
+- **One split per commit, suite green between.** Never fold a behaviour change into a split commit —
+  `git bisect` and the reviewer must be able to trust that a "split" commit moved code and changed
+  nothing observable.
+- **Do not split for a number.** Maintainability is the goal, not a line count. If a file is over
+  the threshold but is genuinely one cohesive concern, leave it and say why. Never shatter a file
+  into fragments that are only ever imported together — that trades one big file for a pile of
+  tightly-coupled small ones, which is worse to maintain, not better.
+
+### Metrics + Carbonah run WHILE you code — a signal you do not enforce does nothing
+
+Do not save quality checks for a "cleanup pass". `tina4 metrics` (LOC, cyclomatic complexity,
+maintainability index, coupling per file — ranked "top offenders") and the Carbonah green
+benchmark are **during-coding instruments**, not a final-gate afterthought:
+
+- **Before you add to a module, run `tina4 metrics` on it.** If it is already an offender (low
+  maintainability, high CC), your addition only makes it worse — split/refactor first, then add.
+  After any non-trivial change re-run and confirm you did not push a file over the edge.
+- **`tina4 metrics --fail-on` is a CI gate, not a report.** An offenders list nobody blocks on is
+  noise. Wire it so a NEW error-severity offender fails the build, exactly like the test suite.
+- **Carbonah before AND after** any change to a hot path (render, serialise, query, route
+  dispatch): a change that regresses energy/latency is a regression even when the tests pass.
+  Profiling (`cProfile` and friends) turns "it feels slow" into a named hot function to fix.
+
+Hard lesson (2026): `tina4 metrics` had been correctly flagging 15+ modules PER LANGUAGE as
+maintainability 0.0 / CC > 50 for months — dev-admin, frond, server, cli, orm, mcp — with the
+framework's own average maintainability sitting at 27.8 (floor 40). Detection was never the
+failure; **nobody enforced or acted on it**. A metric you neither gate on nor read mid-work is a
+metric that does nothing. Treat the offenders list as a live worklist and split/optimise the moment
+a file lands on it (see *Second pass* above), not "later".
 6. **Parity still applies.** A refactor in the Python master that changes a shared shape must be
    mirrored; a refactor confined to one framework's internals need not be — but say which it is.
 
