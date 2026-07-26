@@ -101,6 +101,7 @@ class Frond
     private const RE_WITH_DATA = '/\s+with\s+(.+)$/s';
     private const RE_MACRO_SIG = '/^(\w+)\s*\(([^)]*)\)/';
     private const RE_FROM_IMPORT = '/^["\'](.+?)["\']\s+import\s+(.+)/';
+    private const RE_IMPORT_AS = '/^["\'](.+?)["\']\s+as\s+(\w+)/';
     private const RE_SPACELESS = '/>\s+</';
     private const RE_NOT_PREFIX = '/^not\s+(.+)$/s';
     private const RE_IS_NOT_TEST = '/^(.+?)\s+is\s+not\s+(.+)$/s';
@@ -669,6 +670,9 @@ class Frond
             case 'from':
                 $pos++;
                 return $this->parseFromImport($rest);
+            case 'import':
+                $pos++;
+                return $this->parseImportAs($rest);
             case 'cache':
                 return $this->handleCache($rest, $tokens, $pos);
             case 'live':
@@ -838,6 +842,24 @@ class Frond
         $file = $m[1];
         $names = array_map('trim', explode(',', $m[2]));
         return ['type' => 'from_import', 'file' => $file, 'names' => $names];
+    }
+
+    /**
+     * Parses the {% import "file" as alias %} tag into an import_as node.
+     *
+     * A header the regex rejects produces an empty text node, matching how
+     * parseFromImport treats a malformed {% from %}.
+     *
+     * @param string $rest The tag body after the "import" keyword.
+     * @return array The import_as AST node, or an empty text node when malformed.
+     */
+    private function parseImportAs(string $rest): array
+    {
+        // Parse: "file" as alias
+        if (!preg_match(self::RE_IMPORT_AS, $rest, $m)) {
+            return ['type' => 'text', 'value' => ''];
+        }
+        return ['type' => 'import_as', 'file' => $m[1], 'alias' => $m[2]];
     }
 
     private function handleCache(string $params, array &$tokens, int &$pos): array
@@ -1072,6 +1094,10 @@ class Frond
 
             case 'from_import':
                 $this->executeFromImport($node, $data);
+                return '';
+
+            case 'import_as':
+                $this->executeImportAs($node, $data);
                 return '';
 
             case 'cache':
@@ -2072,13 +2098,18 @@ class Frond
         $funcName = $m[1];
         $argsStr = $m[2] ?? '';
 
+        // A macro wins over the dotted-object path. {% import "f" as m %} registers
+        // its macros under the literal key "m.greet", so {{ m.greet(...) }} resolves
+        // here instead of being sent off to look for an object named "m". Checked
+        // before the dotted branch for that reason; a dotted name that is NOT a
+        // registered macro still falls through to evaluateDottedCall unchanged.
+        if (isset($this->macros[$funcName])) {
+            return $this->callMacro($funcName, $argsStr, $data);
+        }
+
         // Dotted function name: resolve object, then call method
         if (str_contains($funcName, '.')) {
             return $this->evaluateDottedCall($funcName, $argsStr, $data);
-        }
-
-        if (isset($this->macros[$funcName])) {
-            return $this->callMacro($funcName, $argsStr, $data);
         }
 
         if (isset($data[$funcName]) && is_callable($data[$funcName])) {
@@ -2965,6 +2996,40 @@ class Frond
         foreach ($ast as $astNode) {
             if ($astNode['type'] === 'macro' && in_array($astNode['name'], $names)) {
                 $this->macros[$astNode['name']] = $astNode;
+            }
+        }
+    }
+
+    /**
+     * Loads every macro in a file under an alias namespace: {% import "f" as m %}.
+     *
+     * Macros are registered in the SAME registry as {% from %} import, but under the
+     * dotted key "alias.name", so {{ m.greet("Andre") }} resolves through the normal
+     * macro path (evaluateFunctionCall checks the registry before the dotted-object
+     * branch) and reuses callMacro -- identical argument binding, default handling and
+     * raw-output marking as every other macro call. The two import forms therefore
+     * render identically, which is the contract Python locks too.
+     *
+     * @param array $node The import_as AST node (file + alias).
+     * @param array $data The render context (unused; macros live in the registry).
+     * @return void
+     * @throws \RuntimeException When the imported template file does not exist.
+     */
+    private function executeImportAs(array $node, array &$data): void
+    {
+        $file = $this->templateDir . '/' . $node['file'];
+        if (!is_file($file)) {
+            throw new \RuntimeException("Template not found: $file");
+        }
+        $source = file_get_contents($file);
+        $tokens = $this->tokenize($source);
+        $pos = 0;
+        $ast = $this->parse($tokens, $pos);
+
+        $alias = $node['alias'];
+        foreach ($ast as $astNode) {
+            if ($astNode['type'] === 'macro') {
+                $this->macros[$alias . '.' . $astNode['name']] = $astNode;
             }
         }
     }
