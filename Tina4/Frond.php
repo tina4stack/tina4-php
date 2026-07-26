@@ -2468,27 +2468,6 @@ class Frond
         return $parts;
     }
 
-    private function findOperator(string $expr, string $op): int|false
-    {
-        $depth = 0;
-        $inStr = false;
-        $strCh = '';
-        $len = strlen($expr);
-        $opLen = strlen($op);
-        for ($i = 0; $i <= $len - $opLen; $i++) {
-            $ch = $expr[$i];
-            if ($inStr) {
-                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
-                continue;
-            }
-            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
-            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
-            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
-            if ($depth === 0 && substr($expr, $i, $opLen) === $op) return $i;
-        }
-        return false;
-    }
-
     private function findLogicalOp(string $expr, string $op): int|false
     {
         // Find last occurrence for left-associativity
@@ -2538,27 +2517,6 @@ class Frond
                 if (($op === '<' || $op === '>') && $i > 0 && ($expr[$i - 1] === '!' || $expr[$i - 1] === '<' || $expr[$i - 1] === '>')) continue;
                 return $i;
             }
-        }
-        return false;
-    }
-
-    private function findConcat(string $expr): int|false
-    {
-        // Find ~ not inside strings or parens
-        $depth = 0;
-        $inStr = false;
-        $strCh = '';
-        $len = strlen($expr);
-        for ($i = 0; $i < $len; $i++) {
-            $ch = $expr[$i];
-            if ($inStr) {
-                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
-                continue;
-            }
-            if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
-            if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
-            if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
-            if ($ch === '~' && $depth === 0) return $i;
         }
         return false;
     }
