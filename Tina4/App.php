@@ -1420,6 +1420,26 @@ HTML;
      * Handle the current request and send the response to the client.
      * Use this for PHP-FPM / php -S / Apache where output goes to stdout.
      */
+    /**
+     * Should `php index.php` print the "use tina4 serve" hint?
+     *
+     * TRUE only when index.php is the script the user actually ran. FALSE when
+     * the framework CLI included it (entry script is bin/tina4php or
+     * vendor/bin/tina4php), when it was included from some other script, and
+     * when the entry script is unknown — silence is the safe default, because a
+     * stray line on a CLI run can corrupt machine-read output.
+     *
+     * Pure and static so it is testable without spawning a process.
+     */
+    public static function shouldHintCliServe(string $entryScript): bool
+    {
+        if ($entryScript === '') {
+            return false;
+        }
+
+        return basename($entryScript) === 'index.php';
+    }
+
     public function handle(): void
     {
         // In pure CLI context (migrate, generate, etc.) — just initialise routes.
@@ -1427,6 +1447,20 @@ HTML;
         // echo an HTTP response body or call http_response_code() there.
         if (php_sapi_name() === 'cli') {
             $this->start();
+            // Running `php index.php` by hand bootstraps routes and returns —
+            // correct (index.php is a front controller, not a server launcher),
+            // but it looks exactly like a crash: one "started" line, then the
+            // process exits 0 with nothing listening. Point at the real command.
+            //
+            // Guarded twice, because getting this wrong is worse than the
+            // papercut: the tina4php CLI INCLUDES this file, and `tina4php
+            // commands --json` emits a machine-read manifest on stdout. So the
+            // hint only fires when index.php is itself the entry script, and it
+            // goes to STDERR, which no consumer of that manifest parses.
+            if (self::shouldHintCliServe($_SERVER['SCRIPT_FILENAME'] ?? ($_SERVER['argv'][0] ?? ''))) {
+                fwrite(STDERR, "Routes bootstrapped. index.php is a front controller, not a server."
+                    . PHP_EOL . "To serve locally run: tina4 serve" . PHP_EOL);
+            }
             return;
         }
 
