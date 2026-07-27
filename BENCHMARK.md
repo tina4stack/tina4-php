@@ -16,7 +16,7 @@ Real HTTP benchmarks — identical JSON endpoint. Tina4 uses its built-in `strea
 | CodeIgniter 4 | 1,311 | 1,288 | spark serve | 15+ |
 | Laravel 11 | 257 | 313 | artisan serve | 70+ |
 
-**Key takeaway:** Tina4 PHP dominates at 28,158 req/s — 5.5x faster than Slim, 17.7x faster than Symfony, and 110x faster than Laravel, while shipping 38 features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
+**Key takeaway:** Tina4 PHP dominates at 28,158 req/s — 5.5x faster than Slim, 17.7x faster than Symfony, and 110x faster than Laravel, while shipping 98 features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
 
 ---
 
@@ -55,9 +55,12 @@ Reproduce: `cd benchmarks && composer install && php bench_templates.php`
 
 ---
 
-## 2. Feature Comparison (38 features)
+## 2. Feature Comparison (41 of 98 built-in features)
 
-Ships with core install, no extra packages needed.
+Tina4 ships **98 built-in features**. The table below compares the subset that has a
+meaningful equivalent in the competing frameworks, so it is a like-for-like comparison
+rather than the full inventory. Everything listed ships with the core install, with no
+extra packages needed.
 
 | Feature | Tina4 | Slim | Symfony | Laravel | CodeIgniter |
 |---------|:-----:|:----:|:-------:|:-------:|:-----------:|
@@ -111,27 +114,36 @@ Ships with core install, no extra packages needed.
 
 | Framework | Features | Deps | JSON req/s |
 |-----------|:-------:|:----:|:---------:|
-| **Tina4** | **38/38** | **0** | **28,158** |
-| Laravel | 25/38 | 70+ | 257 |
-| Symfony | 18/38 | 30+ | 1,589 |
-| CodeIgniter | 14/38 | 15+ | 1,311 |
-| Slim | 6/38 | 2 | 5,082 |
+| **Tina4** | **41/41** | **0** | **28,158** |
+| Laravel | 25/41 | 70+ | 257 |
+| Symfony | 18/41 | 30+ | 1,589 |
+| CodeIgniter | 14/41 | 15+ | 1,311 |
+| Slim | 6/41 | 2 | 5,082 |
 
 ---
 
 ## 3. Deployment Size
 
-| Framework | Install Size | Dependencies |
-|-----------|:----------:|:------------:|
-| **Tina4 PHP** | **~1.5 MB** | **0** |
-| Slim | ~3 MB | 2 |
-| CodeIgniter | ~12 MB | 15+ |
-| Symfony | ~25 MB | 30+ |
-| Laravel | ~50 MB | 70+ |
+**Measured 2026-07-27** on macOS (Apple Silicon) by installing each package for real.
+Nothing in this table is estimated. The command that produced it is named below.
 
-Zero dependencies means core size **is** deployment size. No `vendor/` sprawl.
+Command: `composer install --no-dev` into an empty project, then `du -sh vendor`.
 
----
+| Framework | Install Size | Vendor packages |
+|-----------|:----------:|:---------------:|
+| slim/slim | **1 MB** | 8 |
+| **Tina4 PHP** | **4.9 MB** | **1 (itself)** |
+| codeigniter4/framework | 6 MB | 3 |
+| symfony/framework-bundle | 9 MB | 25 |
+| laravel/framework | 36 MB | 73 |
+
+**Correction.** This table claimed Tina4 PHP was ~1.5 MB and Slim ~3 MB. Both were wrong,
+both in the direction that flattered us. Measured, **Tina4 is 4.9 MB and Slim is 1 MB**,
+so Slim is the smaller install. Most of the difference is that the published package ships
+its own `src/` example application (1.3 MB) plus `composer.lock`, tracked as php#181.
+
+Zero dependencies still means no `vendor/` sprawl: Tina4 installs exactly **one** package
+against Laravel's 73. That claim survives measurement. "Smallest install" does not.
 
 ## 4. CO2 / Carbonah
 
