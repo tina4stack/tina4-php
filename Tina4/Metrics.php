@@ -802,7 +802,75 @@ class Metrics
             ];
         }
 
-        return $results;
+        return self::chargeNestedComplexityToTheNestedFunction($results);
+    }
+
+    /**
+     * Stop a function being charged for the complexity of the functions nested
+     * inside it.
+     *
+     * Each function's raw score is measured over its whole span, so a branch
+     * inside a nested function landed on BOTH that function and every function
+     * enclosing it. The over-count compounded with depth: a wrapper around
+     * twenty inner handlers absorbed the entire file's complexity and topped the
+     * offenders list, hiding the genuine hot spots.
+     *
+     * The correction is exact. A raw score is 1 + every decision in the span, so
+     * (raw - 1) is the total decision count of a function's whole subtree.
+     * Subtracting that for each DIRECT child leaves the function's own branches:
+     *
+     *     own(F) = raw(F) - sum over direct children C of (raw(C) - 1)
+     *
+     * Anonymous closures are deliberately unaffected: they are not reported as
+     * functions of their own, so nothing subtracts them and their decisions stay
+     * with the function that contains them - moved, never lost.
+     *
+     * @param array $functions Functions from ONE file, each with line + loc
+     * @return array The same functions with corrected complexity
+     */
+    private static function chargeNestedComplexityToTheNestedFunction(array $functions): array
+    {
+        $count = count($functions);
+        if ($count < 2) {
+            return $functions;
+        }
+
+        $end = static function (array $f): int {
+            return $f["line"] + max(1, $f["loc"]) - 1;
+        };
+
+        $contains = static function (array $outer, array $inner) use ($end): bool {
+            return $inner["line"] > $outer["line"] && $end($inner) <= $end($outer);
+        };
+
+        $corrected = $functions;
+        for ($i = 0; $i < $count; $i++) {
+            $subtract = 0;
+            for ($j = 0; $j < $count; $j++) {
+                if ($i === $j || !$contains($functions[$i], $functions[$j])) {
+                    continue;
+                }
+                // Direct child only: skip it if another function sits between
+                // the two, or its complexity would be subtracted twice.
+                $isDirect = true;
+                for ($k = 0; $k < $count; $k++) {
+                    if ($k === $i || $k === $j) {
+                        continue;
+                    }
+                    if ($contains($functions[$i], $functions[$k])
+                        && $contains($functions[$k], $functions[$j])) {
+                        $isDirect = false;
+                        break;
+                    }
+                }
+                if ($isDirect) {
+                    $subtract += $functions[$j]["complexity"] - 1;
+                }
+            }
+            $corrected[$i]["complexity"] = max(1, $functions[$i]["complexity"] - $subtract);
+        }
+
+        return $corrected;
     }
 
     /**

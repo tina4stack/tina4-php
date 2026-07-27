@@ -53,6 +53,104 @@ class MetricsTest extends TestCase
         file_put_contents($path, $content);
     }
 
+    // ── Nested complexity is measured once (parity with Python master) ──
+
+    /**
+     * Each function's raw score covers its whole span, so a branch inside a
+     * nested function used to land on that function AND every function around
+     * it. The over-count compounded with depth: a wrapper around twenty inner
+     * handlers absorbed the whole file and topped the offenders list.
+     *
+     * @return array<string,int> complexity keyed by function name
+     */
+    private function complexityByName(string $source): array
+    {
+        $this->writePhpFile('nested.php', $source);
+        $result = Metrics::fullAnalysis($this->tempDir);
+        $byName = [];
+        foreach (($result['all_functions'] ?? []) as $f) {
+            $byName[$f['name']] = $f['complexity'];
+        }
+        return $byName;
+    }
+
+    public function testAParentWithNoBranchesOfItsOwnScoresOne(): void
+    {
+        $cc = $this->complexityByName(<<<'PHP'
+<?php
+function outer($a) {
+    function inner1($x) { if ($x) { return 1; } if ($x > 2) { return 2; } return 3; }
+    function inner2($y) { if ($y) { return 1; } if ($y > 2) { return 2; } return 3; }
+    return inner1($a) + inner2($a);
+}
+PHP);
+        $this->assertSame(1, $cc['outer'], 'outer branches on nothing itself');
+        $this->assertSame(3, $cc['inner1'], 'the branches moved, not vanished');
+        $this->assertSame(3, $cc['inner2']);
+    }
+
+    public function testTheParentKeepsItsOwnBranches(): void
+    {
+        $cc = $this->complexityByName(<<<'PHP'
+<?php
+function outer($a) {
+    if ($a) { return 0; }
+    function inner($x) { if ($x) { return 1; } return 2; }
+    return inner($a);
+}
+PHP);
+        $this->assertSame(2, $cc['outer'], "1 + outer's own if");
+        $this->assertSame(2, $cc['inner']);
+    }
+
+    public function testThreeLevelsDeepEachKeepsOnlyItsOwn(): void
+    {
+        $cc = $this->complexityByName(<<<'PHP'
+<?php
+function a($x) {
+    if ($x) { $x = 1; }
+    function b($y) {
+        if ($y) { $y = 1; }
+        function c($z) { if ($z) { return 1; } return 2; }
+        return c($y);
+    }
+    return b($x);
+}
+PHP);
+        $this->assertSame(2, $cc['a']);
+        $this->assertSame(2, $cc['b']);
+        $this->assertSame(2, $cc['c']);
+    }
+
+    public function testAClosureStillCountsTowardItsEnclosingFunction(): void
+    {
+        // Anonymous closures are not reported as functions of their own, so
+        // excluding them would LOSE their decisions rather than relocate them.
+        $cc = $this->complexityByName(<<<'PHP'
+<?php
+class B {
+    function withClosure($x) {
+        return array_map(function ($y) { if ($y) { return 1; } return 2; }, $x);
+    }
+}
+PHP);
+        $this->assertSame(2, $cc['B.withClosure'], "1 + the closure's if");
+    }
+
+    public function testSiblingMethodsNeverAffectEachOther(): void
+    {
+        // Guards against an over-eager fix that subtracts from siblings too.
+        $cc = $this->complexityByName(<<<'PHP'
+<?php
+class A {
+    function one($x) { if ($x) { return 1; } return 2; }
+    function two($y) { if ($y) { return 1; } return 2; }
+}
+PHP);
+        $this->assertSame(2, $cc['A.one']);
+        $this->assertSame(2, $cc['A.two']);
+    }
+
     // ── Quick Metrics ──────────────────────────────────────────────
 
     public function testQuickMetricsOnEmptyDirectory(): void
