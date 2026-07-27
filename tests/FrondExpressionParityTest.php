@@ -127,7 +127,7 @@ class FrondExpressionParityTest extends TestCase
     {
         $corpus = $this->loadFixture("frond_expression_corpus.txt", "|");
         $expected = $this->loadFixture("frond_expression_expected.txt", "\t");
-        $this->assertCount(79, $corpus);
+        $this->assertCount(82, $corpus);
         $this->assertSame(
             array_column($corpus, 0),
             array_column($expected, 0),
@@ -239,6 +239,98 @@ class FrondExpressionParityTest extends TestCase
             $this->assertStringNotContainsString($bad, $out);
         }
         $this->assertNotSame("", $this->engine->renderString("{{ v|json_encode }}", ["v" => INF]));
+    }
+
+    /**
+     * {% set name %}...{% endset %} binds the rendered body (3.13.89).
+     *
+     * Core syntax in BOTH reference engines, and broken identically in all four
+     * frameworks until now: the body rendered inline where it stood and the
+     * variable was never assigned.
+     */
+    public function testBlockSetCapturesItsBodyInsteadOfPrintingIt(): void
+    {
+        $ctx = ["n" => "Andre"];
+        $out = $this->engine->renderString("{% set g %}Hi {{ n }}{% endset %}[{{ g }}]", $ctx);
+        $this->assertSame("[Hi Andre]", $out);
+        // Negative case: the old bug printed the body first and left the
+        // variable empty. Neither may happen.
+        $this->assertStringStartsNotWith("Hi", $out);
+        $this->assertStringNotContainsString("[]", $out);
+        $this->assertSame(
+            "[12]",
+            $this->engine->renderString(
+                "{% set g %}{% for i in [1,2] %}{{ i }}{% endfor %}{% endset %}[{{ g }}]",
+                []
+            )
+        );
+        // Nesting: the inner endset must not close the outer block.
+        $this->assertSame(
+            "[AB]",
+            $this->engine->renderString("{% set a %}A{% set b %}B{% endset %}{{ b }}{% endset %}[{{ a }}]", [])
+        );
+    }
+
+    /**
+     * The capture is already-escaped output, so it is not escaped again.
+     *
+     * Twig and Jinja2 both mark a captured block safe. A value interpolated INTO
+     * the body is still escaped on the way in -- escaping happens once, in the
+     * right place.
+     */
+    public function testBlockSetCaptureIsSafeAndTheInlineFormStillWorks(): void
+    {
+        $this->assertSame(
+            "[&lt;b&gt;&amp;x&lt;/b&gt;]",
+            $this->engine->renderString("{% set g %}{{ h }}{% endset %}[{{ g }}]", ["h" => "<b>&x</b>"])
+        );
+        $this->assertSame(
+            "[<b>hi</b>]",
+            $this->engine->renderString("{% set g %}<b>hi</b>{% endset %}[{{ g }}]", [])
+        );
+        // Negative case: the inline assignment form is untouched, including an
+        // "=" inside a quoted value -- that must NOT be read as the block form.
+        $this->assertSame('[x]', $this->engine->renderString('{% set g = "x" %}[{{ g }}]', []));
+        $this->assertSame('[a = b]', $this->engine->renderString('{% set g = "a = b" %}[{{ g }}]', []));
+    }
+
+    /**
+     * A typo'd tag must fail loudly, not render the content it was gating.
+     *
+     * THE security-shaped one. {% iff user.is_admin %}...{% endiff %} used to
+     * render the admin block UNCONDITIONALLY: the unknown tag emitted nothing
+     * and its body was parsed as ordinary content, so a reviewer read a guard
+     * that was not there. Twig and Jinja2 both raise on an unknown tag. There is
+     * no user-extension point for tags, so an unknown name is always a mistake.
+     */
+    public function testAnUnknownTagThrowsInsteadOfLeakingItsBody(): void
+    {
+        try {
+            $this->engine->renderString("{% iff admin %}SECRET{% endiff %}", ["admin" => false]);
+            $this->fail("an unknown tag must throw");
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('unknown tag "iff"', $e->getMessage());
+        }
+        try {
+            $this->engine->renderString("{% frobnicate 42 %}", []);
+            $this->fail("an unknown tag must throw");
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('unknown tag "frobnicate"', $e->getMessage());
+        }
+        // Negative case 1: every real tag still parses.
+        $this->assertSame(
+            "x1{{ q }} a y",
+            $this->engine->renderString(
+                "{% if 1 %}x{% endif %}{% for i in [1] %}{{ i }}{% endfor %}"
+                . "{% raw %}{{ q }}{% endraw %}{% spaceless %} a {% endspaceless %}"
+                . "{% autoescape true %}y{% endautoescape %}",
+                []
+            )
+        );
+        // Negative case 2: a STRAY terminator is not an unknown tag. It stays a
+        // silent no-op -- it was always one, and unlike an unknown tag it cannot
+        // expose gated content.
+        $this->assertSame("AB", $this->engine->renderString("A{% endif %}B", []));
     }
 
     /** The three spellings share one serializer and must not drift apart. */

@@ -54,18 +54,34 @@ The engine also implements these block tags: `{% spaceless %}...{% endspaceless 
 > Frond does **not** implement `{% switch %}/{% case %}/{% default %}` or `{% capture %}`.
 > Use `{% if %}/{% elseif %}` for branching.
 
-**CORRECTION (2026-07-27): only the INLINE `{% set x = ... %}` works.** The BLOCK form
-`{% set x %}...{% endset %}` -- which is core syntax in BOTH Twig and Jinja2 -- is broken
-identically in all four: it prints the body inline and captures nothing.
+**Both `{% set %}` forms work (block form FIXED in 3.13.89).** The inline
+`{% set x = expr %}` assigns an expression; the block `{% set x %}...{% endset %}`
+captures its rendered body.
 
 ```twig
 {% set g %}Hello {{ n }}{% endset %}[{{ g }}]
-{# renders: "Hello A[]"  -- body leaked, g empty. Should be: "[Hello A]" #}
+{# renders "[Hello A]" #}
 ```
 
-Do NOT tell a developer to use the block form for captured values until this is fixed.
-Scheduled for 3.13.88. Until then the only capture is the inline expression form
-(`{% set g = "Hello " ~ n %}`), which works correctly.
+The captured value is marked SAFE (SafeString / raw marker), because it is template
+output that was already escaped on the way in -- re-escaping at `{{ g }}` would
+double-encode every entity. Twig and Jinja2 both mark a capture safe. Which form you get
+is decided by ONE rule, identical in all four: an `=` anywhere in the tag content means
+assignment, so `{% set m = "a = b" %}` is never mistaken for the block form.
+
+Until 3.13.89 the block form printed its body inline and captured nothing (`"Hello A[]"`),
+identically in all four -- a compatibility bug against both reference engines, not a
+missing nicety.
+
+**An UNKNOWN tag now raises (3.13.89, security-shaped).** A typo'd tag used to emit
+nothing while its BODY was parsed as ordinary content, so
+`{% iff user.is_admin %}<admin>{% endiff %}` rendered the gated block
+**UNCONDITIONALLY** -- a reviewer read a guard that was not there. Twig and Jinja2 both
+raise on an unknown tag; Frond now does too, naming the tag and listing the known ones.
+There is no user-extension point for tags in any of the four frameworks, so an unknown
+name is always a mistake, never a plugin. A STRAY TERMINATOR (an `{% endif %}` with no
+`{% if %}`) is deliberately NOT covered: it stays a silent no-op, because it always was
+one and it cannot expose gated content.
 
 ### Template Composition
 ```twig

@@ -77,3 +77,6 @@ to-json-alias|{{ map|to_json }}
 filter-pipe-then-concat|{{ f|number_format(2) ~ " EUR" }}
 ternary-filter-concat|{{ t ? f|number_format(2) ~ " EUR" : "free" }}
 number-format-locale|{{ f|number_format(2, ",", " ") }}
+block-set|{% set cap %}Hi {{ name }}{% endset %}[{{ cap }}]
+block-set-safe|{% set cap %}{{ html }}{% endset %}[{{ cap }}]
+inline-set-equals-in-string|{% set s = "a = b" %}[{{ s }}]

@@ -643,6 +643,33 @@ class Frond
         return str_starts_with($tag, $expected . ' ') || str_starts_with($tag, $expected . '(');
     }
 
+    /**
+     * Every tag that OPENS a construct.
+     *
+     * An unknown tag is a typo, and 3.13.89 makes it throw rather than render
+     * its body: a mistyped guard -- {% iff is_admin %} instead of
+     * {% if is_admin %} -- used to render the gated content UNCONDITIONALLY, so
+     * a reviewer saw a guard that was not there. Twig and Jinja2 both raise on
+     * an unknown tag; Frond now does too. There is no user-extension point for
+     * tags in any of the four frameworks, so an unknown name is always a
+     * mistake, never a plugin.
+     */
+    private const KNOWN_TAGS = [
+        'autoescape', 'block', 'cache', 'extends', 'for', 'from', 'if', 'import',
+        'include', 'live', 'macro', 'raw', 'set', 'spaceless',
+    ];
+
+    /**
+     * Terminators and branch keywords. These reach parseBlock() only when stray
+     * (their own collector consumes them in the normal case), and a stray one
+     * keeps the old render-nothing behaviour -- see the comment at the throw.
+     */
+    private const TERMINATOR_TAGS = [
+        'elif', 'else', 'elseif', 'endautoescape', 'endblock', 'endcache',
+        'endfor', 'endif', 'endlive', 'endmacro', 'endraw', 'endset',
+        'endspaceless',
+    ];
+
     private function parseBlock(string $tag, array &$tokens, int &$pos): ?array
     {
         $tagParts = preg_split(self::RE_WHITESPACE_SPLIT, trim($tag), 2);
@@ -655,6 +682,18 @@ class Frond
             case 'for':
                 return $this->parseFor($rest, $tokens, $pos);
             case 'set':
+                // An assignment has an '='; without one this is the BLOCK form,
+                // {% set name %}...{% endset %}, which captures its rendered body.
+                // A bare str_contains is exact here, not a shortcut: the block
+                // form's tag content is only ever "set <name>", so an '=' anywhere
+                // -- even inside a quoted value like {% set m = "a = b" %} --
+                // means assignment.
+                if (!str_contains($rest, '=')) {
+                    $pos++;
+                    $body = $this->parse($tokens, $pos, 'endset');
+                    $pos++;
+                    return ['type' => 'set_block', 'name' => trim($rest), 'body' => $body];
+                }
                 $pos++;
                 return $this->parseSet($rest);
             case 'include':
@@ -683,7 +722,18 @@ class Frond
                 return $this->parseAutoescape($rest, $tokens, $pos);
             default:
                 $pos++;
-                return null;
+                if ($keyword === '' || in_array($keyword, self::TERMINATOR_TAGS, true)) {
+                    // An empty tag ({%  %}, or a bare whitespace-control
+                    // {%- -%}) and a stray terminator (an {% endif %} with no {% if %}):
+                    // no output. Malformed, but it has always rendered nothing,
+                    // and nothing is the safe answer -- unlike an unknown tag it
+                    // cannot expose content that was meant to be gated.
+                    return null;
+                }
+                throw new \InvalidArgumentException(
+                    'Frond: unknown tag "' . $keyword . '" -- known tags are: '
+                    . implode(', ', self::KNOWN_TAGS)
+                );
         }
     }
 
@@ -1066,6 +1116,9 @@ class Frond
             case 'set':
                 return $this->executeSet($node, $data);
 
+            case 'set_block':
+                return $this->executeSetBlock($node, $data);
+
             case 'include':
                 return $this->executeInclude($node, $data);
 
@@ -1341,6 +1394,30 @@ class Frond
             $value = str_replace(self::RAW_MARKER, '', $value);
         }
         $data[$node['name']] = $value;
+        return '';
+    }
+
+    /**
+     * Handles {% set name %}...{% endset %} -- render the body and bind it.
+     *
+     * Emits nothing itself. The captured value carries the raw marker because it
+     * is template output that was already escaped on the way in; re-escaping it
+     * at {{ name }} would double-encode every entity. Twig and Jinja2 both mark
+     * the capture safe.
+     *
+     * @param array $node  The parsed set_block node ('name', 'body').
+     * @param array $data  Template context, written in place.
+     * @return string Always the empty string.
+     */
+    private function executeSetBlock(array $node, array &$data): string
+    {
+        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('set', $this->sandboxTags)) {
+            return '';
+        }
+        if ($node['name'] === '') {
+            return '';
+        }
+        $data[$node['name']] = self::RAW_MARKER . $this->execute($node['body'], $data);
         return '';
     }
 
