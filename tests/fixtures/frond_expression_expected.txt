@@ -77,3 +77,6 @@ to-json-alias	{"a":1,"b":2}
 filter-pipe-then-concat	1,234.57 EUR
 ternary-filter-concat	1,234.57 EUR
 number-format-locale	1 234,57
+block-set	[Hi Andre]
+block-set-safe	[&lt;b&gt;&amp;x&lt;/b&gt;]
+inline-set-equals-in-string	[a = b]
