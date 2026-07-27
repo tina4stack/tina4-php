@@ -406,16 +406,36 @@ Max upload size: `TINA4_MAX_UPLOAD_SIZE` env var (default 10MB).
 
 ```php
 // expires_in is in MINUTES (default 60). Reads SECRET from env if not passed.
-Auth::getToken($payload, $secret=null, $expiresIn=60): string
-Auth::validToken($token, $secret=null): ?array
+// $algorithm=null resolves TINA4_JWT_ALGORITHM, then HS256.
+Auth::getToken($payload, $secret=null, $expiresIn=60, $algorithm=null): string
+Auth::validToken($token, $secret=null, $algorithm=null): ?array
 Auth::getPayload($token): ?array
 Auth::refreshToken($token, $expiresIn=60): ?string
 Auth::hashPassword($password, $salt=null, $iterations=260000): string  // PBKDF2-SHA256, $ delimiter
 Auth::checkPassword($password, $hash): bool
 Auth::validateApiKey($provided, $expected=null): bool  // reads TINA4_API_KEY from env
-Auth::authenticateRequest($headers, $secret=null): ?array  // Bearer JWT, falls back to API key
+Auth::authenticateRequest($headers, $secret=null, $algorithm=null): ?array  // Bearer JWT, falls back to API key
 Auth::ensureDevSecret($cwd=null): ?string  // dev-secret bootstrap (run once at boot)
+Auth::JWT_LEEWAY_SECONDS  // 60 — clock skew tolerated on the nbf claim
 ```
+
+**`TINA4_JWT_ALGORITHM` — supported algorithms.** `HS256` (default), `HS384`,
+`HS512` (HMAC, zero-dependency) and `RS256` (RSA via ext-openssl). RS256 is a
+PHP/Node-only extra — Python and Ruby cannot sign it without a third-party
+dependency, so cross-framework code should stay on the HMAC family. An
+unsupported value throws `\InvalidArgumentException` naming the supported set
+rather than silently downgrading to HS256. The header's `alg` always names the
+digest that actually signed, and `validToken()` **pins** it: a token whose header
+advertises a different algorithm (including `alg: "none"`) is rejected before any
+signature work, which blocks algorithm substitution across services that share a
+signing secret. An explicit `$algorithm` argument beats the env var.
+
+**`nbf` (not-before) is validated.** `validToken()` refuses a post-dated token
+until its `nbf` passes, tolerating `Auth::JWT_LEEWAY_SECONDS` (60s) of clock skew
+so a token minted on another host is not rejected for a one-second difference. A
+token with **no** `nbf` claim is unconstrained, so existing tokens are unaffected.
+`getToken()` never stamps an `nbf` — a caller wanting a post-dated token puts its
+own `nbf` in the payload (parity with the Python and Node masters).
 
 **`TINA4_SECRET` — dev secret auto-generation.** The default signing secret is
 always BLANK (never a guessable built-in). `Auth::ensureDevSecret()` runs once at
@@ -582,10 +602,15 @@ $frond->unsandbox(): self
 
 ```php
 $auth = new \Tina4\Auth();
-Auth::getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string
-Auth::validToken(string $token, ?string $secret = null): ?array
+Auth::getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60, ?string $algorithm = null): string
+Auth::validToken(string $token, ?string $secret = null, ?string $algorithm = null): ?array
 Auth::getPayload(string $token): ?array
 ```
+
+`$algorithm = null` resolves `TINA4_JWT_ALGORITHM`, then `HS256`. Supported:
+`HS256`/`HS384`/`HS512` plus `RS256` (PHP/Node only). An unsupported value throws
+`\InvalidArgumentException`. `validToken()` pins the header's `alg` to the
+configured algorithm and honours the `nbf` claim (see the Auth section above).
 
 ### Api — External HTTP client
 
