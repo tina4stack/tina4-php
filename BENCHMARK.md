@@ -20,6 +20,41 @@ Real HTTP benchmarks — identical JSON endpoint. Tina4 uses its built-in `strea
 
 ---
 
+## 1b. Template rendering, Frond vs Twig and Blade
+
+**Date:** 2026-07-27 | **Machine:** Apple Silicon (ARM64), macOS | **PHP:** 8.5.7 | **Tool:** `benchmarks/bench_templates.php` (p50 over batched samples, min 0.25s / 200 iterations)
+
+This category used to be missing, and its absence flattered us. Sections 1 and 2 above
+measure request throughput and feature count, where Tina4 wins. Neither says anything
+about template rendering, the one axis where Frond competes head-on with the engine it
+replaced. Here are the numbers.
+
+Same page (20-row product list: loop, index, even/odd class, uppercase, 2-decimal
+money, conditional footer). **Every engine's output is compared and proven identical
+before anything is timed**; a mismatch aborts the run. Each template is compiled ONCE
+outside the clock, so this is steady-state render throughput, not compilation.
+
+| Engine | Renders/s (p50) | Renders/s (mean) | Deps |
+|--------|:---------------:|:----------------:|:----:|
+| Twig 3 | **27,460** | 26,533 | 1 |
+| Blade (Laravel) | **21,680** | 20,156 | 1+ |
+| **Frond (Tina4)** | **7,419** | 7,147 | **0** |
+
+**Key takeaway, stated plainly: Frond is 3.70x slower than Twig and 2.92x slower than
+Blade on identical output.** This is Frond's fastest path, not a strawman, the harness
+reports that the AOT compiler (`FrondCompiler`) engaged, and production mode buys only
+~14% over dev mode, so the gap is the render path itself rather than parse or compile
+overhead. Twig and Blade compile a template to a PHP class and let the PHP VM execute
+it; Frond walks a tree and calls back into engine primitives per hole.
+
+What Frond does buy is the zero in the Deps column, and the fact that the same template
+syntax renders in all four Tina4 languages. That is a real trade, but it is a trade -
+not a win. Closing this gap is tracked as the ahead-of-time compile layer (ADR-0001).
+
+Reproduce: `cd benchmarks && composer install && php bench_templates.php`
+
+---
+
 ## 2. Feature Comparison (38 features)
 
 Ships with core install, no extra packages needed.

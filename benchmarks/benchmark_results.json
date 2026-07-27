@@ -268,5 +268,61 @@
       "features": 1,
       "server": "built-in http"
     }
-  ]
+  ],
+  "templates": {
+    "python": {
+      "measured": true,
+      "runtime": "Python 3.13.5",
+      "output_equivalence": "verified",
+      "engines": {
+        "Frond (Tina4)": 2414,
+        "Jinja2": 34934,
+        "Mako": 89662
+      },
+      "fastest_rival": "Mako",
+      "frond_slower_by": 37.14,
+      "frond_faster_by": null
+    },
+    "php": {
+      "measured": true,
+      "runtime": "PHP 8.5.7",
+      "output_equivalence": "verified",
+      "engines": {
+        "Frond (Tina4)": 7419,
+        "Twig 3": 27460,
+        "Blade (Laravel)": 21680
+      },
+      "fastest_rival": "Twig 3",
+      "frond_slower_by": 3.7,
+      "frond_faster_by": null
+    },
+    "ruby": {
+      "measured": true,
+      "runtime": "Ruby 4.0.2",
+      "output_equivalence": "verified",
+      "engines": {
+        "Frond (Tina4)": 1172,
+        "ERB (stdlib)": 66667,
+        "Erubi (Rails)": 65218
+      },
+      "aot_compile_layer": "NOT IMPLEMENTED in Ruby",
+      "fastest_rival": "ERB (stdlib)",
+      "frond_slower_by": 56.87,
+      "frond_faster_by": null
+    },
+    "nodejs": {
+      "measured": true,
+      "runtime": "Node v24.9.0",
+      "output_equivalence": "verified",
+      "engines": {
+        "Frond (Tina4)": 7016,
+        "Nunjucks": 62420,
+        "EJS": 53570
+      },
+      "aot_compile_layer": "NOT IMPLEMENTED in Node",
+      "fastest_rival": "Nunjucks",
+      "frond_slower_by": 8.9,
+      "frond_faster_by": null
+    }
+  }
 }

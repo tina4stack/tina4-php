@@ -128,5 +128,18 @@
       "features": 22,
       "server": "runserver"
     }
-  ]
+  ],
+  "templates": {
+    "measured": true,
+    "runtime": "Python 3.13.5",
+    "output_equivalence": "verified",
+    "engines": {
+      "Frond (Tina4)": 2414,
+      "Jinja2": 34934,
+      "Mako": 89662
+    },
+    "fastest_rival": "Mako",
+    "frond_slower_by": 37.14,
+    "frond_faster_by": null
+  }
 }

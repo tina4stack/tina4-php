@@ -68,5 +68,18 @@
       "features": 25,
       "server": "artisan serve"
     }
-  ]
+  ],
+  "templates": {
+    "measured": true,
+    "runtime": "PHP 8.5.7",
+    "output_equivalence": "verified",
+    "engines": {
+      "Frond (Tina4)": 7419,
+      "Twig 3": 27460,
+      "Blade (Laravel)": 21680
+    },
+    "fastest_rival": "Twig 3",
+    "frond_slower_by": 3.7,
+    "frond_faster_by": null
+  }
 }
