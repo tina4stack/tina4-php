@@ -69,4 +69,11 @@ filter-chain3	PAD
 quote-op-in-str	a ~ b
 quote-pipe-in-str	a|b
 quote-q-in-str	a ? b : c
-json-encode	{&quot;a&quot;:1,&quot;b&quot;:2}
+json-encode	{"a":1,"b":2}
+json-encode-html	"\u003cb\u003e\u0026x\u003c/b\u003e"
+json-encode-inf	null
+json-encode-nan	{"v":null}
+to-json-alias	{"a":1,"b":2}
+filter-pipe-then-concat	1,234.57 EUR
+ternary-filter-concat	1,234.57 EUR
+number-format-locale	1 234,57

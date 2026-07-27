@@ -138,7 +138,14 @@ Three rules that are now contract. Do not re-derive them per language:
    matched WITH surrounding spaces, so a LEADING `not` matches none of them and falls through
    to variable lookup as a variable named `"not x"`. Route it to the same evaluator `{% if %}`
    uses so a condition means one thing in both places.
-3. **`|json_encode` is HTML-escaped**; `|json_encode|raw` is the opt-out for `<script>`.
+3. **`|json_encode` emits JSON, not HTML entities.** Escape only `<` `>` `&` `'`
+   (plus U+2028/U+2029) as JSON `\uXXXX` and mark the result safe -- the Jinja2
+   `tojson` model, which is valid JSON AND valid JavaScript, cannot terminate a
+   `</script>`, and is safe in a single-quoted attribute. Entity-encoding it (what
+   3.13.87 did, in all four at once) is a SyntaxError inside `<script>`, the filter's
+   main use. A value JSON cannot represent (Infinity, NaN) serializes as `null`; the
+   filter NEVER returns empty and never a token that fails to parse. Slashes stay
+   unescaped and non-ASCII stays raw, so all four agree byte for byte.
 
 Both macro-import forms -- `{% import "f" as alias %}` and `{% from "f" import name %}` --
 work and behave identically in all four. Do not bind the alias namespace as a class instance:
@@ -186,9 +193,9 @@ emit them; there is no fallback and no warning:
 - `classes(...)` conditional-class helper -- build the class string with `{% if %}` / `~`.
 - `{% markdown %}` -- render Markdown in the handler and pass HTML through `|raw`.
 - `{% data ... as ... %}` JSON-script helper -- write the `<script type="application/json">`
-  tag yourself with `|json_encode|raw`. The `|raw` is required: as of 3.13.87 `json_encode`
-  is HTML-escaped in ALL FOUR frameworks (PHP used to return it raw and was brought in
-  line), so inside a `<script>` block you must opt out explicitly.
+  tag yourself with `|json_encode`. No `|raw` needed: since 3.13.88 the filter emits
+  JSON that is already safe in a `<script>` block (see rule 3 above), and `|raw`
+  after it is a no-op.
 - `icon(...)` inline-SVG helper -- `{% include %}` the SVG partial.
 
 ## Filters (~59 total)

@@ -242,27 +242,36 @@ class FrondTest extends TestCase
     }
 
     /**
-     * json_encode is HTML-escaped by default -- the same contract as Python,
-     * Ruby and Node. Breaking in 3.13.87: PHP alone used to return it raw
-     * (the filter prefixed RAW_MARKER), which made unescaped JSON in an HTML
-     * attribute an injection vector.
+     * json_encode emits JSON, not HTML entities -- the same contract as Python,
+     * Ruby and Node. 3.13.88 reverts 3.13.87's HTML escaping, which produced
+     * `{&quot;a&quot;:1}` and made every <script> block using this filter a
+     * SyntaxError. See Frond::jsonSafe().
      */
-    public function testFilterJsonEncodeEscapesByDefault(): void
+    public function testFilterJsonEncodeEmitsPlainJson(): void
     {
         $result = $this->engine->renderString('{{ data | json_encode }}', ['data' => ['a' => 1]]);
-        $this->assertSame('{&quot;a&quot;:1}', $result);
+        $this->assertSame('{"a":1}', $result);
     }
 
     /**
-     * ...and |raw is the explicit opt-out, for a <script> block where the JSON
-     * must land verbatim. Explicit at the call site, same shape as Twig's
-     * autoescape. This is the NEGATIVE case of the test above: it proves the
-     * escaping is the default rather than the only behaviour.
+     * NEGATIVE case of the test above: the output is safe in a page WITHOUT
+     * entities. `<`, `>`, `&` and `'` come back as JSON \uXXXX escapes, so a
+     * </script> in a string cannot close the block and the value drops into a
+     * single-quoted attribute unharmed. `|raw` is now a no-op, not the opt-out.
      */
-    public function testFilterJsonEncodeRawOptsOutOfEscaping(): void
+    public function testFilterJsonEncodeEscapesPageBreakersAsUnicode(): void
     {
-        $result = $this->engine->renderString('{{ data | json_encode | raw }}', ['data' => ['a' => 1]]);
-        $this->assertSame('{"a":1}', $result);
+        $out = $this->engine->renderString(
+            '{{ data | json_encode }}',
+            ['data' => ['x' => "</script>&'"]]
+        );
+        $this->assertSame('{"x":"\u003c/script\u003e\u0026\u0027"}', $out);
+        $this->assertStringNotContainsString('&quot;', $out);
+        $this->assertStringNotContainsString('</script>', $out);
+        $this->assertSame(
+            '{"a":1}',
+            $this->engine->renderString('{{ data | json_encode | raw }}', ['data' => ['a' => 1]])
+        );
     }
 
     /**
