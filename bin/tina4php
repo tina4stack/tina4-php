@@ -241,6 +241,27 @@ function parseFields(string $fieldsStr): array
 }
 
 /**
+ * The default field set used when a generator is called without --fields.
+ *
+ * It MUST be materialised here, in one place, and then flow into the model, the
+ * migration, the form, the view and the co-emitted test alike. It used to live
+ * only inside the model template, so `generate model X` / `generate crud X`
+ * wrote a model declaring `name` while the migration - built from the parsed
+ * field list, which was empty - created only id + createdAt. The first write
+ * then failed with "no column named name".
+ */
+const DEFAULT_FIELDS = [['name', 'string']];
+
+/**
+ * Parsed --fields, or the default single `name` column when none given.
+ */
+function fieldsOrDefault(string $fieldsStr): array
+{
+    $parsed = parseFields($fieldsStr);
+    return $parsed !== [] ? $parsed : DEFAULT_FIELDS;
+}
+
+/**
  * Parse --key value and --flag from args. Returns [flags, positional].
  */
 function parseFlags(array $args): array
@@ -1594,19 +1615,15 @@ DOCKERFILE;
  */
 function generateModel(string $name, array $flags, array $fieldTypeMap, bool $skipMigration = false, bool $emitTest = true): void
 {
-    $fields = parseFields($flags['fields'] ?? '');
+    $fields = fieldsOrDefault($flags['fields'] ?? '');
     $table = tableNameFromClass($name);
 
     // Build typed property lines
     $propLines = ["    public ?int \$id = null;"];
-    if (!empty($fields)) {
-        foreach ($fields as [$fname, $ftype]) {
-            $info = $fieldTypeMap[$ftype] ?? $fieldTypeMap['string'];
-            $nullable = $info['nullable'] ? '?' : '';
-            $propLines[] = "    public {$nullable}{$info['php']} \${$fname} = {$info['default']};";
-        }
-    } else {
-        $propLines[] = "    public string \$name = '';";
+    foreach ($fields as [$fname, $ftype]) {
+        $info = $fieldTypeMap[$ftype] ?? $fieldTypeMap['string'];
+        $nullable = $info['nullable'] ? '?' : '';
+        $propLines[] = "    public {$nullable}{$info['php']} \${$fname} = {$info['default']};";
     }
     $propLines[] = "    public ?string \$createdAt = null;";
 
@@ -2346,7 +2363,7 @@ PHP;
 function generateForm(string $name, array $flags): void
 {
     global $INPUT_TYPE_MAP;
-    $fields = parseFields($flags['fields'] ?? '');
+    $fields = fieldsOrDefault($flags['fields'] ?? '');
     $table = tableNameFromClass($name);
     $routeName = $table . 's';
 
@@ -2360,7 +2377,7 @@ function generateForm(string $name, array $flags): void
 
     // Build form fields
     $fieldHtml = '';
-    $fieldList = !empty($fields) ? $fields : [['name', 'string']];
+    $fieldList = $fields;
     foreach ($fieldList as [$fname, $ftype]) {
         $itype = $INPUT_TYPE_MAP[$ftype] ?? 'text';
         $label = ucwords(str_replace('_', ' ', $fname));
@@ -2426,14 +2443,14 @@ TWIG;
  */
 function generateView(string $name, array $flags): void
 {
-    $fields = parseFields($flags['fields'] ?? '');
+    $fields = fieldsOrDefault($flags['fields'] ?? '');
     $table = tableNameFromClass($name);
     $routeName = $table . 's';
 
     $dir = 'src/templates/pages';
     @mkdir($dir, 0755, true);
 
-    $cols = !empty($fields) ? array_map(fn($f) => $f[0], $fields) : ['name'];
+    $cols = array_map(fn($f) => $f[0], $fields);
 
     // List view
     $listPath = "{$dir}/{$routeName}.twig";
@@ -2764,7 +2781,10 @@ function sampleLiteral(string $type): string
  */
 function emitModelTest(string $model, string $table, array $fields): void
 {
-    $fields = $fields ?: [['name', 'string']];
+    // Reuse the single DEFAULT_FIELDS constant rather than re-stating the
+    // literal, so the co-emitted test can never describe a shape the model
+    // does not actually have.
+    $fields = $fields ?: DEFAULT_FIELDS;
     $pairs = [];
     foreach ($fields as [$fname, $ftype]) {
         $pairs[] = "'{$fname}' => " . sampleLiteral($ftype);

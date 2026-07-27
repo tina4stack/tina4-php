@@ -125,6 +125,120 @@ class CliGenerateCoemitsTest extends TestCase
         $this->runEmitted($emitted);
     }
 
+    /** The generated UP migration (PHP writes UP and DOWN as separate files). */
+    private function upSql(): string
+    {
+        $ups = array_filter(
+            glob($this->tempDir . '/migrations/*.sql') ?: [],
+            static fn(string $f): bool => !str_ends_with($f, '.down.sql')
+        );
+        $this->assertNotEmpty($ups, 'no UP migration was generated');
+        return (string)file_get_contents((string)reset($ups));
+    }
+
+    /**
+     * Column names the generated ORM model declares, as the migration must
+     * spell them. `$tableName` / `$primaryKey` are ORM configuration, not
+     * columns, and Tina4's ORM maps a camelCase property ($createdAt) onto a
+     * snake_case column (created_at) — so compare on the mapped name.
+     */
+    private function modelColumns(string $model): array
+    {
+        $src = (string)file_get_contents($this->tempDir . "/src/orm/{$model}.php");
+        preg_match_all('/^\s{4}public \??\w+ \$(\w+)\s*=/m', $src, $m);
+        $props = array_diff($m[1], ['tableName', 'primaryKey']);
+        return array_values(array_map(
+            static fn(string $p): string => strtolower((string)preg_replace('/(?<!^)[A-Z]/', '_$0', $p)),
+            $props
+        ));
+    }
+
+    /**
+     * Regression (php#186 / tina4-python#101): `generate model/crud` WITHOUT
+     * --fields wrote a model declaring `name` while its migration created only
+     * id + createdAt, so the first write died with "no column named name".
+     * Every case in coemitCases() passes --fields explicitly, which is exactly
+     * why the bug survived — these exercise the no-fields path.
+     */
+    public function testModelWithoutFieldsMigrationHasEveryDeclaredColumn(): void
+    {
+        $this->cli('generate model Todo');
+        $declared = $this->modelColumns('Todo');
+        $up = $this->upSql();
+        $this->assertContains('name', $declared, 'model should declare the default name field');
+        foreach ($declared as $field) {
+            $this->assertStringContainsString(
+                $field,
+                $up,
+                "model declares '{$field}' but the migration omits it:\n{$up}"
+            );
+        }
+    }
+
+    /** Same contract through `generate crud` — the path llms.txt recommends. */
+    public function testCrudWithoutFieldsMigrationHasEveryDeclaredColumn(): void
+    {
+        $this->cli('generate crud Todo');
+        $up = $this->upSql();
+        foreach ($this->modelColumns('Todo') as $field) {
+            $this->assertStringContainsString(
+                $field,
+                $up,
+                "model declares '{$field}' but the migration omits it:\n{$up}"
+            );
+        }
+    }
+
+    /** Positive control: the explicit --fields path must not regress. */
+    public function testExplicitFieldsStillAllReachTheMigration(): void
+    {
+        $this->cli('generate model Product --fields "title:string,price:float,in_stock:bool"');
+        $up = $this->upSql();
+        foreach (['title', 'price', 'in_stock'] as $field) {
+            $this->assertStringContainsString($field, $up, "'{$field}' missing from migration:\n{$up}");
+        }
+    }
+
+    /**
+     * END-TO-END against REAL sqlite: run the generated DDL, then insert a row
+     * using the model's OWN property names. This is precisely what used to 500.
+     */
+    public function testGeneratedSchemaAcceptsARowUsingTheModelsFields(): void
+    {
+        $this->cli('generate model Todo');
+        $cols = array_values(array_diff($this->modelColumns('Todo'), ['id', 'created_at']));
+        $db = new \SQLite3(':memory:');
+        try {
+            $this->assertTrue($db->exec($this->upSql()), 'generated DDL did not execute');
+            $placeholders = implode(', ', array_fill(0, count($cols), '?'));
+            $stmt = $db->prepare('INSERT INTO todo (' . implode(', ', $cols) . ") VALUES ({$placeholders})");
+            foreach ($cols as $i => $_) {
+                $stmt->bindValue($i + 1, 'x', SQLITE3_TEXT);
+            }
+            $this->assertNotFalse($stmt->execute(), 'insert using the model\'s own fields failed');
+            $this->assertSame(1, (int)$db->querySingle('SELECT COUNT(*) FROM todo'));
+        } finally {
+            $db->close();
+        }
+    }
+
+    /**
+     * Lock-in: the generated create/update routes must check save() before
+     * serialising. PHP already did this (unlike Python/Ruby/Node, which had to
+     * be fixed) — this pins it so the guard cannot be dropped later.
+     */
+    public function testGeneratedRoutesCheckSaveBeforeSerialising(): void
+    {
+        $this->cli('generate crud Todo');
+        $route = (string)file_get_contents($this->tempDir . '/src/routes/todos.php');
+        $this->assertStringContainsString('if (!$item->save())', $route);
+        $this->assertLessThan(
+            strpos($route, '$item->toDict(), 201'),
+            strpos($route, 'if (!$item->save())'),
+            'the guard must come before the success serialisation'
+        );
+    }
+
     /**
      * form / view scaffold Frond templates (no PHP logic), so they are exempt
      * from co-emitting a test — assert they produce a .twig and NO test file.
