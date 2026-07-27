@@ -70,3 +70,10 @@ quote-op-in-str|{{ "a ~ b" }}
 quote-pipe-in-str|{{ "a|b" }}
 quote-q-in-str|{{ "a ? b : c" }}
 json-encode|{{ map|json_encode }}
+json-encode-html|{{ html|json_encode }}
+json-encode-inf|{{ inf_val|json_encode }}
+json-encode-nan|{{ nan_map|json_encode }}
+to-json-alias|{{ map|to_json }}
+filter-pipe-then-concat|{{ f|number_format(2) ~ " EUR" }}
+ternary-filter-concat|{{ t ? f|number_format(2) ~ " EUR" : "free" }}
+number-format-locale|{{ f|number_format(2, ",", " ") }}

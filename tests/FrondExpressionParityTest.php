@@ -65,6 +65,10 @@ class FrondExpressionParityTest extends TestCase
             "list" => ["a", "b", "c"],
             "map" => ["a" => 1, "b" => 2],
             "html" => "<b>&x</b>",
+            // Non-finite floats: the tina4-php#184 payload. JSON has no
+            // Infinity or NaN, so both must serialize as null everywhere.
+            "inf_val" => INF,
+            "nan_map" => ["v" => NAN],
         ];
     }
 
@@ -123,7 +127,7 @@ class FrondExpressionParityTest extends TestCase
     {
         $corpus = $this->loadFixture("frond_expression_corpus.txt", "|");
         $expected = $this->loadFixture("frond_expression_expected.txt", "\t");
-        $this->assertCount(72, $corpus);
+        $this->assertCount(79, $corpus);
         $this->assertSame(
             array_column($corpus, 0),
             array_column($expected, 0),
@@ -188,18 +192,65 @@ class FrondExpressionParityTest extends TestCase
     }
 
     /**
-     * `|json_encode` escapes; `|json_encode|raw` does not.
+     * `|json_encode` output must parse as JSON AND run as JavaScript.
      *
-     * Python, Ruby and Node always escaped here; PHP alone returned raw JSON
-     * (the filter prefixed RAW_MARKER), and raw JSON dropped into an HTML
-     * attribute is an injection vector. Breaking in 3.13.87: PHP now matches
-     * the other three, and the `<script>` use case is served by an explicit
-     * `|raw` at the call site.
+     * 3.13.88 reverts 3.13.87's HTML-escaping of this filter. Entity-encoding
+     * the payload produced `{&quot;a&quot;:1}`, a SyntaxError inside <script>,
+     * which broke the filter's primary use in all four frameworks at once. The
+     * safe form escapes only the characters that are dangerous in HTML, as JSON
+     * \uXXXX escapes: valid JSON, valid JavaScript, cannot terminate a
+     * </script>, safe in a single-quoted attribute. Jinja2's tojson model.
      */
-    public function testJsonEncodeIsHtmlEscapedWithRawAsTheOptOut(): void
+    public function testJsonEncodeEmitsJsonThatIsValidInAScriptBlock(): void
     {
-        $ctx = ["data" => ["a" => 1]];
-        $this->assertSame("{&quot;a&quot;:1}", $this->engine->renderString("{{ data|json_encode }}", $ctx));
-        $this->assertSame('{"a":1}', $this->engine->renderString("{{ data|json_encode|raw }}", $ctx));
+        $this->assertSame('{"a":1}', $this->engine->renderString("{{ data|json_encode }}", ["data" => ["a" => 1]]));
+        // Negative case: escapes must be \uXXXX, never HTML entities, and
+        // </script> must not survive intact.
+        $out = $this->engine->renderString("{{ data|json_encode }}", ["data" => ["x" => "</script>&'"]]);
+        $this->assertSame('{"x":"\u003c/script\u003e\u0026\u0027"}', $out);
+        $this->assertStringNotContainsString("&quot;", $out);
+        $this->assertStringNotContainsString("</script>", $out);
+        // |raw is now a no-op rather than the required opt-out.
+        $this->assertSame('{"a":1}', $this->engine->renderString("{{ data|json_encode|raw }}", ["data" => ["a" => 1]]));
+    }
+
+    /**
+     * tina4-php#184 (justin-k-bruce): a non-finite value must become `null`.
+     *
+     * PHP's json_encode returns FALSE on INF/NAN, and a false coerced into a
+     * string return type is an EMPTY STRING -- the payload silently vanished.
+     * `null` is what JSON.stringify has always produced and the only answer the
+     * JSON grammar allows.
+     */
+    public function testJsonEncodeNeverEmitsANonFiniteLiteral(): void
+    {
+        $this->assertSame("null", $this->engine->renderString("{{ v|json_encode }}", ["v" => INF]));
+        $this->assertSame("null", $this->engine->renderString("{{ v|json_encode }}", ["v" => -INF]));
+        $this->assertSame("null", $this->engine->renderString("{{ v|json_encode }}", ["v" => NAN]));
+        $this->assertSame(
+            '{"a":1,"b":null}',
+            $this->engine->renderString("{{ v|json_encode }}", ["v" => ["a" => 1, "b" => INF]])
+        );
+        $this->assertSame("[1,null]", $this->engine->renderString("{{ v|json_encode }}", ["v" => [1, NAN]]));
+        // Negative case: none of the old failure outputs, and never empty --
+        // an empty payload is a silent, invisible failure.
+        $out = $this->engine->renderString("{{ v|json_encode }}", ["v" => ["b" => INF]]);
+        foreach (["Infinity", "NaN", "false", "=>"] as $bad) {
+            $this->assertStringNotContainsString($bad, $out);
+        }
+        $this->assertNotSame("", $this->engine->renderString("{{ v|json_encode }}", ["v" => INF]));
+    }
+
+    /** The three spellings share one serializer and must not drift apart. */
+    public function testJsonEncodeAndToJsonAndTojsonAreOneBehaviour(): void
+    {
+        $ctx = ["v" => ["a" => 1, "u" => "a/b", "n" => "caf\u{e9}", "bad" => INF]];
+        $out = $this->engine->renderString("{{ v|json_encode }}", $ctx);
+        $this->assertSame($out, $this->engine->renderString("{{ v|to_json }}", $ctx));
+        $this->assertSame($out, $this->engine->renderString("{{ v|tojson }}", $ctx));
+        // Slashes stay unescaped and non-ASCII stays raw -- PHP alone used to
+        // write "a\/b", and Python alone used to write "caf\u00e9".
+        $this->assertStringContainsString('"u":"a/b"', $out);
+        $this->assertStringContainsString("caf\u{e9}", $out);
     }
 }

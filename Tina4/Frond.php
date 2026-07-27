@@ -1158,8 +1158,93 @@ class Frond
         // data-active="{{ flag }}" -> data-active="true", testable from JS.
         if ($value === true) return 'true';
         if ($value === false) return 'false';
-        if (is_array($value)) return json_encode($value, JSON_UNESCAPED_UNICODE);
+        // jsonText(), never a bare json_encode(): json_encode() returns FALSE on an
+        // INF/NAN value or malformed UTF-8, and a false coerced into this string
+        // return type is an EMPTY STRING -- the array silently vanishes from the page.
+        if (is_array($value)) return $this->jsonText($value);
         return (string)$value;
+    }
+
+    /**
+     * Serializes a value to compact JSON text that is always valid JSON.
+     *
+     * Shared by valueToString() and jsonSafe(). Never returns false and never
+     * returns an empty string: a non-finite float becomes null (the JSON spec has
+     * no Infinity or NaN) and malformed UTF-8 is substituted, so a payload always
+     * arrives, in the worst case as null.
+     *
+     * @param mixed $value Any value to serialize.
+     * @return string Compact JSON text.
+     */
+    private function jsonText(mixed $value): string
+    {
+        // UNESCAPED_SLASHES and UNESCAPED_UNICODE bring PHP in line with the other
+        // three: PHP alone writes "a\/b" and keeps unicode raw only when told to.
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+        try {
+            return json_encode($value, $flags | JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            // Only reached when the happy path threw, so a well-formed payload
+            // never pays for the walk.
+            $text = json_encode($this->jsonSanitize($value), $flags);
+            return $text === false ? 'null' : $text;
+        }
+    }
+
+    /**
+     * Replaces anything json_encode() refuses with a JSON-representable stand-in.
+     *
+     * @param mixed $value Value to sanitize, walked recursively.
+     * @return mixed The value with every non-finite float replaced by null.
+     */
+    private function jsonSanitize(mixed $value): mixed
+    {
+        if (is_float($value)) return is_finite($value) ? $value : null;
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = $this->jsonSanitize($item);
+            }
+            return $value;
+        }
+        return $value;
+    }
+
+    /**
+     * Serializes to JSON that is valid JSON, valid JavaScript, and safe in HTML.
+     *
+     * THE cross-framework contract for json_encode / to_json / tojson. Keep the
+     * four implementations byte-identical; frond_expression_corpus.txt locks it.
+     *
+     * Three things this must never do, each of which was a real bug:
+     *
+     * 1. Never emit a non-finite literal. Reported as tina4-php#184 by
+     *    justin-k-bruce, who hit it in production: json_encode() returns FALSE on
+     *    INF, so a grid's whole payload rendered as nothing.
+     * 2. Never emit nothing. A serializer that fails must not collapse to an empty
+     *    string, and must never produce something that still parses and means
+     *    something else. "var ROWS = ;" is at least a loud SyntaxError;
+     *    "var ROWS = false;" is valid JavaScript carrying wrong data.
+     * 3. Never HTML-escape it. Entity-encoding JSON produces {&quot;a&quot;:1},
+     *    which is a SyntaxError inside <script> and breaks the filter's primary
+     *    use. Escape only the characters that are dangerous in HTML, as JSON
+     *    \uXXXX escapes: the result stays valid JSON AND valid JavaScript,
+     *    </script> cannot terminate the block, and it is safe inside a
+     *    single-quoted attribute. This is what Jinja2's tojson does, and it is why
+     *    the result carries the raw marker.
+     *
+     * U+2028 and U+2029 join that escape set. Both are legal inside a JSON string
+     * and both were illegal inside a JavaScript string literal before ES2019.
+     *
+     * @param mixed $value Any value to serialize.
+     * @return string Raw-marked JSON, safe to drop into HTML or a script block.
+     */
+    private function jsonSafe(mixed $value): string
+    {
+        return self::RAW_MARKER . str_replace(
+            ['<', '>', '&', "'", "\u{2028}", "\u{2029}"],
+            ['\\u003c', '\\u003e', '\\u0026', '\\u0027', '\\u2028', '\\u2029'],
+            $this->jsonText($value)
+        );
     }
 
     private function executeIf(array $node, array &$data): string
@@ -3026,12 +3111,12 @@ class Frond
         $this->filters['e'] = $this->filters['escape'];
         $this->filters['raw'] = fn($v) => self::RAW_MARKER . (is_string($v) ? str_replace(self::RAW_MARKER, '', $v) : $this->valueToString($v));
         $this->filters['safe'] = $this->filters['raw'];
-        // NOT raw-marked: json_encode output is HTML-escaped by default, matching
-        // Python, Ruby and Node. Escaping is the secure default -- raw JSON dropped
-        // into an HTML attribute is an injection vector. For a <script> block use
-        // {{ x|json_encode|raw }}, which is explicit at the call site (same shape as
-        // Twig's autoescape). Breaking in 3.13.87: PHP alone used to return it raw.
-        $this->filters['json_encode'] = fn($v) => json_encode($v, JSON_UNESCAPED_UNICODE);
+        // See jsonSafe(): raw-marked on purpose. HTML-escaping JSON produces
+        // {&quot;a&quot;:1}, a SyntaxError inside <script>, which is the filter's
+        // whole point. jsonSafe() escapes the dangerous characters as \uXXXX
+        // instead, so the output is valid JSON, valid JavaScript, and safe in an
+        // attribute -- no |raw needed and nothing to escape around.
+        $this->filters['json_encode'] = fn($v) => $this->jsonSafe($v);
         $this->filters['json_decode'] = fn($v) => json_decode((string)$v, true);
         $this->filters['base64_encode'] = fn($v) => base64_encode(is_string($v) ? $v : (string)$v);
         $this->filters['base64encode'] = &$this->filters['base64_encode'];
@@ -3249,8 +3334,8 @@ class Frond
         $this->filters['formTokenValue'] = fn($v) => $formTokenValueFn((string)($v ?: ''));
         $this->filters['form_token_value'] = fn($v) => $formTokenValueFn((string)($v ?: ''));
 
-        // HTML-safe JSON dump (escapes <, >, & as unicode escapes)
-        $this->filters['to_json'] = fn($v) => self::RAW_MARKER . str_replace(['<', '>', '&'], ['\\u003c', '\\u003e', '\\u0026'], json_encode($v));
+        // Same serializer as json_encode -- the three names are one behaviour.
+        $this->filters['to_json'] = fn($v) => $this->jsonSafe($v);
         $this->filters['tojson'] = &$this->filters['to_json'];
 
         // Escape for safe embedding in JavaScript strings (marked raw to bypass auto-escaping)
