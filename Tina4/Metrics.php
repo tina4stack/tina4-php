@@ -274,8 +274,7 @@ class Metrics
             $lines = explode("\n", $source);
             $loc = 0;
             foreach ($lines as $line) {
-                $stripped = trim($line);
-                if ($stripped !== "" && !str_starts_with($stripped, "//") && !str_starts_with($stripped, "#")) {
+                if (self::isCodeLine($line)) {
                     $loc++;
                 }
             }
@@ -659,6 +658,22 @@ class Metrics
      * @param array $lines  Source lines
      * @return array List of function info arrays
      */
+    /**
+     * True for a line that counts toward LOC: not blank, not a comment.
+     *
+     * The single definition of the rule. Function LOC used to ignore it and
+     * return a raw line span while file LOC excluded blanks and comments, so
+     * `loc` meant two different things in one payload - the dashboard sized
+     * bubbles in one unit and printed the function table in the other.
+     */
+    private static function isCodeLine(string $line): bool
+    {
+        $stripped = trim($line);
+        return $stripped !== ""
+            && !str_starts_with($stripped, "//")
+            && !str_starts_with($stripped, "#");
+    }
+
     private static function parseFunctions(array $tokens, array $lines): array
     {
         $results = [];
@@ -783,11 +798,23 @@ class Metrics
             // Find the line number of the closing brace
             for ($j = $bodyEnd; $j >= $bodyStart; $j--) {
                 if (is_array($tokens[$j]) && isset($tokens[$j][2])) {
-                    $endLine = $tokens[$j][2];
+                    // A bare "}" is a string token with no line number, so the
+                    // walk back lands on the whitespace before it and the
+                    // function's last line was dropped. Add the newlines the
+                    // token itself spans to land on the closing brace.
+                    $endLine = $tokens[$j][2] + substr_count($tokens[$j][1], "\n");
                     break;
                 }
             }
-            $funcLoc = max(1, $endLine - $startLine + 1);
+            // Code lines over the function's span, by the same rule as file LOC.
+            // Floor of 1: a one-line body must never report 0.
+            $funcLoc = 0;
+            for ($ln = $startLine; $ln <= $endLine; $ln++) {
+                if (isset($lines[$ln - 1]) && self::isCodeLine($lines[$ln - 1])) {
+                    $funcLoc++;
+                }
+            }
+            $funcLoc = max(1, $funcLoc);
 
             // Calculate cyclomatic complexity for this function's tokens
             $funcTokens = array_slice($tokens, $bodyStart, $bodyEnd - $bodyStart + 1);

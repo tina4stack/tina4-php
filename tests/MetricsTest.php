@@ -151,6 +151,53 @@ PHP);
         $this->assertSame(2, $cc['A.two']);
     }
 
+    // ── Function LOC counts code lines, same rule as file LOC ──────
+
+    /**
+     * Function LOC used to be a raw line span while file LOC excluded blanks and
+     * comments, so `loc` meant two different things in one payload.
+     */
+    public function testFunctionLocExcludesBlankLinesAndComments(): void
+    {
+        $this->writePhpFile('loc.php', <<<'PHP'
+<?php
+class A {
+    // a comment
+    function withComments($x) {
+
+        // another comment
+
+        if ($x) { return 1; }
+        return 2;
+    }
+}
+PHP);
+        $result = Metrics::fullAnalysis($this->tempDir);
+        $byName = [];
+        foreach (($result['all_functions'] ?? []) as $f) {
+            $byName[$f['name']] = $f['loc'];
+        }
+        // Span is 8 lines; code lines are function + if + return + closing brace.
+        $this->assertSame(4, $byName['A.withComments']);
+    }
+
+    public function testFunctionLocNeverReportsZero(): void
+    {
+        $this->writePhpFile('loc.php', "<?php\nfunction f() { return 1; }\n");
+        $result = Metrics::fullAnalysis($this->tempDir);
+        $this->assertGreaterThanOrEqual(1, $result['all_functions'][0]['loc']);
+    }
+
+    public function testFunctionSpanReachesTheClosingBrace(): void
+    {
+        // A bare "}" is a string token with no line number, so the walk back for
+        // the end line landed on the whitespace before it and dropped the
+        // function's last line.
+        $this->writePhpFile('loc.php', "<?php\nfunction f(\$x) {\n    return \$x;\n}\n");
+        $result = Metrics::fullAnalysis($this->tempDir);
+        $this->assertSame(3, $result['all_functions'][0]['loc'], 'function + return + }');
+    }
+
     // ── Quick Metrics ──────────────────────────────────────────────
 
     public function testQuickMetricsOnEmptyDirectory(): void
