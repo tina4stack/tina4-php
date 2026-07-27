@@ -28,10 +28,17 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 - **Breaking: `Auth::validToken()` rejects a token whose header `alg` is not the
   configured algorithm.** The header used to be ignored entirely during
-  verification. A token minted for a different algorithm under the same secret —
-  including `alg: "none"` — was accepted as long as its signature matched. This
-  blocks algorithm substitution where one signing secret is shared by services
-  configured for different algorithms.
+  verification. To be precise about what this is and is not: it was **not**
+  exploitable. Verification always computed the signature using the *configured*
+  algorithm and never read the header to choose a verifier, so a token minted for
+  a different algorithm produced a different signature and was already rejected,
+  and rewriting a real token's header invalidates its signature because the
+  header is part of the signing input. What changes is that a mismatched `alg` —
+  including `alg: "none"` — is now refused up front, before any signature work,
+  instead of being caught incidentally by the comparison. The value is parity with
+  the other three frameworks, early rejection, and a regression lock against a
+  future refactor that trusts `header.alg`. Marked breaking because a token whose
+  header disagrees with the algorithm that signed it no longer authenticates.
 
 - `Auth::authenticateRequest()`'s third parameter changed from
   `string $algorithm = 'HS256'` to `?string $algorithm = null`, and is now actually
