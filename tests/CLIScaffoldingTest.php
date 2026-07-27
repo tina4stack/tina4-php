@@ -55,7 +55,7 @@ class CLIScaffoldingTest extends TestCase
         $tokens = token_get_all($source);
 
         $functionNames = [
-            'tableNameFromClass', 'snakeSlug', 'parseFields', 'parseFlags',
+            'tableNameFromClass', 'snakeSlug', 'parseFields', 'fieldsOrDefault', 'parseFlags',
             'aiFill', 'extendMarker', 'everyToCron',
             'generateModel', 'generateRoute', 'generateMigration',
             'generateMiddleware', 'generateTest', 'generateForm',
@@ -70,6 +70,14 @@ class CLIScaffoldingTest extends TestCase
             'emitSeederTest', 'emitWebsocketTest', 'emitListenerTest',
             'emitAuthTest', 'emitMigrationTest',
         ];
+
+        // The extractor below pulls FUNCTIONS only, but fieldsOrDefault() and
+        // emitModelTest() read the file-scope DEFAULT_FIELDS constant. Lift its
+        // value straight out of the real source rather than restating the
+        // literal here, so this harness can never drift from bin/tina4php.
+        if (!defined('DEFAULT_FIELDS') && preg_match('/^const DEFAULT_FIELDS\s*=\s*(.+);$/m', $source, $dfMatch)) {
+            eval('define(\'DEFAULT_FIELDS\', ' . $dfMatch[1] . ');');
+        }
 
         $count = count($tokens);
         for ($i = 0; $i < $count; $i++) {
