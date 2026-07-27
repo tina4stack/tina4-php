@@ -14,6 +14,38 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ### Changed
 
+- **Breaking: an unsupported `TINA4_JWT_ALGORITHM` now throws instead of silently
+  signing HS256.** `Auth::getToken()`, `Auth::validToken()` and
+  `Auth::authenticateRequest()` throw `\InvalidArgumentException` naming the
+  supported set (`HS256`, `HS384`, `HS512`, `RS256`) and the env var. Previously a
+  typo such as `HS-256` was ignored: the token was signed HS256 while the operator
+  believed something else was in force, so a misconfiguration produced a weaker
+  token than asked for and said nothing.
+
+  **Migration:** set `TINA4_JWT_ALGORITHM` to one of the four supported values, or
+  leave it unset for the `HS256` default. A value that used to be silently ignored
+  now fails at the first token operation.
+
+- **Breaking: `Auth::validToken()` rejects a token whose header `alg` is not the
+  configured algorithm.** The header used to be ignored entirely during
+  verification. A token minted for a different algorithm under the same secret —
+  including `alg: "none"` — was accepted as long as its signature matched. This
+  blocks algorithm substitution where one signing secret is shared by services
+  configured for different algorithms.
+
+- `Auth::authenticateRequest()`'s third parameter changed from
+  `string $algorithm = 'HS256'` to `?string $algorithm = null`, and is now actually
+  forwarded to `validToken()`. It was previously accepted and dropped on the floor,
+  so a caller asking for a specific algorithm silently got the environment's.
+  `null` resolves `TINA4_JWT_ALGORITHM`, then `HS256`; passing `'HS256'`
+  explicitly behaves as before.
+
+- **Breaking: `Auth::validToken()` now honours the `nbf` (not-before) claim.**
+  A post-dated token is refused until its `nbf` passes, with 60 seconds of clock
+  skew tolerated (`Auth::JWT_LEEWAY_SECONDS`). A token with no `nbf` claim is
+  unaffected, so tokens already in circulation keep working. `getToken()` does not
+  stamp an `nbf` — parity with the Python and Node masters. Closes tina4-php#187.
+
 - **Breaking: `\Tina4\SqlTranslation` is renamed to `\Tina4\SQLTranslator`.**
   The SQL dialect-translation class was the only one of the four frameworks not called
   `SQLTranslator` (Python, Ruby and Node.js all already used that name), drifting on both the
@@ -25,6 +57,16 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
   to rename the primary rather than accumulate shims.
 
 ### Fixed
+
+- **`TINA4_JWT_ALGORITHM=HS384` / `HS512` were broken in both directions.**
+  `Auth::sign()` hardcoded `sha256`, so a token advertising `HS512` in its header
+  carried an HMAC-SHA256 signature — a 32-byte digest where the header promised 64 —
+  which any RFC-conformant verifier rejects. Verification was worse: `validToken()`
+  only knew `HS256` and `RS256`, so with `HS512` configured *every* token was
+  invalid. The digest is now looked up from the algorithm, so the header always
+  names the digest that actually signed, and the whole HMAC family verifies.
+  `RS256` (a PHP/Node-only extra — Python and Ruby cannot sign it without a
+  dependency) is unchanged and still works.
 
 - **`tina4 deploy docker` produced images that could not start.** Of the eight
   Dockerfile generators in the stack (four templates in the `tina4` CLI plus one
