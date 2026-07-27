@@ -1,0 +1,33 @@
+{
+    "language": "php",
+    "runtime": "PHP 8.5.7",
+    "page": {
+        "items": 20,
+        "engines": [
+            "Frond (Tina4)",
+            "Twig 3",
+            "Blade (Laravel)"
+        ]
+    },
+    "output_equivalence": "verified",
+    "results": {
+        "Frond (Tina4)": {
+            "p50_ops_sec": 7418.837913229271,
+            "mean_ops_sec": 7147.29507456445,
+            "iterations": 1786,
+            "batches": 1786
+        },
+        "Twig 3": {
+            "p50_ops_sec": 27459.702886014773,
+            "mean_ops_sec": 26533.021962331964,
+            "iterations": 6623,
+            "batches": 6623
+        },
+        "Blade (Laravel)": {
+            "p50_ops_sec": 21680.21680216802,
+            "mean_ops_sec": 20155.745968062874,
+            "iterations": 5033,
+            "batches": 5033
+        }
+    }
+}

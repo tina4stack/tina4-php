@@ -5,8 +5,10 @@
     "license": "MIT",
     "require": {
         "php": ">=8.2",
+        "doctrine/dbal": "^4.0",
         "illuminate/database": "^11.0",
-        "doctrine/dbal": "^4.0"
+        "illuminate/view": "^11.0",
+        "twig/twig": "^3.0"
     },
     "config": {
         "sort-packages": true
