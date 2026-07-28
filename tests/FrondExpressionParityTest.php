@@ -127,7 +127,7 @@ class FrondExpressionParityTest extends TestCase
     {
         $corpus = $this->loadFixture("frond_expression_corpus.txt", "|");
         $expected = $this->loadFixture("frond_expression_expected.txt", "\t");
-        $this->assertCount(82, $corpus);
+        $this->assertCount(84, $corpus);
         $this->assertSame(
             array_column($corpus, 0),
             array_column($expected, 0),

@@ -64,6 +64,8 @@ hash-key	1
 esc-html	&lt;b&gt;&amp;x&lt;/b&gt;
 esc-raw	<b>&x</b>
 esc-e	&lt;b&gt;&amp;x&lt;/b&gt;
+esc-safe	<b>&x</b>
+esc-escape	&lt;b&gt;&amp;x&lt;/b&gt;
 filter-chain	ANDRE
 filter-chain3	PAD
 quote-op-in-str	a ~ b

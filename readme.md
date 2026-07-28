@@ -430,7 +430,7 @@ Tina4 PHP is **5× faster than Slim and 65× faster than Laravel**, with zero de
 
 ## Cross-Framework Parity
 
-Tina4 ships the same 97 features across four languages with full test parity:
+Tina4 ships the same 98 features across four languages with full test parity:
 
 | Language | Package | Tests (v3.11.12) |
 |----------|---------|------------------|

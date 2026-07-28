@@ -64,6 +64,8 @@ hash-key|{{ map.a }}
 esc-html|{{ html }}
 esc-raw|{{ html|raw }}
 esc-e|{{ html|e }}
+esc-safe|{{ html|safe }}
+esc-escape|{{ html|escape }}
 filter-chain|{{ name|lower|upper }}
 filter-chain3|{{ padded|trim|lower|upper }}
 quote-op-in-str|{{ "a ~ b" }}
