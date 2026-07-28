@@ -77,12 +77,30 @@ keyfile /mosquitto/certs/server.key
 EOF
 
 # mosquitto_passwd hashes the file IN PLACE; the "$" marks an already-hashed file.
-if ! grep -q '\$' conf/passwd 2>/dev/null; then
-  printf 'tina4:testpass\n' > conf/passwd
-  docker run --rm -v "$PWD/conf:/mosquitto/config" eclipse-mosquitto:2 \
-    mosquitto_passwd -U /mosquitto/config/passwd >/dev/null 2>&1
-  echo "password file hashed (tina4 / testpass)"
-fi
+#
+# Ownership and mode matter, and mosquitto 2.x says so on every boot:
+#   File .../passwd owner is not mosquitto. Future versions will refuse to load this file.
+#   File .../passwd group is not mosquitto. Future versions will refuse to load this file.
+#   File .../passwd has world readable permissions. Future versions will refuse to load this file.
+# So a default-umask file works TODAY and stops working on the next mosquitto.
+# It needs uid/gid 1883 (mosquitto in the eclipse-mosquitto image) and 0600.
+#
+# The WHOLE lifecycle -- write, hash, chown, chmod -- runs in ONE container pass
+# as root, for two reasons. First, chown needs root, and doing it in the container
+# means this script never needs host root or sudo, so a developer gets the same
+# result as CI. Second, once the file is 0600 uid-1883 the HOST user may not be
+# able to read or rewrite it, so a host-side `grep`/`printf` would fail on the
+# SECOND run -- the idempotency check has to live on the same side as the file.
+docker run --rm -v "$PWD/conf:/mosquitto/config" --user root eclipse-mosquitto:2 sh -c '
+  set -e
+  if ! grep -q "\$" /mosquitto/config/passwd 2>/dev/null; then
+    printf "tina4:testpass\n" > /mosquitto/config/passwd
+    mosquitto_passwd -U /mosquitto/config/passwd
+  fi
+  chown 1883:1883 /mosquitto/config/passwd
+  chmod 0600 /mosquitto/config/passwd
+' >/dev/null 2>&1
+echo "password file hashed + 0600 mosquitto:mosquitto (tina4 / testpass)"
 
 docker rm -f tina4-mosquitto >/dev/null 2>&1 || true
 docker run -d --name tina4-mosquitto \

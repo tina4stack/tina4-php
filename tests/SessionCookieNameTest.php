@@ -30,10 +30,10 @@ class SessionCookieNameTest extends TestCase
 {
     private const CUSTOM_NAME = 'my_app_session';
 
-    /** @var array{0: resource, 1: int}|null Custom-name server (TINA4_SESSION_NAME set). */
-    private static $customServer = null;
-    /** @var array{0: resource, 1: int}|null Default-name server (env unset). */
-    private static $defaultServer = null;
+    /** Custom-name server (TINA4_SESSION_NAME set). */
+    private static ?TestServer $customServer = null;
+    /** Default-name server (env unset). */
+    private static ?TestServer $defaultServer = null;
     private static string $customRoot = '';
     private static string $defaultRoot = '';
 
@@ -68,21 +68,18 @@ class SessionCookieNameTest extends TestCase
         // Custom-name server: TINA4_SESSION_NAME set for THIS child only.
         $customEnv = getenv();
         $customEnv['TINA4_SESSION_NAME'] = self::CUSTOM_NAME;
-        self::$customServer = self::bootServer(self::$customRoot . '/index.php', $customEnv);
+        self::$customServer = TestServer::start(self::$customRoot . '/index.php', $customEnv);
 
         // Default-name server: TINA4_SESSION_NAME explicitly absent.
         $defaultEnv = getenv();
         unset($defaultEnv['TINA4_SESSION_NAME']);
-        self::$defaultServer = self::bootServer(self::$defaultRoot . '/index.php', $defaultEnv);
+        self::$defaultServer = TestServer::start(self::$defaultRoot . '/index.php', $defaultEnv);
     }
 
     public static function tearDownAfterClass(): void
     {
         foreach ([self::$customServer, self::$defaultServer] as $server) {
-            if ($server !== null) {
-                proc_terminate($server[0]);
-                proc_close($server[0]);
-            }
+            $server?->stop();
         }
         foreach ([self::$customRoot, self::$defaultRoot] as $root) {
             @unlink($root . '/index.php');
@@ -96,37 +93,7 @@ class SessionCookieNameTest extends TestCase
         }
     }
 
-    /** Find a free TCP port by binding to :0 and reading back what the OS gave us. */
-    private static function freePort(): int
-    {
-        $sock = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        $name = stream_socket_get_name($sock, false);
-        fclose($sock);
-        return (int)substr($name, strrpos($name, ':') + 1);
-    }
 
-    /**
-     * Boot a real `php -S` server on a free port and wait until it accepts.
-     *
-     * @param string $router The router script the built-in server runs.
-     * @param array<string,string> $env Full environment for the child process.
-     * @return array{0: resource, 1: int} The process handle and its port.
-     */
-    private static function bootServer(string $router, array $env): array
-    {
-        $port = self::freePort();
-        $cmd = escapeshellarg(PHP_BINARY) . ' -S 127.0.0.1:' . $port . ' ' . escapeshellarg($router);
-        $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname($router), $env);
-        for ($i = 0; $i < 100; $i++) {
-            $client = @stream_socket_client("tcp://127.0.0.1:$port", $e1, $e2, 0.1);
-            if ($client) {
-                fclose($client);
-                return [$proc, $port];
-            }
-            usleep(25000);
-        }
-        throw new RuntimeException('php -S did not come up on port ' . $port);
-    }
 
     /**
      * Perform a real GET / and return the body plus every Set-Cookie line.
@@ -175,7 +142,7 @@ class SessionCookieNameTest extends TestCase
      */
     public function testCustomNameIsWrittenAndLegacyNameIsNot(): void
     {
-        $first = $this->get(self::$customServer[1]);
+        $first = $this->get(self::$customServer->port);
 
         $custom = $this->cookieNamed($first['cookies'], self::CUSTOM_NAME);
         $this->assertNotNull(
@@ -196,7 +163,7 @@ class SessionCookieNameTest extends TestCase
      */
     public function testCustomNameSessionResumesOnReplay(): void
     {
-        $first = $this->get(self::$customServer[1]);
+        $first = $this->get(self::$customServer->port);
         $this->assertSame('count=1', $first['body'], 'a fresh session starts the counter at 1');
 
         $custom = $this->cookieNamed($first['cookies'], self::CUSTOM_NAME);
@@ -205,7 +172,7 @@ class SessionCookieNameTest extends TestCase
         $this->assertNotSame('', $sid, 'the renamed cookie must carry a session id');
 
         $second = $this->get(
-            self::$customServer[1],
+            self::$customServer->port,
             ['Cookie: ' . self::CUSTOM_NAME . '=' . $sid]
         );
         $this->assertSame(
@@ -222,7 +189,7 @@ class SessionCookieNameTest extends TestCase
      */
     public function testDefaultNameIsTina4SessionAndResumes(): void
     {
-        $first = $this->get(self::$defaultServer[1]);
+        $first = $this->get(self::$defaultServer->port);
         $this->assertSame('count=1', $first['body']);
 
         $tina4 = $this->cookieNamed($first['cookies'], 'tina4_session');
@@ -233,7 +200,7 @@ class SessionCookieNameTest extends TestCase
         );
 
         $sid = $this->cookieValue($tina4);
-        $second = $this->get(self::$defaultServer[1], ['Cookie: tina4_session=' . $sid]);
+        $second = $this->get(self::$defaultServer->port, ['Cookie: tina4_session=' . $sid]);
         $this->assertSame(
             'count=2',
             $second['body'],

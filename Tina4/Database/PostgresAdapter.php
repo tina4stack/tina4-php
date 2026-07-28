@@ -66,9 +66,21 @@ class PostgresAdapter implements DatabaseAdapter
         // would all share ONE connection (and closing one would break the
         // rest). Forcing a new connection makes each pooled adapter genuinely
         // independent, matching psycopg2 / node-pg / the pg gem.
+        // Clear any unrelated pending warning so error_get_last() below can only
+        // report THIS pg_connect's failure.
+        error_clear_last();
         $conn = @pg_connect($dsn, PGSQL_CONNECT_FORCE_NEW);
         if ($conn === false) {
-            $this->lastError = 'Failed to connect to PostgreSQL';
+            // Say WHY and say WHICH. "Failed to connect to PostgreSQL" on its own
+            // sent 43 identical errors to a maintainer who then went looking for a
+            // driver bug; the real cause was a database that did not exist, and
+            // libpq had said so all along. The @ suppresses the warning but
+            // error_get_last() still holds its message.
+            $why = error_get_last()['message'] ?? '';
+            $why = trim(preg_replace('/^pg_connect\(\):\s*/i', '', $why) ?? '');
+            $this->lastError = 'Failed to connect to PostgreSQL'
+                . ' [' . $this->safeDsn($dsn) . ']'
+                . ($why !== '' ? ': ' . $why : '');
             throw new \RuntimeException("PostgresAdapter: {$this->lastError}");
         }
 
@@ -555,6 +567,17 @@ class PostgresAdapter implements DatabaseAdapter
     /**
      * Build a libpq-style DSN from either a URL or key=value string.
      */
+    /**
+     * The DSN with the password removed, safe to put in an exception message.
+     *
+     * The host/port/dbname/user are exactly what a maintainer needs to see; the
+     * password is exactly what must never reach a log or a 500 body.
+     */
+    private function safeDsn(string $dsn): string
+    {
+        return trim((string)preg_replace('/\bpassword=\S*/i', 'password=***', $dsn));
+    }
+
     private function buildDsn(string $input): string
     {
         // Already a key=value DSN

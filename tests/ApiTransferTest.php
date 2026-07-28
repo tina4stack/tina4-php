@@ -23,10 +23,9 @@ use Tina4\Api;
 
 class ApiTransferTest extends TestCase
 {
-    /** @var array{0: mixed, 1: int} proc handle + port for origin A */
-    private static array $serverA;
-    /** @var array{0: mixed, 1: int} proc handle + port for origin B */
-    private static array $serverB;
+    /** Two independent origins, so a cross-origin redirect is a real one. */
+    private static TestServer $serverA;
+    private static TestServer $serverB;
     private static string $baseA;
     private static string $baseB;
     private static string $tmpDir;
@@ -34,58 +33,24 @@ class ApiTransferTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         $router = __DIR__ . '/fixtures/api_transfer_server.php';
-        self::$serverA = self::bootServer($router);
-        self::$serverB = self::bootServer($router);
-        self::$baseA = 'http://127.0.0.1:' . self::$serverA[1];
-        self::$baseB = 'http://127.0.0.1:' . self::$serverB[1];
+        self::$serverA = TestServer::start($router);
+        self::$serverB = TestServer::start($router);
+        self::$baseA = self::$serverA->base();
+        self::$baseB = self::$serverB->base();
         self::$tmpDir = sys_get_temp_dir() . '/tina4_api_transfer_' . bin2hex(random_bytes(4));
         mkdir(self::$tmpDir, 0777, true);
     }
 
     public static function tearDownAfterClass(): void
     {
-        foreach ([self::$serverA, self::$serverB] as $srv) {
-            if (is_resource($srv[0])) {
-                proc_terminate($srv[0]);
-                proc_close($srv[0]);
-            }
-        }
+        self::$serverA->stop();
+        self::$serverB->stop();
+
         // best-effort temp cleanup
         foreach (glob(self::$tmpDir . '/*') ?: [] as $f) {
             @unlink($f);
         }
         @rmdir(self::$tmpDir);
-    }
-
-    /** Reserve a free localhost TCP port. */
-    private static function freePort(): int
-    {
-        $sock = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        $name = stream_socket_get_name($sock, false);
-        $port = (int)substr($name, strrpos($name, ':') + 1);
-        fclose($sock);
-        return $port;
-    }
-
-    /** Boot a real `php -S` server on a free port and wait until it accepts. */
-    private static function bootServer(string $router): array
-    {
-        $port = self::freePort();
-        $cmd = escapeshellarg(PHP_BINARY) . ' -S 127.0.0.1:' . $port . ' ' . escapeshellarg($router);
-        $proc = proc_open(
-            $cmd,
-            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
-            $pipes
-        );
-        for ($i = 0; $i < 200; $i++) {
-            $client = @stream_socket_client("tcp://127.0.0.1:$port", $e1, $e2, 0.1);
-            if ($client) {
-                fclose($client);
-                return [$proc, $port];
-            }
-            usleep(25000);
-        }
-        throw new \RuntimeException("built-in server did not start on port $port");
     }
 
     // ── upload() ────────────────────────────────────────────────────────────

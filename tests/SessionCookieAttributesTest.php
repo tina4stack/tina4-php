@@ -26,8 +26,8 @@ use PHPUnit\Framework\TestCase;
  */
 class SessionCookieAttributesTest extends TestCase
 {
-    /** @var array{0: resource, 1: int}|null */
-    private static $server = null;
+    /** */
+    private static ?TestServer $server = null;
     private static string $docRoot = '';
 
     public static function setUpBeforeClass(): void
@@ -47,48 +47,17 @@ class SessionCookieAttributesTest extends TestCase
         echo \$result->content ?? '';
         PHP);
 
-        self::$server = self::bootServer(self::$docRoot . '/index.php');
+        self::$server = TestServer::start(self::$docRoot . '/index.php');
     }
 
     public static function tearDownAfterClass(): void
     {
-        if (self::$server !== null) {
-            proc_terminate(self::$server[0]);
-            proc_close(self::$server[0]);
-        }
+        self::$server?->stop();
         @unlink(self::$docRoot . '/index.php');
         @rmdir(self::$docRoot);
     }
 
-    /** Find a free TCP port by binding to :0 and reading back what the OS gave us. */
-    private static function freePort(): int
-    {
-        $sock = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        $name = stream_socket_get_name($sock, false);
-        fclose($sock);
-        return (int)substr($name, strrpos($name, ':') + 1);
-    }
 
-    /**
-     * Boot a real `php -S` server on a free port and wait until it accepts.
-     *
-     * @return array{0: resource, 1: int} The process handle and its port.
-     */
-    private static function bootServer(string $router): array
-    {
-        $port = self::freePort();
-        $cmd = escapeshellarg(PHP_BINARY) . ' -S 127.0.0.1:' . $port . ' ' . escapeshellarg($router);
-        $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname($router));
-        for ($i = 0; $i < 100; $i++) {
-            $client = @stream_socket_client("tcp://127.0.0.1:$port", $e1, $e2, 0.1);
-            if ($client) {
-                fclose($client);
-                return [$proc, $port];
-            }
-            usleep(25000);
-        }
-        throw new RuntimeException('php -S did not come up on port ' . $port);
-    }
 
     /**
      * @param string[] $headers Extra request headers, e.g. a proxy's X-Forwarded-Proto.
@@ -101,7 +70,7 @@ class SessionCookieAttributesTest extends TestCase
             $opts['header'] = implode("\r\n", $headers);
         }
         $ctx = stream_context_create(['http' => $opts]);
-        $body = @file_get_contents('http://127.0.0.1:' . self::$server[1] . '/', false, $ctx);
+        $body = @file_get_contents('http://127.0.0.1:' . self::$server->port . '/', false, $ctx);
         $this->assertNotFalse($body, 'the clean-room app must respond');
         $cookies = [];
         foreach ($http_response_header ?? [] as $line) {
