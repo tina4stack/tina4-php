@@ -106,6 +106,13 @@ class Database implements DatabaseAdapter
     private ?bool $autoCommit;
     private ?string $lastError = null;
 
+    /**
+     * Cache of introspected primary-key columns, keyed by table name.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private array $pkCache = [];
+
     /** @var string Username for pool connections */
     private string $dbUsername;
 
@@ -659,13 +666,118 @@ class Database implements DatabaseAdapter
      * @param array<mixed> $params Bound parameters for the WHERE clause
      * @return DatabaseResult Truthy result carrying affectedRows (lastId null for updates)
      */
-    public function update(string $table, array $data, string $filterSql = '', array $params = []): DatabaseResult
+    public function update(string $table, array $data, string|array $filterSql = '', array $params = []): DatabaseResult
     {
+        [$filterSql, $params] = $this->asWhere($filterSql, $params);
+
+        if ($filterSql === '') {
+            $pkColumns = $this->primaryKey($table);
+            $missing = array_values(array_filter(
+                $pkColumns,
+                static fn(string $c): bool => !array_key_exists($c, $data)
+            ));
+
+            if ($pkColumns === [] || $missing !== []) {
+                throw new DatabaseException(sprintf(
+                    'Database::update() requires a filter or the complete primary key in the data; '
+                    . 'pass a filter explicitly to update multiple rows (table=%s, primary key=[%s], '
+                    . 'missing from data=[%s]). To empty a table use truncate(%s).',
+                    $table,
+                    implode(', ', $pkColumns),
+                    implode(', ', $missing),
+                    $table
+                ));
+            }
+
+            // EVERY key column goes into the WHERE. A composite key built from
+            // only its first column would match every row sharing that value -
+            // the data-loss bug this method exists to prevent, reintroduced.
+            $params = [];
+            $where = [];
+            foreach ($pkColumns as $column) {
+                $params[] = $data[$column];
+                $where[] = $column . ' = ?';
+                unset($data[$column]);
+            }
+
+            if ($data === []) {
+                throw new DatabaseException(sprintf(
+                    'Database::update() was given only the primary key [%s] and no columns to set (table=%s)',
+                    implode(', ', $pkColumns),
+                    $table
+                ));
+            }
+
+            $filterSql = implode(' AND ', $where);
+        }
+
         $adapter = $this->getNextAdapter();
         $result = $adapter->update($table, $data, $filterSql, $params);
         if ($result === false) {
             $this->lastError = $adapter->error();
             throw new DatabaseException('Database::update() failed: ' . ($this->lastError ?? 'unknown error'));
+        }
+        return $this->writeResult($adapter, withLastId: false);
+    }
+
+    /**
+     * Return the table's primary-key columns, introspected once and cached.
+     *
+     * Returns a LIST because a primary key may span several columns. A composite
+     * key is still one primary key; it just has more than one column.
+     *
+     * @param string $table Table name
+     * @return array<int, string> Key column names, empty when there is no primary key
+     */
+    public function primaryKey(string $table): array
+    {
+        if (!array_key_exists($table, $this->pkCache)) {
+            try {
+                $columns = $this->getColumns($table);
+                $this->pkCache[$table] = array_values(array_map(
+                    static fn(array $c): string => (string)$c['name'],
+                    array_filter($columns, static fn(array $c): bool => !empty($c['primary']))
+                ));
+            } catch (\Throwable) {
+                $this->pkCache[$table] = [];
+            }
+        }
+        return $this->pkCache[$table];
+    }
+
+    /**
+     * Normalise a filter to a [sql, params] pair, accepting an array or a string.
+     *
+     * @param string|array<string, mixed> $filter WHERE clause SQL, or column => value pairs
+     * @param array<mixed> $params Bound parameters (string filters only)
+     * @return array{0: string, 1: array<mixed>}
+     */
+    private function asWhere(string|array $filter, array $params): array
+    {
+        if (is_array($filter)) {
+            if ($filter === []) {
+                return ['', []];
+            }
+            $where = array_map(static fn(string $k): string => $k . ' = ?', array_keys($filter));
+            return [implode(' AND ', $where), array_values($filter)];
+        }
+        return [$filter, $params];
+    }
+
+    /**
+     * Remove every row from a table. The explicit spelling of a whole-table delete.
+     *
+     * @param string $table Table name
+     * @return DatabaseResult Truthy result carrying affectedRows (lastId null)
+     * @throws DatabaseException When the delete fails
+     */
+    public function truncate(string $table): DatabaseResult
+    {
+        $adapter = $this->getNextAdapter();
+        $result = $adapter->delete($table, '1 = 1', []);
+        if ($result === false) {
+            $this->lastError = $adapter->error();
+            throw new DatabaseException('Database::truncate() failed: ' . ($this->lastError ?? 'unknown error'));
         }
         return $this->writeResult($adapter, withLastId: false);
     }
@@ -680,8 +792,17 @@ class Database implements DatabaseAdapter
      */
     public function delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
     {
+        [$filterSql, $whereParams] = $this->asWhere($filter, $whereParams);
+        if ($filterSql === '') {
+            throw new DatabaseException(sprintf(
+                'Database::delete() requires a filter (table=%s). To remove every row use truncate(%s).',
+                $table,
+                $table
+            ));
+        }
+
         $adapter = $this->getNextAdapter();
-        $result = $adapter->delete($table, $filter, $whereParams);
+        $result = $adapter->delete($table, $filterSql, $whereParams);
         if ($result === false) {
             $this->lastError = $adapter->error();
             throw new DatabaseException('Database::delete() failed: ' . ($this->lastError ?? 'unknown error'));

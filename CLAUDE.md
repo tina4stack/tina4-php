@@ -197,8 +197,19 @@ $db->fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): 
 $db->execute($sql, $params)        // FAIL LOUD — RAISES on SQL error (never returns false); cause on getError(). try/catch it.
 $db->exec($sql, $params)           // alias for execute() — same raise-on-error contract
 $db->insert(string $table, array $data): DatabaseResult   // single row OR list-of-rows batch
-$db->update(string $table, array $data, string $filterSql = '', array $params = []): DatabaseResult
+$db->update(string $table, array $data, string|array $filterSql = '', array $params = []): DatabaseResult
 $db->delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
+$db->truncate(string $table): DatabaseResult      // remove every row, explicitly
+$db->primaryKey(string $table): array             // introspected PK columns (cached)
+    // A WRITE WITH NO FILTER IS AN ERROR, not a full-table operation (3.13.94).
+    // update() with no filter takes the primary key out of $data and uses it as the
+    // WHERE clause; with neither a filter nor the COMPLETE primary key in $data it
+    // throws DatabaseException instead of overwriting every row. delete() with no
+    // filter throws too -- truncate() is the explicit whole-table spelling.
+    // primaryKey() returns a LIST: a key may span several columns, and EVERY key
+    // column goes into the WHERE. A composite key keyed on only its first column
+    // would match every row sharing that value.
+    // Both filter forms work on update() and delete(): ['id' => 1] or 'id = ?', [1].
     // insert/update/delete return a DatabaseResult (parity with Python master + Node):
     // a truthy object carrying ->affectedRows and ->lastId (lastId set on insert only;
     // null for update/delete). `if ($db->insert(...))` still works (objects are truthy).
