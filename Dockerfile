@@ -1,11 +1,11 @@
-# ghcr.io/tina4stack/tina4-php
+# docker.io/tina4stack/tina4-php
 #
 # Base image for Tina4 PHP apps: the PHP runtime plus the Tina4 framework and its
 # vendor tree already installed, so a developer injects only their own src/.
 #
 # Usage in your project -- note there is NO composer install step, because the
 # framework and its dependencies are already in the image:
-#   FROM ghcr.io/tina4stack/tina4-php:3.13.93
+#   FROM docker.io/tina4stack/tina4-php:3.13.93
 #   COPY src/ /app/src/
 #   # inherits the correct production CMD; override only if you need to
 #
