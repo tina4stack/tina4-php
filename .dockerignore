@@ -1,0 +1,48 @@
+# THE `**/` ON vendor IS LOAD-BEARING. Do not simplify it to `vendor`.
+#
+# This image never booted. Every container died before running a line of app
+# code:
+#
+#     Fatal error: Failed opening required
+#     '/app/vendor/composer/../tina4stack/tina4php/Tina4/Constants.php'
+#
+# The culprit is `example/vendor`, not the repo's own vendor. The example app is
+# a normal Tina4 PHP app, so it vendors tina4php as a Packagist DEPENDENCY, and
+# its generated autoloader resolves the eager `files` map to
+# $vendorDir/tina4stack/tina4php/Tina4/Constants.php -- a path that does not
+# exist even inside example/vendor (that install is partial), and one THIS repo
+# can never produce: here Tina4 IS the project and the real file is
+# Tina4/Bootstrap/Constants.php.
+#
+# The Dockerfile's LAST instruction copies the demo app over the app root:
+#
+#     COPY --from=composer-stage /build/example/ /app/
+#
+# so example/vendor lands on /app/vendor and replaces the correct autoloader
+# composer had just generated, at the very end of the build.
+#
+# A bare `vendor` pattern does NOT prevent this. Docker matches .dockerignore
+# patterns from the CONTEXT ROOT, so `vendor` means `./vendor` only and
+# `example/vendor` sails straight through. `**/vendor` catches both.
+#
+# An earlier attempt blamed the repo's own 13 MB vendor/ and tried to patch the
+# symptom by copying Tina4/ into the vendored path. That could never work: the
+# stale map names several such paths and describes a different project layout.
+**/vendor
+**/composer.phar
+
+.git
+.github
+.claude
+.idea
+node_modules
+
+tests
+benchmarks
+coverage
+
+logs
+*.log
+.env
+.env.local
+.DS_Store

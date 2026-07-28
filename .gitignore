@@ -98,9 +98,13 @@ test.db
 /log/
 /metrics/
 /plan/
-/Dockerfile
 /docker-compose.yml
-/.dockerignore
+# NOT /Dockerfile and NOT /.dockerignore. Both are shipped artefacts of this
+# repo -- they build the published ghcr.io/tina4stack/tina4-php base image.
+# Dockerfile was already tracked (a rule cannot un-track a tracked file), but
+# .dockerignore was genuinely ignored, so its `**/vendor` exclusion existed only
+# on one laptop. Without that exclusion the image does not boot at all, so the
+# fix has to be in the repo. The other three framework repos track theirs.
 /src/public/css/base.css
 /src/public/css/colors.css
 *.db-shm
