@@ -3,11 +3,36 @@
 # Base image for Tina4 PHP apps: the PHP runtime plus the Tina4 framework and its
 # vendor tree already installed, so a developer injects only their own src/.
 #
-# Usage in your project -- note there is NO composer install step, because the
-# framework and its dependencies are already in the image:
+# Usage in your project. THREE STEPS, in this order: inherit, COPY in the tool you
+# need, then modify. That shape is the same for all four Tina4 base images.
+#
+# There is NO composer install step for the framework itself -- Tina4 and its
+# vendor tree are already here. You only need composer for YOUR dependencies.
+#
 #   FROM docker.io/tina4stack/tina4-php:3.13.93
 #   COPY src/ /app/src/
 #   # inherits the correct production CMD; override only if you need to
+#
+# To add a PHP LIBRARY, bring composer in (3.5 MB):
+#   COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+#   RUN composer --no-interaction require --no-scripts psr/log
+# Verified: composer 2.10.2, psr/log lands in /app/vendor, 128 MB derived.
+#
+# To add a PHP EXTENSION (a C extension, not a library), bring the installer in:
+#   COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/
+#   RUN install-php-extensions pdo_pgsql
+# Verified: pdo_pgsql loaded, 119 MB derived.
+#
+# NEITHER TOOL IS BAKED IN, and that is deliberate. The runtime stage below
+# installs the extensions this image needs and then DELETES
+# install-php-extensions, because a base image that ships its own build tooling
+# carries it into every deployment that never uses it. Copying a tool in costs
+# the base nothing and costs you one line. The trade is only defensible while
+# these two lines are documented, which is why they are here rather than in a
+# wiki page.
+#
+# The default database is SQLite (sqlite3 + pdo_sqlite are already installed), so
+# a plain FROM plus your code needs neither tool.
 #
 # Pinning: prefer an exact version tag. `latest` and `v3` also exist and move.
 #
