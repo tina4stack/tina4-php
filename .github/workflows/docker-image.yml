@@ -1,0 +1,215 @@
+# Build the base image, prove it actually boots and serves the version it claims,
+# and only then publish it.
+#
+# Why this exists: these base images were never built or booted by any CI. Building
+# them by hand on 2026-07-27/28 found real defects that had shipped for months --
+# a PHP CMD that silently dropped the bind address (so the container was
+# unreachable through `docker run -p`), no framework CLI in the image at all, an
+# autoloader failure, a Ruby image that exited 2 on every start because it set
+# pre-v3 un-prefixed SWAGGER_* vars the framework now refuses to boot with, and a
+# Node image reporting version 0.0.0. Every one is caught by the jobs below.
+#
+# This is deliberately a SEPARATE workflow from publish.yml. The images may be red
+# while they are being fixed, and an image defect must never block the package
+# publish to PyPI / Packagist / RubyGems / npm, which works today.
+name: Docker image
+
+on:
+  push:
+    branches: [v3]
+    tags: ['[0-9]*.*.*']
+  pull_request:
+    branches: [v3]
+  workflow_dispatch:
+
+# REGISTRY: Docker Hub, not GHCR. This is where these images were already being
+# published and, more importantly, where the Dockerfile header and every user's
+# `docker pull` already point -- `FROM tina4stack/tina4-php:v3` has no registry
+# prefix, so it resolves to docker.io. Publishing to GHCR instead would leave the
+# documented pull path serving images that predate every fix in this batch.
+#
+# The CLI image (ghcr.io/tina4stack/tina4-cli) stays on GHCR: it is published by
+# the tina4 repo's own CI and the deploy templates pin it there.
+env:
+  IMAGE: docker.io/tina4stack/tina4-php
+  APP_PORT: 7145
+
+jobs:
+  boot-gate:
+    name: Image boots, binds 0.0.0.0, and reports its real version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (single arch, for speed -- multi-arch happens on publish)
+        run: docker build -t "$IMAGE:ci" .
+
+      # `docker image inspect -f '{{.Size}}'` LIES under the containerd snapshotter:
+      # it reports a compressed size, which is why an image measured at 59 MB there
+      # occupies 183 MB on disk. `du -sx /` inside the container is the ground truth
+      # a user actually pays for on their disk.
+      - name: Report image size (on-disk, not the compressed lie)
+        run: |
+          kb=$(docker run --rm --entrypoint sh "$IMAGE:ci" -c 'du -sx / 2>/dev/null | cut -f1')
+          echo "on-disk size: $(( kb / 1024 )) MB"
+
+      - name: Boot the container
+        run: docker run -d --name gate -p 8080:$APP_PORT "$IMAGE:ci"
+
+      # Probe /health, NEVER "/". A stock scaffold has an empty src/routes and
+      # answers 404 at "/", and `curl -fsS` scores a 404 as a failure -- which is
+      # exactly how an earlier run recorded three healthy containers as dead.
+      #
+      # A 200 through a PUBLISHED port proves two things at once: the process
+      # booted, AND it bound 0.0.0.0. A server on 127.0.0.1 inside a container
+      # cannot answer through -p, so this is the bind check as well as the
+      # liveness check.
+      - name: Require HTTP 200 on /health through the published port
+        run: |
+          for i in $(seq 1 45); do
+            if curl -fsS -m 2 -o /dev/null "http://127.0.0.1:8080/health"; then
+              echo "served after ${i}s"
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' gate)" != "true" ]; then
+              echo "::error::container exited before serving a request"
+              docker logs gate
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::no 200 on /health within 45s -- the server either failed to boot or bound 127.0.0.1 instead of 0.0.0.0"
+          docker logs gate
+          exit 1
+
+      # Serving once is not passing. A container that answers and then dies is broken.
+      - name: Require the container to still be alive
+        run: |
+          if [ "$(docker inspect -f '{{.State.Running}}' gate)" != "true" ]; then
+            echo "::error::container died after serving; OOMKilled=$(docker inspect -f '{{.State.OOMKilled}}' gate)"
+            docker logs gate
+            exit 1
+          fi
+
+      # THE TAG MUST NOT LIE ABOUT THE VERSION.
+      #
+      # The image tags mirror the framework release (tina4-php:3.13.92), so a tag is
+      # a claim about what is inside. Verify it instead of trusting it.
+      #
+      # This is not hypothetical. The Node image was about to be published as
+      # 3.13.92 while serving "version": "0.0.0" -- relocating the framework out of
+      # /app broke a three-level directory walk in the version resolver, which
+      # silently fell back to "0.0.0". It built, booted, bound 0.0.0.0 and answered
+      # 200: every other gate here passed it.
+      #
+      # "0.0.0" is called out by name because it is the resolvers' fallback
+      # sentinel, not because it is an implausible version.
+      - name: Require /health to report a real version
+        run: |
+          version=$(curl -fsS -m 5 "http://127.0.0.1:8080/health" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))')
+          echo "reported version: '$version'"
+
+          if [ -z "$version" ]; then
+            echo "::error::/health reported no version -- an unverifiable image must not be published"
+            exit 1
+          fi
+          if [ "$version" = "0.0.0" ]; then
+            echo "::error::/health reports 0.0.0 -- that is the version resolver's FALLBACK, so it failed to locate the package manifest inside the image"
+            exit 1
+          fi
+          if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::/health version '$version' is not a release version"
+            exit 1
+          fi
+
+          # On a tag build the tag is the claim -- it must match exactly.
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            tag="${GITHUB_REF#refs/tags/}"
+            if [ "$version" != "$tag" ]; then
+              echo "::error::version mismatch -- tag says $tag, the container serves $version. Refusing to publish a tag that misreports its own contents."
+              exit 1
+            fi
+            echo "tag $tag matches the served version"
+          fi
+
+      - name: Container logs (always, for diagnosis)
+        if: always()
+        run: docker logs gate 2>&1 | tail -50
+
+      - name: Clean up
+        if: always()
+        run: docker rm -f gate || true
+
+  publish:
+    name: Publish to Docker Hub
+    needs: boot-gate          # no path publishes an image the gate did not pass
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Fail with the fix rather than a cryptic login error. Docker Hub needs a
+      # real credential; GITHUB_TOKEN only ever worked for GHCR.
+      - name: Require Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "::error::Docker Hub credentials are not configured. Add repository secrets DOCKERHUB_USERNAME (tina4stack) and DOCKERHUB_TOKEN (a Hub access token with Read/Write, https://hub.docker.com/settings/security)."
+            exit 1
+          fi
+
+      - uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tags
+        id: meta
+        run: |
+          version="${GITHUB_REF#refs/tags/}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tags=$IMAGE:$version,$IMAGE:v3,$IMAGE:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          provenance: true
+
+      # The gate above ran on a native amd64 runner, so amd64 is the ARCH THAT WAS
+      # ACTUALLY BOOTED and arm64 is the one only compiled. buildx cannot --load a
+      # multi-platform result, so arm64 could not be run before the push -- but once
+      # the manifest is in the registry each arch can be pulled individually. Pull
+      # arm64 under emulation and require the same 200, turning "compiled" into
+      # "executed".
+      #
+      # Emulation is not a real arm64 host: it proves the image is not arch-broken
+      # (wrong base, missing native module, bad binary), not that it performs.
+      - name: arm64 gate (emulated, from the published manifest)
+        run: |
+          docker rm -f arm >/dev/null 2>&1 || true
+          docker run -d --name arm --platform linux/arm64 -p 8081:$APP_PORT \
+            "$IMAGE:${{ steps.meta.outputs.version }}"
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS -m 2 -o /dev/null "http://127.0.0.1:8081/health"; then ok=1; break; fi
+            [ "$(docker inspect -f '{{.State.Running}}' arm)" = "true" ] || break
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::the published arm64 layer does not serve -- the manifest is arch-broken"
+            docker logs arm 2>&1 | tail -30
+            docker rm -f arm || true
+            exit 1
+          fi
+          echo "arm64 served 200 (uname=$(docker exec arm uname -m))"
+          docker rm -f arm || true
