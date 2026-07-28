@@ -1098,8 +1098,64 @@ class Frond
         return $out;
     }
 
+    /**
+     * Node types that are TAGS a template author writes, mapped to the name typed.
+     *
+     * Types absent from this map are structure ('text', 'output', 'block',
+     * 'extends') and are NEVER gated: blocking those would stop the template
+     * rendering at all rather than restrict what it may do.
+     *
+     * @var array<string, string>
+     */
+    private const GATEABLE_TAGS = [
+        'if' => 'if',
+        'for' => 'for',
+        'set' => 'set',
+        'set_block' => 'set',
+        'include' => 'include',
+        'macro' => 'macro',
+        'from_import' => 'from',
+        'import_as' => 'import',
+        'cache' => 'cache',
+        'spaceless' => 'spaceless',
+        'autoescape' => 'autoescape',
+        'live' => 'live',
+    ];
+
+    /**
+     * Determine whether a tag may run under the current sandbox.
+     *
+     * One gate for the whole tag vocabulary, so the allow-list governs every tag
+     * rather than whichever names happened to be checked individually.
+     *
+     * @param string $type Node type from the parsed AST
+     * @return bool True when the tag is permitted (or is not a gateable tag)
+     */
+    private function tagPermitted(string $type): bool
+    {
+        if (!$this->sandboxed || $this->sandboxTags === null) {
+            return true;
+        }
+        $tag = self::GATEABLE_TAGS[$type] ?? null;
+        if ($tag === null) {
+            return true; // structural node, not an author-written tag
+        }
+        return in_array($tag, $this->sandboxTags, true);
+    }
+
     private function executeNode(array $node, array &$data): string
     {
+        // Sandbox: ONE tag gate, here at dispatch. Every body handler
+        // (executeFor/executeIf/executeAutoescape/renderCache/executeSpaceless)
+        // renders through execute(), which loops back into this method, so a
+        // NESTED tag is gated too. This replaced per-name conditionals that
+        // covered if/for/set only, which let {% autoescape false %} turn
+        // escaping OFF from inside a sandbox that had not allowed it
+        // (audit feature 38, P1b).
+        if (!$this->tagPermitted($node['type'])) {
+            return '';
+        }
+
         switch ($node['type']) {
             case 'text':
                 return $node['value'];
@@ -1172,9 +1228,6 @@ class Frond
 
     private function executeOutput(string $expr, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('output', $this->sandboxTags) && !in_array('var', $this->sandboxTags)) {
-            // output is always allowed unless tags explicitly exclude it
-        }
 
         $value = $this->evaluateExpression($expr, $data);
         $isRaw = false;
@@ -1302,9 +1355,6 @@ class Frond
 
     private function executeIf(array $node, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('if', $this->sandboxTags)) {
-            return '';
-        }
         foreach ($node['branches'] as $branch) {
             $condValue = $this->evaluateExpression($branch['condition'], $data);
             if ($this->isTruthy($condValue)) {
@@ -1316,9 +1366,6 @@ class Frond
 
     private function executeFor(array $node, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('for', $this->sandboxTags)) {
-            return '';
-        }
 
         $iterable = $this->evaluateExpression($node['iterExpr'], $data);
 
@@ -1385,9 +1432,6 @@ class Frond
 
     private function executeSet(array $node, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('set', $this->sandboxTags)) {
-            return '';
-        }
         $value = $this->evaluateExpression($node['expr'], $data);
         // Strip raw marker from set values
         if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
@@ -1411,9 +1455,6 @@ class Frond
      */
     private function executeSetBlock(array $node, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('set', $this->sandboxTags)) {
-            return '';
-        }
         if ($node['name'] === '') {
             return '';
         }
@@ -1423,9 +1464,6 @@ class Frond
 
     private function executeInclude(array $node, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('include', $this->sandboxTags)) {
-            return '';
-        }
 
         $file = $this->templateDir . '/' . $node['file'];
         if (!is_file($file)) {
@@ -1450,9 +1488,6 @@ class Frond
 
     private function renderCache(array $node, array &$data): string
     {
-        if ($this->sandboxed && $this->sandboxTags !== null && !in_array('cache', $this->sandboxTags)) {
-            return '';
-        }
 
         $key = $node['key'];
         if (isset($this->cache[$key])) {
