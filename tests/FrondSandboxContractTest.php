@@ -118,7 +118,39 @@ class FrondSandboxContractTest extends TestCase
         }
     }
 
-    // --- pair 5: nested tags stay gated -----------------------------------
+    // --- pair 5: escape is revocable too ----------------------------------
+    // PHP is immune to this BY CONSTRUCTION and these tests keep it that way. The
+    // raw/safe filters prepend a RAW_MARKER sentinel, so safety is carried by a
+    // value the filter produces only when it actually RUNS -- deny it and no marker
+    // exists, so the value is still auto-escaped. Python and Ruby use a SafeString
+    // for the same purpose. Node instead set a flag from the filter NAME and
+    // therefore DID emit live markup for a denied `escape` (fixed in 1eb1c4a).
+    // Anyone who later swaps the marker for a name check reopens that hole here.
+
+    public function testNegativeADeniedEscapeFilterNeverProducesUnescapedOutput(): void
+    {
+        $out = $this->denied()->renderString('{{ x|escape }}', ['x' => self::XSS]);
+        $this->assertStringNotContainsString(
+            '<script>',
+            $out,
+            'a DENIED escape filter produced live markup - escaping must be conferred by '
+                . 'RUNNING the filter, never by its name'
+        );
+    }
+
+    public function testNegativeADeniedEFilterNeverProducesUnescapedOutput(): void
+    {
+        $out = $this->denied()->renderString('{{ x|e }}', ['x' => self::XSS]);
+        $this->assertStringNotContainsString('<script>', $out, 'a DENIED e filter produced live markup');
+    }
+
+    public function testAnAllowedEscapeFilterEscapesExactlyOnce(): void
+    {
+        $e = (new Frond())->sandbox(['escape'], ['if'], ['x']);
+        $this->assertSame(self::ESCAPED, $e->renderString('{{ x|escape }}', ['x' => self::XSS]));
+    }
+
+    // --- pair 6: nested tags stay gated -----------------------------------
     // The collapse moved the tag gate to the central dispatch. Every body
     // handler re-enters execute(), so a nested tag must still be gated - if it
     // is not, the sandbox LOOKS intact and leaks.
