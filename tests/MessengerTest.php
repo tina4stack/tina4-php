@@ -63,12 +63,19 @@ class MessengerTest extends TestCase
         $this->assertInstanceOf(Messenger::class, $m);
     }
 
-    public function testSendFailsWithoutHost(): void
+    public function testSendWithoutHostCapturesInsteadOfFailing(): void
     {
+        // Changed in 3.13.94. This previously asserted that send() FAILS with no
+        // host. Under the messenger contract, no configured SMTP host means sending
+        // is impossible, so the message is simulated into the local mailbox rather
+        // than failing -- that is what makes a laptop with no mail server usable,
+        // and it is the original Tina4 "messages folder" behaviour restored.
+        // A real SMTP failure is still covered by testSendFailsWithRefusedConnection.
         $m = new Messenger(host: null, port: null);
         $result = $m->send('test@example.com', 'Subject', 'Body');
-        $this->assertFalse($result['success']);
-        $this->assertStringContainsString('SMTP', $result['message']);
+        $this->assertTrue($result['success'], 'with no SMTP host the message should be captured');
+        $this->assertNotNull($result['id']);
+        $this->assertStringContainsString('captured', $result['message']);
     }
 
     public function testSendFailsWithoutFromAddress(): void
@@ -295,13 +302,15 @@ class MessengerTest extends TestCase
     public function testDevMailboxCaptureWithCcBcc(): void
     {
         $mb = new DevMailbox($this->mailboxDir);
+        // Named from 3.13.94: capture()'s 5th positional is now $text, matching
+        // send(). Passing cc there was exactly the nodejs#42 mismatch.
         $result = $mb->capture(
             'to@test.com',
             'CC Test',
             'Body',
             false,
-            ['cc@test.com'],
-            ['bcc@test.com'],
+            cc: ['cc@test.com'],
+            bcc: ['bcc@test.com'],
         );
         $msg = $mb->read($result['id']);
         $this->assertSame(['cc@test.com'], $msg['cc']);
@@ -313,7 +322,7 @@ class MessengerTest extends TestCase
         $mb = new DevMailbox($this->mailboxDir);
         $result = $mb->capture(
             'to@test.com', 'Reply Test', 'Body', false,
-            [], [], 'reply@test.com',
+            replyTo: 'reply@test.com',
         );
         $msg = $mb->read($result['id']);
         $this->assertSame('reply@test.com', $msg['reply_to']);
@@ -324,7 +333,7 @@ class MessengerTest extends TestCase
         $mb = new DevMailbox($this->mailboxDir);
         $result = $mb->capture(
             'to@test.com', 'Header Test', 'Body', false,
-            [], [], null, [], ['X-Custom' => 'value'],
+            headers: ['X-Custom' => 'value'],
         );
         $msg = $mb->read($result['id']);
         $this->assertSame('value', $msg['headers']['X-Custom']);
@@ -335,8 +344,7 @@ class MessengerTest extends TestCase
         $mb = new DevMailbox($this->mailboxDir);
         $result = $mb->capture(
             'to@test.com', 'Attach Test', 'Body', false,
-            [], [], null,
-            [['filename' => 'doc.pdf', 'content' => 'fake', 'mime' => 'application/pdf']],
+            attachments: [['filename' => 'doc.pdf', 'content' => 'fake', 'mime' => 'application/pdf']],
         );
         $msg = $mb->read($result['id']);
         $this->assertCount(1, $msg['attachments']);

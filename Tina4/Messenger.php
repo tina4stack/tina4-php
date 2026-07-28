@@ -30,6 +30,12 @@ namespace Tina4;
 
 class Messenger
 {
+    /** @var bool Whether an SMTP host was actually configured (see the constructor) */
+    private bool $smtpConfigured = false;
+
+    /** @var DevMailbox|null The local mailbox, present only when this messenger captures */
+    public ?DevMailbox $devMailbox = null;
+
     /** @var string SMTP host */
     private string $host;
 
@@ -94,6 +100,12 @@ class Messenger
         ?string $imapHost = null,
         ?int $imapPort = null,
     ) {
+        // Whether a host was actually CONFIGURED, which is not the same as $this->host
+        // being set: it falls back to 'localhost', so it is never empty and cannot
+        // answer "can this messenger send?". The dev-capture gate needs that answer,
+        // so record it here while the real inputs are still in scope.
+        $this->smtpConfigured = ($host ?? $this->env('TINA4_MAIL_HOST')) !== null;
+
         // SMTP — priority: constructor > TINA4_MAIL_* > default
         $this->host = $host
             ?? $this->env('TINA4_MAIL_HOST')
@@ -185,6 +197,26 @@ class Messenger
         $recipients = is_array($to) ? $to : [$to];
         $ccList = is_array($cc) ? $cc : ($cc ? [$cc] : []);
         $bccList = is_array($bcc) ? $bcc : ($bcc ? [$bcc] : []);
+
+        // Dev capture is a BRANCH here. PHP previously had NO interception at all:
+        // createMessenger() was `return new static()`, so on a box with no SMTP host
+        // this opened a socket to localhost:587 and failed. DevMailbox existed and
+        // was unreachable from the factory.
+        if ($this->shouldCapture()) {
+            return $this->devMailbox()->capture(
+                $to,
+                $subject,
+                $body,
+                $html,
+                $text,
+                $ccList,
+                $bccList,
+                $replyTo,
+                $attachments,
+                $headers
+            );
+        }
+
         $allRecipients = array_merge($recipients, $ccList, $bccList);
 
         if (empty($allRecipients)) {
@@ -626,13 +658,61 @@ class Messenger
     }
 
     /**
+     * Determine whether send() should capture locally instead of talking to SMTP.
+     *
+     * Availability decides, not verbosity. With no SMTP host configured sending is
+     * impossible, so simulate it into a folder rather than failing -- that is what
+     * makes a laptop with no mail server usable. TINA4_MAIL_CAPTURE forces capture
+     * even when a host IS configured, for "never send real mail from this box".
+     *
+     * TINA4_DEBUG deliberately does NOT gate this. Debug must still be able to send:
+     * tying capture to it means nobody can test a real send from a dev box.
+     *
+     * @return bool True when the message should be captured locally
+     */
+    private function shouldCapture(): bool
+    {
+        $forced = $this->env('TINA4_MAIL_CAPTURE');
+        if ($forced !== null && in_array(strtolower($forced), ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+        return !$this->smtpConfigured;
+    }
+
+    /**
+     * The local mailbox, created on first capture and reused after.
+     *
+     * @return DevMailbox The dev mailbox this messenger captures into
+     */
+    private function devMailbox(): DevMailbox
+    {
+        if ($this->devMailbox === null) {
+            $this->devMailbox = new DevMailbox();
+        }
+        return $this->devMailbox;
+    }
+
+    /**
      * Factory that creates a Messenger from the current environment.
+     *
+     * Returns ONE concrete type, always. When sending is impossible (no SMTP host)
+     * or suppressed (TINA4_MAIL_CAPTURE), send() captures into a local DevMailbox
+     * instead, decided by a branch inside send() -- so the object you get back has
+     * one send() with one signature either way.
      *
      * @return static
      */
     public static function createMessenger(): static
     {
-        return new static();
+        $messenger = new static();
+
+        // Attach the mailbox eagerly when this messenger will capture, so callers
+        // (and the dev dashboard) can inspect it before the first send.
+        if ($messenger->shouldCapture()) {
+            $messenger->devMailbox = new DevMailbox();
+        }
+
+        return $messenger;
     }
 
     // ── SMTP Internals ───────────────────────────────────────────

@@ -42,12 +42,22 @@ class DevMailbox
      * @param string|array $to          Recipient(s)
      * @param string       $subject     Email subject
      * @param string       $body        Email body content
-     * @param bool         $html        Whether the body is HTML
-     * @param array        $cc          CC recipients
-     * @param array        $bcc         BCC recipients
-     * @param string|null  $replyTo     Reply-to address
-     * @param array        $attachments Attachment metadata
-     * @param array        $headers     Additional headers
+     * The parameter order MATCHES Messenger::send() on purpose. It did not before:
+     * send()'s 5th positional was $text and capture()'s was $cc, so the same call
+     * meant different things depending on which door it came through -- that
+     * mismatch IS tina4-nodejs#42.
+     *
+     * BREAKING: $text is now the 5th positional. A caller passing $cc positionally
+     * must switch to the named form. Aligning the two signatures is the fix; leaving
+     * them apart would preserve the bug.
+     *
+     * @param bool          $html        Whether the body is HTML
+     * @param string|null   $text        Plain-text alternative (when the body is HTML)
+     * @param array|string  $cc          CC recipients; a bare string is normalised to a list
+     * @param array|string  $bcc         BCC recipients; a bare string is normalised to a list
+     * @param string|null   $replyTo     Reply-to address
+     * @param array         $attachments Attachment metadata
+     * @param array         $headers     Additional headers
      * @return array ['success' => bool, 'message' => string, 'id' => string|null]
      */
     public function capture(
@@ -55,8 +65,9 @@ class DevMailbox
         string $subject,
         string $body,
         bool $html = false,
-        array $cc = [],
-        array $bcc = [],
+        ?string $text = null,
+        array|string $cc = [],
+        array|string $bcc = [],
         ?string $replyTo = null,
         array $attachments = [],
         array $headers = [],
@@ -64,14 +75,21 @@ class DevMailbox
         $id = $this->generateId();
         $recipients = is_array($to) ? $to : [$to];
 
+        // Normalised HERE, at the boundary, so a message is well formed however it
+        // arrived. A dev mailbox that accepts a malformed message and reports success
+        // defeats its own purpose -- it exists to show you what you WOULD have sent.
+        $ccList = is_array($cc) ? $cc : ($cc !== '' ? [$cc] : []);
+        $bccList = is_array($bcc) ? $bcc : ($bcc !== '' ? [$bcc] : []);
+
         $email = [
             'id' => $id,
             'to' => $recipients,
             'subject' => $subject,
             'body' => $body,
+            'text' => $text,
             'html' => $html,
-            'cc' => $cc,
-            'bcc' => $bcc,
+            'cc' => $ccList,
+            'bcc' => $bccList,
             'reply_to' => $replyTo,
             'attachments' => $this->processAttachments($attachments),
             'headers' => $headers,
