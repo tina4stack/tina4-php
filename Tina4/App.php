@@ -14,8 +14,27 @@ namespace Tina4;
  */
 class App
 {
-    /** @var string Framework version — read from composer.json at runtime */
-    public static string $VERSION = '0.0.0';
+    /**
+     * Framework version. DECLARED HERE, not resolved at runtime.
+     *
+     * This is the single source of truth, and the release bumps it. Ruby does the
+     * same with Tina4::VERSION; Python and Node read their package manifests,
+     * which those ecosystems ship inside the installed package.
+     *
+     * It used to default to '0.0.0' and be resolved on boot from composer
+     * metadata. That could not work in the base Docker image and had been
+     * reporting '0.0.0' on /health in every published image: the resolver read
+     * composer.json's `version` key (this repo has none -- Packagist derives the
+     * version from git tags) and then vendor/composer/installed.json for
+     * `tina4stack/tina4php` (absent, because in THIS repo Tina4 is the project,
+     * not a vendored dependency). Both paths missed, so it fell to the literal.
+     *
+     * A declared constant cannot miss. A Packagist install ships the source of
+     * its own tag, so the literal in that copy is that tag by construction.
+     *
+     * @var string
+     */
+    public static string $VERSION = '3.13.93';
 
     /**
      * Legacy env var names that v3.12 retired. Each maps to its new
@@ -128,45 +147,6 @@ class App
         throw new \RuntimeException($msg);
     }
 
-    /**
-     * Resolve the version from the installed composer package.
-     */
-    private static function resolveVersion(): string
-    {
-        // Try installed package's composer.json
-        $paths = [
-            __DIR__ . '/../composer.json',
-            __DIR__ . '/../../composer.json',
-        ];
-        foreach ($paths as $path) {
-            if (file_exists($path)) {
-                $data = json_decode(file_get_contents($path), true);
-                if (!empty($data['version'])) {
-                    return $data['version'];
-                }
-            }
-        }
-        // Try composer installed.json (Packagist installs)
-        // __DIR__ is Tina4/ inside vendor/tina4stack/tina4php/Tina4/
-        $installed = __DIR__ . '/../../../composer/installed.json';
-        if (!file_exists($installed)) {
-            $installed = __DIR__ . '/../../vendor/composer/installed.json';
-        }
-        if (!file_exists($installed)) {
-            $installed = __DIR__ . '/../vendor/composer/installed.json';
-        }
-        if (file_exists($installed)) {
-            $data = json_decode(file_get_contents($installed), true);
-            $packages = $data['packages'] ?? $data;
-            foreach ($packages as $pkg) {
-                if (($pkg['name'] ?? '') === 'tina4stack/tina4php') {
-                    return $pkg['version'] ?? '0.0.0';
-                }
-            }
-        }
-        return '0.0.0';
-    }
-
     /** @var Database\DatabaseAdapter|null Shared database instance */
     private static ?Database\DatabaseAdapter $database = null;
 
@@ -223,10 +203,6 @@ class App
         $this->basePath = $basePath;
         $this->startTime = microtime(true);
 
-        // Resolve version dynamically from composer metadata
-        if (self::$VERSION === '0.0.0') {
-            self::$VERSION = self::resolveVersion();
-        }
         $this->errorHandlerSet = true;
 
         // Error handler: convert warnings and user errors to exceptions so they
