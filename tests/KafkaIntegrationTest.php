@@ -134,4 +134,24 @@ class KafkaIntegrationTest extends TestCase
         $this->assertSame(98765, $body['value'] ?? null, 'The produced value must round-trip.');
         $this->assertSame($payload['nonce'], $body['nonce'] ?? null, 'The unique nonce must round-trip.');
     }
+
+    /**
+     * NEGATIVE: popping a topic that does not exist yields null, not an exception.
+     *
+     * A real broker answers a fetch for an unknown topic with
+     * UNKNOWN_TOPIC_OR_PARTITION (3), and auto-creation is asynchronous, so a
+     * consumer that starts before its producer hits this on every cold start.
+     * pop() is documented to return null when there is nothing to read, so error
+     * code 3 must not surface as a RuntimeException.
+     */
+    public function testPopOnAnUnknownTopicReturnsNullAndDoesNotThrow(): void
+    {
+        $absent = 'tina4_absent_' . bin2hex(random_bytes(6));
+        $queue = new Queue('kafka', [], $absent);
+
+        $this->assertNull(
+            $queue->pop(),
+            'A fetch against a never-created topic must read as "nothing available".'
+        );
+    }
 }
