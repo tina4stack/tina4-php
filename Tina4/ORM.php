@@ -469,6 +469,18 @@ abstract class ORM
                 if (!str_contains($col, '_') && !ctype_upper($col)) {
                     continue;
                 }
+                // The model already declares a property named EXACTLY like the
+                // column: the verbatim declaration wins and no mapping is
+                // invented. Without this, autoMap mapped `first_name` to
+                // `firstName` and the value was assigned to a property the
+                // model never declared -- so a model mirroring its DB columns
+                // SAVED correctly and READ BACK NULL, silently. Node already
+                // behaved this way, which is how we know autoMap and verbatim
+                // naming can both hold at once. autoMap is otherwise unchanged:
+                // every camelCase model keeps mapping exactly as before.
+                if (property_exists($this, $col)) {
+                    continue;
+                }
                 $camel = self::snakeToCamel($col);
                 if ($camel !== $col && !isset($this->fieldMapping[$camel])) {
                     $this->fieldMapping[$camel] = $col;
